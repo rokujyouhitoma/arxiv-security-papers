@@ -83,23 +83,24 @@ assert() {
 
     if [[ "$input" =~ gc- ]]; then
         full_input="$(cat lib/posix.scm lib/gc.scm)"$'\n'"$input"
-    elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string || "$input" =~ string-copy || "$input" =~ string-fill || "$input" =~ string-map || "$input" =~ string-for-each ]]; then
-        full_input="$(cat lib/string.scm)"$'\n'"$input"
-    elif [[ "$input" =~ list-copy || "$input" =~ make-list ]]; then
-        full_input="$(cat lib/list.scm)"$'\n'"$input"
-    elif [[ "$input" =~ open-input-string || "$input" =~ open-output-string || "$input" =~ "port\?" || "$input" =~ "input-port\?" || "$input" =~ "output-port\?" || "$input" =~ "textual-port\?" || "$input" =~ "get-output-string" ]]; then
-        full_input="$(cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
-    elif [[ "$input" =~ parameter || "$input" =~ dynamic-wind ]]; then
-        full_input="$(cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
     elif [[ "$input" =~ bytevector || "$input" =~ utf8 ]]; then
         full_input="$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$input"
     elif [[ "$input" =~ delay || "$input" =~ force || "$input" =~ promise ]]; then
         full_input="$(cat lib/string.scm lib/vector.scm lib/promise.scm)"$'\n'"$input"
     elif [[ "$input" =~ define-record-type || "$input" =~ vector ]]; then
         full_input="$(cat lib/string.scm lib/vector.scm)"$'\n'"$input"
+    elif [[ "$input" =~ open-input-string || "$input" =~ open-output-string || "$input" =~ "port\?" || "$input" =~ "input-port\?" || "$input" =~ "output-port\?" || "$input" =~ "textual-port\?" || "$input" =~ "get-output-string" ]]; then
+        full_input="$(cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
+    elif [[ "$input" =~ parameter || "$input" =~ dynamic-wind ]]; then
+        full_input="$(cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/parameter.scm lib/gc.scm)"$'\n'"$input"
+    elif [[ "$input" =~ list-copy || "$input" =~ make-list ]]; then
+        full_input="$(cat lib/list.scm)"$'\n'"$input"
+    elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string || "$input" =~ string-copy || "$input" =~ string-fill || "$input" =~ string-map || "$input" =~ string-for-each || "$input" =~ string-\>list || "$input" =~ list-\>string || "$input" =~ "string<" || "$input" =~ "string>" || "$input" =~ "string=" ]]; then
+        full_input="$(cat lib/string.scm)"$'\n'"$input"
     else
         full_input="$input"
     fi
+
 
     mkdir -p build
 
@@ -650,6 +651,22 @@ assert "#(1 2 3)" "(list->vector '(1 2 3))"
 assert "#(1 #(2 3) 4)" "(vector 1 (vector 2 3) 4)"
 assert "2" "(vector-ref (vector-ref (vector 1 (vector 2 3) 4) 1) 0)"
 assert "#(100 200)" "(let loop ((i 0) (last-v (vector 0 0))) (if (< i 50) (loop (+ i 1) (vector 100 200)) last-v))"
+
+# --- Issue 557: R7RS String/Vector/List conversions and string ordering ---
+assert "(#\\h #\\e #\\l #\\l #\\o)" '(string->list "hello")'
+assert "(#\\e #\\l)" '(string->list "hello" 1 3)'
+assert '"world"' '(list->string '\''(#\w #\o #\r #\l #\d))'
+assert "#(#\\a #\\b #\\c)" '(string->vector "abc")'
+assert "#(#\\b #\\c)" '(string->vector "abcd" 1 3)'
+assert '"scheme"' '(vector->string (vector #\s #\c #\h #\e #\m #\e))'
+assert '"ch"' '(vector->string (vector #\s #\c #\h #\e #\m #\e) 1 3)'
+assert "#t" '(string<? "abc" "abd")'
+assert "#f" '(string<? "abd" "abc")'
+assert "#t" '(string<? "a" "b" "c")'
+assert "#t" '(string>? "z" "y" "x")'
+assert "#t" '(string<=? "abc" "abc" "abd")'
+assert "#t" '(string>=? "c" "b" "b" "a")'
+assert "#t" '(string=? "abc" "abc" "abc")'
 
 # --- Step 31: R7RS Parameters & Parameterize (Issue 537) ---
 echo "-- Step 31: Issue 537 R7RS Parameters & Parameterize --"

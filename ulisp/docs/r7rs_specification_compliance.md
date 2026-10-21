@@ -149,8 +149,9 @@
 | **6.7** | `string=?` | **◎** | [ulisp/lib/string.scm](../lib/string.scm) | 文字列内容比較 |
 | **6.7** | `substring`, `string-append` | **◎** | [Pass 030](../passes/030_desugar.scm)<br>[ulisp/lib/string.scm](../lib/string.scm) | スライシング・2分木分割結合脱糖 |
 | **6.7** | `string-copy`, `string-copy!`, `string-fill!`, `string-map`, `string-for-each` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../passes/030_desugar.scm) | オーバーラップ安全コピー・充填・反復マッピング ([Issue #551](../../docs/issues/closed/551-expand-r7rs-standard-library-procedures.md)) |
-| **6.7** | `string`, `string<?`, `string>?`, `string<=?`, `string>=?` | **×** | - | [Issue #557](../../docs/issues/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) にて実装予定 |
-| **6.7** | `string->list`, `list->string` | **×** | - | [Issue #557](../../docs/issues/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) にて実装予定 |
+| **6.7** | `string<?`, `string>?`, `string<=?`, `string>=?` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../passes/030_desugar.scm) | 複数引数対応辞書式順序比較述語 ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
+| **6.7** | `string->list`, `list->string` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../passes/030_desugar.scm) | 文字列・リスト相互変換 (スライス対応) ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
+| **6.7** | `string` | **×** | - | 可変長引数文字列コンストラクタ (未実装) |
 
 #### 6.8 ベクタ (Vectors)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -160,7 +161,7 @@
 | **6.8** | `vector-copy`, `vector-copy!`, `vector-append`, `vector-fill!` | **◎** | [ulisp/lib/vector.scm](../lib/vector.scm)<br>[Pass 030](../passes/030_desugar.scm) | スライス複製・破壊的転送・充填 |
 | **6.8** | `vector->list`, `list->vector` | **◎** | [ulisp/lib/vector.scm](../lib/vector.scm)<br>[Pass 030](../passes/030_desugar.scm) | リスト・ベクタ相互変換 |
 | **6.8** | `vector-map`, `vector-for-each` | **◎** | [ulisp/lib/vector.scm](../lib/vector.scm) | ベクタ要素マッピング・走査 |
-| **6.8** | `vector->string`, `string->vector` | **×** | - | 直接相互変換 (未実装) |
+| **6.8** | `vector->string`, `string->vector` | **◎** | [ulisp/lib/vector.scm](../lib/vector.scm)<br>[Pass 030](../passes/030_desugar.scm) | 文字列・ベクタ直接相互変換 (スライス対応) ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
 
 #### 6.9 バイトベクタ (Bytevectors)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -361,9 +362,9 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md): `delay`, `force`, `delay-force`, `promise?` (遅延評価)
    - [Issue #551](../../docs/issues/closed/551-expand-r7rs-standard-library-procedures.md): `list-copy`, `make-list`, `string-copy!`, `string-fill!` 等のシーケンス操作拡充
    - [Issue #555](../../docs/issues/closed/555-implement-r7rs-list-accessors-list-tail-ref-set.md): `list-tail`, `list-ref`, `list-set!` (リストインデックス操作)
+   - [Issue #556](../../docs/issues/closed/556-implement-r7rs-character-comparison-predicates.md): `char<?`, `char>?`, `char<=?`, `char>=?` (文字順序比較)
+   - [Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md): `string->list`, `list->string`, `string->vector`, `vector->string`, `string<?`, `string>?`, `string<=?`, `string>=?` (文字列・ベクタ・リスト相互変換および文字列順序比較述語)
 3. **進行中および直近の実装予定 (Open Issues)**:
-   - [Issue #556](../../docs/issues/556-implement-r7rs-character-comparison-predicates.md): `char<?`, `char>?`, `char<=?`, `char>=?` (文字順序比較)
-   - [Issue #557](../../docs/issues/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md): 文字列・ベクタ・リスト相互変換および文字列順序比較述語
    - [Issue #558](../../docs/issues/558-implement-r7rs-elementary-integer-math-procedures.md): `square`, `gcd`, `lcm`, `expt`, `remainder` (基本整数算術)
    - [Issue #559](../../docs/issues/559-implement-r7rs-do-loop-syntax.md): `do` (反復実行構文)
    - [Issue #560](../../docs/issues/560-implement-r7rs-define-values-syntax.md): `define-values` (多値定義構文)

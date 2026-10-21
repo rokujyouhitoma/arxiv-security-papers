@@ -109,3 +109,31 @@
             (proc (vector-ref vec i))
             (loop (+ i 1)))
           63))))
+
+;; ---------------------------------------------------------------------
+;; §6.8 Vectors: vector->string-range
+;; ---------------------------------------------------------------------
+(define (vector->string-range vec start end)
+  (let* ((count (- end start))
+         (s (make-string count)))
+    (let loop ((i 0))
+      (if (< i count)
+          (begin
+            (string-set! s i (vector-ref vec (+ start i)))
+            (loop (+ i 1)))
+          s))))
+
+;; ---------------------------------------------------------------------
+;; §6.8 Vectors: string->vector-range
+;; ---------------------------------------------------------------------
+(define (string->vector-range str start end)
+  (let* ((count (- end start))
+         (v (%make-vector count)))
+    (let loop ((i 0))
+      (if (< i count)
+          (begin
+            (vector-set! v i (string-ref str (+ start i)))
+            (loop (+ i 1)))
+          v))))
+
+

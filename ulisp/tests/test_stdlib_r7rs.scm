@@ -22,9 +22,6 @@
 (define (test-equal? a b)
   (cond
     ((eqv? a b) #t)
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
     ((and (string? a) (string? b))
      (string=? a b))
     ((and (vector? a) (vector? b))
@@ -40,7 +37,11 @@
            #f)))
     ((and (bytevector? a) (bytevector? b))
      (bytevector=? a b))
+    ((and (pair? a) (pair? b))
+     (and (test-equal? (car a) (car b))
+          (test-equal? (cdr a) (cdr b))))
     (else #f)))
+
 
 (define (assert-true name expr)
   (if expr
@@ -150,6 +151,21 @@
   (string-for-each (lambda (c) (vector-set! cnt 0 (+ (vector-ref cnt 0) 1))) "12345")
   (assert-num-equal "string-for-each counter" 5 (vector-ref cnt 0)))
 
+;; string->list & list->string
+(assert-equal "string->list full" '(#\h #\e #\l #\l #\o) (string->list "hello"))
+(assert-equal "string->list slice start" '(#\e #\l #\l #\o) (string->list "hello" 1))
+(assert-equal "string->list slice range" '(#\e #\l #\l) (string->list "hello" 1 4))
+(assert-equal "string->list empty" '() (string->list ""))
+(assert-equal "list->string" "hi" (list->string '(#\h #\i)))
+(assert-equal "list->string empty" "" (list->string '()))
+(assert-equal "string<->list roundtrip" "scheme" (list->string (string->list "scheme")))
+
+;; string->vector
+(assert-equal "string->vector full" (vector #\a #\b #\c) (string->vector "abc"))
+(assert-equal "string->vector slice start" (vector #\b #\c) (string->vector "abc" 1))
+(assert-equal "string->vector slice range" (vector #\b #\c) (string->vector "abcd" 1 3))
+(assert-equal "string->vector empty" (vector) (string->vector ""))
+
 ;;; =======================================================================
 ;;; 3. Vector Operations (R7RS Section 6.8)
 ;;; =======================================================================
@@ -183,6 +199,13 @@
 (assert-equal "vector->list full" '(10 20 30) (vector->list (vector 10 20 30)))
 (assert-equal "vector->list slice" '(20 30) (vector->list (vector 10 20 30 40) 1 3))
 (assert-equal "list->vector" (vector 1 2 3) (list->vector '(1 2 3)))
+
+;; vector->string
+(assert-equal "vector->string full" "abc" (vector->string (vector #\a #\b #\c)))
+(assert-equal "vector->string slice start" "bc" (vector->string (vector #\a #\b #\c) 1))
+(assert-equal "vector->string slice range" "bc" (vector->string (vector #\a #\b #\c #\d) 1 3))
+(assert-equal "vector->string empty" "" (vector->string (vector)))
+(assert-equal "string<->vector roundtrip" "ulisp" (vector->string (string->vector "ulisp")))
 
 ;; vector-fill!
 (let ((v (vector 1 2 3 4 5)))
@@ -267,6 +290,56 @@
 (assert-equal "char>=? 3 args chain true" #t (char>=? #\c #\b #\a))
 (assert-equal "char>=? 4 args chain with duplicate true" #t (char>=? #\c #\b #\b #\a))
 (assert-equal "char>=? 3 args chain false" #f (char>=? #\b #\c #\a))
+
+;;; =======================================================================
+;;; 6. String Comparison Operations (R7RS Section 6.7)
+;;; =======================================================================
+(write-string "--- 6. String Comparison Procedures ---")
+(write-char #\newline)
+(flush-output-port)
+
+;; string<? tests
+(assert-equal "string<? 2 args true" #t (string<? "abc" "abd"))
+(assert-equal "string<? 2 args false" #f (string<? "abd" "abc"))
+(assert-equal "string<? 2 args equal false" #f (string<? "abc" "abc"))
+(assert-equal "string<? prefix < longer" #t (string<? "abc" "abcd"))
+(assert-equal "string<? longer < prefix false" #f (string<? "abcd" "abc"))
+(assert-equal "string<? empty < non-empty" #t (string<? "" "a"))
+(assert-equal "string<? empty < empty false" #f (string<? "" ""))
+(assert-equal "string<? 3 args chain true" #t (string<? "a" "b" "c"))
+(assert-equal "string<? 4 args chain true" #t (string<? "a" "ab" "abc" "b"))
+(assert-equal "string<? 3 args chain false (unordered)" #f (string<? "a" "c" "b"))
+(assert-equal "string<? 3 args chain false (duplicate)" #f (string<? "a" "b" "b"))
+
+;; string>? tests
+(assert-equal "string>? 2 args true" #t (string>? "z" "a"))
+(assert-equal "string>? 2 args false" #f (string>? "a" "z"))
+(assert-equal "string>? 2 args equal false" #f (string>? "abc" "abc"))
+(assert-equal "string>? prefix > longer false" #f (string>? "abc" "abcd"))
+(assert-equal "string>? longer > prefix true" #t (string>? "abcd" "abc"))
+(assert-equal "string>? 3 args chain true" #t (string>? "z" "y" "x"))
+(assert-equal "string>? 3 args chain false (unordered)" #f (string>? "z" "x" "y"))
+(assert-equal "string>? 3 args chain false (duplicate)" #f (string>? "z" "y" "y"))
+
+;; string<=? tests
+(assert-equal "string<=? 2 args less true" #t (string<=? "abc" "abd"))
+(assert-equal "string<=? 2 args equal true" #t (string<=? "abc" "abc"))
+(assert-equal "string<=? 2 args greater false" #f (string<=? "abd" "abc"))
+(assert-equal "string<=? 3 args chain true" #t (string<=? "a" "b" "c"))
+(assert-equal "string<=? 4 args chain with duplicate true" #t (string<=? "a" "b" "b" "c"))
+(assert-equal "string<=? 3 args chain false" #f (string<=? "a" "c" "b"))
+
+;; string>=? tests
+(assert-equal "string>=? 2 args greater true" #t (string>=? "b" "a"))
+(assert-equal "string>=? 2 args equal true" #t (string>=? "a" "a"))
+(assert-equal "string>=? 2 args less false" #f (string>=? "a" "b"))
+(assert-equal "string>=? 3 args chain true" #t (string>=? "c" "b" "a"))
+(assert-equal "string>=? 4 args chain with duplicate true" #t (string>=? "c" "b" "b" "a"))
+(assert-equal "string>=? 3 args chain false" #f (string>=? "b" "c" "a"))
+
+;; string=? tests (multi-arg chain)
+(assert-equal "string=? 3 args chain true" #t (string=? "abc" "abc" "abc"))
+(assert-equal "string=? 3 args chain false" #f (string=? "abc" "abc" "xyz"))
 
 ;;; Summary
 (write-string "=== ULisp R7RS Standard Library Tests Completed: ")

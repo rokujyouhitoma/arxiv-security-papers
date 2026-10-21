@@ -2,7 +2,7 @@
 ID: 557
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] R7RS 文字列・リスト・ベクタ相互変換および文字列辞書順比較述語の実装 (ID: 557)
@@ -25,10 +25,10 @@ R7RS 6.7 (Strings) および 6.8 (Vectors) に規定されている文字列と�
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/string.scm](../../ulisp/lib/string.scm) (文字列変換・辞書順比較手続きの実装)
-- [ ] [ulisp/lib/vector.scm](../../ulisp/lib/vector.scm) (ベクタ変換手続きの実装)
-- [ ] [ulisp/tests/test_stdlib_r7rs.scm](../../ulisp/tests/test_stdlib_r7rs.scm) (変換・比較テスト追加)
-- [ ] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (適合状況更新)
+- [x] [ulisp/lib/string.scm](../../ulisp/lib/string.scm) (文字列変換・辞書順比較手続きの実装)
+- [x] [ulisp/lib/vector.scm](../../ulisp/lib/vector.scm) (ベクタ変換手続きの実装)
+- [x] [ulisp/tests/test_stdlib_r7rs.scm](../../ulisp/tests/test_stdlib_r7rs.scm) (変換・比較テスト追加)
+- [x] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (適合状況更新)
 
 ---
 
@@ -54,8 +54,9 @@ Target Branch: `feat/557-implement-r7rs-string-vector-list-conversions-and-strin
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `string->list`, `list->string`, `string->vector`, `vector->string` が実装されていること。
-- [ ] `string<?`, `string>?`, `string<=?`, `string>=?` が複数引数対応で実装されていること。
-- [ ] `tests/test_stdlib_r7rs.scm` にテストが追加され、すべて PASS すること。
-- [ ] `./test.sh` および `./test_c.sh` がエラーなく 100% PASS すること。
-- [ ] `ulisp/docs/r7rs_specification_compliance.md` の対象項目が `[x]` に更新されていること。
+- [x] `string->list`, `list->string`, `string->vector`, `vector->string` が実装されていること。
+- [x] `string<?`, `string>?`, `string<=?`, `string>=?` が複数引数対応で実装されていること。
+- [x] `tests/test_stdlib_r7rs.scm` にテストが追加され、すべて PASS すること。
+- [x] `./test.sh` および `./test_c.sh` がエラーなく 100% PASS すること。
+- [x] `ulisp/docs/r7rs_specification_compliance.md` の対象項目が `[x]` に更新されていること。
+

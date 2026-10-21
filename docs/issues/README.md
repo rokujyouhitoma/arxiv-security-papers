@@ -13,7 +13,6 @@
 | **586** | Nanopass Framework DSL Phase 4: パイプライン統御・AST Diff トレーサおよび不変条件 Verifier 自動フック統合 | Feature | High | [586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md](586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md) |
 | **578** | Pass 110 (Closure) / 120 (Escape) / 130 (LIR) の連携による非エスケープオブジェクトのスタック配置最適化 | Refactor | Medium | [578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md](578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md) |
 
-| **557** | R7RS 文字列・リスト・ベクタ相互変換および文字列辞書順比較述語の実装 | Feature | Medium | [557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md](557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) |
 | **558** | R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 | Feature | Medium | [558-implement-r7rs-elementary-integer-math-procedures.md](558-implement-r7rs-elementary-integer-math-procedures.md) |
 | **559** | R7RS 反復構文 (do) のマクロ脱糖実装 | Feature | Medium | [559-implement-r7rs-do-loop-syntax.md](559-implement-r7rs-do-loop-syntax.md) |
 | **560** | R7RS 多値定義構文 (define-values) のマクロ脱糖実装 | Feature | Medium | [560-implement-r7rs-define-values-syntax.md](560-implement-r7rs-define-values-syntax.md) |
@@ -24,7 +23,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **557** | R7RS 文字列・リスト・ベクタ相互変換および文字列辞書順比較述語の実装 | Feature | 2026-10-22 | [closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md](closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md) |
 | **587** | Nanopass DSL展開パスの先行分離 (Pass 015) によるマクロ展開器決め打ちの完全排除 | Feature | 2026-10-22 | [closed/587-extract-dsl-expansion-pass-before-macro-expander.md](closed/587-extract-dsl-expansion-pass-before-macro-expander.md) |
+
 | **588** | 論理積構文 (and) の脱糖漏れによる LIR 未束縛変数例外 (Unbound variable in LIR: and) の解消 | Bug | 2026-10-22 | [closed/588-fix-and-syntax-desugaring-unbound-variable-in-lir.md](closed/588-fix-and-syntax-desugaring-unbound-variable-in-lir.md) |
 | **584** | Nanopass Framework DSL Phase 2: エリップシス反復展開 (Ellipsis) とサブフォーム局所ハンドラ (in-context) の実装および正規化パス移行 | Feature | 2026-10-21 | [closed/584-nanopass-framework-phase2-ellipsis-subforms-and-normalization.md](closed/584-nanopass-framework-phase2-ellipsis-subforms-and-normalization.md) |
 | **581** | Nanopass Framework DSL Phase 1: コア DSL マクロ基盤 (define-language / define-pass) の自律実装と構文脱糖パス刷新 | Feature | 2026-10-20 | [closed/581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md](closed/581-implement-nanopass-framework-dsl-and-migrate-compiler-passes.md) |

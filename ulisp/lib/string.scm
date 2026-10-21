@@ -227,3 +227,56 @@
 
 (define (string-fill! str fill)
   (string-fill-range! str fill 0 (string-length str)))
+
+;; ---------------------------------------------------------------------
+;; §6.7 Strings: string->list-range / list->string
+;; ---------------------------------------------------------------------
+(define (string->list-range str start end)
+  (let loop ((i (- end 1)) (acc '()))
+    (if (< i start)
+        acc
+        (loop (- i 1) (cons (string-ref str i) acc)))))
+
+(define (list->string lst)
+  (let* ((len (length lst))
+         (s (make-string len)))
+    (let loop ((curr lst) (i 0))
+      (if (null? curr)
+          s
+          (begin
+            (string-set! s i (car curr))
+            (loop (cdr curr) (+ i 1)))))))
+
+;; ---------------------------------------------------------------------
+;; §6.7 Strings: Lexicographic Comparison (string<?, string>?, string<=?, string>=?)
+;; ---------------------------------------------------------------------
+(define (%string-compare s1 s2)
+  (let ((len1 (string-length s1))
+        (len2 (string-length s2)))
+    (let ((min-len (if (< len1 len2) len1 len2)))
+      (let loop ((i 0))
+        (if (< i min-len)
+            (let ((n1 (char->integer (string-ref s1 i)))
+                  (n2 (char->integer (string-ref s2 i))))
+              (cond
+                ((< n1 n2) -1)
+                ((> n1 n2) 1)
+                (else (loop (+ i 1)))))
+            (cond
+              ((< len1 len2) -1)
+              ((> len1 len2) 1)
+              (else 0)))))))
+
+(define (string<? s1 s2)
+  (< (%string-compare s1 s2) 0))
+
+(define (string>? s1 s2)
+  (> (%string-compare s1 s2) 0))
+
+(define (string<=? s1 s2)
+  (<= (%string-compare s1 s2) 0))
+
+(define (string>=? s1 s2)
+  (>= (%string-compare s1 s2) 0))
+
+

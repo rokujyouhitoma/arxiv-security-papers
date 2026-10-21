@@ -44,19 +44,20 @@ assert_c() {
     local code
     if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$expr"
-    elif [[ "$expr" =~ string-copy || "$expr" =~ string-fill || "$expr" =~ string-map || "$expr" =~ string-for-each ]]; then
-        code="(!target c)"$'\n'"$(cat lib/string.scm)"$'\n'"$expr"
-    elif [[ "$expr" =~ list-copy || "$expr" =~ make-list ]]; then
-        code="(!target c)"$'\n'"$(cat lib/list.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ delay || "$expr" =~ force || "$expr" =~ promise ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm lib/promise.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ define-record-type || "$expr" =~ vector ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm)"$'\n'"$expr"
     elif [[ "$expr" =~ parameter || "$expr" =~ dynamic-wind ]]; then
         code="(!target c)"$'\n'"$(cat lib/string.scm lib/continuation.scm lib/parameter.scm)"$'\n'"$expr"
+    elif [[ "$expr" =~ list-copy || "$expr" =~ make-list ]]; then
+        code="(!target c)"$'\n'"$(cat lib/list.scm)"$'\n'"$expr"
+    elif [[ "$expr" =~ string-copy || "$expr" =~ string-fill || "$expr" =~ string-map || "$expr" =~ string-for-each || "$expr" =~ string-\>list || "$expr" =~ list-\>string || "$expr" =~ "string<" || "$expr" =~ "string>" || "$expr" =~ "string=" ]]; then
+        code="(!target c)"$'\n'"$(cat lib/string.scm)"$'\n'"$expr"
     else
         code="(!target c) $expr"
     fi
+
 
     if [ -x "bin/ulisp-boot" ]; then
         printf '%s\n' "$code" > build/tmp_c_in.scm
@@ -251,6 +252,20 @@ assert_c "(2 3)" "(vector->list (vector 1 2 3 4) 1 3)"
 assert_c "#(1 2 3)" "(list->vector '(1 2 3))"
 assert_c "#(1 #(2 3) 4)" "(vector 1 (vector 2 3) 4)"
 assert_c "2" "(vector-ref (vector-ref (vector 1 (vector 2 3) 4) 1) 0)"
+assert_c "(#\\h #\\e #\\l #\\l #\\o)" '(string->list "hello")'
+assert_c "(#\\e #\\l)" '(string->list "hello" 1 3)'
+assert_c '"world"' '(list->string '\''(#\w #\o #\r #\l #\d))'
+assert_c "#(#\\a #\\b #\\c)" '(string->vector "abc")'
+assert_c "#(#\\b #\\c)" '(string->vector "abcd" 1 3)'
+assert_c '"scheme"' '(vector->string (vector #\s #\c #\h #\e #\m #\e))'
+assert_c '"ch"' '(vector->string (vector #\s #\c #\h #\e #\m #\e) 1 3)'
+assert_c "#t" '(string<? "abc" "abd")'
+assert_c "#f" '(string<? "abd" "abc")'
+assert_c "#t" '(string<? "a" "b" "c")'
+assert_c "#t" '(string>? "z" "y" "x")'
+assert_c "#t" '(string<=? "abc" "abc" "abd")'
+assert_c "#t" '(string>=? "c" "b" "b" "a")'
+assert_c "#t" '(string=? "abc" "abc" "abc")'
 
 echo "--- Step 11: R7RS Parameters & Parameterize ---"
 assert_c "10" "(let ((p (make-parameter 10))) (p))"
