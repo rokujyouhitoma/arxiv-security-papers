@@ -26,6 +26,18 @@
 (display "=======================================================") (newline)
 
 ;; 1. and desugaring
+(assert-equal "and 0 args"
+              #t
+              (desugar-all '(and)))
+
+(assert-equal "and 1 arg"
+              42
+              (desugar-all '(and 42)))
+
+(assert-equal "and 2 booleans"
+              '(if #t #t #f)
+              (desugar-all '(and #t #t)))
+
 (assert-equal "and 2 args"
               '(if #t 42 #f)
               (desugar-all '(and #t 42)))
@@ -35,6 +47,14 @@
               (desugar-all '(and 1 2 3)))
 
 ;; 2. or desugaring
+(assert-equal "or 0 args"
+              #f
+              (desugar-all '(or)))
+
+(assert-equal "or 1 arg"
+              42
+              (desugar-all '(or 42)))
+
 (let ((res (desugar-all '(or #f 42))))
   (assert-true "or produces let binding" (pair? res))
   (assert-equal "or root tag is let" 'let (car res)))

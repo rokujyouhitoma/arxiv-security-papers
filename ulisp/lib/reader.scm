@@ -98,6 +98,20 @@
        (port-read-char p) ; consume '\''
        (list 'quote (port-read p)))
 
+      ;; Quasiquote: `datum => (quasiquote datum)
+      ((ulisp-char=? c #\`)
+       (port-read-char p) ; consume '`'
+       (list 'quasiquote (port-read p)))
+
+      ;; Unquote: ,datum => (unquote datum), ,@datum => (unquote-splicing datum)
+      ((ulisp-char=? c #\,)
+       (port-read-char p) ; consume ','
+       (if (ulisp-char=? (port-peek-char p) #\@)
+           (begin
+             (port-read-char p) ; consume '@'
+             (list 'unquote-splicing (port-read p)))
+           (list 'unquote (port-read p))))
+
       ;; String: "..."
       ((ulisp-char=? c #\")
        (port-read-char p) ; consume '"'

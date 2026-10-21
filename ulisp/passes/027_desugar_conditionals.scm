@@ -94,7 +94,11 @@
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-conditionals : L_src (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
+    ((cond ,clauses ...) (Expr (desugar-cond clauses)))
     ((cond . ,clauses) (Expr (desugar-cond clauses)))
+    ((case ,key ,clauses ...) (Expr (desugar-case key clauses)))
     ((case ,key . ,clauses) (Expr (desugar-case key clauses)))
+    ((and ,args ...) (Expr (desugar-and args)))
     ((and . ,args) (Expr (desugar-and args)))
+    ((or ,args ...) (Expr (desugar-or args)))
     ((or . ,args) (Expr (desugar-or args)))))

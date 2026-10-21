@@ -6,6 +6,8 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **588** | 論理積構文 (and) の脱糖漏れによる LIR 未束縛変数例外 (Unbound variable in LIR: and) の解消 | Bug | High | [588-fix-and-syntax-desugaring-unbound-variable-in-lir.md](closed/588-fix-and-syntax-desugaring-unbound-variable-in-lir.md) |
+| **587** | Nanopass DSL展開パスの先行分離 (Pass 015) によるマクロ展開器決め打ちの完全排除 | Feature | Medium | [587-extract-dsl-expansion-pass-before-macro-expander.md](587-extract-dsl-expansion-pass-before-macro-expander.md) |
 | **585** | Nanopass Framework DSL Phase 3: Catamorphism Extra Values (上流集約 / 下流伝播) と解析・最適化パス刷新 | Feature | High | [585-nanopass-framework-phase3-catamorphism-extra-values-and-analysis-passes.md](585-nanopass-framework-phase3-catamorphism-extra-values-and-analysis-passes.md) |
 | **586** | Nanopass Framework DSL Phase 4: パイプライン統御・AST Diff トレーサおよび不変条件 Verifier 自動フック統合 | Feature | High | [586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md](586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md) |
 | **578** | Pass 110 (Closure) / 120 (Escape) / 130 (LIR) の連携による非エスケープオブジェクトのスタック配置最適化 | Refactor | Medium | [578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md](578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md) |
