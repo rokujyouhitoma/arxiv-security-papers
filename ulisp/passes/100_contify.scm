@@ -7,57 +7,47 @@
 ;;;       and indirect calls completely.
 ;;; =======================================================================
 
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass: contify-subst
 ;;; Substitutes call sites of `var` into `(%cont-call var . args)` within `expr`.
+;;; -----------------------------------------------------------------------
+(define-pass contify-subst : L_core (ir var) -> L_core ()
+  (Expr : Expr (ir var) -> Expr ()
+    ((quote ,datum)
+     ir)
+    ((lambda (,params ...) ,body)
+     ir) ; Do not cross lambda boundaries into separate procedure CFGs
+    ((let ((,x* ,e*) ...) ,body)
+     (let ((opt-bindings (let loop ((xs x*) (es e*) (acc '()))
+                           (if (or (null? xs) (null? es))
+                               (reverse acc)
+                               (loop (cdr xs) (cdr es) (cons (list (car xs) (Expr (car es) var)) acc))))))
+       (if (memq var x*)
+           (list 'let opt-bindings body) ; shadowed
+           (list 'let opt-bindings (Expr body var)))))
+    ((letrec ((,x* ,e*) ...) ,body)
+     (if (memq var x*)
+         ir ; shadowed
+         (let ((opt-bindings (let loop ((xs x*) (es e*) (acc '()))
+                               (if (or (null? xs) (null? es))
+                                   (reverse acc)
+                                   (loop (cdr xs) (cdr es) (cons (list (car xs) (Expr (car es) var)) acc))))))
+           (list 'letrec opt-bindings (Expr body var)))))
+    ((%cont-fun ,f-name (,params ...) ,f-body ,in-body)
+     (if (eq? f-name var)
+         ir ; shadowed
+         (list '%cont-fun f-name params
+               (Expr f-body var)
+               (Expr in-body var))))
+    ((%cont-call ,target ,es ...)
+     (cons '%cont-call (cons target (map (lambda (e) (Expr e var)) es))))
+    ((,op ,args ...)
+     (if (eq? op var)
+         (cons '%cont-call (cons var (map (lambda (e) (Expr e var)) args)))
+         (cons (Expr op var) (map (lambda (e) (Expr e var)) args))))))
+
 (define (contify-calls var expr)
-  (cond
-    ((not (pair? expr)) expr)
-    (else
-     (let ((op (car expr)))
-       (case op
-         ((quote) expr)
-         ((if)
-          (list 'if
-                (contify-calls var (cadr expr))
-                (contify-calls var (caddr expr))
-                (if (null? (cdddr expr)) #f (contify-calls var (cadddr expr)))))
-         ((begin)
-          (cons 'begin (map (lambda (e) (contify-calls var e)) (cdr expr))))
-         ((let)
-          (let ((bindings (cadr expr))
-                (body (caddr expr)))
-            (list 'let
-                  (map (lambda (b) (list (car b) (contify-calls var (cadr b)))) bindings)
-                  (if (assq var bindings)
-                      body  ; shadowed
-                      (contify-calls var body)))))
-         ((letrec)
-          (let ((bindings (cadr expr))
-                (body (caddr expr)))
-            (if (assq var bindings)
-                expr ; shadowed
-                (list 'letrec
-                      (map (lambda (b) (list (car b) (contify-calls var (cadr b)))) bindings)
-                      (contify-calls var body)))))
-         ((lambda)
-          expr) ; Do not cross lambda boundaries into separate procedure CFGs
-         ((%cont-fun)
-          (let ((f-name (cadr expr))
-                (params (caddr expr))
-                (f-body (cadddr expr))
-                (in-body (cadr (cdddr expr))))
-            (if (eq? f-name var)
-                expr ; shadowed
-                (list '%cont-fun f-name params
-                      (contify-calls var f-body)
-                      (contify-calls var in-body)))))
-         ((%cont-call)
-          (cons '%cont-call
-                (cons (cadr expr)
-                      (map (lambda (e) (contify-calls var e)) (cddr expr)))))
-         (else
-          (if (eq? op var)
-              (cons '%cont-call (cons var (map (lambda (e) (contify-calls var e)) (cdr expr))))
-              (map (lambda (e) (contify-calls var e)) expr))))))))
+  (contify-subst expr var))
 
 ;;; Recursively transforms an expression, converting eligible letrec bindings into %cont-fun.
 (define (contify-expr expr)

@@ -272,6 +272,62 @@
                 '(%program ((define val 50) (define base 20)) (+ 50 20))
                 res))
 
+;;; -----------------------------------------------------------------------
+;;; 9. Extra Values: Downwards Inherited Attributes
+;;; -----------------------------------------------------------------------
+
+(define-pass test-inherited-depth : L_test_src (ir depth) -> L_test_src ()
+  (Expr : Expr (ir depth) -> Expr ()
+    (,c (guard (number? c))
+     (+ c depth))
+    ((+ ,a ,b)
+     (list '+ (Expr a (+ depth 1)) (Expr b (+ depth 1))))))
+
+(assert-equal "test-inherited-depth propagates depth downward"
+              '(+ 12 22)
+              (test-inherited-depth '(+ 1 11) 10))
+
+;;; -----------------------------------------------------------------------
+;;; 10. Extra Values: Pure Analyzer with Synthesized Accumulator (*)
+;;; -----------------------------------------------------------------------
+
+(define-pass test-count-symbols : L_test_src (ir acc) -> * (acc)
+  (Expr : Expr (ir acc) -> * (acc)
+    (,x (guard (symbol? x))
+     (+ acc 1))
+    (,c (guard (number? c))
+     acc)))
+
+(assert-equal "test-count-symbols counts symbols across subnodes"
+              3
+              (test-count-symbols '(+ x (* y z)) 0))
+
+;;; -----------------------------------------------------------------------
+;;; 11. Extra Values: Free Variable Analysis with Bound and Acc (*)
+;;; -----------------------------------------------------------------------
+
+(define-pass test-analyze-frees : L_test_src (ir bound acc) -> * (acc)
+  (Expr : Expr (ir bound acc) -> * (acc)
+    ((quote ,datum)
+     acc)
+    (,x (guard (symbol? x))
+     (if (or (memq x bound) (memq x acc))
+         acc
+         (cons x acc)))
+    ((lambda (,params ...) ,body)
+     (Expr body (append params bound) acc))
+    ((let ((,x* ,e*) ...) ,body)
+     (let* ((new-acc (let loop ((es e*) (cur-acc acc))
+                       (if (null? es)
+                           cur-acc
+                           (loop (cdr es) (Expr (car es) bound cur-acc)))))
+            (new-bound (append x* bound)))
+       (Expr body new-bound new-acc)))))
+
+(assert-equal "test-analyze-frees captures free variables"
+              '(c a)
+              (test-analyze-frees '(let ((x a) (y 1)) (+ x b ((lambda (z) (+ z c)) 2))) '(b) '()))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)

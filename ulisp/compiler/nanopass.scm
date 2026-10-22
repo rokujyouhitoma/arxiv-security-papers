@@ -4,20 +4,26 @@
 ;;; =======================================================================
 
 ;;; Helper to parse header of define-pass
-;;; (define-pass pass-name : L_in (ir) -> L_out () body ...)
-;;; or (define-pass pass-name (ir) body ...)
+;;; (define-pass pass-name : L_in (ir extra_in ...) -> L_out (extra_out ...) body ...)
+;;; or (define-pass pass-name : L_in (ir extra_in ...) -> * (extra_out ...) body ...)
+;;; or (define-pass pass-name (ir extra_in ...) body ...)
 (define (nanopass-parse-pass-header form)
   (let ((name (cadr form))
         (rest (cddr form)))
     (if (and (pair? rest) (eq? (car rest) ':))
         (let* ((l-in (cadr rest))
-               (var (car (caddr rest)))
+               (in-args (caddr rest))
+               (in-arg-list (if (pair? in-args) in-args (list in-args)))
                (after-arrow (cddddr rest))
                (l-out (car after-arrow))
-               (opts (cadr after-arrow))
-               (clauses (cddr after-arrow)))
-          (list name l-in var l-out clauses))
-        (list name 'L_src (car (car rest)) 'L_core (cdr rest)))))
+               (has-extra-out? (and (pair? (cdr after-arrow)) (list? (cadr after-arrow))))
+               (extra-out (if has-extra-out? (cadr after-arrow) '()))
+               (clauses (if has-extra-out? (cddr after-arrow) (cdr after-arrow))))
+          (list name l-in in-arg-list l-out extra-out clauses))
+        (let* ((in-args (car rest))
+               (in-arg-list (if (pair? in-args) in-args (list in-args)))
+               (clauses (cdr rest)))
+          (list name 'L_src in-arg-list 'L_core '() clauses)))))
 
 ;;; Expand a single rule in a nonterminal transformer
 (define (nanopass-expand-rule rule nt-name)
@@ -35,34 +41,47 @@
     (list pat vars guard-expr body-expr)))
 
 ;;; Build cascaded if-expression for nonterminal transformer rules
-(define (nanopass-build-rules-cascade rules l-in l-out nt-name var-name)
-  (let loop ((rs rules))
-    (if (null? rs)
-        (list 'nanopass-catamorphism-step
-              (list 'quote l-in)
-              (list 'quote l-out)
-              (list 'quote nt-name)
-              var-name
-              nt-name)
-        (let* ((r (car rs))
-               (pat (car r))
-               (vars (cadr r))
-               (guard-expr (caddr r))
-               (body-expr (cadddr r))
-               (c-var (unique-symbol "__c_")))
-          (list 'let (list (list c-var
-                                 (list 'nanopass-try-clause
-                                       (list 'quote pat)
-                                       (list 'quote vars)
-                                       var-name
-                                       nt-name
-                                       (list 'lambda vars
-                                             (list 'if guard-expr
-                                                   (list 'cons #t body-expr)
-                                                   #f)))))
-                (list 'if c-var
-                      (list 'cdr c-var)
-                      (loop (cdr rs))))))))
+(define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out)
+  (let* ((ir-var (car in-arg-list))
+         (extra-in (cdr in-arg-list)))
+    (let loop ((rs rules))
+      (if (null? rs)
+          (if (null? extra-in)
+              (list 'nanopass-catamorphism-step
+                    (list 'quote l-in)
+                    (list 'quote l-out)
+                    (list 'quote nt-name)
+                    ir-var
+                    nt-name
+                    ''()
+                    (list 'quote extra-out))
+              (list 'nanopass-catamorphism-step
+                    (list 'quote l-in)
+                    (list 'quote l-out)
+                    (list 'quote nt-name)
+                    ir-var
+                    nt-name
+                    (cons 'list extra-in)
+                    (list 'quote extra-out)))
+          (let* ((r (car rs))
+                 (pat (car r))
+                 (vars (cadr r))
+                 (guard-expr (caddr r))
+                 (body-expr (cadddr r))
+                 (c-var (unique-symbol "__c_")))
+            (list 'let (list (list c-var
+                                   (list 'nanopass-try-clause
+                                         (list 'quote pat)
+                                         (list 'quote vars)
+                                         ir-var
+                                         nt-name
+                                         (list 'lambda vars
+                                               (list 'if guard-expr
+                                                     (list 'cons #t body-expr)
+                                                     #f)))))
+                  (list 'if c-var
+                        (list 'cdr c-var)
+                        (loop (cdr rs)))))))))
 
 ;;; Normalize rules whether passed as list of rules or single wrapped list
 (define (nanopass-normalize-rules raw-rules)
@@ -80,52 +99,72 @@
   (let ((nt-name (car clause))
         (rest (cdr clause)))
     (if (and (pair? rest) (eq? (car rest) ':))
-        ;; (NT : NT_in (ir) -> NT_out () rules ...)
-        (let* ((ir-var (car (caddr rest)))
+        ;; (NT : NT_in (ir extra1 ...) -> NT_out (extra_out ...) rules ...)
+        ;; or (NT : NT_in (ir extra1 ...) -> * (extra_out ...) rules ...)
+        (let* ((nt-in (cadr rest))
+               (in-args (caddr rest))
+               (in-arg-list (if (pair? in-args) in-args (list in-args)))
                (after-arrow (cddddr rest))
-               (rules (nanopass-normalize-rules (cddr after-arrow))))
-          (list nt-name ir-var rules))
-        ;; Shorthand: (NT (ir) rules ...)
-        (let ((ir-var (car (car rest)))
-              (rules (nanopass-normalize-rules (cdr rest))))
-          (list nt-name ir-var rules)))))
+               (nt-out (car after-arrow))
+               (has-extra-out? (and (pair? (cdr after-arrow)) (list? (cadr after-arrow))))
+               (extra-out (if has-extra-out? (cadr after-arrow) '()))
+               (raw-rules (if has-extra-out? (cddr after-arrow) (cdr after-arrow)))
+               (rules (nanopass-normalize-rules raw-rules)))
+          (list nt-name in-arg-list nt-out extra-out rules))
+        ;; Shorthand: (NT (ir extra1 ...) rules ...)
+        (let* ((in-args (car rest))
+               (in-arg-list (if (pair? in-args) in-args (list in-args)))
+               (rules (nanopass-normalize-rules (cdr rest))))
+          (list nt-name in-arg-list nt-name '() rules)))))
 
 ;;; Expand define-pass AST
 (define (nanopass-expand-define-pass form)
   (let* ((parsed (nanopass-parse-pass-header form))
          (name (car parsed))
          (l-in (cadr parsed))
-         (input-var (caddr parsed))
+         (in-arg-list (caddr parsed))
          (l-out (cadddr parsed))
-         (clauses (car (cddddr parsed))))
+         (extra-out (car (cddddr parsed)))
+         (clauses (cadr (cddddr parsed))))
     (let loop ((rest clauses)
                (defs '())
                (nt-procs '())
                (entry-nt #f))
       (if (null? rest)
           (let ((final-entry (if entry-nt entry-nt 'Expr)))
-            (list 'define (list name input-var)
+            (list 'define (cons name in-arg-list)
                   (list 'letrec
                         (append (reverse defs) (reverse nt-procs))
-                        (list final-entry input-var))))
+                        (cons final-entry in-arg-list))))
           (let ((c (car rest)))
             (cond
               ;; (definitions def1 def2 ...)
               ((and (pair? c) (eq? (car c) 'definitions))
-               (loop (cdr rest) (append (reverse (cdr c)) defs) nt-procs entry-nt))
+               (let ((norm-defs
+                      (map (lambda (d)
+                             (if (and (pair? d) (eq? (car d) 'define))
+                                 (let ((spec (cadr d)))
+                                   (if (pair? spec)
+                                       (list (car spec) (cons 'lambda (cons (cdr spec) (cddr d))))
+                                       (list spec (caddr d))))
+                                 d))
+                           (cdr c))))
+                 (loop (cdr rest) (append (reverse norm-defs) defs) nt-procs entry-nt)))
               ;; (entry EntryNT)
               ((and (pair? c) (eq? (car c) 'entry))
                (loop (cdr rest) defs nt-procs (cadr c)))
-              ;; (NT : NT_in (ir) -> NT_out () rules ...)
-              ;; or (NT (ir) rules ...)
+              ;; (NT : NT_in (ir extra ...) -> NT_out (extra_out ...) rules ...)
+              ;; or (NT (ir extra ...) rules ...)
               ((and (pair? c) (symbol? (car c)))
                (let* ((parsed-nt (nanopass-parse-nt-clause c))
                       (nt-name (car parsed-nt))
-                      (ir-var (cadr parsed-nt))
-                      (raw-rules (caddr parsed-nt))
+                      (nt-in-args (cadr parsed-nt))
+                      (nt-out (caddr parsed-nt))
+                      (nt-extra-out (cadddr parsed-nt))
+                      (raw-rules (car (cddddr parsed-nt)))
                       (expanded-rules (map (lambda (r) (nanopass-expand-rule r nt-name)) raw-rules))
-                      (body-expr (nanopass-build-rules-cascade expanded-rules l-in l-out nt-name ir-var))
-                      (proc-binding (list nt-name (list 'lambda (list ir-var) body-expr))))
+                      (body-expr (nanopass-build-rules-cascade expanded-rules l-in nt-out nt-name nt-in-args (if (pair? nt-extra-out) nt-extra-out extra-out)))
+                      (proc-binding (list nt-name (list 'lambda nt-in-args body-expr))))
                  (loop (cdr rest)
                        defs
                        (cons proc-binding nt-procs)

@@ -765,60 +765,92 @@
 
 ;;; Catamorphism Automatic Traversal Code Synthesizer
 ;;; Automatically traverses non-matching AST nodes recursively.
-(define (nanopass-catamorphism-step lang-in lang-out nt-name ir recurse-fn)
-  (cond
-    ((not (pair? ir))
-     ir)
-    (else
-     (let ((op (car ir)))
-       (case op
-         ((quote)
-          ir)
-         ((if)
-          (if (null? (cdddr ir))
-              (list 'if (recurse-fn (cadr ir)) (recurse-fn (caddr ir)))
-              (list 'if (recurse-fn (cadr ir)) (recurse-fn (caddr ir)) (recurse-fn (cadddr ir)))))
-         ((begin)
-          (cons 'begin (map recurse-fn (cdr ir))))
-         ((lambda)
-          ;; Later passes expect a single-expression lambda body.
-          (list 'lambda (cadr ir)
-                (cond ((null? (cddr ir)) (list 'begin))
-                      ((null? (cdddr ir)) (recurse-fn (caddr ir)))
-                      (else (cons 'begin (map recurse-fn (cddr ir)))))))
-         ((let)
-          (if (symbol? (cadr ir))
-              (list 'let (cadr ir)
-                    (map (lambda (b) (list (car b) (recurse-fn (cadr b)))) (caddr ir))
-                    (if (null? (cddddr ir))
-                        (recurse-fn (cadddr ir))
-                        (cons 'begin (map recurse-fn (cdddr ir)))))
-              (list 'let
-                    (map (lambda (b) (list (car b) (recurse-fn (cadr b)))) (cadr ir))
-                    (if (null? (cdddr ir))
-                        (recurse-fn (caddr ir))
-                        (cons 'begin (map recurse-fn (cddr ir)))))))
-         ((letrec)
-          (list 'letrec
-                (map (lambda (b) (list (car b) (recurse-fn (cadr b)))) (cadr ir))
-                (if (null? (cdddr ir))
-                    (recurse-fn (caddr ir))
-                    (cons 'begin (map recurse-fn (cddr ir))))))
-         ((set!)
-          (list 'set! (cadr ir) (recurse-fn (caddr ir))))
-         ((%program)
-          (list '%program
-                (map (lambda (d)
-                       (if (and (pair? d) (eq? (car d) 'define))
-                           (list 'define (cadr d) (recurse-fn (caddr d)))
-                           (recurse-fn d)))
-                     (cadr ir))
-                (recurse-fn (caddr ir))))
-         (else
-          ;; General function application or compound form
-          (let loop ((cur (cdr ir)) (acc (list (recurse-fn op))))
-            (cond
-              ((null? cur) (reverse acc))
-              ((not (pair? cur)) (append (reverse acc) (recurse-fn cur)))
-              (else
-               (loop (cdr cur) (cons (recurse-fn (car cur)) acc)))))))))))
+;;; Supports both AST transformation (with inherited attributes) and pure analyzer passes (lang-out = '*).
+(define (nanopass-catamorphism-step lang-in lang-out nt-name ir recurse-fn extra-args extra-out)
+  (let ((extra-args (if (pair? extra-args) extra-args '()))
+        (extra-out (if (pair? extra-out) extra-out '())))
+    (if (eq? lang-out '*)
+        ;; Pure Analyzer mode: default for unmatched atom is accumulator (if threaded) or #f
+        (cond
+          ((not (pair? ir))
+           (if (and (pair? extra-args) (pair? extra-out))
+               (car (reverse extra-args))
+               #f))
+          (else
+           (if (pair? extra-args)
+               (let* ((rev-extra (reverse extra-args))
+                      (initial-acc (car rev-extra))
+                      (prefix (reverse (cdr rev-extra)))
+                      (elements (if (symbol? (car ir)) (cdr ir) ir)))
+                 (let loop ((cur elements) (acc initial-acc))
+                   (cond
+                     ((null? cur) acc)
+                     ((not (pair? cur))
+                      (nanopass-apply-list recurse-fn (cons cur (append prefix (list acc)))))
+                     (else
+                      (let* ((item (car cur))
+                             (new-acc (nanopass-apply-list recurse-fn (cons item (append prefix (list acc))))))
+                        (loop (cdr cur) new-acc))))))
+               #f)))
+        ;; Transform mode: reconstruct AST while propagating extra inherited attributes
+        (let ((call-recurse
+               (lambda (node)
+                 (if (null? extra-args)
+                     (recurse-fn node)
+                     (nanopass-apply-list recurse-fn (cons node extra-args))))))
+          (cond
+            ((not (pair? ir))
+             ir)
+            (else
+             (let ((op (car ir)))
+               (case op
+                 ((quote)
+                  ir)
+                 ((if)
+                  (if (null? (cdddr ir))
+                      (list 'if (call-recurse (cadr ir)) (call-recurse (caddr ir)))
+                      (list 'if (call-recurse (cadr ir)) (call-recurse (caddr ir)) (call-recurse (cadddr ir)))))
+                 ((begin)
+                  (cons 'begin (map call-recurse (cdr ir))))
+                 ((lambda)
+                  ;; Later passes expect a single-expression lambda body.
+                  (list 'lambda (cadr ir)
+                        (cond ((null? (cddr ir)) (list 'begin))
+                              ((null? (cdddr ir)) (call-recurse (caddr ir)))
+                              (else (cons 'begin (map call-recurse (cddr ir)))))))
+                 ((let)
+                  (if (symbol? (cadr ir))
+                      (list 'let (cadr ir)
+                            (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (caddr ir))
+                            (if (null? (cddddr ir))
+                                (call-recurse (cadddr ir))
+                                (cons 'begin (map call-recurse (cdddr ir)))))
+                      (list 'let
+                            (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (cadr ir))
+                            (if (null? (cdddr ir))
+                                (call-recurse (caddr ir))
+                                (cons 'begin (map call-recurse (cddr ir)))))))
+                 ((letrec)
+                  (list 'letrec
+                        (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (cadr ir))
+                        (if (null? (cdddr ir))
+                            (call-recurse (caddr ir))
+                            (cons 'begin (map call-recurse (cddr ir))))))
+                 ((set!)
+                  (list 'set! (cadr ir) (call-recurse (caddr ir))))
+                 ((%program)
+                  (list '%program
+                        (map (lambda (d)
+                               (if (and (pair? d) (eq? (car d) 'define))
+                                   (list 'define (cadr d) (call-recurse (caddr d)))
+                                   (call-recurse d)))
+                             (cadr ir))
+                        (call-recurse (caddr ir))))
+                 (else
+                  ;; General function application or compound form
+                  (let loop ((cur (cdr ir)) (acc (list (call-recurse op))))
+                    (cond
+                      ((null? cur) (reverse acc))
+                      ((not (pair? cur)) (append (reverse acc) (call-recurse cur)))
+                      (else
+                       (loop (cdr cur) (cons (call-recurse (car cur)) acc))))))))))))))
