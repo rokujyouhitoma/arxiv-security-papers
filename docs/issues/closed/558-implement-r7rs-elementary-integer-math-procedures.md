@@ -2,7 +2,7 @@
 ID: 558
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT] R7RS 基本整数算術手続き (square / gcd / lcm / expt / remainder) の実装 (ID: 558)
@@ -25,10 +25,13 @@ ULisp の整数算術プリミティブ (`+`, `-`, `*`, `/`, `<`, `=`, `abs` な
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/math.scm](../../ulisp/lib/math.scm) (新規作成または既存ライブラリへの追加)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (ライブラリ結合順の追加)
-- [ ] [ulisp/tests/test_stdlib_r7rs.scm](../../ulisp/tests/test_stdlib_r7rs.scm) (算術手続きテスト追加)
-- [ ] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (適合状況更新)
+- [x] [ulisp/lib/math.scm](../../ulisp/lib/math.scm) (新規作成: square, remainder, gcd-2, lcm-2, expt)
+- [x] [ulisp/lib/scheme/base.sld](../../ulisp/lib/scheme/base.sld) (math.scm の include 追加)
+- [x] [ulisp/passes/030_desugar.scm](../../ulisp/passes/030_desugar.scm) (gcd, lcm の可変長脱糖展開)
+- [x] [ulisp/passes/020_macro_expander.scm](../../ulisp/passes/020_macro_expander.scm) (core-form-or-primitive 登録)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (ULISP_STD_LIBS への math.scm 追加)
+- [x] [ulisp/tests/test_stdlib_r7rs.scm](../../ulisp/tests/test_stdlib_r7rs.scm) (算術手続きテスト追加)
+- [x] [ulisp/docs/r7rs_specification_compliance.md](../../ulisp/docs/r7rs_specification_compliance.md) (適合状況更新)
 
 ---
 
@@ -51,8 +54,8 @@ Target Branch: `feat/558-implement-r7rs-elementary-integer-math-procedures`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `square`, `gcd`, `lcm`, `expt`, `remainder` が実装されていること。
-- [ ] 0 や負数を含む境界値テストが正常に動作すること。
-- [ ] `tests/test_stdlib_r7rs.scm` にテストが追加され合格すること。
-- [ ] `./test.sh` および `./test_c.sh` がエラーなく 100% PASS すること。
-- [ ] `ulisp/docs/r7rs_specification_compliance.md` の対象項目が更新されていること。
+- [x] `square`, `gcd`, `lcm`, `expt`, `remainder` が実装されていること。
+- [x] 0 や負数を含む境界値テストが正常に動作すること。
+- [x] `tests/test_stdlib_r7rs.scm` にテストが追加され合格すること。
+- [x] `./test.sh` および `./test_c.sh` がエラーなく 100% PASS すること。
+- [x] `ulisp/docs/r7rs_specification_compliance.md` の対象項目が更新されていること。

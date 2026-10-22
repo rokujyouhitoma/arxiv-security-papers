@@ -341,6 +341,51 @@
 (assert-equal "string=? 3 args chain true" #t (string=? "abc" "abc" "abc"))
 (assert-equal "string=? 3 args chain false" #f (string=? "abc" "abc" "xyz"))
 
+;;; -----------------------------------------------------------------------
+;;; R7RS 6.2.6 Elementary Integer Math (Issue #558)
+;;; -----------------------------------------------------------------------
+;; square
+(assert-num-equal "square 0" 0 (square 0))
+(assert-num-equal "square 7" 49 (square 7))
+(assert-num-equal "square -5" 25 (square -5))
+
+;; remainder (sign follows dividend)
+(assert-num-equal "remainder 13 4" 1 (remainder 13 4))
+(assert-num-equal "remainder -13 4" -1 (remainder -13 4))
+(assert-num-equal "remainder 13 -4" 1 (remainder 13 -4))
+(assert-num-equal "remainder -13 -4" -1 (remainder -13 -4))
+(assert-num-equal "remainder 12 4" 0 (remainder 12 4))
+(assert-num-equal "remainder 0 5" 0 (remainder 0 5))
+
+;; gcd (variadic, non-negative)
+(assert-num-equal "gcd no args" 0 (gcd))
+(assert-num-equal "gcd 1 arg negative" 12 (gcd -12))
+(assert-num-equal "gcd 32 -36" 4 (gcd 32 -36))
+(assert-num-equal "gcd 0 5" 5 (gcd 0 5))
+(assert-num-equal "gcd 0 0" 0 (gcd 0 0))
+(assert-num-equal "gcd 3 args" 6 (gcd 12 18 24))
+(assert-num-equal "gcd 4 args" 1 (gcd 12 18 24 7))
+
+;; lcm (variadic, non-negative)
+(assert-num-equal "lcm no args" 1 (lcm))
+(assert-num-equal "lcm 1 arg negative" 7 (lcm -7))
+(assert-num-equal "lcm 32 -36" 288 (lcm 32 -36))
+(assert-num-equal "lcm with zero" 0 (lcm 0 5))
+(assert-num-equal "lcm 3 args" 60 (lcm 4 6 10))
+
+;; expt (binary exponentiation)
+(assert-num-equal "expt 0^0" 1 (expt 0 0))
+(assert-num-equal "expt 5^0" 1 (expt 5 0))
+(assert-num-equal "expt 0^5" 0 (expt 0 5))
+(assert-num-equal "expt 2^10" 1024 (expt 2 10))
+(assert-num-equal "expt 3^5" 243 (expt 3 5))
+(assert-num-equal "expt -2^3" -8 (expt -2 3))
+(assert-num-equal "expt -2^4" 16 (expt -2 4))
+(assert-num-equal "expt 2^40" 1099511627776 (expt 2 40))
+(assert-num-equal "expt 1^-3" 1 (expt 1 -3))
+(assert-num-equal "expt -1^-3" -1 (expt -1 -3))
+(assert-num-equal "expt -1^-2" 1 (expt -1 -2))
+
 ;;; Summary
 (write-string "=== ULisp R7RS Standard Library Tests Completed: ")
 (if (= (vector-ref *test-failures* 0) 0)

@@ -231,6 +231,7 @@
 
   (include "../list.scm"
            "../equality.scm"
+           "../math.scm"
            "../vector.scm"
            "../bytevector.scm"
            "../string.scm"

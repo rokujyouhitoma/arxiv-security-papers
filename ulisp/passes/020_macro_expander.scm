@@ -30,7 +30,7 @@
               vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector vector->string vector->string-range
               string string-ref string-set! string-length make-string string-append string-copy string-copy! string-fill! string-map string-for-each substring string=? string<? string>? string<=? string>=? string->symbol symbol->string string->list string->list-range list->string string->vector string->vector-range
               bytevector bytevector-u8-ref bytevector-u8-set! bytevector-length make-bytevector bytevector-copy bytevector-copy! bytevector-append bytevector=?
-              + - * = < > <= >= modulo quotient /
+              + - * = < > <= >= modulo quotient / square remainder gcd gcd-2 lcm lcm-2 expt %math-abs
               zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
               boolean? char? symbol? string? list? vector? bytevector?
               write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?

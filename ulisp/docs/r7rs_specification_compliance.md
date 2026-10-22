@@ -98,12 +98,12 @@
 | **6.2.6** | `zero?`, `positive?`, `negative?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 符号・ゼロ判定プリミティブ |
 | **6.2.6** | `odd?`, `even?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | LSB ビット判定 |
 | **6.2.6** | `+`, `-`, `*` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm)<br>[Pass 130](../passes/130_lir.scm) | 63-bit 加減乗算、定数畳み込み、x86/C バックエンド直結 |
-| **6.2.6** | `/`, `quotient`, `modulo` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数除算・剰余、ゼロ除算トラップ保護 |
+| **6.2.6** | `/`, `quotient`, `modulo` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数除算・剰余、ゼロ除算トラップ保護。※ネイティブ `modulo` は `idiv` 剰余 (切り捨て除算) のため、異符号オペランドでは R7RS の床除算剰余と結果が異なる (既知の制約) |
 | **6.2.6** | `=`, `<`, `>`, `<=`, `>=` | **◎** | [Pass 130](../passes/130_lir.scm) | 整数比較、分岐融合 (Branch Fusion) 最適化 ([Issue #545](../../docs/issues/closed/545-implement-condition-branch-flag-fusion.md)) |
 | **6.2.6** | `max`, `min`, `abs` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 2引数固定で基本演算を提供 |
 | **6.2.6** | `floor/`, `floor-quotient`, `floor-remainder` | **×** | - | 未実装 |
 | **6.2.6** | `truncate/`, `truncate-quotient`, `truncate-remainder` | **×** | - | 未実装 |
-| **6.2.6** | `remainder`, `gcd`, `lcm`, `square`, `expt` | **×** | - | [Issue #558](../../docs/issues/558-implement-r7rs-elementary-integer-math-procedures.md) にて実装予定 |
+| **6.2.6** | `remainder`, `gcd`, `lcm`, `square`, `expt` | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[Pass 030](../passes/030_desugar.scm) | 切り捨て剰余、ユークリッド互除法 (可変長引数は `gcd-2`/`lcm-2` 左畳み込みへ脱糖)、繰り返し二乗法 O(log n) ([Issue #558](../../docs/issues/closed/558-implement-r7rs-elementary-integer-math-procedures.md)) |
 | **6.2.6** | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `sqrt` | **×** | - | 超越関数 (浮動小数点非サポートのため未実装) |
 
 #### 6.3 真偽値 (Booleans)
@@ -364,8 +364,8 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #555](../../docs/issues/closed/555-implement-r7rs-list-accessors-list-tail-ref-set.md): `list-tail`, `list-ref`, `list-set!` (リストインデックス操作)
    - [Issue #556](../../docs/issues/closed/556-implement-r7rs-character-comparison-predicates.md): `char<?`, `char>?`, `char<=?`, `char>=?` (文字順序比較)
    - [Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md): `string->list`, `list->string`, `string->vector`, `vector->string`, `string<?`, `string>?`, `string<=?`, `string>=?` (文字列・ベクタ・リスト相互変換および文字列順序比較述語)
+   - [Issue #558](../../docs/issues/closed/558-implement-r7rs-elementary-integer-math-procedures.md): `square`, `gcd`, `lcm`, `expt`, `remainder` (基本整数算術)
 3. **進行中および直近の実装予定 (Open Issues)**:
-   - [Issue #558](../../docs/issues/558-implement-r7rs-elementary-integer-math-procedures.md): `square`, `gcd`, `lcm`, `expt`, `remainder` (基本整数算術)
    - [Issue #559](../../docs/issues/559-implement-r7rs-do-loop-syntax.md): `do` (反復実行構文)
    - [Issue #560](../../docs/issues/560-implement-r7rs-define-values-syntax.md): `define-values` (多値定義構文)
    - [Issue #561](../../docs/issues/561-establish-r7rs-library-metadata-standard-and-link-compliance-tables.md): R7RS ライブラリメタデータ管理規約の確立と準拠表実装リンクの網羅

@@ -2283,7 +2283,7 @@
               vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector vector->string vector->string-range
               string string-ref string-set! string-length make-string string-append string-copy string-copy! string-fill! string-map string-for-each substring string=? string<? string>? string<=? string>=? string->symbol symbol->string string->list string->list-range list->string string->vector string->vector-range
               bytevector bytevector-u8-ref bytevector-u8-set! bytevector-length make-bytevector bytevector-copy bytevector-copy! bytevector-append bytevector=?
-              + - * = < > <= >= modulo quotient /
+              + - * = < > <= >= modulo quotient / square remainder gcd gcd-2 lcm lcm-2 expt %math-abs
               zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
               boolean? char? symbol? string? list? vector? bytevector?
               write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
@@ -3314,6 +3314,30 @@
         (irritants (cddr expr)))
     (list 'raise (cons 'list (cons ''error-object (cons msg irritants))))))
 
+(define (desugar-gcd args)
+  (cond
+    ((null? args) 0)
+    ((null? (cdr args)) (list '%math-abs (car args)))
+    ((null? (cddr args)) (list 'gcd-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'gcd-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'gcd-2 curr (car rest)) (cdr rest)))))))
+
+(define (desugar-lcm args)
+  (cond
+    ((null? args) 1)
+    ((null? (cdr args)) (list '%math-abs (car args)))
+    ((null? (cddr args)) (list 'lcm-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'lcm-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'lcm-2 curr (car rest)) (cdr rest)))))))
+
 ;;; =======================================================================
 ;;; Canonical Nanopass DSL Pass: desugar-all
 ;;; Transforms high-level L_src AST into canonical L_core AST
@@ -3405,6 +3429,8 @@
     ((make-bytevector . ,args) (Expr (desugar-make-bytevector (map Expr args))))
     ((bytevector-copy . ,args) (Expr (desugar-bytevector-copy (map Expr args))))
     ((bytevector-copy! . ,args) (Expr (desugar-bytevector-copy! (map Expr args))))
+    ((gcd . ,args) (Expr (desugar-gcd (map Expr args))))
+    ((lcm . ,args) (Expr (desugar-lcm (map Expr args))))
 
     ;; 4. Dynamic & Multiple Values (Pass 029)
     ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))

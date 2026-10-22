@@ -205,6 +205,30 @@
         (irritants (cddr expr)))
     (list 'raise (cons 'list (cons ''error-object (cons msg irritants))))))
 
+(define (desugar-gcd args)
+  (cond
+    ((null? args) 0)
+    ((null? (cdr args)) (list '%math-abs (car args)))
+    ((null? (cddr args)) (list 'gcd-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'gcd-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'gcd-2 curr (car rest)) (cdr rest)))))))
+
+(define (desugar-lcm args)
+  (cond
+    ((null? args) 1)
+    ((null? (cdr args)) (list '%math-abs (car args)))
+    ((null? (cddr args)) (list 'lcm-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'lcm-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'lcm-2 curr (car rest)) (cdr rest)))))))
+
 ;;; =======================================================================
 ;;; Canonical Nanopass DSL Pass: desugar-all
 ;;; Transforms high-level L_src AST into canonical L_core AST
@@ -296,6 +320,8 @@
     ((make-bytevector . ,args) (Expr (desugar-make-bytevector (map Expr args))))
     ((bytevector-copy . ,args) (Expr (desugar-bytevector-copy (map Expr args))))
     ((bytevector-copy! . ,args) (Expr (desugar-bytevector-copy! (map Expr args))))
+    ((gcd . ,args) (Expr (desugar-gcd (map Expr args))))
+    ((lcm . ,args) (Expr (desugar-lcm (map Expr args))))
 
     ;; 4. Dynamic & Multiple Values (Pass 029)
     ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))

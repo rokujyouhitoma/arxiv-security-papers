@@ -25,7 +25,7 @@ endif
 ULISP_RUNTIME_LIBS = runtime/gc.scm runtime/io.scm runtime/printer.scm runtime/entry.scm
 
 ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm \
-                 lib/reader.scm lib/equality.scm lib/predicates.scm lib/bytevector.scm \
+                 lib/reader.scm lib/equality.scm lib/predicates.scm lib/math.scm lib/bytevector.scm \
                  lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
                  lib/continuation.scm lib/parameter.scm lib/gc.scm \
                  $(ULISP_RUNTIME_LIBS)
