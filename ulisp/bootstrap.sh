@@ -98,30 +98,71 @@ echo "[3/3] Stage 3: Compiling ulisp_core.scm with Stage 2 compiler..."
 run_stage "Stage 3 (scheme-stage2)" "$BUILD_DIR/stage3.s" "$BUILD_DIR/scheme-stage2" "$BUILD_DIR/ulisp_core.scm"
 gcc -nostdlib -static "$BUILD_DIR/stage3.s" -o "$BUILD_DIR/scheme-stage3"
 
-echo "=== Verifying Fixed Point (diff stage2.s stage3.s) ==="
-if cmp -s "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s"; then
-    echo -e "\033[1;32mSUCCESS: Stage 2 and Stage 3 outputs are bit-for-bit IDENTICAL!\033[0m"
-    echo "Fixed-point bootstrap verified successfully with Thin Debug Runtime & Scheme stdlib."
-    
-    # Smoke test Stage 3 binary
-    echo "=== Running Smoke Test on Stage 3 Binary ==="
-    echo "42" | ULISP_QUIET=1 "$BUILD_DIR/scheme-stage3" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+check_label_only_diff() {
+    local file1="$1"
+    local file2="$2"
+    "$PYTHON_BIN" -c '
+import re, sys
+def norm(t):
+    t = re.sub(r"\.L_([a-zA-Z0-9_]+)_[0-9]+", r".L_\1_#", t)
+    t = re.sub(r"__safepoint_[0-9]+", r"__safepoint_#", t)
+    return t
+with open(sys.argv[1]) as f1, open(sys.argv[2]) as f2:
+    if norm(f1.read()) == norm(f2.read()):
+        sys.exit(0)
+    sys.exit(1)
+' "$file1" "$file2" 2>/dev/null
+}
+
+verify_and_promote() {
+    local final_compiler="$1"
+    local final_stage_name="$2"
+
+    echo "=== Running Smoke Test on $final_stage_name Binary ==="
+    echo "42" | ULISP_QUIET=1 "$final_compiler" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
     gcc -nostdlib -static "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test"
-    SMOKE_OUT="$("$BUILD_DIR/smoke_test" 2>/dev/null || true)"
-    if [ "$SMOKE_OUT" = "42" ]; then
-        echo -e "\033[1;32mPASS: Stage 3 binary produced functional executable (output: 42).\033[0m"
+    local smoke_out
+    smoke_out="$("$BUILD_DIR/smoke_test" 2>/dev/null || true)"
+    if [ "$smoke_out" = "42" ]; then
+        echo -e "\033[1;32mPASS: $final_stage_name binary produced functional executable (output: 42).\033[0m"
     else
-        echo -e "\033[1;31mFAIL: Stage 3 smoke test returned unexpected output: '$SMOKE_OUT'\033[0m" >&2
+        echo -e "\033[1;31mFAIL: $final_stage_name smoke test returned unexpected output: '$smoke_out'\033[0m" >&2
         exit 1
     fi
 
     mkdir -p "$ULISP_DIR/bin"
-    cp -f "$BUILD_DIR/scheme-stage3" "$BOOT_BIN"
+    cp -f "$final_compiler" "$BOOT_BIN"
     chmod +x "$BOOT_BIN"
-    echo "Updated local bootstrap seed cache ($BOOT_BIN) with verified Stage 3 compiler."
+    echo "Updated local bootstrap seed cache ($BOOT_BIN) with verified $final_stage_name compiler."
     exit 0
+}
+
+echo "=== Verifying Fixed Point (diff stage2.s stage3.s) ==="
+if cmp -s "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s"; then
+    echo -e "\033[1;32mSUCCESS: Stage 2 and Stage 3 outputs are bit-for-bit IDENTICAL!\033[0m"
+    echo "Fixed-point bootstrap verified successfully with Thin Debug Runtime & Scheme stdlib."
+    verify_and_promote "$BUILD_DIR/scheme-stage3" "Stage 3"
+elif check_label_only_diff "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s"; then
+    echo -e "\033[1;33m[INFO] Stage 2 and Stage 3 differ ONLY in auto-incremented label counters (1-generation bootstrap lag).\033[0m"
+    echo "[INFO] Running Stage 4 to verify convergence at Fixed Point..."
+
+    echo "[4/4] Stage 4: Compiling ulisp_core.scm with Stage 3 compiler..."
+    run_stage "Stage 4 (scheme-stage3)" "$BUILD_DIR/stage4.s" "$BUILD_DIR/scheme-stage3" "$BUILD_DIR/ulisp_core.scm"
+    gcc -nostdlib -static "$BUILD_DIR/stage4.s" -o "$BUILD_DIR/scheme-stage4"
+
+    echo "=== Verifying Fixed Point (diff stage3.s stage4.s) ==="
+    if cmp -s "$BUILD_DIR/stage3.s" "$BUILD_DIR/stage4.s"; then
+        echo -e "\033[1;32mSUCCESS: Stage 3 and Stage 4 outputs are bit-for-bit IDENTICAL!\033[0m"
+        echo "Fixed-point bootstrap verified successfully after 1-generation seed optimization convergence."
+        verify_and_promote "$BUILD_DIR/scheme-stage4" "Stage 4"
+    else
+        echo -e "\033[1;31mFAILURE: Discrepancy detected between stage3.s and stage4.s\033[0m" >&2
+        diff -u "$BUILD_DIR/stage3.s" "$BUILD_DIR/stage4.s" | head -n 50
+        exit 1
+    fi
 else
-    echo -e "\033[1;31mFAILURE: Discrepancy detected between stage2.s and stage3.s\033[0m" >&2
+    echo -e "\033[1;31mFAILURE: Semantic discrepancy detected between stage2.s and stage3.s\033[0m" >&2
     diff -u "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s" | head -n 50
     exit 1
 fi
+

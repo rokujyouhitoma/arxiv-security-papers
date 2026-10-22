@@ -522,7 +522,7 @@
                        (opt-e (car res))
                        (next-env (caddr res)))
                   (loop (cdr es) next-env (append acc (list opt-e)))))))
-         ((%make-closure)
+         ((%make-closure %make-closure-env)
           (let* ((label (cadr expr))
                  (env-args (cddr expr))
                  (evaluated-args
@@ -536,8 +536,8 @@
                                 (cons (cadr res) vn-acc))))))
                  (opt-env-args (car evaluated-args))
                  (res-env (caddr evaluated-args))
-                 (alloc-res (lvn-alloc-vn res-env '%make-closure '())))
-            (list (cons '%make-closure (cons label opt-env-args))
+                 (alloc-res (lvn-alloc-vn res-env (car expr) '())))
+            (list (cons (car expr) (cons label opt-env-args))
                   (car alloc-res)
                   (cdr alloc-res))))
          (else

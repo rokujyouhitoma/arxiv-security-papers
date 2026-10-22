@@ -34,7 +34,7 @@
       (entry (cdr entry))
       ((assq var (car *top-level-fns*))
        ;; Top-level function referenced as first-class value: instantiate static closure
-       (list '%make-closure (cdr (assq var (car *top-level-fns*)))))
+       (list '%make-closure-env (cdr (assq var (car *top-level-fns*)))))
       ((memq var (car *top-level-vars*))
        ;; Top-level global variable reference
        (list '%global-ref var))
@@ -108,6 +108,8 @@
          ((%values)
           (cons '%values
                 (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+         ((%make-closure %make-closure-env)
+          (cons op (cons (cadr expr) (map (lambda (e) (convert-expr e var-map)) (cddr expr)))))
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else
@@ -145,10 +147,10 @@
          (new-body (convert-expr body inner-var-map))
          (fn-def (list '%function label params new-body)))
     (add-lifted-function! fn-def)
-    ;; Instantiation expression: (%make-closure 'label captured-args...)
+    ;; Instantiation expression: (%make-closure-env 'label captured-args...)
     (let ((captured-args
            (map (lambda (fv) (convert-expr fv var-map)) frees)))
-      (cons '%make-closure (cons label captured-args)))))
+      (cons '%make-closure-env (cons label captured-args)))))
 
 ;;; Convert letrec expression into let + %make-closure + backpatching %closure-set!
 (define (convert-letrec bindings body var-map)
@@ -192,7 +194,7 @@
                                            (convert-expr fv outer-var-map)))
                                      frees)))
                            (list var
-                                 (cons '%make-closure (cons label init-args))
+                                 (cons '%make-closure-env (cons label init-args))
                                  frees)))
                        (list var (convert-expr val outer-var-map) '()))))
                bindings))

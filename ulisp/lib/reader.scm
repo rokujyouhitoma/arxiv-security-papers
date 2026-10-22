@@ -135,6 +135,14 @@
        (port-read-char p) ; consume '#'
        (let ((c2 (port-read-char p)))
          (cond
+           ((ulisp-char=? c2 #\:)
+            (let read-kw ((acc (list #\:)))
+              (let ((next (port-peek-char p)))
+                (if (or (ulisp-is-delimiter? next) (eof-object? next))
+                    (string->symbol (ulisp-chars->string (reverse acc)))
+                    (begin
+                      (port-read-char p)
+                      (read-kw (cons next acc)))))))
            ((ulisp-char=? c2 #\t) #t)
            ((ulisp-char=? c2 #\f) #f)
            ((ulisp-char=? c2 #\() ; Vector literal #( ... )

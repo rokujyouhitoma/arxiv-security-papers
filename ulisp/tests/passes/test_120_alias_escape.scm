@@ -144,6 +144,54 @@
                    (%closure-ref c 1))
                 res))
 
+;; Case 3.5: Local %make-closure-env promotion to (annotate #:stack-alloc ...)
+;; (let ((c (%make-closure-env 'L_add1 x))) (%closure-ref c 1))
+;; Expected: c does not escape -> annotated with #:stack-alloc
+(let* ((expr '(let ((c (%make-closure-env 'L_add1 x)))
+                (%closure-ref c 1)))
+       (res (alias-escape-all expr)))
+  (assert-equal "local %make-closure-env is annotated with #:stack-alloc"
+                '(let ((c (annotate #:stack-alloc (%make-closure-env 'L_add1 x))))
+                   (%closure-ref c 1))
+                res))
+
+;; Case 3.6: Locally invoked closure does not escape -> annotated with #:stack-alloc
+;; (let ((f (%make-closure-env 'L_square x))) (f 10))
+;; Expected: calling f does not cause f to escape!
+(let* ((expr '(let ((f (%make-closure-env 'L_square x)))
+                (f 10)))
+       (res (alias-escape-all expr)))
+  (assert-equal "locally invoked closure is annotated with #:stack-alloc"
+                '(let ((f (annotate #:stack-alloc (%make-closure-env 'L_square x))))
+                   (f 10))
+                res))
+
+;; Case 3.7: Escaping closure returned in tail position is NOT annotated
+;; (let ((f (%make-closure-env 'L_square x))) f)
+;; Expected: f escapes via tail position -> remains unannotated
+(let* ((expr '(let ((f (%make-closure-env 'L_square x)))
+                f))
+       (res (alias-escape-all expr)))
+  (assert-equal "escaping closure returned in tail position remains unannotated"
+                '(let ((f (%make-closure-env 'L_square x)))
+                   f)
+                res))
+
+;; Case 3.8: Escaping closure stored into heap data structure is NOT annotated
+;; (let ((f (%make-closure-env 'L_square x))) (vector-set! vec 0 f) 0)
+;; Expected: f escapes into vec -> remains unannotated
+(let* ((expr '(let ((f (%make-closure-env 'L_square x)))
+                (begin
+                  (vector-set! vec 0 f)
+                  0)))
+       (res (alias-escape-all expr)))
+  (assert-equal "closure stored into vector escapes and remains unannotated"
+                '(let ((f (%make-closure-env 'L_square x)))
+                   (begin
+                     (vector-set! vec 0 f)
+                     0))
+                res))
+
 ;;; -----------------------------------------------------------------------
 ;;; Test Group 4: TBAA Redundant Load Elimination in AST
 ;;; -----------------------------------------------------------------------

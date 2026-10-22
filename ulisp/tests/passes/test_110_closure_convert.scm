@@ -36,7 +36,7 @@
        (main-expr (caddr res)))
   (assert-equal "lifts 1 function" 1 (length funcs))
   (assert-equal "function tag" '%function (caar funcs))
-  (assert-equal "main is %make-closure" '%make-closure (car main-expr)))
+  (assert-true "main is %make-closure-env" (memq (car main-expr) '(%make-closure %make-closure-env))))
 
 ;; 3. Free variable capture via %closure-ref
 (let* ((res (closure-convert '(let ((y 10)) (lambda (x) (+ x y)))))

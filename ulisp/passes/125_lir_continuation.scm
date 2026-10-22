@@ -347,7 +347,7 @@
                      (or (cont-body-has-external-call? (car args) f-name)
                          (loop (cdr args)))))
               #t))
-         ((%direct-call %call %closure-call %c-call %syscall %raw-call/cc %make-closure)
+         ((%direct-call %call %closure-call %c-call %syscall %raw-call/cc %make-closure %make-closure-env)
           #t)
          ((if)
           (or (cont-body-has-external-call? (cadr expr) f-name)

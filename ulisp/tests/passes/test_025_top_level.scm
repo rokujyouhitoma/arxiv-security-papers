@@ -83,7 +83,7 @@
                (let has-mc? ((e main))
                  (cond
                    ((not (pair? e)) #f)
-                   ((eq? (car e) '%make-closure) #t)
+                   ((memq (car e) '(%make-closure %make-closure-env)) #t)
                    (else (or (has-mc? (car e)) (has-mc? (cdr e))))))))
 
 ;; Test 5: Top-level define-values expansion

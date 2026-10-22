@@ -2,7 +2,7 @@
 ID: 578
 種別: Refactor
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [REFACTOR] Pass 110 (Closure) / 120 (Escape) / 130 (LIR) の連携による非エスケープオブジェクトのスタック配置最適化 (ID: 578)
@@ -58,8 +58,16 @@ Target Branch: `refactor/578-coordinate-closure-escape-and-lir-stack-allocation-
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 非エスケープクロージャに対して Pass 120 が正しく `#:stack-alloc` を付与できること
-- [ ] Pass 130 が `#:stack-alloc` 注釈を認識し、ヒープ割当（`%alloc`）を回避する LIR を出力すること
-- [ ] 全27パスの単体テスト（`make -C ulisp test_all_passes`）が 100% PASS すること
-- [ ] 既存の AOT テストスイート（`make -C ulisp test_aot`）がデグレードなく 100% PASS すること
-- [ ] 相対パスのみを使用し、絶対パスが含まれないこと
+- [x] 非エスケープクロージャに対して Pass 120 が正しく `#:stack-alloc` を付与できること
+- [x] Pass 130 が `#:stack-alloc` 注釈を認識し、ヒープ割当（`%alloc`）を回避する LIR を出力すること
+- [x] 全27パスの単体テスト（`make -C ulisp test_all_passes`）が 100% PASS すること
+- [x] 既存の AOT テストスイート（`make -C ulisp test_aot`）がデグレードなく 100% PASS すること
+- [x] 相対パスのみを使用し、絶対パスが含まれないこと
+
+---
+
+## 6. 検証結果 / Verification Results
+- `make -C ulisp test_all_passes`: 33/33 PASS (100%)
+- `./test_c.sh`: 139/139 PASS (100% with -Werror)
+- `./bootstrap.sh`: Stage 2 と Stage 3 の bit-for-bit IDENTICAL 固定点収束を完全達成、スモークテスト (Exit code 42) PASS
+- `./test.sh`: 全 35 ステップ完走 PASS

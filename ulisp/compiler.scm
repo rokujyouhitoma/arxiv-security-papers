@@ -351,7 +351,7 @@
   (memq op '(%raw-syscall)))
 
 (define (closure-prim? op)
-  (memq op '(%make-closure %closure-ref %closure-set!)))
+  (memq op '(%make-closure %make-closure-env %closure-ref %closure-set!)))
 
 (define (pure-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -1700,16 +1700,17 @@
     (cond
       ((not (pair? expr)) #t)
       ((eq? (car expr) 'quote) #t)
-      ((eq? (car expr) '%make-closure)
-       ;; Format: (%make-closure label free-vars ...)
+      ((or (eq? (car expr) '%make-closure)
+           (eq? (car expr) '%make-closure-env))
+       ;; Format: (%make-closure label free-vars ...) or (%make-closure-env label free-vars ...)
        (let ((label (cadr expr)))
          (if (not (symbol? label))
-             (verifier-error 'closure "%make-closure label must be a symbol" expr)
+             (verifier-error 'closure "%make-closure / %make-closure-env label must be a symbol" expr)
              (let v-loop ((vars (cddr expr)))
                (if (null? vars)
                    #t
                    (if (not (atomic-expr? (car vars)))
-                       (verifier-error 'closure "%make-closure environment variable must be atomic" (car vars))
+                       (verifier-error 'closure "%make-closure / %make-closure-env environment variable must be atomic" (car vars))
                        (v-loop (cdr vars))))))))
       (else
        (let rec ((children (cdr expr)))
@@ -3618,7 +3619,7 @@
                  (body (caddr expr))
                  (new-bound (set-union params bound)))
             (free-vars-acc body new-bound acc)))
-         ((%make-closure)
+         ((%make-closure %make-closure-env)
           (let loop ((es (cddr expr)) (cur-acc acc))
             (if (null? es)
                 cur-acc
@@ -3734,7 +3735,7 @@
                 (if (memq var (free-vars body params))
                     #t
                     (escapes? var body)))))
-         ((%make-closure)
+         ((%make-closure %make-closure-env)
           (let loop ((es (cddr expr)))
             (and (pair? es)
                  (or (escapes? var (car es))
@@ -3957,8 +3958,8 @@
           (let ((params (cadr expr))
                 (body (cp0-expr (caddr expr))))
             (list 'lambda params body)))
-         ((%make-closure)
-          (cons '%make-closure (cons (cadr expr) (map cp0-expr (cddr expr)))))
+         ((%make-closure %make-closure-env)
+          (cons (car expr) (cons (cadr expr) (map cp0-expr (cddr expr)))))
          ((%with-handler)
           (list '%with-handler (cp0-expr (cadr expr)) (cp0-expr (caddr expr))))
          ((%raw-call/cc)
@@ -4543,7 +4544,7 @@
                        (opt-e (car res))
                        (next-env (caddr res)))
                   (loop (cdr es) next-env (append acc (list opt-e)))))))
-         ((%make-closure)
+         ((%make-closure %make-closure-env)
           (let* ((label (cadr expr))
                  (env-args (cddr expr))
                  (evaluated-args
@@ -4557,8 +4558,8 @@
                                 (cons (cadr res) vn-acc))))))
                  (opt-env-args (car evaluated-args))
                  (res-env (caddr evaluated-args))
-                 (alloc-res (lvn-alloc-vn res-env '%make-closure '())))
-            (list (cons '%make-closure (cons label opt-env-args))
+                 (alloc-res (lvn-alloc-vn res-env (car expr) '())))
+            (list (cons (car expr) (cons label opt-env-args))
                   (car alloc-res)
                   (cdr alloc-res))))
          (else
@@ -4701,13 +4702,14 @@
           (let ((params (cadr expr))
                 (body (caddr expr)))
             (list 'lambda params (anf-expr-depth body 0))))
-         ((%make-closure)
-          (let* ((label (cadr expr))
+         ((%make-closure %make-closure-env)
+          (let* ((op-tag (car expr))
+                 (label (cadr expr))
                  (env-args (cddr expr))
                  (res (anf-flatten-args env-args depth))
                  (bindings (car res))
                  (atom-env (cdr res)))
-            (anf-wrap-bindings bindings (cons '%make-closure (cons label atom-env)))))
+            (anf-wrap-bindings bindings (cons op-tag (cons label atom-env)))))
          ((%with-handler %call-with-values %values %raw-call/cc)
           (let* ((res (anf-flatten-args (cdr expr) depth))
                  (bindings (car res))
@@ -5880,7 +5882,7 @@
       (entry (cdr entry))
       ((assq var (car *top-level-fns*))
        ;; Top-level function referenced as first-class value: instantiate static closure
-       (list '%make-closure (cdr (assq var (car *top-level-fns*)))))
+       (list '%make-closure-env (cdr (assq var (car *top-level-fns*)))))
       ((memq var (car *top-level-vars*))
        ;; Top-level global variable reference
        (list '%global-ref var))
@@ -5954,6 +5956,8 @@
          ((%values)
           (cons '%values
                 (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+         ((%make-closure %make-closure-env)
+          (cons op (cons (cadr expr) (map (lambda (e) (convert-expr e var-map)) (cddr expr)))))
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else
@@ -5991,10 +5995,10 @@
          (new-body (convert-expr body inner-var-map))
          (fn-def (list '%function label params new-body)))
     (add-lifted-function! fn-def)
-    ;; Instantiation expression: (%make-closure 'label captured-args...)
+    ;; Instantiation expression: (%make-closure-env 'label captured-args...)
     (let ((captured-args
            (map (lambda (fv) (convert-expr fv var-map)) frees)))
-      (cons '%make-closure (cons label captured-args)))))
+      (cons '%make-closure-env (cons label captured-args)))))
 
 ;;; Convert letrec expression into let + %make-closure + backpatching %closure-set!
 (define (convert-letrec bindings body var-map)
@@ -6038,7 +6042,7 @@
                                            (convert-expr fv outer-var-map)))
                                      frees)))
                            (list var
-                                 (cons '%make-closure (cons label init-args))
+                                 (cons '%make-closure-env (cons label init-args))
                                  frees)))
                        (list var (convert-expr val outer-var-map) '()))))
                bindings))
@@ -6143,6 +6147,7 @@
   (if (not (pair? expr))
       'unknown
       (case (car expr)
+        ((annotate) (tbaa-type-class (caddr expr)))
         ((car cdr set-car! set-cdr!) 'pair)
         ((%closure-ref %closure-set!) 'closure)
         ((vector-ref vector-set!) 'vector)
@@ -6190,6 +6195,8 @@
 ;;; Part 2: Flow-Sensitive Escape Analysis
 ;;; -----------------------------------------------------------------------
 
+(define *stack-alloc-attr* (string->symbol ":stack-alloc"))
+
 ;;; Collect all variables that escape a given expression context
 ;;; An object escapes if:
 ;;; - It is returned from the function (in tail position)
@@ -6205,6 +6212,8 @@
      (let ((op (car expr)))
        (case op
          ((quote) '())
+         ((annotate)
+          (collect-escaped-vars (caddr expr) is-tail))
          ((if)
           (let ((test-esc (collect-escaped-vars (cadr expr) #f))
                 (then-esc (collect-escaped-vars (caddr expr) is-tail))
@@ -6274,7 +6283,7 @@
                                    (cons arg acc)
                                    (append (collect-escaped-vars arg #f) acc))))))))
             (if (symbol? op)
-                (cons op args-esc)
+                args-esc
                 (append (collect-escaped-vars op #f) args-esc)))))))))
 
 ;;; -----------------------------------------------------------------------
@@ -6288,6 +6297,9 @@
      (let ((op (car expr)))
        (case op
          ((quote) expr)
+         ((annotate)
+          (list 'annotate (cadr expr)
+                (alias-escape-transform-expr (caddr expr) escaped-set avail-loads)))
 
          ;; TBAA Load: (car p), (cdr p), (%closure-ref c i)
          ((car cdr %closure-ref)
@@ -6351,6 +6363,12 @@
                           (list var (cons '%stack-cons
                                           (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
                                                (cdr val)))))
+                         ;; Non-escaping %make-closure-env: promote to (annotate #:stack-alloc (%make-closure-env ...))
+                         ((and (not escapes?) (pair? val) (eq? (car val) '%make-closure-env))
+                          (list var (list 'annotate *stack-alloc-attr*
+                                          (cons '%make-closure-env
+                                                (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                                                     (cdr val))))))
                          ;; Non-escaping closure: promote to %make-stack-closure
                          ((and (not escapes?) (pair? val) (eq? (car val) '%make-closure))
                           (list var (cons '%make-stack-closure
@@ -6365,7 +6383,10 @@
                     (if (null? bs) cur-loads
                         (let* ((b (car bs))
                                (v (car b))
-                               (rhs (cadr b)))
+                               (raw-rhs (cadr b))
+                               (rhs (if (and (pair? raw-rhs) (eq? (car raw-rhs) 'annotate))
+                                        (caddr raw-rhs)
+                                        raw-rhs)))
                           (if (and (pair? rhs) (memq (car rhs) '(car cdr %closure-ref)))
                               (let ((tc (tbaa-type-class rhs)))
                                 (loop (cdr bs) (cons (list rhs tc v) cur-loads)))
@@ -6455,21 +6476,63 @@
             (loop (+ i 1) (- curr-si 8)))))
     (emit-lir! '(%mov %rax %r10))))
 
+(define (stack-alloc-attr? attr)
+  (or (eq? attr '#:stack-alloc)
+      (eq? attr 'stack-alloc)
+      (and (symbol? attr)
+           (let ((s (symbol->string attr)))
+             (or (string=? s ":stack-alloc")
+                 (string=? s "#:stack-alloc"))))))
+
+(define (stack-alloc-bytes val)
+  (cond
+    ((not (pair? val)) 0)
+    ((eq? (car val) '%stack-cons) 24)
+    ((and (eq? (car val) 'annotate)
+          (pair? (cdr val))
+          (stack-alloc-attr? (cadr val))
+          (pair? (cddr val))
+          (pair? (caddr val)))
+     (let ((inner (caddr val)))
+       (cond
+         ((memq (car inner) '(%make-closure-env %make-closure))
+          (let* ((num-args (length (cddr inner)))
+                 (closure-size (* (+ num-args 1) 8))
+                 (aligned-size (if (= (modulo closure-size 16) 0) closure-size (+ closure-size 8))))
+            (+ aligned-size 8)))
+         ((eq? (car inner) 'cons) 24)
+         (else 0))))
+    ((eq? (car val) '%make-stack-closure)
+     (let* ((num-args (length (cddr val)))
+            (closure-size (* (+ num-args 1) 8))
+            (aligned-size (if (= (modulo closure-size 16) 0) closure-size (+ closure-size 8))))
+       (+ aligned-size 8)))
+    (else 0)))
+
+(define (get-stack-vars env)
+  (let ((entry (assq '%stack-vars env)))
+    (if entry (cdr entry) '())))
+
+(define (set-stack-vars svars env)
+  (cons (cons '%stack-vars svars) env))
+
 (define (lir-compile-stack-cons expr si env)
-  (let ((e1 (cadr expr))
-        (e2 (caddr expr))
-        (base-si (- si 24)))
-    ;; 1. Evaluate arguments onto temporary stack slots
-    (track-lir-si! si)
-    (lir-compile-expr e1 si env #f)
-    (emit-lir! (list '%store '%rsp si '%rax))
-    (track-lir-si! (- si 8))
-    (lir-compile-expr e2 (- si 8) env #f)
+  (let* ((e1 (cadr expr))
+         (e2 (caddr expr))
+         (base-si (- si 24))
+         (tmp1 (- base-si 8))
+         (tmp2 (- base-si 16)))
+    ;; 1. Evaluate arguments onto temporary stack slots below base-si
+    (track-lir-si! tmp1)
+    (lir-compile-expr e1 tmp1 env #f)
+    (emit-lir! (list '%store '%rsp tmp1 '%rax))
+    (track-lir-si! tmp2)
+    (lir-compile-expr e2 tmp2 env #f)
     ;; 2. Allocate 24 bytes (header + car + cdr) directly on current stack frame
     (track-lir-si! base-si)
     (emit-lir! '(%mov %rdx 4196356))
     (emit-lir! (list '%store '%rsp base-si '%rdx))
-    (emit-lir! (list '%load '%rdx '%rsp si))
+    (emit-lir! (list '%load '%rdx '%rsp tmp1))
     (emit-lir! (list '%store '%rsp (+ base-si 8) '%rdx))
     (emit-lir! (list '%store '%rsp (+ base-si 16) '%rax))
     ;; 3. Return stack-allocated tagged pair pointer (offset +8 from base-si, tag 1)
@@ -6485,9 +6548,10 @@
          (closure-size (* (+ num-args 1) 8))
          (aligned-size (if (= (modulo closure-size 16) 0) closure-size (+ closure-size 8)))
          (total-bytes (+ aligned-size 8))
-         (base-si (- si total-bytes)))
-    ;; 1. Evaluate arguments sequentially and place into temporary stack slots
-    (let loop ((as args) (curr-si si))
+         (base-si (- si total-bytes))
+         (temp-base (- base-si 8)))
+    ;; 1. Evaluate arguments sequentially and place into temporary stack slots below temp-base
+    (let loop ((as args) (curr-si temp-base))
       (if (not (null? as))
           (begin
             (track-lir-si! curr-si)
@@ -6503,11 +6567,11 @@
     (emit-lir! (list '%code-ref '%rax label-sym))
     (emit-lir! (list '%store '%rsp (+ base-si 8) '%rax))
     ;; 3. Copy captured arguments from temporary slots to stack closure slots
-    (let loop ((i 1) (curr-si si))
+    (let loop ((i 1) (curr-si temp-base))
       (if (<= i num-args)
           (begin
             (emit-lir! (list '%load '%rax '%rsp curr-si))
-            (emit-lir! (list '%store '%rsp (+ base-si 8 (* i 8)) '%rax))
+            (emit-lir! (list '%store '%rsp (+ (+ base-si 8) (* i 8)) '%rax))
             (loop (+ i 1) (- curr-si 8)))))
     ;; 4. Tag closure pointer with 0x01 (offset +8 from header)
     (emit-lir! (list '%alloc-stack '%rax (+ base-si 8) 1))))
@@ -6524,7 +6588,11 @@
   (let* ((num-args (length args))
          (cur-params-entry (assq '%num-params env))
          (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
-         (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
+         (stack-vars (get-stack-vars env))
+         (is-stack-closure? (and (symbol? proc) (memq proc stack-vars)))
+         (can-tco? (and tail?
+                        (not is-stack-closure?)
+                        (if cur-num-params (= cur-num-params num-args) #f)))
          (frame-shift (align-frame-shift (if (= num-args 0)
                                              (- 0 si)
                                              (- (* 8 (- num-args 1)) si))))
@@ -6955,7 +7023,7 @@
                      (or (cont-body-has-external-call? (car args) f-name)
                          (loop (cdr args)))))
               #t))
-         ((%direct-call %call %closure-call %c-call %syscall %raw-call/cc %make-closure)
+         ((%direct-call %call %closure-call %c-call %syscall %raw-call/cc %make-closure %make-closure-env)
           #t)
          ((if)
           (or (cont-body-has-external-call? (cadr expr) f-name)
@@ -7265,13 +7333,22 @@
                   (val (cadr b))
                   (rvars (get-raw-vars new-env))
                   (is-raw (raw-expr? val rvars))
-                  (next-rvars (if is-raw (cons var rvars) rvars)))
+                  (next-rvars (if is-raw (cons var rvars) rvars))
+                  (extra-bytes (stack-alloc-bytes val))
+                  (svars (get-stack-vars new-env))
+                  (next-svars (if (> extra-bytes 0) (cons var svars) svars))
+                  (next-si (if (> extra-bytes 0)
+                               (- curr-si (+ 8 extra-bytes))
+                               (- curr-si 8))))
              (track-lir-si! curr-si)
+             (if (> extra-bytes 0)
+                 (track-lir-si! next-si))
              (lir-compile-expr val curr-si env #f)
              (emit-lir! (list '%store '%rsp curr-si '%rax))
              (loop (cdr bs)
-                   (- curr-si 8)
-                   (cons (cons var curr-si) (set-raw-vars next-rvars new-env)))))))))
+                   next-si
+                   (cons (cons var curr-si)
+                         (set-stack-vars next-svars (set-raw-vars next-rvars new-env))))))))))
 
 (define (lir-compile-if test then else-opt si env tail?)
   (let ((else-label (unique-label-sym "L_else"))
@@ -8045,6 +8122,14 @@
 ;;; Boxed accumulators for LIR instructions and stack tracking
 (define *lir-instructions* (cons '() '()))
 (define *lir-min-si* (cons 0 '()))
+(define *stack-alloc-attr* (string->symbol ":stack-alloc"))
+(define (stack-alloc-attr? attr)
+  (or (eq? attr *stack-alloc-attr*)
+      (eq? attr 'stack-alloc)
+      (and (symbol? attr)
+           (let ((s (symbol->string attr)))
+             (or (string=? s ":stack-alloc")
+                 (string=? s "#:stack-alloc"))))))
 (define (get-raw-vars env)
   (let ((entry (assq '%raw-vars env)))
     (if entry (cdr entry) '())))
@@ -8134,12 +8219,26 @@
               (lir-compile-binop '- (cadr expr) (caddr expr) si env)))
          ((unary-prim? op)
           (lir-compile-unary op (cadr expr) si env))
-         ((eq? op '%make-closure)
+         ((memq op '(%make-closure %make-closure-env))
           (lir-compile-make-closure expr si env))
          ((eq? op '%make-stack-closure)
           (lir-compile-make-stack-closure expr si env))
          ((eq? op '%stack-cons)
           (lir-compile-stack-cons expr si env))
+         ((eq? op 'annotate)
+          (let ((attr (cadr expr))
+                (inner (caddr expr)))
+            (cond
+              ((stack-alloc-attr? attr)
+               (cond
+                 ((and (pair? inner) (memq (car inner) '(%make-closure %make-closure-env)))
+                  (lir-compile-make-stack-closure inner si env))
+                 ((and (pair? inner) (eq? (car inner) 'cons))
+                  (lir-compile-stack-cons inner si env))
+                 (else
+                  (lir-compile-expr inner si env tail?))))
+              (else
+               (lir-compile-expr inner si env tail?)))))
          ((eq? op '%closure-ref)
           (let* ((idx (caddr expr))
                  (offset (- (* idx 8) 1)))
@@ -8234,7 +8333,8 @@
                           (cons (cons (car ps) (cons 'param offset)) acc))))))
            (callee-env (cons (cons '%num-params num-params)
                              (cons (cons '%raw-vars initial-raw-vars)
-                                   (append self-env param-env))))
+                                   (cons (cons '%stack-vars '())
+                                         (append self-env param-env)))))
            (callee-si -24))
       (track-lir-si! -8)
       (track-lir-si! -16)
@@ -8259,7 +8359,7 @@
         (main-expr (caddr prog)))
     (reset-lir!)
     (track-lir-si! -8)
-    (lir-compile-expr main-expr -8 (list (cons '%raw-vars '())) #f)
+    (lir-compile-expr main-expr -8 (list (cons '%raw-vars '()) (cons '%stack-vars '())) #f)
     (emit-lir! '(%return))
     (let* ((main-insts (reverse (car *lir-instructions*)))
            (main-frame (align-frame-shift (- 0 (car *lir-min-si*))))
@@ -9298,7 +9398,9 @@
          (emit "    mov rax, rdx")))
 
       (else
-       (error "Unknown LIR opcode in x86-64 backend:" inst)))))
+       (error (string-append "Unknown LIR opcode in x86-64 backend: "
+                             (if (symbol? (car inst)) (symbol->string (car inst)) "?"))
+              inst)))))
 
 ;;; Emits assembly for a single %lir-function
 (define (emit-x86-function fn)

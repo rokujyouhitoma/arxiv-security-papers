@@ -11,7 +11,11 @@
   (let* ((num-args (length args))
          (cur-params-entry (assq '%num-params env))
          (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
-         (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
+         (stack-vars (get-stack-vars env))
+         (is-stack-closure? (and (symbol? proc) (memq proc stack-vars)))
+         (can-tco? (and tail?
+                        (not is-stack-closure?)
+                        (if cur-num-params (= cur-num-params num-args) #f)))
          (frame-shift (align-frame-shift (if (= num-args 0)
                                              (- 0 si)
                                              (- (* 8 (- num-args 1)) si))))

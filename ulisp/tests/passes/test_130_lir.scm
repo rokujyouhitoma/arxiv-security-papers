@@ -233,6 +233,43 @@
   (assert-true "contified loop generates %jump"
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%jump))) main-body))))
 
+;;; Test Group 8: Non-Escaping Closure Stack Allocation (#:stack-alloc Annotation)
+(display "--- Group 8: Non-Escaping Closure Stack Allocation (#:stack-alloc) ---")
+(newline)
+
+;; 8.1 Direct LIR compilation of (annotate #:stack-alloc (%make-closure-env ...))
+(let* ((prog '(%program () (let ((x 10) (y 20)) (let ((f (annotate #:stack-alloc (%make-closure-env 'L_fn x y)))) (%closure-ref f 1)))))
+       (lir (generate-lir prog))
+       (main-body (cdr (assq 'body (cdr (assq '%lir-main (cdr lir)))))))
+  (assert-true "stack-annotated closure emits %alloc-stack"
+               (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc-stack))) main-body)))
+  (assert-false "stack-annotated closure avoids heap %alloc"
+                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc))) main-body))))
+
+;; 8.2 Unannotated %make-closure-env emits heap %alloc
+(let* ((prog '(%program () (let ((x 10) (y 20)) (%make-closure-env 'L_fn x y))))
+       (lir (generate-lir prog))
+       (main-body (cdr (assq 'body (cdr (assq '%lir-main (cdr lir)))))))
+  (assert-true "unannotated %make-closure-env emits heap %alloc"
+               (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc))) main-body))))
+
+;; 8.3 End-to-end Pass 110 -> 120 -> 130 optimization pipeline
+(let* ((ast '(let ((f (lambda (x) (+ x 1)))) (f 41)))
+       (hir110 (closure-convert (anf-all (cp0-optimize (desugar-all ast)))))
+       (hir120 (alias-escape-all hir110))
+       (lir130 (generate-lir hir120))
+       (main-body (cdr (assq 'body (cdr (assq '%lir-main (cdr lir130)))))))
+  (assert-true "Pass 120 annotated closure with #:stack-alloc"
+               (let check-ann ((expr hir120))
+                 (cond
+                   ((not (pair? expr)) #f)
+                   ((and (eq? (car expr) 'annotate) (eq? (cadr expr) '#:stack-alloc)) #t)
+                   (else (or (check-ann (car expr)) (check-ann (cdr expr)))))))
+  (assert-true "Pass 130 pipeline output uses %alloc-stack"
+               (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc-stack))) main-body)))
+  (assert-false "Pass 130 pipeline output avoids heap %alloc"
+                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc))) main-body))))
+
 (newline)
 (display "=======================================================")
 (newline)

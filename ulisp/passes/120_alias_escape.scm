@@ -22,6 +22,7 @@
   (if (not (pair? expr))
       'unknown
       (case (car expr)
+        ((annotate) (tbaa-type-class (caddr expr)))
         ((car cdr set-car! set-cdr!) 'pair)
         ((%closure-ref %closure-set!) 'closure)
         ((vector-ref vector-set!) 'vector)
@@ -69,6 +70,8 @@
 ;;; Part 2: Flow-Sensitive Escape Analysis
 ;;; -----------------------------------------------------------------------
 
+(define *stack-alloc-attr* (string->symbol ":stack-alloc"))
+
 ;;; Collect all variables that escape a given expression context
 ;;; An object escapes if:
 ;;; - It is returned from the function (in tail position)
@@ -84,6 +87,8 @@
      (let ((op (car expr)))
        (case op
          ((quote) '())
+         ((annotate)
+          (collect-escaped-vars (caddr expr) is-tail))
          ((if)
           (let ((test-esc (collect-escaped-vars (cadr expr) #f))
                 (then-esc (collect-escaped-vars (caddr expr) is-tail))
@@ -153,7 +158,7 @@
                                    (cons arg acc)
                                    (append (collect-escaped-vars arg #f) acc))))))))
             (if (symbol? op)
-                (cons op args-esc)
+                args-esc
                 (append (collect-escaped-vars op #f) args-esc)))))))))
 
 ;;; -----------------------------------------------------------------------
@@ -167,6 +172,9 @@
      (let ((op (car expr)))
        (case op
          ((quote) expr)
+         ((annotate)
+          (list 'annotate (cadr expr)
+                (alias-escape-transform-expr (caddr expr) escaped-set avail-loads)))
 
          ;; TBAA Load: (car p), (cdr p), (%closure-ref c i)
          ((car cdr %closure-ref)
@@ -230,6 +238,12 @@
                           (list var (cons '%stack-cons
                                           (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
                                                (cdr val)))))
+                         ;; Non-escaping %make-closure-env: promote to (annotate #:stack-alloc (%make-closure-env ...))
+                         ((and (not escapes?) (pair? val) (eq? (car val) '%make-closure-env))
+                          (list var (list 'annotate *stack-alloc-attr*
+                                          (cons '%make-closure-env
+                                                (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                                                     (cdr val))))))
                          ;; Non-escaping closure: promote to %make-stack-closure
                          ((and (not escapes?) (pair? val) (eq? (car val) '%make-closure))
                           (list var (cons '%make-stack-closure
@@ -244,7 +258,10 @@
                     (if (null? bs) cur-loads
                         (let* ((b (car bs))
                                (v (car b))
-                               (rhs (cadr b)))
+                               (raw-rhs (cadr b))
+                               (rhs (if (and (pair? raw-rhs) (eq? (car raw-rhs) 'annotate))
+                                        (caddr raw-rhs)
+                                        raw-rhs)))
                           (if (and (pair? rhs) (memq (car rhs) '(car cdr %closure-ref)))
                               (let ((tc (tbaa-type-class rhs)))
                                 (loop (cdr bs) (cons (list rhs tc v) cur-loads)))

@@ -139,16 +139,17 @@
     (cond
       ((not (pair? expr)) #t)
       ((eq? (car expr) 'quote) #t)
-      ((eq? (car expr) '%make-closure)
-       ;; Format: (%make-closure label free-vars ...)
+      ((or (eq? (car expr) '%make-closure)
+           (eq? (car expr) '%make-closure-env))
+       ;; Format: (%make-closure label free-vars ...) or (%make-closure-env label free-vars ...)
        (let ((label (cadr expr)))
          (if (not (symbol? label))
-             (verifier-error 'closure "%make-closure label must be a symbol" expr)
+             (verifier-error 'closure "%make-closure / %make-closure-env label must be a symbol" expr)
              (let v-loop ((vars (cddr expr)))
                (if (null? vars)
                    #t
                    (if (not (atomic-expr? (car vars)))
-                       (verifier-error 'closure "%make-closure environment variable must be atomic" (car vars))
+                       (verifier-error 'closure "%make-closure / %make-closure-env environment variable must be atomic" (car vars))
                        (v-loop (cdr vars))))))))
       (else
        (let rec ((children (cdr expr)))

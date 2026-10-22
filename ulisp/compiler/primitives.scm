@@ -34,7 +34,7 @@
   (memq op '(%raw-syscall)))
 
 (define (closure-prim? op)
-  (memq op '(%make-closure %closure-ref %closure-set!)))
+  (memq op '(%make-closure %make-closure-env %closure-ref %closure-set!)))
 
 (define (pure-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer

@@ -652,7 +652,9 @@
          (emit "    mov rax, rdx")))
 
       (else
-       (error "Unknown LIR opcode in x86-64 backend:" inst)))))
+       (error (string-append "Unknown LIR opcode in x86-64 backend: "
+                             (if (symbol? (car inst)) (symbol->string (car inst)) "?"))
+              inst)))))
 
 ;;; Emits assembly for a single %lir-function
 (define (emit-x86-function fn)

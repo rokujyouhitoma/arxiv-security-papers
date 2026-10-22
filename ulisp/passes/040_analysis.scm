@@ -51,7 +51,7 @@
                  (body (caddr expr))
                  (new-bound (set-union params bound)))
             (free-vars-acc body new-bound acc)))
-         ((%make-closure)
+         ((%make-closure %make-closure-env)
           (let loop ((es (cddr expr)) (cur-acc acc))
             (if (null? es)
                 cur-acc
@@ -167,7 +167,7 @@
                 (if (memq var (free-vars body params))
                     #t
                     (escapes? var body)))))
-         ((%make-closure)
+         ((%make-closure %make-closure-env)
           (let loop ((es (cddr expr)))
             (and (pair? es)
                  (or (escapes? var (car es))
