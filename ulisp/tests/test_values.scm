@@ -106,5 +106,49 @@
               (loop ni ns))
             sum)))
 
+;; Test 11: Top-level define-values (2 values)
+(define-values (dv-x dv-y) (values 100 200))
+(test "define-values-top-2"
+      300
+      (+ dv-x dv-y))
+
+;; Test 12: Top-level define-values (3 values)
+(define-values (dv-a dv-b dv-c) (values 10 20 30))
+(test "define-values-top-3"
+      60
+      (+ (+ dv-a dv-b) dv-c))
+
+;; Test 13: Top-level define-values single value
+(define-values (dv-single) (values 42))
+(test "define-values-top-1"
+      42
+      dv-single)
+
+;; Test 14: Internal define-values in procedure
+(define (test-internal-dv)
+  (define-values (p q) (values 15 25))
+  (+ p q))
+
+(test "define-values-internal-proc"
+      40
+      (test-internal-dv))
+
+;; Test 15: Sequential internal define-values
+(define (test-internal-seq-dv)
+  (define-values (u v) (values 1 2))
+  (define-values (w z) (values 10 20))
+  (+ (+ u v) (+ w z)))
+
+(test "define-values-internal-seq"
+      33
+      (test-internal-seq-dv))
+
+;; Test 16: Internal define-values in let
+(test "define-values-internal-let"
+      55
+      (let ()
+        (define-values (m n) (values 25 30))
+        (+ m n)))
+
 (write-string "=== All Multiple Values Tests Passed ===\n")
 #t

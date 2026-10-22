@@ -252,6 +252,12 @@
              (cons type-name
                    (cons (cons new-ctor-name ctor-args)
                          (cons new-pred-name new-field-specs))))))
+    ((eq? (car expr) 'define-values)
+     (let* ((formals (cadr expr))
+            (body-expr (caddr expr))
+            (new-formals (alpha-rename-expr formals subst))
+            (new-body (alpha-rename-expr body-expr subst)))
+       (list 'define-values new-formals new-body)))
     (else
      (cons (alpha-rename-expr (car expr) subst)
            (alpha-rename-expr (cdr expr) subst)))))
@@ -268,6 +274,14 @@
                (if (pair? def-target)
                    (loop (cdr rest) (cons (car def-target) acc))
                    (loop (cdr rest) (cons def-target acc)))))
+            ((and (pair? form) (eq? (car form) 'define-values) (pair? (cdr form)))
+             (let ((formals (cadr form)))
+               (let formal-loop ((fs formals) (f-acc acc))
+                 (cond
+                   ((null? fs) (loop (cdr rest) f-acc))
+                   ((pair? fs) (formal-loop (cdr fs) (cons (car fs) f-acc)))
+                   ((symbol? fs) (loop (cdr rest) (cons fs f-acc)))
+                   (else (loop (cdr rest) f-acc))))))
             ((and (pair? form) (eq? (car form) 'define-syntax) (pair? (cdr form)))
              (loop (cdr rest) (cons (cadr form) acc)))
             ((and (pair? form) (eq? (car form) 'define-record-type) (pair? (cdr form)))

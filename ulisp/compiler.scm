@@ -2061,6 +2061,12 @@
              (cons type-name
                    (cons (cons new-ctor-name ctor-args)
                          (cons new-pred-name new-field-specs))))))
+    ((eq? (car expr) 'define-values)
+     (let* ((formals (cadr expr))
+            (body-expr (caddr expr))
+            (new-formals (alpha-rename-expr formals subst))
+            (new-body (alpha-rename-expr body-expr subst)))
+       (list 'define-values new-formals new-body)))
     (else
      (cons (alpha-rename-expr (car expr) subst)
            (alpha-rename-expr (cdr expr) subst)))))
@@ -2077,6 +2083,14 @@
                (if (pair? def-target)
                    (loop (cdr rest) (cons (car def-target) acc))
                    (loop (cdr rest) (cons def-target acc)))))
+            ((and (pair? form) (eq? (car form) 'define-values) (pair? (cdr form)))
+             (let ((formals (cadr form)))
+               (let formal-loop ((fs formals) (f-acc acc))
+                 (cond
+                   ((null? fs) (loop (cdr rest) f-acc))
+                   ((pair? fs) (formal-loop (cdr fs) (cons (car fs) f-acc)))
+                   ((symbol? fs) (loop (cdr rest) (cons fs f-acc)))
+                   (else (loop (cdr rest) f-acc))))))
             ((and (pair? form) (eq? (car form) 'define-syntax) (pair? (cdr form)))
              (loop (cdr rest) (cons (cadr form) acc)))
             ((and (pair? form) (eq? (car form) 'define-record-type) (pair? (cdr form)))
@@ -2278,7 +2292,7 @@
 
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
-  (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules define-record-type
+  (memq sym '(if begin lambda let let* letrec quote set! define define-values define-syntax syntax-rules define-record-type
               cond case and or when unless delay delay-force do
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
@@ -2752,6 +2766,40 @@
                     (+ idx 1)
                     (append (reverse set-defs) (cons get-def acc)))))))))
 
+(define (expand-define-values form)
+  (let* ((formals (cadr form))
+         (expr (caddr form)))
+    (cond
+      ((null? formals)
+       (let ((dummy (unique-symbol "dummy_vals_")))
+         (list (list 'define dummy
+                     (list 'call-with-values
+                           (list 'lambda '() expr)
+                           (list 'lambda '() #f))))))
+      ((and (pair? formals) (null? (cdr formals)))
+       ;; Single formal: (define-values (x) expr)
+       (let ((var (car formals)))
+         (list (list 'define var
+                     (list 'call-with-values
+                           (list 'lambda '() expr)
+                           (list 'lambda (list var) var))))))
+      ((list? formals)
+       ;; Proper list of formals: (define-values (x y ...) expr)
+       (let* ((temp (unique-symbol "tmp_vals_"))
+              (producer (list 'lambda '() expr))
+              (consumer (list 'lambda formals (cons 'vector formals)))
+              (temp-def (list 'define temp (list 'call-with-values producer consumer))))
+         (let loop ((idx 0) (vars formals) (acc (list temp-def)))
+           (if (null? vars)
+               (reverse acc)
+               (loop (+ idx 1)
+                     (cdr vars)
+                     (cons (list 'define (car vars)
+                                 (list 'vector-ref temp idx))
+                           acc))))))
+      (else
+       (error "define-values: invalid formals" formals)))))
+
 (define (rewrite-top-level forms)
   (let loop ((fs forms) (defs '()) (bodies '()))
     (if (null? fs)
@@ -2774,6 +2822,9 @@
              (loop (append (cdr f) (cdr fs)) defs bodies))
             ((and (pair? f) (eq? (car f) 'define-record-type))
              (let ((expanded-defs (expand-define-record-type f)))
+               (loop (append expanded-defs (cdr fs)) defs bodies)))
+            ((and (pair? f) (eq? (car f) 'define-values))
+             (let ((expanded-defs (expand-define-values f)))
                (loop (append expanded-defs (cdr fs)) defs bodies)))
             ((and (pair? f) (eq? (car f) 'define))
              (let ((def-spec (cadr f)))
@@ -3048,6 +3099,10 @@
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
+    ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
+     (Expr (list 'let bindings (cons 'begin (cons b1 (cons b2 rest))))))
+    ((lambda ,params ,b1 ,b2 . ,rest)
+     (Expr (list 'lambda params (cons 'begin (cons b1 (cons b2 rest))))))
     ((do ,bindings ,exit-clause . ,commands)
      (Expr (desugar-do bindings exit-clause commands)))))
 ;;; =======================================================================
@@ -3126,6 +3181,15 @@
                     (cons (list p-sym (list 'car old-sym))
                           restore)))))))
 
+(define (desugar-define-values formals expr rest)
+  (if (null? rest)
+      (list 'call-with-values
+            (list 'lambda '() expr)
+            (list 'lambda (if (list? formals) formals (list formals)) #f))
+      (list 'let-values
+            (list (list formals expr))
+            (make-body-expr rest))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Dynamic
 ;;; -----------------------------------------------------------------------
@@ -3133,6 +3197,10 @@
   (Expr : Expr (ir) -> Expr ()
     ((let-values ,bindings . ,bodies) (Expr (desugar-let-values bindings bodies)))
     ((let*-values ,bindings . ,bodies) (Expr (desugar-let*-values bindings bodies)))
+    ((begin (define-values ,formals ,expr) . ,rest)
+     (Expr (desugar-define-values formals expr rest)))
+    ((define-values ,formals ,expr)
+     (Expr (desugar-define-values formals expr '())))
     ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))
     ((parameterize ,bindings . ,bodies) (Expr (desugar-parameterize bindings bodies)))))
 ;;; =======================================================================
@@ -3426,6 +3494,10 @@
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
+    ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
+     (Expr (list 'let bindings (cons 'begin (cons b1 (cons b2 rest))))))
+    ((lambda ,params ,b1 ,b2 . ,rest)
+     (Expr (list 'lambda params (cons 'begin (cons b1 (cons b2 rest))))))
     ((do ,bindings ,exit-clause . ,commands)
      (Expr (desugar-do bindings exit-clause commands)))
 
@@ -3466,6 +3538,10 @@
     ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))
     ((let-values ,bindings . ,bodies) (Expr (desugar-let-values bindings bodies)))
     ((let*-values ,bindings . ,bodies) (Expr (desugar-let*-values bindings bodies)))
+    ((begin (define-values ,formals ,expr) . ,rest)
+     (Expr (desugar-define-values formals expr rest)))
+    ((define-values ,formals ,expr)
+     (Expr (desugar-define-values formals expr '())))
     ((parameterize ,bindings . ,bodies) (Expr (desugar-parameterize bindings bodies)))
     ((delay ,args ...) (Expr (desugar-delay (cons 'delay args))))
     ((delay . ,args) (Expr (desugar-delay (cons 'delay args))))

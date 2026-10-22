@@ -45,6 +45,19 @@
   (assert-true "desugar-parameterize produces let" (pair? p))
   (assert-equal "desugar-parameterize root is let" 'let (car p)))
 
+;; 5. desugar-define-values
+(let ((dv (desugar-define-values '(a b) '(values 1 2) '((+ a b)))))
+  (assert-true "desugar-define-values produces let-values" (pair? dv))
+  (assert-equal "desugar-define-values root is let-values" 'let-values (car dv)))
+
+(let ((dv-single (desugar-define-values '(x) '(values 42) '())))
+  (assert-true "desugar-define-values single produces call-with-values" (pair? dv-single))
+  (assert-equal "desugar-define-values single root is call-with-values" 'call-with-values (car dv-single)))
+
+(let ((dyn-res (desugar-dynamic '(begin (define-values (x y) (values 10 20)) (+ x y)))))
+  (assert-true "desugar-dynamic expands begin define-values" (pair? dyn-res))
+  (assert-equal "desugar-dynamic expands to call-with-values" 'call-with-values (car dyn-res)))
+
 (display "=======================================================") (newline)
 (display " Pass 029: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

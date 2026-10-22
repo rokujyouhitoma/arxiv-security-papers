@@ -74,6 +74,15 @@
                     (cons (list p-sym (list 'car old-sym))
                           restore)))))))
 
+(define (desugar-define-values formals expr rest)
+  (if (null? rest)
+      (list 'call-with-values
+            (list 'lambda '() expr)
+            (list 'lambda (if (list? formals) formals (list formals)) #f))
+      (list 'let-values
+            (list (list formals expr))
+            (make-body-expr rest))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Dynamic
 ;;; -----------------------------------------------------------------------
@@ -81,5 +90,9 @@
   (Expr : Expr (ir) -> Expr ()
     ((let-values ,bindings . ,bodies) (Expr (desugar-let-values bindings bodies)))
     ((let*-values ,bindings . ,bodies) (Expr (desugar-let*-values bindings bodies)))
+    ((begin (define-values ,formals ,expr) . ,rest)
+     (Expr (desugar-define-values formals expr rest)))
+    ((define-values ,formals ,expr)
+     (Expr (desugar-define-values formals expr '())))
     ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))
     ((parameterize ,bindings . ,bodies) (Expr (desugar-parameterize bindings bodies)))))

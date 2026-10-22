@@ -445,6 +445,53 @@
                         ((= (vector-ref count 0) 10) 100)
                       (vector-set! count 0 (+ (vector-ref count 0) 1)))))
 
+;;; =======================================================================
+;;; 8. Multiple-value Definitions (R7RS Section 5.3.3: define-values)
+;;; =======================================================================
+(write-string "--- 8. Multiple-value Definitions (define-values) ---")
+(write-char #\newline)
+(flush-output-port)
+
+;; Top-level define-values
+(define-values (r7rs-x r7rs-y) (values 10 20))
+(assert-num-equal "define-values top-level 2 values sum"
+                  30
+                  (+ r7rs-x r7rs-y))
+
+(define-values (r7rs-a r7rs-b r7rs-c) (values 1 2 3))
+(assert-num-equal "define-values top-level 3 values"
+                  6
+                  (+ (+ r7rs-a r7rs-b) r7rs-c))
+
+(define-values (r7rs-single) (values 99))
+(assert-num-equal "define-values top-level single value"
+                  99
+                  r7rs-single)
+
+;; Internal define-values in procedure
+(define (r7rs-divmod-proc n d)
+  (define-values (q r) (values (quotient n d) (remainder n d)))
+  (+ (* q 10) r))
+
+(assert-num-equal "define-values internal in procedure"
+                  32
+                  (r7rs-divmod-proc 17 5))
+
+;; Internal define-values in let
+(assert-num-equal "define-values internal in let"
+                  50
+                  (let ()
+                    (define-values (v1 v2) (values 20 30))
+                    (+ v1 v2)))
+
+;; Sequential internal define-values
+(assert-num-equal "define-values sequential internal"
+                  33
+                  (let ()
+                    (define-values (s1 s2) (values 1 2))
+                    (define-values (s3 s4) (values 10 20))
+                    (+ (+ s1 s2) (+ s3 s4))))
+
 ;;; Summary
 (write-string "=== ULisp R7RS Standard Library Tests Completed: ")
 (if (= (vector-ref *test-failures* 0) 0)

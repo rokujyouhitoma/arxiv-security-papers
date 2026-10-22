@@ -71,8 +71,8 @@
 | **5.2 / 5.6** | モジュールインポート | `(import <import-set> ...)` | **◎** | [Pass 010](../passes/010_library.scm) | ライブラリ依存解決・シンボル修飾 ([Issue #548](../../docs/issues/closed/548-implement-r7rs-define-library-and-import-syntax.md)) |
 | **5.3.1** | トップレベル変数定義 | `(define <variable> <expression>)` | **◎** | [Pass 030](../passes/030_desugar.scm) | グローバルシンボル束縛 |
 | **5.3.1** | 手続き定義短縮構文 | `(define (<variable> <formals>) <body>)` | **◎** | [Pass 030](../passes/030_desugar.scm) | `lambda` 束縛への自動脱糖 |
-| **5.3.2** | 内部定義 (Internal definitions) | ブロック先頭の `(define ...)` | **◎** | [Pass 030](../passes/030_desugar.scm) | `letrec*` 構造への自動巻き直し |
-| **5.3.3** | 多値定義 | `(define-values <formals> <expression>)` | **×** | - | [Issue #560](../../docs/issues/560-implement-r7rs-define-values-syntax.md) にて実装中 |
+| **5.3.2** | 内部定義 (Internal definitions) | ブロック先頭の `(define ...)` | **△** | [Pass 030](../passes/030_desugar.scm) | 内部 `define-values` は対応済、通常内部 `define` の `letrec*` 巻き直しは未完全 |
+| **5.3.3** | 多値定義 | `(define-values <formals> <expression>)` | **◎** | [Pass 025](../passes/025_top_level.scm) / [029](../passes/029_desugar_dynamic.scm) | トップレベルおよび内部定義対応、ゼロヒープ多値束縛・固定点ブートストラップ完了 ([Issue #560](../../docs/issues/closed/560-implement-r7rs-define-values-syntax.md)) |
 | **5.4** | マクロ定義 (Syntax definitions)| `(define-syntax <keyword> <transformer>)` | **◎** | [Pass 020](../passes/020_macro_expander.scm) | コンパイル時マクロテーブル登録 |
 | **5.5** | レコード型定義 (Record-types) | `(define-record-type <name> (<ctor> ...) <pred> ...)` | **◎** | [Pass 030](../passes/030_desugar.scm) | 固定長ベクタ脱糖マクロ・型述語・アクセサ・ミューテータ完備 ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md)) |
 | **5.6** | ライブラリ定義 (Libraries) | `(define-library (<name> ...) <lib-decl> ...)` | **◎** | [Pass 010](../passes/010_library.scm) | R7RS-small モジュール宣言・フラット展開 ([Issue #548](../../docs/issues/closed/548-implement-r7rs-define-library-and-import-syntax.md)) |

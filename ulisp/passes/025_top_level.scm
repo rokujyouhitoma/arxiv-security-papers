@@ -56,6 +56,40 @@
                     (+ idx 1)
                     (append (reverse set-defs) (cons get-def acc)))))))))
 
+(define (expand-define-values form)
+  (let* ((formals (cadr form))
+         (expr (caddr form)))
+    (cond
+      ((null? formals)
+       (let ((dummy (unique-symbol "dummy_vals_")))
+         (list (list 'define dummy
+                     (list 'call-with-values
+                           (list 'lambda '() expr)
+                           (list 'lambda '() #f))))))
+      ((and (pair? formals) (null? (cdr formals)))
+       ;; Single formal: (define-values (x) expr)
+       (let ((var (car formals)))
+         (list (list 'define var
+                     (list 'call-with-values
+                           (list 'lambda '() expr)
+                           (list 'lambda (list var) var))))))
+      ((list? formals)
+       ;; Proper list of formals: (define-values (x y ...) expr)
+       (let* ((temp (unique-symbol "tmp_vals_"))
+              (producer (list 'lambda '() expr))
+              (consumer (list 'lambda formals (cons 'vector formals)))
+              (temp-def (list 'define temp (list 'call-with-values producer consumer))))
+         (let loop ((idx 0) (vars formals) (acc (list temp-def)))
+           (if (null? vars)
+               (reverse acc)
+               (loop (+ idx 1)
+                     (cdr vars)
+                     (cons (list 'define (car vars)
+                                 (list 'vector-ref temp idx))
+                           acc))))))
+      (else
+       (error "define-values: invalid formals" formals)))))
+
 (define (rewrite-top-level forms)
   (let loop ((fs forms) (defs '()) (bodies '()))
     (if (null? fs)
@@ -78,6 +112,9 @@
              (loop (append (cdr f) (cdr fs)) defs bodies))
             ((and (pair? f) (eq? (car f) 'define-record-type))
              (let ((expanded-defs (expand-define-record-type f)))
+               (loop (append expanded-defs (cdr fs)) defs bodies)))
+            ((and (pair? f) (eq? (car f) 'define-values))
+             (let ((expanded-defs (expand-define-values f)))
                (loop (append expanded-defs (cdr fs)) defs bodies)))
             ((and (pair? f) (eq? (car f) 'define))
              (let ((def-spec (cadr f)))

@@ -86,6 +86,17 @@
                    ((eq? (car e) '%make-closure) #t)
                    (else (or (has-mc? (car e)) (has-mc? (cdr e))))))))
 
+;; Test 5: Top-level define-values expansion
+(let* ((input '((define-values (x y) (values 10 20))
+                (+ x y)))
+       (rewritten (rewrite-top-level input)))
+  (test-assert "rewrite-top-level expands define-values to %program"
+               (and (pair? rewritten) (eq? (car rewritten) '%program)))
+  (test-assert "%program has 3 definitions (temp, x, y)"
+               (= (length (cadr rewritten)) 3))
+  (test-assert "rewritten main is (+ x y)"
+               (equal? (caddr rewritten) '(+ x y))))
+
 (newline)
 (display "=======================================================")
 (newline)
