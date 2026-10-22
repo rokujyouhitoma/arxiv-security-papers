@@ -118,7 +118,7 @@
           (list nt-name in-arg-list nt-name '() rules)))))
 
 ;;; Expand define-pass AST
-(define (nanopass-expand-define-pass form)
+(define (nanopass-expand-define-pass-with-trace form force-trace?)
   (let* ((parsed (nanopass-parse-pass-header form))
          (name (car parsed))
          (l-in (cadr parsed))
@@ -131,11 +131,30 @@
                (nt-procs '())
                (entry-nt #f))
       (if (null? rest)
-          (let ((final-entry (if entry-nt entry-nt 'Expr)))
+          (let* ((final-entry (if entry-nt entry-nt 'Expr))
+                 (ir-var (car in-arg-list))
+                 (res-var (unique-symbol "__res_"))
+                 (body-call (cons final-entry in-arg-list)))
             (list 'define (cons name in-arg-list)
                   (list 'letrec
                         (append (reverse defs) (reverse nt-procs))
-                        (cons final-entry in-arg-list))))
+                        (list 'begin
+                              (list 'if (list 'nanopass-verifier-enabled?)
+                                    (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-in) ir-var ''entry)
+                                    #f)
+                              (list 'let (list (list res-var body-call))
+                                    (list 'if (list 'nanopass-verifier-enabled?)
+                                          (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-out) res-var ''exit)
+                                          #f)
+                                    (if force-trace?
+                                        (list 'begin
+                                              (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                              res-var)
+                                        (list 'begin
+                                              (list 'if (list 'nanopass-trace-enabled?)
+                                                    (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                                    #f)
+                                              res-var)))))))
           (let ((c (car rest)))
             (cond
               ;; (definitions def1 def2 ...)
@@ -171,6 +190,13 @@
                        (if entry-nt entry-nt nt-name))))
               (else
                (loop (cdr rest) defs nt-procs entry-nt))))))))
+
+(define (nanopass-expand-define-pass form)
+  (nanopass-expand-define-pass-with-trace form #f))
+
+(define (nanopass-expand-trace-define-pass form)
+  (let ((pass-form (cons 'define-pass (cdr form))))
+    (nanopass-expand-define-pass-with-trace pass-form #t)))
 
 ;;; Expand define-language AST
 (define (nanopass-expand-define-language form)
@@ -214,6 +240,9 @@
 
 (define-macro (define-pass . args)
   (nanopass-expand-define-pass (cons 'define-pass args)))
+
+(define-macro (trace-define-pass . args)
+  (nanopass-expand-trace-define-pass (cons 'trace-define-pass args)))
 
 (define-macro (define-parser . args)
   (nanopass-expand-define-parser (cons 'define-parser args)))

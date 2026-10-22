@@ -8,8 +8,12 @@
 (define *verifier-strict* (cons #f '()))
 
 (define (verifier-enabled?) (car *verifier-enabled*))
-(define (enable-verifier!) (set-car! *verifier-enabled* #t))
-(define (disable-verifier!) (set-car! *verifier-enabled* #f))
+(define (enable-verifier!)
+  (set-car! *verifier-enabled* #t)
+  (enable-nanopass-verifier!))
+(define (disable-verifier!)
+  (set-car! *verifier-enabled* #f)
+  (disable-nanopass-verifier!))
 (define (set-verifier-strict! flag) (set-car! *verifier-strict* flag))
 
 ;;; Error Reporting Procedure
@@ -247,3 +251,7 @@
         ((safepoint 131) (verify-lir-safepoint data))
         ((ssa 132 130) (verify-ssa-ast data))
         (else #t))))
+
+(define (nanopass-verify-pass-data pass-name lang-name data phase)
+  (and (nanopass-verify-ast pass-name lang-name data phase)
+       (verify-pass-output pass-name data)))

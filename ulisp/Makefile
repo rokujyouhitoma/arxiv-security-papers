@@ -89,6 +89,14 @@ test_nanopass: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_nanopass_framework.scm > build/test_nanopass_runner.scm
 	@$(RUN_SCHEME) build/test_nanopass_runner.scm
+	cat build/compiler_passes.scm tests/test_nanopass_tracer.scm > build/test_nanopass_tracer_runner.scm
+	@$(RUN_SCHEME) build/test_nanopass_tracer_runner.scm
+
+docs_nanopass: build/compiler_passes.scm
+	@mkdir -p build docs
+	cat build/compiler_passes.scm tools/generate_nanopass_docs.scm > build/generate_docs_runner.scm
+	@$(RUN_SCHEME) build/generate_docs_runner.scm > docs/nanopass_spec.md
+	@echo "Generated docs/nanopass_spec.md"
 
 test_passes: build/compiler_passes.scm test_all_passes
 	@mkdir -p build

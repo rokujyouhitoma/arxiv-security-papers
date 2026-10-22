@@ -506,8 +506,11 @@
 ;;; nonterminals: list of (nt-sym (meta-vars ...) (productions ...))
 ;;; keywords: list of symbols (production heads)
 ;;; removed-prods: list of symbols (removed production heads)
-(define (nanopass-make-language name nongenerative-id entry terminals nonterminals keywords removed-prods)
-  (list 'nanopass-language name nongenerative-id entry terminals nonterminals keywords removed-prods))
+(define (nanopass-make-language name nongenerative-id entry terminals nonterminals keywords removed-prods parent)
+  (list 'nanopass-language name nongenerative-id entry terminals nonterminals keywords removed-prods parent))
+
+(define (nanopass-lang-parent l)
+  (if (> (length l) 8) (list-ref l 8) #f))
 
 (define (nanopass-language? obj)
   (and (pair? obj) (eq? (car obj) 'nanopass-language)))
@@ -752,7 +755,7 @@
                                                 (cond ((null? ks) '())
                                                       ((memq (car ks) raw-kws) (filter-kws (cdr ks)))
                                                       (else (cons (car ks) (filter-kws (cdr ks)))))))))
-              (nanopass-make-language name final-id final-entry final-terms final-nts final-kws final-removed))
+              (nanopass-make-language name final-id final-entry final-terms final-nts final-kws final-removed parent))
             (let* ((parsed-terms (if (null? terminal-clauses) '() terminal-clauses))
                    (final-entry (if entry-sym
                                     entry-sym
@@ -763,7 +766,7 @@
                                       (list (car nt) (cadr nt) (cddr nt)))
                                     nonterminal-clauses))
                    (kws (nanopass-extract-keywords-from-nts parsed-nts parsed-terms)))
-              (nanopass-make-language name nongenerative-id final-entry parsed-terms parsed-nts kws '())))
+              (nanopass-make-language name nongenerative-id final-entry parsed-terms parsed-nts kws '() #f)))
         (let ((c (car rest)))
           (cond
             ((and (pair? c) (eq? (car c) 'extends))
@@ -970,6 +973,133 @@
                                     (exists? (cdr cur)))))
                          (loop (cdr ps) acc))
                         (else (loop (cdr ps) (cons (car ps) acc)))))))))
+
+(define (nanopass-get-all-languages)
+  (let loop ((cur (car *nanopass-languages*)) (acc '()))
+    (if (null? cur)
+        (reverse acc)
+        (loop (cdr cur) (cons (car (car cur)) acc)))))
+
+(define (language-parent-chain lang-name)
+  (let loop ((cur lang-name) (acc '()))
+    (if (not cur)
+        acc
+        (let* ((lang (nanopass-lookup-language cur))
+               (p (nanopass-lang-parent lang)))
+          (loop p (cons cur acc))))))
+
+(define (language-declaration lang-name)
+  (let ((lang (nanopass-lookup-language lang-name)))
+    (list 'language-declaration
+          (nanopass-lang-name lang)
+          (list 'parent (nanopass-lang-parent lang))
+          (list 'entry (nanopass-lang-entry lang))
+          (list 'nongenerative-id (nanopass-lang-nongenerative-id lang))
+          (cons 'terminals (nanopass-lang-terminals lang))
+          (cons 'nonterminals (nanopass-lang-nonterminals lang))
+          (cons 'keywords (nanopass-lang-keywords lang))
+          (cons 'removed (nanopass-lang-removed-prods lang)))))
+
+;;; AST Structural Diff Engine
+(define (nanopass-ast-diff-list l1 l2)
+  (let loop ((c1 l1) (c2 l2) (acc '()))
+    (if (or (null? c1) (null? c2))
+        (reverse acc)
+        (let ((o (car c1))
+              (n (car c2)))
+          (loop (cdr c1) (cdr c2)
+                (cons (if (equal? o n) o (nanopass-ast-diff o n)) acc))))))
+
+(define (nanopass-ast-diff old-ir new-ir)
+  (cond
+    ((equal? old-ir new-ir)
+     #f)
+    ((and (pair? old-ir) (pair? new-ir))
+     (let ((head-old (car old-ir))
+           (head-new (car new-ir)))
+       (if (and (symbol? head-old) (eq? head-old head-new) (= (length old-ir) (length new-ir)))
+           (cons head-old (nanopass-ast-diff-list (cdr old-ir) (cdr new-ir)))
+           (list 'diff:modified old-ir new-ir))))
+    (else
+     (list 'diff:modified old-ir new-ir))))
+
+;;; AST Diff Tracer Configuration and Display
+(define *nanopass-trace* (cons #f '()))
+(define (nanopass-trace-enabled?) (car *nanopass-trace*))
+(define (enable-nanopass-trace!) (set-car! *nanopass-trace* #t))
+(define (disable-nanopass-trace!) (set-car! *nanopass-trace* #f))
+
+(define (nanopass-truncate-expr expr depth max-len)
+  (cond
+    ((<= depth 0) '...)
+    ((not (pair? expr)) expr)
+    (else
+     (let loop ((cur expr) (len 0) (acc '()))
+       (cond
+         ((null? cur) (reverse acc))
+         ((not (pair? cur)) (append (reverse acc) cur))
+         ((>= len max-len) (append (reverse acc) (list '...)))
+         (else
+          (loop (cdr cur) (+ len 1) (cons (nanopass-truncate-expr (car cur) (- depth 1) max-len) acc))))))))
+
+(define (nanopass-display-esc)
+  (write-char (integer->char 27)))
+
+(define (nanopass-display-ast-diff pass-name old-ir new-ir)
+  (let ((max-depth 8)
+        (max-len 16))
+    (nanopass-display-esc)
+    (display "[36m--- [PASS: ")
+    (display pass-name)
+    (display "] -----------------------------------------------------")
+    (nanopass-display-esc)
+    (display "[0m\n")
+    (if (equal? old-ir new-ir)
+        (display "  (AST unchanged)\n")
+        (begin
+          (nanopass-display-esc)
+          (display "[31m- ")
+          (write (nanopass-truncate-expr old-ir max-depth max-len))
+          (nanopass-display-esc)
+          (display "[0m\n")
+          (nanopass-display-esc)
+          (display "[32m+ ")
+          (write (nanopass-truncate-expr new-ir max-depth max-len))
+          (nanopass-display-esc)
+          (display "[0m\n")))
+    (nanopass-display-esc)
+    (display "[36m----------------------------------------------------------------------")
+    (nanopass-display-esc)
+    (display "[0m\n")))
+
+;;; Verifier Hooks Configuration & Error Reporting
+(define *nanopass-verifier-enabled* (cons #f '()))
+(define (nanopass-verifier-enabled?) (car *nanopass-verifier-enabled*))
+(define (enable-nanopass-verifier!) (set-car! *nanopass-verifier-enabled* #t))
+(define (disable-nanopass-verifier!) (set-car! *nanopass-verifier-enabled* #f))
+
+(define (nanopass-verification-failure pass-name lang-name expr phase)
+  (display "\n*** [NANOPASS VERIFIER ERROR] Pass: ")
+  (display pass-name)
+  (display " (")
+  (display phase)
+  (display ") failed language constraint for ")
+  (display lang-name)
+  (display "\n    Violating AST: ")
+  (write expr)
+  (newline)
+  (error "Nanopass Language Invariant Violation" pass-name lang-name))
+
+(define (nanopass-verify-ast pass-name lang-name val phase)
+  (if (or (eq? lang-name '*) (not (symbol? lang-name)))
+      #t
+      (let ((lang-entry (assq lang-name (car *nanopass-languages*))))
+        (if (not lang-entry)
+            #t
+            (if (not (nanopass-ast-valid? lang-name val))
+                (nanopass-verification-failure pass-name lang-name val phase)
+                #t)))))
+
 
 (define (nanopass-proper-list? x)
   (let loop ((cur x))
@@ -1460,7 +1590,7 @@
           (list nt-name in-arg-list nt-name '() rules)))))
 
 ;;; Expand define-pass AST
-(define (nanopass-expand-define-pass form)
+(define (nanopass-expand-define-pass-with-trace form force-trace?)
   (let* ((parsed (nanopass-parse-pass-header form))
          (name (car parsed))
          (l-in (cadr parsed))
@@ -1473,11 +1603,30 @@
                (nt-procs '())
                (entry-nt #f))
       (if (null? rest)
-          (let ((final-entry (if entry-nt entry-nt 'Expr)))
+          (let* ((final-entry (if entry-nt entry-nt 'Expr))
+                 (ir-var (car in-arg-list))
+                 (res-var (unique-symbol "__res_"))
+                 (body-call (cons final-entry in-arg-list)))
             (list 'define (cons name in-arg-list)
                   (list 'letrec
                         (append (reverse defs) (reverse nt-procs))
-                        (cons final-entry in-arg-list))))
+                        (list 'begin
+                              (list 'if (list 'nanopass-verifier-enabled?)
+                                    (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-in) ir-var ''entry)
+                                    #f)
+                              (list 'let (list (list res-var body-call))
+                                    (list 'if (list 'nanopass-verifier-enabled?)
+                                          (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-out) res-var ''exit)
+                                          #f)
+                                    (if force-trace?
+                                        (list 'begin
+                                              (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                              res-var)
+                                        (list 'begin
+                                              (list 'if (list 'nanopass-trace-enabled?)
+                                                    (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                                    #f)
+                                              res-var)))))))
           (let ((c (car rest)))
             (cond
               ;; (definitions def1 def2 ...)
@@ -1513,6 +1662,13 @@
                        (if entry-nt entry-nt nt-name))))
               (else
                (loop (cdr rest) defs nt-procs entry-nt))))))))
+
+(define (nanopass-expand-define-pass form)
+  (nanopass-expand-define-pass-with-trace form #f))
+
+(define (nanopass-expand-trace-define-pass form)
+  (let ((pass-form (cons 'define-pass (cdr form))))
+    (nanopass-expand-define-pass-with-trace pass-form #t)))
 
 ;;; Expand define-language AST
 (define (nanopass-expand-define-language form)
@@ -1556,6 +1712,9 @@
 
 (define-macro (define-pass . args)
   (nanopass-expand-define-pass (cons 'define-pass args)))
+
+(define-macro (trace-define-pass . args)
+  (nanopass-expand-trace-define-pass (cons 'trace-define-pass args)))
 
 (define-macro (define-parser . args)
   (nanopass-expand-define-parser (cons 'define-parser args)))
@@ -1640,8 +1799,12 @@
 (define *verifier-strict* (cons #f '()))
 
 (define (verifier-enabled?) (car *verifier-enabled*))
-(define (enable-verifier!) (set-car! *verifier-enabled* #t))
-(define (disable-verifier!) (set-car! *verifier-enabled* #f))
+(define (enable-verifier!)
+  (set-car! *verifier-enabled* #t)
+  (enable-nanopass-verifier!))
+(define (disable-verifier!)
+  (set-car! *verifier-enabled* #f)
+  (disable-nanopass-verifier!))
 (define (set-verifier-strict! flag) (set-car! *verifier-strict* flag))
 
 ;;; Error Reporting Procedure
@@ -1879,6 +2042,10 @@
         ((safepoint 131) (verify-lir-safepoint data))
         ((ssa 132 130) (verify-ssa-ast data))
         (else #t))))
+
+(define (nanopass-verify-pass-data pass-name lang-name data phase)
+  (and (nanopass-verify-ast pass-name lang-name data phase)
+       (verify-pass-output pass-name data)))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 0a: R7RS define-library & import Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Issue #548 (R7RS 5.6)
@@ -2326,6 +2493,13 @@
                      res)))
             ((and (pair? f) (eq? (car f) 'define-pass))
              (let ((expanded (nanopass-expand-define-pass f)))
+               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
+                                 (cdr expanded)
+                                 (list expanded))
+                             (cdr fs))
+                     res)))
+            ((and (pair? f) (eq? (car f) 'trace-define-pass))
+             (let ((expanded (nanopass-expand-trace-define-pass f)))
                (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
                                  (cdr expanded)
                                  (list expanded))
@@ -12997,22 +13171,27 @@
     (let loop ((forms raw-forms)
                (target 'x86_64)
                (gc-mode initial-gc)
-               (verify #f))
+               (verify #f)
+               (trace #f))
       (if (null? forms)
-          (list target gc-mode '() verify)
+          (list target gc-mode '() verify trace)
           (let ((first (car forms)))
             (cond
               ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
-               (loop (cdr forms) (cadr first) gc-mode verify))
+               (loop (cdr forms) (cadr first) gc-mode verify trace))
               ((and (pair? first) (eq? (car first) '!gc) (pair? (cdr first)))
-               (loop (cdr forms) target (cadr first) verify))
+               (loop (cdr forms) target (cadr first) verify trace))
               ((or (eq? first '--gc-stress) (eq? first '!gc-stress))
-               (loop (cdr forms) target 'stress verify))
+               (loop (cdr forms) target 'stress verify trace))
               ((and (pair? first) (eq? (car first) '!verify))
                (let ((vmode (if (pair? (cdr first)) (cadr first) #t)))
-                 (loop (cdr forms) target gc-mode vmode)))
+                 (loop (cdr forms) target gc-mode vmode trace)))
+              ((or (eq? first '--trace-passes) (eq? first '!trace))
+               (loop (cdr forms) target gc-mode verify #t))
+              ((and (pair? first) (eq? (car first) '!trace))
+               (loop (cdr forms) target gc-mode verify #t))
               (else
-               (list target gc-mode forms verify))))))))
+               (list target gc-mode forms verify trace))))))))
 
 (define (extract-target-and-forms raw-forms)
   (let ((res (extract-directives-and-forms raw-forms)))
@@ -13024,12 +13203,15 @@
        (target (car directives))
        (gc-mode (cadr directives))
        (forms (caddr directives))
-       (verify-mode (cadddr directives)))
+       (verify-mode (cadddr directives))
+       (trace-mode (car (cddddr directives))))
   (if verify-mode
       (begin
         (enable-verifier!)
         (if (eq? verify-mode 'strict)
             (set-verifier-strict! #t))))
+  (if trace-mode
+      (enable-nanopass-trace!))
   (if (not (null? forms))
       (let* ((ast010     (desugar-libraries-and-imports forms))
              (ast015     (expand-dsl-forms ast010))

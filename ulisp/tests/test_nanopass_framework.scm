@@ -328,6 +328,25 @@
               '(c a)
               (test-analyze-frees '(let ((x a) (y 1)) (+ x b ((lambda (z) (+ z c)) 2))) '(b) '()))
 
+;;; -----------------------------------------------------------------------
+;;; 12. Phase 4: Reflection Hierarchy & AST Diff Engine
+;;; -----------------------------------------------------------------------
+
+(assert-true "nanopass-get-all-languages returns registered languages"
+             (memq 'L_test_core (nanopass-get-all-languages)))
+
+(assert-equal "language-parent-chain tracks L_test_src -> L_test_core"
+              '(L_test_src L_test_core)
+              (language-parent-chain 'L_test_core))
+
+(assert-equal "nanopass-ast-diff identifies identical expressions"
+              #f
+              (nanopass-ast-diff '(if a b c) '(if a b c)))
+
+(assert-equal "nanopass-ast-diff detects modified node"
+              '(if a (diff:modified b 42) c)
+              (nanopass-ast-diff '(if a b c) '(if a 42 c)))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)

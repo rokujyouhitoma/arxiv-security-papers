@@ -20,8 +20,11 @@
 ;;; nonterminals: list of (nt-sym (meta-vars ...) (productions ...))
 ;;; keywords: list of symbols (production heads)
 ;;; removed-prods: list of symbols (removed production heads)
-(define (nanopass-make-language name nongenerative-id entry terminals nonterminals keywords removed-prods)
-  (list 'nanopass-language name nongenerative-id entry terminals nonterminals keywords removed-prods))
+(define (nanopass-make-language name nongenerative-id entry terminals nonterminals keywords removed-prods parent)
+  (list 'nanopass-language name nongenerative-id entry terminals nonterminals keywords removed-prods parent))
+
+(define (nanopass-lang-parent l)
+  (if (> (length l) 8) (list-ref l 8) #f))
 
 (define (nanopass-language? obj)
   (and (pair? obj) (eq? (car obj) 'nanopass-language)))
@@ -266,7 +269,7 @@
                                                 (cond ((null? ks) '())
                                                       ((memq (car ks) raw-kws) (filter-kws (cdr ks)))
                                                       (else (cons (car ks) (filter-kws (cdr ks)))))))))
-              (nanopass-make-language name final-id final-entry final-terms final-nts final-kws final-removed))
+              (nanopass-make-language name final-id final-entry final-terms final-nts final-kws final-removed parent))
             (let* ((parsed-terms (if (null? terminal-clauses) '() terminal-clauses))
                    (final-entry (if entry-sym
                                     entry-sym
@@ -277,7 +280,7 @@
                                       (list (car nt) (cadr nt) (cddr nt)))
                                     nonterminal-clauses))
                    (kws (nanopass-extract-keywords-from-nts parsed-nts parsed-terms)))
-              (nanopass-make-language name nongenerative-id final-entry parsed-terms parsed-nts kws '())))
+              (nanopass-make-language name nongenerative-id final-entry parsed-terms parsed-nts kws '() #f)))
         (let ((c (car rest)))
           (cond
             ((and (pair? c) (eq? (car c) 'extends))
@@ -484,6 +487,133 @@
                                     (exists? (cdr cur)))))
                          (loop (cdr ps) acc))
                         (else (loop (cdr ps) (cons (car ps) acc)))))))))
+
+(define (nanopass-get-all-languages)
+  (let loop ((cur (car *nanopass-languages*)) (acc '()))
+    (if (null? cur)
+        (reverse acc)
+        (loop (cdr cur) (cons (car (car cur)) acc)))))
+
+(define (language-parent-chain lang-name)
+  (let loop ((cur lang-name) (acc '()))
+    (if (not cur)
+        acc
+        (let* ((lang (nanopass-lookup-language cur))
+               (p (nanopass-lang-parent lang)))
+          (loop p (cons cur acc))))))
+
+(define (language-declaration lang-name)
+  (let ((lang (nanopass-lookup-language lang-name)))
+    (list 'language-declaration
+          (nanopass-lang-name lang)
+          (list 'parent (nanopass-lang-parent lang))
+          (list 'entry (nanopass-lang-entry lang))
+          (list 'nongenerative-id (nanopass-lang-nongenerative-id lang))
+          (cons 'terminals (nanopass-lang-terminals lang))
+          (cons 'nonterminals (nanopass-lang-nonterminals lang))
+          (cons 'keywords (nanopass-lang-keywords lang))
+          (cons 'removed (nanopass-lang-removed-prods lang)))))
+
+;;; AST Structural Diff Engine
+(define (nanopass-ast-diff-list l1 l2)
+  (let loop ((c1 l1) (c2 l2) (acc '()))
+    (if (or (null? c1) (null? c2))
+        (reverse acc)
+        (let ((o (car c1))
+              (n (car c2)))
+          (loop (cdr c1) (cdr c2)
+                (cons (if (equal? o n) o (nanopass-ast-diff o n)) acc))))))
+
+(define (nanopass-ast-diff old-ir new-ir)
+  (cond
+    ((equal? old-ir new-ir)
+     #f)
+    ((and (pair? old-ir) (pair? new-ir))
+     (let ((head-old (car old-ir))
+           (head-new (car new-ir)))
+       (if (and (symbol? head-old) (eq? head-old head-new) (= (length old-ir) (length new-ir)))
+           (cons head-old (nanopass-ast-diff-list (cdr old-ir) (cdr new-ir)))
+           (list 'diff:modified old-ir new-ir))))
+    (else
+     (list 'diff:modified old-ir new-ir))))
+
+;;; AST Diff Tracer Configuration and Display
+(define *nanopass-trace* (cons #f '()))
+(define (nanopass-trace-enabled?) (car *nanopass-trace*))
+(define (enable-nanopass-trace!) (set-car! *nanopass-trace* #t))
+(define (disable-nanopass-trace!) (set-car! *nanopass-trace* #f))
+
+(define (nanopass-truncate-expr expr depth max-len)
+  (cond
+    ((<= depth 0) '...)
+    ((not (pair? expr)) expr)
+    (else
+     (let loop ((cur expr) (len 0) (acc '()))
+       (cond
+         ((null? cur) (reverse acc))
+         ((not (pair? cur)) (append (reverse acc) cur))
+         ((>= len max-len) (append (reverse acc) (list '...)))
+         (else
+          (loop (cdr cur) (+ len 1) (cons (nanopass-truncate-expr (car cur) (- depth 1) max-len) acc))))))))
+
+(define (nanopass-display-esc)
+  (write-char (integer->char 27)))
+
+(define (nanopass-display-ast-diff pass-name old-ir new-ir)
+  (let ((max-depth 8)
+        (max-len 16))
+    (nanopass-display-esc)
+    (display "[36m--- [PASS: ")
+    (display pass-name)
+    (display "] -----------------------------------------------------")
+    (nanopass-display-esc)
+    (display "[0m\n")
+    (if (equal? old-ir new-ir)
+        (display "  (AST unchanged)\n")
+        (begin
+          (nanopass-display-esc)
+          (display "[31m- ")
+          (write (nanopass-truncate-expr old-ir max-depth max-len))
+          (nanopass-display-esc)
+          (display "[0m\n")
+          (nanopass-display-esc)
+          (display "[32m+ ")
+          (write (nanopass-truncate-expr new-ir max-depth max-len))
+          (nanopass-display-esc)
+          (display "[0m\n")))
+    (nanopass-display-esc)
+    (display "[36m----------------------------------------------------------------------")
+    (nanopass-display-esc)
+    (display "[0m\n")))
+
+;;; Verifier Hooks Configuration & Error Reporting
+(define *nanopass-verifier-enabled* (cons #f '()))
+(define (nanopass-verifier-enabled?) (car *nanopass-verifier-enabled*))
+(define (enable-nanopass-verifier!) (set-car! *nanopass-verifier-enabled* #t))
+(define (disable-nanopass-verifier!) (set-car! *nanopass-verifier-enabled* #f))
+
+(define (nanopass-verification-failure pass-name lang-name expr phase)
+  (display "\n*** [NANOPASS VERIFIER ERROR] Pass: ")
+  (display pass-name)
+  (display " (")
+  (display phase)
+  (display ") failed language constraint for ")
+  (display lang-name)
+  (display "\n    Violating AST: ")
+  (write expr)
+  (newline)
+  (error "Nanopass Language Invariant Violation" pass-name lang-name))
+
+(define (nanopass-verify-ast pass-name lang-name val phase)
+  (if (or (eq? lang-name '*) (not (symbol? lang-name)))
+      #t
+      (let ((lang-entry (assq lang-name (car *nanopass-languages*))))
+        (if (not lang-entry)
+            #t
+            (if (not (nanopass-ast-valid? lang-name val))
+                (nanopass-verification-failure pass-name lang-name val phase)
+                #t)))))
+
 
 (define (nanopass-proper-list? x)
   (let loop ((cur x))
