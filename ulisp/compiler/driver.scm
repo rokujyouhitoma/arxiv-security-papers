@@ -74,7 +74,7 @@
              (_v110      (if verify-mode (verify-pass-output 'closure ast110) #t))
              (ast120     (alias-escape-all ast110))
              (lir130     (generate-lir ast120))
-             (_v130      (if verify-mode (verify-pass-output 'ssa lir130) #t)))
+             (_v130      (if verify-mode (verify-pass-output 'lir lir130) #t)))
         (cond
           ((eq? target 'c)
            (emit-c lir130 gc-mode))

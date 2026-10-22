@@ -249,7 +249,8 @@
         ((anf 070)     (verify-anf-ast data))
         ((closure 110) (verify-closure-ast data))
         ((safepoint 131) (verify-lir-safepoint data))
-        ((ssa 132 130) (verify-ssa-ast data))
+        ((ssa 132)     (verify-ssa-ast data))
+        ((lir canonical-lir 130) (and (verify-ssa-ast data) (validate-lir data)))
         (else #t))))
 
 (define (nanopass-verify-pass-data pass-name lang-name data phase)

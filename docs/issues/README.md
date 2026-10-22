@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **589** | LIR (Low-level IR) 仕様の厳格化と不変条件バリデータ導入によるフロントエンド・バックエンド境界の確立 | Feature | High | [589-establish-canonical-lir-specification-and-boundary-validator.md](589-establish-canonical-lir-specification-and-boundary-validator.md) |
 | **590** | ULisp コンパイラ層の物理分離（Frontend/Nanopass メタコンパイラ層と Backend/低レベルコード生成層の分離） | Feature | High | [590-physical-layer-separation-of-frontend-and-backend.md](590-physical-layer-separation-of-frontend-and-backend.md) |
 | **591** | コンパイラドライバおよびテストスイートの階層化（LIR中間出力モードおよびフロントエンド／バックエンド独立検証基盤の構築） | Feature | Medium | [591-hierarchical-compiler-driver-and-test-suites.md](591-hierarchical-compiler-driver-and-test-suites.md) |
 | **592** | 手続き本体および内部定義 (Internal Definitions) の脱糖未実装による未束縛変数例外 | Bug | High | [592-implement-r7rs-internal-definition-desugaring.md](592-implement-r7rs-internal-definition-desugaring.md) |
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **589** | LIR (Low-level IR) 仕様の厳格化と不変条件バリデータ導入によるフロントエンド・バックエンド境界の確立 | Feature | 2026-10-23 | [closed/589-establish-canonical-lir-specification-and-boundary-validator.md](closed/589-establish-canonical-lir-specification-and-boundary-validator.md) |
 | **586** | Nanopass Framework DSL Phase 4: パイプライン統御・AST Diff トレーサおよび不変条件 Verifier 自動フック統合 | Feature | 2026-10-23 | [closed/586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md](closed/586-nanopass-framework-phase4-pipeline-observability-diff-trace-and-verifier-hooks.md) |
 | **585** | Nanopass Framework DSL Phase 3: Catamorphism Extra Values (上流集約 / 下流伝播) と解析・最適化パス刷新 | Feature | 2026-10-22 | [closed/585-nanopass-framework-phase3-catamorphism-extra-values-and-analysis-passes.md](closed/585-nanopass-framework-phase3-catamorphism-extra-values-and-analysis-passes.md) |
 | **578** | Pass 110 (Closure) / 120 (Escape) / 130 (LIR) の連携による非エスケープオブジェクトのスタック配置最適化 | Refactor | 2026-10-22 | [closed/578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md](closed/578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md) |
