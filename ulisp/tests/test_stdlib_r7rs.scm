@@ -386,6 +386,65 @@
 (assert-num-equal "expt -1^-3" -1 (expt -1 -3))
 (assert-num-equal "expt -1^-2" 1 (expt -1 -2))
 
+;;; =======================================================================
+;;; 7. Iteration (R7RS Section 4.2.4: do)
+;;; =======================================================================
+(write-string "--- 7. Iteration (do) ---")
+(write-char #\newline)
+(flush-output-port)
+
+;; Simple counter loop
+(assert-num-equal "do simple counter 1 to 10 sum"
+                  55
+                  (do ((i 1 (+ i 1))
+                       (sum 0 (+ sum i)))
+                      ((> i 10) sum)))
+
+;; Fibonacci sequence (parallel variable updates)
+(assert-num-equal "do fibonacci 10"
+                  55
+                  (do ((i 0 (+ i 1))
+                       (a 0 b)
+                       (b 1 (+ a b)))
+                      ((= i 10) a)))
+
+;; Step omitted (variable retained)
+(assert-num-equal "do step omitted"
+                  420
+                  (do ((i 0 (+ i 1))
+                       (scale 42))
+                      ((= i 10) (* i scale))))
+
+;; Side effects in command body
+(let ((vec (make-vector 5 0)))
+  (do ((i 0 (+ i 1)))
+      ((= i 5) vec)
+    (vector-set! vec i (* i i)))
+  (assert-equal "do vector mutation commands"
+                (vector 0 1 4 9 16)
+                vec))
+
+;; Multiple return expressions in exit clause
+(assert-num-equal "do multi exit expressions"
+                  20
+                  (let ((x (vector 0)))
+                    (do ((i 0 (+ i 1)))
+                        ((= i 5) (vector-set! x 0 10) (+ (vector-ref x 0) 10)))))
+
+;; No return expressions in exit clause (returns #f)
+(assert-equal "do no exit expressions"
+              #f
+              (do ((i 0 (+ i 1)))
+                  ((= i 3))))
+
+;; Empty bindings list
+(assert-num-equal "do empty bindings"
+                  100
+                  (let ((count (vector 0)))
+                    (do ()
+                        ((= (vector-ref count 0) 10) 100)
+                      (vector-set! count 0 (+ (vector-ref count 0) 1)))))
+
 ;;; Summary
 (write-string "=== ULisp R7RS Standard Library Tests Completed: ")
 (if (= (vector-ref *test-failures* 0) 0)

@@ -289,6 +289,8 @@
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
+    ((do ,bindings ,exit-clause . ,commands)
+     (Expr (desugar-do bindings exit-clause commands)))
 
     ;; 3. Constructors (Pass 026)
     ((list ,args ...) (Expr (desugar-list args)))

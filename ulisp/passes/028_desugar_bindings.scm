@@ -26,6 +26,30 @@
           (list (list name (cons 'lambda (cons params bodies))))
           (cons name inits))))
 
+(define (desugar-do bindings exit-clause commands)
+  (let* ((loop-sym (unique-symbol "do_loop_"))
+         (init-bindings
+          (map (lambda (b) (list (car b) (cadr b))) bindings))
+         (test (car exit-clause))
+         (res (cdr exit-clause))
+         (then-expr
+          (if (null? res)
+              #f
+              (make-body-expr res)))
+         (step-exprs
+          (map (lambda (b)
+                 (if (pair? (cddr b))
+                     (caddr b)
+                     (car b)))
+               bindings))
+         (loop-call (cons loop-sym step-exprs))
+         (else-expr
+          (make-body-expr (append commands (list loop-call)))))
+    (list 'let loop-sym init-bindings
+          (list 'if test
+                then-expr
+                else-expr))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Bindings
 ;;; -----------------------------------------------------------------------
@@ -33,4 +57,6 @@
   (Expr : Expr (ir) -> Expr ()
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
-     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))))
+     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
+    ((do ,bindings ,exit-clause . ,commands)
+     (Expr (desugar-do bindings exit-clause commands)))))

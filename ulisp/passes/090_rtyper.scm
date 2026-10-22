@@ -129,6 +129,10 @@
     ((eq? (car expr) fn-name)
      ;; Tail-recursive loop jump: keep unboxed raw integers
      expr)
+    ((eq? (car expr) '%box-fixnum)
+     expr)
+    ((memq (car expr) '(%raw-add %raw-sub %raw-mul))
+     (list '%box-fixnum expr))
     ((eq? (car expr) 'if)
      (let ((test (cadr expr))
            (then (caddr expr))

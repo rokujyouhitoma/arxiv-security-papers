@@ -1521,6 +1521,7 @@
     (let ((x e1) ...) e ...)
     (letrec ((x e1) ...) e ...)
     (let* ((x e1) ...) e ...)
+    (do ((x e1 e2) ...) (e_test e_res ...) e_cmd ...)
     (cond (e1 e2) ... (else e_else))
     (case key (dat e ...) ... (else e_else))
     (and e ...)
@@ -1545,6 +1546,7 @@
     (- (cond (e1 e2) ... (else e_else)))
     (- (case key (dat e ...) ... (else e_else)))
     (- (let* ((x e1) ...) e ...))
+    (- (do ((x e1 e2) ...) (e_test e_res ...) e_cmd ...))
     (- (and e ...))
     (- (or e ...))
     (- (list e ...))
@@ -2277,7 +2279,7 @@
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
   (memq sym '(if begin lambda let let* letrec quote set! define define-syntax syntax-rules define-record-type
-              cond case and or when unless delay delay-force
+              cond case and or when unless delay delay-force do
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
               vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector vector->string vector->string-range
@@ -3014,6 +3016,30 @@
           (list (list name (cons 'lambda (cons params bodies))))
           (cons name inits))))
 
+(define (desugar-do bindings exit-clause commands)
+  (let* ((loop-sym (unique-symbol "do_loop_"))
+         (init-bindings
+          (map (lambda (b) (list (car b) (cadr b))) bindings))
+         (test (car exit-clause))
+         (res (cdr exit-clause))
+         (then-expr
+          (if (null? res)
+              #f
+              (make-body-expr res)))
+         (step-exprs
+          (map (lambda (b)
+                 (if (pair? (cddr b))
+                     (caddr b)
+                     (car b)))
+               bindings))
+         (loop-call (cons loop-sym step-exprs))
+         (else-expr
+          (make-body-expr (append commands (list loop-call)))))
+    (list 'let loop-sym init-bindings
+          (list 'if test
+                then-expr
+                else-expr))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Bindings
 ;;; -----------------------------------------------------------------------
@@ -3021,7 +3047,9 @@
   (Expr : Expr (ir) -> Expr ()
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
-     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))))
+     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
+    ((do ,bindings ,exit-clause . ,commands)
+     (Expr (desugar-do bindings exit-clause commands)))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 029: Dynamic Environment & Multiple Values Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -3398,6 +3426,8 @@
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
+    ((do ,bindings ,exit-clause . ,commands)
+     (Expr (desugar-do bindings exit-clause commands)))
 
     ;; 3. Constructors (Pass 026)
     ((list ,args ...) (Expr (desugar-list args)))
@@ -5359,6 +5389,10 @@
     ((eq? (car expr) fn-name)
      ;; Tail-recursive loop jump: keep unboxed raw integers
      expr)
+    ((eq? (car expr) '%box-fixnum)
+     expr)
+    ((memq (car expr) '(%raw-add %raw-sub %raw-mul))
+     (list '%box-fixnum expr))
     ((eq? (car expr) 'if)
      (let ((test (cadr expr))
            (then (caddr expr))

@@ -309,6 +309,15 @@ run_test_file_c "tests/test_record.scm" "lib/string.scm lib/vector.scm" "R7RS de
 run_test_file_c "tests/test_promise.scm" "lib/string.scm lib/vector.scm lib/promise.scm" "R7RS delay/force/promise suite"
 run_test_file_c "tests/test_stdlib_r7rs.scm" "lib/list.scm lib/string.scm lib/vector.scm lib/bytevector.scm lib/equality.scm lib/math.scm" "R7RS standard sequence library suite"
 
+echo "--- Step 15: R7RS Iteration (Issue 559: do) ---"
+assert_c "55" "(do ((i 1 (+ i 1)) (sum 0 (+ sum i))) ((> i 10) sum))"
+assert_c "55" "(do ((i 0 (+ i 1)) (a 0 b) (b 1 (+ a b))) ((= i 10) a))"
+assert_c "420" "(do ((i 0 (+ i 1)) (scale 42)) ((= i 10) (* i scale)))"
+assert_c "#(0 1 4 9 16)" "(let ((vec (make-vector 5 0))) (do ((i 0 (+ i 1))) ((= i 5) vec) (vector-set! vec i (* i i))))"
+assert_c "20" "(let ((x (vector 0))) (do ((i 0 (+ i 1))) ((= i 5) (vector-set! x 0 10) (+ (vector-ref x 0) 10))))"
+assert_c "#f" "(do ((i 0 (+ i 1))) ((= i 3)))"
+assert_c "100" "(let ((count (vector 0))) (do () ((= (vector-ref count 0) 10) 100) (vector-set! count 0 (+ (vector-ref count 0) 1))))"
+
 rm -f "$TMP_C" "$TMP_BIN"
 
 echo "======================================================="

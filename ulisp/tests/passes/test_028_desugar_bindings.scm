@@ -52,6 +52,31 @@
   (assert-true "desugar-named-let produces letrec" (pair? nlet))
   (assert-equal "desugar-named-let root is letrec" 'letrec (car nlet)))
 
+;; 4. desugar-do
+(let ((do-res (desugar-do '((i 0 (+ i 1))) '((= i 10) i) '())))
+  (assert-true "desugar-do produces named let" (pair? do-res))
+  (assert-equal "desugar-do root is let" 'let (car do-res))
+  (assert-equal "desugar-do init bindings" '((i 0)) (caddr do-res)))
+
+;; 5. desugar-do step omitted
+(let ((do-res (desugar-do '((i 0 (+ i 1)) (x 42)) '((= i 10) x) '())))
+  (assert-equal "desugar-do step omitted bindings" '((i 0) (x 42)) (caddr do-res))
+  ;; Check else branch passes x unchanged
+  (let* ((if-expr (cadddr do-res))
+         (else-expr (cadddr if-expr)))
+    (assert-equal "desugar-do step omitted else call" 'x (caddr else-expr))))
+
+;; 6. desugar-do multi commands
+(let ((do-res (desugar-do '((i 0 (+ i 1))) '((= i 5) #t) '((display i) (newline)))))
+  (let* ((if-expr (cadddr do-res))
+         (else-expr (cadddr if-expr)))
+    (assert-equal "desugar-do multi commands else is begin" 'begin (car else-expr))))
+
+;; 7. desugar-bindings do
+(let ((expanded (desugar-bindings '(do ((i 0 (+ i 1))) ((= i 10) i)))))
+  (assert-true "desugar-bindings do expands to letrec" (pair? expanded))
+  (assert-equal "desugar-bindings do root is letrec" 'letrec (car expanded)))
+
 (display "=======================================================") (newline)
 (display " Pass 028: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

@@ -719,6 +719,16 @@ make test_promise
 echo "-- Step 34: Standalone R7RS Standard Library Sequence Test Suite (tests/test_stdlib_r7rs.scm) --"
 make test_stdlib
 
+# --- Step 35: R7RS Iteration Syntax (Issue 559: do) ---
+echo "-- Step 35: Issue 559 R7RS Iteration Syntax (do) --"
+assert "55" "(do ((i 1 (+ i 1)) (sum 0 (+ sum i))) ((> i 10) sum))"
+assert "55" "(do ((i 0 (+ i 1)) (a 0 b) (b 1 (+ a b))) ((= i 10) a))"
+assert "420" "(do ((i 0 (+ i 1)) (scale 42)) ((= i 10) (* i scale)))"
+assert "#(0 1 4 9 16)" "(let ((vec (make-vector 5 0))) (do ((i 0 (+ i 1))) ((= i 5) vec) (vector-set! vec i (* i i))))"
+assert "20" "(let ((x (vector 0))) (do ((i 0 (+ i 1))) ((= i 5) (vector-set! x 0 10) (+ (vector-ref x 0) 10))))"
+assert "#f" "(do ((i 0 (+ i 1))) ((= i 3)))"
+assert "100" "(let ((count (vector 0))) (do () ((= (vector-ref count 0) 10) 100) (vector-set! count 0 (+ (vector-ref count 0) 1))))"
+
 # =======================================================================
 # Phase 7: Self-Hosting Bootstrap & Fixed-Point Verification
 # =======================================================================

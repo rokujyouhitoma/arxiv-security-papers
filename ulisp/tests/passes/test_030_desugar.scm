@@ -82,6 +82,11 @@
 (let ((res (desugar-all '(let-values (((a b) (values 1 2))) (+ a b)))))
   (assert-equal "let-values expands to %call-with-values" '%call-with-values (car res)))
 
+;; 8. do desugaring
+(let ((res (desugar-all '(do ((i 0 (+ i 1))) ((= i 10) i)))))
+  (assert-true "do desugars to pair" (pair? res))
+  (assert-equal "do expands to letrec" 'letrec (car res)))
+
 (display "=======================================================") (newline)
 (display " Pass 030: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)
