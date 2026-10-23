@@ -549,7 +549,10 @@
                    (if (null? fs) #t
                        (and (lir-valid-function? (car fs) known-fn-labels)
                             (f-loop (cdr fs)))))
-                 (lir-valid-main? main-clause known-fn-labels)))))))))
+                 (lir-valid-main? main-clause known-fn-labels)
+                 (if (not (nanopass-ast-valid? 'L_lir_canonical prog))
+                     (lir-report-error "Program violates L_lir_canonical schema invariants" prog)
+                     #t)))))))))
 
 (define (verify-lir prog)
   (if (not (verifier-enabled?))

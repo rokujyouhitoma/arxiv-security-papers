@@ -253,6 +253,64 @@
              (verify-lir (make-test-lir-program '() '((%jump .L_nonexistent)))))
 (enable-verifier!)
 
+;;; -----------------------------------------------------------------------
+;;; Group 7: Nanopass L_lir_canonical Schema Integration Tests (Issue #593)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 7: Nanopass L_lir_canonical Schema Integration ---\n")
+
+;; 7.1 L_lir_canonical is registered in Nanopass repository
+(assert-true "L_lir_canonical language is registered"
+             (nanopass-language? (nanopass-lookup-language 'L_lir_canonical)))
+
+;; 7.2 L_lir_canonical? predicate recognizes valid canonical programs
+(assert-true "L_lir_canonical? recognizes minimal valid program"
+             (L_lir_canonical? (make-test-lir-program '() '((%mov %rax 42) (%return)))))
+
+(assert-true "L_lir_canonical? recognizes function with params and memory transfer"
+             (L_lir_canonical?
+              (make-test-lir-program
+               (list '(%lir-function .L_add
+                                     (params (x y))
+                                     (frame-size 24)
+                                     (body
+                                      (%load %rax %rsp 8)
+                                      (%load %rbx %rsp 16)
+                                      (%add %rax %rbx)
+                                      (%return %rax))))
+               '((%mov %rax 10)
+                 (%return)))))
+
+(assert-true "L_lir_canonical? recognizes runtime alloc and continuations"
+             (L_lir_canonical?
+              (make-test-lir-program
+               '()
+               '((%alloc %rax 24 1)
+                 (%alloc-stack %rbx -32 1)
+                 (%push-handler .L_catch -16 -24)
+                 (%pop-handler -16)
+                 (%set-values-count 2)
+                 (%store-values-buf -32 2)
+                 (%capture-cc .L_ret -8)
+                 (%label .L_ret)
+                 (%label .L_catch)
+                 (%return %rax)))))
+
+;; 7.3 L_lir_canonical? rejects malformed or un-lowered structures
+(assert-false "L_lir_canonical? rejects program with invalid opcode"
+              (L_lir_canonical? (make-test-lir-program '() '((%unknown-op %rax 10)))))
+
+(assert-false "L_lir_canonical? rejects invalid register operand in %mov"
+              (L_lir_canonical? (make-test-lir-program '() '((%mov %r99 10)))))
+
+(assert-false "L_lir_canonical? rejects non-register dest in %load"
+              (L_lir_canonical? (make-test-lir-program '() '((%load 42 %rsp 8)))))
+
+(assert-false "L_lir_canonical? rejects non-integer shift in %shl"
+              (L_lir_canonical? (make-test-lir-program '() '((%shl %rax %rbx)))))
+
+(assert-false "L_lir_canonical? rejects missing %lir-program root"
+              (L_lir_canonical? '((%mov %rax 42))))
+
 (display "\n=======================================================\n")
 (display " All Canonical LIR Verifier Tests PASSED: ")
 (display (car *pass-count*))

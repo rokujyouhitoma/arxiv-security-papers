@@ -4,12 +4,11 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-| Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
-| :---: | --- | :---: | :---: | :---: |
-| **593** | LIR層: define-language L_lir_canonical の導入と lir_verifier 宣言的統合 | Feature | High | [593-define-lir-canonical-language-and-verifier-integration.md](593-define-lir-canonical-language-and-verifier-integration.md) |
-| **594** | Frontend層: define-language L_anf / L_lifted の導入と不変条件自動検証 | Feature | Medium | [594-define-frontend-anf-and-lifted-languages.md](594-define-frontend-anf-and-lifted-languages.md) |
-| **595** | LIR層: define-pass による分岐融合・DCE・ピープホール最適化の宣言化 | Feature | Medium | [595-define-pass-lir-optimizations-and-peephole.md](595-define-pass-lir-optimizations-and-peephole.md) |
-| **596** | Backend層: define-language L_asm 導入による命令選択とコード生成の2段階分離 | Feature | Medium | [596-backend-instruction-selection-and-emission-separation.md](596-backend-instruction-selection-and-emission-separation.md) |
+| Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
+| :---: | --- | :---: | :---: | :---: | :---: |
+| **594** | Frontend層: define-language L_anf / L_lifted の導入と不変条件自動検証 | Feature | Medium | Open | [594-define-frontend-anf-and-lifted-languages.md](594-define-frontend-anf-and-lifted-languages.md) |
+| **595** | LIR層: define-pass による分岐融合・DCE・ピープホール最適化の宣言化 | Feature | Medium | Open | [595-define-pass-lir-optimizations-and-peephole.md](595-define-pass-lir-optimizations-and-peephole.md) |
+| **596** | Backend層: define-language L_asm 導入による命令選択とコード生成の2段階分離 | Feature | Medium | Open | [596-backend-instruction-selection-and-emission-separation.md](596-backend-instruction-selection-and-emission-separation.md) |
 
 ---
 
@@ -17,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **593** | LIR層: define-language L_lir_canonical の導入と lir_verifier 宣言的統合 | Feature | 2026-10-24 | [closed/593-define-lir-canonical-language-and-verifier-integration.md](closed/593-define-lir-canonical-language-and-verifier-integration.md) |
 | **592** | 手続き本体および内部定義 (Internal Definitions) の脱糖未実装による未束縛変数例外 | Bug | 2026-10-24 | [closed/592-implement-r7rs-internal-definition-desugaring.md](closed/592-implement-r7rs-internal-definition-desugaring.md) |
 | **591** | コンパイラドライバおよびテストスイートの階層化（LIR中間出力モード `--target-lir` およびフロントエンド／バックエンド独立検証基盤の構築） | Feature | 2026-10-23 | [closed/591-hierarchical-compiler-driver-and-test-suites.md](closed/591-hierarchical-compiler-driver-and-test-suites.md) |
 | **590** | ULisp コンパイラ層の物理分離（Frontend/Nanopass メタコンパイラ層と Backend/低レベルコード生成層の分離） | Feature | 2026-10-23 | [closed/590-physical-layer-separation-of-frontend-and-backend.md](closed/590-physical-layer-separation-of-frontend-and-backend.md) |

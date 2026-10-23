@@ -326,28 +326,19 @@
   ;; Check if expr is a list starting with an explicitly removed production head
   (if (and (pair? expr) (symbol? (car expr)) (memq (car expr) (nanopass-lang-removed-prods lang)))
       #f
-      ;; 1. Check terminals
-      (let ((terminals (nanopass-lang-terminals lang)))
-        (let check-t ((ts terminals))
-          (if (not (null? ts))
-              (let* ((term (car ts))
-                     (pred (car term)))
-                (if (nanopass-terminal-matches? pred expr)
-                    #t
-                    (check-t (cdr ts))))
-              ;; 2. Check nonterminal productions
-              (let* ((nts (nanopass-lang-nonterminals lang))
-                     (nt-entry (assq nt-name nts)))
-                (if (not nt-entry)
+      ;; Check nonterminal productions
+      (let* ((nts (nanopass-lang-nonterminals lang))
+             (nt-entry (assq nt-name nts)))
+        (if (not nt-entry)
+            #f
+            (let ((prods (caddr nt-entry)))
+              (let check-p ((ps prods))
+                (if (null? ps)
                     #f
-                    (let ((prods (caddr nt-entry)))
-                      (let check-p ((ps prods))
-                        (if (null? ps)
-                            #f
-                            (let ((p (car ps)))
-                              (if (nanopass-production-matches? p expr lang nt-name)
-                                  #t
-                                  (check-p (cdr ps))))))))))))))
+                    (let ((p (car ps)))
+                      (if (nanopass-production-matches? p expr lang nt-name)
+                          #t
+                          (check-p (cdr ps)))))))))))
 
 (define (nanopass-production-matches? prod expr lang curr-nt)
   (cond
@@ -415,7 +406,9 @@
           (let* ((p (car prod-rest))
                  (cls (nanopass-classify-meta-var p lang)))
             (if cls
-                (nanopass-check-valid-node (car expr-rest) (if (eq? (car cls) 'nonterminal) (cadr cls) curr-nt) lang)
+                (if (eq? (car cls) 'terminal)
+                    (nanopass-terminal-matches? (cadr cls) (car expr-rest))
+                    (nanopass-check-valid-node (car expr-rest) (cadr cls) lang))
                 (equal? p (car expr-rest))))
           (nanopass-match-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt)))))
 
@@ -424,11 +417,16 @@
     ((symbol? pat)
      (let ((cls (nanopass-classify-meta-var pat lang)))
        (if cls
-           (nanopass-check-valid-node val (if (eq? (car cls) 'nonterminal) (cadr cls) curr-nt) lang)
+           (if (eq? (car cls) 'terminal)
+               (nanopass-terminal-matches? (cadr cls) val)
+               (nanopass-check-valid-node val (cadr cls) lang))
            (equal? pat val))))
     ((pair? pat)
-     (and (pair? val)
-          (nanopass-match-subforms pat val lang curr-nt)))
+     (if (null? val)
+         (or (eq? (car pat) '...)
+             (and (pair? (cdr pat)) (eq? (cadr pat) '...)))
+         (and (pair? val)
+              (nanopass-match-subforms pat val lang curr-nt))))
     (else (equal? pat val))))
 
 ;;; Parser & Unparser Procs

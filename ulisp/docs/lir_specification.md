@@ -15,10 +15,10 @@ LIR は、高水準 Scheme の意味論（ラムダ式、レキシカルスコ�
    - 独自のバイナリ AST ではなく、純粋な Scheme の S 式（リスト・シンボル・整数）として表現され、メタプログラミング、直列化（`write` / `read`）、パイプライン差分検証が極めて容易である。
 2. **ターゲット非依存性とバックエンド中立性**:
    - 抽象レジスタセット、スタックスロット、ラベル、3番地命令列で構成され、特定 CPU アーキテクチャのマイクロアーキテクチャ依存を排除する。
-3. **厳格な境界契約 (Contract)**:
-   - メタコンパイラ層は、本仕様で定義された BNF 文法および不変条件を 100% 満たす `%lir-program` を出力することを保証する。
+3. **厳格な境界契約 (Contract) と多層検証 (Two-Tier Verification)**:
+   - メタコンパイラ層は、形式文法 DSL `define-language L_lir_canonical`（`ulisp/lir/lir_lang.scm`）および本仕様で定義された BNF 文法・不変条件を 100% 満たす `%lir-program` を出力することを保証する。
    - バックエンド層（`140_backend_x86_64.scm`, `150_backend_aarch64.scm`, `160_backend_c.scm`）は、本仕様を満たす LIR 入力に対してのみ正当なマシン語／ソースコードを生成する責務を負う。
-   - 両層の物理的分離点において、独立バリデータ `validate-lir` / `verify-lir` が常時境界検証を行う。
+   - 両層の物理的分離点において、独立バリデータ `validate-lir` / `verify-lir`（`ulisp/lir/lir_verifier.scm`）が常時境界検証を行い、Tier 1 構文スキーマ検査（`L_lir_canonical?`）と Tier 2 意味論的 CFG/アライメント検査の多層防護を提供する。
 
 ---
 
@@ -174,10 +174,11 @@ LIR は、高水準 Scheme の意味論（ラムダ式、レキシカルスコ�
 ---
 
 ## 5. 境界バリデータ (`validate-lir` / `verify-lir`) 仕様
-
-バリデータは `ulisp/lir/lir_verifier.scm` に実装され、以下の公開 API を提供する：
+ 
+バリデータは `ulisp/lir/lir_verifier.scm` に実装され、`ulisp/lir/lir_lang.scm`（`define-language L_lir_canonical`）と宣言的に統合された以下の多層防護（Two-Tier Verification）API を提供する：
 
 - `(validate-lir prog)` / `(verify-lir prog)`:
-  - 引数 `prog` が Canonical LIR 不変条件をすべて満たせば `#t` を返却する。
+  - **Tier 1 (構文スキーマ検証)**: `(L_lir_canonical? prog)` による形式文法適合性・未定義オペコード排除・オペランド型整合性検証。
+  - **Tier 2 (コンテキスト意味論検証)**: CFG ラベル重複排除・未定義ラベルジャンプ検査・SSA ブロック引数 arity 整合・スタックフレーム 8 バイトアライメント・セーフポイントスタックマップ正当性検査。
   - 不変条件違反を検出した場合、詳細な診断メッセージ（関数名、命令、違反理由）を出力し、非 strict モードでは `#f` を返却、strict モードでは例外を raise する。
 - 統合コンパイラドライバ（`compiler/driver.scm`）において、Pass 130 完了直後かつバックエンド呼出直前に自動実行される。

@@ -812,28 +812,19 @@
   ;; Check if expr is a list starting with an explicitly removed production head
   (if (and (pair? expr) (symbol? (car expr)) (memq (car expr) (nanopass-lang-removed-prods lang)))
       #f
-      ;; 1. Check terminals
-      (let ((terminals (nanopass-lang-terminals lang)))
-        (let check-t ((ts terminals))
-          (if (not (null? ts))
-              (let* ((term (car ts))
-                     (pred (car term)))
-                (if (nanopass-terminal-matches? pred expr)
-                    #t
-                    (check-t (cdr ts))))
-              ;; 2. Check nonterminal productions
-              (let* ((nts (nanopass-lang-nonterminals lang))
-                     (nt-entry (assq nt-name nts)))
-                (if (not nt-entry)
+      ;; Check nonterminal productions
+      (let* ((nts (nanopass-lang-nonterminals lang))
+             (nt-entry (assq nt-name nts)))
+        (if (not nt-entry)
+            #f
+            (let ((prods (caddr nt-entry)))
+              (let check-p ((ps prods))
+                (if (null? ps)
                     #f
-                    (let ((prods (caddr nt-entry)))
-                      (let check-p ((ps prods))
-                        (if (null? ps)
-                            #f
-                            (let ((p (car ps)))
-                              (if (nanopass-production-matches? p expr lang nt-name)
-                                  #t
-                                  (check-p (cdr ps))))))))))))))
+                    (let ((p (car ps)))
+                      (if (nanopass-production-matches? p expr lang nt-name)
+                          #t
+                          (check-p (cdr ps)))))))))))
 
 (define (nanopass-production-matches? prod expr lang curr-nt)
   (cond
@@ -901,7 +892,9 @@
           (let* ((p (car prod-rest))
                  (cls (nanopass-classify-meta-var p lang)))
             (if cls
-                (nanopass-check-valid-node (car expr-rest) (if (eq? (car cls) 'nonterminal) (cadr cls) curr-nt) lang)
+                (if (eq? (car cls) 'terminal)
+                    (nanopass-terminal-matches? (cadr cls) (car expr-rest))
+                    (nanopass-check-valid-node (car expr-rest) (cadr cls) lang))
                 (equal? p (car expr-rest))))
           (nanopass-match-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt)))))
 
@@ -910,11 +903,16 @@
     ((symbol? pat)
      (let ((cls (nanopass-classify-meta-var pat lang)))
        (if cls
-           (nanopass-check-valid-node val (if (eq? (car cls) 'nonterminal) (cadr cls) curr-nt) lang)
+           (if (eq? (car cls) 'terminal)
+               (nanopass-terminal-matches? (cadr cls) val)
+               (nanopass-check-valid-node val (cadr cls) lang))
            (equal? pat val))))
     ((pair? pat)
-     (and (pair? val)
-          (nanopass-match-subforms pat val lang curr-nt)))
+     (if (null? val)
+         (or (eq? (car pat) '...)
+             (and (pair? (cdr pat)) (eq? (cadr pat) '...)))
+         (and (pair? val)
+              (nanopass-match-subforms pat val lang curr-nt))))
     (else (equal? pat val))))
 
 ;;; Parser & Unparser Procs
@@ -6665,6 +6663,118 @@
       (let ((esc (collect-escaped-vars program #t)))
         (alias-escape-transform-expr program esc '()))))
 ;;; =======================================================================
+;;; ULisp Compiler: Canonical LIR Language Specification (L_lir_canonical)
+;;; Conforms to DSN-33 Architecture Specification & Issue #593
+;;; =======================================================================
+;;; Formal intermediate language definition for Canonical LIR using Nanopass
+;;; DSL (define-language). Serves as the declarative contract between the
+;;; mid-level optimization/flattening passes and low-level code generation backends.
+;;; =======================================================================
+
+(define-language L_lir_canonical
+  (entry Program)
+  (terminals
+    (symbol (x lbl var cond_op sp_lbl))
+    (integer (n offset shift frame_size bytes tag si cnt bitmap))
+    (string (str fn_name)))
+  (Register (reg)
+    %rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+    %r8  %r9  %r10 %r11 %r12 %r13 %r14 %r15 %al
+    (%reg x))
+  (StackSlot (stk)
+    (%stack offset))
+  (MemRef (mem)
+    (%mem reg offset)
+    (%mem reg reg))
+  (LValue (lval)
+    reg
+    stk
+    mem)
+  (Operand (opnd)
+    lval
+    n
+    lbl)
+  (Inst (inst)
+    ;; Control Flow
+    (%label lbl)
+    (%block lbl (x ...) inst ...)
+    (%jump lbl)
+    (%jump lbl (opnd ...))
+    (%jump-if-false reg lbl)
+    (%jump-if-false reg lbl (opnd ...))
+    (%jump-if reg lbl1 (opnd1 ...) lbl2 (opnd2 ...))
+    (%jump-cond cond_op lbl)
+    (%jump-if-zero lbl)
+    (%direct-jump lbl)
+    (%return)
+    (%return opnd)
+
+    ;; Calls & ABI
+    (%c-call fn_name shift)
+    (%call-closure shift)
+    (%call-closure shift sp_lbl)
+    (%direct-call lbl shift)
+    (%direct-call lbl shift sp_lbl)
+    (%dispatch-consumer si1 si2 shift)
+
+    ;; Memory & Data Transfer
+    (%mov lval opnd)
+    (%load reg1 reg2 offset)
+    (%store reg1 offset opnd)
+    (%load-byte-zx reg1 reg2 offset)
+    (%store-byte reg1 offset opnd)
+    (%push reg)
+    (%pop reg)
+    (%code-ref reg lbl)
+    (%str-ref reg lbl)
+    (%global-ref reg var)
+    (%global-set! var reg)
+
+    ;; Arithmetic / Logic / Primitives
+    (%add opnd1 opnd2)
+    (%raw-add opnd1 opnd2)
+    (%sub opnd1 opnd2)
+    (%raw-sub opnd1 opnd2)
+    (%imul opnd1 opnd2)
+    (%raw-mul opnd1 opnd2)
+    (%neg opnd)
+    (%inc opnd)
+    (%cqo)
+    (%idiv opnd)
+    (%shl opnd shift)
+    (%shr opnd shift)
+    (%sar opnd shift)
+    (%bit-and opnd1 opnd2)
+    (%bit-or opnd1 opnd2)
+    (%bit-xor opnd1 opnd2)
+    (%cmp opnd1 opnd2)
+    (%raw-cmp opnd1 opnd2)
+    (%set-boolean opnd cond_op)
+    (%box-fixnum opnd1 opnd2)
+    (%unbox-fixnum opnd1 opnd2)
+    (%syscall)
+
+    ;; Runtime / GC / CC / Values
+    (%alloc opnd bytes tag)
+    (%alloc opnd bytes tag si)
+    (%alloc-stack opnd offset tag)
+    (%capture-cc lbl si)
+    (%push-handler lbl si1 si2)
+    (%pop-handler si)
+    (%raise)
+    (%set-values-count cnt)
+    (%store-values-buf si cnt))
+  (StringEntry (se)
+    (lbl str))
+  (SafepointEntry (sm)
+    (lbl frame_size bitmap))
+  (FunctionDecl (f)
+    (%lir-function lbl (params (x ...)) (frame-size frame_size) (body inst ...)))
+  (MainDecl (m)
+    (%lir-main (frame-size frame_size) (body inst ...)))
+  (Program (p)
+    (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)))
+;;; =======================================================================
 ;;; ULisp Compiler: Canonical LIR Specification Verifier & Boundary Validator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #589
 ;;; =======================================================================
@@ -7215,7 +7325,10 @@
                    (if (null? fs) #t
                        (and (lir-valid-function? (car fs) known-fn-labels)
                             (f-loop (cdr fs)))))
-                 (lir-valid-main? main-clause known-fn-labels)))))))))
+                 (lir-valid-main? main-clause known-fn-labels)
+                 (if (not (nanopass-ast-valid? 'L_lir_canonical prog))
+                     (lir-report-error "Program violates L_lir_canonical schema invariants" prog)
+                     #t)))))))))
 
 (define (verify-lir prog)
   (if (not (verifier-enabled?))

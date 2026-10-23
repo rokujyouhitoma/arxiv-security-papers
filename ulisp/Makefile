@@ -55,7 +55,8 @@ FRONTEND_PASSES = frontend/010_library.scm \
                   frontend/110_closure_convert.scm \
                   frontend/120_alias_escape.scm
 
-LIR_PASSES = lir/lir_verifier.scm \
+LIR_PASSES = lir/lir_lang.scm \
+             lir/lir_verifier.scm \
              lir/123_lir_closures.scm \
              lir/124_lir_call_abi.scm \
              lir/125_lir_continuation.scm \
