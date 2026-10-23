@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
-| **592** | 手続き本体および内部定義 (Internal Definitions) の脱糖未実装による未束縛変数例外 | Bug | High | [592-implement-r7rs-internal-definition-desugaring.md](592-implement-r7rs-internal-definition-desugaring.md) |
 | **593** | LIR層: define-language L_lir_canonical の導入と lir_verifier 宣言的統合 | Feature | High | [593-define-lir-canonical-language-and-verifier-integration.md](593-define-lir-canonical-language-and-verifier-integration.md) |
 | **594** | Frontend層: define-language L_anf / L_lifted の導入と不変条件自動検証 | Feature | Medium | [594-define-frontend-anf-and-lifted-languages.md](594-define-frontend-anf-and-lifted-languages.md) |
 | **595** | LIR層: define-pass による分岐融合・DCE・ピープホール最適化の宣言化 | Feature | Medium | [595-define-pass-lir-optimizations-and-peephole.md](595-define-pass-lir-optimizations-and-peephole.md) |
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **592** | 手続き本体および内部定義 (Internal Definitions) の脱糖未実装による未束縛変数例外 | Bug | 2026-10-24 | [closed/592-implement-r7rs-internal-definition-desugaring.md](closed/592-implement-r7rs-internal-definition-desugaring.md) |
 | **591** | コンパイラドライバおよびテストスイートの階層化（LIR中間出力モード `--target-lir` およびフロントエンド／バックエンド独立検証基盤の構築） | Feature | 2026-10-23 | [closed/591-hierarchical-compiler-driver-and-test-suites.md](closed/591-hierarchical-compiler-driver-and-test-suites.md) |
 | **590** | ULisp コンパイラ層の物理分離（Frontend/Nanopass メタコンパイラ層と Backend/低レベルコード生成層の分離） | Feature | 2026-10-23 | [closed/590-physical-layer-separation-of-frontend-and-backend.md](closed/590-physical-layer-separation-of-frontend-and-backend.md) |
 | **589** | LIR (Low-level IR) 仕様の厳格化と不変条件バリデータ導入によるフロントエンド・バックエンド境界の確立 | Feature | 2026-10-23 | [closed/589-establish-canonical-lir-specification-and-boundary-validator.md](closed/589-establish-canonical-lir-specification-and-boundary-validator.md) |

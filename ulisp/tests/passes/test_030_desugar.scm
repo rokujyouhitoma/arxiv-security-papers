@@ -92,6 +92,21 @@
   (assert-true "define-values in begin desugars to pair" (pair? res))
   (assert-equal "define-values in begin expands to %call-with-values" '%call-with-values (car res)))
 
+;; 10. internal define variables desugaring
+(let ((res (desugar-all '(begin (define x 10) (define y 20) (+ x y)))))
+  (assert-equal "internal define variables root tag" 'let (car res))
+  (assert-equal "internal define variable x" '((x 10)) (cadr res))
+  (assert-equal "internal define variable y" 'let (car (caddr res))))
+
+;; 11. internal define procedure desugaring
+(let ((res (desugar-all '(begin (define (foo x) (* x 2)) (foo 21)))))
+  (assert-equal "internal define procedure root tag" 'letrec (car res))
+  (assert-equal "internal define procedure name" 'foo (caar (cadr res))))
+
+;; 12. splicing begin desugaring
+(let ((res (desugar-all '(begin (begin (define x 10)) x))))
+  (assert-equal "splicing begin with internal define" 'let (car res)))
+
 (display "=======================================================") (newline)
 (display " Pass 030: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

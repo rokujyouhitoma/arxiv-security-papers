@@ -3338,6 +3338,45 @@
                 then-expr
                 else-expr))))
 
+(define (normalize-define-spec spec bodies)
+  (cond
+    ((pair? spec)
+     (let ((actual-bodies (if (null? bodies) (list #f) bodies)))
+       (if (pair? (car spec))
+           ;; カリー化短縮構文: (define ((f x) y) ...) -> (define (f x) (lambda (y) ...))
+           (normalize-define-spec (car spec) (list (cons 'lambda (cons (cdr spec) actual-bodies))))
+           ;; 通常短縮構文: (define (f x ...) ...) -> (define f (lambda (x ...) ...))
+           (cons (car spec) (cons 'lambda (cons (cdr spec) actual-bodies))))))
+    ((symbol? spec)
+     ;; 変数定義: (define x val)
+     (cons spec (if (pair? bodies) (car bodies) #f)))
+    (else
+     (error "Malformed define specification in internal define:" spec))))
+
+(define (desugar-internal-define spec rest-def rest)
+  (let* ((norm (normalize-define-spec spec rest-def))
+         (name (car norm))
+         (val (cdr norm))
+         (is-proc? (and (pair? val) (eq? (car val) 'lambda))))
+    (if is-proc?
+        ;; 連続する手続き定義を単一の letrec 節へ集約（相互再帰対応）
+        (let loop ((cur-rest rest)
+                   (proc-bindings (list (list name val))))
+          (if (and (pair? cur-rest)
+                   (pair? (car cur-rest))
+                   (eq? (caar cur-rest) 'define)
+                   (pair? (cdar cur-rest)))
+              (let* ((next-def (car cur-rest))
+                     (next-norm (normalize-define-spec (cadr next-def) (cddr next-def)))
+                     (next-name (car next-norm))
+                     (next-val (cdr next-norm)))
+                (if (and (pair? next-val) (eq? (car next-val) 'lambda))
+                    (loop (cdr cur-rest) (cons (list next-name next-val) proc-bindings))
+                    (list 'letrec (reverse proc-bindings) (if (null? cur-rest) #f (make-body-expr cur-rest)))))
+              (list 'letrec (reverse proc-bindings) (if (null? cur-rest) #f (make-body-expr cur-rest)))))
+        ;; 通常の変数定義: let で包み、後続の定義・式を body に配置
+        (list 'let (list (list name val)) (if (null? rest) #f (make-body-expr rest))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Bindings
 ;;; -----------------------------------------------------------------------
@@ -3348,10 +3387,18 @@
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
     ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
      (Expr (list 'let bindings (cons 'begin (cons b1 (cons b2 rest))))))
+    ((letrec ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
+     (Expr (list 'letrec bindings (cons 'begin (cons b1 (cons b2 rest))))))
     ((lambda ,params ,b1 ,b2 . ,rest)
      (Expr (list 'lambda params (cons 'begin (cons b1 (cons b2 rest))))))
     ((do ,bindings ,exit-clause . ,commands)
-     (Expr (desugar-do bindings exit-clause commands)))))
+     (Expr (desugar-do bindings exit-clause commands)))
+    ((begin (begin . ,inner) . ,rest)
+     (Expr (cons 'begin (append inner rest))))
+    ((begin (define ,spec . ,rest-def) . ,rest)
+     (Expr (desugar-internal-define spec rest-def rest)))
+    ((define ,spec . ,rest-def)
+     (Expr (desugar-internal-define spec rest-def '())))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 029: Dynamic Environment & Multiple Values Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -3743,10 +3790,18 @@
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
     ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
      (Expr (list 'let bindings (cons 'begin (cons b1 (cons b2 rest))))))
+    ((letrec ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
+     (Expr (list 'letrec bindings (cons 'begin (cons b1 (cons b2 rest))))))
     ((lambda ,params ,b1 ,b2 . ,rest)
      (Expr (list 'lambda params (cons 'begin (cons b1 (cons b2 rest))))))
     ((do ,bindings ,exit-clause . ,commands)
      (Expr (desugar-do bindings exit-clause commands)))
+    ((begin (begin . ,inner) . ,rest)
+     (Expr (cons 'begin (append inner rest))))
+    ((begin (define ,spec . ,rest-def) . ,rest)
+     (Expr (desugar-internal-define spec rest-def rest)))
+    ((define ,spec . ,rest-def)
+     (Expr (desugar-internal-define spec rest-def '())))
 
     ;; 3. Constructors (Pass 026)
     ((list ,args ...) (Expr (desugar-list args)))

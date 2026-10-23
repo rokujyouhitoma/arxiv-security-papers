@@ -492,6 +492,57 @@
                     (define-values (s3 s4) (values 10 20))
                     (+ (+ s1 s2) (+ s3 s4))))
 
+;;; -----------------------------------------------------------------------
+;;; R7RS Section 5.3.2: Internal definitions
+;;; -----------------------------------------------------------------------
+
+;; Internal variable definitions in procedure
+(define (r7rs-int-vars)
+  (define x 10)
+  (define y 20)
+  (+ x y))
+
+(assert-num-equal "internal define variables in procedure"
+                  30
+                  (r7rs-int-vars))
+
+;; Internal procedure definition
+(define (r7rs-int-proc)
+  (define (double n) (* n 2))
+  (double 21))
+
+(assert-num-equal "internal define procedure in procedure"
+                  42
+                  (r7rs-int-proc))
+
+;; Mutually recursive internal procedure definitions
+(define (r7rs-int-mutual n)
+  (define (even? m) (if (= m 0) #t (odd? (- m 1))))
+  (define (odd? m) (if (= m 0) #f (even? (- m 1))))
+  (if (even? n) 100 200))
+
+(assert-num-equal "internal define mutually recursive procedures"
+                  100
+                  (r7rs-int-mutual 10))
+
+;; Curried shorthand internal procedure definition
+(define (r7rs-int-curry)
+  (define ((curry-add a) b) (+ a b))
+  ((curry-add 15) 27))
+
+(assert-num-equal "internal define curried procedure"
+                  42
+                  (r7rs-int-curry))
+
+;; Splicing begin with internal definitions
+(assert-num-equal "internal define in splicing begin"
+                  300
+                  (let ()
+                    (begin
+                      (define u 100)
+                      (define v 200))
+                    (+ u v)))
+
 ;;; Summary
 (write-string "=== ULisp R7RS Standard Library Tests Completed: ")
 (if (= (vector-ref *test-failures* 0) 0)

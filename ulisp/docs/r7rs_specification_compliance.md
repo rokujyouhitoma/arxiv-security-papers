@@ -71,7 +71,7 @@
 | **5.2 / 5.6** | モジュールインポート | `(import <import-set> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | ライブラリ依存解決・シンボル修飾 ([Issue #548](../../docs/issues/closed/548-implement-r7rs-define-library-and-import-syntax.md)) |
 | **5.3.1** | トップレベル変数定義 | `(define <variable> <expression>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | グローバルシンボル束縛 |
 | **5.3.1** | 手続き定義短縮構文 | `(define (<variable> <formals>) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `lambda` 束縛への自動脱糖 |
-| **5.3.2** | 内部定義 (Internal definitions) | ブロック先頭の `(define ...)` | **△** | [Pass 030](../frontend/030_desugar.scm) | 内部 `define-values` は対応済、通常内部 `define` の `letrec*` 巻き直しは未完全 |
+| **5.3.2** | 内部定義 (Internal definitions) | ブロック先頭の `(define ...)` | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm) / [030](../frontend/030_desugar.scm) | 内部変数定義（逐次 `let`）、内部手続き定義・相互再帰（集約 `letrec`）、カリー化短縮構文、スプライシング `begin` 完全対応・固定点ブートストラップ完了 ([Issue #592](../../docs/issues/592-implement-r7rs-internal-definition-desugaring.md)) |
 | **5.3.3** | 多値定義 | `(define-values <formals> <expression>)` | **◎** | [Pass 025](../frontend/025_top_level.scm) / [029](../frontend/029_desugar_dynamic.scm) | トップレベルおよび内部定義対応、ゼロヒープ多値束縛・固定点ブートストラップ完了 ([Issue #560](../../docs/issues/closed/560-implement-r7rs-define-values-syntax.md)) |
 | **5.4** | マクロ定義 (Syntax definitions)| `(define-syntax <keyword> <transformer>)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | コンパイル時マクロテーブル登録 |
 | **5.5** | レコード型定義 (Record-types) | `(define-record-type <name> (<ctor> ...) <pred> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 固定長ベクタ脱糖マクロ・型述語・アクセサ・ミューテータ完備 ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md)) |

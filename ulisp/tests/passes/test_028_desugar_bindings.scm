@@ -77,6 +77,40 @@
   (assert-true "desugar-bindings do expands to letrec" (pair? expanded))
   (assert-equal "desugar-bindings do root is letrec" 'letrec (car expanded)))
 
+;; 8. normalize-define-spec variable
+(let ((norm (normalize-define-spec 'x '(10))))
+  (assert-equal "normalize-define-spec variable name" 'x (car norm))
+  (assert-equal "normalize-define-spec variable val" 10 (cdr norm)))
+
+;; 9. normalize-define-spec procedure
+(let ((norm (normalize-define-spec '(double x) '((* x 2)))))
+  (assert-equal "normalize-define-spec proc name" 'double (car norm))
+  (assert-equal "normalize-define-spec proc lambda" '(lambda (x) (* x 2)) (cdr norm)))
+
+;; 10. normalize-define-spec curried procedure
+(let ((norm (normalize-define-spec '((curry a) b) '((+ a b)))))
+  (assert-equal "normalize-define-spec curried name" 'curry (car norm))
+  (assert-equal "normalize-define-spec curried lambda" '(lambda (a) (lambda (b) (+ a b))) (cdr norm)))
+
+;; 11. desugar-internal-define variable in begin
+(let ((res (desugar-internal-define 'x '(10) '((+ x 1)))))
+  (assert-equal "desugar-internal-define var is let" 'let (car res))
+  (assert-equal "desugar-internal-define var binding" '((x 10)) (cadr res)))
+
+;; 12. desugar-internal-define mutual recursion procedures
+(let ((res (desugar-internal-define '(even? n) '((if (= n 0) #t (odd? (- n 1))))
+                                   '((define (odd? n) (if (= n 0) #f (even? (- n 1))))
+                                     (even? 10)))))
+  (assert-equal "desugar-internal-define mutual proc is letrec" 'letrec (car res))
+  (let ((bindings (cadr res)))
+    (assert-equal "mutual proc bindings count" 2 (length bindings))
+    (assert-equal "mutual proc 1 name" 'even? (caar bindings))
+    (assert-equal "mutual proc 2 name" 'odd? (caadr bindings))))
+
+;; 13. desugar-bindings on begin with internal defines
+(let ((res (desugar-bindings '(begin (define x 10) (define y 20) (+ x y)))))
+  (assert-equal "desugar-bindings expands to let" 'let (car res)))
+
 (display "=======================================================") (newline)
 (display " Pass 028: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)
