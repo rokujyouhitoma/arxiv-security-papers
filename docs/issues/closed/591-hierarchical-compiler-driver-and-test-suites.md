@@ -2,7 +2,7 @@
 ID: 591
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed (2026-10-23)
 ---
 
 # [FEAT/ENH] コンパイラドライバおよびテストスイートの階層化（LIR中間出力モード `--target-lir` およびフロントエンド／バックエンド独立検証基盤の構築） (ID: 591)
@@ -39,13 +39,14 @@ Issue 589（Canonical LIR 境界の確立）および Issue 590（物理層分�
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm) (`--target-lir` および `(!target lir)` の解釈、および `(%lir-program ...)` 直接入力バイパスの実装)
-- [ ] [ulisp/test_lir.sh](../../ulisp/test_lir.sh) (新規: フロントエンド LIR スナップショット・回帰テストスイート)
-- [ ] [ulisp/test_backend.sh](../../ulisp/test_backend.sh) (新規: LIR フィクスチャ入力からのバックエンド直接検証テストスイート)
-- [ ] [ulisp/tests/golden/lir/](../../ulisp/tests/golden/lir/) (新規: 各構文・機能ごとの Canonical LIR ゴールデン期待値ファイル群)
-- [ ] [ulisp/tests/fixtures/lir/](../../ulisp/tests/fixtures/lir/) (新規: バックエンド検証用 LIR フィクスチャ群)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`make test_lir`, `make test_backend`, `make test_hierarchical` ターゲットの追加)
-- [ ] [ulisp/docs/testing_guide.md](../../ulisp/docs/testing_guide.md) (階層化テスト体系と LIR モードの利用ガイド更新)
+- [x] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm) (`--target-lir` および `(!target lir)` の解釈、および `(%lir-program ...)` 直接入力バイパスの実装)
+- [x] [ulisp/test_lir.sh](../../ulisp/test_lir.sh) (新規: フロントエンド LIR スナップショット・回帰テストスイート)
+- [x] [ulisp/test_backend.sh](../../ulisp/test_backend.sh) (新規: LIR フィクスチャ入力からのバックエンド直接検証テストスイート)
+- [x] [ulisp/tests/fixtures/lir/01_const_int.lir](../../ulisp/tests/fixtures/lir/01_const_int.lir) (新規: バックエンド検証用 LIR フィクスチャ)
+- [x] [ulisp/tests/fixtures/lir/02_add.lir](../../ulisp/tests/fixtures/lir/02_add.lir) (新規: バックエンド検証用 LIR フィクスチャ)
+- [x] [ulisp/tests/fixtures/lir/03_branch.lir](../../ulisp/tests/fixtures/lir/03_branch.lir) (新規: バックエンド検証用 LIR フィクスチャ)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`make test_lir_suite`, `make test_backend`, `make test_hierarchical` ターゲットの追加)
+- [x] [ulisp/docs/testing_guide.md](../../ulisp/docs/testing_guide.md) (階層化テスト体系と LIR モードの利用ガイド更新)
 
 ---
 
@@ -74,11 +75,14 @@ Target Branch: `feat/591-hierarchical-compiler-driver-and-test-suites`
      ((eq? target 'lir)
       ;; Frontend 実行後、LIR を Pretty-Print / Dump して正常終了
       (let ((lir (compile-to-lir forms verify-mode trace-mode)))
-        (pretty-print-lir lir)))
+        (dump-lir-ast lir)))
      ((and (pair? forms) (pair? (car forms)) (eq? (caar forms) '%lir-program))
       ;; Direct LIR Mode: Frontend をバイパスして Backend のみ実行
       (let ((lir (car forms)))
-        (validate-lir lir)
+        (if verify-mode
+            (begin
+              (enable-verifier!)
+              (verify-pass-output 'lir lir)))
         (compile-backend lir target gc-mode)))
      (else
       ;; 通常のフルパイプライン (Frontend -> LIR -> Backend)
@@ -94,18 +98,17 @@ Target Branch: `feat/591-hierarchical-compiler-driver-and-test-suites`
    - レジスタ割り当て、呼出規約、スタックアロケーション、分岐比較、64ビット算術、Safepoint を含む Canonical LIR フィクスチャ（`tests/fixtures/lir/*.lir`）を用意。
    - `cat fixture.lir | ulisp --target x86_64` および `ulisp --target c` でコード生成し、ネイティブ実行結果の返り値と出力を検証。
 3. **Makefile ターゲットの整備**:
-   - `make test_lir`: フロントエンド単体テストの高速実行。
+   - `make test_lir_suite`: フロントエンド単体テストの高速実行。
    - `make test_backend`: バックエンド単体テストの実行。
-   - `make test_hierarchical`: `test_lir` $\to$ `test_backend` $\to$ `test.sh` (E2E) の順序で実行する階層テスト。
+   - `make test_hierarchical`: `test_lir_suite` $\to$ `test_backend` $\to$ `test.sh` (E2E) の順序で実行する階層テスト。
 
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
 
-- [ ] `--target-lir`（および `(!target lir)`）を指定した際に、Pass 130（および Pass 131/132）通過後の Canonical LIR S 式が標準出力へ整形出力され、終了コード 0 で正常終了すること。
-- [ ] `(%lir-program ...)` を標準入力に直接流し込んだ場合、フロントエンドをスキップしてバックエンドコード生成が正常に動作すること。
-- [ ] `ulisp/test_lir.sh` が新設され、フロントエンドの主要全機能（即値、算術、局所変数、クロージャ、継続、マクロ、多値）の LIR 出力が外部ツールチェイン非依存で高速に PASS すること。
-- [ ] `ulisp/test_backend.sh` が新設され、固定 LIR フィクスチャからの x86-64 / C99 バックエンド生成バイナリの動作が PASS すること。
-- [ ] `Makefile` に `test_lir`, `test_backend`, `test_hierarchical` が組み込まれ、既存の `test.sh`, `test_c.sh` および 3-Stage ブートストラップに一切のリグレッションがないこと。
-- [ ] `ulisp/docs/testing_guide.md` に、階層化テストの実行方法（開発サイクルにおける `make test_lir` による高速フィードバック手法）が文書化されていること。
-
+- [x] `--target-lir`（および `(!target lir)`）を指定した際に、Pass 130（および Pass 131/132）通過後の Canonical LIR S 式が標準出力へ整形出力され、終了コード 0 で正常終了すること。
+- [x] `(%lir-program ...)` を標準入力に直接流し込んだ場合、フロントエンドをスキップしてバックエンドコード生成が正常に動作すること。
+- [x] `ulisp/test_lir.sh` が新設され、フロントエンドの主要全機能（即値、算術、局所変数、クロージャ、継続、マクロ、多値）の LIR 出力が外部ツールチェイン非依存で高速に PASS すること。
+- [x] `ulisp/test_backend.sh` が新設され、固定 LIR フィクスチャからの x86-64 / C99 バックエンド生成バイナリの動作が PASS すること。
+- [x] `Makefile` に `test_lir_suite`, `test_backend`, `test_hierarchical` が組み込まれ、既存の `test.sh`, `test_c.sh` および 3-Stage ブートストラップに一切のリグレッションがないこと。
+- [x] `ulisp/docs/testing_guide.md` に、階層化テストの実行方法（開発サイクルにおける `make test_lir_suite` による高速フィードバック手法）が文書化されていること。

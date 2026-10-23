@@ -1,0 +1,10 @@
+(%lir-program
+  (strings ())
+  (stackmaps ())
+  (%lir-functions)
+  (%lir-main
+    (frame-size 16)
+    (body
+      (%mov %rax 20)
+      (%add %rax 40)
+      (%return))))

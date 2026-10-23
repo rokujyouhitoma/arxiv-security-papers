@@ -108,6 +108,31 @@ python3 tools/differential_test_ulisp.py
 ```
 - 全 10 種類の計算・アルゴリズムワークロード（フィボナッチ、アッカーマン、N-Queens、高階関数等）で 100% の出力一致を自動検証。
 
+### Layer 7: 階層化 LIR 単体テスト (`test_lir.sh` & `test_backend.sh` - Issue #591)
+Frontend（Scheme $\to$ Canonical LIR）と Backend（Canonical LIR $\to$ Asm/C）の境界を分離した独立高速単体テスト。
+
+```bash
+cd ulisp
+# 1. Frontend 高速単体テスト (C/Asm コンパイラ不要、ミリ秒単位で Fast-Fail)
+make test_lir_suite
+# または
+./test_lir.sh
+
+# 2. Backend 単体テスト (LIR フィクスチャからコード生成・実行を直接検証)
+make test_backend
+# または
+./test_backend.sh
+
+# 3. 階層テスト一括実行
+make test_hierarchical
+```
+
+- **LIR 中間出力モード**:
+  - CLI: `cat source.scm | ulisp --target-lir`
+  - ソース内ディレクティブ: `(!target lir)`
+- **Direct LIR Ingestion**:
+  - `cat fixture.lir | ulisp`（先頭が `(%lir-program ...)` の場合、Frontend パスをバイパスして Backend のみ直接実行）
+
 ---
 
 ## 3. トラブルシューティング

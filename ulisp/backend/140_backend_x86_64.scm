@@ -168,8 +168,20 @@
                (emit (string-append (symbol->string cont-lbl) ":"))))))
 
       ((%jump-cond)
-       (let ((jmp-op (cadr inst))
-             (lbl (caddr inst)))
+       (let* ((op (cadr inst))
+              (jmp-op (cond
+                        ((string? op) op)
+                        ((eq? op 'equal) "je")
+                        ((eq? op 'not-equal) "jne")
+                        ((eq? op 'less) "jl")
+                        ((eq? op 'less-equal) "jle")
+                        ((eq? op 'greater) "jg")
+                        ((eq? op 'greater-equal) "jge")
+                        ((eq? op 'zero) "je")
+                        ((eq? op 'not-zero) "jne")
+                        ((symbol? op) (symbol->string op))
+                        (else "je")))
+              (lbl (caddr inst)))
          (emit (string-append "    " jmp-op " " (if (symbol? lbl) (symbol->string lbl) (reg->str lbl))))))
 
       ((%jump-if)

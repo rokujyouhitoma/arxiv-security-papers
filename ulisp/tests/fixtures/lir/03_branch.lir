@@ -1,0 +1,15 @@
+(%lir-program
+  (strings ())
+  (stackmaps ())
+  (%lir-functions)
+  (%lir-main
+    (frame-size 16)
+    (body
+      (%mov %rax 10)
+      (%cmp %rax 10)
+      (%jump-cond equal .L_then)
+      (%mov %rax 0)
+      (%return)
+      (%label .L_then)
+      (%mov %rax 200)
+      (%return))))

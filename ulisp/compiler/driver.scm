@@ -21,6 +21,9 @@
           (list target gc-mode '() verify trace)
           (let ((first (car forms)))
             (cond
+              ((or (eq? first '--target-lir)
+                   (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'lir)))
+               (loop (cdr forms) 'lir gc-mode verify trace))
               ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
                (loop (cdr forms) (cadr first) gc-mode verify trace))
               ((and (pair? first) (eq? (car first) '!gc) (pair? (cdr first)))
@@ -83,6 +86,105 @@
     (else
      (emit-x86-64 lir-ast gc-mode))))
 
+;;; -----------------------------------------------------------------------
+;;; Canonical LIR S-expression Serializer
+;;; Resolves compiled quotation symbols under native AOT without '?' masking
+;;; -----------------------------------------------------------------------
+
+(define *lir-known-symbols*
+  '((%lir-program . "%lir-program")
+    (%lir-functions . "%lir-functions")
+    (%lir-function . "%lir-function")
+    (%lir-main . "%lir-main")
+    (strings . "strings")
+    (stackmaps . "stackmaps")
+    (frame-size . "frame-size")
+    (body . "body")
+    (params . "params")
+    (%mov . "%mov")
+    (%load . "%load")
+    (%store . "%store")
+    (%add . "%add")
+    (%sub . "%sub")
+    (%mul . "%mul")
+    (%div . "%div")
+    (%cmp . "%cmp")
+    (%jump . "%jump")
+    (%jump-cond . "%jump-cond")
+    (%label . "%label")
+    (%call . "%call")
+    (%call-closure . "%call-closure")
+    (%return . "%return")
+    (%alloc . "%alloc")
+    (%safepoint . "%safepoint")
+    (%rax . "%rax")
+    (%rbx . "%rbx")
+    (%rcx . "%rcx")
+    (%rdx . "%rdx")
+    (%rsi . "%rsi")
+    (%rdi . "%rdi")
+    (%rbp . "%rbp")
+    (%rsp . "%rsp")
+    (%r8 . "%r8")
+    (%r9 . "%r9")
+    (%r10 . "%r10")
+    (%r11 . "%r11")
+    (%r12 . "%r12")
+    (%r13 . "%r13")
+    (%r14 . "%r14")
+    (%r15 . "%r15")
+    (%al . "%al")
+    (equal . "equal")
+    (not-equal . "not-equal")
+    (less . "less")
+    (less-equal . "less-equal")
+    (greater . "greater")
+    (greater-equal . "greater-equal")
+    (zero . "zero")
+    (not-zero . "not-zero")))
+
+(define (lir-symbol->string sym)
+  (let ((entry (assq sym *lir-known-symbols*)))
+    (if entry
+        (cdr entry)
+        (let ((s (symbol->string sym)))
+          (if (string=? s "?")
+              "?"
+              s)))))
+
+(define (dump-lir-token val)
+  (cond
+    ((symbol? val)
+     (display (lir-symbol->string val)))
+    ((number? val)
+     (display val))
+    ((string? val)
+     (write val))
+    ((boolean? val)
+     (display (if val "#t" "#f")))
+    ((null? val)
+     (display "()"))
+    ((pair? val)
+     (display "(")
+     (let loop ((curr val) (first? #t))
+       (cond
+         ((null? curr)
+          (display ")"))
+         ((pair? curr)
+          (if (not first?) (display " "))
+          (dump-lir-token (car curr))
+          (loop (cdr curr) #f))
+         (else
+          (display " . ")
+          (dump-lir-token curr)
+          (display ")")))))
+    (else
+     (write val))))
+
+(define (dump-lir-ast lir-ast)
+  (dump-lir-token lir-ast)
+  (newline))
+
 ;;; Entry point: read all S-expressions from standard input and compile through two-layer pipeline
 (let* ((raw (read-all-forms))
        (directives (extract-directives-and-forms raw))
@@ -92,6 +194,21 @@
        (verify-mode (cadddr directives))
        (trace-mode (car (cddddr directives))))
   (if (not (null? forms))
-      (let ((lir (compile-to-lir forms verify-mode trace-mode)))
-        (compile-backend lir target gc-mode))))
+      (cond
+        ;; 1. LIR Intermediate Output Mode (--target-lir or (!target lir))
+        ((eq? target 'lir)
+         (let ((lir (compile-to-lir forms verify-mode trace-mode)))
+           (dump-lir-ast lir)))
+        ;; 2. Direct LIR Ingestion Mode (Input is already a Canonical LIR S-expression)
+        ((and (pair? forms) (pair? (car forms)) (eq? (caar forms) '%lir-program))
+         (let ((lir (car forms)))
+           (if verify-mode
+               (begin
+                 (enable-verifier!)
+                 (verify-pass-output 'lir lir)))
+           (compile-backend lir target gc-mode)))
+        ;; 3. Standard Full Pipeline (Frontend -> LIR -> Backend)
+        (else
+         (let ((lir (compile-to-lir forms verify-mode trace-mode)))
+           (compile-backend lir target gc-mode))))))
 
