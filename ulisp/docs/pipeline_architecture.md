@@ -199,3 +199,24 @@ graph TD
 
 #### Pass 160: Portable ANSI C99 コード生成 (`backend/160_backend_c.scm`)
 - **責務**: ANSI C99 ソースコード生成。クロスプラットフォーム（Linux, macOS, Windows, WebAssembly）向け実行バイナリ生成基盤。
+
+---
+
+## 3. 3層構造における Nanopass 言語・パス設計指針 (Frontend / LIR / Backend)
+
+Frontend, LIR (Middle-End), Backend の3層物理分離に伴い、各層の抽象度（式木 vs CFG/線形命令 vs ターゲット機械語）に特化した `define-language` および `define-pass` を定義・運用する。
+
+### 3.1 層別中間言語（Languages）の推移
+- **Frontend 層 (式木・高水準 AST)**:
+  - `L_src` (全 Scheme / R7RS 構文) $\to$ `L_core` (コア構文脱糖) $\to$ `L_anf` (3番地・引数アトミック化) $\to$ `L_lifted` (クロージャ変換後)
+- **LIR 層 (中水準・CFG・線形命令)**:
+  - `L_lir_raw` (Lowering直後) $\to$ `L_lir_ssa` (Braun SSA形式) $\to$ `L_lir_canonical` (Safepoint確定・正典形式)
+- **Backend 層 (低水準・ターゲット命令表現)**:
+  - `L_asm_x86_64` / `L_asm_aarch64` / `L_ast_c99` (ターゲット抽象機械命令)
+
+### 3.2 3層分離ロードマップ (Issues 593〜596)
+1. **[Issue 593](../../docs/issues/593-define-lir-canonical-language-and-verifier-integration.md)**: LIR層 `define-language L_lir_canonical` の導入と `lir_verifier.scm` の宣言的統合
+2. **[Issue 594](../../docs/issues/594-define-frontend-anf-and-lifted-languages.md)**: Frontend層 `define-language L_anf` / `L_lifted` の導入と不変条件自動検証
+3. **[Issue 595](../../docs/issues/595-define-pass-lir-optimizations-and-peephole.md)**: LIR層 `define-pass` による分岐融合・DCE・ピープホール最適化の宣言化
+4. **[Issue 596](../../docs/issues/596-backend-instruction-selection-and-emission-separation.md)**: Backend層 `define-language L_asm` 導入による命令選択とコード生成の2段階分離
+

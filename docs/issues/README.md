@@ -8,6 +8,10 @@
 | :---: | --- | :---: | :---: | :---: |
 | **591** | コンパイラドライバおよびテストスイートの階層化（LIR中間出力モードおよびフロントエンド／バックエンド独立検証基盤の構築） | Feature | Medium | [591-hierarchical-compiler-driver-and-test-suites.md](591-hierarchical-compiler-driver-and-test-suites.md) |
 | **592** | 手続き本体および内部定義 (Internal Definitions) の脱糖未実装による未束縛変数例外 | Bug | High | [592-implement-r7rs-internal-definition-desugaring.md](592-implement-r7rs-internal-definition-desugaring.md) |
+| **593** | LIR層: define-language L_lir_canonical の導入と lir_verifier 宣言的統合 | Feature | High | [593-define-lir-canonical-language-and-verifier-integration.md](593-define-lir-canonical-language-and-verifier-integration.md) |
+| **594** | Frontend層: define-language L_anf / L_lifted の導入と不変条件自動検証 | Feature | Medium | [594-define-frontend-anf-and-lifted-languages.md](594-define-frontend-anf-and-lifted-languages.md) |
+| **595** | LIR層: define-pass による分岐融合・DCE・ピープホール最適化の宣言化 | Feature | Medium | [595-define-pass-lir-optimizations-and-peephole.md](595-define-pass-lir-optimizations-and-peephole.md) |
+| **596** | Backend層: define-language L_asm 導入による命令選択とコード生成の2段階分離 | Feature | Medium | [596-backend-instruction-selection-and-emission-separation.md](596-backend-instruction-selection-and-emission-separation.md) |
 
 ---
 
