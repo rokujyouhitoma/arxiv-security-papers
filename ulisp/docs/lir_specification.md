@@ -175,7 +175,7 @@ LIR は、高水準 Scheme の意味論（ラムダ式、レキシカルスコ�
 
 ## 5. 境界バリデータ (`validate-lir` / `verify-lir`) 仕様
 
-バリデータは `ulisp/compiler/lir_verifier.scm` に実装され、以下の公開 API を提供する：
+バリデータは `ulisp/lir/lir_verifier.scm` に実装され、以下の公開 API を提供する：
 
 - `(validate-lir prog)` / `(verify-lir prog)`:
   - 引数 `prog` が Canonical LIR 不変条件をすべて満たせば `#t` を返却する。

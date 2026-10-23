@@ -5,8 +5,8 @@
 - 関連仕様書: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - 実装モジュール:
   - 高水準ライブラリ: [ulisp/lib/continuation.scm](../lib/continuation.scm)
-  - 中間表現パス: [ulisp/passes/06_lir.scm](../passes/06_lir.scm)
-  - ネイティブバックエンド: [ulisp/passes/07_backend_x86_64.scm](../passes/07_backend_x86_64.scm), [ulisp/passes/07_backend_c.scm](../passes/07_backend_c.scm), [ulisp/passes/07_backend_aarch64.scm](../passes/07_backend_aarch64.scm)
+  - 中間表現パス: [ulisp/lir/125_lir_continuation.scm](../lir/125_lir_continuation.scm), [ulisp/lir/130_lir.scm](../lir/130_lir.scm)
+  - ネイティブバックエンド: [ulisp/backend/140_backend_x86_64.scm](../backend/140_backend_x86_64.scm), [ulisp/backend/160_backend_c.scm](../backend/160_backend_c.scm), [ulisp/backend/150_backend_aarch64.scm](../backend/150_backend_aarch64.scm)
   - テストスイート: [ulisp/tests/test_call_cc.scm](../tests/test_call_cc.scm)
 
 ---

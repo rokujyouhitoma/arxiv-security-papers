@@ -1,7 +1,7 @@
 # ULisp クロスプラットフォーム・コンパイル＆ビルド手順書
 ## (Portable C Backend Cross-Platform Compilation & Build Guide)
 
-本書は、ULisp (Underlying LISP / Micro Scheme AOT Compiler) を Linux、macOS (Apple Silicon M1/M2/M3/M4 および Intel Mac)、BSD 等の多様な OS / CPU アーキテクチャ環境において、**ULisp コンパイラ自身のビルド** および **Portable C バックエンド (`passes/07_backend_c.scm`) を用いた任意の Scheme コードのビルド・実行** を行うための完全手順書である。
+本書は、ULisp (Underlying LISP / Micro Scheme AOT Compiler) を Linux、macOS (Apple Silicon M1/M2/M3/M4 および Intel Mac)、BSD 等の多様な OS / CPU アーキテクチャ環境において、**ULisp コンパイラ自身のビルド** および **Portable C バックエンド (`backend/160_backend_c.scm`) を用いた任意の Scheme コードのビルド・実行** を行うための完全手順書である。
 
 ---
 
@@ -9,12 +9,12 @@
 
 ULisp は 2 系統のコード生成バックエンドを備えている：
 
-1. **ベアメタル・ネイティブ AOT バックエンド (`passes/07_backend_x86_64.scm`, `07_backend_aarch64.scm`)**:
+1. **ベアメタル・ネイティブ AOT バックエンド (`backend/140_backend_x86_64.scm`, `backend/150_backend_aarch64.scm`)**:
    - libc を一切使用せず、Scheme コードから直接 Linux ELF / システムコール (`%syscall`) を生成する極限最適化バックエンド。
    - 対象: Linux (x86-64, AArch64)
 
-2. **ポータブル C バックエンド (`passes/07_backend_c.scm` + `runtime.c`)**:
-   - 共通の低レベル中間表現 (LIR: Pass 6) を ANSI C99 規格準拠のポータブルな C コードへトランスパイルするバックエンド。
+2. **ポータブル C バックエンド (`backend/160_backend_c.scm` + `runtime.c`)**:
+   - 共通の低レベル中間表現 (LIR: `lir/130_lir.scm`) を ANSI C99 規格準拠のポータブルな C コードへトランスパイルするバックエンド。
    - C コンパイラ (Clang / GCC) を介して、**macOS (Apple Silicon / Intel)、FreeBSD/OpenBSD、Linux、Windows (WSL/MSYS2)** など、あらゆる 64-bit プラットフォームでネイティブバイナリを生成・実行可能。
 
 ---
@@ -56,7 +56,7 @@ ULisp コンパイラ自身をビルド・自己生成する手順です。環�
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        ULisp コンパイラ構成要素                        │
 │                                                                        │
-│  passes/00_helpers.scm 〜 passes/08_driver.scm  ──> compiler.scm        │
+│  frontend/ lir/ backend/ (3層モジュール群)      ──> compiler.scm        │
 │                                                          │             │
 │  lib/posix.scm 〜 lib/gc.scm (標準ライブラリ群)  ─────────┴─> ulisp_core │
 └────────────────────────────────────────────────────────────────────────┘
@@ -70,7 +70,6 @@ cd ulisp
 
 # コンパイラパイプラインの結合 (compiler.scm の生成)
 make compiler
-# または手動結合: cat passes/00*.scm passes/01*.scm ... passes/08*.scm > compiler.scm
 
 # 標準ライブラリと結合した自己充足コアの生成 (build/ulisp_core.scm の生成)
 make core

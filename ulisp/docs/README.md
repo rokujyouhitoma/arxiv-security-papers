@@ -28,7 +28,7 @@
    - ファーストクラス継続 & dynamic-wind テスト（`test_call_cc.scm`）
    - Mytkowicz バイアス排除 差分テスト（`tools/differential_test_ulisp.py`）
 5. [クロスプラットフォーム・コンパイル＆ビルド手順書 (macOS / Linux / BSD)](PORTABLE_BUILD_GUIDE.md)
-   - Portable C バックエンド (`passes/07_backend_c.scm`) の利用方法
+   - Portable C バックエンド (`backend/160_backend_c.scm`) の利用方法
    - macOS (Apple Silicon / Intel Mac) および Linux/BSD でのコンパイル・ビルド・実行手順
    - `(!target c)` ディレクティブによるワンライナー生成と Clang/GCC によるネイティブバイナリ作成
    - メモリモデル、TCO、Darwin 固有のクラッシュハンドラ・`mmap` 互換性
@@ -67,9 +67,12 @@ ulisp/
 │   ├── helpers.scm          # 共通AST操作・シンボル/ラベル生成
 │   ├── primitives.scm       # プリミティブ述語分類・定数畳み込み
 │   └── driver.scm           # コンパイルドライバ・CLI
-├── passes/                  # 直列 Nanopass モジュール群 (3桁プレフィックス)
+├── frontend/                # Frontend メタコンパイラ層 (Pass 010〜120)
 │   ├── 010_library.scm      # Pass 010: R7RS define-library & import (Issue #548)
+│   ├── 015_dsl_expander.scm # Pass 015: Nanopass DSL 手続き型展開 (Issue #587)
 │   ├── 020_macro_expander.scm # Pass 020: 衛生的マクロ展開器 (Issue #533)
+│   ├── 025_top_level.scm    # Pass 025: トップレベル定義巻き上げ (Issue #570)
+│   ├── 026_029_desugar_*.scm# Pass 026-029: 構文別脱糖 (Issue #574)
 │   ├── 030_desugar.scm      # Pass 030: 構文脱糖 (cond, case, let*, and, or, %raw-call/cc)
 │   ├── 040_analysis.scm     # Pass 040: 静的スコープ・高速自由変数解析 (Issue #529)
 │   ├── 050_cp0.scm          # Pass 050: CP0 最適化 (定数畳み込み, 自明分岐剪定, DCE)
@@ -79,11 +82,19 @@ ulisp/
 │   ├── 090_rtyper.scm       # Pass 090: RType 推論 & アンボクシング (Issue #518)
 │   ├── 100_contify.scm      # Pass 100: Contification 最適化 (Issue #522)
 │   ├── 110_closure_convert.scm # Pass 110: クロージャ変換 (ラムダリフティング, フラット環境)
-│   ├── 120_alias_escape.scm # Pass 120: TBAA & エスケープ解析 (Issue #525)
+│   └── 120_alias_escape.scm # Pass 120: TBAA & エスケープ解析 (Issue #525)
+├── lir/                     # LIR / Middle-End 中間表現層 (Pass 123〜132)
+│   ├── lir_verifier.scm     # Canonical LIR バリデータ (Issue #589)
+│   ├── 123_127_lir_*.scm    # Pass 123-127: 機能責務別 LIR 低レベル化 (Issue #583)
+│   ├── 128_lir_branch_fusion.scm # Pass 128: 分岐融合 (Issue #571)
+│   ├── 129_lir_primitives.scm # Pass 129: 命令選択 (Issue #573)
 │   ├── 130_lir.scm          # Pass 130: 低レベル IR (LIR) 生成 (Issue #502)
 │   ├── 131_lir_safepoint.scm # Pass 131: GC Safepoint & スタックマップ生成 (Issue #519)
-│   ├── 132_lir_braun_ssa.scm # Pass 132: Braun SSA & ブロック引数 (Issue #523)
+│   └── 132_lir_braun_ssa.scm # Pass 132: Braun SSA & ブロック引数 (Issue #523)
+├── backend/                 # Backend コード生成層 (Pass 140〜160)
 │   ├── 140_backend_x86_64.scm # Pass 140: x86-64 GNU アセンブリコード生成
+│   ├── 141_backend_x86_gc.scm # Pass 141: x86 世代別コピー GC ルーチン (Issue #569)
+│   ├── 142_backend_x86_freestanding.scm # Pass 142: x86 ベアメタルランタイム (Issue #569)
 │   ├── 150_backend_aarch64.scm # Pass 150: AArch64 GNU アセンブリコード生成
 │   └── 160_backend_c.scm    # Pass 160: Portable C99 コード生成 (Issue #504)
 ├── tests/                   # 統合テストスイート

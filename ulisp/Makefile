@@ -34,43 +34,46 @@ COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm \
                 compiler/nanopass_meta.scm \
                 compiler/nanopass.scm \
-                compiler/verifier.scm \
-                compiler/lir_verifier.scm
+                compiler/verifier.scm
 
-PASSES_LIB = $(COMPILER_BASE) \
-             passes/010_library.scm \
-             passes/015_dsl_expander.scm \
-             passes/020_macro_expander.scm \
-             passes/025_top_level.scm \
-             passes/026_desugar_constructors.scm \
-             passes/027_desugar_conditionals.scm \
-             passes/028_desugar_bindings.scm \
-             passes/029_desugar_dynamic.scm \
-             passes/030_desugar.scm \
-             passes/040_analysis.scm \
-             passes/050_cp0.scm \
-             passes/060_lvn.scm \
-             passes/070_anf.scm \
-             passes/080_annotator.scm \
-             passes/090_rtyper.scm \
-             passes/100_contify.scm \
-             passes/110_closure_convert.scm \
-             passes/120_alias_escape.scm \
-             passes/123_lir_closures.scm \
-             passes/124_lir_call_abi.scm \
-             passes/125_lir_continuation.scm \
-             passes/126_lir_control.scm \
-             passes/127_lir_runtime.scm \
-             passes/128_lir_branch_fusion.scm \
-             passes/129_lir_primitives.scm \
-             passes/130_lir.scm \
-             passes/131_lir_safepoint.scm \
-             passes/132_lir_braun_ssa.scm \
-             passes/140_backend_x86_64.scm \
-             passes/141_backend_x86_gc.scm \
-             passes/142_backend_x86_freestanding.scm \
-             passes/150_backend_aarch64.scm \
-             passes/160_backend_c.scm
+FRONTEND_PASSES = frontend/010_library.scm \
+                  frontend/015_dsl_expander.scm \
+                  frontend/020_macro_expander.scm \
+                  frontend/025_top_level.scm \
+                  frontend/026_desugar_constructors.scm \
+                  frontend/027_desugar_conditionals.scm \
+                  frontend/028_desugar_bindings.scm \
+                  frontend/029_desugar_dynamic.scm \
+                  frontend/030_desugar.scm \
+                  frontend/040_analysis.scm \
+                  frontend/050_cp0.scm \
+                  frontend/060_lvn.scm \
+                  frontend/070_anf.scm \
+                  frontend/080_annotator.scm \
+                  frontend/090_rtyper.scm \
+                  frontend/100_contify.scm \
+                  frontend/110_closure_convert.scm \
+                  frontend/120_alias_escape.scm
+
+LIR_PASSES = lir/lir_verifier.scm \
+             lir/123_lir_closures.scm \
+             lir/124_lir_call_abi.scm \
+             lir/125_lir_continuation.scm \
+             lir/126_lir_control.scm \
+             lir/127_lir_runtime.scm \
+             lir/128_lir_branch_fusion.scm \
+             lir/129_lir_primitives.scm \
+             lir/130_lir.scm \
+             lir/131_lir_safepoint.scm \
+             lir/132_lir_braun_ssa.scm
+
+BACKEND_PASSES = backend/140_backend_x86_64.scm \
+                 backend/141_backend_x86_gc.scm \
+                 backend/142_backend_x86_freestanding.scm \
+                 backend/150_backend_aarch64.scm \
+                 backend/160_backend_c.scm
+
+PASSES_LIB = $(COMPILER_BASE) $(FRONTEND_PASSES) $(LIR_PASSES) $(BACKEND_PASSES)
 
 PASSES = $(PASSES_LIB) compiler/driver.scm
 
