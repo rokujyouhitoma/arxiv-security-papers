@@ -139,6 +139,7 @@
                   (list 'letrec
                         (append (reverse defs) (reverse nt-procs))
                         (list 'begin
+                              (list 'set-current-pass! (list 'quote name))
                               (list 'if (list 'nanopass-verifier-enabled?)
                                     (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-in) ir-var ''entry)
                                     #f)

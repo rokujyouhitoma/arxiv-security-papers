@@ -160,12 +160,77 @@
       (car ls)
       (list-ref (cdr ls) (- n 1))))
 
-(define (error msg val)
-  (display msg)
-  (display " ")
-  (display val)
+;;; Compiler Execution Context (cons cells to prevent top-level set! in LIR/AOT)
+(define *current-pass* (cons 'none '()))
+(define *current-toplevel-name* (cons 'none '()))
+(define *current-form* (cons 'none '()))
+(define *compiler-in-error* (cons #f '()))
+
+(define (current-pass) (car *current-pass*))
+(define (set-current-pass! name) (set-car! *current-pass* name))
+
+(define (current-toplevel-name) (car *current-toplevel-name*))
+(define (set-current-toplevel-name! name) (set-car! *current-toplevel-name* name))
+
+(define (current-form) (car *current-form*))
+(define (set-current-form! form) (set-car! *current-form* form))
+
+(define (reset-compiler-context!)
+  (set-car! *current-pass* 'none)
+  (set-car! *current-toplevel-name* 'none)
+  (set-car! *current-form* 'none)
+  (set-car! *compiler-in-error* #f))
+
+;;; Safe AST truncation for diagnostics (prevents memory blowup / circular structures)
+(define (truncate-expr-for-diagnostics expr)
+  (let rec ((e expr) (depth 0))
+    (cond
+      ((> depth 3) '...)
+      ((not (pair? e)) e)
+      (else
+       (let loop ((cur e) (count 0) (acc '()))
+         (cond
+           ((null? cur) (reverse acc))
+           ((not (pair? cur)) (reverse (cons (cons '... cur) acc)))
+           ((>= count 5) (reverse (cons '... acc)))
+           (else
+            (loop (cdr cur) (+ count 1) (cons (rec (car cur) (+ depth 1)) acc)))))))))
+
+;;; Structured Compiler Diagnostic Report
+(define (compiler-diagnostic-report msg irritants)
+  (display "\n======================================================================\n")
+  (display "[COMPILER ERROR] Compilation aborted in Pass: ")
+  (display (current-pass))
   (newline)
-  val)
+  (display "======================================================================\n")
+  (display "  Message           : ")
+  (display msg)
+  (newline)
+  (display "  Target / Irritant : ")
+  (write irritants)
+  (newline)
+  (display "  Toplevel Form     : ")
+  (write (current-toplevel-name))
+  (newline)
+  (display "  Current Expr      : ")
+  (write (truncate-expr-for-diagnostics (current-form)))
+  (newline)
+  (display "======================================================================\n\n"))
+
+(define (error msg val)
+  (if (car *compiler-in-error*)
+      (begin
+        (display "\n*** [RECURSIVE ERROR] Aborting during error reporting: ")
+        (display msg)
+        (display " ")
+        (write val)
+        (newline)
+        val)
+      (begin
+        (set-car! *compiler-in-error* #t)
+        (compiler-diagnostic-report msg val)
+        (set-car! *compiler-in-error* #f)
+        val)))
 
 ;;; Deterministic symbol counter for unique variable generation
 (define *symbol-counter* (cons 0 '()))

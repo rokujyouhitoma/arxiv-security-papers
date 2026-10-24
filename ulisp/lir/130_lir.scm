@@ -98,6 +98,8 @@
              (error "Invalid binding format in LIR:" binding)))))))
 
 (define (lir-compile-expr expr si env tail?)
+  (if (pair? expr)
+      (set-current-form! expr))
   (cond
     ((immediate? expr)
      (let ((val (lir-immediate expr)))
@@ -218,6 +220,7 @@
          (body (cadddr fn))
          (num-params (length params))
          (initial-raw-vars (if (unboxed-fn? label) params '())))
+    (set-current-toplevel-name! label)
     (reset-lir!)
     ;; Build callee env:
     ;; %self at [rsp - 8]
@@ -255,6 +258,7 @@
   (reset-symbol-table!)
   (let ((funcs (cadr prog))
         (main-expr (caddr prog)))
+    (set-current-toplevel-name! '%main)
     (reset-lir!)
     (track-lir-si! -8)
     (lir-compile-expr main-expr -8 (list (cons '%raw-vars '()) (cons '%stack-vars '())) #f)

@@ -112,7 +112,8 @@ test_passes: build/compiler_passes.scm test_all_passes
 	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
 	@$(RUN_SCHEME) build/test_passes_runner.scm
 
-NANOPASS_TESTS = tests/passes/test_010_library.scm \
+NANOPASS_TESTS = tests/passes/test_000_compiler_diagnostics.scm \
+                 tests/passes/test_010_library.scm \
                  tests/passes/test_015_dsl_expander.scm \
                  tests/passes/test_020_macro_expander.scm \
                  tests/passes/test_025_top_level.scm \
