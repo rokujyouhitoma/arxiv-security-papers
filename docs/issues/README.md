@@ -10,7 +10,6 @@
 | **598** | 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング・観測性の一元化 | Feature | Medium | New | [598-implement-unified-compiler-pass-manager.md](598-implement-unified-compiler-pass-manager.md) |
 | **599** | 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復エンジン）の導入 | Feature | Medium | New | [599-implement-generic-dataflow-analysis-framework.md](599-implement-generic-dataflow-analysis-framework.md) |
 | **600** | 統合シンボル・スコープ解決基盤および α 変換（Alpha-Conversion）エンジンの導入 | Feature | Medium | New | [600-implement-unified-lexical-scope-and-alpha-conversion-engine.md](600-implement-unified-lexical-scope-and-alpha-conversion-engine.md) |
-| **601** | ネイティブランタイムにおけるシンボル名表示の復元および未捕捉例外メッセージの構造化整形 | Feature | High | New | [601-restore-symbol-printing-and-format-unhandled-exceptions.md](601-restore-symbol-printing-and-format-unhandled-exceptions.md) |
 | **602** | コンパイラ実行時における現在Nanopass・処理中トップレベル式・ソース位置のコンテキスト追跡とエラー診断ダンプの導入 | Feature | High | New | [602-track-compiler-context-pass-and-toplevel-form-on-error.md](602-track-compiler-context-pass-and-toplevel-form-on-error.md) |
 | **603** | Power Assert 風アサーション式展開および LIR 変数解決失敗時のローカル環境（env）自動ダンプ機能の実装 | Feature | Medium | New | [603-implement-power-assert-and-lir-env-dump-diagnostics.md](603-implement-power-assert-and-lir-env-dump-diagnostics.md) |
 | **604** | コンパイラ実行時のコールスタック追跡（Call Stack Traceback）および未捕捉例外時のバックトレース表示機能の実装 | Feature | Medium | New | [604-implement-call-stack-traceback-for-compiler-exceptions.md](604-implement-call-stack-traceback-for-compiler-exceptions.md) |
@@ -27,6 +26,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **601** | ネイティブランタイムにおけるシンボル名表示の復元および未捕捉例外メッセージの構造化整形 | Feature | 2026-10-24 | [closed/601-restore-symbol-printing-and-format-unhandled-exceptions.md](closed/601-restore-symbol-printing-and-format-unhandled-exceptions.md) |
 | **596** | Backend層: define-language L_asm 導入による命令選択とコード生成の2段階分離 | Feature | 2026-10-24 | [closed/596-backend-instruction-selection-and-emission-separation.md](closed/596-backend-instruction-selection-and-emission-separation.md) |
 | **595** | LIR層: define-pass による分岐融合・DCE・ピープホール最適化の宣言化 | Feature | 2026-10-24 | [closed/595-define-pass-lir-optimizations-and-peephole.md](closed/595-define-pass-lir-optimizations-and-peephole.md) |
 | **594** | Frontend層: define-language L_anf / L_lifted の導入と不変条件自動検証 | Feature | 2026-10-24 | [closed/594-define-frontend-anf-and-lifted-languages.md](closed/594-define-frontend-anf-and-lifted-languages.md) |

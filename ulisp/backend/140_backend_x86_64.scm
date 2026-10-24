@@ -62,7 +62,9 @@
          ((%stack)
           (string-append "[rsp " (offset->string (cadr opnd)) "]"))
          ((%disp)
-          (string-append "[" (reg->str (caddr opnd)) " " (offset->string (cadr opnd)) "]"))
+          (if (symbol? (cadr opnd))
+              (string-append "[" (reg->str (caddr opnd)) " + " (reg->str (cadr opnd)) "]")
+              (string-append "[" (reg->str (caddr opnd)) " " (offset->string (cadr opnd)) "]")))
          ((%imm)
           (number->string (cadr opnd)))
          ((%mem)
@@ -816,13 +818,43 @@
       ((set)
        (let ((cc (cadr inst))
              (dst (caddr inst)))
-         (emit (string-append "    set" (if (symbol? cc) (symbol->string cc) cc) " " (asm-opnd->str dst)))))
+         (let ((cc-str (cond
+                         ((string? cc) cc)
+                         ((eq? cc 'e) "e")
+                         ((eq? cc 'ne) "ne")
+                         ((eq? cc 'l) "l")
+                         ((eq? cc 'le) "le")
+                         ((eq? cc 'g) "g")
+                         ((eq? cc 'ge) "ge")
+                         ((eq? cc 'sete) "e")
+                         ((eq? cc 'setne) "ne")
+                         ((eq? cc 'setl) "l")
+                         ((eq? cc 'setle) "le")
+                         ((eq? cc 'setg) "g")
+                         ((eq? cc 'setge) "ge")
+                         ((symbol? cc)
+                          (let ((s (symbol->raw-name cc)))
+                            (if (string=? s "?") "e" s)))
+                         (else "e"))))
+           (emit (string-append "    set" cc-str " " (asm-opnd->str dst))))))
       ((jmp)
        (emit (string-append "    jmp " (asm-opnd->str (cadr inst)))))
       ((jcc)
        (let ((cc (cadr inst))
              (lbl (caddr inst)))
-         (emit (string-append "    " (if (symbol? cc) (symbol->string cc) cc) " " (asm-opnd->str lbl)))))
+         (let ((cc-str (cond
+                         ((string? cc) cc)
+                         ((eq? cc 'je) "je")
+                         ((eq? cc 'jne) "jne")
+                         ((eq? cc 'jl) "jl")
+                         ((eq? cc 'jle) "jle")
+                         ((eq? cc 'jg) "jg")
+                         ((eq? cc 'jge) "jge")
+                         ((symbol? cc)
+                          (let ((s (symbol->raw-name cc)))
+                            (if (string=? s "?") "je" s)))
+                         (else "je"))))
+           (emit (string-append "    " cc-str " " (asm-opnd->str lbl))))))
       ((call)
        (emit (string-append "    call " (asm-opnd->str (cadr inst)))))
       ((ret)
@@ -975,6 +1007,7 @@
        (emit "    test rax, rax")
        (emit "    js .L_start_exit")
        (emit "    lea rbx, [rip + ulisp_gc_state]")
+       (emit "    mov [rbx + 0], rax")             ; save mmap base address before env scan
        ;; Scan env var ULISP_GC_PROFILE (Pass 141 Profile Detection)
        (emit "    mov rcx, [rbp]")                 ; argc
        (emit "    lea rdx, [rbp + 16]")            ; &argv[0]
@@ -1054,34 +1087,34 @@
        (emit "    mov r12, 67108864")              ; size = 64MB
        (emit "    mov rsi, 134217728")             ; total = 128MB
        (emit "    jmp .L_gc_state_stress_setup")
-       ;; Compiler Profile (16MB Nursery, 256MB Mature, 2GB Max)
+       ;; Compiler Profile (256MB Nursery, 256MB Mature, 4GB Max)
        (emit ".L_profile_compiler:")
-       (emit "    mov r12, 16777216")              ; nursery_size = 16MB
+       (emit "    mov r12, 268435456")             ; nursery_size = 256MB
        (emit "    mov r13, 268435456")             ; mature_size = 256MB
-       (emit "    mov rsi, 553648128")             ; total_mmap = ~528MB
-       (emit "    mov r8, 2147483648")             ; max_mature = 2GB
+       (emit "    mov rsi, 805371904")             ; total_mmap = ~805MB
+       (emit "    mov r8, 4294967296")             ; max_mature = 4GB
        (emit "    mov r10, 1")                     ; profile_id = 1
        (emit "    jmp .L_profile_setup")
-       ;; Server Profile (32MB Nursery, 512MB Mature, 4GB Max)
+       ;; Server Profile (16MB Nursery, 256MB Mature, 4GB Max)
        (emit ".L_profile_server:")
-       (emit "    mov r12, 33554432")              ; nursery_size = 32MB
-       (emit "    mov r13, 536870912")             ; mature_size = 512MB
-       (emit "    mov rsi, 1107296256")            ; total_mmap = ~1056MB
+       (emit "    mov r12, 16777216")              ; nursery_size = 16MB
+       (emit "    mov r13, 268435456")             ; mature_size = 256MB
+       (emit "    mov rsi, 553713664")             ; total_mmap = ~553MB
        (emit "    mov r8, 4294967296")             ; max_mature = 4GB
        (emit "    mov r10, 2")                     ; profile_id = 2
        (emit ".L_profile_setup:")
-       (emit "    mov [rbx + 0], rax")             ; nursery_base
+       (emit "    mov rax, [rbx + 0]")             ; restore mmap base address
        (emit "    mov [rbx + 8], r12")             ; nursery_size
        (emit "    lea rdx, [rax + r12]")
        (emit "    mov [rbx + 16], rdx")            ; mature_base
-       (emit "    mov [rbx + 24], r13")            ; mature_size
-       (emit "    mov [rbx + 32], rdx")            ; mature_to = mature_base
        (emit "    lea rcx, [rdx + r13]")
-       (emit "    mov [rbx + 40], rcx")            ; mature_free = mature_from
+       (emit "    mov [rbx + 24], rcx")            ; mature_to
+       (emit "    mov [rbx + 32], r13")            ; mature_size
+       (emit "    mov [rbx + 40], rdx")            ; mature_free = mature_from
        (emit "    mov [rbx + 48], rbp")            ; stack_bottom
        (emit "    mov qword ptr [rbx + 56], 0")    ; minor_count = 0
        (emit "    mov qword ptr [rbx + 64], 0")    ; major_count = 0
-       (emit "    lea r9, [rdx + r13]")
+       (emit "    lea r9, [rcx + r13]")
        (emit "    mov [rbx + 72], r9")             ; remset_ptr
        (emit "    mov qword ptr [rbx + 80], 0")    ; remset_count = 0
        (emit "    mov qword ptr [rbx + 88], 1")    ; gen_mode = 1
@@ -1094,7 +1127,7 @@
        (emit "    mov [rdx], rcx")                 ; limit = nursery_base + nursery_size
        (emit "    jmp .L_gc_state_setup_done")
        (emit ".L_gc_state_stress_setup:")
-       (emit "    mov [rbx + 0], rax")             ; from
+       (emit "    mov rax, [rbx + 0]")             ; restore mmap base address
        (emit "    mov rdi, rax")                   ; rdi = from
        (emit "    lea rcx, [rax + 67108864]")
        (emit "    mov [rbx + 8], rcx")             ; to
@@ -1177,6 +1210,30 @@
                   (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string v)))))
                     (emit (string-append "    .quad " g-lbl))))
                 gvs))
+    ;; Emit symbols metadata table in .rodata section
+    (let ((syms (get-all-symbols)))
+      (emit "    .section .rodata")
+      (emit "    .align 8")
+      (emit "    .globl __ulisp_symbol_table")
+      (emit "__ulisp_symbol_table:")
+      (emit (string-append "    .quad " (number->string (length syms))))
+      (let loop ((ss syms) (idx 0))
+        (if (not (null? ss))
+            (let* ((entry (car ss))
+                   (id (cadr entry))
+                   (sym-lbl (string-append ".L_sym_name_" (number->string idx))))
+              (emit (string-append "    .quad " (number->string id)))
+              (emit (string-append "    .quad " sym-lbl))
+              (loop (cdr ss) (+ idx 1)))))
+      (let loop ((ss syms) (idx 0))
+        (if (not (null? ss))
+            (let* ((entry (car ss))
+                   (str (caddr entry))
+                   (sym-lbl (string-append ".L_sym_name_" (number->string idx))))
+              (emit "    .p2align 3")
+              (emit (string-append sym-lbl ":"))
+              (emit (string-append "    .asciz \"" (escape-gas-string str) "\""))
+              (loop (cdr ss) (+ idx 1))))))
     (emit "    .section .rodata")
     (emit "    .align 8")
     (emit ".L_str_env_prefix:")

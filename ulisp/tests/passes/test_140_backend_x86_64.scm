@@ -41,6 +41,8 @@
 ;; 3. Memory operand formatting
 (assert-equal "mem op rsp" "[rsp - 8]" (mem-op->str '%rsp -8))
 (assert-equal "mem op reg" "[rax + 7]" (mem-op->str '%rax 7))
+(assert-equal "disp op numeric" "[rsp - 8]" (operand->str '(%disp -8 %rsp)))
+(assert-equal "disp op register" "[r12 + rdx]" (operand->str '(%disp %rdx %r12)))
 
 ;; 4. String escaping
 (assert-equal "escape normal" "hello" (escape-gas-string "hello"))
@@ -74,6 +76,14 @@
                     (pop r12)
                     (ret))
                   main-body)))
+
+;; 6. Symbol table interning and lookup
+(intern-symbol 'car)
+(intern-symbol 'error-object)
+(let ((syms (get-all-symbols)))
+  (assert-true "get-all-symbols returns a list" (list? syms))
+  (assert-true "get-all-symbols contains car" (pair? (assq 'car syms)))
+  (assert-true "get-all-symbols contains error-object" (pair? (assq 'error-object syms))))
 
 (display "=======================================================") (newline)
 (display " Pass 140: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)

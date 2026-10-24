@@ -240,6 +240,11 @@
         (caddr entry)
         (symbol->string sym))))
 
+(define (get-all-symbols)
+  (if (pair? *symbol-table*)
+      (reverse (car *symbol-table*))
+      '()))
+
 ;;; String table for interned string literals
 (define *string-counter* (cons 0 '()))
 (define *strings* (cons '() '()))
