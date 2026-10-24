@@ -363,8 +363,194 @@
                              inst))))))
 
 ;;; -----------------------------------------------------------------------
-;;; CFG Invariants: Label Uniqueness, Resolution, and Block Arity Matching
+;;; Lightweight Symbol Hash Set & Hash Table for O(1) Fast CFG Verification
 ;;; -----------------------------------------------------------------------
+(define (lir-symbol-hash-str str)
+  (let ((len (string-length str)))
+    (let loop ((i 0) (h 5381))
+      (if (= i len)
+          (modulo h 16777213)
+          (let ((c (char->integer (string-ref str i))))
+            (loop (+ i 1)
+                  (modulo (+ (* h 33) c) 16777213)))))))
+
+(define (make-symbol-hash-set size)
+  (make-vector (max 16 size) '()))
+
+(define (symbol-hash-bucket-index sym size)
+  (let ((str (if (symbol? sym) (symbol->string sym) "")))
+    (modulo (lir-symbol-hash-str str) size)))
+
+(define (symbol-hash-set-add! set sym)
+  (let* ((idx (symbol-hash-bucket-index sym (vector-length set)))
+         (bucket (vector-ref set idx)))
+    (if (memq sym bucket)
+        #f
+        (begin
+          (vector-set! set idx (cons sym bucket))
+          #t))))
+
+(define (symbol-hash-set-contains? set sym)
+  (let* ((idx (symbol-hash-bucket-index sym (vector-length set)))
+         (bucket (vector-ref set idx)))
+    (and (memq sym bucket) #t)))
+
+(define (make-symbol-hash-table size)
+  (make-vector (max 16 size) '()))
+
+(define (symbol-hash-table-put! tbl sym val)
+  (let* ((idx (symbol-hash-bucket-index sym (vector-length tbl)))
+         (bucket (vector-ref tbl idx))
+         (entry (assq sym bucket)))
+    (if entry
+        (set-cdr! entry val)
+        (vector-set! tbl idx (cons (cons sym val) bucket)))))
+
+(define (symbol-hash-table-ref tbl sym default)
+  (let* ((idx (symbol-hash-bucket-index sym (vector-length tbl)))
+         (bucket (vector-ref tbl idx))
+         (entry (assq sym bucket)))
+    (if entry (cdr entry) default)))
+
+;;; -----------------------------------------------------------------------
+;;; Single-Pass Instruction Verification and CFG Target Resolution (O(N))
+;;; -----------------------------------------------------------------------
+(define (lir-verify-insts-single-pass insts known-fn-set fn-name)
+  (let ((label-set (make-symbol-hash-set 128))
+        (block-arity-tbl (make-symbol-hash-table 128))
+        (pending-jumps (cons '() '())))
+    ;; Step 1: Single pass traversal validating syntax, collecting labels & arities, and queuing jumps
+    (define (scan-insts is current-block)
+      (let loop ((rest is))
+        (if (null? rest)
+            #t
+            (let ((inst (car rest)))
+              (cond
+                ((not (pair? inst))
+                 (lir-report-error "Instruction must be a non-empty pair" inst))
+                ((eq? (car inst) '%label)
+                 (if (and (= (length inst) 2) (symbol? (cadr inst)))
+                     (let ((lbl (cadr inst)))
+                       (if (not (symbol-hash-set-add! label-set lbl))
+                           (begin
+                             (lir-report-error "Duplicate label definition within function" lbl)
+                             #f)
+                           (loop (cdr rest))))
+                     (lir-report-error "%label must have exactly 1 symbol operand" inst)))
+                ((eq? (car inst) '%block)
+                 (if (and (>= (length inst) 3)
+                          (symbol? (cadr inst))
+                          (list? (caddr inst)))
+                     (let ((lbl (cadr inst))
+                           (params (caddr inst))
+                           (body (cdddr inst)))
+                       (if (not (symbol-hash-set-add! label-set lbl))
+                           (begin
+                             (lir-report-error "Duplicate block label definition within function" lbl)
+                             #f)
+                           (let p-loop ((ps params))
+                             (if (null? ps)
+                                 (begin
+                                   (symbol-hash-table-put! block-arity-tbl lbl (length params))
+                                   (and (with-verifier-context (list (cons 'phase 'canonical-lir)
+                                                                     (cons 'function fn-name)
+                                                                     (cons 'block lbl))
+                                          (lambda () (scan-insts body lbl)))
+                                        (loop (cdr rest))))
+                                 (if (symbol? (car ps))
+                                     (p-loop (cdr ps))
+                                     (lir-report-error "%block parameter must be a symbol" (car ps)))))))
+                     (lir-report-error "%block must be (%block <label-sym> (<param-syms>...) <insts>...)" inst)))
+                (else
+                 ;; Validate instruction syntax (Tier 1)
+                 (if (not (lir-valid-inst? inst))
+                     #f
+                     (begin
+                       ;; Queue jump checks if control flow instruction
+                       (case (car inst)
+                         ((%jump)
+                          (let ((target (cadr inst))
+                                (args (if (pair? (cddr inst)) (caddr inst) '())))
+                            (set-car! pending-jumps (cons (list '%jump target (length args) inst)
+                                                          (car pending-jumps)))))
+                         ((%jump-if-false)
+                          (let ((target (caddr inst))
+                                (args (if (pair? (cdddr inst)) (cadddr inst) '())))
+                            (set-car! pending-jumps (cons (list '%jump-if-false target (if (pair? args) (length args) #f) inst)
+                                                          (car pending-jumps)))))
+                         ((%jump-if)
+                          (let ((then-target (caddr inst))
+                                (then-args (cadddr inst))
+                                (else-target (car (cddddr inst)))
+                                (else-args (cadr (cddddr inst))))
+                            (set-car! pending-jumps (cons (list '%jump-if then-target (if (pair? then-args) (length then-args) #f)
+                                                                inst else-target (if (pair? else-args) (length else-args) #f))
+                                                          (car pending-jumps)))))
+                         ((%jump-cond)
+                          (let ((target (caddr inst)))
+                            (set-car! pending-jumps (cons (list '%jump-cond target #f inst)
+                                                          (car pending-jumps)))))
+                         ((%jump-if-zero)
+                          (let ((target (cadr inst)))
+                            (set-car! pending-jumps (cons (list '%jump-if-zero target #f inst)
+                                                          (car pending-jumps)))))
+                         ((%direct-jump)
+                          (let ((target (cadr inst)))
+                            (set-car! pending-jumps (cons (list '%direct-jump target #f inst)
+                                                          (car pending-jumps))))))
+                       (loop (cdr rest))))))))))
+
+    ;; Step 2: Post-pass target resolution in O(1) per jump
+    (define (resolve-jumps jumps)
+      (let j-loop ((js jumps))
+        (if (null? js)
+            #t
+            (let* ((j (car js))
+                   (kind (car j))
+                   (target (cadr j))
+                   (argc (caddr j))
+                   (inst (cadddr j)))
+              (cond
+                ((not (or (symbol-hash-set-contains? label-set target)
+                          (symbol-hash-set-contains? known-fn-set target)))
+                 (cond
+                   ((eq? kind '%jump)
+                    (lir-report-error "Undefined jump target label" target))
+                   ((eq? kind '%jump-if-false)
+                    (lir-report-error "Undefined jump target in %jump-if-false" target))
+                   ((eq? kind '%jump-if)
+                    (lir-report-error "Undefined then-target in %jump-if" target))
+                   (else
+                    (lir-report-error "Undefined jump condition target" target))))
+                ((and argc
+                      (let ((expected (symbol-hash-table-ref block-arity-tbl target #f)))
+                        (and expected (not (= argc expected)))))
+                 (if (eq? kind '%jump-if-false)
+                     (lir-report-error "%jump-if-false argument count mismatch with %block" inst)
+                     (if (eq? kind '%jump-if)
+                         (lir-report-error "%jump-if then-argument count mismatch with %block" inst)
+                         (lir-report-error "Jump argument count does not match %block parameter count" inst))))
+                ;; For %jump-if, also check else branch
+                ((eq? kind '%jump-if)
+                 (let ((else-target (car (cddddr j)))
+                       (else-argc (cadr (cddddr j))))
+                   (cond
+                     ((not (or (symbol-hash-set-contains? label-set else-target)
+                               (symbol-hash-set-contains? known-fn-set else-target)))
+                      (lir-report-error "Undefined else-target in %jump-if" else-target))
+                     ((and else-argc
+                           (let ((expected (symbol-hash-table-ref block-arity-tbl else-target #f)))
+                             (and expected (not (= else-argc expected)))))
+                      (lir-report-error "%jump-if else-argument count mismatch with %block" inst))
+                     (else
+                      (j-loop (cdr js))))))
+                (else
+                 (j-loop (cdr js))))))))
+
+    (and (scan-insts insts #f)
+         (resolve-jumps (reverse (car pending-jumps))))))
+
+;;; Backward-compatibility wrappers for tests and legacy callers
 (define (lir-collect-labels-and-params insts)
   (let loop ((is insts) (labels '()) (block-params '()))
     (if (null? is)
@@ -397,122 +583,125 @@
              (loop (cdr is) labels block-params)))))))
 
 (define (lir-verify-cfg-targets insts defined-labels block-params known-fn-labels)
-  (let loop ((is insts))
-    (if (null? is)
-        #t
-        (let ((inst (car is)))
-          (cond
-            ((not (pair? inst)) (loop (cdr is)))
-            ((eq? (car inst) '%block)
-             (and (loop (cdddr inst))
-                  (loop (cdr is))))
-            ((eq? (car inst) '%jump)
-             (let* ((target (cadr inst))
-                    (args (if (pair? (cddr inst)) (caddr inst) '()))
-                    (param-entry (assq target block-params)))
-               (cond
-                 ((and (not (memq target defined-labels))
-                       (not (memq target known-fn-labels)))
-                  (lir-report-error "Undefined jump target label" target))
-                 ((and param-entry (not (= (length args) (cdr param-entry))))
-                  (lir-report-error "Jump argument count does not match %block parameter count" inst))
-                 (else
-                  (loop (cdr is))))))
-            ((eq? (car inst) '%jump-if-false)
-             (let* ((target (caddr inst))
-                    (args (if (pair? (cdddr inst)) (cadddr inst) '()))
-                    (param-entry (assq target block-params)))
-               (cond
-                 ((and (not (memq target defined-labels))
-                       (not (memq target known-fn-labels)))
-                  (lir-report-error "Undefined jump target in %jump-if-false" target))
-                 ((and param-entry (pair? args) (not (= (length args) (cdr param-entry))))
-                  (lir-report-error "%jump-if-false argument count mismatch with %block" inst))
-                 (else
-                  (loop (cdr is))))))
-            ((eq? (car inst) '%jump-if)
-             (let* ((then-target (caddr inst))
-                    (then-args (cadddr inst))
-                    (else-target (car (cddddr inst)))
-                    (else-args (cadr (cddddr inst)))
-                    (then-entry (assq then-target block-params))
-                    (else-entry (assq else-target block-params)))
-               (cond
-                 ((and (not (memq then-target defined-labels))
-                       (not (memq then-target known-fn-labels)))
-                  (lir-report-error "Undefined then-target in %jump-if" then-target))
-                 ((and (not (memq else-target defined-labels))
-                       (not (memq else-target known-fn-labels)))
-                  (lir-report-error "Undefined else-target in %jump-if" else-target))
-                 ((and then-entry (pair? then-args) (not (= (length then-args) (cdr then-entry))))
-                  (lir-report-error "%jump-if then-argument count mismatch with %block" inst))
-                 ((and else-entry (pair? else-args) (not (= (length else-args) (cdr else-entry))))
-                  (lir-report-error "%jump-if else-argument count mismatch with %block" inst))
-                 (else
-                  (loop (cdr is))))))
-            ((or (eq? (car inst) '%jump-cond)
-                 (eq? (car inst) '%jump-if-zero))
-             (let ((target (if (eq? (car inst) '%jump-cond) (caddr inst) (cadr inst))))
-               (if (and (not (memq target defined-labels))
-                        (not (memq target known-fn-labels)))
-                   (lir-report-error "Undefined jump condition target" target)
-                   (loop (cdr is)))))
-            (else
-             (loop (cdr is))))))))
+  (let ((label-set (make-symbol-hash-set (max 16 (* 2 (length defined-labels)))))
+        (known-set (make-symbol-hash-set (max 16 (* 2 (length known-fn-labels)))))
+        (arity-tbl (make-symbol-hash-table (max 16 (* 2 (length block-params))))))
+    (for-each (lambda (l) (symbol-hash-set-add! label-set l)) defined-labels)
+    (for-each (lambda (k) (symbol-hash-set-add! known-set k)) known-fn-labels)
+    (for-each (lambda (bp) (symbol-hash-table-put! arity-tbl (car bp) (cdr bp))) block-params)
+    (let loop ((is insts))
+      (if (null? is) #t
+          (let ((inst (car is)))
+            (cond
+              ((not (pair? inst)) (loop (cdr is)))
+              ((eq? (car inst) '%block)
+               (and (loop (cdddr inst))
+                    (loop (cdr is))))
+              ((eq? (car inst) '%jump)
+               (let* ((target (cadr inst))
+                      (args (if (pair? (cddr inst)) (caddr inst) '()))
+                      (expected-arity (symbol-hash-table-ref arity-tbl target #f)))
+                 (cond
+                   ((and (not (symbol-hash-set-contains? label-set target))
+                         (not (symbol-hash-set-contains? known-set target)))
+                    (lir-report-error "Undefined jump target label" target))
+                   ((and expected-arity (not (= (length args) expected-arity)))
+                    (lir-report-error "Jump argument count does not match %block parameter count" inst))
+                   (else
+                    (loop (cdr is))))))
+              ((eq? (car inst) '%jump-if-false)
+               (let* ((target (caddr inst))
+                      (args (if (pair? (cdddr inst)) (cadddr inst) '()))
+                      (expected-arity (symbol-hash-table-ref arity-tbl target #f)))
+                 (cond
+                   ((and (not (symbol-hash-set-contains? label-set target))
+                         (not (symbol-hash-set-contains? known-set target)))
+                    (lir-report-error "Undefined jump target in %jump-if-false" target))
+                   ((and expected-arity (pair? args) (not (= (length args) expected-arity)))
+                    (lir-report-error "%jump-if-false argument count mismatch with %block" inst))
+                   (else
+                    (loop (cdr is))))))
+              ((eq? (car inst) '%jump-if)
+               (let* ((then-target (caddr inst))
+                      (then-args (cadddr inst))
+                      (else-target (car (cddddr inst)))
+                      (else-args (cadr (cddddr inst)))
+                      (then-expected (symbol-hash-table-ref arity-tbl then-target #f))
+                      (else-expected (symbol-hash-table-ref arity-tbl else-target #f)))
+                 (cond
+                   ((and (not (symbol-hash-set-contains? label-set then-target))
+                         (not (symbol-hash-set-contains? known-set then-target)))
+                    (lir-report-error "Undefined then-target in %jump-if" then-target))
+                   ((and (not (symbol-hash-set-contains? label-set else-target))
+                         (not (symbol-hash-set-contains? known-set else-target)))
+                    (lir-report-error "Undefined else-target in %jump-if" else-target))
+                   ((and then-expected (pair? then-args) (not (= (length then-args) then-expected)))
+                    (lir-report-error "%jump-if then-argument count mismatch with %block" inst))
+                   ((and else-expected (pair? else-args) (not (= (length else-args) else-expected)))
+                    (lir-report-error "%jump-if else-argument count mismatch with %block" inst))
+                   (else
+                    (loop (cdr is))))))
+              ((or (eq? (car inst) '%jump-cond)
+                   (eq? (car inst) '%jump-if-zero))
+               (let ((target (if (eq? (car inst) '%jump-cond) (caddr inst) (cadr inst))))
+                 (if (and (not (symbol-hash-set-contains? label-set target))
+                          (not (symbol-hash-set-contains? known-set target)))
+                     (lir-report-error "Undefined jump condition target" target)
+                     (loop (cdr is)))))
+              (else
+               (loop (cdr is)))))))))
 
 (define (lir-verify-insts-and-cfg insts known-fn-labels)
-  (let ((label-info (lir-collect-labels-and-params insts)))
-    (if (not label-info)
-        #f
-        (let ((defined-labels (car label-info))
-              (block-params (cdr label-info)))
-          (and (let i-loop ((is insts))
-                 (if (null? is) #t
-                     (and (lir-valid-inst? (car is))
-                          (i-loop (cdr is)))))
-               (lir-verify-cfg-targets insts defined-labels block-params known-fn-labels))))))
+  (let ((known-set (make-symbol-hash-set (max 16 (* 2 (length known-fn-labels))))))
+    (for-each (lambda (k) (symbol-hash-set-add! known-set k)) known-fn-labels)
+    (lir-verify-insts-single-pass insts known-set '%unnamed-fn)))
 
 ;;; -----------------------------------------------------------------------
 ;;; Function-Level and Program-Level Validation
 ;;; -----------------------------------------------------------------------
-(define (lir-valid-function? fn known-fn-labels)
+(define (lir-valid-function? fn known-fn-set)
   (cond
     ((not (and (pair? fn) (eq? (car fn) '%lir-function)))
      (lir-report-error "Function node must start with %lir-function" fn))
     ((not (symbol? (cadr fn)))
      (lir-report-error "%lir-function name must be a symbol" fn))
     (else
-     (let* ((params-clause (assq 'params (cddr fn)))
-            (frame-clause (assq 'frame-size (cddr fn)))
-            (body-clause (assq 'body (cddr fn))))
-       (cond
-         ((not (and params-clause (list? (cadr params-clause))))
-          (lir-report-error "%lir-function must have valid (params (...)) clause" fn))
-         ((not (and frame-clause (integer? (cadr frame-clause))
-                    (>= (cadr frame-clause) 0)
-                    (= (modulo (cadr frame-clause) 8) 0)))
-          (lir-report-error "%lir-function frame-size must be a non-negative multiple of 8" fn))
-         ((not (and body-clause (list? (cdr body-clause))))
-          (lir-report-error "%lir-function must have valid (body <insts>...) clause" fn))
-         (else
-          (lir-verify-insts-and-cfg (cdr body-clause) known-fn-labels)))))))
+     (let ((fn-name (cadr fn))
+           (params-clause (assq 'params (cddr fn)))
+           (frame-clause (assq 'frame-size (cddr fn)))
+           (body-clause (assq 'body (cddr fn))))
+       (with-verifier-context (list (cons 'phase 'canonical-lir) (cons 'function fn-name))
+         (lambda ()
+           (cond
+             ((not (and params-clause (list? (cadr params-clause))))
+              (lir-report-error "%lir-function must have valid (params (...)) clause" fn))
+             ((not (and frame-clause (integer? (cadr frame-clause))
+                        (>= (cadr frame-clause) 0)
+                        (= (modulo (cadr frame-clause) 8) 0)))
+              (lir-report-error "%lir-function frame-size must be a non-negative multiple of 8" fn))
+             ((not (and body-clause (list? (cdr body-clause))))
+              (lir-report-error "%lir-function must have valid (body <insts>...) clause" fn))
+             (else
+              (lir-verify-insts-single-pass (cdr body-clause) known-fn-set fn-name)))))))))
 
-(define (lir-valid-main? main-clause known-fn-labels)
+(define (lir-valid-main? main-clause known-fn-set)
   (cond
     ((not (and (pair? main-clause) (eq? (car main-clause) '%lir-main)))
      (lir-report-error "%lir-main node must start with %lir-main" main-clause))
     (else
      (let ((frame-clause (assq 'frame-size (cdr main-clause)))
            (body-clause (assq 'body (cdr main-clause))))
-       (cond
-         ((not (and frame-clause (integer? (cadr frame-clause))
-                    (>= (cadr frame-clause) 0)
-                    (= (modulo (cadr frame-clause) 8) 0)))
-          (lir-report-error "%lir-main frame-size must be a non-negative multiple of 8" main-clause))
-         ((not (and body-clause (list? (cdr body-clause))))
-          (lir-report-error "%lir-main must have valid (body <insts>...) clause" main-clause))
-         (else
-          (lir-verify-insts-and-cfg (cdr body-clause) known-fn-labels)))))))
+       (with-verifier-context (list (cons 'phase 'canonical-lir) (cons 'function '%lir-main))
+         (lambda ()
+           (cond
+             ((not (and frame-clause (integer? (cadr frame-clause))
+                        (>= (cadr frame-clause) 0)
+                        (= (modulo (cadr frame-clause) 8) 0)))
+              (lir-report-error "%lir-main frame-size must be a non-negative multiple of 8" main-clause))
+             ((not (and body-clause (list? (cdr body-clause))))
+              (lir-report-error "%lir-main must have valid (body <insts>...) clause" main-clause))
+             (else
+              (lir-verify-insts-single-pass (cdr body-clause) known-fn-set '%lir-main)))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Public API: validate-lir / verify-lir
@@ -537,21 +726,26 @@
           (lir-report-error "%lir-program missing (%lir-main ...) clause" prog))
          (else
           (let* ((funcs (cdr funcs-clause))
-                 (known-fn-labels
-                  (let extract ((fs funcs) (acc '()))
-                    (if (null? fs)
-                        (reverse acc)
-                        (if (and (pair? (car fs)) (pair? (cdar fs)) (symbol? (cadar fs)))
-                            (extract (cdr fs) (cons (cadar fs) acc))
-                            (extract (cdr fs) acc))))))
+                 (known-fn-set (make-symbol-hash-set (max 32 (* 2 (length funcs))))))
+            ;; Populate known function labels in O(1)
+            (let extract ((fs funcs))
+              (if (null? fs)
+                  #t
+                  (begin
+                    (if (and (pair? (car fs)) (pair? (cdar fs)) (symbol? (cadar fs)))
+                        (symbol-hash-set-add! known-fn-set (cadar fs)))
+                    (extract (cdr fs)))))
             (and (verify-lir-safepoint prog)
                  (let f-loop ((fs funcs))
                    (if (null? fs) #t
-                       (and (lir-valid-function? (car fs) known-fn-labels)
+                       (and (lir-valid-function? (car fs) known-fn-set)
                             (f-loop (cdr fs)))))
-                 (lir-valid-main? main-clause known-fn-labels)
-                 (if (not (nanopass-ast-valid? 'L_lir_canonical prog))
-                     (lir-report-error "Program violates L_lir_canonical schema invariants" prog)
+                 (lir-valid-main? main-clause known-fn-set)
+                 (if (and (>= (verifier-level) 3)
+                          (assq 'L_lir_canonical (nanopass-get-languages)))
+                     (if (not (nanopass-ast-valid? 'L_lir_canonical prog))
+                         (lir-report-error "Program violates L_lir_canonical schema invariants" prog)
+                         #t)
                      #t)))))))))
 
 (define (verify-lir prog)

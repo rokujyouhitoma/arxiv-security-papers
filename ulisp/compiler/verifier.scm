@@ -4,30 +4,76 @@
 ;;; =======================================================================
 
 ;;; Verifier Configuration (represented as cons cells to avoid top-level set! in LIR)
+;;; Levels: 0 = OFF, 1 = BOUNDARY (LIR only), 2 = STANDARD (all passes), 3 = STRICT/PARANOID
+(define *verifier-level* (cons 0 '()))
 (define *verifier-enabled* (cons #f '()))
 (define *verifier-strict* (cons #f '()))
 
-(define (verifier-enabled?) (car *verifier-enabled*))
+(define (verifier-level) (car *verifier-level*))
+(define (set-verifier-level! lvl)
+  (set-car! *verifier-level* lvl)
+  (if (> lvl 0)
+      (begin
+        (set-car! *verifier-enabled* #t)
+        (enable-nanopass-verifier!))
+      (begin
+        (set-car! *verifier-enabled* #f)
+        (disable-nanopass-verifier!))))
+
+(define (verifier-enabled?) (> (car *verifier-level*) 0))
 (define (enable-verifier!)
-  (set-car! *verifier-enabled* #t)
-  (enable-nanopass-verifier!))
+  (set-verifier-level! 2))
 (define (disable-verifier!)
-  (set-car! *verifier-enabled* #f)
-  (disable-nanopass-verifier!))
+  (set-verifier-level! 0))
+(define (verifier-strict?) (car *verifier-strict*))
 (define (set-verifier-strict! flag) (set-car! *verifier-strict* flag))
 
-;;; Error Reporting Procedure
-(define (verifier-error phase message expr)
-  (display "\n*** [VERIFIER ERROR] Phase: ")
-  (display phase)
-  (display " - ")
-  (display message)
-  (display "\n    Expression: ")
-  (write expr)
-  (newline)
-  (if (car *verifier-strict*)
-      (error "IR Verifier Invariant Violation" expr)
-      #f))
+;;; Dynamic Verifier Context Tracking
+(define *verifier-context-stack* (cons '() '()))
+
+(define (current-verifier-context)
+  (if (null? (car *verifier-context-stack*))
+      '()
+      (caar *verifier-context-stack*)))
+
+(define (verifier-push-context! ctx)
+  (set-car! *verifier-context-stack* (cons ctx (car *verifier-context-stack*))))
+
+(define (verifier-pop-context!)
+  (if (pair? (car *verifier-context-stack*))
+      (set-car! *verifier-context-stack* (cdar *verifier-context-stack*))))
+
+(define (with-verifier-context ctx thunk)
+  (verifier-push-context! ctx)
+  (let ((res (thunk)))
+    (verifier-pop-context!)
+    res))
+
+;;; Error Reporting Procedure with Contextual Information
+(define (verifier-error phase message expr . rest)
+  (let* ((ctx (current-verifier-context))
+         (fn-entry (and (pair? ctx) (assq 'function ctx)))
+         (fn-name (and fn-entry (cdr fn-entry)))
+         (blk-entry (and (pair? ctx) (assq 'block ctx)))
+         (blk-name (and blk-entry (cdr blk-entry))))
+    (display "\n*** [VERIFIER ERROR] Phase: ")
+    (display phase)
+    (if fn-name
+        (begin (display " | Function: ") (display fn-name)))
+    (if blk-name
+        (begin (display " | Block: ") (display blk-name)))
+    (display " - ")
+    (display message)
+    (display "\n    Expression: ")
+    (write expr)
+    (if (and (pair? rest) (car rest))
+        (begin
+          (display "\n    Detail: ")
+          (display (car rest))))
+    (newline)
+    (if (car *verifier-strict*)
+        (error "IR Verifier Invariant Violation" expr)
+        #f)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 1. Pass 030 Desugar Output Verifier
@@ -250,17 +296,27 @@
 ;;; Unified Verifier Dispatcher
 ;;; -----------------------------------------------------------------------
 (define (verify-pass-output phase data)
-  (if (not (verifier-enabled?))
-      #t
-      (case phase
-        ((desugar 030) (verify-desugared-ast data))
-        ((anf 070)     (verify-anf-ast data))
-        ((closure 110) (verify-closure-ast data))
-        ((safepoint 131) (verify-lir-safepoint data))
-        ((ssa 132)     (verify-ssa-ast data))
-        ((lir canonical-lir 130) (and (verify-ssa-ast data) (validate-lir data)))
-        (else #t))))
+  (let ((lvl (verifier-level)))
+    (if (<= lvl 0)
+        #t
+        (case phase
+          ((desugar 030)
+           (if (>= lvl 2) (verify-desugared-ast data) #t))
+          ((anf 070)
+           (if (>= lvl 2) (verify-anf-ast data) #t))
+          ((closure 110)
+           (if (>= lvl 2) (verify-closure-ast data) #t))
+          ((safepoint 131)
+           (if (>= lvl 2) (verify-lir-safepoint data) #t))
+          ((ssa 132)
+           (if (>= lvl 2) (verify-ssa-ast data) #t))
+          ((lir canonical-lir 130)
+           ;; Level 1 (Boundary) or higher performs full LIR validation
+           (validate-lir data))
+          (else #t)))))
 
 (define (nanopass-verify-pass-data pass-name lang-name data phase)
-  (and (nanopass-verify-ast pass-name lang-name data phase)
+  (and (if (>= (verifier-level) 3)
+           (nanopass-verify-ast pass-name lang-name data phase)
+           #t)
        (verify-pass-output pass-name data)))

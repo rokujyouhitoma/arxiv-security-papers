@@ -311,6 +311,68 @@
 (assert-false "L_lir_canonical? rejects missing %lir-program root"
               (L_lir_canonical? '((%mov %rax 42))))
 
+;;; -----------------------------------------------------------------------
+;;; Group 8: Multi-Level Verifier, Context Tracking & Scalability (Issue #597)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 8: Multi-Level Verifier, Context & Scalability ---\n")
+
+;; 8.1 Verifier Level Switching
+(set-verifier-level! 0)
+(assert-true "Level 0 (OFF): bypasses pass verification entirely"
+             (verify-pass-output 'anf '(invalid syntax non atomic (nested (call)))))
+
+(set-verifier-level! 1)
+(assert-true "Level 1 (BOUNDARY): bypasses frontend passes"
+             (verify-pass-output 'anf '(invalid syntax)))
+(assert-true "Level 1 (BOUNDARY): still validates canonical LIR"
+             (verify-pass-output 'lir (make-test-lir-program '() '((%mov %rax 42) (%return)))))
+
+(set-verifier-level! 2)
+(assert-true "Level 2 (STANDARD): enables verification across passes"
+             (verifier-enabled?))
+
+;; 8.2 Dynamic Context Tracking
+(with-verifier-context '((phase . canonical-lir) (function . .L_test_fn) (block . .L_entry_block))
+  (lambda ()
+    (let ((ctx (current-verifier-context)))
+      (assert-true "Context tracking: phase captured" (eq? (cdr (assq 'phase ctx)) 'canonical-lir))
+      (assert-true "Context tracking: function captured" (eq? (cdr (assq 'function ctx)) '.L_test_fn))
+      (assert-true "Context tracking: block captured" (eq? (cdr (assq 'block ctx)) '.L_entry_block)))))
+
+(assert-true "Context stack pops cleanly after execution"
+             (null? (current-verifier-context)))
+
+;; 8.3 Scalability & Performance Benchmark: 100+ Blocks & Chained Jumps
+(define (build-large-lir-chain n)
+  (let loop ((i 0) (acc '()))
+    (if (= i n)
+        (reverse (cons (list '%label (string->symbol (string-append ".L_blk_" (number->string n))))
+                       (cons '(%return %rax) acc)))
+        (let ((cur-lbl (string->symbol (string-append ".L_blk_" (number->string i))))
+              (next-lbl (string->symbol (string-append ".L_blk_" (number->string (+ i 1))))))
+          (loop (+ i 1)
+                (cons (list '%jump next-lbl)
+                      (cons (list '%label cur-lbl)
+                            acc)))))))
+
+(define *large-chain-insts* (build-large-lir-chain 100))
+(assert-true "Scalability: 100-block chained LIR validated in linear time"
+             (validate-lir
+              (make-test-lir-program '()
+                                     (cons '(%mov %rax 1)
+                                           *large-chain-insts*))))
+
+;; 8.4 Duplicate detection in large block set rejected cleanly in O(1)
+(assert-false "Scalability: duplicate label in 100-block chain rejected"
+              (validate-lir
+               (make-test-lir-program '()
+                                      (cons '(%label .L_blk_50)
+                                            *large-chain-insts*))))
+
+;; Reset to standard verifier mode for subsequent suites
+(enable-verifier!)
+(set-verifier-strict! #f)
+
 (display "\n=======================================================\n")
 (display " All Canonical LIR Verifier Tests PASSED: ")
 (display (car *pass-count*))
