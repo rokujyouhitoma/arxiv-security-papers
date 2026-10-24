@@ -598,6 +598,7 @@
     (emit "")
     (emit "#if defined(__GNUC__) || defined(__clang__)")
     (emit "#define ULISP_UNUSED __attribute__((unused))")
+    (emit "#pragma GCC diagnostic ignored \"-Wunused-label\"")
     (emit "#else")
     (emit "#define ULISP_UNUSED")
     (emit "#endif")

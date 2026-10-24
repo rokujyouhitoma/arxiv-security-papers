@@ -74,12 +74,33 @@ run_stage() {
     check_asm_output "$stage_name" "$asm_file"
 }
 
+run_stage_try() {
+    local stage_name="$1"
+    local asm_file="$2"
+    shift 2
+    local rc=0
+    "$@" < "$BUILD_DIR/ulisp_core.scm" > "$asm_file" 2>&1 || rc=$?
+    if [ "$rc" -ne 0 ] || grep -q "^\*\*\* ERROR:" "$asm_file" || [ ! -s "$asm_file" ]; then
+        return 1
+    fi
+    return 0
+}
+
 if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ] && [ "$BUILD_DIR/scheme-stage1" -nt "$BUILD_DIR/ulisp_core.scm" ]; then
     echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
 elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ "${BOOTSTRAP_WITH_GOSH:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
     echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using native seed ($BOOT_BIN)..."
-    run_stage "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s" "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm"
-    gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
+    if run_stage_try "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s" "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm" && gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1" 2>/dev/null; then
+        echo "  -> Stage 1 successfully compiled with native seed."
+    elif [ -n "$GOSH_BIN" ]; then
+        echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed (e.g. exit code 139 / ABI drift). Automatically falling back to Gauche ($GOSH_BIN)...\033[0m"
+        run_stage "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
+        gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
+    else
+        echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed. Automatically falling back to ILisp ($PYTHON_BIN)...\033[0m"
+        run_stage "Stage 1 (ILisp)" "$BUILD_DIR/stage1.s" env PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm"
+        gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1"
+    fi
 elif [ "${BOOTSTRAP_WITH_GOSH:-0}" = "1" ] && [ -n "$GOSH_BIN" ]; then
     echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using Gauche ($GOSH_BIN)..."
     run_stage "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
@@ -119,7 +140,13 @@ verify_and_promote() {
     local final_stage_name="$2"
 
     echo "=== Running Smoke Test on $final_stage_name Binary ==="
+    rm -f "$BUILD_DIR/smoke_test.s" "$BUILD_DIR/smoke_test"
     echo "42" | ULISP_QUIET=1 "$final_compiler" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+    if [ ! -s "$BUILD_DIR/smoke_test.s" ]; then
+        echo "42" > "$BUILD_DIR/smoke_in.scm"
+        ULISP_QUIET=1 "$final_compiler" "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+        rm -f "$BUILD_DIR/smoke_in.scm"
+    fi
     gcc -nostdlib -static "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test"
     local smoke_out
     smoke_out="$("$BUILD_DIR/smoke_test" 2>/dev/null || true)"

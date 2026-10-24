@@ -45,6 +45,37 @@
 ;; 4. String escaping
 (assert-equal "escape normal" "hello" (escape-gas-string "hello"))
 
+;; 5. Instruction Selection (LIR -> L_asm_x86)
+(let* ((lir-inst '(%mov %rax 42))
+       (asm-insts (lower-lir-instruction lir-inst)))
+  (assert-equal "lower mov imm" '((mov rax (%imm 42))) asm-insts))
+
+(let* ((lir-inst '(%add %rax (%stack -8)))
+       (asm-insts (lower-lir-instruction lir-inst)))
+  (assert-equal "lower add stack" '((add rax (%disp -8 rsp))) asm-insts))
+
+(let* ((lir-prog '(%lir-program
+                   (strings ())
+                   (stackmaps ())
+                   (%lir-functions)
+                   (%lir-main
+                    (frame-size 16)
+                    (body (%mov %rax 42)
+                          (%add %rax 10)
+                          (%return %rax)))))
+       (asm-prog (select-instructions-x86 lir-prog)))
+  (assert-true "selected asm program satisfies L_asm_x86 schema"
+               (L_asm_x86? asm-prog))
+  (let ((main-body (cdr (assq 'body (cdr (assq '%asm-main (cdr asm-prog)))))))
+    (assert-equal "main body contains selected instructions"
+                  '((mov rax (%imm 42))
+                    (add rax (%imm 10))
+                    (add rsp 8)
+                    (pop r12)
+                    (ret))
+                  main-body)))
+
 (display "=======================================================") (newline)
 (display " Pass 140: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)
+

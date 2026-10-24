@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **596** | Backend層: define-language L_asm 導入による命令選択とコード生成の2段階分離 | Feature | Medium | Open | [596-backend-instruction-selection-and-emission-separation.md](596-backend-instruction-selection-and-emission-separation.md) |
 | **597** | IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化 | Feature | Medium | New | [597-unify-ir-verifier-framework-and-optimize-lir-performance.md](597-unify-ir-verifier-framework-and-optimize-lir-performance.md) |
 | **598** | 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング・観測性の一元化 | Feature | Medium | New | [598-implement-unified-compiler-pass-manager.md](598-implement-unified-compiler-pass-manager.md) |
 | **599** | 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復エンジン）の導入 | Feature | Medium | New | [599-implement-generic-dataflow-analysis-framework.md](599-implement-generic-dataflow-analysis-framework.md) |
@@ -28,6 +27,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **596** | Backend層: define-language L_asm 導入による命令選択とコード生成の2段階分離 | Feature | 2026-10-24 | [closed/596-backend-instruction-selection-and-emission-separation.md](closed/596-backend-instruction-selection-and-emission-separation.md) |
 | **595** | LIR層: define-pass による分岐融合・DCE・ピープホール最適化の宣言化 | Feature | 2026-10-24 | [closed/595-define-pass-lir-optimizations-and-peephole.md](closed/595-define-pass-lir-optimizations-and-peephole.md) |
 | **594** | Frontend層: define-language L_anf / L_lifted の導入と不変条件自動検証 | Feature | 2026-10-24 | [closed/594-define-frontend-anf-and-lifted-languages.md](closed/594-define-frontend-anf-and-lifted-languages.md) |
 | **593** | LIR層: define-language L_lir_canonical の導入と lir_verifier 宣言的統合 | Feature | 2026-10-24 | [closed/593-define-lir-canonical-language-and-verifier-integration.md](closed/593-define-lir-canonical-language-and-verifier-integration.md) |

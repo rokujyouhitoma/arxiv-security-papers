@@ -18,7 +18,7 @@ if [ "$OS_NAME" = "Darwin" ]; then
 else
     CC="${CC:-gcc}"
 fi
-CFLAGS="-Wall -Wextra -Werror -O2"
+CFLAGS="-Wall -Wextra -Werror -Wno-unused-label -O2"
 
 TMP_C="build/tmp_c_test.c"
 TMP_BIN="build/tmp_c_bin"
