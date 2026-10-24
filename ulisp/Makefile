@@ -67,7 +67,8 @@ LIR_PASSES = lir/lir_lang.scm \
              lir/129_lir_primitives.scm \
              lir/130_lir.scm \
              lir/131_lir_safepoint.scm \
-             lir/132_lir_braun_ssa.scm
+             lir/132_lir_braun_ssa.scm \
+             lir/133_lir_peephole.scm
 
 BACKEND_PASSES = backend/140_backend_x86_64.scm \
                  backend/141_backend_x86_gc.scm \
@@ -137,6 +138,7 @@ NANOPASS_TESTS = tests/passes/test_010_library.scm \
                  tests/passes/test_130_lir.scm \
                  tests/passes/test_131_lir_safepoint.scm \
                  tests/passes/test_132_lir_braun_ssa.scm \
+                 tests/passes/test_133_lir_peephole.scm \
                  tests/passes/test_140_backend_x86_64.scm \
                  tests/passes/test_141_backend_x86_gc.scm \
                  tests/passes/test_142_backend_x86_freestanding.scm \
@@ -144,13 +146,13 @@ NANOPASS_TESTS = tests/passes/test_010_library.scm \
                  tests/passes/test_160_backend_c.scm
 
 test_all_passes: build/compiler_passes.scm
-	@echo "=== Running 1:1 Nanopass Unit Tests (33 Passes) ==="
+	@echo "=== Running 1:1 Nanopass Unit Tests (34 Passes) ==="
 	@for t in $(NANOPASS_TESTS); do \
 		echo "Running $$t..."; \
 		cat build/compiler_passes.scm $$t > build/runner_temp.scm && \
 		$(RUN_SCHEME) build/runner_temp.scm || exit 1; \
 	done
-	@echo "SUCCESS: All 33 1:1 Nanopass Unit Tests PASSED!"
+	@echo "SUCCESS: All 34 1:1 Nanopass Unit Tests PASSED!"
 
 
 

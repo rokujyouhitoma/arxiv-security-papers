@@ -96,6 +96,27 @@
       (emit-x86-64 lir 'none)))
   (assert-true "emitted build/test_predicates_fusion.s successfully" #t))
 
+;; Test 3: Direct define-pass lir-fuse-branches transformation
+(let* ((orig (list '%lir-program
+                   '(strings ())
+                   '(stackmaps ())
+                   '(%lir-functions)
+                   (list '%lir-main
+                         '(frame-size 0)
+                         '(body (%cmp %rax 10)
+                                (%set-boolean %rbx "je")
+                                (%jump-if-false %rbx L_else)
+                                (%return 0)
+                                (%label L_else)
+                                (%return 1)))))
+       (fused (lir-fuse-branches orig))
+       (main-body (cdr (assq 'body (cdr (assq '%lir-main (cdr fused)))))))
+  (let ((jump-conds (filter (lambda (i) (and (pair? i) (eq? (car i) '%jump-cond))) main-body))
+        (set-booleans (filter (lambda (i) (and (pair? i) (eq? (car i) '%set-boolean))) main-body)))
+    (assert-true "define-pass lir-fuse-branches emits %jump-cond" (pair? jump-conds))
+    (assert-true "define-pass lir-fuse-branches eliminates %set-boolean" (null? set-booleans))
+    (assert-true "fused program satisfies L_lir_canonical schema" (L_lir_canonical? fused))))
+
 (newline)
 (display "=======================================================")
 (newline)

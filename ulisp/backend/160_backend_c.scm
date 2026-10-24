@@ -170,7 +170,8 @@
                (emit "    }")))))
 
       ((%jump-cond)
-       (let* ((cc (cadr inst))
+       (let* ((raw-cc (cadr inst))
+              (cc (if (symbol? raw-cc) (symbol->string raw-cc) raw-cc))
               (lbl (caddr inst))
               (cond-expr
                (cond

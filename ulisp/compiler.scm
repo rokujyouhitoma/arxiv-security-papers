@@ -2082,7 +2082,9 @@
     lbl
     var
     c
-    (quote datum))
+    (quote datum)
+    (%closure-ref a c)
+    (%global-ref x))
   (Def (d)
     (define x e)
     e)
@@ -6797,6 +6799,7 @@
     (%jump-if-false reg lbl (opnd ...))
     (%jump-if reg lbl1 (opnd1 ...) lbl2 (opnd2 ...))
     (%jump-cond cond_op lbl)
+    (%jump-cond str lbl)
     (%jump-if-zero lbl)
     (%direct-jump lbl)
     (%return)
@@ -8545,7 +8548,7 @@
     (emit-lir! (list '%block ret-lbl '()))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 128: LIR Branch & Comparison Flag Fusion
-;;; Conforms to DSN-33 Architecture Specification & Issue #571
+;;; Conforms to DSN-33 Architecture Specification & Issues #571, #595
 ;;; Fuses relational comparisons directly into conditional jumps (%jump-cond)
 ;;; eliminating intermediate boolean instantiation.
 ;;; =======================================================================
@@ -8567,6 +8570,16 @@
     ((>)     "jg")
     ((>=)    "jge")
     (else    "je")))
+
+(define (lir-invert-cond-op op)
+  (cond
+    ((or (equal? op "je") (eq? op 'je) (eq? op 'equal) (eq? op 'zero)) "jne")
+    ((or (equal? op "jne") (eq? op 'jne) (eq? op 'not-equal) (eq? op 'not-zero)) "je")
+    ((or (equal? op "jl") (eq? op 'jl) (eq? op 'less)) "jge")
+    ((or (equal? op "jle") (eq? op 'jle) (eq? op 'less-equal)) "jg")
+    ((or (equal? op "jg") (eq? op 'jg) (eq? op 'greater)) "jle")
+    ((or (equal? op "jge") (eq? op 'jge) (eq? op 'greater-equal)) "jl")
+    (else "jne")))
 
 (define (extract-fused-cmp-int e)
   (cond
@@ -8627,6 +8640,94 @@
 
 (define (lir-compile-fused-cmp op e1 e2 else-label si env)
   (lir-compile-fused-cmp-cond op e1 e2 else-label lir-cmp-false-cc si env))
+
+;;; -----------------------------------------------------------------------
+;;; Linear LIR Branch Fusion Transformer
+;;; -----------------------------------------------------------------------
+
+(define (optimize-branch-fusion insts)
+  (let loop ((rest insts) (acc '()))
+    (cond
+      ((null? rest)
+       (reverse acc))
+
+      ;; Pattern 1: (%cmp opnd1 opnd2) followed by (%set-boolean reg cond) and (%jump-if-false reg lbl)
+      ;; -> (%cmp opnd1 opnd2) followed by (%jump-cond (invert-cc cond) lbl)
+      ((and (pair? rest)
+            (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (car rest))
+            (memq (caar rest) '(%cmp %raw-cmp))
+            (pair? (cadr rest))
+            (eq? (car (cadr rest)) '%set-boolean)
+            (pair? (caddr rest))
+            (eq? (car (caddr rest)) '%jump-if-false)
+            (equal? (cadr (cadr rest)) (cadr (caddr rest))))
+       (let* ((cmp-inst (car rest))
+              (set-b (cadr rest))
+              (jmp-inst (caddr rest))
+              (cond-op (caddr set-b))
+              (target-lbl (caddr jmp-inst))
+              (fused-jmp (list '%jump-cond (lir-invert-cond-op cond-op) target-lbl)))
+         (loop (cdddr rest) (cons fused-jmp (cons cmp-inst acc)))))
+
+      ;; Pattern 2: (%set-boolean reg cond) followed by (%jump-if-false reg lbl)
+      ;; -> (%jump-cond (invert-cc cond) lbl)
+      ((and (pair? rest)
+            (pair? (cdr rest))
+            (pair? (car rest))
+            (eq? (caar rest) '%set-boolean)
+            (pair? (cadr rest))
+            (eq? (car (cadr rest)) '%jump-if-false)
+            (equal? (cadar rest) (cadr (cadr rest))))
+       (let* ((set-b (car rest))
+              (jmp-inst (cadr rest))
+              (cond-op (caddr set-b))
+              (target-lbl (caddr jmp-inst))
+              (fused-jmp (list '%jump-cond (lir-invert-cond-op cond-op) target-lbl)))
+         (loop (cddr rest) (cons fused-jmp acc))))
+
+      ;; Pattern 3: (%cmp reg const) followed by (%jump-if-false reg2 lbl)
+      ((and (pair? rest)
+            (pair? (cdr rest))
+            (pair? (car rest))
+            (memq (caar rest) '(%cmp %raw-cmp))
+            (pair? (cadr rest))
+            (eq? (car (cadr rest)) '%jump-if-false))
+       (let* ((cmp-inst (car rest))
+              (jmp-inst (cadr rest))
+              (target-lbl (caddr jmp-inst))
+              (fused-jmp (list '%jump-cond "jne" target-lbl)))
+         (loop (cddr rest) (cons fused-jmp (cons cmp-inst acc)))))
+
+      (else
+       (loop (cdr rest) (cons (car rest) acc))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass: lir-fuse-branches
+;;; -----------------------------------------------------------------------
+
+(define-pass lir-fuse-branches : L_lir_canonical (ir) -> L_lir_canonical ()
+  (entry Program)
+  (Program : Program (p) -> Program ()
+    ((%lir-program (strings ,se) (stackmaps ,sm) (%lir-functions ,f ...) ,m)
+     (list '%lir-program
+           (list 'strings se)
+           (list 'stackmaps sm)
+           (cons '%lir-functions (map FunctionDecl f))
+           (MainDecl m))))
+  (FunctionDecl : FunctionDecl (f) -> FunctionDecl ()
+    ((%lir-function ,lbl (params (,x ...)) (frame-size ,frame_size) (body ,inst ...))
+     (list '%lir-function
+           lbl
+           (list 'params x)
+           (list 'frame-size frame_size)
+           (cons 'body (optimize-branch-fusion inst)))))
+  (MainDecl : MainDecl (m) -> MainDecl ()
+    ((%lir-main (frame-size ,frame_size) (body ,inst ...))
+     (list '%lir-main
+           (list 'frame-size frame_size)
+           (cons 'body (optimize-branch-fusion inst))))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 129: LIR Primitive Instruction Selection
 ;;; =======================================================================
@@ -9739,6 +9840,154 @@
               (block-body (append insts term-inst)))
          (cons '%block (cons lbl (cons params block-body)))))
      order)))
+;;; =======================================================================
+;;; ULisp Compiler Pass 133: LIR Peephole Optimization & Dead Code Elimination
+;;; Conforms to DSN-33 Architecture Specification & Issue #595
+;;; Implements sliding-window local simplifications and unreachable code pruning.
+;;; =======================================================================
+
+(define (lir-peephole-reg? opnd)
+  (and (symbol? opnd)
+       (let ((s (symbol->string opnd)))
+         (and (> (string-length s) 1)
+              (char=? (string-ref s 0) #\%)))))
+
+(define (lir-unconditional-terminator? inst)
+  (and (pair? inst)
+       (memq (car inst) '(%jump %direct-jump %return))))
+
+(define (lir-label-inst? inst)
+  (and (pair? inst)
+       (memq (car inst) '(%label %block))))
+
+(define (lir-peephole-step-window insts)
+  (let loop ((rest insts) (acc '()))
+    (cond
+      ((null? rest)
+       (reverse acc))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 1: Redundant Self-Move Elimination
+      ;; (%mov reg reg) -> ()
+      ;; -----------------------------------------------------------------
+      ((and (pair? (car rest))
+            (let ((i (car rest)))
+              (and (eq? (car i) '%mov)
+                   (= (length i) 3)
+                   (equal? (cadr i) (caddr i)))))
+       (loop (cdr rest) acc))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 2: Round-Trip Register Move Elimination
+      ;; (%mov r1 r2) followed immediately by (%mov r2 r1) -> (%mov r1 r2)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest)))
+              (and (eq? (car i1) '%mov)
+                   (eq? (car i2) '%mov)
+                   (= (length i1) 3)
+                   (= (length i2) 3)
+                   (equal? (cadr i1) (caddr i2))
+                   (equal? (caddr i1) (cadr i2))
+                   (lir-peephole-reg? (cadr i1))
+                   (lir-peephole-reg? (caddr i1)))))
+       ;; Keep only the first mov (%mov r1 r2) and skip the second
+       (loop (cddr rest) (cons (car rest) acc)))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 3: Redundant Jump to Next Immediate Label
+      ;; (%jump L1) followed immediately by (%label L1) -> (%label L1)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (memq (caar rest) '(%jump %direct-jump))
+            (eq? (caadr rest) '%label)
+            (eq? (cadr (car rest)) (cadr (cadr rest))))
+       ;; Drop jump, keep label
+       (loop (cdr rest) acc))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 4: Identity Arithmetic Simplification
+      ;; (%add reg 0) / (%raw-add reg 0) -> ()
+      ;; (%sub reg 0) / (%raw-sub reg 0) -> ()
+      ;; -----------------------------------------------------------------
+      ((and (pair? (car rest))
+            (let ((i (car rest)))
+              (and (memq (car i) '(%add %raw-add %sub %raw-sub))
+                   (= (length i) 3)
+                   (eqv? (caddr i) 0))))
+       (loop (cdr rest) acc))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 5: Identity Multiplication Simplification
+      ;; (%imul reg 1) / (%raw-mul reg 1) -> ()
+      ;; -----------------------------------------------------------------
+      ((and (pair? (car rest))
+            (let ((i (car rest)))
+              (and (memq (car i) '(%imul %raw-mul))
+                   (= (length i) 3)
+                   (eqv? (caddr i) 1))))
+       (loop (cdr rest) acc))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 6: Unreachable Code Elimination (Dead Code Elimination)
+      ;; (%jump L1) / (%return) followed by non-label instructions up to next label
+      ;; -----------------------------------------------------------------
+      ((and (lir-unconditional-terminator? (car rest))
+            (pair? (cdr rest))
+            (not (lir-label-inst? (cadr rest))))
+       ;; Drop instructions between unconditional terminator and next label/block
+       (let skip ((tail (cdr rest)))
+         (cond
+           ((null? tail)
+            (loop '() (cons (car rest) acc)))
+           ((lir-label-inst? (car tail))
+            (loop tail (cons (car rest) acc)))
+           (else
+            (skip (cdr tail))))))
+
+      ;; Fallthrough: Keep instruction unchanged
+      (else
+       (loop (cdr rest) (cons (car rest) acc))))))
+
+(define (optimize-peephole-fixpoint insts)
+  (let loop ((cur insts) (iterations 10))
+    (if (<= iterations 0)
+        cur
+        (let ((next (lir-peephole-step-window cur)))
+          (if (equal? cur next)
+              cur
+              (loop next (- iterations 1)))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass: lir-peephole-optimize
+;;; -----------------------------------------------------------------------
+
+(define-pass lir-peephole-optimize : L_lir_canonical (ir) -> L_lir_canonical ()
+  (entry Program)
+  (Program : Program (p) -> Program ()
+    ((%lir-program (strings ,se) (stackmaps ,sm) (%lir-functions ,f ...) ,m)
+     (list '%lir-program
+           (list 'strings se)
+           (list 'stackmaps sm)
+           (cons '%lir-functions (map FunctionDecl f))
+           (MainDecl m))))
+  (FunctionDecl : FunctionDecl (f) -> FunctionDecl ()
+    ((%lir-function ,lbl (params (,x ...)) (frame-size ,frame_size) (body ,inst ...))
+     (list '%lir-function
+           lbl
+           (list 'params x)
+           (list 'frame-size frame_size)
+           (cons 'body (optimize-peephole-fixpoint inst)))))
+  (MainDecl : MainDecl (m) -> MainDecl ()
+    ((%lir-main (frame-size ,frame_size) (body ,inst ...))
+     (list '%lir-main
+           (list 'frame-size frame_size)
+           (cons 'body (optimize-peephole-fixpoint inst))))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native x86-64 Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & ulisp/docs/lir_specification.md
@@ -13042,7 +13291,8 @@
                (emit "    }")))))
 
       ((%jump-cond)
-       (let* ((cc (cadr inst))
+       (let* ((raw-cc (cadr inst))
+              (cc (if (symbol? raw-cc) (symbol->string raw-cc) raw-cc))
               (lbl (caddr inst))
               (cond-expr
                (cond
@@ -14061,8 +14311,10 @@
          (_v110      (if verify-mode (verify-pass-output 'closure ast110) #t))
          (ast120     (alias-escape-all ast110))
          (lir130     (generate-lir ast120))
-         (_v130      (if verify-mode (verify-pass-output 'lir lir130) #t)))
-    lir130))
+         (lir128     (lir-fuse-branches lir130))
+         (lir133     (lir-peephole-optimize lir128))
+         (_v130      (if verify-mode (verify-pass-output 'lir lir133) #t)))
+    lir133))
 
 (define (compile-backend lir-ast target gc-mode)
   (cond

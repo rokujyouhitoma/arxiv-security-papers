@@ -74,8 +74,10 @@
          (_v110      (if verify-mode (verify-pass-output 'closure ast110) #t))
          (ast120     (alias-escape-all ast110))
          (lir130     (generate-lir ast120))
-         (_v130      (if verify-mode (verify-pass-output 'lir lir130) #t)))
-    lir130))
+         (lir128     (lir-fuse-branches lir130))
+         (lir133     (lir-peephole-optimize lir128))
+         (_v130      (if verify-mode (verify-pass-output 'lir lir133) #t)))
+    lir133))
 
 (define (compile-backend lir-ast target gc-mode)
   (cond

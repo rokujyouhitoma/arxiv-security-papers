@@ -40,6 +40,7 @@
     (%jump-if-false reg lbl (opnd ...))
     (%jump-if reg lbl1 (opnd1 ...) lbl2 (opnd2 ...))
     (%jump-cond cond_op lbl)
+    (%jump-cond str lbl)
     (%jump-if-zero lbl)
     (%direct-jump lbl)
     (%return)
