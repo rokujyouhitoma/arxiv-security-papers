@@ -50,7 +50,9 @@
     res))
 
 ;;; Error Reporting Procedure with Contextual Information
-(define (verifier-error phase message expr . rest)
+;;; NOTE: Fixed arity only. The self-hosted compiler (Pass 060 LVN) does not
+;;; support dotted/variadic parameter lists in compiler sources.
+(define (verifier-error phase message expr)
   (let* ((ctx (current-verifier-context))
          (fn-entry (and (pair? ctx) (assq 'function ctx)))
          (fn-name (and fn-entry (cdr fn-entry)))
@@ -66,10 +68,6 @@
     (display message)
     (display "\n    Expression: ")
     (write expr)
-    (if (and (pair? rest) (car rest))
-        (begin
-          (display "\n    Detail: ")
-          (display (car rest))))
     (newline)
     (if (car *verifier-strict*)
         (error "IR Verifier Invariant Violation" expr)
