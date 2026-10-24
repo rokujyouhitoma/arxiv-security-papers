@@ -88,18 +88,43 @@ jmp   .Lloop_entry      ; 直接ジャンプ (スタック消費なし)
 
 ---
 
-## 3. ベアメタル・システムコール (`%syscall`)
+## 3. AArch64 (ARM64) バックエンド ABI 規約 (AAPCS64 準拠)
 
-ベアメタルモード（libc 非依存）において、入出力およびメモリ確保はカーネルシステムコール命令（`syscall`）を直接インライン展開して発行する：
+`backend/150_backend_aarch64.scm` は、ARM 64-bit Architecture Procedure Call Standard (AAPCS64) をベースに LIR をネイティブアセンブリへマッピングする。
 
-- `sys_read` (Syscall 0): 標準入力読み取り
-- `sys_write` (Syscall 1): 標準出力/エラー出力への直接書き込み
-- `sys_exit` (Syscall 60): プロセス終了
-- `sys_mmap` (Syscall 9): ページ単位のヒープ領域（128MB〜）の動的獲得
+### 3.1 レジスタ割り当て表 (AArch64 Register Allocation Map)
+
+| AArch64 レジスタ | LIR 抽象レジスタ | 役割 / 規約 | 保存責任 | 備考 |
+| :---: | :---: | :--- | :---: | :--- |
+| `x0` | `%rax` / `%rdi` | **戻り値 (Return Value)** / 第 1 引数 | Caller | 評価結果 / 引数 1 |
+| `x1` | `%rdx` / `%rsi` | 第 2 引数 (Argument 2) / 剰余 | Caller | 引数 2 |
+| `x2` | `%rcx` | 第 3 引数 (Argument 3) | Caller | 引数 3 |
+| `x3` | `%rbx` | 第 4 引数 (Argument 4) | Caller | 引数 4 |
+| `x10` | `%r10` | 汎用スクラッチ / クロージャポインタ | Caller | 静的環境アドレス |
+| `x19` | `%r12` | **ヒープバンプポインタ (Heap Alloc Ptr)** | **Callee-saved** | 常時 From-Space 先端を保持 |
+| `x29` | `%rbp` | **フレームポインタ (Frame Pointer: FP)** | Callee-saved | スタックフレームチェーン |
+| `x30` | - | **リンクレジスタ (Link Register: LR)** | Caller | 呼出元リターンアドレス |
+| `sp`  | `%rsp` | スタックポインタ (Stack Pointer) | - | 16 バイトアライメント維持 |
+
+### 3.2 AArch64 における末尾呼び出し最適化 (TCO)
+AArch64 における末尾呼び出しは、`bl`（Branch with Link）ではなく `br`（Branch to Register）または直接分岐 `b` を用いて、スタックフレームを解放した後にジャンプする。
 
 ---
 
-## 4. Portable C99 バックエンド (Pass 160)
+## 4. ベアメタル・システムコール (`%syscall`)
+
+ベアメタルモード（libc 非依存）において、入出力およびメモリ確保はカーネルシステムコール命令（x86-64: `syscall`, AArch64: `svc #0`）を直接インライン展開して発行する。
+
+| 操作 | 機能 | x86-64 Syscall 番号 | AArch64 Syscall 番号 | 引数レジスタ規約 (x86 / ARM64) |
+| :--- | :--- | :---: | :---: | :--- |
+| `sys_read` | 標準入力 / fd 読出 | `0` | `63` | `rdi`/`x0` (fd), `rsi`/`x1` (buf), `rdx`/`x2` (count) |
+| `sys_write`| 標準出力 / fd 書込 | `1` | `64` | `rdi`/`x0` (fd), `rsi`/`x1` (buf), `rdx`/`x2` (count) |
+| `sys_mmap` | ページ単位メモリ確保 | `9` | `222`| addr, len, prot, flags, fd, offset |
+| `sys_exit` | プロセス正常・異常終了 | `60` | `93` | `rdi`/`x0` (exit status code) |
+
+---
+
+## 5. Portable C99 バックエンド (Pass 160)
 
 `backend/160_backend_c.scm` は、Canonical LIR を完全な ANSI C99 規格準拠のコードへ変換する：
 
@@ -109,3 +134,4 @@ jmp   .Lloop_entry      ; 直接ジャンプ (スタック消費なし)
    - C レベルでのスタックポインタ退避バッファと、`sigsetjmp` / `siglongjmp` またはトランポリン関数を用いた継続ディスパッチ。
 3. **プラットフォーム独立性**:
    - macOS (Apple Silicon ARM64 / Intel x86-64)、FreeBSD、Linux、Windows など、Clang または GCC が動作するあらゆる環境で単一バイナリを生成可能。
+

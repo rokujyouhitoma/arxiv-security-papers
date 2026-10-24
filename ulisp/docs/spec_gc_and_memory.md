@@ -82,8 +82,30 @@ ja    .Lgc_safepoint_slowpath ; 超過時は GC トリガー
 orq   $1,   %rax          ; Pair タグ (0x01) を付与
 ```
 
-### 2.2 Forwarding Pointer (転送ポインタ) によるループ・多重参照保護
-コピーされたオブジェクトの旧 From-Space ヘッダには、移動先の To-Space アドレスが **転送ポインタ（Forwarding Pointer）** として上書きされる。これにより、循環参照リストや共有オブジェクトが多重コピーされることを完全に防止する。
+### 2.2 Cheney GC 実行サイクル (GC Execution Cycle)
+
+```mermaid
+flowchart TD
+    ALLOC["メモリアロケーション要求 (%alloc)"] --> CHECK{"バンプポインタ (%r12) + サイズ > ヒープ限界?"}
+    CHECK -->|No: Fast-Path| FAST["%r12 をインクリメントして即座に返却 (2〜3命令)"]
+    CHECK -->|Yes: Slow-Path| SLOW["GC 開始 (.Lgc_safepoint_slowpath)"]
+    
+    subgraph GC_Cycle ["Cheney 2-Space コピーサイクル"]
+        ROOTS["1. ルート集合走査 (Roots Scan)<br/>スタックマップ bitmap & レジスタから To-Space へコピー"]
+        SCAN["2. 幅優先走査 (Scan & Free Ptr)<br/>Scan Ptr が Free Ptr に追いつくまで参照先オブジェクトを再帰コピー"]
+        FWD["3. 転送ポインタ (Forwarding Pointer) 記録<br/>旧ヘッダに新アドレスを上書きし多重コピーを完全防止"]
+        FLIP["4. 空間反転 (Space Flip)<br/>From-Space と To-Space の役割を入れ替え、%r12 を To-Space 先端へ設定"]
+    end
+    
+    SLOW --> ROOTS --> SCAN --> FWD --> FLIP
+    FLIP --> RESUME["実行再開 (%alloc 完了)"]
+```
+
+### 2.3 Forwarding Pointer (転送ポインタ) によるループ・多重参照保護
+コピーされたオブジェクトの旧 From-Space ヘッダには、移動先の To-Space アドレスが **転送ポインタ（Forwarding Pointer）** として上書きされる。
+- **未コピー状態**: ヘッダ最下位 2 ビットは `00b`（Fixnum エンコード）。
+- **コピー済状態**: ヘッダ最下位 2 ビットは `01b` / `10b`（To-Space ヒープポインタ）。
+これにより、循環参照リストや共有グラフ構造であっても $O(N)$（生存オブジェクト数比例）の線形時間で完全に複製される。
 
 ---
 

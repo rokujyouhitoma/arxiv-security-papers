@@ -6,6 +6,14 @@
 
 本書は `ulisp/tools/generate_nanopass_docs.scm` により、登録済みの中間言語メタ情報から完全自動生成された仕様ドキュメントです。
 
+- **関連仕様書**:
+  - [パイプライン・Nanopass 詳細仕様書](spec_pipeline.md)
+  - [低レベル IR (LIR) 正典仕様書](spec_lir.md)
+  - [バックエンド & コード生成仕様書](spec_backend.md)
+  - [テスト実行ガイド](guide_testing.md)
+
+---
+
 ## 1. 言語継承・構文遷移図 (Language Derivation Graph)
 
 ```mermaid

@@ -69,8 +69,8 @@ ULisp における継続オブジェクトは、通常のクロージャ（タ�
  Word 5: [Exn Chain]    -> キャプチャ時点の例外ハンドラチェーン
 ```
 
-- **Tag**: 下位 3 ビットが `001` (Closure)。
-- **呼び出し透過性**: Scheme コードからは通常の 1 引数関数 `(k val)` として呼び出し可能（`Pass 5: closure-convert` で通常の関数適用として処理される）。
+- **Tag**: 下位 2 ビットが `01b` (Heap Pointer / Closure: `spec_gc_and_memory.md` 参照)。
+- **呼び出し透過性**: Scheme コードからは通常の 1 引数関数 `(k val)` として呼び出し可能（`Pass 110: closure-convert` で通常の関数適用として処理される）。
 
 ---
 

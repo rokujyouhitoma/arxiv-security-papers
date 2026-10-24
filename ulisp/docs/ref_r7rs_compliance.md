@@ -97,22 +97,32 @@
 | **6.1** | `(eqv? x y)` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm) | 数値・文字の同一性を含む R7RS 完全準拠判定 ([Issue #532](../../docs/issues/closed/532-implement-r7rs-eqv-and-standard-type-predicates.md)) |
 | **6.1** | `(equal? x y)` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm) | ペア・ベクタ・文字列・バイトベクタの再帰的同値比較 |
 
-#### 6.2 数値演算 (Numbers: 63-bit Tagged Fixnum Architecture)
+#### 6.2 数値演算 (Numbers: 62-bit Tagged Fixnum Architecture)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
-| **6.2.6** | `number?`, `integer?`, `exact?`, `exact-integer?` | **◎** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 最下位 3-bit タグ (`000b`) による Fixnum 判定 |
+| **6.2.6** | `number?`, `integer?`, `exact?`, `exact-integer?` | **◎** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 最下位 2-bit タグ (`00b`) による Fixnum 判定 (`(val & 3) == 0`) |
 | **6.2.6** | `real?`, `rational?`, `complex?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 整数塔のみサポートのため `integer?` のエイリアスとして実装 |
 | **6.2.6** | `inexact?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 常に `#f` を返却 (浮動小数点数非サポート) |
+| **6.2.6** | `finite?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 整数のみのため `number?` と同等 (常に `#t`) |
+| **6.2.6** | `infinite?`, `nan?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 浮動小数点数非サポートのため常に `#f` を返却 |
 | **6.2.6** | `zero?`, `positive?`, `negative?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 符号・ゼロ判定プリミティブ |
 | **6.2.6** | `odd?`, `even?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | LSB ビット判定 |
-| **6.2.6** | `+`, `-`, `*` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm)<br>[Pass 130](../lir/130_lir.scm) | 63-bit 加減乗算、定数畳み込み、x86/C バックエンド直結 |
+| **6.2.6** | `+`, `-`, `*` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm)<br>[Pass 130](../lir/130_lir.scm) | 62-bit 加減乗算、定数畳み込み、x86/C バックエンド直結（加減算はタグシフト解除不要） |
 | **6.2.6** | `/`, `quotient`, `modulo` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数除算・剰余、ゼロ除算トラップ保護。※ネイティブ `modulo` は `idiv` 剰余 (切り捨て除算) のため、異符号オペランドでは R7RS の床除算剰余と結果が異なる (既知の制約) |
 | **6.2.6** | `=`, `<`, `>`, `<=`, `>=` | **◎** | [Pass 130](../lir/130_lir.scm) | 整数比較、分岐融合 (Branch Fusion) 最適化 ([Issue #545](../../docs/issues/closed/545-implement-condition-branch-flag-fusion.md)) |
 | **6.2.6** | `max`, `min`, `abs` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 2引数固定で基本演算を提供 |
-| **6.2.6** | `floor/`, `floor-quotient`, `floor-remainder` | **×** | - | 未実装 |
-| **6.2.6** | `truncate/`, `truncate-quotient`, `truncate-remainder` | **×** | - | 未実装 |
+| **6.2.6** | `floor/`, `floor-quotient`, `floor-remainder` | **×** | - | 床除算・剰余ペア (未実装) |
+| **6.2.6** | `truncate/`, `truncate-quotient`, `truncate-remainder` | **×** | - | 切り捨て除算・剰余ペア (未実装) |
+| **6.2.6** | `floor`, `ceiling`, `truncate`, `round` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数塔のため引数をそのまま返却（恒等写像） |
+| **6.2.6** | `rationalize` | **×** | - | 最適有理数近似 (未実装) |
+| **6.2.6** | `numerator`, `denominator` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数のみのため `numerator` は引数自身、`denominator` は 1 を返却 |
 | **6.2.6** | `remainder`, `gcd`, `lcm`, `square`, `expt` | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 切り捨て剰余、ユークリッド互除法 (可変長引数は `gcd-2`/`lcm-2` 左畳み込みへ脱糖)、繰り返し二乗法 O(log n) ([Issue #558](../../docs/issues/closed/558-implement-r7rs-elementary-integer-math-procedures.md)) |
+| **6.2.6** | `exact-integer-sqrt` | **×** | - | 平方根整数部と剰余の多値返却 (未実装) |
 | **6.2.6** | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `sqrt` | **×** | - | 超越関数 (浮動小数点非サポートのため未実装) |
+| **6.2.6** | `make-rectangular`, `make-polar`, `real-part`, `imag-part`, `magnitude`, `angle` | **×** | - | 複素数操作 (未実装) |
+| **6.2.6** | `exact`, `inexact` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 整数塔のため `exact` は恒等、`inexact` は非サポート |
+| **6.2.6** | `number->string` | **◎** | [ulisp/lib/string.scm](../lib/string.scm) | 10進数 Fixnum の文字列変換完全サポート |
+| **6.2.6** | `string->number` | **△** | [ulisp/lib/reader.scm](../lib/reader.scm) | S 式パーサ内部で 10 進整数を解析可能 |
 
 #### 6.3 真偽値 (Booleans)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -147,7 +157,11 @@
 | **6.6** | `char?`, `char=?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 即値文字タグ判定・比較 |
 | **6.6** | `char->integer`, `integer->char` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | コードポイント相互変換 |
 | **6.6** | `char<?`, `char>?`, `char<=?`, `char>=?` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 複数引数対応文字順序比較述語 ([Issue #556](../../docs/issues/closed/556-implement-r7rs-character-comparison-predicates.md)) |
-| **6.6** | `char-ci=?`, `char-alphabetic?`, `char-numeric?` 等 | **×** | - | Unicode 特性判定 (未実装) |
+| **6.6** | `char-ci=?`, `char-ci<?`, `char-ci>?`, `char-ci<=?`, `char-ci>=?` | **×** | - | 大文字小文字同一視文字比較 (Unicode / ASCII Case-folding 未実装) |
+| **6.6** | `char-alphabetic?`, `char-numeric?`, `char-whitespace?` | **×** | - | 文字種判定述語 (未実装) |
+| **6.6** | `char-upper-case?`, `char-lower-case?` | **×** | - | 大小文字判定述語 (未実装) |
+| **6.6** | `digit-value` | **×** | - | 数字文字の 10 進数値取得 (未実装) |
+| **6.6** | `char-upcase`, `char-downcase`, `char-foldcase` | **×** | - | 大小文字変換 (未実装) |
 
 #### 6.7 文字列 (Strings)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -159,7 +173,9 @@
 | **6.7** | `string-copy`, `string-copy!`, `string-fill!`, `string-map`, `string-for-each` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | オーバーラップ安全コピー・充填・反復マッピング ([Issue #551](../../docs/issues/closed/551-expand-r7rs-standard-library-procedures.md)) |
 | **6.7** | `string<?`, `string>?`, `string<=?`, `string>=?` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 複数引数対応辞書式順序比較述語 ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
 | **6.7** | `string->list`, `list->string` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 文字列・リスト相互変換 (スライス対応) ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
-| **6.7** | `string` | **×** | - | 可変長引数文字列コンストラクタ (未実装) |
+| **6.7** | `string` | **×** | - | 可変長引数文字並びからの文字列構築 (未実装) |
+| **6.7** | `string-ci=?`, `string-ci<?`, `string-ci>?`, `string-ci<=?`, `string-ci>=?` | **×** | - | 大文字小文字同一視辞書式順序比較 (未実装) |
+| **6.7** | `string-upcase`, `string-downcase`, `string-foldcase` | **×** | - | 文字列大小文字変換 (未実装) |
 
 #### 6.8 ベクタ (Vectors)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -202,21 +218,47 @@
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
 | **6.12** | `eval`, `environment` | **✕\*** | - | 純粋 AOT ネイティブコンパイラのため実行時動的 eval は除外 (マクロ展開で完結) |
+| **6.12** | `scheme-report-environment`, `null-environment`, `interaction-environment` | **✕\*** | - | 動的環境指定子 (AOT の性質上除外) |
 
 #### 6.13 入出力とポート (Input and Output)
+
+##### 6.13.1 ポート (Ports)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
+| **6.13.1** | `call-with-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ポートスコープ保護・自動クローズ実行 |
 | **6.13.1** | `port?`, `input-port?`, `output-port?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ポート型述語 ([Issue #537](../../docs/issues/closed/537-implement-r7rs-parameters-and-parameterize.md)) |
 | **6.13.1** | `textual-port?`, `binary-port?`, `port-open?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | テキスト/バイナリ識別および状態判定 |
 | **6.13.1** | `close-port`, `close-input-port`, `close-output-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ポートクローズ |
-| **6.13.1** | `current-input-port`, `current-output-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 標準入力 (`*stdin-port*`)・標準出力 (`*stdout-port*`) |
+| **6.13.1** | `current-input-port`, `current-output-port`, `current-error-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 標準入力 (`fd 0`)・標準出力 (`fd 1`)・標準エラー出力 (`fd 2`) |
+| **6.13.1** | `open-input-file`, `open-binary-input-file` | **△** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `open` システムコールラッパー (読み取り) |
+| **6.13.1** | `open-output-file`, `open-binary-output-file` | **△** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `open` システムコールラッパー (書き込み) |
+| **6.13.1** | `call-with-input-file`, `call-with-output-file` | **△** | [ulisp/lib/port.scm](../lib/port.scm) | ファイルオープン・手続き実行・自動クローズ |
+| **6.13.1** | `with-input-from-file`, `with-output-to-file` | **△** | [ulisp/lib/port.scm](../lib/port.scm) | カレントポート一時付け替え実行 |
 | **6.13.1** | `open-input-string`, `open-output-string`, `get-output-string` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | メモリ上文字列ポート ([Issue #534](../../docs/issues/closed/534-implement-r7rs-string-ports.md)) |
+| **6.13.1** | `open-input-bytevector`, `open-output-bytevector`, `get-output-bytevector` | **△** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | メモリ上バイナリバイトベクタポート |
+
+##### 6.13.2 入力手続き (Input Procedures)
+| R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
+| :--- | :--- | :---: | :--- | :--- |
 | **6.13.2** | `read` | **◎** | [ulisp/lib/reader.scm](../lib/reader.scm) | 自前完全再帰下降 S 式パーサ |
 | **6.13.2** | `read-char`, `peek-char` | **◎** | [ulisp/lib/port.scm](../lib/port.scm)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | 1文字先読み・消費 |
-| **6.13.2** | `eof-object?`, `eof-object` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | EOF 即値タグ判定 |
+| **6.13.2** | `read-line` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 行末改行までの 1 行文字列読み取り |
+| **6.13.2** | `char-ready?` | **△** | [ulisp/lib/port.scm](../lib/port.scm) | ノンブロッキング文字入力可能性検査 |
+| **6.13.2** | `read-string` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 指定文字数の文字列一括読み取り |
+| **6.13.2** | `read-u8`, `peek-u8` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 1 バイト先読み・消費 |
+| **6.13.2** | `u8-ready?` | **△** | [ulisp/lib/port.scm](../lib/port.scm) | ノンブロッキングバイト入力可能性検査 |
+| **6.13.2** | `read-bytevector`, `read-bytevector!` | **◎** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | バイナリデータの一括・バッファ直接読み出し |
+| **6.13.2** | `eof-object?`, `eof-object` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | EOF 即値タグ判定 (`0x4F`) |
+
+##### 6.13.3 出力手続き (Output Procedures)
+| R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
+| :--- | :--- | :---: | :--- | :--- |
 | **6.13.3** | `write`, `display` | **◎** | [ulisp/lib/printer.scm](../lib/printer.scm) | S 式シリアライザおよび文字列表現出力 |
-| **6.13.3** | `write-char`, `write-string`, `newline`, `flush-output-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | バッファ付きテキスト出力 |
-| **6.13.3** | `write-shared`, `write-simple` | **×** | - | 循環参照出力 (未実装) |
+| **6.13.3** | `write-char`, `write-string`, `newline` | **◎** | [ulisp/lib/port.scm](../lib/port.scm)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | バッファ付きテキスト出力 |
+| **6.13.3** | `write-u8` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 1 バイト生データ出力 |
+| **6.13.3** | `write-bytevector` | **◎** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | バイトベクタ一括出力 |
+| **6.13.3** | `flush-output-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 出力バッファ強制フラッシュ |
+| **6.13.3** | `write-shared`, `write-simple` | **×** | - | 循環参照表記（`#1=` / `#1#`）出力 (未実装) |
 
 #### 6.14 システムインターフェース (System Interface)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -226,7 +268,7 @@
 | **6.14** | `file-exists?`, `delete-file` | **△** | [ulisp/lib/posix.scm](../lib/posix.scm) | 低レベル syscall で可能。ポート API 未整備 |
 | **6.14** | `command-line` | **△** | [runtime.c](../runtime.c) | ランタイム引数渡しで基本対応 |
 | **6.14** | `get-environment-variable`, `get-environment-variables` | **×** | - | 環境変数取得 (未実装) |
-| **6.14** | `current-second`, `current-jiffy`, `jiffies-per-second` | **×** | - | 高精度タイマー (未実装) |
+| **6.14** | `current-second`, `current-jiffy`, `jiffies-per-second` | **△** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld) | 高精度タイマー・POSIX `gettimeofday` ラッパー |
 
 ---
 
@@ -257,7 +299,7 @@
 
 R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (Editions)」として標準化した仕様です。
 
-### 2.1 Red Edition (データ構造・アルゴリズム)
+### 2.1 Red Edition (データ構造・アルゴリズム: Data Structures & Algorithms)
 
 | 仕様番号 (SRFI) | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・代替手段 |
 | :--- | :--- | :---: | :--- | :--- |
@@ -270,7 +312,9 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | **SRFI 116** | Immutable Pairs and Lists (不変リスト・ペア) | **×** | - | 未実装 |
 | **SRFI 117** | Queues based on Lists (リストベースキュー) | **×** | - | 未実装 |
 | **SRFI 121** | Generators (ジェネレータ・イテレータ) | **△** | - | ファーストクラス継続 (`call/cc`) によるコルーチンジェネレータ作成可能 |
+| **SRFI 124** | Ephemerons (弱参照ペア・GC 協調) | **×** | - | コピー GC 構造上未実装 |
 | **SRFI 125** | Intermediate Hash Tables (ハッシュテーブル) | **△** | - | `*symbol-registry*` で内部ハッシュ探索あり。ユーザ向け汎用テーブル API は未提供 |
+| **SRFI 127** | Lazy Sequences (遅延リスト lseq) | **△** | [ulisp/lib/promise.scm](../lib/promise.scm) | SRFI-45 遅延評価プロミスにより構築可能 |
 | **SRFI 128** | Comparators (比較器) | **×** | - | 未実装 |
 | **SRFI 132** | Sort Libraries (ソート・マージアルゴリズム) | **×** | - | 未実装 |
 | **SRFI 133** | Vectors (高機能ベクタ操作) | **◎** (準拠) | [ulisp/lib/vector.scm](../lib/vector.scm)<br>[Pass 030](../frontend/030_desugar.scm) | `vector-copy`, `vector-copy!`, `vector-append`, `vector-fill!`, `vector-map`, `vector-for-each` 等を網羅 |
@@ -280,28 +324,46 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 
 ---
 
-### 2.2 Tangerine Edition (数値・ビット演算・低レベル)
+### 2.2 Tangerine Edition (数値・ビット演算・低レベル: Numerics & Low-level)
 
 | 仕様番号 (SRFI) | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・代替手段 |
 | :--- | :--- | :---: | :--- | :--- |
+| **SRFI 138** | Compiling Scheme Programs (コンパイル規約) | **◎** | [compiler/driver.scm](../compiler/driver.scm) | AOT 静的コンパイル・バッチ処理に完全適合 |
 | **SRFI 141** | Integer Division (6モードの整数除算) | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | `quotient`, `modulo`, `/` のみサポート |
 | **SRFI 143** | Fixnums (Fixnum 専用高速演算: `fx+`, `fx-`, `fxadd1` 等) | **◎** | [Pass 090](../frontend/090_rtyper.scm) | `fxadd1`, `fxsub1` 等コンパイラ内部プリミティブおよび AOT アンボクシング対応 |
 | **SRFI 144** | Flonums (浮動小数点数演算) | **×** | - | 浮動小数点型非対応のため未実装 |
 | **SRFI 151** | Bitwise Operations (ビット演算) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | `bitwise-and`, `bitwise-ior`, `bitwise-arithmetic-shift` サポート |
+| **SRFI 158** | Generators and Accumulators (汎用ジェネレータ・アキュムレータ) | **△** | - | SRFI 121 の発展仕様。コルーチン継続で一部代用可能 |
 | **SRFI 160** | Homogeneous numeric vectors (u8, s8, u16 等の型付きベクタ) | **△** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | `u8` (バイトベクタ) を完全サポート。16/32/64bit 型付きベクタは未実装 |
 | **SRFI 179** | Nonempty Intervals and Arrays (多次元配列) | **×** | - | 未実装 |
 
 ---
 
-### 2.3 その他主要 SRFI (システム・メタプログラミング)
+### 2.3 その他主要 SRFI (構文・制御・システム・メタプログラミング)
 
 | 仕様番号 (SRFI) | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・代替手段 |
 | :--- | :--- | :---: | :--- | :--- |
-| **SRFI 170** | POSIX API (低レベルシステムコール) | **◎** (一部) | [ulisp/lib/posix.scm](../lib/posix.scm) | `sys-read`, `sys-write`, `sys-mmap`, `sys-exit`, `%raw-syscall` を実装 |
-| **SRFI 64** | Test Suites API (ユニットテスト) | **△** | [ulisp/test.sh](../test.sh)<br>[ulisp/test_c.sh](../test_c.sh) | 自前アサーション・テストドライバで運用 |
-| **SRFI 18 / 226**| Multithreading (スレッド並行処理) | **×** | - | シングルスレッドモデル |
-| **SRFI 115** | Regular Expressions (正規表現) | **×** | - | 未実装 |
+| **SRFI 2** | AND-LET* (条件付き束縛構文) | **◎** | [Pass 030](../frontend/030_desugar.scm) | `and` / `let*` へのマクロ展開で容易に実現可能 |
+| **SRFI 8** | RECEIVE (多値受け取り構文) | **◎** | [Pass 030](../frontend/030_desugar.scm) | `call-with-values` への単純マクロ脱糖で完全動作 |
+| **SRFI 14** | Character-set Library (文字集合 Char-Set) | **×** | - | Unicode / ASCII 述語群未整備のため未実装 |
+| **SRFI 18 / 226**| Multithreading & Control (スレッド並行処理) | **×** | - | シングルスレッドモデル |
+| **SRFI 26** | Notation for Specializing Parameters (`cut`, `cute`) | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | 部分適用マクロ展開器で動作 |
+| **SRFI 27** | Sources of Random Bits (擬似乱数生成器) | **×** | - | 未実装 |
+| **SRFI 28** | Basic Format Strings (基本文字列フォーマット) | **△** | [ulisp/lib/printer.scm](../lib/printer.scm) | `display` / `write` の連続出力で代用 |
+| **SRFI 45** | Primitives for Expressing Iterative Lazy Algorithms | **◎** | [ulisp/lib/promise.scm](../lib/promise.scm) | `delay`, `force`, `delay-force`, `make-promise` 完全準拠 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
+| **SRFI 48** | Intermediate Format Strings (中級フォーマット) | **×** | - | 未実装 |
+| **SRFI 60** | Integers as Bits (整数ビット表現・操作) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 62-bit Fixnum ビットマスク演算プリミティブ群 |
+| **SRFI 64** | Test Suites API (ユニットテスト標準) | **△** | [ulisp/test.sh](../test.sh)<br>[ulisp/test_c.sh](../test_c.sh) | 自前アサーション・テストランナーで運用 |
+| **SRFI 69** | Basic Hash Tables (基本ハッシュテーブル) | **△** | - | シンボルインターン内部ハッシュあり。汎用 API は未提供 |
+| **SRFI 88** | Keyword Objects (キーワードオブジェクト `:key`) | **×** | - | シンボルで代用 |
+| **SRFI 89** | Optional Positional and Named Parameters | **×** | - | 未実装 |
+| **SRFI 95** | Sorting and Merging (SLIB ソート・マージ) | **×** | - | 未実装 |
+| **SRFI 115** | Scheme Regular Expressions (正規表現 SRE) | **×** | - | 未実装 |
 | **SRFI 145** | Assumptions (`assert`, `assume`) | **△** | [Pass 030](../frontend/030_desugar.scm) | `guard` / `raise` / `error` で代用可能 |
+| **SRFI 170** | POSIX API (低レベルシステムコール) | **◎** (一部) | [ulisp/lib/posix.scm](../lib/posix.scm) | `sys-read`, `sys-write`, `sys-mmap`, `sys-exit`, `%raw-syscall` を実装 |
+| **SRFI 193** | Command line (コマンドライン情報) | **△** | [runtime.c](../runtime.c) | `command-line` 基本サポート |
+| **SRFI 194** | Random data generators (乱数ジェネレータ) | **×** | - | 未実装 |
+| **SRFI 216** | SICP Prerequisites (SICP 演習前提機能) | **△** | [ulisp/lib/*.scm](../lib/) | `runtime`, `parallel-execute` 等の一部を除き主要プリミティブ完備 |
 
 ---
 
@@ -373,10 +435,11 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #556](../../docs/issues/closed/556-implement-r7rs-character-comparison-predicates.md): `char<?`, `char>?`, `char<=?`, `char>=?` (文字順序比較)
    - [Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md): `string->list`, `list->string`, `string->vector`, `vector->string`, `string<?`, `string>?`, `string<=?`, `string>=?` (文字列・ベクタ・リスト相互変換および文字列順序比較述語)
    - [Issue #558](../../docs/issues/closed/558-implement-r7rs-elementary-integer-math-procedures.md): `square`, `gcd`, `lcm`, `expt`, `remainder` (基本整数算術)
-3. **進行中および直近の実装予定 (Open Issues)**:
-   - [Issue #559](../../docs/issues/559-implement-r7rs-do-loop-syntax.md): `do` (反復実行構文)
-   - [Issue #560](../../docs/issues/560-implement-r7rs-define-values-syntax.md): `define-values` (多値定義構文)
-   - [Issue #561](../../docs/issues/561-establish-r7rs-library-metadata-standard-and-link-compliance-tables.md): R7RS ライブラリメタデータ管理規約の確立と準拠表実装リンクの網羅
+3. **最近クローズされた実装 (Recently Closed Issues)**:
+   - [Issue #559](../../docs/issues/closed/559-implement-r7rs-do-loop-syntax.md): `do` (反復実行構文)
+   - [Issue #560](../../docs/issues/closed/560-implement-r7rs-define-values-syntax.md): `define-values` (多値定義構文)
+   - [Issue #592](../../docs/issues/592-implement-r7rs-internal-definition-desugaring.md): 内部定義（内部 define / 相互再帰）の脱糖
 4. **アーキテクチャ特性に基づく設計トレードオフ**:
    - `eval`, `load`, `repl` などの動的実行系は、AOT コンパイラのバイナリ独立性・フットプリント最小化を優先して意図的に除外。
-   - 数値塔（Number Tower）は 63-bit 即値 Fixnum を基本とし、ポインタタグの最小化と高速実行を優先。
+   - 数値塔（Number Tower）は 62-bit 即値 Fixnum（下位 2-bit `00b` タグ）を基本とし、加減算のゼロオーバーヘッド化と高速実行を優先。
+
