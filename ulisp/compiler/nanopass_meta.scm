@@ -324,7 +324,11 @@
 
 (define (nanopass-check-valid-node expr nt-name lang)
   ;; Check if expr is a list starting with an explicitly removed production head
-  (if (and (pair? expr) (symbol? (car expr)) (memq (car expr) (nanopass-lang-removed-prods lang)))
+  ;; (Only if it is not re-introduced as an active keyword in this language)
+  (if (and (pair? expr)
+           (symbol? (car expr))
+           (memq (car expr) (nanopass-lang-removed-prods lang))
+           (not (memq (car expr) (nanopass-lang-keywords lang))))
       #f
       ;; Check nonterminal productions
       (let* ((nts (nanopass-lang-nonterminals lang))
@@ -363,16 +367,14 @@
              ((symbol? head)
               (let ((cls (nanopass-classify-meta-var head lang)))
                 (if cls
-                    ;; Function call / application: (e0 e1 ...)
+                    ;; Function call / application: (e0 e1 ...) or (a0 a ...)
                     ;; Only valid if (car expr) is NOT a reserved keyword of the language family
                     (if (memq (car expr) (nanopass-lang-keywords lang))
                         #f
-                        (and (nanopass-check-valid-node (car expr) curr-nt lang)
-                             (let check-args ((args (cdr expr)))
-                               (or (null? args)
-                                   (and (pair? args)
-                                        (nanopass-check-valid-node (car args) curr-nt lang)
-                                        (check-args (cdr args)))))))
+                        (and (if (eq? (car cls) 'terminal)
+                                 (nanopass-terminal-matches? (cadr cls) (car expr))
+                                 (nanopass-check-valid-node (car expr) (cadr cls) lang))
+                             (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)))
                     ;; Keyword-headed production: (if ...), (cond ...), (let ...), etc.
                     (if (eq? head (car expr))
                         (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)

@@ -36,7 +36,8 @@ COMPILER_BASE = compiler/helpers.scm \
                 compiler/nanopass.scm \
                 compiler/verifier.scm
 
-FRONTEND_PASSES = frontend/010_library.scm \
+FRONTEND_PASSES = frontend/frontend_lang.scm \
+                  frontend/010_library.scm \
                   frontend/015_dsl_expander.scm \
                   frontend/020_macro_expander.scm \
                   frontend/025_top_level.scm \

@@ -115,19 +115,24 @@
 
 ;;; Top-level entrypoint for ANF normalization
 (define (anf-all form)
-  (cond
-    ((not (pair? form)) form)
-    ((eq? (car form) '%program)
-     (let ((defs (cadr form))
-           (main (caddr form)))
-       (list '%program
-             (map (lambda (d)
-                    (if (and (pair? d) (eq? (car d) 'define))
-                        (list 'define (cadr d) (anf-expr-depth (caddr d) 0))
-                        (anf-expr-depth d 0)))
-                  defs)
-             (anf-expr-depth main 0))))
-    ((eq? (car form) 'define)
-     (list 'define (cadr form) (anf-expr-depth (caddr form) 0)))
-    (else
-     (anf-expr-depth form 0))))
+  (let ((res
+         (cond
+           ((not (pair? form)) form)
+           ((eq? (car form) '%program)
+            (let ((defs (cadr form))
+                  (main (caddr form)))
+              (list '%program
+                    (map (lambda (d)
+                           (if (and (pair? d) (eq? (car d) 'define))
+                               (list 'define (cadr d) (anf-expr-depth (caddr d) 0))
+                               (anf-expr-depth d 0)))
+                         defs)
+                    (anf-expr-depth main 0))))
+           ((eq? (car form) 'define)
+            (list 'define (cadr form) (anf-expr-depth (caddr form) 0)))
+           (else
+            (anf-expr-depth form 0)))))
+    (if (and (verifier-enabled?) (assq 'L_anf (nanopass-get-languages)))
+        (if (not (nanopass-ast-valid? 'L_anf res))
+            (verifier-error 'anf "Pass 070 output violates L_anf schema invariants" res)))
+    res))

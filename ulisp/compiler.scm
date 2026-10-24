@@ -810,7 +810,11 @@
 
 (define (nanopass-check-valid-node expr nt-name lang)
   ;; Check if expr is a list starting with an explicitly removed production head
-  (if (and (pair? expr) (symbol? (car expr)) (memq (car expr) (nanopass-lang-removed-prods lang)))
+  ;; (Only if it is not re-introduced as an active keyword in this language)
+  (if (and (pair? expr)
+           (symbol? (car expr))
+           (memq (car expr) (nanopass-lang-removed-prods lang))
+           (not (memq (car expr) (nanopass-lang-keywords lang))))
       #f
       ;; Check nonterminal productions
       (let* ((nts (nanopass-lang-nonterminals lang))
@@ -849,16 +853,14 @@
              ((symbol? head)
               (let ((cls (nanopass-classify-meta-var head lang)))
                 (if cls
-                    ;; Function call / application: (e0 e1 ...)
+                    ;; Function call / application: (e0 e1 ...) or (a0 a ...)
                     ;; Only valid if (car expr) is NOT a reserved keyword of the language family
                     (if (memq (car expr) (nanopass-lang-keywords lang))
                         #f
-                        (and (nanopass-check-valid-node (car expr) curr-nt lang)
-                             (let check-args ((args (cdr expr)))
-                               (or (null? args)
-                                   (and (pair? args)
-                                        (nanopass-check-valid-node (car args) curr-nt lang)
-                                        (check-args (cdr args)))))))
+                        (and (if (eq? (car cls) 'terminal)
+                                 (nanopass-terminal-matches? (cadr cls) (car expr))
+                                 (nanopass-check-valid-node (car expr) (cadr cls) lang))
+                             (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)))
                     ;; Keyword-headed production: (if ...), (cond ...), (let ...), etc.
                     (if (eq? head (car expr))
                         (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)
@@ -1857,99 +1859,107 @@
   '(quote if begin let letrec lambda set! define %program %values %call-with-values %raw-call/cc))
 
 (define (verify-anf-ast ast)
-  (let loop ((expr ast))
-    (cond
-      ((not (pair? expr)) #t)
-      ((eq? (car expr) 'quote) #t)
-      ((eq? (car expr) 'if)
-       (let ((test (cadr expr))
-             (then (caddr expr))
-             (else-e (if (null? (cdddr expr)) '() (cadddr expr))))
-         (if (not (atomic-expr? test))
-             (verifier-error 'anf "If-condition is not atomic in ANF" expr)
-             (and (loop then)
-                  (if (null? else-e) #t (loop else-e))))))
-      ((eq? (car expr) 'let)
-       (let ((bindings (cadr expr))
-             (body (caddr expr)))
-         (and (let b-loop ((bs bindings))
-                (if (null? bs)
-                    #t
-                    (and (loop (cadar bs))
-                         (b-loop (cdr bs)))))
-              (loop body))))
-      ((eq? (car expr) 'lambda)
-       (let ((body (caddr expr)))
-         (loop body)))
-      ((eq? (car expr) 'begin)
-       (let b-loop ((es (cdr expr)))
-         (if (null? es)
-             #t
-             (and (loop (car es))
-                  (b-loop (cdr es))))))
-      ((eq? (car expr) '%program)
-       (let ((defs (cadr expr))
-             (main (caddr expr)))
-         (and (let d-loop ((ds defs))
-                (if (null? ds)
-                    #t
-                    (and (loop (car ds))
-                         (d-loop (cdr ds)))))
-              (loop main))))
-      ((memq (car expr) '(define set!))
-       (loop (caddr expr)))
-      ((eq? (car expr) '%call-with-values)
-       (and (loop (cadr expr))
-            (loop (caddr expr))))
-      ((eq? (car expr) '%values)
-       (let a-loop ((args (cdr expr)))
-         (if (null? args)
-             #t
-             (if (not (atomic-expr? (car args)))
-                 (verifier-error 'anf "%values operand is not atomic in ANF" (car args))
-                 (a-loop (cdr args))))))
-      ;; General application: (f a1 a2 ...)
-      (else
-       (let ((op (car expr))
-             (args (cdr expr)))
-         (if (and (not (symbol? op)) (not (atomic-expr? op)))
-             (verifier-error 'anf "Application operator is not atomic in ANF" expr)
-             (let a-loop ((as args))
-               (if (null? as)
-                   #t
-                   (if (not (atomic-expr? (car as)))
-                       (verifier-error 'anf "Application argument is not atomic in ANF" (car as))
-                       (a-loop (cdr as)))))))))))
+  (if (and (assq 'L_anf (nanopass-get-languages))
+           (not (nanopass-ast-valid? 'L_anf ast)))
+      (verifier-error 'anf "AST violates L_anf schema invariants" ast)
+      (let loop ((expr ast))
+        (cond
+          ((not (pair? expr)) #t)
+          ((eq? (car expr) 'quote) #t)
+          ((eq? (car expr) 'if)
+           (let ((test (cadr expr))
+                 (then (caddr expr))
+                 (else-e (if (null? (cdddr expr)) '() (cadddr expr))))
+             (if (not (atomic-expr? test))
+                 (verifier-error 'anf "If-condition is not atomic in ANF" expr)
+                 (and (loop then)
+                      (if (null? else-e) #t (loop else-e))))))
+          ((eq? (car expr) 'let)
+           (let ((bindings (cadr expr))
+                 (body (caddr expr)))
+             (and (let b-loop ((bs bindings))
+                    (if (null? bs)
+                        #t
+                        (and (loop (cadar bs))
+                             (b-loop (cdr bs)))))
+                  (loop body))))
+          ((eq? (car expr) 'lambda)
+           (let ((body (caddr expr)))
+             (loop body)))
+          ((eq? (car expr) 'begin)
+           (let b-loop ((es (cdr expr)))
+             (if (null? es)
+                 #t
+                 (and (loop (car es))
+                      (b-loop (cdr es))))))
+          ((eq? (car expr) '%program)
+           (let ((defs (cadr expr))
+                 (main (caddr expr)))
+             (and (let d-loop ((ds defs))
+                    (if (null? ds)
+                        #t
+                        (and (loop (car ds))
+                             (d-loop (cdr ds)))))
+                  (loop main))))
+          ((memq (car expr) '(define set!))
+           (loop (caddr expr)))
+          ((eq? (car expr) '%call-with-values)
+           (and (loop (cadr expr))
+                (loop (caddr expr))))
+          ((eq? (car expr) '%values)
+           (let a-loop ((args (cdr expr)))
+             (if (null? args)
+                 #t
+                 (if (not (atomic-expr? (car args)))
+                     (verifier-error 'anf "%values operand is not atomic in ANF" (car args))
+                     (a-loop (cdr args))))))
+          ;; General application: (f a1 a2 ...)
+          (else
+           (let ((op (car expr))
+                 (args (cdr expr)))
+             (if (and (not (symbol? op)) (not (atomic-expr? op)))
+                 (verifier-error 'anf "Application operator is not atomic in ANF" expr)
+                 (let a-loop ((as args))
+                   (if (null? as)
+                       #t
+                       (if (not (atomic-expr? (car as)))
+                           (verifier-error 'anf "Application argument is not atomic in ANF" (car as))
+                           (a-loop (cdr as))))))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. Pass 110 Closure Convert Output Verifier
 ;;; -----------------------------------------------------------------------
 ;;; Invariant: Top-level program contains %program, closures are represented
-;;; with %make-closure or lifted labels.
+;;; with %make-closure or lifted labels. No unlifted lambda abstractions.
 
 (define (verify-closure-ast ast)
-  (let loop ((expr ast))
-    (cond
-      ((not (pair? expr)) #t)
-      ((eq? (car expr) 'quote) #t)
-      ((or (eq? (car expr) '%make-closure)
-           (eq? (car expr) '%make-closure-env))
-       ;; Format: (%make-closure label free-vars ...) or (%make-closure-env label free-vars ...)
-       (let ((label (cadr expr)))
-         (if (not (symbol? label))
-             (verifier-error 'closure "%make-closure / %make-closure-env label must be a symbol" expr)
-             (let v-loop ((vars (cddr expr)))
-               (if (null? vars)
-                   #t
-                   (if (not (atomic-expr? (car vars)))
-                       (verifier-error 'closure "%make-closure / %make-closure-env environment variable must be atomic" (car vars))
-                       (v-loop (cdr vars))))))))
-      (else
-       (let rec ((children (cdr expr)))
-         (if (null? children)
-             #t
-             (and (loop (car children))
-                  (rec (cdr children)))))))))
+  (if (and (assq 'L_lifted (nanopass-get-languages))
+           (not (nanopass-ast-valid? 'L_lifted ast)))
+      (verifier-error 'closure "AST violates L_lifted schema invariants (unlifted lambda or malformed structure)" ast)
+      (let loop ((expr ast))
+        (cond
+          ((not (pair? expr)) #t)
+          ((eq? (car expr) 'quote) #t)
+          ((eq? (car expr) 'lambda)
+           (verifier-error 'closure "Unlifted lambda remaining after closure conversion" expr))
+          ((or (eq? (car expr) '%make-closure)
+               (eq? (car expr) '%make-closure-env))
+           ;; Format: (%make-closure label free-vars ...) or (%make-closure-env label free-vars ...)
+           (let ((label (cadr expr)))
+             (if (not (symbol? label))
+                 (verifier-error 'closure "%make-closure / %make-closure-env label must be a symbol" expr)
+                 (let v-loop ((vars (cddr expr)))
+                   (if (null? vars)
+                       #t
+                       (if (not (atomic-expr? (car vars)))
+                           (verifier-error 'closure "%make-closure / %make-closure-env environment variable must be atomic" (car vars))
+                           (v-loop (cdr vars))))))))
+          (else
+           (let rec ((children (cdr expr)))
+             (if (null? children)
+                 #t
+                 (and (loop (car children))
+                      (rec (cdr children))))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. Pass 131 Safepoint / Stackmap Verifier
@@ -2045,6 +2055,79 @@
 (define (nanopass-verify-pass-data pass-name lang-name data phase)
   (and (nanopass-verify-ast pass-name lang-name data phase)
        (verify-pass-output pass-name data)))
+;;; =======================================================================
+;;; ULisp Compiler: Frontend Intermediate Languages Specification
+;;; (L_anf and L_lifted)
+;;; Conforms to DSN-33 Architecture Specification & Issue #594
+;;; =======================================================================
+;;; Formal intermediate language definitions for the late Frontend pipeline
+;;; using Nanopass DSL (define-language).
+;;; - L_anf: A-Normal Form intermediate language where all function/primitive
+;;;          arguments and conditional tests are atomic operands.
+;;; - L_lifted: Flat procedure intermediate language where local lambda abstractions
+;;;             have been hoisted into top-level %function definitions, and closures
+;;;             are explicitly instantiated via %make-closure / %make-closure-env.
+;;; =======================================================================
+
+;;; -----------------------------------------------------------------------
+;;; L_anf: 3-Address Code / A-Normal Form Language
+;;; -----------------------------------------------------------------------
+(define-language L_anf
+  (entry Program)
+  (terminals
+    (symbol (x lbl var))
+    (constant (c)))
+  (Atom (a)
+    x
+    lbl
+    var
+    c
+    (quote datum))
+  (Def (d)
+    (define x e)
+    e)
+  (Expr (e)
+    a
+    (if a e1 e2)
+    (if a e1)
+    (begin e ...)
+    (let ((x e1) ...) e ...)
+    (letrec ((x e1) ...) e ...)
+    (lambda (x ...) e ...)
+    (set! x e)
+    (%make-closure a1 a ...)
+    (%make-closure-env a1 a ...)
+    (%closure-ref a c)
+    (%closure-set! a1 c a2)
+    (%cont-fun x (x ...) e1 e2)
+    (%cont-call x a ...)
+    (%with-handler a1 a2)
+    (%raw-call/cc a)
+    (%call-with-values a1 a2)
+    (%values a ...)
+    (%direct-call a1 a ...)
+    (%global-ref x)
+    (%global-set! x e)
+    (a0 a ...))
+  (Program (p)
+    (%program (d ...) e)
+    e))
+
+;;; -----------------------------------------------------------------------
+;;; L_lifted: Lambda-Lifted & Explicit Closure Converted Language
+;;; -----------------------------------------------------------------------
+(define-language L_lifted
+  (extends L_anf)
+  (entry Program)
+  (FunctionDecl (fn)
+    (%function x (x ...) e))
+  (Expr (e)
+    (- (lambda (x ...) e ...))
+    (+ (annotate x e)
+       (%stack-cons a1 a2)))
+  (Program (p)
+    (- (%program (d ...) e))
+    (+ (%program (fn ...) e))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 0a: R7RS define-library & import Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Issue #548 (R7RS 5.6)
@@ -4967,22 +5050,27 @@
 
 ;;; Top-level entrypoint for ANF normalization
 (define (anf-all form)
-  (cond
-    ((not (pair? form)) form)
-    ((eq? (car form) '%program)
-     (let ((defs (cadr form))
-           (main (caddr form)))
-       (list '%program
-             (map (lambda (d)
-                    (if (and (pair? d) (eq? (car d) 'define))
-                        (list 'define (cadr d) (anf-expr-depth (caddr d) 0))
-                        (anf-expr-depth d 0)))
-                  defs)
-             (anf-expr-depth main 0))))
-    ((eq? (car form) 'define)
-     (list 'define (cadr form) (anf-expr-depth (caddr form) 0)))
-    (else
-     (anf-expr-depth form 0))))
+  (let ((res
+         (cond
+           ((not (pair? form)) form)
+           ((eq? (car form) '%program)
+            (let ((defs (cadr form))
+                  (main (caddr form)))
+              (list '%program
+                    (map (lambda (d)
+                           (if (and (pair? d) (eq? (car d) 'define))
+                               (list 'define (cadr d) (anf-expr-depth (caddr d) 0))
+                               (anf-expr-depth d 0)))
+                         defs)
+                    (anf-expr-depth main 0))))
+           ((eq? (car form) 'define)
+            (list 'define (cadr form) (anf-expr-depth (caddr form) 0)))
+           (else
+            (anf-expr-depth form 0)))))
+    (if (and (verifier-enabled?) (assq 'L_anf (nanopass-get-languages)))
+        (if (not (nanopass-ast-valid? 'L_anf res))
+            (verifier-error 'anf "Pass 070 output violates L_anf schema invariants" res)))
+    res))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 4b: S-Annotator (Abstract Interpretation Type Inference)
 ;;; Conforms to DSN-33 Architecture Specification & Issue #517
@@ -6305,54 +6393,59 @@
 (define (closure-convert ast)
   (reset-lifted-functions!)
   (reset-top-level-env!)
-  (if (and (pair? ast) (eq? (car ast) '%program))
-      (let* ((defs (cadr ast))
-             (main-expr (caddr ast)))
-        ;; 1. Scan defs and populate *top-level-fns* and *top-level-vars*
-        (let loop ((ds defs))
-          (if (pair? ds)
-              (begin
-                (let ((d (car ds)))
-                  (if (and (pair? d) (eq? (car d) 'define))
-                      (let ((name (cadr d))
-                            (val (caddr d)))
-                        (if (and (pair? val) (eq? (car val) 'lambda))
-                            (if (not (assq name (car *top-level-fns*)))
-                                (let ((label (unique-label-sym (string-append "L_top_" (sanitize-label-str (symbol->string name))))))
-                                  (set-car! *top-level-fns* (cons (cons name label) (car *top-level-fns*)))))
-                            (if (not (memq name (car *top-level-vars*)))
-                                (set-car! *top-level-vars* (cons name (car *top-level-vars*))))))))
-                (loop (cdr ds)))))
-        ;; 2. Convert each top-level function and add to lifted-functions
-        (let loop ((ds defs))
-          (if (pair? ds)
-              (begin
-                (let ((d (car ds)))
-                  (if (and (pair? d) (eq? (car d) 'define))
-                      (let ((name (cadr d))
-                            (val (caddr d)))
-                        (if (and (pair? val) (eq? (car val) 'lambda))
-                            (let* ((label (cdr (assq name (car *top-level-fns*))))
-                                   (params (cadr val))
-                                   (lbody (caddr val))
-                                   (inner-map (map (lambda (p) (cons p p)) params))
-                                   (new-body (convert-expr lbody inner-map))
-                                   (fn-def (list '%function label params new-body)))
-                              (add-lifted-function! fn-def))))))
-                (loop (cdr ds)))))
-        ;; 3. Convert variable inits and main-expr
-        (let* ((inits (let loop ((ds defs) (acc '()))
-                        (if (null? ds)
-                            (reverse acc)
-                            (let ((d (car ds)))
-                              (if (and (pair? d) (eq? (car d) 'define) (not (assq (cadr d) (car *top-level-fns*))))
-                                  (loop (cdr ds) (cons (list '%global-set! (cadr d) (convert-expr (caddr d) '())) acc))
-                                  (loop (cdr ds) acc))))))
-               (conv-main (convert-expr main-expr '()))
-               (final-main (if (null? inits) conv-main (cons 'begin (append inits (list conv-main))))))
-          (list '%program (reverse (car *lifted-functions*)) final-main)))
-      (let ((main-expr (convert-expr ast '())))
-        (list '%program (reverse (car *lifted-functions*)) main-expr))))
+  (let ((res
+         (if (and (pair? ast) (eq? (car ast) '%program))
+             (let* ((defs (cadr ast))
+                    (main-expr (caddr ast)))
+               ;; 1. Scan defs and populate *top-level-fns* and *top-level-vars*
+               (let loop ((ds defs))
+                 (if (pair? ds)
+                     (begin
+                       (let ((d (car ds)))
+                         (if (and (pair? d) (eq? (car d) 'define))
+                             (let ((name (cadr d))
+                                   (val (caddr d)))
+                               (if (and (pair? val) (eq? (car val) 'lambda))
+                                   (if (not (assq name (car *top-level-fns*)))
+                                       (let ((label (unique-label-sym (string-append "L_top_" (sanitize-label-str (symbol->string name))))))
+                                         (set-car! *top-level-fns* (cons (cons name label) (car *top-level-fns*)))))
+                                   (if (not (memq name (car *top-level-vars*)))
+                                       (set-car! *top-level-vars* (cons name (car *top-level-vars*))))))))
+                       (loop (cdr ds)))))
+               ;; 2. Convert each top-level function and add to lifted-functions
+               (let loop ((ds defs))
+                 (if (pair? ds)
+                     (begin
+                       (let ((d (car ds)))
+                         (if (and (pair? d) (eq? (car d) 'define))
+                             (let ((name (cadr d))
+                                   (val (caddr d)))
+                               (if (and (pair? val) (eq? (car val) 'lambda))
+                                   (let* ((label (cdr (assq name (car *top-level-fns*))))
+                                          (params (cadr val))
+                                          (lbody (caddr val))
+                                          (inner-map (map (lambda (p) (cons p p)) params))
+                                          (new-body (convert-expr lbody inner-map))
+                                          (fn-def (list '%function label params new-body)))
+                                     (add-lifted-function! fn-def))))))
+                       (loop (cdr ds)))))
+               ;; 3. Convert variable inits and main-expr
+               (let* ((inits (let loop ((ds defs) (acc '()))
+                               (if (null? ds)
+                                   (reverse acc)
+                                   (let ((d (car ds)))
+                                     (if (and (pair? d) (eq? (car d) 'define) (not (assq (cadr d) (car *top-level-fns*))))
+                                         (loop (cdr ds) (cons (list '%global-set! (cadr d) (convert-expr (caddr d) '())) acc))
+                                         (loop (cdr ds) acc))))))
+                      (conv-main (convert-expr main-expr '()))
+                      (final-main (if (null? inits) conv-main (cons 'begin (append inits (list conv-main))))))
+                 (list '%program (reverse (car *lifted-functions*)) final-main)))
+             (let ((main-expr (convert-expr ast '())))
+               (list '%program (reverse (car *lifted-functions*)) main-expr)))))
+    (if (and (verifier-enabled?) (assq 'L_lifted (nanopass-get-languages)))
+        (if (not (nanopass-ast-valid? 'L_lifted res))
+            (verifier-error 'closure "Pass 110 output violates L_lifted schema invariants" res)))
+    res))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 6b: TBAA & Escape Analysis Nanopass
 ;;; Conforms to DSN-33 Section 8.5 & Issue #525

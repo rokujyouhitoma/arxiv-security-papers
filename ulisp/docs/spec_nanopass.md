@@ -19,6 +19,9 @@
 ```mermaid
 graph TD
     L_lir_canonical["L_lir_canonical"]
+    L_lifted["L_lifted"]
+    L_anf --> L_lifted
+    L_anf["L_anf"]
     L_core["L_core"]
     L_src --> L_core
     L_src["L_src"]
@@ -187,6 +190,156 @@ graph TD
 
 ```scheme
   (%lir-program (strings (se |...|)) (stackmaps (sm |...|)) (%lir-functions f |...|) m)
+```
+
+---
+
+### 言語: `L_lifted`
+
+- **親言語 (Parent)**: `L_anf`
+- **エントリ非終端記号 (Entry)**: `Program`
+- **Nongenerative ID**: `L_anf->L_lifted`
+
+#### 終端記号 (Terminals)
+
+| 述語 (Predicate) | メタ変数パターン (Meta-Variables) |
+| :--- | :--- |
+| `symbol` | `(x lbl var)` |
+| `constant` | `(c)` |
+
+#### 非終端記号とプロダクション規則 (Nonterminals & Productions)
+
+##### `Program` (p)
+
+```scheme
+  e
+  (%program (fn |...|) e)
+```
+
+##### `Expr` (e)
+
+```scheme
+  a
+  (if a e1 e2)
+  (if a e1)
+  (begin e |...|)
+  (let ((x e1) |...|) e |...|)
+  (letrec ((x e1) |...|) e |...|)
+  (set! x e)
+  (%make-closure a1 a |...|)
+  (%make-closure-env a1 a |...|)
+  (%closure-ref a c)
+  (%closure-set! a1 c a2)
+  (%cont-fun x (x |...|) e1 e2)
+  (%cont-call x a |...|)
+  (%with-handler a1 a2)
+  (%raw-call/cc a)
+  (%call-with-values a1 a2)
+  (%values a |...|)
+  (%direct-call a1 a |...|)
+  (%global-ref x)
+  (%global-set! x e)
+  (a0 a |...|)
+  (annotate x e)
+  (%stack-cons a1 a2)
+```
+
+##### `Def` (d)
+
+```scheme
+  (define x e)
+  e
+```
+
+##### `Atom` (a)
+
+```scheme
+  x
+  lbl
+  var
+  c
+  (quote datum)
+```
+
+##### `FunctionDecl` (fn)
+
+```scheme
+  (%function x (x |...|) e)
+```
+
+#### 削除・排除された不変条件 (Removed Invariants)
+
+本言語では以下の構文が明示的に禁止・脱糖済みとして排除されています：
+
+- `%program`
+- `lambda`
+
+---
+
+### 言語: `L_anf`
+
+- **親言語 (Parent)**: (ルート言語)
+- **エントリ非終端記号 (Entry)**: `Program`
+- **Nongenerative ID**: `#f`
+
+#### 終端記号 (Terminals)
+
+| 述語 (Predicate) | メタ変数パターン (Meta-Variables) |
+| :--- | :--- |
+| `symbol` | `(x lbl var)` |
+| `constant` | `(c)` |
+
+#### 非終端記号とプロダクション規則 (Nonterminals & Productions)
+
+##### `Atom` (a)
+
+```scheme
+  x
+  lbl
+  var
+  c
+  (quote datum)
+```
+
+##### `Def` (d)
+
+```scheme
+  (define x e)
+  e
+```
+
+##### `Expr` (e)
+
+```scheme
+  a
+  (if a e1 e2)
+  (if a e1)
+  (begin e |...|)
+  (let ((x e1) |...|) e |...|)
+  (letrec ((x e1) |...|) e |...|)
+  (lambda (x |...|) e |...|)
+  (set! x e)
+  (%make-closure a1 a |...|)
+  (%make-closure-env a1 a |...|)
+  (%closure-ref a c)
+  (%closure-set! a1 c a2)
+  (%cont-fun x (x |...|) e1 e2)
+  (%cont-call x a |...|)
+  (%with-handler a1 a2)
+  (%raw-call/cc a)
+  (%call-with-values a1 a2)
+  (%values a |...|)
+  (%direct-call a1 a |...|)
+  (%global-ref x)
+  (%global-set! x e)
+  (a0 a |...|)
+```
+
+##### `Program` (p)
+
+```scheme
+  (%program (d |...|) e)
+  e
 ```
 
 ---
