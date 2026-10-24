@@ -9,6 +9,10 @@
 | **594** | Frontend層: define-language L_anf / L_lifted の導入と不変条件自動検証 | Feature | Medium | Open | [594-define-frontend-anf-and-lifted-languages.md](594-define-frontend-anf-and-lifted-languages.md) |
 | **595** | LIR層: define-pass による分岐融合・DCE・ピープホール最適化の宣言化 | Feature | Medium | Open | [595-define-pass-lir-optimizations-and-peephole.md](595-define-pass-lir-optimizations-and-peephole.md) |
 | **596** | Backend層: define-language L_asm 導入による命令選択とコード生成の2段階分離 | Feature | Medium | Open | [596-backend-instruction-selection-and-emission-separation.md](596-backend-instruction-selection-and-emission-separation.md) |
+| **597** | IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化 | Feature | Medium | New | [597-unify-ir-verifier-framework-and-optimize-lir-performance.md](597-unify-ir-verifier-framework-and-optimize-lir-performance.md) |
+| **598** | 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング・観測性の一元化 | Feature | Medium | New | [598-implement-unified-compiler-pass-manager.md](598-implement-unified-compiler-pass-manager.md) |
+| **599** | 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復エンジン）の導入 | Feature | Medium | New | [599-implement-generic-dataflow-analysis-framework.md](599-implement-generic-dataflow-analysis-framework.md) |
+| **600** | 統合シンボル・スコープ解決基盤および α 変換（Alpha-Conversion）エンジンの導入 | Feature | Medium | New | [600-implement-unified-lexical-scope-and-alpha-conversion-engine.md](600-implement-unified-lexical-scope-and-alpha-conversion-engine.md) |
 
 ---
 
