@@ -223,36 +223,38 @@
          (num-params (length params))
          (initial-raw-vars (if (unboxed-fn? label) params '())))
     (set-current-toplevel-name! label)
-    (reset-lir!)
-    ;; Build callee env:
-    ;; %self at [rsp - 8]
-    ;; params at [rsp + 8 * (num-params - i)]
-    (let* ((self-env (list (cons '%self (cons 'self -8))))
-           (param-env
-            (let loop ((ps params) (i 0) (acc '()))
-              (if (null? ps) acc
-                  (let ((offset (* 8 (- num-params i))))
-                    (loop (cdr ps) (+ i 1)
-                          (cons (cons (car ps) (cons 'param offset)) acc))))))
-           (callee-env (cons (cons '%num-params num-params)
-                             (cons (cons '%raw-vars initial-raw-vars)
-                                   (cons (cons '%stack-vars '())
-                                         (append self-env param-env)))))
-           (callee-si -24))
-      (track-lir-si! -8)
-      (track-lir-si! -16)
-      (track-lir-si! callee-si)
-      (emit-lir! '(%store %rsp -16 %rax))
-      (lir-compile-expr body callee-si callee-env #t)
-      (emit-lir! '(%return))
-      (let* ((needed-frame (- 0 (car *lir-min-si*)))
-             (frame-size (align-frame-shift needed-frame))
-             (insts (reverse (car *lir-instructions*))))
-        (list '%lir-function
-              label
-              (list 'params params)
-              (list 'frame-size frame-size)
-              (cons 'body insts))))))
+    (with-call-frame label fn
+      (lambda ()
+        (reset-lir!)
+        ;; Build callee env:
+        ;; %self at [rsp - 8]
+        ;; params at [rsp + 8 * (num-params - i)]
+        (let* ((self-env (list (cons '%self (cons 'self -8))))
+               (param-env
+                (let loop ((ps params) (i 0) (acc '()))
+                  (if (null? ps) acc
+                      (let ((offset (* 8 (- num-params i))))
+                        (loop (cdr ps) (+ i 1)
+                              (cons (cons (car ps) (cons 'param offset)) acc))))))
+               (callee-env (cons (cons '%num-params num-params)
+                                 (cons (cons '%raw-vars initial-raw-vars)
+                                       (cons (cons '%stack-vars '())
+                                             (append self-env param-env)))))
+               (callee-si -24))
+          (track-lir-si! -8)
+          (track-lir-si! -16)
+          (track-lir-si! callee-si)
+          (emit-lir! '(%store %rsp -16 %rax))
+          (lir-compile-expr body callee-si callee-env #t)
+          (emit-lir! '(%return))
+          (let* ((needed-frame (- 0 (car *lir-min-si*)))
+                 (frame-size (align-frame-shift needed-frame))
+                 (insts (reverse (car *lir-instructions*))))
+            (list '%lir-function
+                  label
+                  (list 'params params)
+                  (list 'frame-size frame-size)
+                  (cons 'body insts))))))))
 
 ;;; Pass 6 Entrypoint: Transforms Pass 5 %program AST into %lir-program
 (define (generate-lir prog)

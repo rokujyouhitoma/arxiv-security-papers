@@ -193,6 +193,7 @@
     error-object?
     error-object-message
     error-object-irritants
+    error-object-traceback
     read-error?
     file-error?
 

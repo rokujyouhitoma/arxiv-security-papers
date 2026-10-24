@@ -114,6 +114,7 @@ test_passes: build/compiler_passes.scm test_all_passes
 
 NANOPASS_TESTS = tests/passes/test_000_compiler_diagnostics.scm \
                  tests/passes/test_power_assert.scm \
+                 tests/passes/test_traceback.scm \
                  tests/passes/test_010_library.scm \
                  tests/passes/test_015_dsl_expander.scm \
                  tests/passes/test_020_macro_expander.scm \
@@ -151,16 +152,20 @@ NANOPASS_TESTS = tests/passes/test_000_compiler_diagnostics.scm \
                  tests/passes/test_160_backend_c.scm
 
 test_all_passes: build/compiler_passes.scm
-	@echo "=== Running 1:1 Nanopass Unit Tests (36 Passes) ==="
+	@echo "=== Running 1:1 Nanopass Unit Tests (37 Passes) ==="
 	@for t in $(NANOPASS_TESTS); do \
 		echo "Running $$t..."; \
 		cat build/compiler_passes.scm $$t > build/runner_temp.scm && \
 		$(RUN_SCHEME) build/runner_temp.scm || exit 1; \
 	done
-	@echo "SUCCESS: All 36 1:1 Nanopass Unit Tests PASSED!"
+	@echo "SUCCESS: All 37 1:1 Nanopass Unit Tests PASSED!"
 
 test_power_assert: build/compiler_passes.scm
 	@cat build/compiler_passes.scm tests/passes/test_power_assert.scm > build/runner_temp.scm
+	@$(RUN_SCHEME) build/runner_temp.scm
+
+test_traceback: build/compiler_passes.scm
+	@cat build/compiler_passes.scm tests/passes/test_traceback.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
 test_140: build/compiler_passes.scm

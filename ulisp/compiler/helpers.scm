@@ -166,6 +166,153 @@
 (define *current-form* (cons 'none '()))
 (define *compiler-in-error* (cons #f '()))
 
+;;; Call Stack Tracing Context (Conforms to DSN-33 & Issue #604)
+(define *call-stack* (cons '() '()))
+(define *call-stack-depth-limit* (cons 32 '()))
+(define *debug-traceback-enabled* (cons #f '()))
+
+(define (call-stack-trace-enabled?) (car *debug-traceback-enabled*))
+(define (enable-call-stack-trace!) (set-car! *debug-traceback-enabled* #t))
+(define (disable-call-stack-trace!) (set-car! *debug-traceback-enabled* #f))
+
+(define (current-call-stack) (car *call-stack*))
+(define (call-stack-depth-limit) (car *call-stack-depth-limit*))
+(define (set-call-stack-depth-limit! limit) (set-car! *call-stack-depth-limit* limit))
+(define (reset-call-stack!) (set-car! *call-stack* '()))
+
+(define (take-prefix ls n)
+  (let loop ((cur ls) (k n) (acc '()))
+    (if (or (null? cur) (not (pair? cur)) (<= k 0))
+        (reverse acc)
+        (loop (cdr cur) (- k 1) (cons (car cur) acc)))))
+
+(define (push-call-frame! name form)
+  (if (call-stack-trace-enabled?)
+      (let* ((cur (car *call-stack*))
+             (summary (if (or (null? form) (eq? form 'none)) '() (truncate-expr-for-diagnostics form)))
+             (frame (cons name summary))
+             (len (length cur))
+             (limit (car *call-stack-depth-limit*)))
+        (if (>= len limit)
+            (set-car! *call-stack* (cons frame (take-prefix cur (- limit 1))))
+            (set-car! *call-stack* (cons frame cur))))
+      #f))
+
+(define (pop-call-frame!)
+  (if (call-stack-trace-enabled?)
+      (let ((cur (car *call-stack*)))
+        (if (pair? cur)
+            (set-car! *call-stack* (cdr cur))
+            #f))
+      #f))
+
+(define (with-call-frame name form thunk)
+  (if (not (call-stack-trace-enabled?))
+      (thunk)
+      (begin
+        (push-call-frame! name form)
+        (let ((res (thunk)))
+          (pop-call-frame!)
+          res))))
+
+(define (capture-call-stack)
+  (if (call-stack-trace-enabled?)
+      (car *call-stack*)
+      '()))
+
+;;; -----------------------------------------------------------------------
+;;; Error Object & Condition Helpers (R7RS §6.11 / Issue #604)
+;;; -----------------------------------------------------------------------
+(define (error-object? obj)
+  (and (pair? obj) (eq? (car obj) 'error-object)))
+
+(define (error-object-message obj)
+  (if (error-object? obj)
+      (cadr obj)
+      "unknown error"))
+
+(define (error-object-irritants obj)
+  (if (error-object? obj)
+      (let filter-tb ((cur (cddr obj)))
+        (cond
+          ((null? cur) '())
+          ((not (pair? cur)) cur)
+          ((and (pair? (car cur)) (pair? (car (car cur))) (eq? (car (car cur)) '%traceback))
+           (filter-tb (cdr cur)))
+          ((and (pair? (car cur)) (eq? (car (car cur)) '%traceback))
+           (filter-tb (cdr cur)))
+          (else (cons (car cur) (filter-tb (cdr cur))))))
+      '()))
+
+(define (error-object-traceback obj)
+  (if (error-object? obj)
+      (let loop ((cur (cddr obj)))
+        (cond
+          ((null? cur) '())
+          ((not (pair? cur)) '())
+          ((and (pair? (car cur)) (eq? (car (car cur)) '%traceback))
+           (cdr (car cur)))
+          (else (loop (cdr cur)))))
+      '()))
+
+(define (make-error-object msg irritants)
+  (cons 'error-object (cons msg irritants)))
+
+(define (make-error-object-with-traceback msg irritants tb)
+  (cons 'error-object (cons msg (append irritants (list (cons '%traceback tb))))))
+
+(define (display-call-stack-traceback frames)
+  (if (null? frames)
+      (display "    (no stack frames recorded - run with DEBUG=1 or --debug)\n")
+      (let* ((rev-frames (reverse frames)))
+        (let loop ((cur rev-frames) (i 1))
+          (if (null? cur)
+              #t
+              (let* ((fr (car cur))
+                     (name (car fr))
+                     (summary (cdr fr)))
+                (display "    [")
+                (display i)
+                (display "] ")
+                (cond
+                  ((and (pair? summary) (not (null? summary)))
+                   (display "(")
+                   (display (if (symbol? name) (symbol->string name) name))
+                   (display " ")
+                   (write summary)
+                   (display ")"))
+                  ((symbol? name)
+                   (display "(")
+                   (display (symbol->string name))
+                   (display ")"))
+                  (else
+                   (write name)))
+                (newline)
+                (loop (cdr cur) (+ i 1))))))))
+
+(define (string-join-lines lines)
+  (let loop ((cur lines) (res ""))
+    (if (null? cur)
+        res
+        (loop (cdr cur) (string-append res (car cur))))))
+
+(define (format-call-stack-traceback frames)
+  (if (null? frames)
+      "    (no stack frames recorded - run with DEBUG=1 or --debug)\n"
+      (let* ((rev-frames (reverse frames)))
+        (let loop ((cur rev-frames) (i 1) (acc '()))
+          (if (null? cur)
+              (string-join-lines (reverse acc))
+              (let* ((fr (car cur))
+                     (name (car fr))
+                     (name-str (if (symbol? name) (symbol->string name) "unknown"))
+                     (summary (cdr fr))
+                     (summary-str (if (and (pair? summary) (not (null? summary)))
+                                      " (...)"
+                                      ""))
+                     (line (string-append "    [" (number->string i) "] (" name-str summary-str ")\n")))
+                (loop (cdr cur) (+ i 1) (cons line acc))))))))
+
 (define (current-pass) (car *current-pass*))
 (define (set-current-pass! name) (set-car! *current-pass* name))
 
@@ -179,7 +326,8 @@
   (set-car! *current-pass* 'none)
   (set-car! *current-toplevel-name* 'none)
   (set-car! *current-form* 'none)
-  (set-car! *compiler-in-error* #f))
+  (set-car! *compiler-in-error* #f)
+  (reset-call-stack!))
 
 ;;; Safe AST truncation for diagnostics (prevents memory blowup / circular structures)
 (define (truncate-expr-for-diagnostics expr)
@@ -215,6 +363,9 @@
   (display "  Current Expr      : ")
   (write (truncate-expr-for-diagnostics (current-form)))
   (newline)
+  (display "----------------------------------------------------------------------\n")
+  (display "  Call Traceback (most recent call last):\n")
+  (display-call-stack-traceback (current-call-stack))
   (display "======================================================================\n\n"))
 
 (define (error msg val)

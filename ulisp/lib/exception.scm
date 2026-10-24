@@ -27,6 +27,12 @@
       (raise (list 'error-object "error-object-irritants: expected error-object" obj))))
 
 ;; ---------------------------------------------------------------------
+;; §6.11 Exceptions: error-object-traceback (Issue #604)
+;; ---------------------------------------------------------------------
+(define (error-object-traceback obj)
+  '())
+
+;; ---------------------------------------------------------------------
 ;; §6.11 Exceptions: file-error?
 ;; ---------------------------------------------------------------------
 (define (file-error? obj)

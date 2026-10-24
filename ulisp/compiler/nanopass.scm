@@ -143,19 +143,21 @@
                               (list 'if (list 'nanopass-verifier-enabled?)
                                     (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-in) ir-var ''entry)
                                     #f)
-                              (list 'let (list (list res-var body-call))
-                                    (list 'if (list 'nanopass-verifier-enabled?)
-                                          (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-out) res-var ''exit)
-                                          #f)
-                                    (if force-trace?
-                                        (list 'begin
-                                              (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
-                                              res-var)
-                                        (list 'begin
-                                              (list 'if (list 'nanopass-trace-enabled?)
-                                                    (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
-                                                    #f)
-                                              res-var)))))))
+                              (list 'with-call-frame (list 'quote name) ir-var
+                                    (list 'lambda '()
+                                          (list 'let (list (list res-var body-call))
+                                                (list 'if (list 'nanopass-verifier-enabled?)
+                                                      (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-out) res-var ''exit)
+                                                      #f)
+                                                (if force-trace?
+                                                    (list 'begin
+                                                          (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                                          res-var)
+                                                    (list 'begin
+                                                          (list 'if (list 'nanopass-trace-enabled?)
+                                                                (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                                                #f)
+                                                          res-var)))))))))
           (let ((c (car rest)))
             (cond
               ;; (definitions def1 def2 ...)
