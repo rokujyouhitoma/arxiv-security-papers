@@ -24,8 +24,8 @@ ULisp コンパイラにおける各中間表現（Desugar, ANF, Closure, SSA, L
   - Issue #589: [LIR (Low-level IR) 仕様の厳格化と不変条件バリデータ導入によるフロントエンド・バックエンド境界の確立](closed/589-establish-canonical-lir-specification-and-boundary-validator.md)
   - Issue #593: [LIR層: define-language L_lir_canonical の導入と lir_verifier 宣言的統合](closed/593-define-lir-canonical-language-and-verifier-integration.md)
 - 関連仕様書:
-  - [ulisp/docs/lir_specification.md](../../ulisp/docs/lir_specification.md)
-  - [ulisp/docs/pipeline_architecture.md](../../ulisp/docs/pipeline_architecture.md)
+  - [ulisp/docs/spec_lir.md](../../ulisp/docs/spec_lir.md)
+  - [ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md)
 
 ---
 

@@ -1,3 +1,7 @@
+[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **3-Stage Bootstrap & 不動点自動検証プロトコル仕様書**
+
+---
+
 # ULisp 3-Stage Bootstrap & Fixed-Point Verification Protocol
 
 ## 1. 概要 (Overview)
@@ -6,6 +10,11 @@ uLisp は、コンパイラ自身が Scheme (uLisp) 自身によって記述さ�
 プログラミング言語のコンパイラが真に自己完結し、意味論的閉包性（Semantic Closure）を保持していることを数学的・機械的に証明するためには、**「固定点到達（Fixed-Point Convergence / 不動点到達）」** の検証が不可欠である。
 
 本ドキュメントは、uLisp における **3-Stage Bootstrap プロトコル** の数学的背景、ビルドステージ設計、固定点自動判定メカニズム（`make bootstrap_verify`）、および運用の手順を定義する。
+
+- 関連仕様書:
+  - [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+  - [パイプライン・Nanopass 詳細仕様書](spec_pipeline.md)
+  - [テストおよび検証ガイド](guide_testing.md)
 
 ---
 

@@ -1,8 +1,17 @@
+[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **低レベル IR (LIR) 正典仕様書**
+
+---
+
 # ULisp Canonical 低レベル IR (LIR) 正典仕様書
 
 本ドキュメントは、ULisp コンパイラにおけるメタコンパイラ（フロントエンド／ミドルエンド）と低水準コードジェネレータ（バックエンド: x86-64 / AArch64 / C99 / Wasm）の接合境界である**正典低レベル中間表現（Canonical LIR: Low-level Intermediate Representation）**の完全な構文、BNF文法、オペコード辞書、不変条件規則、および境界バリデータ仕様を定義する。
 
 - **アーキテクチャ親仕様書**: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- **関連仕様書**:
+  - [パイプライン・Nanopass 詳細仕様書](spec_pipeline.md)
+  - [バックエンド & コード生成仕様書](spec_backend.md)
+  - [GC & メモリモデル仕様書](spec_gc_and_memory.md)
+  - [テスト実行ガイド](guide_testing.md)
 - **関連 Issue**: #589 (Canonical LIR 仕様厳格化と境界バリデータ), #583 (LIR Nanopass 分割), #576 (IR Verifier), #590 (物理層分離), #591 (ドライバ・テスト階層化)
 
 ---

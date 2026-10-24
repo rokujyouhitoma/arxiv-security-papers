@@ -1,5 +1,18 @@
+[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **クロスプラットフォーム・コンパイル＆ビルド手順書**
+
+---
+
 # ULisp クロスプラットフォーム・コンパイル＆ビルド手順書
 ## (Portable C Backend Cross-Platform Compilation & Build Guide)
+
+- **正典仕様書**: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- **関連仕様・手順書**:
+  - [バックエンド & コード生成仕様書](spec_backend.md)
+  - [低レベル IR (LIR) 正典仕様書](spec_lir.md)
+  - [テストおよび検証ガイド](guide_testing.md)
+  - [3-Stage Bootstrap & 不動点自動検証プロトコル仕様書](guide_bootstrap.md)
+
+---
 
 本書は、ULisp (Underlying LISP / Micro Scheme AOT Compiler) を Linux、macOS (Apple Silicon M1/M2/M3/M4 および Intel Mac)、BSD 等の多様な OS / CPU アーキテクチャ環境において、**ULisp コンパイラ自身のビルド** および **Portable C バックエンド (`backend/160_backend_c.scm`) を用いた任意の Scheme コードのビルド・実行** を行うための完全手順書である。
 

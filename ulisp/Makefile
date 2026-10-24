@@ -100,8 +100,8 @@ test_nanopass: build/compiler_passes.scm
 docs_nanopass: build/compiler_passes.scm
 	@mkdir -p build docs
 	cat build/compiler_passes.scm tools/generate_nanopass_docs.scm > build/generate_docs_runner.scm
-	@$(RUN_SCHEME) build/generate_docs_runner.scm > docs/nanopass_spec.md
-	@echo "Generated docs/nanopass_spec.md"
+	@$(RUN_SCHEME) build/generate_docs_runner.scm > docs/spec_nanopass.md
+	@echo "Generated docs/spec_nanopass.md"
 
 test_passes: build/compiler_passes.scm test_all_passes
 	@mkdir -p build

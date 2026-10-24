@@ -26,7 +26,7 @@ ULisp フロントエンドおよび LIR 最適化層（Pass 040, 050, 060, 080,
   - Issue #578: [Pass 110/120/130 の連携による非エスケープオブジェクトのスタック配置最適化](closed/578-coordinate-closure-escape-and-lir-stack-allocation-pipeline.md)
   - Issue #597: [IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化](597-unify-ir-verifier-framework-and-optimize-lir-performance.md)
 - 関連仕様書:
-  - [ulisp/docs/pipeline_architecture.md](../../ulisp/docs/pipeline_architecture.md)
+  - [ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md)
 
 ---
 

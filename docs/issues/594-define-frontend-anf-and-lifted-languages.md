@@ -17,7 +17,7 @@ ID: 594
 ## 2. トレーサビリティ / Traceability
 - **正典仕様書**:
   - [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
-  - [ULisp パイプライン・Nanopass 詳細仕様書](../../ulisp/docs/pipeline_architecture.md)
+  - [ULisp パイプライン・Nanopass 詳細仕様書](../../ulisp/docs/spec_pipeline.md)
 - **関連 Issue**:
   - Issue 587: Pass 015 Nanopass DSL 手続き型展開器
   - Issue 593: LIR層 `L_lir_canonical` の導入（LIR 入力境界の対抗先）

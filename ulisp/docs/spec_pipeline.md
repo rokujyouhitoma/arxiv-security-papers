@@ -1,12 +1,19 @@
+[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **パイプライン・Nanopass 詳細仕様書**
+
+---
+
 # ULisp パイプライン・Nanopass 詳細仕様書
 
 本ドキュメントは、ULisp コンパイラ内部の各 Nanopass の役割、入出力データ構造、最適化パス、およびパス間で維持される不変条件（Invariants）を定義する。
 
 - 正典アーキテクチャ仕様書: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - 関連仕様書:
-  - [LIR 命令セット仕様書](lir_specification.md)
-  - [継続・dynamic-wind 仕様書](continuations_and_unwind.md)
-  - [テスト実行ガイド](testing_guide.md)
+  - [Nanopass 言語仕様書 (自動生成)](spec_nanopass.md)
+  - [LIR 命令セット仕様書](spec_lir.md)
+  - [継続・dynamic-wind 仕様書](spec_continuations_and_unwind.md)
+  - [GC & メモリモデル仕様書](spec_gc_and_memory.md)
+  - [バックエンド & コード生成仕様書](spec_backend.md)
+  - [テスト実行ガイド](guide_testing.md)
 
 ---
 
@@ -214,9 +221,14 @@ Frontend, LIR (Middle-End), Backend の3層物理分離に伴い、各層の抽�
 - **Backend 層 (低水準・ターゲット命令表現)**:
   - `L_asm_x86_64` / `L_asm_aarch64` / `L_ast_c99` (ターゲット抽象機械命令)
 
-### 3.2 3層分離ロードマップ (Issues 593〜596)
-1. **[Issue 593](../../docs/issues/593-define-lir-canonical-language-and-verifier-integration.md)**: LIR層 `define-language L_lir_canonical` の導入と `lir_verifier.scm` の宣言的統合 (済: `lir/lir_lang.scm`)
+### 3.2 3層分離ロードマップ (Issues 593〜601)
+1. **[Issue 593](../../docs/issues/closed/593-define-lir-canonical-language-and-verifier-integration.md)**: LIR層 `define-language L_lir_canonical` の導入と `lir_verifier.scm` の宣言的統合 (完了: `lir/lir_lang.scm`)
 2. **[Issue 594](../../docs/issues/594-define-frontend-anf-and-lifted-languages.md)**: Frontend層 `define-language L_anf` / `L_lifted` の導入と不変条件自動検証
 3. **[Issue 595](../../docs/issues/595-define-pass-lir-optimizations-and-peephole.md)**: LIR層 `define-pass` による分岐融合・DCE・ピープホール最適化の宣言化
 4. **[Issue 596](../../docs/issues/596-backend-instruction-selection-and-emission-separation.md)**: Backend層 `define-language L_asm` 導入による命令選択とコード生成の2段階分離
+5. **[Issue 597](../../docs/issues/597-unify-ir-verifier-framework-and-optimize-lir-performance.md)**: IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化
+6. **[Issue 598](../../docs/issues/598-implement-unified-compiler-pass-manager.md)**: 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング
+7. **[Issue 599](../../docs/issues/599-implement-generic-dataflow-analysis-framework.md)**: 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復）
+8. **[Issue 600](../../docs/issues/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md)**: 統合シンボル・スコープ解決基盤および α 変換エンジンの導入
+9. **[Issue 601](../../docs/issues/closed/601-reorganize-ulisp-docs-with-role-prefix-naming.md)**: ULisp ドキュメント体系の再構築と役割プレフィックス命名規約の適用 (完了)
 

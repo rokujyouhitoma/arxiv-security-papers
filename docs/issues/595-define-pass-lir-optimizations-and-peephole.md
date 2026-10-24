@@ -18,8 +18,8 @@ Issue 593 により `define-language L_lir_canonical` が導入されること�
 ## 2. トレーサビリティ / Traceability
 - **正典仕様書**:
   - [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
-  - [ULisp パイプライン・Nanopass 詳細仕様書](../../ulisp/docs/pipeline_architecture.md)
-  - [LIR 命令セット仕様書](../../ulisp/docs/lir_specification.md)
+  - [ULisp パイプライン・Nanopass 詳細仕様書](../../ulisp/docs/spec_pipeline.md)
+  - [LIR 命令セット仕様書](../../ulisp/docs/spec_lir.md)
 - **関連 Issue**:
   - Issue 571: Pass 128 LIR 分岐融合 & 条件比較低レベル化
   - Issue 593: LIR層 `L_lir_canonical` の導入

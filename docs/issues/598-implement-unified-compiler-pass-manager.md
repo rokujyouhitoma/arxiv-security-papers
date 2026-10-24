@@ -23,7 +23,7 @@ ULisp コンパイラドライバおよびパイプライン実行において�
   - Issue #591: [コンパイラドライバおよびテストスイートの階層化](closed/591-hierarchical-compiler-driver-and-test-suites.md)
   - Issue #597: [IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化](597-unify-ir-verifier-framework-and-optimize-lir-performance.md)
 - 関連仕様書:
-  - [ulisp/docs/pipeline_architecture.md](../../ulisp/docs/pipeline_architecture.md)
+  - [ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md)
 
 ---
 

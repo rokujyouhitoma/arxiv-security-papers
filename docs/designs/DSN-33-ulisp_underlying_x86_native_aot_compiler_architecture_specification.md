@@ -257,7 +257,7 @@ Chez Scheme の設計思想に基づき、ULisp はコンパイラを単一の�
   (将来) backend_c.scm          (ANSI C99 / WebAssembly トランスパイル)
 ```
 
-詳細な各パス仕様および LIR 命令セット仕様については、[ulisp/docs/pipeline_architecture.md](../../ulisp/docs/pipeline_architecture.md) および [ulisp/docs/lir_specification.md](../../ulisp/docs/lir_specification.md) を参照のこと。
+詳細な各パス仕様および LIR 命令セット仕様については、[ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md) および [ulisp/docs/spec_lir.md](../../ulisp/docs/spec_lir.md) を参照のこと。
 
 ---
 

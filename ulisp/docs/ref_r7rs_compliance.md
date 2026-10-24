@@ -1,8 +1,16 @@
+[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **R7RS 仕様準拠状況リファレンス**
+
+---
+
 # ULisp メタコンパイラ R7RS 仕様準拠状況リファレンス (Specification Compliance)
 
 本ドキュメントは、**ULisp (Underlying LISP)** ネイティブ AOT メタコンパイラにおける **R7RS-small (Revised^7 Report on the Algorithmic Language Scheme - Small Language, 2013)** および **R7RS-large (Large Language: Red Edition, Tangerine Edition, 主要 SRFI)** の仕様準拠状況、対応機能、未対応機能、ならびに該当する仕様番号（Section 番号 / SRFI 番号）を網羅した包括的技術リファレンスである。
 
-システム全体の設計思想および ABI 規約については、正典仕様書である [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) を参照すること。
+- システム全体の設計思想および ABI 規約については、正典仕様書である [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) を参照すること。
+- 関連仕様書:
+  - [パイプライン・Nanopass 詳細仕様書](spec_pipeline.md)
+  - [低レベル IR (LIR) 正典仕様書](spec_lir.md)
+  - [ファーストクラス継続 & dynamic-wind 技術仕様書](spec_continuations_and_unwind.md)
 
 ---
 
@@ -176,7 +184,7 @@
 | :--- | :--- | :---: | :--- | :--- |
 | **6.10** | `procedure?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 手続き型タグ判定 |
 | **6.10** | `apply` | **◎** | [Pass 110](../frontend/110_closure_convert.scm)<br>[Pass 130](../lir/130_lir.scm) | クロージャへの可変長引数アンパック呼び出し |
-| **6.10** | `call-with-current-continuation`, `call/cc` | **◎** | [continuations_and_unwind.md](continuations_and_unwind.md) | スタックセグメントコピー方式ファーストクラス継続 ([Issue #540](../../docs/issues/closed/540-implement-full-first-class-call-with-current-continuation-call-cc.md)) |
+| **6.10** | `call-with-current-continuation`, `call/cc` | **◎** | [spec_continuations_and_unwind.md](spec_continuations_and_unwind.md) | スタックセグメントコピー方式ファーストクラス継続 ([Issue #540](../../docs/issues/closed/540-implement-full-first-class-call-with-current-continuation-call-cc.md)) |
 | **6.10** | `dynamic-wind` | **◎** | [ulisp/lib/continuation.scm](../lib/continuation.scm) | LCA (Lowest Common Ancestor) による unwind/rewind 遷移 |
 | **6.10** | `values`, `call-with-values` | **◎** | [ulisp/lib/values.scm](../lib/values.scm) | ゼロアロケーション多値返却・受け渡し ABI ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
 | **6.10** | `map`, `for-each` (複数引数リスト版) | **△** | [ulisp/lib/list.scm](../lib/list.scm) | 単一リストおよびベクタ版は提供。多変数リスト版は未対応 |
@@ -319,7 +327,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
 ;;; Specification:
 ;;;   - §5.3.3: Derived expression types (let*, letrec*, cond, ...)
 ;;;   - §6.10:  Control features (values, call-with-values, dynamic-wind)
-;;; Traceability: ulisp/docs/r7rs_specification_compliance.md
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =====================================================================
 
 (define-library (scheme base)

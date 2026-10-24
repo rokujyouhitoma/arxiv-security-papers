@@ -1,8 +1,16 @@
+[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **ファーストクラス継続 (`call/cc`) & `dynamic-wind` 技術仕様書**
+
+---
+
 # ULisp ファーストクラス継続 (`call/cc`) & `dynamic-wind` 詳細技術仕様書
 
 本ドキュメントは、ULisp (Underlying LISP) における **R7RS Section 6.10 (Control features)** 準拠のファーストクラス継続 (`call/cc`, `call-with-current-continuation`) およびスタック出入り保護機構 (`dynamic-wind`) のアーキテクチャ、内部データ構造、スタックコピー方式、および LCA (Lowest Common Ancestor) アンワインド/リワインドアルゴリズムを定義する。
 
-- 関連仕様書: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- 関連仕様書:
+  - [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+  - [パイプライン・Nanopass 詳細仕様書](spec_pipeline.md)
+  - [低レベル IR (LIR) 正典仕様書](spec_lir.md)
+  - [テスト実行ガイド](guide_testing.md)
 - 実装モジュール:
   - 高水準ライブラリ: [ulisp/lib/continuation.scm](../lib/continuation.scm)
   - 中間表現パス: [ulisp/lir/125_lir_continuation.scm](../lir/125_lir_continuation.scm), [ulisp/lir/130_lir.scm](../lir/130_lir.scm)

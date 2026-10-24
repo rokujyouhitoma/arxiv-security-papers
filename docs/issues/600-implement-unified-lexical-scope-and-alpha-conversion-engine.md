@@ -26,7 +26,7 @@ ID: 600
   - Issue #592: [手続き本体および内部定義の脱糖未実装による未束縛変数例外](closed/592-implement-r7rs-internal-definition-desugaring.md)
   - Issue #594: [Frontend層: define-language L_anf / L_lifted の導入と不変条件自動検証](594-define-frontend-anf-and-lifted-languages.md)
 - 関連仕様書:
-  - [ulisp/docs/pipeline_architecture.md](../../ulisp/docs/pipeline_architecture.md)
+  - [ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md)
 
 ---
 

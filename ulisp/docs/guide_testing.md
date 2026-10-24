@@ -1,8 +1,18 @@
+[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **テストおよび検証ガイド**
+
+---
+
 # ULisp テストおよび検証ガイド (Testing & Verification Guide)
 
 本ドキュメントは、ULisp コンパイラの品質保証（QA）、パス別単体テスト、インクリメンタル統合テスト、および 3 段階セルフホスティング不動点検証の実行・デバッグ手順を解説する。
 
-正典アーキテクチャ仕様書: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- 正典アーキテクチャ仕様書: [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- 関連仕様・手順書:
+  - [パイプライン・Nanopass 詳細仕様書](spec_pipeline.md)
+  - [低レベル IR (LIR) 正典仕様書](spec_lir.md)
+  - [ファーストクラス継続 & dynamic-wind 技術仕様書](spec_continuations_and_unwind.md)
+  - [3-Stage Bootstrap & 不動点自動検証プロトコル仕様書](guide_bootstrap.md)
+  - [クロスプラットフォーム・ビルド手順書](guide_portable_build.md)
 
 ---
 
@@ -98,7 +108,7 @@ cd ulisp
 make test_call_cc
 ```
 
-- **詳細仕様**: [continuations_and_unwind.md](continuations_and_unwind.md)
+- **詳細仕様**: [spec_continuations_and_unwind.md](spec_continuations_and_unwind.md)
 
 ### Layer 6: Mytkowicz バイアス排除 差分テスト (`differential_test_ulisp.py` - Issue #526)
 環境変数パディングおよびリンク順序のバイアス（Mytkowicz et al., ASPLOS '09）を排除した状態で、Gauche / Chibi-Scheme / Chez Scheme との実行結果の完全一致を検証。

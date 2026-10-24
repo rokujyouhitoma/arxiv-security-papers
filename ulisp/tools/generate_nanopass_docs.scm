@@ -100,6 +100,7 @@
 
 (define (main)
   (let ((all-langs (nanopass-get-all-languages)))
+    (display "[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **Nanopass Framework 言語仕様書**\n\n---\n\n")
     (display "# ULisp Nanopass Framework 言語仕様書 (Language Specifications)\n\n")
     (display "本書は `ulisp/tools/generate_nanopass_docs.scm` により、登録済みの中間言語メタ情報から完全自動生成された仕様ドキュメントです。\n\n")
     (display "## 1. 言語継承・構文遷移図 (Language Derivation Graph)\n\n")
