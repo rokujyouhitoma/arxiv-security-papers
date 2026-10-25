@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **598** | 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング・観測性の一元化 | Feature | Medium | New | [598-implement-unified-compiler-pass-manager.md](598-implement-unified-compiler-pass-manager.md) |
 | **599** | 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復エンジン）の導入 | Feature | Medium | New | [599-implement-generic-dataflow-analysis-framework.md](599-implement-generic-dataflow-analysis-framework.md) |
 | **600** | 統合シンボル・スコープ解決基盤および α 変換（Alpha-Conversion）エンジンの導入 | Feature | Medium | New | [600-implement-unified-lexical-scope-and-alpha-conversion-engine.md](600-implement-unified-lexical-scope-and-alpha-conversion-engine.md) |
 | **606** | ビルド時 cat 結合の廃止と R7RS include 構文によるソース位置（ファイル名・行番号）追跡基盤の導入 | Feature | High | New | [606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md](606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **598** | 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング・観測性の一元化 | Feature | 2026-10-25 | [closed/598-implement-unified-compiler-pass-manager.md](closed/598-implement-unified-compiler-pass-manager.md) |
 | **597** | IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化 | Feature | 2026-10-24 | [closed/597-unify-ir-verifier-framework-and-optimize-lir-performance.md](closed/597-unify-ir-verifier-framework-and-optimize-lir-performance.md) |
 | **605** | bootstrap.sh におけるコンパイル失敗時の自動診断・詳細スタックトレース採取（Gauche/ILispフォールバック）機能の導入 | Feature | 2026-10-24 | [closed/605-enhance-bootstrap-diagnostics-and-fallback-trace.md](closed/605-enhance-bootstrap-diagnostics-and-fallback-trace.md) |
 | **604** | コンパイラ実行時のコールスタック追跡（Call Stack Traceback）および未捕捉例外時のバックトレース表示機能の実装 | Feature | 2026-10-24 | [closed/604-implement-call-stack-traceback-for-compiler-exceptions.md](closed/604-implement-call-stack-traceback-for-compiler-exceptions.md) |

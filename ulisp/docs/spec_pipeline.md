@@ -83,13 +83,22 @@ graph TD
 
 ## 2. 各層および各パスの詳細仕様 (Pass Specifications)
 
-### 基盤: コンパイラユーティリティ & 述語 (`compiler/helpers.scm`, `compiler/primitives.scm`, `compiler/verifier.scm`)
-- **責務**: 全パス共通の述語、アキュムレータ、一意シンボル/ラベル生成ルーチンの提供。
+### 基盤: コンパイラユーティリティ & Pass Manager (`compiler/helpers.scm`, `compiler/primitives.scm`, `compiler/verifier.scm`, `compiler/pass_manager.scm`)
+- **責務**: 全パス共通の述語、アキュムレータ、一意シンボル/ラベル生成ルーチン、IR Verifier、および統一 Pass Manager パイプラインスケジューラの提供。
 - **主要機能**:
   - `atomic-expr?`, `pure-prim?`, `closure-prim?`, `type-predicate-op?`
   - `unique-label`, `unique-symbol`, `set-diff`, `set-union`
   - ビットマスク・型タグ定数（Fixnum, Pair, Closure, String, Vector, Continuation）
   - 軽量 IR Verifier フレームワーク (`verify-pass-output`)
+  - **統一 Pass Manager 基盤 (`ulisp/compiler/pass_manager.scm` - Issue #598)**:
+    - `pass-descriptor`: 各コンパイラパスのメタデータ（ID, 名前, カテゴリ, 最適化レベル, 述語/関数, Verifierフェーズ, 入出力言語, 前提依存関係, 必須フラグ）をカプセル化。
+    - 最適化レベルスケジューリング:
+      - `-O0`: 最小限の必須パスのみ実行（高速コンパイル）
+      - `-O1`: 基本的最適化（CP0, LIR ピープホール）を有効化
+      - `-O2`: 高度最適化（LVN, Annotator, RTyper, Contify, エスケープ解析, 分岐融合等）を全開実行
+    - 前提条件（Prerequisites）DAG 自動検証およびサイクル検出
+    - 観測性フック: `--time-passes`（ミリ秒/ティックプロファイラ）、`--dump-ir=<pass>`（中間 AST ダンプ）、`--print-after-all`、`--trace-passes`（AST 差分表示）
+    - IR Verifier 自動連携: パス実行直後の宣言的バリデーション実行
 
 ---
 
@@ -226,8 +235,8 @@ Frontend, LIR (Middle-End), Backend の3層物理分離に伴い、各層の抽�
 2. **[Issue 594](../../docs/issues/594-define-frontend-anf-and-lifted-languages.md)**: Frontend層 `define-language L_anf` / `L_lifted` の導入と不変条件自動検証
 3. **[Issue 595](../../docs/issues/595-define-pass-lir-optimizations-and-peephole.md)**: LIR層 `define-pass` による分岐融合・DCE・ピープホール最適化の宣言化
 4. **[Issue 596](../../docs/issues/596-backend-instruction-selection-and-emission-separation.md)**: Backend層 `define-language L_asm` 導入による命令選択とコード生成の2段階分離
-5. **[Issue 597](../../docs/issues/597-unify-ir-verifier-framework-and-optimize-lir-performance.md)**: IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化
-6. **[Issue 598](../../docs/issues/598-implement-unified-compiler-pass-manager.md)**: 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング
+5. **[Issue 597](../../docs/issues/closed/597-unify-ir-verifier-framework-and-optimize-lir-performance.md)**: IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化 (完了)
+6. **[Issue 598](../../docs/issues/closed/598-implement-unified-compiler-pass-manager.md)**: 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング (完了: `compiler/pass_manager.scm`)
 7. **[Issue 599](../../docs/issues/599-implement-generic-dataflow-analysis-framework.md)**: 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復）
 8. **[Issue 600](../../docs/issues/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md)**: 統合シンボル・スコープ解決基盤および α 変換エンジンの導入
 9. **[Issue 601](../../docs/issues/closed/601-reorganize-ulisp-docs-with-role-prefix-naming.md)**: ULisp ドキュメント体系の再構築と役割プレフィックス命名規約の適用 (完了)

@@ -10,6 +10,18 @@
           (reverse acc)
           (loop (cons expr acc))))))
 
+(define (string-starts-with? s prefix)
+  (let ((slen (string-length s))
+        (plen (string-length prefix)))
+    (if (< slen plen)
+        #f
+        (let loop ((i 0))
+          (if (= i plen)
+              #t
+              (if (char=? (string-ref s i) (string-ref prefix i))
+                  (loop (+ i 1))
+                  #f))))))
+
 (define (extract-directives-and-forms raw-forms)
   (let ((initial-gc 'all))
     (let loop ((forms raw-forms)
@@ -22,18 +34,50 @@
           (list target gc-mode '() verify trace debug)
           (let ((first (car forms)))
             (cond
+              ;; Target directives
               ((or (eq? first '--target-lir)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'lir)))
                (loop (cdr forms) 'lir gc-mode verify trace debug))
               ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
                (loop (cdr forms) (cadr first) gc-mode verify trace debug))
+              ;; GC directives
               ((and (pair? first) (eq? (car first) '!gc) (pair? (cdr first)))
                (loop (cdr forms) target (cadr first) verify trace debug))
               ((or (eq? first '--gc-stress) (eq? first '!gc-stress))
                (loop (cdr forms) target 'stress verify trace debug))
+              ;; Optimization level directives (-O0, -O1, -O2)
+              ((or (eq? first '-O0) (eq? first '!-O0))
+               (set-pipeline-opt-level! 0)
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ((or (eq? first '-O1) (eq? first '!-O1))
+               (set-pipeline-opt-level! 1)
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ((or (eq? first '-O2) (eq? first '!-O2))
+               (set-pipeline-opt-level! 2)
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ((and (pair? first) (eq? (car first) '!opt) (pair? (cdr first)))
+               (set-pipeline-opt-level! (cadr first))
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ;; Verification directives
               ((and (pair? first) (eq? (car first) '!verify))
                (let ((vmode (if (pair? (cdr first)) (cadr first) #t)))
                  (loop (cdr forms) target gc-mode vmode trace debug)))
+              ;; Pass timing / profiling directives
+              ((or (eq? first '--time-passes) (eq? first '!time-passes))
+               (enable-pipeline-time-passes!)
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ;; IR Dump directives
+              ((or (eq? first '--print-after-all) (eq? first '!print-after-all))
+               (enable-pipeline-print-after-all!)
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ((and (pair? first) (eq? (car first) '!dump-ir) (pair? (cdr first)))
+               (set-pipeline-dump-ir! (cadr first))
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ;; Pass disable directives
+              ((and (pair? first) (eq? (car first) '!disable-pass) (pair? (cdr first)))
+               (disable-pass! (cadr first))
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ;; Tracing and debugging directives
               ((or (eq? first '--trace-passes) (eq? first '!trace))
                (loop (cdr forms) target gc-mode verify #t debug))
               ((and (pair? first) (eq? (car first) '!trace))
@@ -42,6 +86,20 @@
                (loop (cdr forms) target gc-mode verify trace #t))
               ((and (pair? first) (eq? (car first) '!debug))
                (loop (cdr forms) target gc-mode verify trace #t))
+              ;; String/Symbol prefix directives (--dump-ir=..., --disable-pass=...)
+              ((symbol? first)
+               (let ((str (symbol->string first)))
+                 (cond
+                   ((string-starts-with? str "--dump-ir=")
+                    (let ((pname (string->symbol (substring str 10 (string-length str)))))
+                      (set-pipeline-dump-ir! pname)
+                      (loop (cdr forms) target gc-mode verify trace debug)))
+                   ((string-starts-with? str "--disable-pass=")
+                    (let ((pname (string->symbol (substring str 15 (string-length str)))))
+                      (disable-pass! pname)
+                      (loop (cdr forms) target gc-mode verify trace debug)))
+                   (else
+                    (list target gc-mode forms verify trace debug)))))
               (else
                (list target gc-mode forms verify trace debug))))))))
 
@@ -51,54 +109,11 @@
 
 ;;; -----------------------------------------------------------------------
 ;;; Two-Layer Compiler Pipeline API (Frontend/LIR & Backend)
-;;; Conforms to DSN-33 Architecture Specification & Issue #590
+;;; Conforms to DSN-33 Architecture Specification & Issue #590, #598
 ;;; -----------------------------------------------------------------------
 
 (define (compile-to-lir forms verify-mode trace-mode)
-  (if verify-mode
-      (begin
-        (enable-verifier!)
-        (if (eq? verify-mode 'strict)
-            (set-verifier-strict! #t))))
-  (if trace-mode
-      (enable-nanopass-trace!))
-  (set-current-pass! 'pass-010-library)
-  (let* ((ast010     (with-call-frame 'pass-010-library forms (lambda () (desugar-libraries-and-imports forms))))
-         (_          (set-current-pass! 'pass-015-dsl-expander))
-         (ast015     (with-call-frame 'pass-015-dsl-expander ast010 (lambda () (expand-dsl-forms ast010))))
-         (_          (set-current-pass! 'pass-020-macro-expander))
-         (ast020     (with-call-frame 'pass-020-macro-expander ast015 (lambda () (expand-macros-in-forms ast015))))
-         (_          (set-current-pass! 'pass-025-top-level))
-         (ast025     (with-call-frame 'pass-025-top-level ast020 (lambda () (rewrite-top-level ast020))))
-         (_          (set-current-pass! 'pass-030-desugar))
-         (ast030     (with-call-frame 'pass-030-desugar ast025 (lambda () (desugar-all ast025))))
-         (_v030      (if verify-mode (verify-pass-output 'desugar ast030) #t))
-         (_          (set-current-pass! 'pass-050-cp0))
-         (ast050     (with-call-frame 'pass-050-cp0 ast030 (lambda () (cp0-optimize ast030))))
-         (_          (set-current-pass! 'pass-060-lvn))
-         (ast060     (with-call-frame 'pass-060-lvn ast050 (lambda () (lvn-all ast050))))
-         (_          (set-current-pass! 'pass-070-anf))
-         (ast070     (with-call-frame 'pass-070-anf ast060 (lambda () (anf-all ast060))))
-         (_v070      (if verify-mode (verify-pass-output 'anf ast070) #t))
-         (_          (set-current-pass! 'pass-080-annotator))
-         (ast080     (with-call-frame 'pass-080-annotator ast070 (lambda () (annotate-all ast070))))
-         (_          (set-current-pass! 'pass-090-rtyper))
-         (ast090     (with-call-frame 'pass-090-rtyper ast080 (lambda () (rtyper-all ast080))))
-         (_          (set-current-pass! 'pass-100-contify))
-         (ast100     (with-call-frame 'pass-100-contify ast090 (lambda () (contify-all ast090))))
-         (_          (set-current-pass! 'pass-110-closure-convert))
-         (ast110     (with-call-frame 'pass-110-closure-convert ast100 (lambda () (closure-convert ast100))))
-         (_v110      (if verify-mode (verify-pass-output 'closure ast110) #t))
-         (_          (set-current-pass! 'pass-120-alias-escape))
-         (ast120     (with-call-frame 'pass-120-alias-escape ast110 (lambda () (alias-escape-all ast110))))
-         (_          (set-current-pass! 'pass-130-lir))
-         (lir130     (with-call-frame 'pass-130-lir ast120 (lambda () (generate-lir ast120))))
-         (_          (set-current-pass! 'pass-128-lir-branch-fusion))
-         (lir128     (with-call-frame 'pass-128-lir-branch-fusion lir130 (lambda () (lir-fuse-branches lir130))))
-         (_          (set-current-pass! 'pass-133-lir-peephole))
-         (lir133     (with-call-frame 'pass-133-lir-peephole lir128 (lambda () (lir-peephole-optimize lir128))))
-         (_v130      (if verify-mode (verify-pass-output 'lir lir133) #t)))
-    lir133))
+  (run-pass-pipeline forms verify-mode trace-mode))
 
 (define (compile-backend lir-ast target gc-mode)
   (let ((pass-name (string->symbol (string-append "backend-" (symbol->string target)))))

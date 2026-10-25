@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress
 
 CC = gcc
@@ -34,7 +34,8 @@ COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm \
                 compiler/nanopass_meta.scm \
                 compiler/nanopass.scm \
-                compiler/verifier.scm
+                compiler/verifier.scm \
+                compiler/pass_manager.scm
 
 FRONTEND_PASSES = frontend/frontend_lang.scm \
                   frontend/010_library.scm \
@@ -296,6 +297,11 @@ test_lir_verifier: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_lir_verifier.scm > build/test_lir_verifier_runner.scm
 	@$(RUN_SCHEME) build/test_lir_verifier_runner.scm
+
+test_pass_manager: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/test_pass_manager.scm > build/test_pass_manager_runner.scm
+	@$(RUN_SCHEME) build/test_pass_manager_runner.scm
 
 
 test_exceptions: $(COMPILER_DEP)
@@ -613,7 +619,7 @@ diff_test: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_jit test_c test_aot
+test: test_passes test_pass_manager test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log
