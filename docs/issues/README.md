@@ -9,6 +9,10 @@
 | **606** | ビルド時 cat 結合の廃止と R7RS include 構文によるソース位置（ファイル名・行番号）追跡基盤の導入 | Feature | High | New | [606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md](606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md) |
 | **607** | 外部シンボル（extern）参照解決と標準ライブラリ・コンパイラの2分割 .o 静的リンク基盤の導入 | Feature | High | New | [607-support-extern-symbols-and-split-stdlib-compiler-linking.md](607-support-extern-symbols-and-split-stdlib-compiler-linking.md) |
 | **608** | Nanopass・モジュール単位の完全分割コンパイル（.o）および増分ビルド（Incremental Build）基盤の実装 | Feature | Medium | New | [608-implement-modular-separate-compilation-and-incremental-build.md](608-implement-modular-separate-compilation-and-incremental-build.md) |
+| **609** | R7RS case-lambda 構文および (scheme case-lambda) ライブラリの実装 | Feature | High | New | [609-implement-r7rs-case-lambda-syntax.md](609-implement-r7rs-case-lambda-syntax.md) |
+| **610** | R7RS (scheme base) 未実装コア手続き群 (string, 多引数 map/for-each, floor/, exact-integer-sqrt) の実装 | Feature | High | New | [610-implement-r7rs-base-core-procedures.md](610-implement-r7rs-base-core-procedures.md) |
+| **611** | R7RS (scheme process-context) 環境変数取得手続き (get-environment-variable / get-environment-variables) の実装 | Feature | Medium | New | [611-implement-r7rs-process-context-environment-variables.md](611-implement-r7rs-process-context-environment-variables.md) |
+| **612** | R7RS (scheme char) ASCII 文字・文字列述語群および大小文字変換手続きの実装 | Feature | Medium | New | [612-implement-r7rs-char-ascii-predicates-and-conversions.md](612-implement-r7rs-char-ascii-predicates-and-conversions.md) |
 
 
 
