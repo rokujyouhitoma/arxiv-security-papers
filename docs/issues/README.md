@@ -13,6 +13,15 @@
 | **612** | R7RS (scheme char) ASCII 文字・文字列述語群および大小文字変換手続きの実装 | Feature | Medium | New | [612-implement-r7rs-char-ascii-predicates-and-conversions.md](612-implement-r7rs-char-ascii-predicates-and-conversions.md) |
 | **613** | ILisp における R7RS include / include-ci 構文およびライブラリ宣言 include の実装 | Feature | High | New | [613-implement-ilisp-r7rs-include-and-include-ci-support.md](613-implement-ilisp-r7rs-include-and-include-ci-support.md) |
 | **614** | ランタイムのデフォルト沈黙化（Quiet-by-Default）とコンパイラ成果物出力（明示的終了値 0 / -o オプション）の根本是正 | Refactor | High | New | [614-refactor-runtime-silence-by-default-and-compiler-cli-output.md](614-refactor-runtime-silence-by-default-and-compiler-cli-output.md) |
+| **615** | ビルドパイプラインからの GCC 呼出し排除と GNU as / ld 直接駆動（脱 GCC ドライバ）への移行 | Refactor | High | New | [615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md](615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md) |
+| **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | High | New | [616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
+| **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
+| **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
+| **619** | ソース位置追跡情報（%source-loc）に基づく最小限 DWARF（.debug_line）セクション生成と GDB / perf デバッグ支援の実装 | Feature | Medium | New | [619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md](619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md) |
+| **620** | ベンチマークスイート（benchmark_c_vs_x86）の修復・Freestanding対応および make bench 自動計測ハーネスの確立 | Feature | High | New | [620-repair-benchmark-suite-and-establish-automated-bench-harness.md](620-repair-benchmark-suite-and-establish-automated-bench-harness.md) |
+| **621** | コンパイラ Nanopass 実行時間・メモリ消費プロファイラ（--time-passes）の実装 | Feature | High | New | [621-implement-compiler-pass-timing-and-memory-profiler.md](621-implement-compiler-pass-timing-and-memory-profiler.md) |
+| **622** | 実行時 GC 統計プロファイル（ULISP_GC_STATS）および Linux perf ハードウェアカウンタ連携基盤の実装 | Feature | Medium | New | [622-implement-runtime-gc-stats-and-perf-hardware-counter-integration.md](622-implement-runtime-gc-stats-and-perf-hardware-counter-integration.md) |
+| **623** | ULisp 正典性能ベースライン測定レポート（BASELINE.md）の策定と継続的性能監視基盤の構築 | Feature | Medium | New | [623-establish-canonical-performance-baseline-and-continuous-monitoring.md](623-establish-canonical-performance-baseline-and-continuous-monitoring.md) |
 
 
 
