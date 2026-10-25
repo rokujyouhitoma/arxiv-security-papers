@@ -67,67 +67,71 @@
               (loop (cdr loads)))))))
 
 ;;; -----------------------------------------------------------------------
-;;; Part 2: Flow-Sensitive Escape Analysis
+;;; Part 2: Flow-Sensitive Escape Analysis (Monotone Framework)
 ;;; -----------------------------------------------------------------------
 
 (define *stack-alloc-attr* (string->symbol ":stack-alloc"))
+
+;;; Lattice for escape analysis: Powerset of escaped variable symbols
+(define *escape-lattice* (make-powerset-lattice 'escape-analysis #f))
+(define (escape-lattice) *escape-lattice*)
 
 ;;; Collect all variables that escape a given expression context
 ;;; An object escapes if:
 ;;; - It is returned from the function (in tail position)
 ;;; - It is passed as an argument to an external call (non-primitive / escaping op)
 ;;; - It is stored into another escaping data structure or global
+;;; Employs the Monotone Framework Lattice Join to ensure set deduplication and monotonicity.
 (define (collect-escaped-vars expr is-tail)
-  (cond
-    ((symbol? expr)
-     (if is-tail (list expr) '()))
-    ((not (pair? expr))
-     '())
-    (else
-     (let ((op (car expr)))
-       (case op
-         ((quote) '())
-         ((annotate)
-          (collect-escaped-vars (caddr expr) is-tail))
-         ((if)
-          (let ((test-esc (collect-escaped-vars (cadr expr) #f))
-                (then-esc (collect-escaped-vars (caddr expr) is-tail))
-                (else-esc (if (null? (cdddr expr))
-                              '()
-                              (collect-escaped-vars (cadddr expr) is-tail))))
-            (append test-esc (append then-esc else-esc))))
-         ((begin)
-          (let loop ((es (cdr expr)) (acc '()))
-            (if (null? es)
-                acc
-                (let ((tail? (and is-tail (null? (cdr es)))))
-                  (loop (cdr es)
-                        (append acc (collect-escaped-vars (car es) tail?)))))))
+  (let ((lat (escape-lattice)))
+    (cond
+      ((symbol? expr)
+       (if is-tail (list expr) (lattice-bottom lat)))
+      ((not (pair? expr))
+       (lattice-bottom lat))
+      (else
+       (let ((op (car expr)))
+         (case op
+           ((quote) (lattice-bottom lat))
+           ((annotate)
+            (collect-escaped-vars (caddr expr) is-tail))
+           ((if)
+            (let ((test-esc (collect-escaped-vars (cadr expr) #f))
+                  (then-esc (collect-escaped-vars (caddr expr) is-tail))
+                  (else-esc (if (null? (cdddr expr))
+                                (lattice-bottom lat)
+                                (collect-escaped-vars (cadddr expr) is-tail))))
+              (lattice-join lat test-esc (lattice-join lat then-esc else-esc))))
+           ((begin)
+            (let loop ((es (cdr expr)) (acc (lattice-bottom lat)))
+              (if (null? es)
+                  acc
+                  (let ((tail? (and is-tail (null? (cdr es)))))
+                    (loop (cdr es)
+                          (lattice-join lat acc (collect-escaped-vars (car es) tail?)))))))
          ((let)
           (let* ((bindings (cadr expr))
                  (body (caddr expr))
                  (b-escs
-                  (let loop ((bs bindings) (acc '()))
+                  (let loop ((bs bindings) (acc (lattice-bottom lat)))
                     (if (null? bs) acc
                         (loop (cdr bs)
-                              (append acc (collect-escaped-vars (cadar bs) #f))))))
+                              (lattice-join lat acc (collect-escaped-vars (cadar bs) #f))))))
                  (body-escs (collect-escaped-vars body is-tail)))
-            (append b-escs body-escs)))
+            (lattice-join lat b-escs body-escs)))
          ;; Safe local destructors: car, cdr, %closure-ref, null?, pair? do NOT cause target to escape
          ((car cdr null? pair? not zero? fixnum? integer? string? boolean?)
           (collect-escaped-vars (cadr expr) #f))
-         ((%closure-ref)
-          '())
-         ((%global-ref)
-          '())
+         ((%closure-ref %global-ref)
+          (lattice-bottom lat))
          ((%direct-call)
-          (let loop ((args (cddr expr)) (acc '()))
+          (let loop ((args (cddr expr)) (acc (lattice-bottom lat)))
             (if (null? args) acc
                 (let ((arg (car args)))
                   (loop (cdr args)
                         (if (symbol? arg)
-                            (cons arg acc)
-                            (append (collect-escaped-vars arg #f) acc)))))))
+                            (lattice-join lat (list arg) acc)
+                            (lattice-join lat (collect-escaped-vars arg #f) acc)))))))
          ((%global-set!)
           (let ((stored-val (caddr expr)))
             (if (symbol? stored-val)
@@ -137,29 +141,30 @@
          ((set-car! set-cdr!)
           (let ((stored-val (caddr expr)))
             (if (symbol? stored-val)
-                (cons stored-val (collect-escaped-vars (cadr expr) #f))
+                (lattice-join lat (list stored-val) (collect-escaped-vars (cadr expr) #f))
                 (collect-escaped-vars stored-val #f))))
          ((vector-set!)
           (let ((stored-val (cadddr expr)))
             (if (symbol? stored-val)
-                (cons stored-val (append (collect-escaped-vars (cadr expr) #f)
-                                         (collect-escaped-vars (caddr expr) #f)))
-                (append (collect-escaped-vars (cadr expr) #f)
-                        (append (collect-escaped-vars (caddr expr) #f)
-                                (collect-escaped-vars stored-val #f))))))
+                (lattice-join lat (list stored-val)
+                              (lattice-join lat (collect-escaped-vars (cadr expr) #f)
+                                            (collect-escaped-vars (caddr expr) #f)))
+                (lattice-join lat (collect-escaped-vars (cadr expr) #f)
+                              (lattice-join lat (collect-escaped-vars (caddr expr) #f)
+                                            (collect-escaped-vars stored-val #f))))))
          ;; Standard function call or primitive: all arguments escape unless known safe
          (else
           (let ((args-esc
-                 (let loop ((args (cdr expr)) (acc '()))
+                 (let loop ((args (cdr expr)) (acc (lattice-bottom lat)))
                    (if (null? args) acc
                        (let ((arg (car args)))
                          (loop (cdr args)
                                (if (symbol? arg)
-                                   (cons arg acc)
-                                   (append (collect-escaped-vars arg #f) acc))))))))
+                                   (lattice-join lat (list arg) acc)
+                                   (lattice-join lat (collect-escaped-vars arg #f) acc))))))))
             (if (symbol? op)
                 args-esc
-                (append (collect-escaped-vars op #f) args-esc)))))))))
+                (lattice-join lat (collect-escaped-vars op #f) args-esc))))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Part 3: AST Transformation (Stack Promotion & Redundant Load Elimination)

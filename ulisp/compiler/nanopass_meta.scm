@@ -364,6 +364,10 @@
               (and (eq? (car expr) 'quote)
                    (pair? (cdr expr))
                    (null? (cddr expr))))
+             ((eq? head '%program)
+              (and (eq? (car expr) '%program)
+                   (pair? (cdr expr))
+                   (pair? (cddr expr))))
              ((symbol? head)
               (let ((cls (nanopass-classify-meta-var head lang)))
                 (if cls
@@ -602,7 +606,7 @@
   (display "\n    Violating AST: ")
   (write expr)
   (newline)
-  (error "Nanopass Language Invariant Violation" pass-name lang-name))
+  (error "Nanopass Language Invariant Violation" (list pass-name lang-name)))
 
 (define (nanopass-verify-ast pass-name lang-name val phase)
   (if (or (eq? lang-name '*) (not (symbol? lang-name)))
