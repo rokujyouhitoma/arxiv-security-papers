@@ -21,7 +21,6 @@
 (define (cadar x) (safe-car (safe-cdr (safe-car x))))
 (define (cadddr x) (safe-car (safe-cdr (safe-cdr (safe-cdr x)))))
 (define (cddddr x) (safe-cdr (safe-cdr (safe-cdr (safe-cdr x)))))
-(define (open-input-file path) #f)
 (define (caaar x) (safe-car (safe-car (safe-car x))))
 (define (cdaar x) (safe-cdr (safe-car (safe-car x))))
 (define (caadar x) (safe-car (safe-car (safe-cdr (safe-car x)))))
@@ -164,7 +163,37 @@
 (define *current-pass* (cons 'none '()))
 (define *current-toplevel-name* (cons 'none '()))
 (define *current-form* (cons 'none '()))
+(define *current-source-file* (cons 'none '()))
+(define *current-source-line* (cons 0 '()))
+(define *current-source-col* (cons 0 '()))
 (define *compiler-in-error* (cons #f '()))
+
+(define (current-source-file) (car *current-source-file*))
+(define (set-current-source-file! f) (set-car! *current-source-file* f))
+
+(define (current-source-line) (car *current-source-line*))
+(define (set-current-source-line! l) (set-car! *current-source-line* l))
+
+(define (current-source-col) (car *current-source-col*))
+(define (set-current-source-col! c) (set-car! *current-source-col* c))
+
+(define (source-loc? obj)
+  (and (pair? obj)
+       (eq? (car obj) '%source-loc)
+       (pair? (cdr obj))
+       (pair? (cddr obj))
+       (pair? (cdddr obj))
+       (pair? (cddddr obj))))
+
+(define (source-loc-file loc) (cadr loc))
+(define (source-loc-line loc) (caddr loc))
+(define (source-loc-col loc) (cadddr loc))
+(define (source-loc-form loc) (car (cddddr loc)))
+
+(define (strip-source-loc obj)
+  (if (source-loc? obj)
+      (source-loc-form obj)
+      obj))
 
 ;;; Call Stack Tracing Context (Conforms to DSN-33 & Issue #604)
 (define *call-stack* (cons '() '()))
@@ -326,6 +355,9 @@
   (set-car! *current-pass* 'none)
   (set-car! *current-toplevel-name* 'none)
   (set-car! *current-form* 'none)
+  (set-car! *current-source-file* 'none)
+  (set-car! *current-source-line* 0)
+  (set-car! *current-source-col* 0)
   (set-car! *compiler-in-error* #f)
   (reset-call-stack!))
 
@@ -351,6 +383,17 @@
   (display (current-pass))
   (newline)
   (display "======================================================================\n")
+  (if (not (eq? (current-source-file) 'none))
+      (begin
+        (display "  Source Location   : ")
+        (display (current-source-file))
+        (display ":")
+        (display (current-source-line))
+        (if (> (current-source-col) 0)
+            (begin
+              (display ":")
+              (display (current-source-col))))
+        (newline)))
   (display "  Message           : ")
   (display msg)
   (newline)

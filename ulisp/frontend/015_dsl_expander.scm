@@ -14,6 +14,21 @@
         (reverse res)
         (let ((f (car fs)))
           (cond
+            ((and (pair? f) (eq? (car f) '%source-loc))
+             (let ((file (cadr f))
+                   (line (caddr f))
+                   (col (cadddr f))
+                   (inner (car (cddddr f))))
+               (cond
+                 ((and (pair? inner) (memq (car inner) '(define-language define-pass trace-define-pass define-parser define-unparser)))
+                  (let ((exp-inner (expand-dsl-forms (list inner))))
+                    (loop (append (map (lambda (x) (list '%source-loc file line col x)) exp-inner)
+                                  (cdr fs))
+                          res)))
+                 ((and (pair? inner) (eq? (car inner) 'define-macro))
+                  (loop (cdr fs) res))
+                 (else
+                  (loop (cdr fs) (cons f res))))))
             ((and (pair? f) (eq? (car f) 'begin))
              (loop (append (cdr f) (cdr fs)) res))
             ((and (pair? f) (eq? (car f) 'define-macro))

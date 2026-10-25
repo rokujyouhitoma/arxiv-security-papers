@@ -6,13 +6,14 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **606** | ビルド時 cat 結合の廃止と R7RS include 構文によるソース位置（ファイル名・行番号）追跡基盤の導入 | Feature | High | New | [606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md](606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md) |
 | **607** | 外部シンボル（extern）参照解決と標準ライブラリ・コンパイラの2分割 .o 静的リンク基盤の導入 | Feature | High | New | [607-support-extern-symbols-and-split-stdlib-compiler-linking.md](607-support-extern-symbols-and-split-stdlib-compiler-linking.md) |
 | **608** | Nanopass・モジュール単位の完全分割コンパイル（.o）および増分ビルド（Incremental Build）基盤の実装 | Feature | Medium | New | [608-implement-modular-separate-compilation-and-incremental-build.md](608-implement-modular-separate-compilation-and-incremental-build.md) |
 | **609** | R7RS case-lambda 構文および (scheme case-lambda) ライブラリの実装 | Feature | High | New | [609-implement-r7rs-case-lambda-syntax.md](609-implement-r7rs-case-lambda-syntax.md) |
 | **610** | R7RS (scheme base) 未実装コア手続き群 (string, 多引数 map/for-each, floor/, exact-integer-sqrt) の実装 | Feature | High | New | [610-implement-r7rs-base-core-procedures.md](610-implement-r7rs-base-core-procedures.md) |
 | **611** | R7RS (scheme process-context) 環境変数取得手続き (get-environment-variable / get-environment-variables) の実装 | Feature | Medium | New | [611-implement-r7rs-process-context-environment-variables.md](611-implement-r7rs-process-context-environment-variables.md) |
 | **612** | R7RS (scheme char) ASCII 文字・文字列述語群および大小文字変換手続きの実装 | Feature | Medium | New | [612-implement-r7rs-char-ascii-predicates-and-conversions.md](612-implement-r7rs-char-ascii-predicates-and-conversions.md) |
+| **613** | ILisp における R7RS include / include-ci 構文およびライブラリ宣言 include の実装 | Feature | High | New | [613-implement-ilisp-r7rs-include-and-include-ci-support.md](613-implement-ilisp-r7rs-include-and-include-ci-support.md) |
+| **614** | ランタイムのデフォルト沈黙化（Quiet-by-Default）とコンパイラ成果物出力（明示的終了値 0 / -o オプション）の根本是正 | Refactor | High | New | [614-refactor-runtime-silence-by-default-and-compiler-cli-output.md](614-refactor-runtime-silence-by-default-and-compiler-cli-output.md) |
 
 
 
@@ -22,6 +23,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **606** | ビルド時 cat 結合の廃止と R7RS include 構文によるソース位置（ファイル名・行番号）追跡基盤の導入 | Feature | 2026-10-25 | [closed/606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md](closed/606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md) |
 | **600** | 統合シンボル・スコープ解決基盤および α 変換（Alpha-Conversion）エンジンの導入 | Feature | 2026-10-25 | [closed/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md](closed/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md) |
 | **599** | 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復エンジン）の導入 | Feature | 2026-10-25 | [closed/599-implement-generic-dataflow-analysis-framework.md](closed/599-implement-generic-dataflow-analysis-framework.md) |
 | **598** | 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング・観測性の一元化 | Feature | 2026-10-25 | [closed/598-implement-unified-compiler-pass-manager.md](closed/598-implement-unified-compiler-pass-manager.md) |

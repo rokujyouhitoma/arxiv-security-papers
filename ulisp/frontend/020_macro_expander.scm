@@ -424,13 +424,23 @@
        (safe-macro-expand-list expanded macro-table)))))
 
 
-;;; Expand all macro definitions and usages in top-level forms
 (define (expand-macros-in-forms forms)
   (let loop ((fs forms) (macro-table '()) (res '()))
     (if (null? fs)
         (reverse res)
         (let ((f (car fs)))
           (cond
+            ((source-loc? f)
+             (let* ((file (source-loc-file f))
+                    (line (source-loc-line f))
+                    (col (source-loc-col f))
+                    (inner (source-loc-form f)))
+               (if (macro-def? inner)
+                   (let* ((macro-desc (parse-syntax-rules-def inner))
+                          (name (macro-name macro-desc)))
+                     (loop (cdr fs) (cons (cons name macro-desc) macro-table) res))
+                   (let ((exp-f (macro-expand-all inner macro-table)))
+                     (loop (cdr fs) macro-table (cons (list '%source-loc file line col exp-f) res))))))
             ((macro-def? f)
              (let* ((macro-desc (parse-syntax-rules-def f))
                     (name (macro-name macro-desc)))

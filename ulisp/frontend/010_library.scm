@@ -116,6 +116,82 @@
                ;; Skip unrecognized or unsupported declaration silently
                (loop (cdr rest) exports imports body-forms))))))))
 
+;;; -----------------------------------------------------------------------
+;;; 2.5 File Inclusion & Path Resolution (R7RS Section 4.1.7 & 5.6.1)
+;;; -----------------------------------------------------------------------
+
+(define (include-form? form)
+  (and (pair? form)
+       (or (eq? (car form) 'include)
+           (eq? (car form) 'include-ci))))
+
+(define *include-path-stack* (cons '() '()))
+
+(define (member-string? s ls)
+  (cond
+    ((null? ls) #f)
+    ((not (pair? ls)) #f)
+    ((string=? s (car ls)) #t)
+    (else (member-string? s (cdr ls)))))
+
+(define (extract-dir-path path)
+  (let loop ((i (- (string-length path) 1)))
+    (cond
+      ((< i 0) "")
+      ((char=? (string-ref path i) #\/)
+       (substring path 0 (+ i 1)))
+      (else (loop (- i 1))))))
+
+(define (path-traversal? p)
+  (if (and (> (string-length p) 0) (char=? (string-ref p 0) #\/))
+      #t
+      (let loop ((i 0))
+        (if (>= (+ i 3) (string-length p))
+            #f
+            (if (and (char=? (string-ref p i) #\.)
+                     (char=? (string-ref p (+ i 1)) #\.)
+                     (char=? (string-ref p (+ i 2)) #\/))
+                #t
+                (loop (+ i 1)))))))
+
+(define (find-included-file path)
+  (let ((p (open-input-file path)))
+    (if p
+        (begin (close-input-port p) path)
+        (let* ((prefixed (string-append "ulisp/" path))
+               (p2 (open-input-file prefixed)))
+          (if p2
+              (begin (close-input-port p2) prefixed)
+              path)))))
+
+(define (resolve-include-path path)
+  (if (path-traversal? path)
+      (error "include: path traversal outside allowed directory rejected" path)
+      (let ((stack (car *include-path-stack*)))
+        (if (and (pair? stack) (not (string=? (extract-dir-path (car stack)) "")))
+            (let* ((parent-dir (extract-dir-path (car stack)))
+                   (relative-path (string-append parent-dir path))
+                   (p0 (open-input-file relative-path)))
+              (if p0
+                  (begin (close-input-port p0) relative-path)
+                  (find-included-file path)))
+            (find-included-file path)))))
+
+(define (expand-includes-in-forms forms)
+  (let loop ((fs forms) (acc '()))
+    (if (null? fs)
+        (reverse acc)
+        (let ((f (car fs)))
+          (cond
+            ((include-form? f)
+             (let ((included (slurp-included-files (cdr f))))
+               (loop (append included (cdr fs)) acc)))
+            ((and (source-loc? f) (include-form? (source-loc-form f)))
+             (let ((included (slurp-included-files (cdr (source-loc-form f)))))
+               (loop (append included (cdr fs)) acc)))
+            (else
+             (loop (cdr fs) (cons f acc))))))))
+
 ;;; File inclusion helper: safely read forms from given files
 (define (slurp-included-files paths)
   (let loop ((ps paths) (acc '()))
@@ -124,9 +200,29 @@
         (let ((forms (slurp-single-file (car ps))))
           (loop (cdr ps) (append (reverse forms) acc))))))
 
-(define (slurp-single-file path)
-  ;; File inclusion is not yet supported in bare-metal self-hosting without posix open syscall.
-  '())
+(define (read-datum-or-source-loc p path line)
+  (let ((expr (read p)))
+    (if (eof-object? expr)
+        expr
+        (list '%source-loc path line 1 expr))))
+
+(define (slurp-single-file raw-path)
+  (let ((path (resolve-include-path raw-path)))
+    (if (member-string? path (car *include-path-stack*))
+        (error "include: circular dependency detected" path)
+        (let ((p (open-input-file path)))
+          (if (not p)
+              (error "include: failed to open source file" path)
+              (begin
+                (set-car! *include-path-stack* (cons path (car *include-path-stack*)))
+                (let loop ((acc '()) (line 1))
+                  (let ((expr (read-datum-or-source-loc p path line)))
+                    (if (eof-object? expr)
+                        (begin
+                          (close-input-port p)
+                          (set-car! *include-path-stack* (cdr (car *include-path-stack*)))
+                          (expand-includes-in-forms (reverse acc)))
+                        (loop (cons expr acc) (+ line 1)))))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. Import-Set Resolution & Name Mapping
@@ -342,15 +438,18 @@
 ;;; 3. Emits namespaced definitions and local binding aliases
 ;;; Returns a flat list of Scheme forms ready for macro expansion (Pass 00b).
 (define (desugar-libraries-and-imports forms)
-  ;; Step 1: Extract all library definitions into an alist: ((name . lib-rec) ...)
-  (let loop-collect ((rest forms) (registry '()) (non-lib-forms '()))
-    (if (not (null? rest))
-        (let ((f (car rest)))
-          (if (define-library-form? f)
-              (let* ((rec (parse-define-library-form f))
-                     (name (lib-rec-name rec)))
-                (loop-collect (cdr rest) (cons (cons name rec) registry) non-lib-forms))
-              (loop-collect (cdr rest) registry (cons f non-lib-forms))))
+  ;; Pre-Step: Expand all top-level (include ...) forms recursively
+  (let ((all-forms (expand-includes-in-forms forms)))
+    ;; Step 1: Extract all library definitions into an alist: ((name . lib-rec) ...)
+    (let loop-collect ((rest all-forms) (registry '()) (non-lib-forms '()))
+      (if (not (null? rest))
+          (let ((f (car rest)))
+            (if (define-library-form? (strip-source-loc f))
+                (let* ((actual-f (strip-source-loc f))
+                       (rec (parse-define-library-form actual-f))
+                       (name (lib-rec-name rec)))
+                  (loop-collect (cdr rest) (cons (cons name rec) registry) non-lib-forms))
+                (loop-collect (cdr rest) registry (cons f non-lib-forms))))
 
         ;; Step 2: Expand all imports and emit flat forms
         (let ((clean-forms (reverse non-lib-forms)))
@@ -414,4 +513,4 @@
                       (loop-expand (cdr fs)
                                    instantiated-libs
                                    lib-aliases
-                                   (cons f out-forms))))))))))
+                                   (cons f out-forms)))))))))))

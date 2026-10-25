@@ -13,7 +13,7 @@ RUN_SCHEME = PYTHONPATH=$(ROOT_DIR) $(ILISP)
 
 # --- 処理系エンジンの決定 (ULISP_BOOT があれば優先、なければ ILISP を使用) ---
 ifeq ($(shell test -x $(ULISP_BOOT) && echo yes),yes)
-    ULISP_COMPILER ?= ./$(ULISP_BOOT)
+    ULISP_COMPILER ?= ULISP_QUIET=1 ./$(ULISP_BOOT) <
     COMPILER_DEP = $(ULISP_BOOT)
     USE_NATIVE_BOOT = 1
 else
@@ -314,6 +314,11 @@ test_scope: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/test_scope.scm > build/test_scope_runner.scm
 	@$(RUN_SCHEME) build/test_scope_runner.scm
+
+test_include_source_loc: build/compiler_passes.scm
+	@mkdir -p build
+	cat build/compiler_passes.scm tests/test_include_source_loc.scm > build/test_include_source_loc_runner.scm
+	@$(RUN_SCHEME) build/test_include_source_loc_runner.scm
 
 
 test_exceptions: $(COMPILER_DEP)
@@ -631,7 +636,7 @@ diff_test: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_pass_manager test_dataflow test_scope test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_jit test_c test_aot
+test: test_passes test_pass_manager test_dataflow test_scope test_include_source_loc test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log

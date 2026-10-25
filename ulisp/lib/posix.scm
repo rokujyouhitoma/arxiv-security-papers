@@ -24,6 +24,15 @@
 (define (sys-read fd buf-ptr count)
   (%to-fixnum (%raw-syscall (%to-raw 0) (%to-raw fd) buf-ptr (%to-raw count) 0 0 0)))
 
+;; sys-open: sys_open(path, flags, mode) -> syscall 2
+(define (sys-open path flags mode)
+  (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+    (%to-fixnum (%raw-syscall (%to-raw 2) path-ptr (%to-raw flags) (%to-raw mode) 0 0 0))))
+
+;; sys-close: sys_close(fd) -> syscall 3
+(define (sys-close fd)
+  (%to-fixnum (%raw-syscall (%to-raw 3) (%to-raw fd) 0 0 0 0 0)))
+
 ;; sys-mmap: sys_mmap(addr, len, prot, flags, fd, offset) -> syscall 9
 ;; PROT_READ|PROT_WRITE = 3, MAP_PRIVATE|MAP_ANONYMOUS = 34, fd = -1, offset = 0
 (define (sys-mmap length)

@@ -244,6 +244,21 @@
 (define (read-from-port p)
   (port-read p))
 
+(define (port-read-with-source-info p)
+  (let ((c (ulisp-skip-ws-port p)))
+    (if (eof-object? c)
+        c
+        (let ((fn (port-filename p))
+              (line (port-line p))
+              (col (port-col p))
+              (datum (port-read p)))
+          (if (eof-object? datum)
+              datum
+              (list '%source-loc fn line col datum))))))
+
+(define (read-with-source-info p)
+  (port-read-with-source-info p))
+
 (define-syntax read
   (syntax-rules ()
     ((read) (port-read *stdin-port*))

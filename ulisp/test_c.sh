@@ -40,20 +40,20 @@ assert_c() {
     local expr="$2"
     local stdin_input="${3:-}"
 
-    # Prepend (!target c) and optional stdlib
+    # Prepend (!target c) and optional stdlib via R7RS (include ...)
     local code
     if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
-        code="(!target c)"$'\n'"$(cat lib/string.scm lib/bytevector.scm)"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/string.scm\") (include \"lib/bytevector.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ delay || "$expr" =~ force || "$expr" =~ promise ]]; then
-        code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm lib/promise.scm)"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/string.scm\") (include \"lib/vector.scm\") (include \"lib/promise.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ define-record-type || "$expr" =~ vector ]]; then
-        code="(!target c)"$'\n'"$(cat lib/string.scm lib/vector.scm)"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/string.scm\") (include \"lib/vector.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ parameter || "$expr" =~ dynamic-wind ]]; then
-        code="(!target c)"$'\n'"$(cat lib/string.scm lib/continuation.scm lib/parameter.scm)"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/string.scm\") (include \"lib/continuation.scm\") (include \"lib/parameter.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ list-copy || "$expr" =~ make-list ]]; then
-        code="(!target c)"$'\n'"$(cat lib/list.scm)"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/list.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ string-copy || "$expr" =~ string-fill || "$expr" =~ string-map || "$expr" =~ string-for-each || "$expr" =~ string-\>list || "$expr" =~ list-\>string || "$expr" =~ "string<" || "$expr" =~ "string>" || "$expr" =~ "string=" ]]; then
-        code="(!target c)"$'\n'"$(cat lib/string.scm)"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/string.scm\")"$'\n'"$expr"
     else
         code="(!target c) $expr"
     fi

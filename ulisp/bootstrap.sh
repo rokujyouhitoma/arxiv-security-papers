@@ -12,30 +12,9 @@ mkdir -p "$BUILD_DIR"
 # Apply compiler profile for self-hosting compiler execution (Issue #567)
 export ULISP_GC_PROFILE=compiler
 
-echo "[0/4] Preparing unified compiler (lib/ + compiler.scm)..."
-make -C "$ULISP_DIR" compiler
-echo '(!gc none)' > "$BUILD_DIR/ulisp_core.scm"
-cat "$ULISP_DIR/lib/posix.scm" \
-    "$ULISP_DIR/lib/list.scm" \
-    "$ULISP_DIR/lib/string.scm" \
-    "$ULISP_DIR/lib/port.scm" \
-    "$ULISP_DIR/lib/printer.scm" \
-    "$ULISP_DIR/lib/reader.scm" \
-    "$ULISP_DIR/lib/equality.scm" \
-    "$ULISP_DIR/lib/predicates.scm" \
-    "$ULISP_DIR/lib/bytevector.scm" \
-    "$ULISP_DIR/lib/vector.scm" \
-    "$ULISP_DIR/lib/promise.scm" \
-    "$ULISP_DIR/lib/exception.scm" \
-    "$ULISP_DIR/lib/values.scm" \
-    "$ULISP_DIR/lib/continuation.scm" \
-    "$ULISP_DIR/lib/parameter.scm" \
-    "$ULISP_DIR/lib/gc.scm" \
-    "$ULISP_DIR/runtime/gc.scm" \
-    "$ULISP_DIR/runtime/io.scm" \
-    "$ULISP_DIR/runtime/printer.scm" \
-    "$ULISP_DIR/runtime/entry.scm" \
-    "$ULISP_DIR/compiler.scm" >> "$BUILD_DIR/ulisp_core.scm"
+echo "[0/4] Preparing unified compiler (entry_core.scm)..."
+make -C "$ULISP_DIR" -B compiler
+cp "$ULISP_DIR/entry_core.scm" "$BUILD_DIR/ulisp_core.scm"
 
 PYTHON_BIN="python3"
 if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
