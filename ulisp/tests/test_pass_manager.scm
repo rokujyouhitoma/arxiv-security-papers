@@ -128,6 +128,8 @@
              (memq 'pass-010-library ids-o0))
 (assert-true "2.3 -O0 contains pass-030-desugar"
              (memq 'pass-030-desugar ids-o0))
+(assert-true "2.3.1 -O0 contains pass-035-scope-resolve"
+             (memq 'pass-035-scope-resolve ids-o0))
 (assert-true "2.4 -O0 contains pass-070-anf"
              (memq 'pass-070-anf ids-o0))
 (assert-true "2.5 -O0 contains pass-110-closure-convert"

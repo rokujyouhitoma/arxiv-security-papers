@@ -292,6 +292,9 @@
     (make-pass-descriptor 'pass-030-desugar "Core Desugar All" 'frontend 0
       (lambda (forms) (desugar-all forms)) 'desugar 'L_src 'L_core '(pass-025-top-level) #t))
   (register-pass!
+    (make-pass-descriptor 'pass-035-scope-resolve "Lexical Scope Resolution and Alpha-Conversion" 'frontend 0
+      (lambda (forms) (scope-resolve-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
+  (register-pass!
     (make-pass-descriptor 'pass-050-cp0 "CP0 Source Optimization" 'frontend 1
       (lambda (forms) (cp0-optimize forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
   (register-pass!
