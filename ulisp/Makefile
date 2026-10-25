@@ -10,10 +10,12 @@ PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.
 ILISP = $(PYTHON) -m ilisp
 ULISP_BOOT = bin/ulisp-boot
 RUN_SCHEME = PYTHONPATH=$(ROOT_DIR) $(ILISP)
+export ULISP_GC_PROFILE ?= compiler
+GOSH_BIN = $(shell command -v gosh 2>/dev/null)
 
 # --- 処理系エンジンの決定 (ULISP_BOOT があれば優先、なければ ILISP を使用) ---
 ifeq ($(shell test -x $(ULISP_BOOT) && echo yes),yes)
-    ULISP_COMPILER ?= ULISP_QUIET=1 ./$(ULISP_BOOT) <
+    ULISP_COMPILER ?= env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) <
     COMPILER_DEP = $(ULISP_BOOT)
     USE_NATIVE_BOOT = 1
 else
@@ -152,16 +154,21 @@ NANOPASS_TESTS = tests/passes/test_000_compiler_diagnostics.scm \
                  tests/passes/test_142_backend_x86_freestanding.scm \
                  tests/passes/test_143_backend_x86_peephole.scm \
                  tests/passes/test_150_backend_aarch64.scm \
-                 tests/passes/test_160_backend_c.scm
+                 tests/passes/test_160_backend_c.scm \
+                 tests/passes/test_extern_symbols.scm
 
 test_all_passes: build/compiler_passes.scm
-	@echo "=== Running 1:1 Nanopass Unit Tests (37 Passes) ==="
+	@echo "=== Running 1:1 Nanopass Unit Tests (38 Passes) ==="
 	@for t in $(NANOPASS_TESTS); do \
 		echo "Running $$t..."; \
 		cat build/compiler_passes.scm $$t > build/runner_temp.scm && \
 		$(RUN_SCHEME) build/runner_temp.scm || exit 1; \
 	done
-	@echo "SUCCESS: All 37 1:1 Nanopass Unit Tests PASSED!"
+	@echo "SUCCESS: All 38 1:1 Nanopass Unit Tests PASSED!"
+
+test_extern_symbols: build/compiler_passes.scm
+	@cat build/compiler_passes.scm tests/passes/test_extern_symbols.scm > build/runner_temp.scm
+	@$(RUN_SCHEME) build/runner_temp.scm
 
 test_power_assert: build/compiler_passes.scm
 	@cat build/compiler_passes.scm tests/passes/test_power_assert.scm > build/runner_temp.scm
@@ -507,6 +514,72 @@ bootstrap_verify: stage2 stage3
 		diff -u build/stage2.s build/stage3.s | head -n 50; \
 		exit 1; \
 	fi
+
+# --- Modular 2-Split Static Linking Targets (Issue #607) ---
+build/ulisp_stdlib.s: compiler.scm stdlib_entry.scm
+	@mkdir -p build
+	@echo "=== Compiling Standard Library Module (stdlib_entry.scm) ==="
+	@if [ -n "$(GOSH_BIN)" ]; then \
+		echo "(!module #t)" > build/stdlib_input.scm; \
+		cat stdlib_entry.scm >> build/stdlib_input.scm; \
+		$(GOSH_BIN) compiler.scm < build/stdlib_input.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		echo "(!module #t)" > build/stdlib_input.scm; \
+		cat stdlib_entry.scm >> build/stdlib_input.scm; \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 build/stdlib_input.scm > $@; \
+	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
+		echo "(!module #t)" > build/stdlib_input.scm; \
+		cat stdlib_entry.scm >> build/stdlib_input.scm; \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) build/stdlib_input.scm > $@; \
+	else \
+		echo "(!module #t)" > build/stdlib_input.scm; \
+		cat stdlib_entry.scm >> build/stdlib_input.scm; \
+		$(RUN_SCHEME) compiler.scm < build/stdlib_input.scm > $@; \
+	fi
+
+build/ulisp_stdlib.o: build/ulisp_stdlib.s
+	$(CC) -c $< -o $@
+
+build/ulisp_compiler.s: compiler.scm compiler_entry.scm
+	@mkdir -p build
+	@echo "=== Compiling Compiler Module (compiler_entry.scm) ==="
+	@if [ -n "$(GOSH_BIN)" ]; then \
+		echo "(!allow-extern #t)" > build/compiler_input.scm; \
+		cat compiler_entry.scm >> build/compiler_input.scm; \
+		$(GOSH_BIN) compiler.scm < build/compiler_input.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		echo "(!allow-extern #t)" > build/compiler_input.scm; \
+		cat compiler_entry.scm >> build/compiler_input.scm; \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 build/compiler_input.scm > $@; \
+	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
+		echo "(!allow-extern #t)" > build/compiler_input.scm; \
+		cat compiler_entry.scm >> build/compiler_input.scm; \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) build/compiler_input.scm > $@; \
+	else \
+		echo "(!allow-extern #t)" > build/compiler_input.scm; \
+		cat compiler_entry.scm >> build/compiler_input.scm; \
+		$(RUN_SCHEME) compiler.scm < build/compiler_input.scm > $@; \
+	fi
+
+build/ulisp_compiler.o: build/ulisp_compiler.s
+	$(CC) -c $< -o $@
+
+build/ulisp-fast: build/ulisp_stdlib.o build/ulisp_compiler.o
+	@mkdir -p build
+	@echo "=== Statically Linking Split Objects (ulisp_stdlib.o + ulisp_compiler.o) ==="
+	$(CC) -nostdlib -static $^ -o $@
+
+test_split_link: build/ulisp-fast
+	@echo "=== Verifying 2-Split Statically Linked Compiler Binary (build/ulisp-fast) ==="
+	cat $(ULISP_STD_LIBS) > build/test_split_input.scm
+	@echo '(display "Hello from split-linked ULisp!\n") (display (+ 123 456)) (newline)' >> build/test_split_input.scm
+	./build/ulisp-fast build/test_split_input.scm > build/test_split.s
+	$(CC) -nostdlib -static build/test_split.s -o build/test_split
+	@echo "Executing compiled test binary:"
+	@res=$$(env ULISP_QUIET=1 ./build/test_split | tr -d '\r\n'); \
+	echo "Output: $$res"; \
+	test "$$res" = "Hello from split-linked ULisp!579"
+	@echo "SUCCESS: 2-split static linking verification PASSED!"
 
 bootstrap: core
 	./bootstrap.sh

@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **607** | 外部シンボル（extern）参照解決と標準ライブラリ・コンパイラの2分割 .o 静的リンク基盤の導入 | Feature | High | New | [607-support-extern-symbols-and-split-stdlib-compiler-linking.md](607-support-extern-symbols-and-split-stdlib-compiler-linking.md) |
 | **608** | Nanopass・モジュール単位の完全分割コンパイル（.o）および増分ビルド（Incremental Build）基盤の実装 | Feature | Medium | New | [608-implement-modular-separate-compilation-and-incremental-build.md](608-implement-modular-separate-compilation-and-incremental-build.md) |
 | **609** | R7RS case-lambda 構文および (scheme case-lambda) ライブラリの実装 | Feature | High | New | [609-implement-r7rs-case-lambda-syntax.md](609-implement-r7rs-case-lambda-syntax.md) |
 | **610** | R7RS (scheme base) 未実装コア手続き群 (string, 多引数 map/for-each, floor/, exact-integer-sqrt) の実装 | Feature | High | New | [610-implement-r7rs-base-core-procedures.md](610-implement-r7rs-base-core-procedures.md) |
@@ -23,6 +22,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **607** | 外部シンボル（extern）参照解決と標準ライブラリ・コンパイラの2分割 .o 静的リンク基盤の導入 | Feature | 2026-10-26 | [closed/607-support-extern-symbols-and-split-stdlib-compiler-linking.md](closed/607-support-extern-symbols-and-split-stdlib-compiler-linking.md) |
 | **606** | ビルド時 cat 結合の廃止と R7RS include 構文によるソース位置（ファイル名・行番号）追跡基盤の導入 | Feature | 2026-10-25 | [closed/606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md](closed/606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md) |
 | **600** | 統合シンボル・スコープ解決基盤および α 変換（Alpha-Conversion）エンジンの導入 | Feature | 2026-10-25 | [closed/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md](closed/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md) |
 | **599** | 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復エンジン）の導入 | Feature | 2026-10-25 | [closed/599-implement-generic-dataflow-analysis-framework.md](closed/599-implement-generic-dataflow-analysis-framework.md) |

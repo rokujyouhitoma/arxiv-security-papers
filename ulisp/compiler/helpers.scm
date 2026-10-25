@@ -11,6 +11,18 @@
 (define (safe-car x) (if (pair? x) (car x) '()))
 (define (safe-cdr x) (if (pair? x) (cdr x) '()))
 
+(define (string-starts-with? s prefix)
+  (let ((slen (string-length s))
+        (plen (string-length prefix)))
+    (if (< slen plen)
+        #f
+        (let loop ((i 0))
+          (if (= i plen)
+              #t
+              (if (char=? (string-ref s i) (string-ref prefix i))
+                  (loop (+ i 1))
+                  #f))))))
+
 (define (car* x) (car x))
 (define (cadr x) (safe-car (safe-cdr x)))
 (define (cddr x) (safe-cdr (safe-cdr x)))
@@ -167,6 +179,13 @@
 (define *current-source-line* (cons 0 '()))
 (define *current-source-col* (cons 0 '()))
 (define *compiler-in-error* (cons #f '()))
+(define *allow-extern-symbols* (cons #f '()))
+(define (allow-extern-symbols?) (car *allow-extern-symbols*))
+(define (set-allow-extern-symbols! val) (set-car! *allow-extern-symbols* val))
+
+(define *module-mode* (cons #f '()))
+(define (module-mode?) (car *module-mode*))
+(define (set-module-mode! val) (set-car! *module-mode* val))
 
 (define (current-source-file) (car *current-source-file*))
 (define (set-current-source-file! f) (set-car! *current-source-file* f))
@@ -873,27 +892,41 @@
 (define (%program? form)
   (and (pair? form) (eq? (car form) '%program)))
 
+(define (char->mangle-str c)
+  (cond
+    ((or (and (char>=? c #\a) (char<=? c #\z))
+         (and (char>=? c #\A) (char<=? c #\Z))
+         (and (char>=? c #\0) (char<=? c #\9)))
+     (let ((s (make-string 1))) (string-set! s 0 c) s))
+    ((char=? c #\.) ".")
+    ((char=? c #\_) "_")
+    ((char=? c #\-) "_")
+    ((char=? c #\?) "_p")
+    ((char=? c #\!) "_excl")
+    ((char=? c #\=) "_eq")
+    ((char=? c #\<) "_lt")
+    ((char=? c #\>) "_gt")
+    ((char=? c #\+) "_plus")
+    ((char=? c #\*) "_star")
+    ((char=? c #\/) "_slash")
+    ((char=? c #\%) "_pct")
+    ((char=? c #\:) "_col")
+    ((char=? c #\@) "_at")
+    ((char=? c #\~) "_tilde")
+    (else "_")))
+
 (define (sanitize-label-str str)
-  (let* ((len (string-length str))
-         (res (make-string len)))
-    (let loop ((i 0))
+  (let ((len (string-length str)))
+    (let loop ((i 0) (res ""))
       (if (< i len)
-          (let ((c (string-ref str i)))
-            (string-set! res i
-              (cond
-                ((char=? c #\-) #\_)
-                ((char=? c #\?) #\_)
-                ((char=? c #\!) #\_)
-                ((char=? c #\*) #\_)
-                ((char=? c #\/) #\_)
-                ((char=? c #\<) #\_)
-                ((char=? c #\>) #\_)
-                ((char=? c #\=) #\_)
-                ((char=? c #\%) #\_)
-                ((char=? c #\:) #\_)
-                (else c)))
-            (loop (+ i 1)))
+          (loop (+ i 1) (string-append res (char->mangle-str (string-ref str i))))
           res))))
+
+(define (mangle-fn-label name)
+  (string->symbol (string-append "ulisp_fn_" (sanitize-label-str (symbol->string name)))))
+
+(define (mangle-gvar-label name)
+  (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string name))))
 
 (define (make-body-expr bodies)
   (cond

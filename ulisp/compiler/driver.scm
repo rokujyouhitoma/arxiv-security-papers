@@ -10,18 +10,6 @@
           (reverse acc)
           (loop (cons expr acc))))))
 
-(define (string-starts-with? s prefix)
-  (let ((slen (string-length s))
-        (plen (string-length prefix)))
-    (if (< slen plen)
-        #f
-        (let loop ((i 0))
-          (if (= i plen)
-              #t
-              (if (char=? (string-ref s i) (string-ref prefix i))
-                  (loop (+ i 1))
-                  #f))))))
-
 (define (extract-directives-and-forms raw-forms)
   (let ((initial-gc 'all))
     (let loop ((forms raw-forms)
@@ -40,6 +28,18 @@
                (loop (cdr forms) 'lir gc-mode verify trace debug))
               ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
                (loop (cdr forms) (cadr first) gc-mode verify trace debug))
+              ;; Extern symbol directives
+              ((or (eq? first '--allow-extern)
+                   (eq? first '!allow-extern)
+                   (and (pair? first) (or (eq? (car first) '!allow-extern) (eq? (car first) '--allow-extern))))
+               (set-allow-extern-symbols! #t)
+               (loop (cdr forms) target gc-mode verify trace debug))
+              ;; Module compilation directives
+              ((or (eq? first '--module)
+                   (eq? first '!module)
+                   (and (pair? first) (or (eq? (car first) '!module) (eq? (car first) '--module))))
+               (set-module-mode! #t)
+               (loop (cdr forms) target gc-mode verify trace debug))
               ;; GC directives
               ((and (pair? first) (eq? (car first) '!gc) (pair? (cdr first)))
                (loop (cdr forms) target (cadr first) verify trace debug))

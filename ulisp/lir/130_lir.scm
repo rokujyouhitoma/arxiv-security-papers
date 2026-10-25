@@ -78,9 +78,11 @@
 (define (lir-compile-variable var env)
   (let ((binding (assq var env)))
     (if (not binding)
-        (begin
-          (dump-lir-unbound-variable-diagnostic var env)
-          (error (string-append "Unbound variable in LIR: " (symbol->string var)) var))
+        (if (allow-extern-symbols?)
+            (emit-lir! (list '%global-ref '%rax var))
+            (begin
+              (dump-lir-unbound-variable-diagnostic var env)
+              (error (string-append "Unbound variable in LIR: " (symbol->string var)) var)))
         (let ((info (cdr binding)))
           (cond
             ((number? info)

@@ -36,6 +36,14 @@
 (define (closure-prim? op)
   (memq op '(%make-closure %make-closure-env %closure-ref %closure-set!)))
 
+(define (lir-primitive? op)
+  (or (zero-arg-prim? op)
+      (unary-prim? op)
+      (binop-prim? op)
+      (triop-prim? op)
+      (septop-prim? op)
+      (closure-prim? op)))
+
 (define (pure-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
              integer->symbol symbol->integer

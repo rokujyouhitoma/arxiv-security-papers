@@ -38,6 +38,11 @@
       ((memq var (car *top-level-vars*))
        ;; Top-level global variable reference
        (list '%global-ref var))
+      ((lir-primitive? var)
+       var)
+      ((allow-extern-symbols?)
+       ;; External reference fallback: treat as external global variable
+       (list '%global-ref var))
       (else var))))
 
 ;;; Forward declarations / helpers for mutual recursion in closure conversion
@@ -115,10 +120,19 @@
          (else
           (if (and (symbol? op)
                    (not (assq op var-map))
-                   (assq op (car *top-level-fns*)))
-              (let ((label (cdr (assq op (car *top-level-fns*))))
-                    (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
-                (cons '%direct-call (cons label args)))
+                   (not (lir-primitive? op)))
+              (cond
+                ((assq op (car *top-level-fns*))
+                 (let ((label (cdr (assq op (car *top-level-fns*))))
+                       (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+                   (cons '%direct-call (cons label args))))
+                ((allow-extern-symbols?)
+                 (let ((label (mangle-fn-label op))
+                       (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+                   (cons '%direct-call (cons label args))))
+                (else
+                 (cons (convert-expr op var-map)
+                       (map (lambda (e) (convert-expr e var-map)) (cdr expr)))))
               (cons (convert-expr op var-map)
                     (map (lambda (e) (convert-expr e var-map)) (cdr expr))))))))))
 
@@ -241,7 +255,7 @@
                                    (val (caddr d)))
                                (if (and (pair? val) (eq? (car val) 'lambda))
                                    (if (not (assq name (car *top-level-fns*)))
-                                       (let ((label (unique-label-sym (string-append "L_top_" (sanitize-label-str (symbol->string name))))))
+                                       (let ((label (mangle-fn-label name)))
                                          (set-car! *top-level-fns* (cons (cons name label) (car *top-level-fns*)))))
                                    (if (not (memq name (car *top-level-vars*)))
                                        (set-car! *top-level-vars* (cons name (car *top-level-vars*))))))))

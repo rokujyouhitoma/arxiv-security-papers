@@ -4,6 +4,7 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$DIR/.." && pwd)"
 export PYTHONPATH="$ROOT_DIR"
+export ULISP_GC_PROFILE="${ULISP_GC_PROFILE:-compiler}"
 cd "$DIR"
 
 if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
@@ -15,8 +16,9 @@ ILISP="${ILISP:-$PYTHON_BIN -m ilisp}"
 CC="gcc"
 CFLAGS="-Wall -Wextra -O0 -g"
 
-TMP_S="tmp.s"
-TMP_BIN="tmp_bin"
+mkdir -p build
+TMP_S="build/tmp_$$.s"
+TMP_BIN="build/tmp_$$.bin"
 COMPILER="compiler.scm"
 ULISP_STAGE1="build/scheme-stage1"
 ULISP_BOOT="bin/ulisp-boot"
