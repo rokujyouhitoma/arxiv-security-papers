@@ -281,6 +281,9 @@ verify_and_promote() {
     cp -f "$final_compiler" "$BOOT_BIN"
     chmod +x "$BOOT_BIN"
     echo "Updated local bootstrap seed cache ($BOOT_BIN) with verified $final_stage_name compiler."
+
+    echo "=== Running Modular Separate Compilation & Incremental Verification (Issue #608) ==="
+    make -C "$ULISP_DIR" test_incremental
     exit 0
 }
 

@@ -187,6 +187,10 @@
 (define (module-mode?) (car *module-mode*))
 (define (set-module-mode! val) (set-car! *module-mode* val))
 
+(define *current-module-id* (cons #f '()))
+(define (current-module-id) (car *current-module-id*))
+(define (set-current-module-id! id) (set-car! *current-module-id* id))
+
 (define (current-source-file) (car *current-source-file*))
 (define (set-current-source-file! f) (set-car! *current-source-file* f))
 
@@ -927,6 +931,9 @@
 
 (define (mangle-gvar-label name)
   (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string name))))
+
+(define (mangle-mod-init-label mod-id)
+  (string-append "ulisp_mod_init_" (sanitize-label-str (if (symbol? mod-id) (symbol->string mod-id) mod-id))))
 
 (define (make-body-expr bodies)
   (cond
