@@ -520,21 +520,19 @@ bootstrap_verify: stage2 stage3
 build/ulisp_stdlib.s: compiler.scm stdlib_entry.scm
 	@mkdir -p build
 	@echo "=== Compiling Standard Library Module (stdlib_entry.scm) ==="
-	@if [ -n "$(GOSH_BIN)" ]; then \
-		echo "(!module #t)" > build/stdlib_input.scm; \
-		cat stdlib_entry.scm >> build/stdlib_input.scm; \
-		$(GOSH_BIN) compiler.scm < build/stdlib_input.scm > $@; \
-	elif [ -x "build/scheme-stage1" ]; then \
-		echo "(!module #t)" > build/stdlib_input.scm; \
-		cat stdlib_entry.scm >> build/stdlib_input.scm; \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 build/stdlib_input.scm > $@; \
+	@echo "(!module #t)" > build/stdlib_input.scm
+	@cat stdlib_entry.scm >> build/stdlib_input.scm
+	@if [ -x "build/ulisp-fast" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-fast < build/stdlib_input.scm > $@; \
 	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
-		echo "(!module #t)" > build/stdlib_input.scm; \
-		cat stdlib_entry.scm >> build/stdlib_input.scm; \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) build/stdlib_input.scm > $@; \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) < build/stdlib_input.scm > $@; \
+	elif [ -x "build/scheme-stage2" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage2 < build/stdlib_input.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 < build/stdlib_input.scm > $@; \
+	elif [ -n "$(GOSH_BIN)" ]; then \
+		$(GOSH_BIN) compiler.scm < build/stdlib_input.scm > $@; \
 	else \
-		echo "(!module #t)" > build/stdlib_input.scm; \
-		cat stdlib_entry.scm >> build/stdlib_input.scm; \
 		$(RUN_SCHEME) compiler.scm < build/stdlib_input.scm > $@; \
 	fi
 
@@ -544,21 +542,19 @@ build/ulisp_stdlib.o: build/ulisp_stdlib.s
 build/ulisp_compiler.s: compiler.scm compiler_entry.scm
 	@mkdir -p build
 	@echo "=== Compiling Compiler Module (compiler_entry.scm) ==="
-	@if [ -n "$(GOSH_BIN)" ]; then \
-		echo "(!allow-extern #t)" > build/compiler_input.scm; \
-		cat compiler_entry.scm >> build/compiler_input.scm; \
-		$(GOSH_BIN) compiler.scm < build/compiler_input.scm > $@; \
-	elif [ -x "build/scheme-stage1" ]; then \
-		echo "(!allow-extern #t)" > build/compiler_input.scm; \
-		cat compiler_entry.scm >> build/compiler_input.scm; \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 build/compiler_input.scm > $@; \
+	@echo "(!allow-extern #t)" > build/compiler_input.scm
+	@cat compiler_entry.scm >> build/compiler_input.scm
+	@if [ -x "build/ulisp-fast" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-fast < build/compiler_input.scm > $@; \
 	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
-		echo "(!allow-extern #t)" > build/compiler_input.scm; \
-		cat compiler_entry.scm >> build/compiler_input.scm; \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) build/compiler_input.scm > $@; \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) < build/compiler_input.scm > $@; \
+	elif [ -x "build/scheme-stage2" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage2 < build/compiler_input.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 < build/compiler_input.scm > $@; \
+	elif [ -n "$(GOSH_BIN)" ]; then \
+		$(GOSH_BIN) compiler.scm < build/compiler_input.scm > $@; \
 	else \
-		echo "(!allow-extern #t)" > build/compiler_input.scm; \
-		cat compiler_entry.scm >> build/compiler_input.scm; \
 		$(RUN_SCHEME) compiler.scm < build/compiler_input.scm > $@; \
 	fi
 
@@ -592,10 +588,16 @@ build/compiler_base.s: $(COMPILER_BASE) build/meta/compiler_env.sbi
 	@echo "=== Compiling Compiler Base Module ==="
 	@echo "(!module-name compiler_base) (!import-sbi build/meta/compiler_env.sbi)" > build/compiler_base_in.scm
 	@cat $(COMPILER_BASE) >> build/compiler_base_in.scm
-	@if [ -n "$(GOSH_BIN)" ]; then \
-		$(GOSH_BIN) compiler.scm < build/compiler_base_in.scm > $@; \
-	elif [ -x "build/ulisp-fast" ]; then \
+	@if [ -x "build/ulisp-fast" ]; then \
 		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-fast < build/compiler_base_in.scm > $@; \
+	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) < build/compiler_base_in.scm > $@; \
+	elif [ -x "build/scheme-stage2" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage2 < build/compiler_base_in.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 < build/compiler_base_in.scm > $@; \
+	elif [ -n "$(GOSH_BIN)" ]; then \
+		$(GOSH_BIN) compiler.scm < build/compiler_base_in.scm > $@; \
 	else \
 		$(RUN_SCHEME) compiler.scm < build/compiler_base_in.scm > $@; \
 	fi
@@ -608,10 +610,16 @@ build/frontend_passes.s: $(FRONTEND_PASSES) build/meta/compiler_env.sbi
 	@echo "=== Compiling Frontend Passes Module ==="
 	@echo "(!module-name frontend_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/frontend_passes_in.scm
 	@cat $(FRONTEND_PASSES) >> build/frontend_passes_in.scm
-	@if [ -n "$(GOSH_BIN)" ]; then \
-		$(GOSH_BIN) compiler.scm < build/frontend_passes_in.scm > $@; \
-	elif [ -x "build/ulisp-fast" ]; then \
+	@if [ -x "build/ulisp-fast" ]; then \
 		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-fast < build/frontend_passes_in.scm > $@; \
+	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) < build/frontend_passes_in.scm > $@; \
+	elif [ -x "build/scheme-stage2" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage2 < build/frontend_passes_in.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 < build/frontend_passes_in.scm > $@; \
+	elif [ -n "$(GOSH_BIN)" ]; then \
+		$(GOSH_BIN) compiler.scm < build/frontend_passes_in.scm > $@; \
 	else \
 		$(RUN_SCHEME) compiler.scm < build/frontend_passes_in.scm > $@; \
 	fi
@@ -624,10 +632,16 @@ build/lir_passes.s: $(LIR_PASSES) build/meta/compiler_env.sbi
 	@echo "=== Compiling LIR Passes Module ==="
 	@echo "(!module-name lir_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/lir_passes_in.scm
 	@cat $(LIR_PASSES) >> build/lir_passes_in.scm
-	@if [ -n "$(GOSH_BIN)" ]; then \
-		$(GOSH_BIN) compiler.scm < build/lir_passes_in.scm > $@; \
-	elif [ -x "build/ulisp-fast" ]; then \
+	@if [ -x "build/ulisp-fast" ]; then \
 		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-fast < build/lir_passes_in.scm > $@; \
+	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) < build/lir_passes_in.scm > $@; \
+	elif [ -x "build/scheme-stage2" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage2 < build/lir_passes_in.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 < build/lir_passes_in.scm > $@; \
+	elif [ -n "$(GOSH_BIN)" ]; then \
+		$(GOSH_BIN) compiler.scm < build/lir_passes_in.scm > $@; \
 	else \
 		$(RUN_SCHEME) compiler.scm < build/lir_passes_in.scm > $@; \
 	fi
@@ -640,10 +654,16 @@ build/backend_passes.s: $(BACKEND_PASSES) build/meta/compiler_env.sbi
 	@echo "=== Compiling Backend Passes Module ==="
 	@echo "(!module-name backend_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/backend_passes_in.scm
 	@cat $(BACKEND_PASSES) >> build/backend_passes_in.scm
-	@if [ -n "$(GOSH_BIN)" ]; then \
-		$(GOSH_BIN) compiler.scm < build/backend_passes_in.scm > $@; \
-	elif [ -x "build/ulisp-fast" ]; then \
+	@if [ -x "build/ulisp-fast" ]; then \
 		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-fast < build/backend_passes_in.scm > $@; \
+	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) < build/backend_passes_in.scm > $@; \
+	elif [ -x "build/scheme-stage2" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage2 < build/backend_passes_in.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 < build/backend_passes_in.scm > $@; \
+	elif [ -n "$(GOSH_BIN)" ]; then \
+		$(GOSH_BIN) compiler.scm < build/backend_passes_in.scm > $@; \
 	else \
 		$(RUN_SCHEME) compiler.scm < build/backend_passes_in.scm > $@; \
 	fi
@@ -656,10 +676,16 @@ build/compiler_driver.s: compiler/driver.scm build/meta/compiler_env.sbi
 	@echo "=== Compiling Driver Module ==="
 	@echo "(!allow-extern #t) (!import-sbi build/meta/compiler_env.sbi)" > build/compiler_driver_in.scm
 	@cat compiler/driver.scm >> build/compiler_driver_in.scm
-	@if [ -n "$(GOSH_BIN)" ]; then \
-		$(GOSH_BIN) compiler.scm < build/compiler_driver_in.scm > $@; \
-	elif [ -x "build/ulisp-fast" ]; then \
+	@if [ -x "build/ulisp-fast" ]; then \
 		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-fast < build/compiler_driver_in.scm > $@; \
+	elif [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) < build/compiler_driver_in.scm > $@; \
+	elif [ -x "build/scheme-stage2" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage2 < build/compiler_driver_in.scm > $@; \
+	elif [ -x "build/scheme-stage1" ]; then \
+		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 < build/compiler_driver_in.scm > $@; \
+	elif [ -n "$(GOSH_BIN)" ]; then \
+		$(GOSH_BIN) compiler.scm < build/compiler_driver_in.scm > $@; \
 	else \
 		$(RUN_SCHEME) compiler.scm < build/compiler_driver_in.scm > $@; \
 	fi
@@ -793,7 +819,11 @@ run_jit: bin/ulisp-jit
 	@echo "SUCCESS: ulisp-jit AOT compilation verified (fact 5) = 120!"
 
 # --- Performance Benchmark ---
-bench: bin/ulisp-jit
+bench: compiler
+	@mkdir -p build
+	$(PYTHON) benchmarks/benchmark_c_vs_x86.py
+
+bench_stage2_vs_jit: bin/ulisp-jit
 	$(PYTHON) benchmarks/benchmark_stage2_vs_ulisp_jit.py
 
 bench_trio: bin/ulisp-jit

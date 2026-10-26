@@ -23,7 +23,7 @@ os.makedirs(BUILD_DIR, exist_ok=True)
 
 PYTHON_BIN = sys.executable
 COMPILER_SCM = os.path.join(ULISP_DIR, "compiler.scm")
-RUNTIME_C = os.path.join(ULISP_DIR, "runtime.c")
+ULISP_BOOT = os.path.join(ULISP_DIR, "bin", "ulisp-boot")
 
 CHEZ_BIN = shutil.which("chezscheme") or shutil.which("scheme")
 GUILE_BIN = shutil.which("guile")
@@ -71,19 +71,36 @@ def run_cmd(cmd, input_text=None):
 def compile_ulisp_x86(name, expr):
     s_path = os.path.join(BUILD_DIR, f"{name}.s")
     bin_path = os.path.join(BUILD_DIR, f"{name}_x86")
-    s_code = run_cmd([PYTHON_BIN, "-m", "ilisp", COMPILER_SCM], input_text=expr)
-    with open(s_path, "w") as f:
-        f.write(s_code)
+    if os.path.exists(ULISP_BOOT) and os.access(ULISP_BOOT, os.X_OK):
+        tmp_in = os.path.join(BUILD_DIR, f"tmp_{name}.scm")
+        with open(tmp_in, "w") as f:
+            f.write(expr)
+        with open(s_path, "w") as f:
+            env = dict(os.environ, PYTHONPATH=ROOT_DIR, ULISP_QUIET="1", ULISP_GC_PROFILE="compiler")
+            subprocess.run([ULISP_BOOT, tmp_in], stdout=f, check=True, env=env)
+    else:
+        s_code = run_cmd([PYTHON_BIN, "-m", "ilisp", COMPILER_SCM], input_text=expr)
+        with open(s_path, "w") as f:
+            f.write(s_code)
     run_cmd(["gcc", "-nostdlib", "-static", s_path, "-o", bin_path])
     return bin_path
 
 def compile_ulisp_c(name, expr):
     c_path = os.path.join(BUILD_DIR, f"{name}.c")
     bin_path = os.path.join(BUILD_DIR, f"{name}_c")
-    c_code = run_cmd([PYTHON_BIN, "-m", "ilisp", COMPILER_SCM], input_text=f"(!target c)\n{expr}")
-    with open(c_path, "w") as f:
-        f.write(c_code)
-    run_cmd(["gcc", "-Wall", "-Wextra", "-Werror", "-O2", RUNTIME_C, c_path, "-o", bin_path])
+    c_expr = f"(!target c)\n{expr}"
+    if os.path.exists(ULISP_BOOT) and os.access(ULISP_BOOT, os.X_OK):
+        tmp_in = os.path.join(BUILD_DIR, f"tmp_{name}_c.scm")
+        with open(tmp_in, "w") as f:
+            f.write(c_expr)
+        with open(c_path, "w") as f:
+            env = dict(os.environ, PYTHONPATH=ROOT_DIR, ULISP_QUIET="1", ULISP_GC_PROFILE="compiler")
+            subprocess.run([ULISP_BOOT, tmp_in], stdout=f, check=True, env=env)
+    else:
+        c_code = run_cmd([PYTHON_BIN, "-m", "ilisp", COMPILER_SCM], input_text=c_expr)
+        with open(c_path, "w") as f:
+            f.write(c_code)
+    run_cmd(["gcc", "-Wall", "-Wextra", "-Werror", "-Wno-unused-label", "-O2", c_path, "-o", bin_path])
     return bin_path
 
 def measure_bin(bin_path, iters):

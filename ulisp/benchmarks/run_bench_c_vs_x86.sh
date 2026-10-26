@@ -42,7 +42,7 @@ run_bench() {
 
     # 2. Compile Portable C
     printf "(!target c)\n%s\n" "$expr" | $ILISP "$COMPILER" > "$c_file"
-    gcc -Wall -Wextra -Werror -O2 runtime.c "$c_file" -o "$bin_c"
+    gcc -Wall -Wextra -Werror -Wno-unused-label -O2 "$c_file" -o "$bin_c"
     local c_size=$(wc -c < "$bin_c")
 
     # Verify correctness

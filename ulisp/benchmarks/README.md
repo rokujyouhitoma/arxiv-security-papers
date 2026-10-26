@@ -106,16 +106,40 @@ echo "(let loop ((i 0) (s 0)) (if (< i 10) (loop (+ i 1) (+ s i)) s))" | ./ulisp
 ```
 
 ### AOT コンパイルモード (`(!compile)` または `(!target ...)`)
-S 式先頭に `(!compile)` を指定することで、ULisp の Nanopass パイプライン経由でネイティブ x86-64 アセンブリを出力します：
+S 式先頭に `(!compile)` を指定することで、ULisp の Nanopass パイプライン経由でネイティブ x86-64 アセンブリを出力します（libc 依存ゼロの Freestanding ELF）：
 ```bash
 echo "(!compile) (define (fact n) (if (<= n 1) 1 (* n (fact (- n 1))))) (fact 5)" | ./ulisp/bin/ulisp-jit > fact.s
-gcc -no-pie -O2 ulisp/runtime.c fact.s -o fact
+gcc -nostdlib -static fact.s -o fact
 ./fact # => 120
 ```
 
-C 言語バックエンド出力：
+C 言語バックエンド出力（自己完結型 Standalone C99）：
 ```bash
 echo "(!target c) (+ 40 2)" | ./ulisp/bin/ulisp-jit > out.c
-gcc -O2 ulisp/runtime.c out.c -o out
+gcc -Wall -Wextra -Werror -Wno-unused-label -O2 out.c -o out
 ./out # => 42
 ```
+
+---
+
+## 5. ベンチマークスイートの実行（Benchmark Harness）
+
+ULisp では、Freestanding x86-64 ネイティブ、ULisp C バックエンド、および同一アルゴリズムの純粋 C99 実装（Pure C Baseline）の 3 者を公平に比較する自動計測ハーネスを提供しています（Issue #620 準拠）。
+
+```bash
+# ULisp 標準ベンチマークの実行（6大ワークロード、ウォームアップ3回+本試行10回）
+make -C ulisp bench
+```
+
+### 測定対象 6 大ワークロード
+1. **Fibonacci (`fib 30`)**: 再帰分岐・コールフレームオーバーヘッド・整数演算
+2. **Tail-Recursive Loop (`loop 10M`)**: TCO（末尾呼出最適化）・レジスタピン留め・ループ分岐速度
+3. **Ackermann (`ack 3 7`)**: 深いスタックネスト・多重再帰関数呼出し
+4. **Higher-Order Closure (`closure 1M`)**: ファーストクラスクロージャ呼出し・環境参照
+5. **List Allocation & Traverse (`list 100k`)**: バンプアロケータ・ヒープ走査・ペアリスト走査
+6. **Vector Indexing & Traverse (`vector 100k`)**: ベクタインデックス参照・メモリ走査
+
+### レポート出力先
+- **Markdown レポート**: `ulisp/build/bench_results.md` および `outputs/benchmarks/benchmark_c_vs_x86.md`
+- **JSON メトリクス**: `ulisp/build/bench_results.json` および `outputs/benchmarks/latest.json`
+

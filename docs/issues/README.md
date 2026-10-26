@@ -17,7 +17,6 @@
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
 | **619** | ソース位置追跡情報（%source-loc）に基づく最小限 DWARF（.debug_line）セクション生成と GDB / perf デバッグ支援の実装 | Feature | Medium | New | [619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md](619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md) |
-| **620** | ベンチマークスイート（benchmark_c_vs_x86）の修復・Freestanding対応および make bench 自動計測ハーネスの確立 | Feature | High | New | [620-repair-benchmark-suite-and-establish-automated-bench-harness.md](620-repair-benchmark-suite-and-establish-automated-bench-harness.md) |
 | **621** | コンパイラ Nanopass 実行時間・メモリ消費プロファイラ（--time-passes）の実装 | Feature | High | New | [621-implement-compiler-pass-timing-and-memory-profiler.md](621-implement-compiler-pass-timing-and-memory-profiler.md) |
 | **622** | 実行時 GC 統計プロファイル（ULISP_GC_STATS）および Linux perf ハードウェアカウンタ連携基盤の実装 | Feature | Medium | New | [622-implement-runtime-gc-stats-and-perf-hardware-counter-integration.md](622-implement-runtime-gc-stats-and-perf-hardware-counter-integration.md) |
 | **623** | ULisp 正典性能ベースライン測定レポート（BASELINE.md）の策定と継続的性能監視基盤の構築 | Feature | Medium | New | [623-establish-canonical-performance-baseline-and-continuous-monitoring.md](623-establish-canonical-performance-baseline-and-continuous-monitoring.md) |
@@ -30,6 +29,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **620** | ベンチマークスイート（benchmark_c_vs_x86）の修復・Freestanding対応および make bench 自動計測ハーネスの確立 | Feature | 2026-10-26 | [closed/620-repair-benchmark-suite-and-establish-automated-bench-harness.md](closed/620-repair-benchmark-suite-and-establish-automated-bench-harness.md) |
 | **608** | Nanopass・モジュール単位の完全分割コンパイル（.o）および増分ビルド（Incremental Build）基盤の実装 | Feature | 2026-10-26 | [closed/608-implement-modular-separate-compilation-and-incremental-build.md](closed/608-implement-modular-separate-compilation-and-incremental-build.md) |
 | **607** | 外部シンボル（extern）参照解決と標準ライブラリ・コンパイラの2分割 .o 静的リンク基盤の導入 | Feature | 2026-10-26 | [closed/607-support-extern-symbols-and-split-stdlib-compiler-linking.md](closed/607-support-extern-symbols-and-split-stdlib-compiler-linking.md) |
 | **606** | ビルド時 cat 結合の廃止と R7RS include 構文によるソース位置（ファイル名・行番号）追跡基盤の導入 | Feature | 2026-10-25 | [closed/606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md](closed/606-replace-cat-bundle-with-r7rs-include-and-source-tracking.md) |

@@ -15,7 +15,6 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 STAGE2_BIN = ROOT_DIR / "ulisp" / "build" / "scheme-stage2"
 ULISP_JIT_BIN = ROOT_DIR / "ulisp" / "bin" / "ulisp-jit"
-RUNTIME_C = ROOT_DIR / "ulisp" / "runtime.c"
 
 def get_binary_metrics(bin_path):
     stat = os.stat(bin_path)
@@ -107,8 +106,8 @@ def benchmark_aot_compiled_binary(compiler_bin, code, iterations=50, is_jit=Fals
     # Compile to .s
     with open(s_path, "w") as out_f:
         subprocess.run([str(compiler_bin), in_path], stdout=out_f, check=True)
-    # Compile to ELF
-    subprocess.run(["gcc", "-no-pie", "-O2", str(RUNTIME_C), s_path, "-o", exe_path], check=True)
+    # Compile to Freestanding ELF
+    subprocess.run(["gcc", "-nostdlib", "-static", s_path, "-o", exe_path], check=True)
 
     times = []
     cmd = [exe_path]
