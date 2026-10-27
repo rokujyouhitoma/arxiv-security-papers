@@ -163,9 +163,44 @@
                   (set-car! *symbol-registry* (cons (cons str candidate) (car *symbol-registry*)))
                   candidate)))))))
 
+(define *known-runtime-symbols*
+  '((string-append2 . "string-append2")
+    (vector-append2 . "vector-append2")
+    (bytevector-append2 . "bytevector-append2")
+    (nanopass-try-clause . "nanopass-try-clause")
+    (nanopass-catamorphism-step . "nanopass-catamorphism-step")
+    (set-current-pass! . "set-current-pass!")
+    (nanopass-verifier-enabled? . "nanopass-verifier-enabled?")
+    (nanopass-verify-ast . "nanopass-verify-ast")
+    (with-call-frame . "with-call-frame")
+    (nanopass-display-ast-diff . "nanopass-display-ast-diff")
+    (nanopass-trace-enabled? . "nanopass-trace-enabled?")
+    (nanopass-register-language! . "nanopass-register-language!")
+    (nanopass-parse-language-spec . "nanopass-parse-language-spec")
+    (nanopass-parse . "nanopass-parse")
+    (nanopass-unparse . "nanopass-unparse")
+    (nanopass-ast-valid? . "nanopass-ast-valid?")
+    (nanopass-parse-nt . "nanopass-parse-nt")
+    (current-jiffy . "current-jiffy")
+    (jiffies-per-second . "jiffies-per-second")
+    (sys-getenv . "sys-getenv")
+    (sys-clock-gettime-monotonic . "sys-clock-gettime-monotonic")
+    (gc-current-heap-bytes . "gc-current-heap-bytes")))
+
+(define (%sym-assoc-string sym alist)
+  (cond
+    ((null? alist) #f)
+    ((not (pair? alist)) #f)
+    ((and (pair? (car alist)) (eq? (car (car alist)) sym))
+     (cdr (car alist)))
+    (else (%sym-assoc-string sym (cdr alist)))))
+
 (define (%symbol-find-string sym entries)
   (if (null? entries)
-      "?"
+      (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
+        (if known
+            known
+            "?"))
       (let ((entry (car entries)))
         (if (eq? (cdr entry) sym)
             (car entry)

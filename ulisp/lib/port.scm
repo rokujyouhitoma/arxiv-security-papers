@@ -10,9 +10,11 @@
 
 (define *stdin-port* (list '%standard-input-port 0))
 (define *stdout-port* (list '%standard-output-port 1))
+(define *stderr-port* (list '%standard-output-port 2))
 
 (define (current-input-port) *stdin-port*)
 (define (current-output-port) *stdout-port*)
+(define (current-error-port) *stderr-port*)
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Port Predicates (R7RS Section 6.13.1)
@@ -235,6 +237,10 @@
          (string-set! buf len ch)
          (set-car! len-cell (+ len 1))
          #t)))
+    ((and (pair? p) (eq? (car p) '%standard-output-port) (= (cadr p) 2))
+     (let ((buf (cons 0 (cons 0 '()))))
+       (%raw-store! (%ptr-untag buf) 0 (%to-raw (char->integer ch)))
+       (sys-write 2 (%ptr-untag buf) 1)))
     (else
      (%write-char ch))))
 
@@ -248,6 +254,11 @@
                (port-write-char (string-ref str i) p)
                (loop (+ i 1)))
              #t))))
+    ((and (pair? p) (eq? (car p) '%standard-output-port) (= (cadr p) 2))
+     (let ((slen (string-length str)))
+       (if (> slen 0)
+           (sys-write 2 (%ptr-untag str) slen)
+           0)))
     (else
      (%write-string str))))
 

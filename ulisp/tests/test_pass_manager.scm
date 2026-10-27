@@ -239,16 +239,41 @@
 (display "\n--- Group 5: Pass Timing & Profiling ---\n")
 
 (reset-pass-timings!)
-(record-pass-timing! 'pass-010-library 5)
-(record-pass-timing! 'pass-030-desugar 12)
+(record-pass-timing! 'pass-010-library "Desugar Libraries and Imports" 5200 24576)
+(record-pass-timing! 'pass-030-desugar "Core Desugar All" 12400 65536)
 
 (assert-equal "5.1 recorded timings count"
               2
               (length (get-pass-timings)))
 
-(assert-equal "5.2 first recorded timing"
-              '(pass-010-library . 5)
-              (car (get-pass-timings)))
+(define first-timing (car (get-pass-timings)))
+(assert-equal "5.2 first recorded timing id"
+              'pass-010-library
+              (pass-timing-id first-timing))
+
+(assert-equal "5.3 first recorded timing name"
+              "Desugar Libraries and Imports"
+              (pass-timing-name first-timing))
+
+(assert-equal "5.4 first recorded timing elapsed-us"
+              5200
+              (pass-timing-elapsed-us first-timing))
+
+(assert-equal "5.5 first recorded timing alloc-bytes"
+              24576
+              (pass-timing-alloc-bytes first-timing))
+
+(assert-equal "5.6 format-fixed-2-ms formatting"
+              "5.20 ms"
+              (format-fixed-2-ms 5200))
+
+(assert-equal "5.7 format-fixed-1-pct formatting"
+              "29.5%"
+              (format-fixed-1-pct 5200 17600))
+
+(assert-equal "5.8 format-alloc-kb formatting"
+              "24 KB"
+              (format-alloc-kb 24576))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 6: Full Pipeline Execution via Pass Manager

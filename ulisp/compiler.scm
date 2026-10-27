@@ -470,8 +470,8 @@
       ;; Early pruning for large length difference
       ((> (abs (- len1 len2)) 10) (abs (- len1 len2)))
       (else
-       (let ((v0 (make-vector (+ len2 1) 0))
-             (v1 (make-vector (+ len2 1) 0)))
+       (let ((v0 (make-vector (+ len2 1)))
+             (v1 (make-vector (+ len2 1))))
          (let init-v0 ((j 0))
            (if (<= j len2)
                (begin
@@ -838,11 +838,43 @@
           (set-car! *symbol-table* (cons (list sym id str) (car *symbol-table*)))
           id))))
 
+(define *known-compiler-symbols*
+  '((string-append2 . "string-append2")
+    (vector-append2 . "vector-append2")
+    (bytevector-append2 . "bytevector-append2")
+    (nanopass-try-clause . "nanopass-try-clause")
+    (nanopass-catamorphism-step . "nanopass-catamorphism-step")
+    (set-current-pass! . "set-current-pass!")
+    (nanopass-verifier-enabled? . "nanopass-verifier-enabled?")
+    (nanopass-verify-ast . "nanopass-verify-ast")
+    (with-call-frame . "with-call-frame")
+    (nanopass-display-ast-diff . "nanopass-display-ast-diff")
+    (nanopass-trace-enabled? . "nanopass-trace-enabled?")
+    (nanopass-register-language! . "nanopass-register-language!")
+    (nanopass-parse-language-spec . "nanopass-parse-language-spec")
+    (nanopass-parse . "nanopass-parse")
+    (nanopass-unparse . "nanopass-unparse")
+    (nanopass-ast-valid? . "nanopass-ast-valid?")
+    (nanopass-parse-nt . "nanopass-parse-nt")
+    (current-jiffy . "current-jiffy")
+    (jiffies-per-second . "jiffies-per-second")
+    (sys-getenv . "sys-getenv")
+    (sys-bench-passes? . "sys-bench-passes?")
+    (sys-clock-gettime-monotonic . "sys-clock-gettime-monotonic")
+    (gc-current-heap-bytes . "gc-current-heap-bytes")))
+
 (define (symbol->raw-name sym)
   (let ((entry (assq sym (car *symbol-table*))))
     (if (and entry (pair? (cdr entry)) (pair? (cddr entry)))
         (caddr entry)
-        (symbol->string sym))))
+        (let ((known (assq sym *known-compiler-symbols*)))
+          (if known
+              (cdr known)
+              (let ((s (symbol->string sym)))
+                (if (string=? s "?")
+                    (let ((k2 (assq sym *known-compiler-symbols*)))
+                      (if k2 (cdr k2) s))
+                    s)))))))
 
 (define (get-all-symbols)
   (if (pair? *symbol-table*)
@@ -927,19 +959,53 @@
           res))))
 
 (define (mangle-fn-label name)
-  (string->symbol (string-append "ulisp_fn_" (sanitize-label-str (symbol->string name)))))
+  (string->symbol (string-append "ulisp_fn_" (sanitize-label-str (symbol->raw-name name)))))
 
 (define (mangle-gvar-label name)
-  (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string name))))
+  (string-append "ulisp_gvar_" (sanitize-label-str (symbol->raw-name name))))
 
 (define (mangle-mod-init-label mod-id)
-  (string-append "ulisp_mod_init_" (sanitize-label-str (if (symbol? mod-id) (symbol->string mod-id) mod-id))))
+  (string-append "ulisp_mod_init_" (sanitize-label-str (if (symbol? mod-id) (symbol->raw-name mod-id) mod-id))))
 
 (define (make-body-expr bodies)
   (cond
     ((null? bodies) (list 'begin))
     ((null? (cdr bodies)) (car bodies))
     (else (cons 'begin bodies))))
+
+;;; -----------------------------------------------------------------------
+;;; Standard Error & Profiling Port / Timer Fallbacks (Issue #621)
+;;; -----------------------------------------------------------------------
+
+(define *compiler-stderr-port* (cons '%standard-output-port (cons 2 '())))
+
+(define (get-compiler-error-port)
+  (cond
+    ((and (procedure? current-error-port) (not (null? (current-error-port))))
+     (current-error-port))
+    (else
+     *compiler-stderr-port*)))
+
+(define (sys-clock-gettime-monotonic)
+  (cons 0 0))
+
+(define (gc-current-heap-bytes)
+  0)
+
+(define (sys-getenv name)
+  #f)
+
+(define (sys-bench-passes?)
+  #f)
+
+(define (current-jiffy)
+  0)
+
+(define (jiffies-per-second)
+  1000000000)
+
+
+
 
 ;;; =======================================================================
 ;;; ULisp Compiler Primitives & Predicate Categorization
@@ -2157,7 +2223,7 @@
     (let loop ((rs rules))
       (if (null? rs)
           (if (null? extra-in)
-              (list 'nanopass-catamorphism-step
+              (list (string->symbol "nanopass-catamorphism-step")
                     (list 'quote l-in)
                     (list 'quote l-out)
                     (list 'quote nt-name)
@@ -2165,7 +2231,7 @@
                     nt-name
                     ''()
                     (list 'quote extra-out))
-              (list 'nanopass-catamorphism-step
+              (list (string->symbol "nanopass-catamorphism-step")
                     (list 'quote l-in)
                     (list 'quote l-out)
                     (list 'quote nt-name)
@@ -2180,7 +2246,7 @@
                  (body-expr (cadddr r))
                  (c-var (unique-symbol "__c_")))
             (list 'let (list (list c-var
-                                   (list 'nanopass-try-clause
+                                   (list (string->symbol "nanopass-try-clause")
                                          (list 'quote pat)
                                          (list 'quote vars)
                                          ir-var
@@ -2249,23 +2315,23 @@
                   (list 'letrec
                         (append (reverse defs) (reverse nt-procs))
                         (list 'begin
-                              (list 'set-current-pass! (list 'quote name))
-                              (list 'if (list 'nanopass-verifier-enabled?)
-                                    (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-in) ir-var ''entry)
+                              (list (string->symbol "set-current-pass!") (list 'quote name))
+                              (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
+                                    (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-in) ir-var ''entry)
                                     #f)
-                              (list 'with-call-frame (list 'quote name) ir-var
+                              (list (string->symbol "with-call-frame") (list 'quote name) ir-var
                                     (list 'lambda '()
                                           (list 'let (list (list res-var body-call))
-                                                (list 'if (list 'nanopass-verifier-enabled?)
-                                                      (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-out) res-var ''exit)
+                                                (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
+                                                      (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-out) res-var ''exit)
                                                       #f)
                                                 (if force-trace?
                                                     (list 'begin
-                                                          (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                                          (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
                                                           res-var)
                                                     (list 'begin
-                                                          (list 'if (list 'nanopass-trace-enabled?)
-                                                                (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                                          (list 'if (list (string->symbol "nanopass-trace-enabled?"))
+                                                                (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
                                                                 #f)
                                                           res-var)))))))))
           (let ((c (car rest)))
@@ -2317,33 +2383,33 @@
          (clauses (cddr form)))
     (list 'begin
           (list 'define (string->symbol (string-append "__lang_" (symbol->string name)))
-                (list 'nanopass-register-language!
-                      (list 'nanopass-parse-language-spec
+                (list (string->symbol "nanopass-register-language!")
+                      (list (string->symbol "nanopass-parse-language-spec")
                             (list 'quote name)
                             (list 'quote clauses))))
           (list 'define (string->symbol (string-append "parse-" (symbol->string name)))
                 (list 'lambda (list 'expr)
-                      (list 'nanopass-parse (list 'quote name) 'expr)))
+                      (list (string->symbol "nanopass-parse") (list 'quote name) 'expr)))
           (list 'define (string->symbol (string-append "unparse-" (symbol->string name)))
                 (list 'lambda (list 'ir)
-                      (list 'nanopass-unparse (list 'quote name) 'ir)))
+                      (list (string->symbol "nanopass-unparse") (list 'quote name) 'ir)))
           (list 'define (string->symbol (string-append (symbol->string name) "?"))
                 (list 'lambda (list 'expr)
-                      (list 'nanopass-ast-valid? (list 'quote name) 'expr))))))
+                      (list (string->symbol "nanopass-ast-valid?") (list 'quote name) 'expr))))))
 
 ;;; Expand define-parser AST
 (define (nanopass-expand-define-parser form)
   (let ((proc-name (cadr form))
         (lang-name (caddr form)))
     (list 'define (list proc-name 'expr)
-          (list 'nanopass-parse (list 'quote lang-name) 'expr))))
+          (list (string->symbol "nanopass-parse") (list 'quote lang-name) 'expr))))
 
 ;;; Expand define-unparser AST
 (define (nanopass-expand-define-unparser form)
   (let ((proc-name (cadr form))
         (lang-name (caddr form)))
     (list 'define (list proc-name 'ir)
-          (list 'nanopass-unparse (list 'quote lang-name) 'ir))))
+          (list (string->symbol "nanopass-unparse") (list 'quote lang-name) 'ir))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Host / Interpreter Macros (for ilisp and interactive environments)
@@ -2366,7 +2432,7 @@
 (define-macro (in-context . args)
   (if (= (length args) 2)
       (list (car args) (cadr args))
-      (list 'nanopass-parse-nt (list 'quote (car args)) (caddr args) (list 'quote (cadr args)))))
+      (list (string->symbol "nanopass-parse-nt") (list 'quote (car args)) (caddr args) (list 'quote (cadr args)))))
 
 (define-macro (nanopass-template . args)
   (nanopass-expand-template (car args) '()))
@@ -2905,51 +2971,185 @@
 ;;; 5. Pass Timing & Profiling Statistics
 ;;; -----------------------------------------------------------------------
 
-(define *pass-manager-ticks* (cons 0 '()))
+(define *pass-manager-timer-ticks* (cons 0 '()))
+
+(define (current-time-monotonic-us)
+  (let ((p (sys-clock-gettime-monotonic)))
+    (if (and (pair? p) (or (> (car p) 0) (> (cdr p) 0)))
+        (+ (* (car p) 1000000) (quotient (cdr p) 1000))
+        (begin
+          (set-car! *pass-manager-timer-ticks* (+ (car *pass-manager-timer-ticks*) 1000))
+          (car *pass-manager-timer-ticks*)))))
+
 (define (current-time-monotonic-ms)
-  (set-car! *pass-manager-ticks* (+ (car *pass-manager-ticks*) 1))
-  (car *pass-manager-ticks*))
+  (quotient (current-time-monotonic-us) 1000))
+
+(define (current-heap-alloc-bytes)
+  (gc-current-heap-bytes))
+
+;; Formatters
+(define (pad-right str width)
+  (let ((len (string-length str)))
+    (if (>= len width)
+        str
+        (let ((res (make-string width #\space)))
+          (let loop ((i 0))
+            (if (< i len)
+                (begin
+                  (string-set! res i (string-ref str i))
+                  (loop (+ i 1)))
+                res))))))
+
+(define (pad-left str width)
+  (let ((len (string-length str)))
+    (if (>= len width)
+        str
+        (let* ((pad (- width len))
+               (res (make-string width #\space)))
+          (let loop ((i 0))
+            (if (< i len)
+                (begin
+                  (string-set! res (+ pad i) (string-ref str i))
+                  (loop (+ i 1)))
+                res))))))
+
+(define (format-fixed-2-ms us)
+  (let* ((total-cs (quotient (+ us 5) 10))
+         (whole (quotient total-cs 100))
+         (frac (modulo total-cs 100))
+         (whole-str (number->string whole))
+         (frac-str (if (< frac 10)
+                       (string-append "0" (number->string frac))
+                       (number->string frac))))
+    (string-append whole-str "." frac-str " ms")))
+
+(define (format-fixed-1-pct part total)
+  (if (<= total 0)
+      " 0.0%"
+      (let* ((scaled (quotient (* part 1000) total))
+             (whole (quotient scaled 10))
+             (frac (modulo scaled 10))
+             (whole-str (number->string whole))
+             (frac-str (number->string frac)))
+        (string-append whole-str "." frac-str "%"))))
+
+(define (format-alloc-kb bytes)
+  (if (<= bytes 0)
+      "0 KB"
+      (let ((kb (quotient (+ bytes 1023) 1024)))
+        (string-append (number->string kb) " KB"))))
+
+;; Timing Record
+(define (make-pass-timing-entry id name elapsed-us alloc-bytes)
+  (list id name elapsed-us alloc-bytes))
+
+(define (pass-timing-id e) (car e))
+(define (pass-timing-name e) (cadr e))
+(define (pass-timing-elapsed-us e) (caddr e))
+(define (pass-timing-alloc-bytes e) (cadddr e))
 
 (define *pass-timings* (cons '() '()))
 
 (define (reset-pass-timings!)
   (set-car! *pass-timings* '()))
 
-(define (record-pass-timing! pass-id elapsed-ms)
+(define (record-pass-timing! pass-id pass-name elapsed-us alloc-bytes)
   (set-car! *pass-timings*
-            (append (car *pass-timings*) (list (cons pass-id elapsed-ms)))))
+            (append (car *pass-timings*)
+                    (list (make-pass-timing-entry pass-id pass-name elapsed-us alloc-bytes)))))
 
 (define (get-pass-timings)
   (car *pass-timings*))
 
+(define *pass-id-names*
+  '((pass-010-library . "pass-010-library")
+    (pass-015-dsl-expander . "pass-015-dsl-expander")
+    (pass-020-macro-expander . "pass-020-macro-expander")
+    (pass-025-top-level . "pass-025-top-level")
+    (pass-030-desugar . "pass-030-desugar")
+    (pass-035-scope-resolve . "pass-035-scope-resolve")
+    (pass-050-cp0 . "pass-050-cp0")
+    (pass-060-lvn . "pass-060-lvn")
+    (pass-070-anf . "pass-070-anf")
+    (pass-080-annotator . "pass-080-annotator")
+    (pass-090-rtyper . "pass-090-rtyper")
+    (pass-100-contify . "pass-100-contify")
+    (pass-110-closure-convert . "pass-110-closure-convert")
+    (pass-120-alias-escape . "pass-120-alias-escape")
+    (pass-130-lir . "pass-130-lir")
+    (pass-128-lir-branch-fusion . "pass-128-lir-branch-fusion")
+    (pass-133-lir-peephole . "pass-133-lir-peephole")
+    (pass-140-backend-x86-64 . "pass-140-backend-x86-64")
+    (pass-150-backend-aarch64 . "pass-150-backend-aarch64")
+    (pass-160-backend-c . "pass-160-backend-c")))
+
+(define (pass-id->string pid)
+  (if (string? pid)
+      pid
+      (let ((entry (assq pid *pass-id-names*)))
+        (if entry
+            (cdr entry)
+            (if (symbol? pid)
+                (let ((s (symbol->string pid)))
+                  (if (string=? s "?")
+                      "pass"
+                      s))
+                "pass")))))
+
+;; Stderr print wrappers
+(define (display-stderr msg)
+  (display msg (get-compiler-error-port)))
+
+(define (newline-stderr)
+  (newline (get-compiler-error-port)))
+
 (define (print-pass-timing-report)
-  (display "\n======================================================================\n")
-  (display "Pass Execution Profiling Report (--time-passes)\n")
-  (display "======================================================================\n")
   (let* ((timings (car *pass-timings*))
-         (total (let loop ((ts timings) (acc 0))
-                  (if (null? ts)
-                      acc
-                      (loop (cdr ts) (+ acc (cdar ts)))))))
+         (total-us (let loop ((ts timings) (acc 0))
+                     (if (null? ts)
+                         acc
+                         (loop (cdr ts) (+ acc (pass-timing-elapsed-us (car ts)))))))
+         (total-bytes (let loop ((ts timings) (acc 0))
+                        (if (null? ts)
+                            acc
+                            (loop (cdr ts) (+ acc (pass-timing-alloc-bytes (car ts))))))))
+    (display-stderr "\n========================================================================================\n")
+    (display-stderr "ULisp Nanopass Execution Profile (--time-passes)\n")
+    (display-stderr "========================================================================================\n")
+    (display-stderr "Pass ID                  Pass Name                         Time (ms)  Share (%)   Heap (KB)\n")
+    (display-stderr "----------------------------------------------------------------------------------------\n")
     (let loop ((ts timings))
       (if (pair? ts)
           (let* ((entry (car ts))
-                 (pid (car entry))
-                 (ms (cdr entry))
-                 (pct (if (> total 0) (quotient (* ms 100) total) 0)))
-            (display "  ")
-            (display pid)
-            (display " : ")
-            (display ms)
-            (display " ticks (")
-            (display pct)
-            (display "%)\n")
+                 (pid (pass-timing-id entry))
+                 (pname (pass-timing-name entry))
+                 (us (pass-timing-elapsed-us entry))
+                 (bytes (pass-timing-alloc-bytes entry))
+                 (id-str (pass-id->string pid))
+                 (name-str (if (string? pname) pname (if (symbol? pname) (symbol->string pname) id-str)))
+                 (time-str (format-fixed-2-ms us))
+                 (share-str (format-fixed-1-pct us total-us))
+                 (heap-str (format-alloc-kb bytes)))
+            (display-stderr (pad-right id-str 24))
+            (display-stderr " ")
+            (display-stderr (pad-right name-str 32))
+            (display-stderr " ")
+            (display-stderr (pad-left time-str 11))
+            (display-stderr " ")
+            (display-stderr (pad-left share-str 10))
+            (display-stderr " ")
+            (display-stderr (pad-left heap-str 10))
+            (newline-stderr)
             (loop (cdr ts)))))
-    (display "----------------------------------------------------------------------\n")
-    (display "  Total passes time : ")
-    (display total)
-    (display " ticks\n")
-    (display "======================================================================\n\n")))
+    (display-stderr "----------------------------------------------------------------------------------------\n")
+    (display-stderr "Total Compilation Time : ")
+    (display-stderr (format-fixed-2-ms total-us))
+    (newline-stderr)
+    (display-stderr "Total Heap Allocation  : ")
+    (display-stderr (format-alloc-kb total-bytes))
+    (newline-stderr)
+    (display-stderr "========================================================================================\n\n")))
+
 
 ;;; -----------------------------------------------------------------------
 ;;; 6. IR Dump & Observability
@@ -2973,27 +3173,40 @@
 
 (define (run-single-pass pass-desc input-ast verify-mode trace-mode)
   (let* ((id (pass-id pass-desc))
+         (pname (pass-name pass-desc))
          (fn (pass-fn pass-desc))
          (vphase (pass-verifier-phase pass-desc)))
     (set-current-pass! id)
     (with-call-frame id input-ast
       (lambda ()
-        (let* ((t0 (current-time-monotonic-ms))
-               (output-ast (fn input-ast))
-               (t1 (current-time-monotonic-ms))
-               (d (- t1 t0))
-               (elapsed (if (< d 0) 0 d)))
-          (if (pipeline-time-passes?)
-              (record-pass-timing! id elapsed))
-          (if trace-mode
-              (nanopass-display-ast-diff id input-ast output-ast))
-          (if (or (pipeline-print-after-all?)
-                  (eq? (pipeline-dump-ir) id)
-                  (eq? (pipeline-dump-ir) 'all))
-              (dump-pass-ir id 'output output-ast))
-          (if (and verify-mode vphase)
-              (verify-pass-output vphase output-ast))
-          output-ast)))))
+        (if (pipeline-time-passes?)
+            (let* ((t0 (current-time-monotonic-us))
+                   (m0 (current-heap-alloc-bytes))
+                   (output-ast (fn input-ast))
+                   (t1 (current-time-monotonic-us))
+                   (m1 (current-heap-alloc-bytes))
+                   (elapsed-us (let ((d (- t1 t0))) (if (< d 0) 0 d)))
+                   (alloc-bytes (let ((d (- m1 m0))) (if (< d 0) 0 d))))
+              (record-pass-timing! id pname elapsed-us alloc-bytes)
+              (if trace-mode
+                  (nanopass-display-ast-diff id input-ast output-ast))
+              (if (or (pipeline-print-after-all?)
+                      (eq? (pipeline-dump-ir) id)
+                      (eq? (pipeline-dump-ir) 'all))
+                  (dump-pass-ir id 'output output-ast))
+              (if (and verify-mode vphase)
+                  (verify-pass-output vphase output-ast))
+              output-ast)
+            (let ((output-ast (fn input-ast)))
+              (if trace-mode
+                  (nanopass-display-ast-diff id input-ast output-ast))
+              (if (or (pipeline-print-after-all?)
+                      (eq? (pipeline-dump-ir) id)
+                      (eq? (pipeline-dump-ir) 'all))
+                  (dump-pass-ir id 'output output-ast))
+              (if (and verify-mode vphase)
+                  (verify-pass-output vphase output-ast))
+              output-ast))))))
 
 (define (run-pass-pipeline forms verify-mode trace-mode)
   (if (null? (car *pass-registry*))
@@ -3013,8 +3226,6 @@
     (let loop ((ps pipeline) (current-ast forms))
       (if (null? ps)
           (begin
-            (if (pipeline-time-passes?)
-                (print-pass-timing-report))
             (if verify-mode
                 (verify-pass-output 'lir current-ast))
             current-ast)
@@ -5325,7 +5536,7 @@
   (cond
     ((null? args) "")
     ((null? (cdr args)) (car args))
-    ((null? (cddr args)) (list 'string-append2 (car args) (cadr args)))
+    ((null? (cddr args)) (list (string->symbol "string-append2") (car args) (cadr args)))
     (else
      ;; Split args into two halves to keep tree depth O(log N)
      (let* ((len (length args))
@@ -5333,7 +5544,7 @@
        (let loop ((rest args) (i 0) (left '()))
          (if (< i half)
              (loop (cdr rest) (+ i 1) (cons (car rest) left))
-             (list 'string-append2
+             (list (string->symbol "string-append2")
                    (desugar-string-append (reverse left))
                    (desugar-string-append rest))))))))
 
@@ -5352,14 +5563,14 @@
   (cond
     ((null? args) (list '%make-bytevector 0))
     ((null? (cdr args)) (car args))
-    ((null? (cddr args)) (list 'bytevector-append2 (car args) (cadr args)))
+    ((null? (cddr args)) (list (string->symbol "bytevector-append2") (car args) (cadr args)))
     (else
      (let* ((len (length args))
             (half (quotient len 2)))
        (let loop ((rest args) (i 0) (left '()))
          (if (< i half)
              (loop (cdr rest) (+ i 1) (cons (car rest) left))
-             (list 'bytevector-append2
+             (list (string->symbol "bytevector-append2")
                    (desugar-bytevector-append (reverse left))
                    (desugar-bytevector-append rest))))))))
 
@@ -5378,14 +5589,14 @@
   (cond
     ((null? args) (list '%make-vector 0))
     ((null? (cdr args)) (car args))
-    ((null? (cddr args)) (list 'vector-append2 (car args) (cadr args)))
+    ((null? (cddr args)) (list (string->symbol "vector-append2") (car args) (cadr args)))
     (else
      (let* ((len (length args))
             (half (quotient len 2)))
        (let loop ((rest args) (i 0) (left '()))
          (if (< i half)
              (loop (cdr rest) (+ i 1) (cons (car rest) left))
-             (list 'vector-append2
+             (list (string->symbol "vector-append2")
                    (desugar-vector-append (reverse left))
                    (desugar-vector-append rest))))))))
 
@@ -12949,14 +13160,14 @@
       ((%global-ref)
        (let ((reg (cadr inst))
              (var (caddr inst)))
-         (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string var)))))
+         (let ((g-lbl (mangle-gvar-label var)))
            (list (list '%raw-asm (string-append "    lea r11, [rip + " g-lbl "]"))
                  (list '%raw-asm (string-append "    mov " (reg->str reg) ", [r11]"))))))
 
       ((%global-set!)
        (let ((var (cadr inst))
              (reg (caddr inst)))
-         (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string var)))))
+         (let ((g-lbl (mangle-gvar-label var)))
            (list (list '%raw-asm (string-append "    lea r11, [rip + " g-lbl "]"))
                  (list '%raw-asm (string-append "    mov [r11], " (reg->str reg)))))))
 
@@ -13371,32 +13582,54 @@
     (emit ".L_start_no_args:")
     (emit "    mov rbp, rsp")
     (emit "    and rsp, -16")
-    ;; Scan env var ULISP_QUIET
+    ;; Scan env vars: ULISP_QUIET and ULISP_BENCH_PASSES
     (emit "    mov rcx, [rbp]")                 ; argc
     (emit "    lea rdx, [rbp + 16]")            ; &argv[0]
     (emit "    lea rdx, [rdx + rcx*8]")         ; past argv NULL -> envp
-    (emit ".L_quiet_scan_loop:")
+    (emit ".L_flags_scan_loop:")
     (emit "    mov rsi, [rdx]")
     (emit "    test rsi, rsi")
-    (emit "    jz .L_quiet_scan_done")
+    (emit "    jz .L_flags_scan_done")
     (emit "    add rdx, 8")
     ;; Check prefix "ULISP_QUIET=" (12 chars: 8 bytes + 4 bytes)
     (emit "    mov rax, [rsi]")
     (emit "    mov r8, [rip + .L_str_env_quiet]")
     (emit "    cmp rax, r8")
-    (emit "    jne .L_quiet_scan_loop")
+    (emit "    jne .L_check_bench")
     (emit "    mov eax, [rsi + 8]")
     (emit "    mov r8d, [rip + .L_str_env_quiet + 8]")
     (emit "    cmp eax, r8d")
-    (emit "    jne .L_quiet_scan_loop")
-    ;; Matched "ULISP_QUIET="
+    (emit "    jne .L_check_bench")
     (emit "    cmp byte ptr [rsi + 12], 0")
-    (emit "    je .L_quiet_scan_loop")
+    (emit "    je .L_check_bench")
     (emit "    cmp byte ptr [rsi + 12], '0'")
-    (emit "    je .L_quiet_scan_loop")
+    (emit "    je .L_check_bench")
     (emit "    lea rax, [rip + ulisp_quiet_mode]")
     (emit "    mov byte ptr [rax], 1")
-    (emit ".L_quiet_scan_done:")
+    (emit ".L_check_bench:")
+    ;; Check prefix "ULISP_BENCH_PASSES=" (19 chars: 8 + 8 + 3)
+    (emit "    mov rax, [rsi]")
+    (emit "    mov r8, [rip + .L_str_env_bench]")
+    (emit "    cmp rax, r8")
+    (emit "    jne .L_flags_scan_loop")
+    (emit "    mov rax, [rsi + 8]")
+    (emit "    mov r8, [rip + .L_str_env_bench + 8]")
+    (emit "    cmp rax, r8")
+    (emit "    jne .L_flags_scan_loop")
+    (emit "    cmp byte ptr [rsi + 16], 'E'")
+    (emit "    jne .L_flags_scan_loop")
+    (emit "    cmp byte ptr [rsi + 17], 'S'")
+    (emit "    jne .L_flags_scan_loop")
+    (emit "    cmp byte ptr [rsi + 18], '='")
+    (emit "    jne .L_flags_scan_loop")
+    (emit "    cmp byte ptr [rsi + 19], 0")
+    (emit "    je .L_flags_scan_loop")
+    (emit "    cmp byte ptr [rsi + 19], '0'")
+    (emit "    je .L_flags_scan_loop")
+    (emit "    lea rax, [rip + ulisp_bench_passes_mode]")
+    (emit "    mov byte ptr [rax], 1")
+    (emit "    jmp .L_flags_scan_loop")
+    (emit ".L_flags_scan_done:")
     (cond
       ((eq? gc-mode 'none)
        (emit "    mov rax, 9")                     ; sys_mmap
@@ -13704,7 +13937,7 @@
       (emit "    .section ulisp_globals_sec, \"a\"")
       (emit "    .p2align 3")
       (for-each (lambda (v)
-                  (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string v)))))
+                  (let ((g-lbl (mangle-gvar-label v)))
                     (emit (string-append "    .quad " g-lbl))))
                 gvs))
     ;; Emit symbols metadata table in .rodata section
@@ -13739,6 +13972,9 @@
     (emit "    .align 8")
     (emit ".L_str_env_quiet:")
     (emit "    .ascii \"ULISP_QUIET=\"")
+    (emit "    .align 8")
+    (emit ".L_str_env_bench:")
+    (emit "    .ascii \"ULISP_BENCH_PASSES=\"")
     (emit "    .section .data")
     (if (not (null? (car *strings*)))
         (let loop ((ss (reverse (car *strings*))))
@@ -13777,7 +14013,7 @@
     (let loop ((gvs (car *top-level-vars*)))
       (if (pair? gvs)
           (let ((v (car gvs)))
-            (let ((g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string v)))))
+            (let ((g-lbl (mangle-gvar-label v)))
               (emit "    .align 8")
               (emit (string-append "    .globl " g-lbl))
               (emit (string-append "    .weak " g-lbl))
@@ -13790,9 +14026,9 @@
           (let* ((entry (car gfs))
                  (fn-name (car entry))
                  (fn-lbl (cdr entry))
-                 (fn-lbl-str (if (symbol? fn-lbl) (symbol->string fn-lbl) fn-lbl))
-                 (g-lbl (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string fn-name))))
-                 (sc-lbl (string-append ".L_static_closure_" (sanitize-label-str (symbol->string fn-name)))))
+                 (fn-lbl-str (if (symbol? fn-lbl) (symbol->raw-name fn-lbl) fn-lbl))
+                 (g-lbl (mangle-gvar-label fn-name))
+                 (sc-lbl (string-append ".L_static_closure_" (sanitize-label-str (symbol->raw-name fn-name)))))
             (emit "    .align 16")
             (emit (string-append sc-lbl ":"))
             (emit "    .quad 4195336")
@@ -13809,6 +14045,12 @@
     (emit "    .weak ulisp_quiet_mode")
     (emit "    .type ulisp_quiet_mode, @object")
     (emit "ulisp_quiet_mode:")
+    (emit "    .byte 0")
+    (emit "    .align 8")
+    (emit "    .globl ulisp_bench_passes_mode")
+    (emit "    .weak ulisp_bench_passes_mode")
+    (emit "    .type ulisp_bench_passes_mode, @object")
+    (emit "ulisp_bench_passes_mode:")
     (emit "    .byte 0")
     (emit "    .align 8")
     (emit "    .globl ulisp_gc_stress_mode")
@@ -13842,6 +14084,17 @@
     (emit "    .weak ulisp_io_buf")
     (emit "ulisp_io_buf:")
     (emit "    .space 32")
+    (emit "    .text")
+    (emit "    .globl ulisp_fn_sys_bench_passes_p")
+    (emit "    .weak ulisp_fn_sys_bench_passes_p")
+    (emit "    .type ulisp_fn_sys_bench_passes_p, @function")
+    (emit "ulisp_fn_sys_bench_passes_p:")
+    (emit "    lea rax, [rip + ulisp_bench_passes_mode]")
+    (emit "    cmp byte ptr [rax], 0")
+    (emit "    mov rax, 47")
+    (emit "    mov rdx, 111")
+    (emit "    cmovne rax, rdx")
+    (emit "    ret")
     (emit "    .section .note.GNU-stack,\"\",@progbits")))
 
 ;;; -----------------------------------------------------------------------
@@ -17457,7 +17710,33 @@
           (reverse acc)
           (loop (cons expr acc))))))
 
+(define (detect-bench-passes-env)
+  (let ((v (sys-getenv "ULISP_BENCH_PASSES")))
+    (if (and (string? v) (or (string=? v "1") (string=? v "true")))
+        #t
+        (let ((p (open-input-file "/proc/self/environ")))
+          (if (not p)
+              #f
+              (let loop ((matched 0))
+                (let ((c (port-read-char p)))
+                  (cond
+                    ((eof-object? c)
+                     (close-input-port p)
+                     #f)
+                    ((char=? c (string-ref "ULISP_BENCH_PASSES=1" matched))
+                     (if (= (+ matched 1) 20)
+                         (begin
+                           (close-input-port p)
+                           #t)
+                         (loop (+ matched 1))))
+                    ((char=? c (string-ref "ULISP_BENCH_PASSES=1" 0))
+                     (loop 1))
+                    (else
+                     (loop 0))))))))))
+
 (define (extract-directives-and-forms raw-forms)
+  (if (detect-bench-passes-env)
+      (enable-pipeline-time-passes!))
   (let ((initial-gc 'all))
     (let loop ((forms raw-forms)
                (target 'x86_64)
@@ -17537,11 +17816,15 @@
                (let ((vmode (if (pair? (cdr first)) (cadr first) #t)))
                  (loop (cdr forms) target gc-mode vmode trace debug)))
               ;; Pass timing / profiling directives
-              ((or (eq? first '--time-passes) (eq? first '!time-passes))
+              ((or (eq? first '--time-passes)
+                   (eq? first '!time-passes)
+                   (and (pair? first) (or (eq? (car first) '!time-passes) (eq? (car first) '--time-passes))))
                (enable-pipeline-time-passes!)
                (loop (cdr forms) target gc-mode verify trace debug))
               ;; IR Dump directives
-              ((or (eq? first '--print-after-all) (eq? first '!print-after-all))
+              ((or (eq? first '--print-after-all)
+                   (eq? first '!print-after-all)
+                   (and (pair? first) (or (eq? (car first) '!print-after-all) (eq? (car first) '--print-after-all))))
                (enable-pipeline-print-after-all!)
                (loop (cdr forms) target gc-mode verify trace debug))
               ((and (pair? first) (eq? (car first) '!dump-ir) (pair? (cdr first)))
@@ -17600,17 +17883,37 @@
   (run-pass-pipeline forms verify-mode trace-mode))
 
 (define (compile-backend lir-ast target gc-mode)
-  (let ((pass-name (string->symbol (string-append "backend-" (symbol->string target)))))
-    (set-current-pass! pass-name)
-    (with-call-frame pass-name lir-ast
+  (let* ((tgt-str (cond ((eq? target 'c) "c") ((eq? target 'aarch64) "aarch64") (else "x86-64")))
+         (pass-id (cond ((eq? target 'c) 'pass-160-backend-c)
+                        ((eq? target 'aarch64) 'pass-150-backend-aarch64)
+                        (else 'pass-140-backend-x86-64)))
+         (pass-name (string-append "Backend Code Generation (" tgt-str ")")))
+    (set-current-pass! pass-id)
+    (with-call-frame pass-id lir-ast
       (lambda ()
-        (cond
-          ((eq? target 'c)
-           (emit-c lir-ast gc-mode))
-          ((eq? target 'aarch64)
-           (emit-aarch64 lir-ast gc-mode))
-          (else
-           (emit-x86-64 lir-ast gc-mode)))))))
+        (if (pipeline-time-passes?)
+            (let* ((t0 (current-time-monotonic-us))
+                   (m0 (current-heap-alloc-bytes))
+                   (res (cond
+                          ((eq? target 'c)
+                           (emit-c lir-ast gc-mode))
+                          ((eq? target 'aarch64)
+                           (emit-aarch64 lir-ast gc-mode))
+                          (else
+                           (emit-x86-64 lir-ast gc-mode))))
+                   (t1 (current-time-monotonic-us))
+                   (m1 (current-heap-alloc-bytes))
+                   (elapsed-us (let ((d (- t1 t0))) (if (< d 0) 0 d)))
+                   (alloc-bytes (let ((d (- m1 m0))) (if (< d 0) 0 d))))
+              (record-pass-timing! pass-id pass-name elapsed-us alloc-bytes)
+              res)
+            (cond
+              ((eq? target 'c)
+               (emit-c lir-ast gc-mode))
+              ((eq? target 'aarch64)
+               (emit-aarch64 lir-ast gc-mode))
+              (else
+               (emit-x86-64 lir-ast gc-mode))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Canonical LIR S-expression Serializer
@@ -17727,17 +18030,24 @@
         ;; 1. LIR Intermediate Output Mode (--target-lir or (!target lir))
         ((eq? target 'lir)
          (let ((lir (compile-to-lir forms verify-mode trace-mode)))
-           (dump-lir-ast lir)))
+           (dump-lir-ast lir)
+           (if (pipeline-time-passes?)
+               (print-pass-timing-report))))
         ;; 2. Direct LIR Ingestion Mode (Input is already a Canonical LIR S-expression)
         ((and (pair? forms) (pair? (car forms)) (eq? (caar forms) '%lir-program))
          (let ((lir (car forms)))
+           (reset-pass-timings!)
            (if verify-mode
                (begin
                  (enable-verifier!)
                  (verify-pass-output 'lir lir)))
-           (compile-backend lir target gc-mode)))
+           (compile-backend lir target gc-mode)
+           (if (pipeline-time-passes?)
+               (print-pass-timing-report))))
         ;; 3. Standard Full Pipeline (Frontend -> LIR -> Backend)
         (else
          (let ((lir (compile-to-lir forms verify-mode trace-mode)))
-           (compile-backend lir target gc-mode))))))
+           (compile-backend lir target gc-mode)
+           (if (pipeline-time-passes?)
+               (print-pass-timing-report)))))))
 

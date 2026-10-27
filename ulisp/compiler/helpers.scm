@@ -470,8 +470,8 @@
       ;; Early pruning for large length difference
       ((> (abs (- len1 len2)) 10) (abs (- len1 len2)))
       (else
-       (let ((v0 (make-vector (+ len2 1) 0))
-             (v1 (make-vector (+ len2 1) 0)))
+       (let ((v0 (make-vector (+ len2 1)))
+             (v1 (make-vector (+ len2 1))))
          (let init-v0 ((j 0))
            (if (<= j len2)
                (begin
@@ -838,11 +838,43 @@
           (set-car! *symbol-table* (cons (list sym id str) (car *symbol-table*)))
           id))))
 
+(define *known-compiler-symbols*
+  '((string-append2 . "string-append2")
+    (vector-append2 . "vector-append2")
+    (bytevector-append2 . "bytevector-append2")
+    (nanopass-try-clause . "nanopass-try-clause")
+    (nanopass-catamorphism-step . "nanopass-catamorphism-step")
+    (set-current-pass! . "set-current-pass!")
+    (nanopass-verifier-enabled? . "nanopass-verifier-enabled?")
+    (nanopass-verify-ast . "nanopass-verify-ast")
+    (with-call-frame . "with-call-frame")
+    (nanopass-display-ast-diff . "nanopass-display-ast-diff")
+    (nanopass-trace-enabled? . "nanopass-trace-enabled?")
+    (nanopass-register-language! . "nanopass-register-language!")
+    (nanopass-parse-language-spec . "nanopass-parse-language-spec")
+    (nanopass-parse . "nanopass-parse")
+    (nanopass-unparse . "nanopass-unparse")
+    (nanopass-ast-valid? . "nanopass-ast-valid?")
+    (nanopass-parse-nt . "nanopass-parse-nt")
+    (current-jiffy . "current-jiffy")
+    (jiffies-per-second . "jiffies-per-second")
+    (sys-getenv . "sys-getenv")
+    (sys-bench-passes? . "sys-bench-passes?")
+    (sys-clock-gettime-monotonic . "sys-clock-gettime-monotonic")
+    (gc-current-heap-bytes . "gc-current-heap-bytes")))
+
 (define (symbol->raw-name sym)
   (let ((entry (assq sym (car *symbol-table*))))
     (if (and entry (pair? (cdr entry)) (pair? (cddr entry)))
         (caddr entry)
-        (symbol->string sym))))
+        (let ((known (assq sym *known-compiler-symbols*)))
+          (if known
+              (cdr known)
+              (let ((s (symbol->string sym)))
+                (if (string=? s "?")
+                    (let ((k2 (assq sym *known-compiler-symbols*)))
+                      (if k2 (cdr k2) s))
+                    s)))))))
 
 (define (get-all-symbols)
   (if (pair? *symbol-table*)
@@ -927,17 +959,51 @@
           res))))
 
 (define (mangle-fn-label name)
-  (string->symbol (string-append "ulisp_fn_" (sanitize-label-str (symbol->string name)))))
+  (string->symbol (string-append "ulisp_fn_" (sanitize-label-str (symbol->raw-name name)))))
 
 (define (mangle-gvar-label name)
-  (string-append "ulisp_gvar_" (sanitize-label-str (symbol->string name))))
+  (string-append "ulisp_gvar_" (sanitize-label-str (symbol->raw-name name))))
 
 (define (mangle-mod-init-label mod-id)
-  (string-append "ulisp_mod_init_" (sanitize-label-str (if (symbol? mod-id) (symbol->string mod-id) mod-id))))
+  (string-append "ulisp_mod_init_" (sanitize-label-str (if (symbol? mod-id) (symbol->raw-name mod-id) mod-id))))
 
 (define (make-body-expr bodies)
   (cond
     ((null? bodies) (list 'begin))
     ((null? (cdr bodies)) (car bodies))
     (else (cons 'begin bodies))))
+
+;;; -----------------------------------------------------------------------
+;;; Standard Error & Profiling Port / Timer Fallbacks (Issue #621)
+;;; -----------------------------------------------------------------------
+
+(define *compiler-stderr-port* (cons '%standard-output-port (cons 2 '())))
+
+(define (get-compiler-error-port)
+  (cond
+    ((and (procedure? current-error-port) (not (null? (current-error-port))))
+     (current-error-port))
+    (else
+     *compiler-stderr-port*)))
+
+(define (sys-clock-gettime-monotonic)
+  (cons 0 0))
+
+(define (gc-current-heap-bytes)
+  0)
+
+(define (sys-getenv name)
+  #f)
+
+(define (sys-bench-passes?)
+  #f)
+
+(define (current-jiffy)
+  0)
+
+(define (jiffies-per-second)
+  1000000000)
+
+
+
 

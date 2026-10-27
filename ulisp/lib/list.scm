@@ -69,3 +69,20 @@
 
 (define (cadddr x) (car (cdr (cdr (cdr x)))))
 (define (cddddr x) (cdr (cdr (cdr (cdr x)))))
+
+;; ---------------------------------------------------------------------
+;; §6.4 Pairs and lists: memq & assq
+;; ---------------------------------------------------------------------
+(define (memq item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((eq? (car ls) item) ls)
+    (else (memq item (cdr ls)))))
+
+(define (assq item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((not (pair? (car ls))) (assq item (cdr ls)))
+    ((eq? (caar ls) item) (car ls))
+    (else (assq item (cdr ls)))))
+

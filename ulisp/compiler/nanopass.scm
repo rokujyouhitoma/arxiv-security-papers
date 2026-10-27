@@ -47,7 +47,7 @@
     (let loop ((rs rules))
       (if (null? rs)
           (if (null? extra-in)
-              (list 'nanopass-catamorphism-step
+              (list (string->symbol "nanopass-catamorphism-step")
                     (list 'quote l-in)
                     (list 'quote l-out)
                     (list 'quote nt-name)
@@ -55,7 +55,7 @@
                     nt-name
                     ''()
                     (list 'quote extra-out))
-              (list 'nanopass-catamorphism-step
+              (list (string->symbol "nanopass-catamorphism-step")
                     (list 'quote l-in)
                     (list 'quote l-out)
                     (list 'quote nt-name)
@@ -70,7 +70,7 @@
                  (body-expr (cadddr r))
                  (c-var (unique-symbol "__c_")))
             (list 'let (list (list c-var
-                                   (list 'nanopass-try-clause
+                                   (list (string->symbol "nanopass-try-clause")
                                          (list 'quote pat)
                                          (list 'quote vars)
                                          ir-var
@@ -139,23 +139,23 @@
                   (list 'letrec
                         (append (reverse defs) (reverse nt-procs))
                         (list 'begin
-                              (list 'set-current-pass! (list 'quote name))
-                              (list 'if (list 'nanopass-verifier-enabled?)
-                                    (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-in) ir-var ''entry)
+                              (list (string->symbol "set-current-pass!") (list 'quote name))
+                              (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
+                                    (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-in) ir-var ''entry)
                                     #f)
-                              (list 'with-call-frame (list 'quote name) ir-var
+                              (list (string->symbol "with-call-frame") (list 'quote name) ir-var
                                     (list 'lambda '()
                                           (list 'let (list (list res-var body-call))
-                                                (list 'if (list 'nanopass-verifier-enabled?)
-                                                      (list 'nanopass-verify-ast (list 'quote name) (list 'quote l-out) res-var ''exit)
+                                                (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
+                                                      (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-out) res-var ''exit)
                                                       #f)
                                                 (if force-trace?
                                                     (list 'begin
-                                                          (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                                          (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
                                                           res-var)
                                                     (list 'begin
-                                                          (list 'if (list 'nanopass-trace-enabled?)
-                                                                (list 'nanopass-display-ast-diff (list 'quote name) ir-var res-var)
+                                                          (list 'if (list (string->symbol "nanopass-trace-enabled?"))
+                                                                (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
                                                                 #f)
                                                           res-var)))))))))
           (let ((c (car rest)))
@@ -207,33 +207,33 @@
          (clauses (cddr form)))
     (list 'begin
           (list 'define (string->symbol (string-append "__lang_" (symbol->string name)))
-                (list 'nanopass-register-language!
-                      (list 'nanopass-parse-language-spec
+                (list (string->symbol "nanopass-register-language!")
+                      (list (string->symbol "nanopass-parse-language-spec")
                             (list 'quote name)
                             (list 'quote clauses))))
           (list 'define (string->symbol (string-append "parse-" (symbol->string name)))
                 (list 'lambda (list 'expr)
-                      (list 'nanopass-parse (list 'quote name) 'expr)))
+                      (list (string->symbol "nanopass-parse") (list 'quote name) 'expr)))
           (list 'define (string->symbol (string-append "unparse-" (symbol->string name)))
                 (list 'lambda (list 'ir)
-                      (list 'nanopass-unparse (list 'quote name) 'ir)))
+                      (list (string->symbol "nanopass-unparse") (list 'quote name) 'ir)))
           (list 'define (string->symbol (string-append (symbol->string name) "?"))
                 (list 'lambda (list 'expr)
-                      (list 'nanopass-ast-valid? (list 'quote name) 'expr))))))
+                      (list (string->symbol "nanopass-ast-valid?") (list 'quote name) 'expr))))))
 
 ;;; Expand define-parser AST
 (define (nanopass-expand-define-parser form)
   (let ((proc-name (cadr form))
         (lang-name (caddr form)))
     (list 'define (list proc-name 'expr)
-          (list 'nanopass-parse (list 'quote lang-name) 'expr))))
+          (list (string->symbol "nanopass-parse") (list 'quote lang-name) 'expr))))
 
 ;;; Expand define-unparser AST
 (define (nanopass-expand-define-unparser form)
   (let ((proc-name (cadr form))
         (lang-name (caddr form)))
     (list 'define (list proc-name 'ir)
-          (list 'nanopass-unparse (list 'quote lang-name) 'ir))))
+          (list (string->symbol "nanopass-unparse") (list 'quote lang-name) 'ir))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Host / Interpreter Macros (for ilisp and interactive environments)
@@ -256,7 +256,7 @@
 (define-macro (in-context . args)
   (if (= (length args) 2)
       (list (car args) (cadr args))
-      (list 'nanopass-parse-nt (list 'quote (car args)) (caddr args) (list 'quote (cadr args)))))
+      (list (string->symbol "nanopass-parse-nt") (list 'quote (car args)) (caddr args) (list 'quote (cadr args)))))
 
 (define-macro (nanopass-template . args)
   (nanopass-expand-template (car args) '()))

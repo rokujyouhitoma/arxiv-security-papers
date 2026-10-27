@@ -10,7 +10,33 @@
           (reverse acc)
           (loop (cons expr acc))))))
 
+(define (detect-bench-passes-env)
+  (let ((v (sys-getenv "ULISP_BENCH_PASSES")))
+    (if (and (string? v) (or (string=? v "1") (string=? v "true")))
+        #t
+        (let ((p (open-input-file "/proc/self/environ")))
+          (if (not p)
+              #f
+              (let loop ((matched 0))
+                (let ((c (port-read-char p)))
+                  (cond
+                    ((eof-object? c)
+                     (close-input-port p)
+                     #f)
+                    ((char=? c (string-ref "ULISP_BENCH_PASSES=1" matched))
+                     (if (= (+ matched 1) 20)
+                         (begin
+                           (close-input-port p)
+                           #t)
+                         (loop (+ matched 1))))
+                    ((char=? c (string-ref "ULISP_BENCH_PASSES=1" 0))
+                     (loop 1))
+                    (else
+                     (loop 0))))))))))
+
 (define (extract-directives-and-forms raw-forms)
+  (if (detect-bench-passes-env)
+      (enable-pipeline-time-passes!))
   (let ((initial-gc 'all))
     (let loop ((forms raw-forms)
                (target 'x86_64)
@@ -90,11 +116,15 @@
                (let ((vmode (if (pair? (cdr first)) (cadr first) #t)))
                  (loop (cdr forms) target gc-mode vmode trace debug)))
               ;; Pass timing / profiling directives
-              ((or (eq? first '--time-passes) (eq? first '!time-passes))
+              ((or (eq? first '--time-passes)
+                   (eq? first '!time-passes)
+                   (and (pair? first) (or (eq? (car first) '!time-passes) (eq? (car first) '--time-passes))))
                (enable-pipeline-time-passes!)
                (loop (cdr forms) target gc-mode verify trace debug))
               ;; IR Dump directives
-              ((or (eq? first '--print-after-all) (eq? first '!print-after-all))
+              ((or (eq? first '--print-after-all)
+                   (eq? first '!print-after-all)
+                   (and (pair? first) (or (eq? (car first) '!print-after-all) (eq? (car first) '--print-after-all))))
                (enable-pipeline-print-after-all!)
                (loop (cdr forms) target gc-mode verify trace debug))
               ((and (pair? first) (eq? (car first) '!dump-ir) (pair? (cdr first)))
@@ -153,17 +183,37 @@
   (run-pass-pipeline forms verify-mode trace-mode))
 
 (define (compile-backend lir-ast target gc-mode)
-  (let ((pass-name (string->symbol (string-append "backend-" (symbol->string target)))))
-    (set-current-pass! pass-name)
-    (with-call-frame pass-name lir-ast
+  (let* ((tgt-str (cond ((eq? target 'c) "c") ((eq? target 'aarch64) "aarch64") (else "x86-64")))
+         (pass-id (cond ((eq? target 'c) 'pass-160-backend-c)
+                        ((eq? target 'aarch64) 'pass-150-backend-aarch64)
+                        (else 'pass-140-backend-x86-64)))
+         (pass-name (string-append "Backend Code Generation (" tgt-str ")")))
+    (set-current-pass! pass-id)
+    (with-call-frame pass-id lir-ast
       (lambda ()
-        (cond
-          ((eq? target 'c)
-           (emit-c lir-ast gc-mode))
-          ((eq? target 'aarch64)
-           (emit-aarch64 lir-ast gc-mode))
-          (else
-           (emit-x86-64 lir-ast gc-mode)))))))
+        (if (pipeline-time-passes?)
+            (let* ((t0 (current-time-monotonic-us))
+                   (m0 (current-heap-alloc-bytes))
+                   (res (cond
+                          ((eq? target 'c)
+                           (emit-c lir-ast gc-mode))
+                          ((eq? target 'aarch64)
+                           (emit-aarch64 lir-ast gc-mode))
+                          (else
+                           (emit-x86-64 lir-ast gc-mode))))
+                   (t1 (current-time-monotonic-us))
+                   (m1 (current-heap-alloc-bytes))
+                   (elapsed-us (let ((d (- t1 t0))) (if (< d 0) 0 d)))
+                   (alloc-bytes (let ((d (- m1 m0))) (if (< d 0) 0 d))))
+              (record-pass-timing! pass-id pass-name elapsed-us alloc-bytes)
+              res)
+            (cond
+              ((eq? target 'c)
+               (emit-c lir-ast gc-mode))
+              ((eq? target 'aarch64)
+               (emit-aarch64 lir-ast gc-mode))
+              (else
+               (emit-x86-64 lir-ast gc-mode))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Canonical LIR S-expression Serializer
@@ -280,17 +330,24 @@
         ;; 1. LIR Intermediate Output Mode (--target-lir or (!target lir))
         ((eq? target 'lir)
          (let ((lir (compile-to-lir forms verify-mode trace-mode)))
-           (dump-lir-ast lir)))
+           (dump-lir-ast lir)
+           (if (pipeline-time-passes?)
+               (print-pass-timing-report))))
         ;; 2. Direct LIR Ingestion Mode (Input is already a Canonical LIR S-expression)
         ((and (pair? forms) (pair? (car forms)) (eq? (caar forms) '%lir-program))
          (let ((lir (car forms)))
+           (reset-pass-timings!)
            (if verify-mode
                (begin
                  (enable-verifier!)
                  (verify-pass-output 'lir lir)))
-           (compile-backend lir target gc-mode)))
+           (compile-backend lir target gc-mode)
+           (if (pipeline-time-passes?)
+               (print-pass-timing-report))))
         ;; 3. Standard Full Pipeline (Frontend -> LIR -> Backend)
         (else
          (let ((lir (compile-to-lir forms verify-mode trace-mode)))
-           (compile-backend lir target gc-mode))))))
+           (compile-backend lir target gc-mode)
+           (if (pipeline-time-passes?)
+               (print-pass-timing-report)))))))
 

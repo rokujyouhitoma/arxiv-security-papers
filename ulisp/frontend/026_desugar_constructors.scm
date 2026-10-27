@@ -13,7 +13,7 @@
   (cond
     ((null? args) "")
     ((null? (cdr args)) (car args))
-    ((null? (cddr args)) (list 'string-append2 (car args) (cadr args)))
+    ((null? (cddr args)) (list (string->symbol "string-append2") (car args) (cadr args)))
     (else
      ;; Split args into two halves to keep tree depth O(log N)
      (let* ((len (length args))
@@ -21,7 +21,7 @@
        (let loop ((rest args) (i 0) (left '()))
          (if (< i half)
              (loop (cdr rest) (+ i 1) (cons (car rest) left))
-             (list 'string-append2
+             (list (string->symbol "string-append2")
                    (desugar-string-append (reverse left))
                    (desugar-string-append rest))))))))
 
@@ -40,14 +40,14 @@
   (cond
     ((null? args) (list '%make-bytevector 0))
     ((null? (cdr args)) (car args))
-    ((null? (cddr args)) (list 'bytevector-append2 (car args) (cadr args)))
+    ((null? (cddr args)) (list (string->symbol "bytevector-append2") (car args) (cadr args)))
     (else
      (let* ((len (length args))
             (half (quotient len 2)))
        (let loop ((rest args) (i 0) (left '()))
          (if (< i half)
              (loop (cdr rest) (+ i 1) (cons (car rest) left))
-             (list 'bytevector-append2
+             (list (string->symbol "bytevector-append2")
                    (desugar-bytevector-append (reverse left))
                    (desugar-bytevector-append rest))))))))
 
@@ -66,14 +66,14 @@
   (cond
     ((null? args) (list '%make-vector 0))
     ((null? (cdr args)) (car args))
-    ((null? (cddr args)) (list 'vector-append2 (car args) (cadr args)))
+    ((null? (cddr args)) (list (string->symbol "vector-append2") (car args) (cadr args)))
     (else
      (let* ((len (length args))
             (half (quotient len 2)))
        (let loop ((rest args) (i 0) (left '()))
          (if (< i half)
              (loop (cdr rest) (+ i 1) (cons (car rest) left))
-             (list 'vector-append2
+             (list (string->symbol "vector-append2")
                    (desugar-vector-append (reverse left))
                    (desugar-vector-append rest))))))))
 

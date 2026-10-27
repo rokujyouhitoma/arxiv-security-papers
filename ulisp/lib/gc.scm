@@ -31,6 +31,11 @@
 (define (set-gc-count! v) (%raw-store! (%get-gc-state-ptr) 32 v))
 (define (set-gc-free! v) (%raw-store! (%get-gc-state-ptr) 40 v))
 
+;; Current heap allocation position (nursery bump pointer %r12)
+(define (gc-current-heap-bytes)
+  (%to-fixnum (%get-heap-ptr)))
+
+
 ;; Generational mode accessors
 (define (gc-nursery-base) (%raw-load (%get-gc-state-ptr) 0))
 (define (gc-nursery-size) (%to-fixnum (%raw-load (%get-gc-state-ptr) 8)))

@@ -153,51 +153,185 @@
 ;;; 5. Pass Timing & Profiling Statistics
 ;;; -----------------------------------------------------------------------
 
-(define *pass-manager-ticks* (cons 0 '()))
+(define *pass-manager-timer-ticks* (cons 0 '()))
+
+(define (current-time-monotonic-us)
+  (let ((p (sys-clock-gettime-monotonic)))
+    (if (and (pair? p) (or (> (car p) 0) (> (cdr p) 0)))
+        (+ (* (car p) 1000000) (quotient (cdr p) 1000))
+        (begin
+          (set-car! *pass-manager-timer-ticks* (+ (car *pass-manager-timer-ticks*) 1000))
+          (car *pass-manager-timer-ticks*)))))
+
 (define (current-time-monotonic-ms)
-  (set-car! *pass-manager-ticks* (+ (car *pass-manager-ticks*) 1))
-  (car *pass-manager-ticks*))
+  (quotient (current-time-monotonic-us) 1000))
+
+(define (current-heap-alloc-bytes)
+  (gc-current-heap-bytes))
+
+;; Formatters
+(define (pad-right str width)
+  (let ((len (string-length str)))
+    (if (>= len width)
+        str
+        (let ((res (make-string width #\space)))
+          (let loop ((i 0))
+            (if (< i len)
+                (begin
+                  (string-set! res i (string-ref str i))
+                  (loop (+ i 1)))
+                res))))))
+
+(define (pad-left str width)
+  (let ((len (string-length str)))
+    (if (>= len width)
+        str
+        (let* ((pad (- width len))
+               (res (make-string width #\space)))
+          (let loop ((i 0))
+            (if (< i len)
+                (begin
+                  (string-set! res (+ pad i) (string-ref str i))
+                  (loop (+ i 1)))
+                res))))))
+
+(define (format-fixed-2-ms us)
+  (let* ((total-cs (quotient (+ us 5) 10))
+         (whole (quotient total-cs 100))
+         (frac (modulo total-cs 100))
+         (whole-str (number->string whole))
+         (frac-str (if (< frac 10)
+                       (string-append "0" (number->string frac))
+                       (number->string frac))))
+    (string-append whole-str "." frac-str " ms")))
+
+(define (format-fixed-1-pct part total)
+  (if (<= total 0)
+      " 0.0%"
+      (let* ((scaled (quotient (* part 1000) total))
+             (whole (quotient scaled 10))
+             (frac (modulo scaled 10))
+             (whole-str (number->string whole))
+             (frac-str (number->string frac)))
+        (string-append whole-str "." frac-str "%"))))
+
+(define (format-alloc-kb bytes)
+  (if (<= bytes 0)
+      "0 KB"
+      (let ((kb (quotient (+ bytes 1023) 1024)))
+        (string-append (number->string kb) " KB"))))
+
+;; Timing Record
+(define (make-pass-timing-entry id name elapsed-us alloc-bytes)
+  (list id name elapsed-us alloc-bytes))
+
+(define (pass-timing-id e) (car e))
+(define (pass-timing-name e) (cadr e))
+(define (pass-timing-elapsed-us e) (caddr e))
+(define (pass-timing-alloc-bytes e) (cadddr e))
 
 (define *pass-timings* (cons '() '()))
 
 (define (reset-pass-timings!)
   (set-car! *pass-timings* '()))
 
-(define (record-pass-timing! pass-id elapsed-ms)
+(define (record-pass-timing! pass-id pass-name elapsed-us alloc-bytes)
   (set-car! *pass-timings*
-            (append (car *pass-timings*) (list (cons pass-id elapsed-ms)))))
+            (append (car *pass-timings*)
+                    (list (make-pass-timing-entry pass-id pass-name elapsed-us alloc-bytes)))))
 
 (define (get-pass-timings)
   (car *pass-timings*))
 
+(define *pass-id-names*
+  '((pass-010-library . "pass-010-library")
+    (pass-015-dsl-expander . "pass-015-dsl-expander")
+    (pass-020-macro-expander . "pass-020-macro-expander")
+    (pass-025-top-level . "pass-025-top-level")
+    (pass-030-desugar . "pass-030-desugar")
+    (pass-035-scope-resolve . "pass-035-scope-resolve")
+    (pass-050-cp0 . "pass-050-cp0")
+    (pass-060-lvn . "pass-060-lvn")
+    (pass-070-anf . "pass-070-anf")
+    (pass-080-annotator . "pass-080-annotator")
+    (pass-090-rtyper . "pass-090-rtyper")
+    (pass-100-contify . "pass-100-contify")
+    (pass-110-closure-convert . "pass-110-closure-convert")
+    (pass-120-alias-escape . "pass-120-alias-escape")
+    (pass-130-lir . "pass-130-lir")
+    (pass-128-lir-branch-fusion . "pass-128-lir-branch-fusion")
+    (pass-133-lir-peephole . "pass-133-lir-peephole")
+    (pass-140-backend-x86-64 . "pass-140-backend-x86-64")
+    (pass-150-backend-aarch64 . "pass-150-backend-aarch64")
+    (pass-160-backend-c . "pass-160-backend-c")))
+
+(define (pass-id->string pid)
+  (if (string? pid)
+      pid
+      (let ((entry (assq pid *pass-id-names*)))
+        (if entry
+            (cdr entry)
+            (if (symbol? pid)
+                (let ((s (symbol->string pid)))
+                  (if (string=? s "?")
+                      "pass"
+                      s))
+                "pass")))))
+
+;; Stderr print wrappers
+(define (display-stderr msg)
+  (display msg (get-compiler-error-port)))
+
+(define (newline-stderr)
+  (newline (get-compiler-error-port)))
+
 (define (print-pass-timing-report)
-  (display "\n======================================================================\n")
-  (display "Pass Execution Profiling Report (--time-passes)\n")
-  (display "======================================================================\n")
   (let* ((timings (car *pass-timings*))
-         (total (let loop ((ts timings) (acc 0))
-                  (if (null? ts)
-                      acc
-                      (loop (cdr ts) (+ acc (cdar ts)))))))
+         (total-us (let loop ((ts timings) (acc 0))
+                     (if (null? ts)
+                         acc
+                         (loop (cdr ts) (+ acc (pass-timing-elapsed-us (car ts)))))))
+         (total-bytes (let loop ((ts timings) (acc 0))
+                        (if (null? ts)
+                            acc
+                            (loop (cdr ts) (+ acc (pass-timing-alloc-bytes (car ts))))))))
+    (display-stderr "\n========================================================================================\n")
+    (display-stderr "ULisp Nanopass Execution Profile (--time-passes)\n")
+    (display-stderr "========================================================================================\n")
+    (display-stderr "Pass ID                  Pass Name                         Time (ms)  Share (%)   Heap (KB)\n")
+    (display-stderr "----------------------------------------------------------------------------------------\n")
     (let loop ((ts timings))
       (if (pair? ts)
           (let* ((entry (car ts))
-                 (pid (car entry))
-                 (ms (cdr entry))
-                 (pct (if (> total 0) (quotient (* ms 100) total) 0)))
-            (display "  ")
-            (display pid)
-            (display " : ")
-            (display ms)
-            (display " ticks (")
-            (display pct)
-            (display "%)\n")
+                 (pid (pass-timing-id entry))
+                 (pname (pass-timing-name entry))
+                 (us (pass-timing-elapsed-us entry))
+                 (bytes (pass-timing-alloc-bytes entry))
+                 (id-str (pass-id->string pid))
+                 (name-str (if (string? pname) pname (if (symbol? pname) (symbol->string pname) id-str)))
+                 (time-str (format-fixed-2-ms us))
+                 (share-str (format-fixed-1-pct us total-us))
+                 (heap-str (format-alloc-kb bytes)))
+            (display-stderr (pad-right id-str 24))
+            (display-stderr " ")
+            (display-stderr (pad-right name-str 32))
+            (display-stderr " ")
+            (display-stderr (pad-left time-str 11))
+            (display-stderr " ")
+            (display-stderr (pad-left share-str 10))
+            (display-stderr " ")
+            (display-stderr (pad-left heap-str 10))
+            (newline-stderr)
             (loop (cdr ts)))))
-    (display "----------------------------------------------------------------------\n")
-    (display "  Total passes time : ")
-    (display total)
-    (display " ticks\n")
-    (display "======================================================================\n\n")))
+    (display-stderr "----------------------------------------------------------------------------------------\n")
+    (display-stderr "Total Compilation Time : ")
+    (display-stderr (format-fixed-2-ms total-us))
+    (newline-stderr)
+    (display-stderr "Total Heap Allocation  : ")
+    (display-stderr (format-alloc-kb total-bytes))
+    (newline-stderr)
+    (display-stderr "========================================================================================\n\n")))
+
 
 ;;; -----------------------------------------------------------------------
 ;;; 6. IR Dump & Observability
@@ -221,27 +355,40 @@
 
 (define (run-single-pass pass-desc input-ast verify-mode trace-mode)
   (let* ((id (pass-id pass-desc))
+         (pname (pass-name pass-desc))
          (fn (pass-fn pass-desc))
          (vphase (pass-verifier-phase pass-desc)))
     (set-current-pass! id)
     (with-call-frame id input-ast
       (lambda ()
-        (let* ((t0 (current-time-monotonic-ms))
-               (output-ast (fn input-ast))
-               (t1 (current-time-monotonic-ms))
-               (d (- t1 t0))
-               (elapsed (if (< d 0) 0 d)))
-          (if (pipeline-time-passes?)
-              (record-pass-timing! id elapsed))
-          (if trace-mode
-              (nanopass-display-ast-diff id input-ast output-ast))
-          (if (or (pipeline-print-after-all?)
-                  (eq? (pipeline-dump-ir) id)
-                  (eq? (pipeline-dump-ir) 'all))
-              (dump-pass-ir id 'output output-ast))
-          (if (and verify-mode vphase)
-              (verify-pass-output vphase output-ast))
-          output-ast)))))
+        (if (pipeline-time-passes?)
+            (let* ((t0 (current-time-monotonic-us))
+                   (m0 (current-heap-alloc-bytes))
+                   (output-ast (fn input-ast))
+                   (t1 (current-time-monotonic-us))
+                   (m1 (current-heap-alloc-bytes))
+                   (elapsed-us (let ((d (- t1 t0))) (if (< d 0) 0 d)))
+                   (alloc-bytes (let ((d (- m1 m0))) (if (< d 0) 0 d))))
+              (record-pass-timing! id pname elapsed-us alloc-bytes)
+              (if trace-mode
+                  (nanopass-display-ast-diff id input-ast output-ast))
+              (if (or (pipeline-print-after-all?)
+                      (eq? (pipeline-dump-ir) id)
+                      (eq? (pipeline-dump-ir) 'all))
+                  (dump-pass-ir id 'output output-ast))
+              (if (and verify-mode vphase)
+                  (verify-pass-output vphase output-ast))
+              output-ast)
+            (let ((output-ast (fn input-ast)))
+              (if trace-mode
+                  (nanopass-display-ast-diff id input-ast output-ast))
+              (if (or (pipeline-print-after-all?)
+                      (eq? (pipeline-dump-ir) id)
+                      (eq? (pipeline-dump-ir) 'all))
+                  (dump-pass-ir id 'output output-ast))
+              (if (and verify-mode vphase)
+                  (verify-pass-output vphase output-ast))
+              output-ast))))))
 
 (define (run-pass-pipeline forms verify-mode trace-mode)
   (if (null? (car *pass-registry*))
@@ -261,8 +408,6 @@
     (let loop ((ps pipeline) (current-ast forms))
       (if (null? ps)
           (begin
-            (if (pipeline-time-passes?)
-                (print-pass-timing-report))
             (if verify-mode
                 (verify-pass-output 'lir current-ast))
             current-ast)
