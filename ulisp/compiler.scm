@@ -995,8 +995,6 @@
 (define (sys-getenv name)
   #f)
 
-(define (sys-bench-passes?)
-  #f)
 
 (define (current-jiffy)
   0)
@@ -1013,7 +1011,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-stackmap-table %num-args)))
+  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %num-args)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -1033,7 +1031,7 @@
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
              bytevector-u8-ref vector-ref
-             %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
+             %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (triop-prim? op)
@@ -1062,7 +1060,7 @@
              bytevector? bytevector-length vector? vector-length %num-args
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
-             %raw-add %raw-sub %raw-mul %raw-cmp)))
+             %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (const? x)
   (or (number? x)
@@ -3911,9 +3909,9 @@
     call-with-values values call/cc dynamic-wind
     open-input-file flush-output-port eof-object eof-object?
     power-assert-report dump-lir-unbound-variable-diagnostic
-    %raw-load %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
+    %raw-load %raw-load-u8 %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
     %ptr-add %ptr-tag %ptr-untag %ptr-tag-add %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-stackmap-table))
+    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table))
 
 (define (scope-primitive-symbol? sym)
   (or (scope-special-form? sym)
@@ -7757,7 +7755,7 @@
      (type-boolean))
     ((memq op '(make-string string-ref))
      (if (eq? op 'make-string) (type-string) (type-char)))
-    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %raw-load %ptr-add %ptr-tag-add))
+    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %get-environ-ptr %raw-load %raw-load-u8 %ptr-add %ptr-tag-add))
      (type-fixnum))
     (else (type-top))))
 
@@ -8837,7 +8835,7 @@
         ((%closure-ref %closure-set!) 'closure)
         ((vector-ref vector-set!) 'vector)
         ((bytevector-u8-ref bytevector-u8-set!) 'bytevector)
-        ((%raw-load %raw-store!) 'raw)
+        ((%raw-load %raw-load-u8 %raw-store!) 'raw)
         (else 'unknown))))
 
 ;;; Predicate: Are two memory operations provably disjoint by type?
@@ -11313,6 +11311,8 @@
        (emit-lir! '(%mov %rax %r12)))
       ((%get-gc-state-ptr)
        (emit-lir! (list '%code-ref '%rax "ulisp_gc_state")))
+      ((%get-environ-ptr)
+       (emit-lir! (list '%code-ref '%rax "ulisp_environ")))
       ((%get-heap-limit-ptr)
        (emit-lir! (list '%code-ref '%rax "ulisp_heap_limit")))
       ((%get-stackmap-table)
@@ -11658,6 +11658,11 @@
           (emit-lir! (list '%load '%rdx '%rsp si))
           (emit-lir! '(%add %rdx %rax))
           (emit-lir! '(%load %rax %rdx 0)))
+         ((%raw-load-u8)
+          (emit-lir! '(%sar %rax 2))
+          (emit-lir! (list '%load '%rdx '%rsp si))
+          (emit-lir! (list '%load-byte-zx '%rax '%rdx '%rax))
+          (emit-lir! '(%shl %rax 2)))
          ((%ptr-add %ptr-tag-add)
           (emit-lir! '(%sar %rax 2))
           (emit-lir! (list '%add '%rax (list '%stack si))))
@@ -13586,6 +13591,8 @@
     (emit "    mov rcx, [rbp]")                 ; argc
     (emit "    lea rdx, [rbp + 16]")            ; &argv[0]
     (emit "    lea rdx, [rdx + rcx*8]")         ; past argv NULL -> envp
+    (emit "    lea rax, [rip + ulisp_environ]")
+    (emit "    mov [rax], rdx")
     (emit ".L_flags_scan_loop:")
     (emit "    mov rsi, [rdx]")
     (emit "    test rsi, rsi")
@@ -13985,6 +13992,11 @@
                 (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
                 (loop (cdr ss))))))
     (emit "    .bss")
+    (emit "    .align 8")
+    (emit "    .globl ulisp_environ")
+    (emit "    .weak ulisp_environ")
+    (emit "ulisp_environ:")
+    (emit "    .quad 0")
     (emit "    .align 8")
     (emit "    .globl ulisp_heap_limit")
     (emit "    .weak ulisp_heap_limit")
@@ -16501,6 +16513,10 @@
     (emit "    .globl ulisp_values_buf")
     (emit "ulisp_values_buf:")
     (emit "    .zero 512")
+    (emit "    .align 3")
+    (emit "    .globl ulisp_environ")
+    (emit "ulisp_environ:")
+    (emit "    .xword 0")
     (let loop ((gvs (car *top-level-vars*)))
       (if (pair? gvs)
           (let ((v (car gvs)))
@@ -17153,6 +17169,7 @@
     (emit "")
     (emit "static void ulisp_unhandled_exception(uint64_t exn) ULISP_UNUSED;")
     (emit "static uint64_t ulisp_gc_state[32] ULISP_UNUSED;")
+    (emit "static uint64_t ulisp_environ[1] ULISP_UNUSED = {0};")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     (if (eq? gc-mode 'stress)
@@ -17612,7 +17629,9 @@
     (emit "")
     ;; Standalone main() entrypoint
     (emit "#ifndef ULISP_NO_MAIN")
-    (emit "int main(int argc, char **argv) {")
+    (emit "int main(int argc, char **argv, char **envp) {")
+    (emit "    extern char **environ;")
+    (emit "    ulisp_environ[0] = (uint64_t)(uintptr_t)(envp ? envp : environ);")
     (emit "    struct sigaction sa;")
     (emit "    memset(&sa, 0, sizeof(sa));")
     (emit "    sa.sa_sigaction = crash_handler;")
@@ -17714,25 +17733,7 @@
   (let ((v (sys-getenv "ULISP_BENCH_PASSES")))
     (if (and (string? v) (or (string=? v "1") (string=? v "true")))
         #t
-        (let ((p (open-input-file "/proc/self/environ")))
-          (if (not p)
-              #f
-              (let loop ((matched 0))
-                (let ((c (port-read-char p)))
-                  (cond
-                    ((eof-object? c)
-                     (close-input-port p)
-                     #f)
-                    ((char=? c (string-ref "ULISP_BENCH_PASSES=1" matched))
-                     (if (= (+ matched 1) 20)
-                         (begin
-                           (close-input-port p)
-                           #t)
-                         (loop (+ matched 1))))
-                    ((char=? c (string-ref "ULISP_BENCH_PASSES=1" 0))
-                     (loop 1))
-                    (else
-                     (loop 0))))))))))
+        #f)))
 
 (define (extract-directives-and-forms raw-forms)
   (if (detect-bench-passes-env)

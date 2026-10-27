@@ -944,6 +944,8 @@
     (emit "    mov rcx, [rbp]")                 ; argc
     (emit "    lea rdx, [rbp + 16]")            ; &argv[0]
     (emit "    lea rdx, [rdx + rcx*8]")         ; past argv NULL -> envp
+    (emit "    lea rax, [rip + ulisp_environ]")
+    (emit "    mov [rax], rdx")
     (emit ".L_flags_scan_loop:")
     (emit "    mov rsi, [rdx]")
     (emit "    test rsi, rsi")
@@ -1343,6 +1345,11 @@
                 (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
                 (loop (cdr ss))))))
     (emit "    .bss")
+    (emit "    .align 8")
+    (emit "    .globl ulisp_environ")
+    (emit "    .weak ulisp_environ")
+    (emit "ulisp_environ:")
+    (emit "    .quad 0")
     (emit "    .align 8")
     (emit "    .globl ulisp_heap_limit")
     (emit "    .weak ulisp_heap_limit")

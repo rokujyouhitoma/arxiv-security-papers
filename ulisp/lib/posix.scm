@@ -16,6 +16,9 @@
 (define (exit code)
   (sys-exit code))
 
+(define (emergency-exit code)
+  (sys-exit code))
+
 ;; sys-write: sys_write(fd, buf_ptr, count) -> syscall 1
 (define (sys-write fd buf-ptr count)
   (%to-fixnum (%raw-syscall (%to-raw 1) (%to-raw fd) buf-ptr (%to-raw count) 0 0 0)))
@@ -123,7 +126,103 @@
                (ch (integer->char (+ digit 48))))
           (sys-write-char ch)))))
 
+;;; -----------------------------------------------------------------------
+;;; 5. Process Context & Environment Variables (R7RS §6.14)
+;;; -----------------------------------------------------------------------
+
+(define (command-line)
+  '("ulisp"))
+
+(define (sys-environ-ptr)
+  (let ((slot (%get-environ-ptr)))
+    (if (= slot 0)
+        0
+        (%raw-load slot 0))))
+
+(define (%raw-c-strlen ptr)
+  (let loop ((i 0))
+    (if (= (%raw-load-u8 ptr i) 0)
+        i
+        (loop (+ i 1)))))
+
+(define (get-environment-variable name)
+  (if (not (string? name))
+      #f
+      (let ((envp (sys-environ-ptr)))
+        (if (= envp 0)
+            #f
+            (let ((klen (string-length name)))
+              (let scan-loop ((idx 0))
+                (if (>= idx 65536)
+                    #f
+                    (let ((entry-ptr (%raw-load envp (* idx 8))))
+                      (if (= entry-ptr 0)
+                          #f
+                          (let match-key ((k 0))
+                            (if (< k klen)
+                                (let ((b (%raw-load-u8 entry-ptr k))
+                                      (expected (char->integer (string-ref name k))))
+                                  (if (= b expected)
+                                      (match-key (+ k 1))
+                                      (scan-loop (+ idx 1))))
+                                ;; All characters of name matched.
+                                ;; Next character MUST be '=' (ASCII 61)
+                                (if (= (%raw-load-u8 entry-ptr klen) 61)
+                                    ;; Key matches! Extract value
+                                    (let* ((total-len (%raw-c-strlen entry-ptr))
+                                           (val-len (- total-len (+ klen 1)))
+                                           (val (make-string val-len)))
+                                      (let copy-val ((i 0))
+                                        (if (< i val-len)
+                                            (begin
+                                              (string-set! val i
+                                                           (integer->char (%raw-load-u8 entry-ptr (+ klen 1 i))))
+                                              (copy-val (+ i 1)))
+                                            val)))
+                                    ;; Did not end with '=', e.g. "NAME_OTHER=val"
+                                    (scan-loop (+ idx 1))))))))))))))
+
+(define (%posix-reverse lst)
+  (let loop ((rest lst) (res '()))
+    (if (pair? rest)
+        (loop (cdr rest) (cons (car rest) res))
+        res)))
+
+(define (get-environment-variables)
+  (let ((envp (sys-environ-ptr)))
+    (if (= envp 0)
+        '()
+        (let scan-loop ((idx 0) (acc '()))
+          (if (>= idx 65536)
+              (%posix-reverse acc)
+              (let ((entry-ptr (%raw-load envp (* idx 8))))
+                (if (= entry-ptr 0)
+                    (%posix-reverse acc)
+                    (let* ((total-len (%raw-c-strlen entry-ptr))
+                           (eq-pos
+                            (let find-eq ((i 0))
+                              (cond
+                                ((>= i total-len) #f)
+                                ((= (%raw-load-u8 entry-ptr i) 61) i)
+                                (else (find-eq (+ i 1)))))))
+                      (if (not eq-pos)
+                          (scan-loop (+ idx 1) acc)
+                          (let* ((key (make-string eq-pos))
+                                 (val-len (- total-len (+ eq-pos 1)))
+                                 (val (make-string val-len)))
+                            (let copy-key ((i 0))
+                              (if (< i eq-pos)
+                                  (begin
+                                    (string-set! key i (integer->char (%raw-load-u8 entry-ptr i)))
+                                    (copy-key (+ i 1)))))
+                            (let copy-val ((j 0))
+                              (if (< j val-len)
+                                  (begin
+                                    (string-set! val j (integer->char (%raw-load-u8 entry-ptr (+ eq-pos 1 j))))
+                                    (copy-val (+ j 1)))))
+                            (scan-loop (+ idx 1) (cons (cons key val) acc))))))))))))
+
 ;; Environment variable query fallback (Issue #621)
 (define (sys-getenv name)
-  #f)
+  (get-environment-variable name))
 

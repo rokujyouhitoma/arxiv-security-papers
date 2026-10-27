@@ -336,7 +336,7 @@
      (type-boolean))
     ((memq op '(make-string string-ref))
      (if (eq? op 'make-string) (type-string) (type-char)))
-    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %raw-load %ptr-add %ptr-tag-add))
+    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %get-environ-ptr %raw-load %raw-load-u8 %ptr-add %ptr-tag-add))
      (type-fixnum))
     (else (type-top))))
 

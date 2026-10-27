@@ -995,8 +995,6 @@
 (define (sys-getenv name)
   #f)
 
-(define (sys-bench-passes?)
-  #f)
 
 (define (current-jiffy)
   0)

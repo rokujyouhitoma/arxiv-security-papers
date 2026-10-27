@@ -4,7 +4,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-stackmap-table %num-args)))
+  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %num-args)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -24,7 +24,7 @@
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
              bytevector-u8-ref vector-ref
-             %raw-load %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
+             %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (triop-prim? op)
@@ -53,7 +53,7 @@
              bytevector? bytevector-length vector? vector-length %num-args
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
-             %raw-add %raw-sub %raw-mul %raw-cmp)))
+             %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (const? x)
   (or (number? x)

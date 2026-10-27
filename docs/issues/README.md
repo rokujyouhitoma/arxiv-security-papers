@@ -8,7 +8,6 @@
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **609** | R7RS case-lambda 構文および (scheme case-lambda) ライブラリの実装 | Feature | High | New | [609-implement-r7rs-case-lambda-syntax.md](609-implement-r7rs-case-lambda-syntax.md) |
 | **610** | R7RS (scheme base) 未実装コア手続き群 (string, 多引数 map/for-each, floor/, exact-integer-sqrt) の実装 | Feature | High | New | [610-implement-r7rs-base-core-procedures.md](610-implement-r7rs-base-core-procedures.md) |
-| **611** | R7RS (scheme process-context) 環境変数取得手続き (get-environment-variable / get-environment-variables) の実装 | Feature | Medium | New | [611-implement-r7rs-process-context-environment-variables.md](611-implement-r7rs-process-context-environment-variables.md) |
 | **612** | R7RS (scheme char) ASCII 文字・文字列述語群および大小文字変換手続きの実装 | Feature | Medium | New | [612-implement-r7rs-char-ascii-predicates-and-conversions.md](612-implement-r7rs-char-ascii-predicates-and-conversions.md) |
 | **613** | ILisp における R7RS include / include-ci 構文およびライブラリ宣言 include の実装 | Feature | High | New | [613-implement-ilisp-r7rs-include-and-include-ci-support.md](613-implement-ilisp-r7rs-include-and-include-ci-support.md) |
 | **614** | ランタイムのデフォルト沈黙化（Quiet-by-Default）とコンパイラ成果物出力（明示的終了値 0 / -o オプション）の根本是正 | Refactor | High | New | [614-refactor-runtime-silence-by-default-and-compiler-cli-output.md](614-refactor-runtime-silence-by-default-and-compiler-cli-output.md) |
@@ -28,6 +27,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **611** | R7RS (scheme process-context) 環境変数取得手続き (get-environment-variable / get-environment-variables) の実装 | Feature | 2026-10-28 | [closed/611-implement-r7rs-process-context-environment-variables.md](closed/611-implement-r7rs-process-context-environment-variables.md) |
 | **621** | コンパイラ Nanopass 実行時間・メモリ消費プロファイラ（--time-passes）の実装 | Feature | 2026-10-27 | [closed/621-implement-compiler-pass-timing-and-memory-profiler.md](closed/621-implement-compiler-pass-timing-and-memory-profiler.md) |
 | **620** | ベンチマークスイート（benchmark_c_vs_x86）の修復・Freestanding対応および make bench 自動計測ハーネスの確立 | Feature | 2026-10-26 | [closed/620-repair-benchmark-suite-and-establish-automated-bench-harness.md](closed/620-repair-benchmark-suite-and-establish-automated-bench-harness.md) |
 | **608** | Nanopass・モジュール単位の完全分割コンパイル（.o）および増分ビルド（Incremental Build）基盤の実装 | Feature | 2026-10-26 | [closed/608-implement-modular-separate-compilation-and-incremental-build.md](closed/608-implement-modular-separate-compilation-and-incremental-build.md) |

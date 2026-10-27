@@ -267,7 +267,7 @@
 | **6.14** | `load` | **✕\*** | - | 動的コードロード (AOT のためビルド時静的リンクで代替) |
 | **6.14** | `file-exists?`, `delete-file` | **△** | [ulisp/lib/posix.scm](../lib/posix.scm) | 低レベル syscall で可能。ポート API 未整備 |
 | **6.14** | `command-line` | **△** | [runtime.c](../runtime.c) | ランタイム引数渡しで基本対応 |
-| **6.14** | `get-environment-variable`, `get-environment-variables` | **×** | - | 環境変数取得 (未実装) |
+| **6.14** | `get-environment-variable`, `get-environment-variables` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `environ` 走査・連想リスト構築 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
 | **6.14** | `current-second`, `current-jiffy`, `jiffies-per-second` | **△** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld) | 高精度タイマー・POSIX `gettimeofday` ラッパー |
 
 ---
@@ -286,7 +286,7 @@
 | `(scheme inexact)` | 浮動小数点数・超越関数 | **× 0%** | [ulisp/lib/scheme/inexact.sld](../lib/scheme/inexact.sld) | 非サポート（整数・Tagged Pointer 設計） |
 | `(scheme lazy)` | 遅延評価 (`delay`, `force`) | **◎ 100%** | [ulisp/lib/scheme/lazy.sld](../lib/scheme/lazy.sld)<br>([ulisp/lib/promise.scm](../lib/promise.scm)) | SRFI-45 準拠プロミス完備 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
 | `(scheme load)` | スクリプト動的ロード | **✕\* 0%** | [ulisp/lib/scheme/load.sld](../lib/scheme/load.sld) | AOT の性質上除外（`import` またはビルド時結合で代替） |
-| `(scheme process-context)` | プロセス環境 (`exit`, `command-line`) | **約 50%** | [ulisp/lib/scheme/process-context.sld](../lib/scheme/process-context.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)) | `exit`, `emergency-exit` 完備。`get-environment-variable` は未実装 |
+| `(scheme process-context)` | プロセス環境 (`exit`, `command-line`, `get-environment-variable`) | **◎ 100%** | [ulisp/lib/scheme/process-context.sld](../lib/scheme/process-context.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)) | `exit`, `emergency-exit`, `command-line`, `get-environment-variable`, `get-environment-variables` 完備 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
 | `(scheme r5rs)` | R5RS 互換仕様シンボル群 | **約 85%** | [ulisp/lib/scheme/r5rs.sld](../lib/scheme/r5rs.sld) | R5RS 標準シンボル群の互換エクスポート定義 |
 | `(scheme read)` | S 式リーダー (`read`) | **◎ 100%** | [ulisp/lib/scheme/read.sld](../lib/scheme/read.sld)<br>([ulisp/lib/reader.scm](../lib/reader.scm)) | 自前完全再帰下降パーサ完備 |
 | `(scheme repl)` | 対話型 REPL | **✕\* 0%** | [ulisp/lib/scheme/repl.sld](../lib/scheme/repl.sld) | AOT コンパイラのため静的バイナリ出力が正典 |

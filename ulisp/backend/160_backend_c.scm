@@ -639,6 +639,7 @@
     (emit "")
     (emit "static void ulisp_unhandled_exception(uint64_t exn) ULISP_UNUSED;")
     (emit "static uint64_t ulisp_gc_state[32] ULISP_UNUSED;")
+    (emit "static uint64_t ulisp_environ[1] ULISP_UNUSED = {0};")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     (if (eq? gc-mode 'stress)
@@ -1098,7 +1099,9 @@
     (emit "")
     ;; Standalone main() entrypoint
     (emit "#ifndef ULISP_NO_MAIN")
-    (emit "int main(int argc, char **argv) {")
+    (emit "int main(int argc, char **argv, char **envp) {")
+    (emit "    extern char **environ;")
+    (emit "    ulisp_environ[0] = (uint64_t)(uintptr_t)(envp ? envp : environ);")
     (emit "    struct sigaction sa;")
     (emit "    memset(&sa, 0, sizeof(sa));")
     (emit "    sa.sa_sigaction = crash_handler;")

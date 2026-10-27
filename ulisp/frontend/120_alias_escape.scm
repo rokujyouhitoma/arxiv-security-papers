@@ -27,7 +27,7 @@
         ((%closure-ref %closure-set!) 'closure)
         ((vector-ref vector-set!) 'vector)
         ((bytevector-u8-ref bytevector-u8-set!) 'bytevector)
-        ((%raw-load %raw-store!) 'raw)
+        ((%raw-load %raw-load-u8 %raw-store!) 'raw)
         (else 'unknown))))
 
 ;;; Predicate: Are two memory operations provably disjoint by type?

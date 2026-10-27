@@ -14,25 +14,7 @@
   (let ((v (sys-getenv "ULISP_BENCH_PASSES")))
     (if (and (string? v) (or (string=? v "1") (string=? v "true")))
         #t
-        (let ((p (open-input-file "/proc/self/environ")))
-          (if (not p)
-              #f
-              (let loop ((matched 0))
-                (let ((c (port-read-char p)))
-                  (cond
-                    ((eof-object? c)
-                     (close-input-port p)
-                     #f)
-                    ((char=? c (string-ref "ULISP_BENCH_PASSES=1" matched))
-                     (if (= (+ matched 1) 20)
-                         (begin
-                           (close-input-port p)
-                           #t)
-                         (loop (+ matched 1))))
-                    ((char=? c (string-ref "ULISP_BENCH_PASSES=1" 0))
-                     (loop 1))
-                    (else
-                     (loop 0))))))))))
+        #f)))
 
 (define (extract-directives-and-forms raw-forms)
   (if (detect-bench-passes-env)

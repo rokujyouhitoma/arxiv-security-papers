@@ -396,6 +396,13 @@ test_stdlib: $(COMPILER_DEP)
 	$(CC) -nostdlib -static build/test_stdlib.s -o build/test_stdlib
 	./build/test_stdlib
 
+test_process_context: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_process_context.scm > build/test_process_context_input.scm
+	$(ULISP_COMPILER) build/test_process_context_input.scm > build/test_process_context.s
+	$(CC) -nostdlib -static build/test_process_context.s -o build/test_process_context
+	./build/test_process_context
+
 test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_gc_growth.scm > build/test_gc_growth_input.scm
@@ -546,7 +553,7 @@ define COMPILE_SCM_TO_S
 endef
 
 # --- Modular 2-Split Static Linking Targets (Issue #607) ---
-build/ulisp_stdlib.s: compiler.scm stdlib_entry.scm
+build/ulisp_stdlib.s: compiler.scm stdlib_entry.scm $(ULISP_STD_LIBS)
 	@mkdir -p build
 	@echo "=== Compiling Standard Library Module (stdlib_entry.scm) ==="
 	@echo "(!module #t)" > build/stdlib_input.scm
@@ -556,7 +563,7 @@ build/ulisp_stdlib.s: compiler.scm stdlib_entry.scm
 build/ulisp_stdlib.o: build/ulisp_stdlib.s
 	$(CC) -c $< -o $@
 
-build/ulisp_compiler.s: compiler.scm compiler_entry.scm
+build/ulisp_compiler.s: compiler.scm compiler_entry.scm $(COMPILER_BASE) $(FRONTEND_PASSES) $(LIR_PASSES) $(BACKEND_PASSES) compiler/driver.scm
 	@mkdir -p build
 	@echo "=== Compiling Compiler Module (compiler_entry.scm) ==="
 	@echo "(!allow-extern #t)" > build/compiler_input.scm
@@ -787,7 +794,7 @@ diff_test: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_pass_manager test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_jit test_c test_aot
+test: test_passes test_pass_manager test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log

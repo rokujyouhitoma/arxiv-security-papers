@@ -137,9 +137,9 @@
     call-with-values values call/cc dynamic-wind
     open-input-file flush-output-port eof-object eof-object?
     power-assert-report dump-lir-unbound-variable-diagnostic
-    %raw-load %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
+    %raw-load %raw-load-u8 %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
     %ptr-add %ptr-tag %ptr-untag %ptr-tag-add %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-stackmap-table))
+    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table))
 
 (define (scope-primitive-symbol? sym)
   (or (scope-special-form? sym)
