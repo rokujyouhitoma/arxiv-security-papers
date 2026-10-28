@@ -15,8 +15,10 @@
 | **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | High | New | [616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
-| **619** | ソース位置追跡情報（%source-loc）に基づく最小限 DWARF（.debug_line）セクション生成と GDB / perf デバッグ支援の実装 | Feature | Medium | New | [619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md](619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md) |
-| **624** | ULisp x86-64 ネイティブバックエンドの Pure C -O2 パリティ達成に向けた包括的コード生成最適化（直接呼出・レジスタABI・アンボックス・レジスタ割付） | Feature | High | New | [624-achieve-pure-c-parity-with-native-codegen-optimizations.md](624-achieve-pure-c-parity-with-native-codegen-optimizations.md) |
+| **624** | ULisp x86-64 ネイティブバックエンド Phase 1: 既知関数の直接呼出最適化（Direct Known-Function Calls）とクロージャ呼出オーバーヘッドの撲滅 | Feature | High | New | [624-phase1-direct-known-function-calls.md](624-phase1-direct-known-function-calls.md) |
+| **625** | ULisp x86-64 ネイティブバックエンド Phase 2: System V AMD64 レジスタ引数受渡し呼出規約（Register-Based Calling Convention）の導入 | Feature | High | New | [625-phase2-system-v-register-based-calling-convention.md](625-phase2-system-v-register-based-calling-convention.md) |
+| **626** | ULisp x86-64 ネイティブバックエンド Phase 3: S-RTyper 連携による完全アンボックス整数演算とタグ操作撲滅（Interprocedural Unboxing） | Feature | High | New | [626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md](626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md) |
+| **627** | ULisp x86-64 ネイティブバックエンド Phase 4: ループ回転・末尾呼出し JMP 最適化・大域レジスタ割り付けと Pure C パリティ検証 | Feature | High | New | [627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md](627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md) |
 
 
 
