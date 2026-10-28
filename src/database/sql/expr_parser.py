@@ -18,7 +18,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
+
+if TYPE_CHECKING:
+    from database.sql.generated_sql_expr_parser import (
+        SQLExprParser as _AOTSQLExprParser,
+    )
 
 
 class SQLExpr(ABC):
@@ -440,16 +445,16 @@ class ExistsExpr(SQLExpr):
         }
 
 
-from database.sql.generated_sql_expr_parser import (  # noqa: E402
-    SQLExprParser as _AOTSQLExprParser,
-)
-
 _GLOBAL_EXPR_AOT_PARSER: Optional[_AOTSQLExprParser] = None
 
 
 def _get_expr_aot_parser() -> _AOTSQLExprParser:
     global _GLOBAL_EXPR_AOT_PARSER
     if _GLOBAL_EXPR_AOT_PARSER is None:
+        from database.sql.generated_sql_expr_parser import (
+            SQLExprParser as _AOTSQLExprParser,
+        )
+
         _GLOBAL_EXPR_AOT_PARSER = _AOTSQLExprParser()
     return _GLOBAL_EXPR_AOT_PARSER
 
