@@ -128,10 +128,10 @@
 (define *next-sym-id* (cons 100 '()))
 
 (define (%string-find-symbol str entries)
-  (if (null? entries)
+  (if (or (null? entries) (not (pair? entries)))
       #f
       (let ((entry (car entries)))
-        (if (string=? (car entry) str)
+        (if (and (pair? entry) (string=? (car entry) str))
             (cdr entry)
             (%string-find-symbol str (cdr entries))))))
 
@@ -145,11 +145,12 @@
                   (modulo (+ (* h 33) c) 16777213)))))))
 
 (define (%sym-id-taken? sym entries)
-  (if (null? entries)
+  (if (or (null? entries) (not (pair? entries)))
       #f
-      (if (eq? (cdr (car entries)) sym)
-          #t
-          (%sym-id-taken? sym (cdr entries)))))
+      (let ((entry (car entries)))
+        (if (and (pair? entry) (eq? (cdr entry) sym))
+            #t
+            (%sym-id-taken? sym (cdr entries))))))
 
 (define (string->symbol str)
   (let ((found (%string-find-symbol str (car *symbol-registry*))))
@@ -196,13 +197,13 @@
     (else (%sym-assoc-string sym (cdr alist)))))
 
 (define (%symbol-find-string sym entries)
-  (if (null? entries)
+  (if (or (null? entries) (not (pair? entries)))
       (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
         (if known
             known
             "?"))
       (let ((entry (car entries)))
-        (if (eq? (cdr entry) sym)
+        (if (and (pair? entry) (eq? (cdr entry) sym))
             (car entry)
             (%symbol-find-string sym (cdr entries))))))
 

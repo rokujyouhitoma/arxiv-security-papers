@@ -254,7 +254,7 @@
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc))) main-body))))
 
 ;; 8.3 End-to-end Pass 110 -> 120 -> 130 optimization pipeline
-(let* ((ast '(let ((f (lambda (x) (+ x 1)))) (f 41)))
+(let* ((ast '(let ((y 1)) (let ((f (lambda (x) (+ x y)))) (f 41))))
        (hir110 (closure-convert (anf-all (cp0-optimize (desugar-all ast)))))
        (hir120 (alias-escape-all hir110))
        (lir130 (generate-lir hir120))
@@ -263,7 +263,10 @@
                (let check-ann ((expr hir120))
                  (cond
                    ((not (pair? expr)) #f)
-                   ((and (eq? (car expr) 'annotate) (eq? (cadr expr) '#:stack-alloc)) #t)
+                   ((and (eq? (car expr) 'annotate)
+                         (or (eq? (cadr expr) '#:stack-alloc)
+                             (eq? (cadr expr) ':stack-alloc)
+                             (eq? (cadr expr) *stack-alloc-attr*))) #t)
                    (else (or (check-ann (car expr)) (check-ann (cdr expr)))))))
   (assert-true "Pass 130 pipeline output uses %alloc-stack"
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc-stack))) main-body)))

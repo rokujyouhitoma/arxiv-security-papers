@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-28T04:50:36.729420+00:00",
+  "timestamp": "2026-10-28T13:07:52.292363+00:00",
   "os": "Linux",
   "arch": "x86_64",
   "kernel": "6.18.54.1-microsoft-standard-WSL2",
@@ -7,101 +7,52 @@
   "cpu_count": 4,
   "mem_total": "12251728 kB",
   "gcc": "13",
-  "perf_enabled": true,
+  "perf_enabled": false,
   "results": [
     {
       "id": "fib_30",
       "name": "Fibonacci (fib 30)",
       "expected": "832040",
       "x86": {
-        "mean_ms": 5.5731368,
-        "median_ms": 5.235043,
-        "min_ms": 5.212798,
-        "max_ms": 6.096593,
-        "std_ms": 0.4763863920109388,
+        "mean_ms": 7.3941504,
+        "median_ms": 7.483367,
+        "min_ms": 5.400317,
+        "max_ms": 11.275318,
+        "std_ms": 1.8764260584800387,
         "size_bytes": 20112
       },
       "ulisp_c": {
-        "mean_ms": 8.4513772,
-        "median_ms": 8.426674,
-        "min_ms": 8.223051,
-        "max_ms": 8.676012,
-        "std_ms": 0.165500940960165,
+        "mean_ms": 10.010055,
+        "median_ms": 9.867145,
+        "min_ms": 9.446376,
+        "max_ms": 10.762216,
+        "std_ms": 0.5320402206892924,
         "size_bytes": 17160
       },
       "pure_c": {
-        "mean_ms": 2.1107738,
-        "median_ms": 1.948777,
-        "min_ms": 1.726144,
-        "max_ms": 2.984728,
-        "std_ms": 0.498561393463433,
+        "mean_ms": 2.5618472,
+        "median_ms": 2.317909,
+        "min_ms": 1.875542,
+        "max_ms": 4.247211,
+        "std_ms": 0.7803988492198931,
         "size_bytes": 16048
       },
-      "ratio_x86_to_pure_c": 2.640328774215409,
-      "ratio_x86_to_ulisp_c": 0.6594353403135291,
+      "ratio_x86_to_pure_c": 2.8862573849057043,
+      "ratio_x86_to_ulisp_c": 0.7386723049973253,
       "chez": {
-        "mean_ms": 51.3069288,
-        "median_ms": 50.091643,
-        "min_ms": 49.522605,
-        "max_ms": 55.590833,
-        "std_ms": 2.5309933807950213
+        "mean_ms": 52.820389,
+        "median_ms": 51.614266,
+        "min_ms": 49.405979,
+        "max_ms": 58.973153,
+        "std_ms": 3.165225730647131
       },
-      "ratio_x86_to_chez": 0.10862347309317022,
+      "ratio_x86_to_chez": 0.1399866706774916,
       "gauche": {
-        "mean_ms": 83.2156562,
-        "median_ms": 81.776733,
-        "min_ms": 78.454433,
-        "max_ms": 90.613142,
-        "std_ms": 5.207048896625968
-      },
-      "perf": {
-        "x86": {
-          "cycles": 28127324,
-          "instructions": 76846014,
-          "branches": 9445007,
-          "branch_misses": 3719,
-          "cache_references": 8510,
-          "cache_misses": 4445,
-          "ipc": 2.7320769654447044,
-          "branch_miss_pct": 0.039375301680559895,
-          "cache_miss_pct": 52.232667450058756
-        },
-        "ulisp_c": {
-          "cycles": 32567415,
-          "instructions": 73408767,
-          "branches": 8223280,
-          "branch_misses": 8111,
-          "cache_references": 24652,
-          "cache_misses": 9463,
-          "ipc": 2.254055687256726,
-          "branch_miss_pct": 0.09863460808825675,
-          "cache_miss_pct": 38.38633782248905
-        },
-        "pure_c": {
-          "cycles": 6162226,
-          "instructions": 26123240,
-          "branches": 2805082,
-          "branch_misses": 10054,
-          "cache_references": 19243,
-          "cache_misses": 5451,
-          "ipc": 4.2392538021163135,
-          "branch_miss_pct": 0.3584208946476431,
-          "cache_miss_pct": 28.327183911032584
-        }
-      },
-      "gc_stats": {
-        "x86": {
-          "major": "0)",
-          "alloc": "0 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        },
-        "ulisp_c": {
-          "major": "0)",
-          "alloc": "0 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        }
+        "mean_ms": 95.6871159,
+        "median_ms": 90.1268925,
+        "min_ms": 87.356554,
+        "max_ms": 114.864091,
+        "std_ms": 10.48016782401307
       }
     },
     {
@@ -109,94 +60,45 @@
       "name": "Tail-Recursive Loop (10M)",
       "expected": "49999995000000",
       "x86": {
-        "mean_ms": 3.3946902,
-        "median_ms": 3.374434,
-        "min_ms": 3.089516,
-        "max_ms": 3.629345,
-        "std_ms": 0.2146060798048367,
+        "mean_ms": 3.3785992,
+        "median_ms": 3.338475,
+        "min_ms": 3.16148,
+        "max_ms": 3.67853,
+        "std_ms": 0.17895554034936526,
         "size_bytes": 19928
       },
       "ulisp_c": {
-        "mean_ms": 0.5310692,
-        "median_ms": 0.532502,
-        "min_ms": 0.474489,
-        "max_ms": 0.581047,
-        "std_ms": 0.03805445059648082,
+        "mean_ms": 0.524836,
+        "median_ms": 0.5272215,
+        "min_ms": 0.486652,
+        "max_ms": 0.565431,
+        "std_ms": 0.026401377501941072,
         "size_bytes": 17088
       },
       "pure_c": {
-        "mean_ms": 0.458458,
-        "median_ms": 0.451461,
-        "min_ms": 0.438493,
-        "max_ms": 0.499366,
-        "std_ms": 0.023573670344263307,
+        "mean_ms": 0.5243761,
+        "median_ms": 0.5044985,
+        "min_ms": 0.469072,
+        "max_ms": 0.64386,
+        "std_ms": 0.05922632866752195,
         "size_bytes": 16016
       },
-      "ratio_x86_to_pure_c": 7.40458275349105,
-      "ratio_x86_to_ulisp_c": 6.3921805293924026,
+      "ratio_x86_to_pure_c": 6.443083885783505,
+      "ratio_x86_to_ulisp_c": 6.4374379806263295,
       "chez": {
-        "mean_ms": 64.409783,
-        "median_ms": 65.915909,
-        "min_ms": 59.401109,
-        "max_ms": 67.305314,
-        "std_ms": 3.166520469646848
+        "mean_ms": 64.5944077,
+        "median_ms": 63.4417155,
+        "min_ms": 61.869956,
+        "max_ms": 68.947643,
+        "std_ms": 2.593467250386634
       },
-      "ratio_x86_to_chez": 0.05270457439671858,
+      "ratio_x86_to_chez": 0.05230482514355495,
       "gauche": {
-        "mean_ms": 204.7743434,
-        "median_ms": 204.772058,
-        "min_ms": 198.086916,
-        "max_ms": 213.883143,
-        "std_ms": 6.157900890957463
-      },
-      "perf": {
-        "x86": {
-          "cycles": 13231198,
-          "instructions": 40092767,
-          "branches": 10017879,
-          "branch_misses": 1125,
-          "cache_references": 5386,
-          "cache_misses": 3657,
-          "ipc": 3.0301690746370813,
-          "branch_miss_pct": 0.01122992202241612,
-          "cache_miss_pct": 67.89825473449685
-        },
-        "ulisp_c": {
-          "cycles": 874987,
-          "instructions": 674984,
-          "branches": 139208,
-          "branch_misses": 4247,
-          "cache_references": 20288,
-          "cache_misses": 3166,
-          "ipc": 0.7714217468373816,
-          "branch_miss_pct": 3.050830412045285,
-          "cache_miss_pct": 15.605283911671924
-        },
-        "pure_c": {
-          "cycles": 1220518,
-          "instructions": 603607,
-          "branches": 124462,
-          "branch_misses": 3637,
-          "cache_references": 21410,
-          "cache_misses": 9008,
-          "ipc": 0.4945498550615394,
-          "branch_miss_pct": 2.9221770500233,
-          "cache_miss_pct": 42.07379729098552
-        }
-      },
-      "gc_stats": {
-        "x86": {
-          "major": "0)",
-          "alloc": "0 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        },
-        "ulisp_c": {
-          "major": "0)",
-          "alloc": "0 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        }
+        "mean_ms": 216.1115279,
+        "median_ms": 215.488206,
+        "min_ms": 197.20656,
+        "max_ms": 239.93163,
+        "std_ms": 15.276463497251159
       }
     },
     {
@@ -204,94 +106,45 @@
       "name": "Ackermann (ack 3 7)",
       "expected": "1021",
       "x86": {
-        "mean_ms": 3.7273756,
-        "median_ms": 3.732232,
-        "min_ms": 3.295734,
-        "max_ms": 4.08759,
-        "std_ms": 0.2873084075115101,
+        "mean_ms": 4.0255407,
+        "median_ms": 3.8576175,
+        "min_ms": 3.602239,
+        "max_ms": 5.211728,
+        "std_ms": 0.4897183536006634,
         "size_bytes": 20048
       },
       "ulisp_c": {
-        "mean_ms": 4.52105,
-        "median_ms": 4.321502,
-        "min_ms": 4.102999,
-        "max_ms": 5.000644,
-        "std_ms": 0.42695390770491853,
-        "size_bytes": 17160
+        "mean_ms": 3.7036172,
+        "median_ms": 3.660209,
+        "min_ms": 3.483459,
+        "max_ms": 4.104753,
+        "std_ms": 0.19022518750610629,
+        "size_bytes": 17168
       },
       "pure_c": {
-        "mean_ms": 1.0498444,
-        "median_ms": 1.061591,
-        "min_ms": 1.013426,
-        "max_ms": 1.079844,
-        "std_ms": 0.027372528021722846,
+        "mean_ms": 1.0174646,
+        "median_ms": 1.029875,
+        "min_ms": 0.962426,
+        "max_ms": 1.088365,
+        "std_ms": 0.038881337663317216,
         "size_bytes": 16048
       },
-      "ratio_x86_to_pure_c": 3.5504076604113903,
-      "ratio_x86_to_ulisp_c": 0.8244490992136783,
+      "ratio_x86_to_pure_c": 3.956443005486382,
+      "ratio_x86_to_ulisp_c": 1.0869213751356375,
       "chez": {
-        "mean_ms": 48.5037606,
-        "median_ms": 48.059828,
-        "min_ms": 47.59407,
-        "max_ms": 50.814035,
-        "std_ms": 1.3254886801522652
+        "mean_ms": 52.6802377,
+        "median_ms": 51.979087500000006,
+        "min_ms": 47.466471,
+        "max_ms": 57.533987,
+        "std_ms": 3.690081675552425
       },
-      "ratio_x86_to_chez": 0.07684714656949712,
+      "ratio_x86_to_chez": 0.07641462673202781,
       "gauche": {
-        "mean_ms": 63.892582,
-        "median_ms": 64.247918,
-        "min_ms": 60.558558,
-        "max_ms": 67.655943,
-        "std_ms": 2.71119296459409
-      },
-      "perf": {
-        "x86": {
-          "cycles": 15578523,
-          "instructions": 24092477,
-          "branches": 2458022,
-          "branch_misses": 301393,
-          "cache_references": 12573,
-          "cache_misses": 7029,
-          "ipc": 1.5465186911493471,
-          "branch_miss_pct": 12.261607097088635,
-          "cache_miss_pct": 55.90551181102362
-        },
-        "ulisp_c": {
-          "cycles": 14141513,
-          "instructions": 20533911,
-          "branches": 2238887,
-          "branch_misses": 305032,
-          "cache_references": 27084,
-          "cache_misses": 10050,
-          "ipc": 1.4520306985539666,
-          "branch_miss_pct": 13.624269558937097,
-          "cache_miss_pct": 37.1067789100576
-        },
-        "pure_c": {
-          "cycles": 2796091,
-          "instructions": 4752031,
-          "branches": 1285735,
-          "branch_misses": 33025,
-          "cache_references": 24512,
-          "cache_misses": 6982,
-          "ipc": 1.699526589084547,
-          "branch_miss_pct": 2.568569728598817,
-          "cache_miss_pct": 28.484007832898172
-        }
-      },
-      "gc_stats": {
-        "x86": {
-          "major": "0)",
-          "alloc": "0 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        },
-        "ulisp_c": {
-          "major": "0)",
-          "alloc": "0 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        }
+        "mean_ms": 62.2324831,
+        "median_ms": 62.318872,
+        "min_ms": 58.591711,
+        "max_ms": 66.599524,
+        "std_ms": 2.100574921500856
       }
     },
     {
@@ -299,94 +152,45 @@
       "name": "Higher-Order Closure (1M)",
       "expected": "1000000",
       "x86": {
-        "mean_ms": 3.5678088,
-        "median_ms": 3.676755,
-        "min_ms": 3.230754,
-        "max_ms": 3.847846,
-        "std_ms": 0.26438570245514414,
+        "mean_ms": 4.0528358,
+        "median_ms": 3.5618939999999997,
+        "min_ms": 3.400563,
+        "max_ms": 8.259657,
+        "std_ms": 1.4876935856096027,
         "size_bytes": 19984
       },
       "ulisp_c": {
-        "mean_ms": 4.5175108,
-        "median_ms": 4.502341,
-        "min_ms": 4.35897,
-        "max_ms": 4.798725,
-        "std_ms": 0.17007490619341817,
+        "mean_ms": 4.9573749000000005,
+        "median_ms": 4.9752054999999995,
+        "min_ms": 4.751413,
+        "max_ms": 5.122179,
+        "std_ms": 0.12142736423013456,
         "size_bytes": 21832
       },
       "pure_c": {
-        "mean_ms": 0.4667192,
-        "median_ms": 0.464752,
-        "min_ms": 0.454823,
-        "max_ms": 0.48598,
-        "std_ms": 0.012052010774140568,
+        "mean_ms": 0.5224968,
+        "median_ms": 0.5298515,
+        "min_ms": 0.476418,
+        "max_ms": 0.565097,
+        "std_ms": 0.027202612577961454,
         "size_bytes": 16024
       },
-      "ratio_x86_to_pure_c": 7.644444025443993,
-      "ratio_x86_to_ulisp_c": 0.7897731644603926,
+      "ratio_x86_to_pure_c": 7.7566710456408545,
+      "ratio_x86_to_ulisp_c": 0.81753667651805,
       "chez": {
-        "mean_ms": 49.8666656,
-        "median_ms": 49.261576,
-        "min_ms": 48.66984,
-        "max_ms": 52.848419,
-        "std_ms": 1.7099676807002235
+        "mean_ms": 54.8051733,
+        "median_ms": 53.9940005,
+        "min_ms": 51.13981,
+        "max_ms": 66.341514,
+        "std_ms": 4.505665978528766
       },
-      "ratio_x86_to_chez": 0.07154696944485496,
+      "ratio_x86_to_chez": 0.07394987655298593,
       "gauche": {
-        "mean_ms": 73.7677802,
-        "median_ms": 68.512268,
-        "min_ms": 60.826068,
-        "max_ms": 87.090609,
-        "std_ms": 11.485192620657465
-      },
-      "perf": {
-        "x86": {
-          "cycles": 12548263,
-          "instructions": 42097909,
-          "branches": 4019445,
-          "branch_misses": 1258,
-          "cache_references": 6837,
-          "cache_misses": 3642,
-          "ipc": 3.354879396455111,
-          "branch_miss_pct": 0.03129785331059387,
-          "cache_miss_pct": 53.26897762176394
-        },
-        "ulisp_c": {
-          "cycles": 17595012,
-          "instructions": 39713832,
-          "branches": 3146653,
-          "branch_misses": 5629,
-          "cache_references": 24949,
-          "cache_misses": 6122,
-          "ipc": 2.2571074120324557,
-          "branch_miss_pct": 0.17888848881652983,
-          "cache_miss_pct": 24.538057637580664
-        },
-        "pure_c": {
-          "cycles": 1371798,
-          "instructions": 610478,
-          "branches": 125993,
-          "branch_misses": 4568,
-          "cache_references": 20157,
-          "cache_misses": 8950,
-          "ipc": 0.44502033098167515,
-          "branch_miss_pct": 3.6255982475216877,
-          "cache_miss_pct": 44.4014486282681
-        }
-      },
-      "gc_stats": {
-        "x86": {
-          "major": "0)",
-          "alloc": "24 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        },
-        "ulisp_c": {
-          "major": "0)",
-          "alloc": "24 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        }
+        "mean_ms": 65.9111326,
+        "median_ms": 63.6966315,
+        "min_ms": 58.225949,
+        "max_ms": 85.106693,
+        "std_ms": 7.835785916712367
       }
     },
     {
@@ -394,94 +198,45 @@
       "name": "List Alloc & Traverse (100k)",
       "expected": "5000050000",
       "x86": {
-        "mean_ms": 1.7098115999999999,
-        "median_ms": 1.694742,
-        "min_ms": 1.565072,
-        "max_ms": 1.872393,
-        "std_ms": 0.1165531328291951,
+        "mean_ms": 1.5221781,
+        "median_ms": 1.5053455,
+        "min_ms": 1.452806,
+        "max_ms": 1.639043,
+        "std_ms": 0.058522045681663123,
         "size_bytes": 20048
       },
       "ulisp_c": {
-        "mean_ms": 2.1606714,
-        "median_ms": 2.137629,
-        "min_ms": 1.957854,
-        "max_ms": 2.343082,
-        "std_ms": 0.14246961580561657,
-        "size_bytes": 21872
+        "mean_ms": 1.7861315,
+        "median_ms": 1.7566475000000001,
+        "min_ms": 1.644118,
+        "max_ms": 1.982823,
+        "std_ms": 0.12649658363963828,
+        "size_bytes": 21784
       },
       "pure_c": {
-        "mean_ms": 1.2518012,
-        "median_ms": 1.26826,
-        "min_ms": 1.112784,
-        "max_ms": 1.360247,
-        "std_ms": 0.11376529197299146,
+        "mean_ms": 1.1459181,
+        "median_ms": 1.1593930000000001,
+        "min_ms": 1.000719,
+        "max_ms": 1.318605,
+        "std_ms": 0.09858586104671517,
         "size_bytes": 16104
       },
-      "ratio_x86_to_pure_c": 1.3658810999701867,
-      "ratio_x86_to_ulisp_c": 0.7913334716236814,
+      "ratio_x86_to_pure_c": 1.3283480730429165,
+      "ratio_x86_to_ulisp_c": 0.8522206231736018,
       "chez": {
-        "mean_ms": 56.3449962,
-        "median_ms": 57.157637,
-        "min_ms": 49.433037,
-        "max_ms": 59.653988,
-        "std_ms": 4.148807469336544
+        "mean_ms": 52.5314479,
+        "median_ms": 51.114136,
+        "min_ms": 48.697444,
+        "max_ms": 65.836532,
+        "std_ms": 4.875984022718709
       },
-      "ratio_x86_to_chez": 0.030345402703212888,
+      "ratio_x86_to_chez": 0.028976511420314384,
       "gauche": {
-        "mean_ms": 47.4271528,
-        "median_ms": 47.60946,
-        "min_ms": 45.90067,
-        "max_ms": 49.373218,
-        "std_ms": 1.3705903427405668
-      },
-      "perf": {
-        "x86": {
-          "cycles": 5660992,
-          "instructions": 9662014,
-          "branches": 1100880,
-          "branch_misses": 1390,
-          "cache_references": 80636,
-          "cache_misses": 49220,
-          "ipc": 1.7067704741501135,
-          "branch_miss_pct": 0.12626262626262627,
-          "cache_miss_pct": 61.03973411379533
-        },
-        "ulisp_c": {
-          "cycles": 8010551,
-          "instructions": 13153184,
-          "branches": 1355233,
-          "branch_misses": 6012,
-          "cache_references": 96920,
-          "cache_misses": 54243,
-          "ipc": 1.6419824304220771,
-          "branch_miss_pct": 0.44361375497792627,
-          "cache_miss_pct": 55.96677672307058
-        },
-        "pure_c": {
-          "cycles": 3757323,
-          "instructions": 3514598,
-          "branches": 668584,
-          "branch_misses": 4629,
-          "cache_references": 64570,
-          "cache_misses": 36211,
-          "ipc": 0.9353994852185985,
-          "branch_miss_pct": 0.6923587761597645,
-          "cache_miss_pct": 56.080223013783495
-        }
-      },
-      "gc_stats": {
-        "x86": {
-          "major": "0)",
-          "alloc": "2400000 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        },
-        "ulisp_c": {
-          "major": "0)",
-          "alloc": "2400000 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        }
+        "mean_ms": 47.8861531,
+        "median_ms": 47.484165000000004,
+        "min_ms": 46.220003,
+        "max_ms": 51.66247,
+        "std_ms": 1.5027820512166727
       }
     },
     {
@@ -489,94 +244,45 @@
       "name": "Vector Indexing & Traverse (100k)",
       "expected": "4200000",
       "x86": {
-        "mean_ms": 1.2229158,
-        "median_ms": 1.16747,
-        "min_ms": 1.132667,
-        "max_ms": 1.401359,
-        "std_ms": 0.11060477883753486,
+        "mean_ms": 1.1324585,
+        "median_ms": 1.1224945,
+        "min_ms": 1.068454,
+        "max_ms": 1.255876,
+        "std_ms": 0.05240357524539714,
         "size_bytes": 20128
       },
       "ulisp_c": {
-        "mean_ms": 3.5129842,
-        "median_ms": 2.426384,
-        "min_ms": 2.196156,
-        "max_ms": 6.36028,
-        "std_ms": 1.833622149064305,
+        "mean_ms": 2.8494273999999997,
+        "median_ms": 2.477848,
+        "min_ms": 1.299068,
+        "max_ms": 7.424542,
+        "std_ms": 1.7458197640747581,
         "size_bytes": 21920
       },
       "pure_c": {
-        "mean_ms": 0.944022,
-        "median_ms": 0.996186,
-        "min_ms": 0.794172,
-        "max_ms": 1.029907,
-        "std_ms": 0.1046575348864094,
+        "mean_ms": 0.7581839,
+        "median_ms": 0.7423535,
+        "min_ms": 0.719384,
+        "max_ms": 0.847139,
+        "std_ms": 0.04450977330991474,
         "size_bytes": 16104
       },
-      "ratio_x86_to_pure_c": 1.2954314624023593,
-      "ratio_x86_to_ulisp_c": 0.3481130942746625,
+      "ratio_x86_to_pure_c": 1.4936461985014453,
+      "ratio_x86_to_ulisp_c": 0.3974337089620182,
       "chez": {
-        "mean_ms": 49.6567406,
-        "median_ms": 49.11103,
-        "min_ms": 48.211588,
-        "max_ms": 51.506047,
-        "std_ms": 1.4631132434284788
+        "mean_ms": 52.3584863,
+        "median_ms": 52.298283,
+        "min_ms": 48.320951,
+        "max_ms": 58.711395,
+        "std_ms": 3.0998648842939045
       },
-      "ratio_x86_to_chez": 0.024627387646139625,
+      "ratio_x86_to_chez": 0.021628938879388496,
       "gauche": {
-        "mean_ms": 51.306329,
-        "median_ms": 48.89087,
-        "min_ms": 44.377878,
-        "max_ms": 63.989531,
-        "std_ms": 7.6201420402955735
-      },
-      "perf": {
-        "x86": {
-          "cycles": 4045268,
-          "instructions": 8918306,
-          "branches": 745896,
-          "branch_misses": 1378,
-          "cache_references": 32869,
-          "cache_misses": 17042,
-          "ipc": 2.204626739192558,
-          "branch_miss_pct": 0.18474425389062282,
-          "cache_miss_pct": 51.848246067723395
-        },
-        "ulisp_c": {
-          "cycles": 4077853,
-          "instructions": 7157981,
-          "branches": 736563,
-          "branch_misses": 5942,
-          "cache_references": 40429,
-          "cache_misses": 23684,
-          "ipc": 1.7553308076578533,
-          "branch_miss_pct": 0.8067198596725602,
-          "cache_miss_pct": 58.581711147938364
-        },
-        "pure_c": {
-          "cycles": 2151867,
-          "instructions": 2008690,
-          "branches": 426468,
-          "branch_misses": 5822,
-          "cache_references": 39208,
-          "cache_misses": 18411,
-          "ipc": 0.9334638246694614,
-          "branch_miss_pct": 1.365166905840532,
-          "cache_miss_pct": 46.95725362170985
-        }
-      },
-      "gc_stats": {
-        "x86": {
-          "major": "0)",
-          "alloc": "800064 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        },
-        "ulisp_c": {
-          "major": "0)",
-          "alloc": "800064 bytes",
-          "copied": "0 bytes",
-          "gc time": "0 ms (0% of total)"
-        }
+        "mean_ms": 47.1928633,
+        "median_ms": 46.96912,
+        "min_ms": 45.672831,
+        "max_ms": 49.038534,
+        "std_ms": 1.319707927381665
       }
     }
   ]

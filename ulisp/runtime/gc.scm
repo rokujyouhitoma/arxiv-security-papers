@@ -55,17 +55,17 @@
 (define (runtime-init-heap size-bytes profile-id debug-gc)
   (let* ((n-size
           (cond
-            ((= profile-id 1) 268435456)   ; compiler: 256MB
+            ((= profile-id 1) 2147483648)  ; compiler: 2GB
             ((= profile-id 2) 16777216)    ; server: 16MB
             (else 4194304)))               ; standard: 4MB
          (m-size
           (cond
-            ((= profile-id 1) 268435456)   ; compiler: 256MB
+            ((= profile-id 1) 2147483648)  ; compiler: 2GB
             ((= profile-id 2) 268435456)   ; server: 256MB
             (else 67108864)))              ; standard: 64MB
          (max-size
           (cond
-            ((= profile-id 1) 4294967296)  ; compiler: 4GB
+            ((= profile-id 1) 8589934592)  ; compiler: 8GB
             ((= profile-id 2) 4294967296)  ; server: 4GB
             (else 1073741824)))            ; standard: 1GB
          (total-alloc (+ n-size (* m-size 2) 65536))

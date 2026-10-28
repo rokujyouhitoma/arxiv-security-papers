@@ -95,12 +95,23 @@ def _resolve_compiler_input(scheme_code: str, target_ulisp_dir: Path) -> str:
         or "'" in scheme_code
     )
 
+    if needs_printer_lib:
+        posix_scm = target_ulisp_dir / "lib" / "posix.scm"
+        if posix_scm.is_file():
+            prepend_parts.append(posix_scm.read_text(encoding="utf-8"))
+        list_scm = target_ulisp_dir / "lib" / "list.scm"
+        if list_scm.is_file():
+            prepend_parts.append(list_scm.read_text(encoding="utf-8"))
+
     if needs_string_lib:
         str_scm = target_ulisp_dir / "lib" / "string.scm"
         if str_scm.is_file():
             prepend_parts.append(str_scm.read_text(encoding="utf-8"))
 
     if needs_printer_lib:
+        port_scm = target_ulisp_dir / "lib" / "port.scm"
+        if port_scm.is_file():
+            prepend_parts.append(port_scm.read_text(encoding="utf-8"))
         prn_scm = target_ulisp_dir / "lib" / "printer.scm"
         if prn_scm.is_file():
             prepend_parts.append(prn_scm.read_text(encoding="utf-8"))
@@ -171,11 +182,6 @@ def compile_to_elf(
 ) -> Path:
     """Compile Scheme code into a standalone native Linux ELF binary."""
     asm_code = compile_to_assembly(source, ulisp_dir=ulisp_dir)
-    target_ulisp_dir = ulisp_dir or _get_ulisp_dir()
-    runtime_c = target_ulisp_dir / "runtime.c"
-
-    if not runtime_c.is_file():
-        raise UlispCodegenError(f"ULisp C runtime not found at {runtime_c}")
 
     out_file = Path(output_path).resolve()
     out_file.parent.mkdir(parents=True, exist_ok=True)

@@ -27,10 +27,83 @@
   (let ((top-bound (append (map car* (car *top-level-fns*)) (car *top-level-vars*))))
     (free-vars expr (set-union bound top-bound))))
 
+;;; Checks whether `var` escapes (appears in non-operator position) within `expr`.
+(define (var-escapes? var expr)
+  (cond
+    ((symbol? expr)
+     (eq? expr var))
+    ((not (pair? expr))
+     #f)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) #f)
+         ((if)
+          (or (var-escapes? var (cadr expr))
+              (var-escapes? var (caddr expr))
+              (if (null? (cdddr expr)) #f (var-escapes? var (cadddr expr)))))
+         ((begin)
+          (let loop ((es (cdr expr)))
+            (and (pair? es)
+                 (or (var-escapes? var (car es))
+                     (loop (cdr es))))))
+         ((let)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (or (let loop ((bs bindings))
+                  (and (pair? bs)
+                       (or (var-escapes? var (cadar bs))
+                           (loop (cdr bs)))))
+                (if (memq var (map car* bindings))
+                    #f
+                    (var-escapes? var body)))))
+         ((letrec)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (if (memq var (map car* bindings))
+                #f
+                (or (let loop ((bs bindings))
+                      (and (pair? bs)
+                           (or (var-escapes? var (cadar bs))
+                               (loop (cdr bs)))))
+                    (var-escapes? var body)))))
+         ((lambda)
+          (let ((params (cadr expr))
+                (body (caddr expr)))
+            (if (memq var params)
+                #f
+                (occurs-in? var body))))
+         (else
+          (if (eq? op var)
+              (let loop ((as (cdr expr)))
+                (and (pair? as)
+                     (or (var-escapes? var (car as))
+                         (loop (cdr as)))))
+              (or (var-escapes? var op)
+                  (let loop ((as (cdr expr)))
+                    (and (pair? as)
+                         (or (var-escapes? var (car as))
+                             (loop (cdr as)))))))))))))
+
+(define (binding-lambda? val)
+  (and (pair? val) (eq? (car val) 'lambda)))
+
+(define (known-fn-binding? var val rec-vars)
+  (if (binding-lambda? val)
+      (let* ((params (cadr val))
+             (lbody (caddr val))
+             (bound (append rec-vars params))
+             (frees (free-vars-with-globals lbody bound)))
+        (null? frees))
+      #f))
+
 ;;; Variable environment lookup (linear alist, latest bindings shadow older ones)
 (define (lookup-var var var-map)
   (let ((entry (assq var var-map)))
     (cond
+      ((and entry (pair? (cdr entry)) (eq? (cadr entry) '%known-fn))
+       ;; Known function referenced as first-class value: instantiate static closure
+       (list '%make-closure-env (caddr entry)))
       (entry (cdr entry))
       ((assq var (car *top-level-fns*))
        ;; Top-level function referenced as first-class value: instantiate static closure
@@ -67,20 +140,7 @@
          ((begin)
           (cons 'begin (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
          ((let)
-          (let* ((bindings (cadr expr))
-                 (body (caddr expr))
-                 (new-bindings
-                  (map (lambda (b)
-                         (list (car b) (convert-expr (cadr b) var-map)))
-                       bindings))
-                 ;; Shadow let-bound variables in body by pushing identity mappings
-                 (body-var-map
-                  (let loop ((bs bindings) (acc var-map))
-                    (if (null? bs) acc
-                        (let ((v (caar bs)))
-                          (loop (cdr bs) (cons (cons v v) acc))))))
-                 (new-body (convert-expr body body-var-map)))
-            (list 'let new-bindings new-body)))
+          (convert-let (cadr expr) (caddr expr) var-map))
          ((letrec)
           (convert-letrec (cadr expr) (caddr expr) var-map))
          ((%cont-fun)
@@ -118,23 +178,32 @@
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else
-          (if (and (symbol? op)
-                   (not (assq op var-map))
-                   (not (lir-primitive? op)))
-              (cond
-                ((assq op (car *top-level-fns*))
-                 (let ((label (cdr (assq op (car *top-level-fns*))))
-                       (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
-                   (cons '%direct-call (cons label args))))
-                ((allow-extern-symbols?)
-                 (let ((label (mangle-fn-label op))
-                       (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
-                   (cons '%direct-call (cons label args))))
-                (else
-                 (cons (convert-expr op var-map)
-                       (map (lambda (e) (convert-expr e var-map)) (cdr expr)))))
-              (cons (convert-expr op var-map)
-                    (map (lambda (e) (convert-expr e var-map)) (cdr expr))))))))))
+          (let ((known-entry (and (symbol? op) (assq op var-map))))
+            (cond
+              ;; 1. Local known function via var-map (%known-fn label)
+              ((and known-entry (pair? (cdr known-entry)) (eq? (cadr known-entry) '%known-fn))
+               (let ((label (caddr known-entry))
+                     (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+                 (cons '%direct-call (cons label args))))
+              ;; 2. Top-level known function or extern function
+              ((and (symbol? op)
+                    (not known-entry)
+                    (not (lir-primitive? op)))
+               (cond
+                 ((assq op (car *top-level-fns*))
+                  (let ((label (cdr (assq op (car *top-level-fns*))))
+                        (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+                    (cons '%direct-call (cons label args))))
+                 ((allow-extern-symbols?)
+                  (let ((label (mangle-fn-label op))
+                        (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
+                    (cons '%direct-call (cons label args))))
+                 (else
+                  (cons (convert-expr op var-map)
+                        (map (lambda (e) (convert-expr e var-map)) (cdr expr))))))
+              (else
+               (cons (convert-expr op var-map)
+                     (map (lambda (e) (convert-expr e var-map)) (cdr expr))))))))))))
 
 ;;; Convert a lambda expression, lift it as a top-level %function, and return %make-closure
 (define (convert-lambda self-name params body var-map)
@@ -166,76 +235,188 @@
            (map (lambda (fv) (convert-expr fv var-map)) frees)))
       (cons '%make-closure-env (cons label captured-args)))))
 
-;;; Convert letrec expression into let + %make-closure + backpatching %closure-set!
+;;; Convert let expression, identifying non-escaping lambdas as known functions
+(define (convert-let bindings body var-map)
+  (let* ((known-info
+          (map (lambda (b)
+                 (let ((var (car b)) (val (cadr b)))
+                   (if (and (binding-lambda? val)
+                            (null? (free-vars-with-globals (caddr val) (cadr val)))
+                            (not (var-escapes? var body))
+                            (not (var-escapes? var (caddr val))))
+                       (let ((label (unique-label-sym (string-append "L_known_" (sanitize-label-str (symbol->string var))))))
+                         (list var label val))
+                       #f)))
+               bindings))
+         (known-env-entries
+          (let loop ((kis known-info) (acc '()))
+            (cond
+              ((null? kis) (reverse acc))
+              ((car kis)
+               (let ((ki (car kis)))
+                 (loop (cdr kis) (cons (cons (car ki) (list '%known-fn (cadr ki))) acc))))
+              (else (loop (cdr kis) acc))))))
+    ;; Lift each known function
+    (let loop ((kis known-info))
+      (if (pair? kis)
+          (begin
+            (if (car kis)
+                (let* ((ki (car kis))
+                       (label (cadr ki))
+                       (val (caddr ki))
+                       (params (cadr val))
+                       (lbody (caddr val))
+                       (inner-map (append (map (lambda (p) (cons p p)) params)
+                                          (append known-env-entries var-map)))
+                       (new-lbody (convert-expr lbody inner-map))
+                       (fn-def (list '%function label params new-lbody)))
+                  (add-lifted-function! fn-def)))
+            (loop (cdr kis)))))
+    ;; Prepare let-bindings for non-known bindings
+    (let* ((normal-bindings
+            (let loop ((bs bindings) (kis known-info) (acc '()))
+              (cond
+                ((null? bs) (reverse acc))
+                ((not (car kis))
+                 (let ((b (car bs)))
+                   (loop (cdr bs) (cdr kis) (cons (list (car b) (convert-expr (cadr b) var-map)) acc))))
+                (else
+                 ;; Non-escaping known function: omit binding!
+                 (loop (cdr bs) (cdr kis) acc)))))
+           (body-var-map
+            (let loop ((bs normal-bindings) (acc (append known-env-entries var-map)))
+              (if (null? bs) acc
+                  (let ((v (caar bs)))
+                    (loop (cdr bs) (cons (cons v v) acc))))))
+           (new-body (convert-expr body body-var-map)))
+      (if (null? normal-bindings)
+          new-body
+          (list 'let normal-bindings new-body)))))
+
+;;; ;;; Convert letrec expression into direct known function calls + %make-closure backpatching
 (define (convert-letrec bindings body var-map)
   (let* ((rec-vars (map car* bindings))
-         ;; Shadow rec-vars in outer-var-map by binding them to themselves
-         (outer-var-map
-          (let loop ((rvs rec-vars) (acc var-map))
-            (if (null? rvs) acc
-                (loop (cdr rvs) (cons (cons (car rvs) (car rvs)) acc)))))
-         (processed-bindings
+         (rec-fn-vars (let loop ((bs bindings) (acc '()))
+                        (if (null? bs) (reverse acc)
+                            (let ((b (car bs)))
+                              (if (binding-lambda? (cadr b))
+                                  (loop (cdr bs) (cons (car b) acc))
+                                  (loop (cdr bs) acc))))))
+         ;; 1. Identify known functions: must be a closed lambda, and must NOT escape from body or any binding!
+         (known-info
           (map (lambda (b)
-                 (let ((var (car b))
-                       (val (cadr b)))
-                   (if (and (pair? val) (eq? (car val) 'lambda))
-                       (let* ((params (cadr val))
-                              (lbody (caddr val))
-                              (bound (cons var params))
-                              (frees (free-vars-with-globals lbody bound))
-                              (label (unique-label-sym "L_lambda"))
-                              ;; Callee inner environment:
-                              ;; Params map to themselves
-                              (env-p (let loop ((ps params) (acc '()))
-                                       (if (null? ps) acc
-                                           (loop (cdr ps) (cons (cons (car ps) (car ps)) acc)))))
-                              ;; Self-name maps to %self
-                              (env-s (cons (cons var '%self) env-p))
-                              ;; Free variables map to (%closure-ref %self idx)
-                              (inner-var-map
-                               (let loop ((fs frees) (idx 1) (acc env-s))
-                                 (if (null? fs) acc
-                                     (let ((fv (car fs)))
-                                       (loop (cdr fs) (+ idx 1)
-                                             (cons (cons fv (list '%closure-ref '%self idx)) acc))))))
-                              (new-lbody (convert-expr lbody inner-var-map))
-                              (fn-def (list '%function label params new-lbody)))
-                         (add-lifted-function! fn-def)
-                         (let ((init-args
-                                (map (lambda (fv)
-                                       (if (memq fv rec-vars)
-                                           #f
-                                           (convert-expr fv outer-var-map)))
-                                     frees)))
-                           (list var
-                                 (cons '%make-closure-env (cons label init-args))
-                                 frees)))
-                       (list var (convert-expr val outer-var-map) '()))))
+                 (let ((var (car b)) (val (cadr b)))
+                   (if (known-fn-binding? var val rec-fn-vars)
+                       (let ((esc? (or (var-escapes? var body)
+                                       (let loop ((bs bindings))
+                                         (and (pair? bs)
+                                              (or (let* ((other-b (car bs))
+                                                         (other-var (car other-b))
+                                                         (other-val (cadr other-b)))
+                                                    (if (eq? other-var var)
+                                                        (var-escapes? var (caddr other-val))
+                                                        (if (binding-lambda? other-val)
+                                                            (var-escapes? var (caddr other-val))
+                                                            (occurs-in? var other-val))))
+                                                  (loop (cdr bs))))))))
+                         (if esc?
+                             #f
+                             (let ((label (unique-label-sym (string-append "L_known_" (sanitize-label-str (symbol->string var))))))
+                               (list var label val))))
+                       #f)))
                bindings))
-         (let-bindings
-          (map (lambda (pb) (list (car pb) (cadr pb))) processed-bindings))
-         (backpatches
-          (let loop-b ((pbs processed-bindings) (acc '()))
-            (if (null? pbs)
-                (reverse acc)
-                (let* ((pb (car pbs))
-                       (var (car pb))
-                       (frees (caddr pb))
-                       (patches
-                        (let loop-f ((fs frees) (idx 1) (p-acc '()))
-                          (if (null? fs)
-                              (reverse p-acc)
-                              (let ((fv (car fs)))
-                                (if (memq fv rec-vars)
-                                    (loop-f (cdr fs) (+ idx 1)
-                                            (cons (list '%closure-set! var idx fv) p-acc))
-                                    (loop-f (cdr fs) (+ idx 1) p-acc)))))))
-                  (loop-b (cdr pbs) (append (reverse patches) acc))))))
-         (new-body (convert-expr body outer-var-map)))
-    (if (null? backpatches)
-        (list 'let let-bindings new-body)
-        (list 'let let-bindings
-              (cons 'begin (append backpatches (list new-body)))))))
+         (known-env-entries
+          (let loop ((kis known-info) (acc '()))
+            (cond
+              ((null? kis) (reverse acc))
+              ((car kis)
+               (let ((ki (car kis)))
+                 (loop (cdr kis) (cons (cons (car ki) (list '%known-fn (cadr ki))) acc))))
+              (else (loop (cdr kis) acc))))))
+    ;; 2. Convert and lift each known function
+    (let loop ((kis known-info))
+      (if (pair? kis)
+          (begin
+            (if (car kis)
+                (let* ((ki (car kis))
+                       (label (cadr ki))
+                       (val (caddr ki))
+                       (params (cadr val))
+                       (lbody (caddr val))
+                       (inner-map
+                        (append (map (lambda (p) (cons p p)) params)
+                                (append known-env-entries var-map)))
+                       (new-lbody (convert-expr lbody inner-map))
+                       (fn-def (list '%function label params new-lbody)))
+                  (add-lifted-function! fn-def)))
+            (loop (cdr kis)))))
+    ;; 3. Filter non-known bindings and process them with original closure conversion
+    (let* ((non-known-bindings
+            (let loop ((bs bindings) (kis known-info) (acc '()))
+              (cond
+                ((null? bs) (reverse acc))
+                ((not (car kis))
+                 (loop (cdr bs) (cdr kis) (cons (car bs) acc)))
+                (else
+                 (loop (cdr bs) (cdr kis) acc)))))
+           (base-outer-var-map (append known-env-entries var-map)))
+      (if (null? non-known-bindings)
+          ;; Fast path: ALL bindings are known non-escaping functions! ZERO closures allocated!
+          (convert-expr body base-outer-var-map)
+          ;; Mixed or escaping path: standard closure conversion for non-known bindings
+          (let* ((outer-var-map
+                  (let loop ((rvs rec-vars) (acc base-outer-var-map))
+                    (if (null? rvs) acc
+                        (loop (cdr rvs) (cons (cons (car rvs) (car rvs)) acc)))))
+                 (processed-bindings
+                  (map (lambda (b)
+                         (let ((var (car b)) (val (cadr b)))
+                           (if (and (pair? val) (eq? (car val) 'lambda))
+                               (let* ((params (cadr val))
+                                      (lbody (caddr val))
+                                      (bound (cons var params))
+                                      (frees (free-vars-with-globals lbody bound))
+                                      (label (unique-label-sym "L_lambda"))
+                                      (env-p (map (lambda (p) (cons p p)) params))
+                                      (env-s (cons (cons var '%self) env-p))
+                                      (inner-var-map
+                                       (let loop ((fs frees) (idx 1) (acc (append env-s known-env-entries)))
+                                         (if (null? fs) acc
+                                             (let ((fv (car fs)))
+                                               (loop (cdr fs) (+ idx 1)
+                                                     (cons (cons fv (list '%closure-ref '%self idx)) acc))))))
+                                      (new-lbody (convert-expr lbody inner-var-map))
+                                      (fn-def (list '%function label params new-lbody)))
+                                 (add-lifted-function! fn-def)
+                                 (let ((init-args
+                                        (map (lambda (fv)
+                                               (if (memq fv rec-vars) #f (convert-expr fv outer-var-map)))
+                                             frees)))
+                                   (list var (cons '%make-closure-env (cons label init-args)) frees)))
+                               (list var (convert-expr val outer-var-map) '()))))
+                       non-known-bindings))
+                 (let-bindings
+                  (map (lambda (pb) (list (car pb) (cadr pb))) processed-bindings))
+                 (backpatches
+                  (let loop-b ((pbs processed-bindings) (acc '()))
+                    (if (null? pbs) (reverse acc)
+                        (let* ((pb (car pbs))
+                               (var (car pb))
+                               (frees (caddr pb))
+                               (patches
+                                (let loop-f ((fs frees) (idx 1) (p-acc '()))
+                                  (if (null? fs) (reverse p-acc)
+                                      (let ((fv (car fs)))
+                                        (if (memq fv rec-vars)
+                                            (loop-f (cdr fs) (+ idx 1)
+                                                    (cons (list '%closure-set! var idx fv) p-acc))
+                                            (loop-f (cdr fs) (+ idx 1) p-acc)))))))
+                          (loop-b (cdr pbs) (append (reverse patches) acc))))))
+                 (new-body (convert-expr body outer-var-map)))
+            (if (null? backpatches)
+                (list 'let let-bindings new-body)
+                (list 'let let-bindings
+                      (cons 'begin (append backpatches (list new-body))))))))))
 
 ;;; Pass 5 Entrypoint: Takes Canonical Core AST or (%program defs main-expr), returns (%program functions main-expr)
 (define (closure-convert ast)

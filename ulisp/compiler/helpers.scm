@@ -388,6 +388,7 @@
 (define (truncate-expr-for-diagnostics expr)
   (let rec ((e expr) (depth 0))
     (cond
+      ((and (>= depth 3) (pair? e)) '(...))
       ((> depth 3) '...)
       ((not (pair? e)) e)
       (else

@@ -1070,7 +1070,7 @@
        ;; Generational Collector initialization (Pass 141)
        (emit "    mov rax, 9")                     ; sys_mmap
        (emit "    xor rdi, rdi")                   ; addr = NULL
-       (emit "    mov rsi, 2147483648")            ; 2GB total address space reservation
+       (emit "    mov rsi, 8589934592")            ; 8GB total address space reservation
        (emit "    mov rdx, 3")                     ; PROT_READ|PROT_WRITE
        (emit "    mov r10, 34")                    ; MAP_PRIVATE|MAP_ANONYMOUS
        (emit "    mov r8, -1")                     ; fd = -1
@@ -1159,12 +1159,12 @@
        (emit "    mov r12, 67108864")              ; size = 64MB
        (emit "    mov rsi, 134217728")             ; total = 128MB
        (emit "    jmp .L_gc_state_stress_setup")
-       ;; Compiler Profile (256MB Nursery, 256MB Mature, 4GB Max)
+       ;; Compiler Profile (2GB Nursery, 2GB Mature, 8GB Max)
        (emit ".L_profile_compiler:")
-       (emit "    mov r12, 268435456")             ; nursery_size = 256MB
-       (emit "    mov r13, 268435456")             ; mature_size = 256MB
-       (emit "    mov rsi, 805371904")             ; total_mmap = ~805MB
-       (emit "    mov r8, 4294967296")             ; max_mature = 4GB
+       (emit "    mov r12, 2147483648")            ; nursery_size = 2GB
+       (emit "    mov r13, 2147483648")            ; mature_size = 2GB
+       (emit "    mov rsi, 6442450944")            ; total_mmap = ~6.4GB
+       (emit "    mov r8, 8589934592")             ; max_mature = 8GB
        (emit "    mov r10, 1")                     ; profile_id = 1
        (emit "    jmp .L_profile_setup")
        ;; Server Profile (16MB Nursery, 256MB Mature, 4GB Max)

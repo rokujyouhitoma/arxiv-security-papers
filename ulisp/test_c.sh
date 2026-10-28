@@ -61,7 +61,7 @@ assert_c() {
 
     if [ -x "bin/ulisp-boot" ]; then
         printf '%s\n' "$code" > build/tmp_c_in.scm
-        ULISP_QUIET=1 bin/ulisp-boot build/tmp_c_in.scm > "$TMP_C" 2>build/compile_err.log || {
+        env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 bin/ulisp-boot build/tmp_c_in.scm > "$TMP_C" 2>build/compile_err.log || {
             echo -e "\033[31m[COMPILE FAIL]\033[0m $expr"
             cat build/compile_err.log
             FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -76,6 +76,7 @@ assert_c() {
         }
     fi
 
+    rm -f "$TMP_BIN"
     $CC $CFLAGS "$TMP_C" -o "$TMP_BIN" 2>build/gcc_err.log || {
         echo -e "\033[31m[GCC BUILD FAIL]\033[0m $expr"
         cat build/gcc_err.log
@@ -114,7 +115,7 @@ run_test_file_c() {
         cat "$f" >> "$in_file"
     done
     if [ -x "bin/ulisp-boot" ]; then
-        ULISP_QUIET=1 bin/ulisp-boot "$in_file" > "$out_c" 2>build/compile_err.log || {
+        env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 bin/ulisp-boot "$in_file" > "$out_c" 2>build/compile_err.log || {
             echo -e "\033[31m[COMPILE FAIL]\033[0m $test_file"
             cat build/compile_err.log
             FAIL_COUNT=$((FAIL_COUNT + 1))

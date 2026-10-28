@@ -416,7 +416,7 @@ test_gc_profile: $(COMPILER_DEP)
 	$(ULISP_COMPILER) build/test_gc_profile_input.scm > build/test_gc_profile.s
 	$(CC) -nostdlib -static build/test_gc_profile.s -o build/test_gc_profile
 	@echo "--- 1. Testing Default (Standard) Profile ---"
-	./build/test_gc_profile
+	env -u ULISP_GC_PROFILE ./build/test_gc_profile
 	@echo "--- 2. Testing ULISP_GC_PROFILE=compiler ---"
 	ULISP_GC_PROFILE=compiler ./build/test_gc_profile
 	@echo "--- 3. Testing ULISP_GC_PROFILE=server ---"
