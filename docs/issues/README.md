@@ -16,6 +16,7 @@
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
 | **619** | ソース位置追跡情報（%source-loc）に基づく最小限 DWARF（.debug_line）セクション生成と GDB / perf デバッグ支援の実装 | Feature | Medium | New | [619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md](619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md) |
+| **624** | ULisp x86-64 ネイティブバックエンドの Pure C -O2 パリティ達成に向けた包括的コード生成最適化（直接呼出・レジスタABI・アンボックス・レジスタ割付） | Feature | High | New | [624-achieve-pure-c-parity-with-native-codegen-optimizations.md](624-achieve-pure-c-parity-with-native-codegen-optimizations.md) |
 
 
 
