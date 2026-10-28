@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress \
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental
 
 CC = gcc
@@ -335,42 +335,42 @@ test_include_source_loc: build/compiler_passes.scm
 
 test_exceptions: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm tests/test_exceptions.scm > build/test_exn_input.scm
+	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm tests/test_exceptions.scm > build/test_exn_input.scm
 	$(ULISP_COMPILER) build/test_exn_input.scm > build/test_exn.s
 	$(CC) -nostdlib -static build/test_exn.s -o build/test_exn
 	./build/test_exn
 
 test_values: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
+	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
 	$(ULISP_COMPILER) build/test_values_input.scm > build/test_values.s
 	$(CC) -nostdlib -static build/test_values.s -o build/test_values
 	./build/test_values
 
 test_call_cc: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_call_cc.scm > build/test_call_cc_input.scm
+	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_call_cc.scm > build/test_call_cc_input.scm
 	$(ULISP_COMPILER) build/test_call_cc_input.scm > build/test_call_cc.s
 	$(CC) -nostdlib -static build/test_call_cc.s -o build/test_call_cc
 	./build/test_call_cc
 
 test_eqv: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_eqv.scm > build/test_eqv_input.scm
+	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_eqv.scm > build/test_eqv_input.scm
 	$(ULISP_COMPILER) build/test_eqv_input.scm > build/test_eqv.s
 	$(CC) -nostdlib -static build/test_eqv.s -o build/test_eqv
 	./build/test_eqv
 
 test_syntax_rules: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
+	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
 	$(ULISP_COMPILER) build/test_syntax_rules_input.scm > build/test_syntax_rules.s
 	$(CC) -nostdlib -static build/test_syntax_rules.s -o build/test_syntax_rules
 	./build/test_syntax_rules
 
 test_ports: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_ports.scm > build/test_ports_input.scm
+	cat lib/posix.scm lib/list.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_ports.scm > build/test_ports_input.scm
 	$(ULISP_COMPILER) build/test_ports_input.scm > build/test_ports.s
 	$(CC) -nostdlib -static build/test_ports.s -o build/test_ports
 	./build/test_ports
@@ -700,21 +700,21 @@ build/test_optimizer_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/
 test_optimizer: build/test_optimizer_runner.scm
 	@$(RUN_SCHEME) build/test_optimizer_runner.scm
 
-build/test_bridge_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm tests/jit/test_bridge.scm
+build/test_bridge_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm tests/jit/test_bridge.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_bridge: build/test_bridge_runner.scm
 	@$(RUN_SCHEME) build/test_bridge_runner.scm
 
-build/test_examples_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm tests/jit/test_examples.scm
+build/test_examples_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm tests/jit/test_examples.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_examples: build/test_examples_runner.scm
 	@$(RUN_SCHEME) build/test_examples_runner.scm
 
-build/test_guard_elimination_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm tests/jit/test_guard_elimination.scm
+build/test_guard_elimination_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm tests/jit/test_guard_elimination.scm
 	@mkdir -p build
 	cat $^ > $@
 
@@ -724,7 +724,7 @@ test_guard_elimination: build/test_guard_elimination_runner.scm
 test_jit: test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
 	@echo "=== [All JIT Component Tests Passed: 112/112] ==="
 
-build/demo_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm jit/examples/demo.scm
+build/demo_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm jit/examples/demo.scm
 	@mkdir -p build
 	cat $^ > $@
 
@@ -781,8 +781,8 @@ bench_stage2_vs_jit: bin/ulisp-jit
 bench_trio: bin/ulisp-jit
 	$(PYTHON) $(ROOT_DIR)/tools/benchmark_ilisp_ulisp.py --iterations 10
 
-bench_perf: bin/ulisp-jit
-	$(PYTHON) $(ROOT_DIR)/tools/benchmark_ilisp_ulisp.py --iterations 10 --perf
+bench_perf: compiler
+	$(PYTHON) benchmarks/benchmark_c_vs_x86.py --perf
 
 bench_ci: bin/ulisp-jit
 	$(PYTHON) $(ROOT_DIR)/tools/benchmark_ilisp_ulisp.py --iterations 5 --compare $(ROOT_DIR)/outputs/benchmarks/latest.json --threshold 2.5
@@ -794,7 +794,11 @@ diff_test: bin/ulisp-jit
 test_aot: core
 	./test.sh
 
-test: test_passes test_pass_manager test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_jit test_c test_aot
+test_gc_stats: compiler
+	@echo "=== Running Runtime GC Statistics Tests (Issue #622) ==="
+	bash tests/test_gc_stats.sh
+
+test: test_passes test_pass_manager test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log

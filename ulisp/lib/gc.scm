@@ -103,6 +103,17 @@
     (%raw-store! (%get-gc-state-ptr) 128
                  (%to-raw (if v (bitwise-ior cur 1) (bitwise-and cur -2))))))
 
+;; GC Statistics (Issue #622)
+;; [136]: total_alloc_bytes, [144]: total_survived_bytes, [152]: total_gc_time_ns
+;; [160]: stats_mode, [168]: start_time_sec, [176]: start_time_nsec
+(define (gc-alloc-bytes)    (%to-fixnum (%raw-load (%get-gc-state-ptr) 136)))
+(define (gc-survived-bytes) (%to-fixnum (%raw-load (%get-gc-state-ptr) 144)))
+(define (gc-total-time-ns)  (%to-fixnum (%raw-load (%get-gc-state-ptr) 152)))
+(define (gc-stats-mode?)
+  (= (bitwise-and (%to-fixnum (%raw-load (%get-gc-state-ptr) 160)) 1) 1))
+(define (set-gc-stats-mode! v)
+  (%raw-store! (%get-gc-state-ptr) 160 (%to-raw (if v 1 0))))
+
 ;;; Query current GC execution profile (Issue #567)
 ;;; Returns symbol: 'standard, 'compiler, 'server, 'none, 'dual-space, or 'stress
 (define (gc-current-profile)

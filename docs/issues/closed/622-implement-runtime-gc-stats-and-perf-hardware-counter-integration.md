@@ -2,7 +2,7 @@
 ID: 622
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] 実行時 GC 統計プロファイル（ULISP_GC_STATS）および Linux perf ハードウェアカウンタ連携基盤の実装 (ID: 622)
@@ -131,11 +131,11 @@ Target Branch: `feat/622-implement-runtime-gc-stats-and-perf-hardware-counter-in
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ULISP_GC_STATS=1 ./binary` を実行した際、GC 回数・総割り当て量・生存コピー量・停止時間が標準エラー出力に規定フォーマットで出力されること。
-- [ ] 通常実行時（`ULISP_GC_STATS` 未指定時）において、標準エラー出力が沈黙を保ち、オーバーヘッドが 0.1% 未満（ホットパス無変更）であること。
-- [ ] `140_backend_x86_64.scm`（ネイティブ）および `160_backend_c.scm`（C バックエンド）の双角で同一の `ULISP_GC_STATS` 仕様が動作すること。
-- [ ] `python3 benchmarks/benchmark_c_vs_x86.py --perf`（または `make bench_perf`）が正常に完走し、IPC、分岐予測ミス率、キャッシュミス率が集計・出力されること。
-- [ ] `perf` 権限がない環境または未インストール環境でも、エラーで異常終了せず警告とともに安全にフォールバックすること。
-- [ ] 新規テストスイート `ulisp/tests/test_gc_stats.sh` が作成され、全項目 PASS すること。
-- [ ] `make test` および `make py_compile` / `make static_analysis` が 100% エラー 0 件で通過すること。
+- [x] `ULISP_GC_STATS=1 ./binary` を実行した際、GC 回数・総割り当て量・生存コピー量・停止時間が標準エラー出力に規定フォーマットで出力されること。
+- [x] 通常実行時（`ULISP_GC_STATS` 未指定時）において、標準エラー出力が沈黙を保ち、オーバーヘッドが 0.1% 未満（ホットパス無変更）であること。
+- [x] `140_backend_x86_64.scm`（ネイティブ）および `160_backend_c.scm`（C バックエンド）の双角で同一の `ULISP_GC_STATS` 仕様が動作すること。
+- [x] `python3 benchmarks/benchmark_c_vs_x86.py --perf`（または `make bench_perf`）が正常に完走し、IPC、分岐予測ミス率、キャッシュミス率が集計・出力されること。
+- [x] `perf` 権限がない環境または未インストール環境でも、エラーで異常終了せず警告とともに安全にフォールバックすること。
+- [x] 新規テストスイート `ulisp/tests/test_gc_stats.sh` が作成され、全項目 PASS すること。
+- [x] `make test` および `make py_compile` / `make static_analysis` が 100% エラー 0 件で通過すること。
 

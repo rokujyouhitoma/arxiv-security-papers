@@ -12,6 +12,7 @@ import os
 import platform
 import statistics
 import subprocess
+import shutil
 import sys
 import time
 
@@ -236,7 +237,16 @@ def compile_scheme_to_file(in_code, out_path):
     with open(tmp_scm, "w") as f:
         f.write(in_code)
 
-    if os.path.exists(ULISP_BOOT) and os.access(ULISP_BOOT, os.X_OK):
+    if "ULISP_COMPILER" in os.environ:
+        compiler_cmd = os.environ["ULISP_COMPILER"].split()
+        out_str = run_cmd(compiler_cmd, input_text=in_code)
+        with open(out_path, "w") as out_f:
+            out_f.write(out_str)
+    elif shutil.which("gosh"):
+        out_str = run_cmd(["gosh", COMPILER_SCM], input_text=in_code)
+        with open(out_path, "w") as out_f:
+            out_f.write(out_str)
+    elif os.path.exists(ULISP_BOOT) and os.access(ULISP_BOOT, os.X_OK):
         with open(out_path, "w") as out_f:
             env = dict(os.environ, PYTHONPATH=ROOT_DIR, ULISP_QUIET="1", ULISP_GC_PROFILE="compiler")
             res = subprocess.run([ULISP_BOOT, tmp_scm], stdout=out_f, stderr=subprocess.PIPE, text=True, env=env)
@@ -304,7 +314,89 @@ def measure_execution(bin_path, iterations, warmup=3):
         "std_ms": std_ms,
     }
 
+def measure_perf(bin_path):
+    """Measures hardware performance counters using Linux perf stat -x,."""
+    cmd = [
+        "perf", "stat", "-x,",
+        "-e", "cycles,instructions,branches,branch-misses,cache-references,cache-misses",
+        bin_path
+    ]
+    env = dict(os.environ, ULISP_QUIET="1")
+    try:
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+    if p.returncode != 0 and not p.stderr:
+        return None
+
+    events = {}
+    for line in p.stderr.splitlines():
+        parts = line.strip().split(",")
+        if len(parts) >= 3:
+            val_str = parts[0].strip()
+            event_name = parts[2].strip()
+            if val_str not in ("<not counted>", "<not supported>", ""):
+                try:
+                    events[event_name] = int(val_str)
+                except ValueError:
+                    try:
+                        events[event_name] = int(float(val_str))
+                    except ValueError:
+                        pass
+
+    if not events:
+        return None
+
+    cycles = events.get("cycles", 0)
+    instructions = events.get("instructions", 0)
+    branches = events.get("branches", 0)
+    branch_misses = events.get("branch-misses", 0)
+    cache_refs = events.get("cache-references", 0)
+    cache_misses = events.get("cache-misses", 0)
+
+    ipc = (instructions / cycles) if cycles > 0 else 0.0
+    branch_miss_pct = (branch_misses / branches * 100.0) if branches > 0 else 0.0
+    cache_miss_pct = (cache_misses / cache_refs * 100.0) if cache_refs > 0 else 0.0
+
+    return {
+        "cycles": cycles,
+        "instructions": instructions,
+        "branches": branches,
+        "branch_misses": branch_misses,
+        "cache_references": cache_refs,
+        "cache_misses": cache_misses,
+        "ipc": ipc,
+        "branch_miss_pct": branch_miss_pct,
+        "cache_miss_pct": cache_miss_pct,
+    }
+
+def measure_gc_stats(bin_path):
+    """Extracts GC statistics via ULISP_GC_STATS=1 stderr summary."""
+    env = dict(os.environ, ULISP_QUIET="1", ULISP_GC_STATS="1")
+    try:
+        p = subprocess.run([bin_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    except Exception:
+        return None
+
+    # Parse: [ULISP GC STATS] Collections: %d (Minor: %d, Major: %d), Alloc: %d bytes, Copied: %d bytes, GC Time: %d ms (%d% of total)
+    for line in p.stderr.splitlines():
+        if "[ULISP GC STATS]" in line:
+            res = {}
+            parts = line.replace("[ULISP GC STATS]", "").strip().split(",")
+            for part in parts:
+                kv = part.strip().split(":")
+                if len(kv) == 2:
+                    k = kv[0].strip().lower()
+                    v = kv[1].strip()
+                    res[k] = v
+            return res
+    return None
+
 def main():
+    perf_enabled = "--perf" in sys.argv
     gcc_ver = subprocess.getoutput("gcc -dumpversion").strip()
     cpu_arch = platform.machine()
     os_name = platform.system()
@@ -313,6 +405,8 @@ def main():
     print("=" * 88, flush=True)
     print(" ULisp Canonical Performance Benchmark: x86-64 Freestanding vs ULisp C vs Pure C", flush=True)
     print(f" Environment: {os_name} {cpu_arch}, GCC {gcc_ver}, Engine: {'ulisp-boot' if os.path.exists(ULISP_BOOT) else 'ILisp'}", flush=True)
+    if perf_enabled:
+        print(" Mode: Linux perf hardware counters & GC stats enabled (--perf)", flush=True)
     print("=" * 88, flush=True)
 
     results = []
@@ -337,7 +431,12 @@ def main():
         x86_out = verify_output(x86_bin)
         assert x86_out == expected, f"Output mismatch for x86-64 in {w_name}: expected '{expected}', got '{x86_out}'"
         x86_metrics = measure_execution(x86_bin, iters, warmup)
-        print(f"        Execution: {x86_metrics['mean_ms']:7.2f} ms (min: {x86_metrics['min_ms']:7.2f} ms, std: {x86_metrics['std_ms']:5.2f} ms) | Size: {x86_size:6d} B", flush=True)
+        x86_perf = measure_perf(x86_bin) if perf_enabled else None
+        x86_gc = measure_gc_stats(x86_bin) if perf_enabled else None
+        perf_info = ""
+        if x86_perf:
+            perf_info = f" | IPC: {x86_perf['ipc']:.2f}, BrMiss: {x86_perf['branch_miss_pct']:.2f}%, L1Miss: {x86_perf['cache_miss_pct']:.2f}%"
+        print(f"        Execution: {x86_metrics['mean_ms']:7.2f} ms (min: {x86_metrics['min_ms']:7.2f} ms, std: {x86_metrics['std_ms']:5.2f} ms) | Size: {x86_size:6d} B{perf_info}", flush=True)
 
         # 2. ULisp C Backend (-O2)
         print("  [2/3] Compiling ULisp C backend (-O2)...", end="", flush=True)
@@ -348,7 +447,12 @@ def main():
         c_out = verify_output(c_bin)
         assert c_out == expected, f"Output mismatch for ULisp C in {w_name}: expected '{expected}', got '{c_out}'"
         c_metrics = measure_execution(c_bin, iters, warmup)
-        print(f"        Execution: {c_metrics['mean_ms']:7.2f} ms (min: {c_metrics['min_ms']:7.2f} ms, std: {c_metrics['std_ms']:5.2f} ms) | Size: {c_size:6d} B", flush=True)
+        c_perf = measure_perf(c_bin) if perf_enabled else None
+        c_gc = measure_gc_stats(c_bin) if perf_enabled else None
+        c_perf_info = ""
+        if c_perf:
+            c_perf_info = f" | IPC: {c_perf['ipc']:.2f}, BrMiss: {c_perf['branch_miss_pct']:.2f}%, L1Miss: {c_perf['cache_miss_pct']:.2f}%"
+        print(f"        Execution: {c_metrics['mean_ms']:7.2f} ms (min: {c_metrics['min_ms']:7.2f} ms, std: {c_metrics['std_ms']:5.2f} ms) | Size: {c_size:6d} B{c_perf_info}", flush=True)
 
         # 3. Pure C Baseline (-O2)
         print("  [3/3] Compiling Pure C baseline (-O2)...", end="", flush=True)
@@ -359,7 +463,11 @@ def main():
         pure_c_out = verify_output(pure_c_bin)
         assert pure_c_out == expected, f"Output mismatch for Pure C in {w_name}: expected '{expected}', got '{pure_c_out}'"
         pure_c_metrics = measure_execution(pure_c_bin, iters, warmup)
-        print(f"        Execution: {pure_c_metrics['mean_ms']:7.2f} ms (min: {pure_c_metrics['min_ms']:7.2f} ms, std: {pure_c_metrics['std_ms']:5.2f} ms) | Size: {pure_c_size:6d} B", flush=True)
+        pure_c_perf = measure_perf(pure_c_bin) if perf_enabled else None
+        pure_perf_info = ""
+        if pure_c_perf:
+            pure_perf_info = f" | IPC: {pure_c_perf['ipc']:.2f}, BrMiss: {pure_c_perf['branch_miss_pct']:.2f}%, L1Miss: {pure_c_perf['cache_miss_pct']:.2f}%"
+        print(f"        Execution: {pure_c_metrics['mean_ms']:7.2f} ms (min: {pure_c_metrics['min_ms']:7.2f} ms, std: {pure_c_metrics['std_ms']:5.2f} ms) | Size: {pure_c_size:6d} B{pure_perf_info}", flush=True)
 
         print(f"  => Output Verified: {expected} [All 3 implementations match 100%]", flush=True)
 
@@ -367,7 +475,7 @@ def main():
         x86_vs_pure = x86_metrics["mean_ms"] / pure_c_metrics["mean_ms"] if pure_c_metrics["mean_ms"] > 0 else 1.0
         x86_vs_ulisp_c = x86_metrics["mean_ms"] / c_metrics["mean_ms"] if c_metrics["mean_ms"] > 0 else 1.0
 
-        results.append({
+        item = {
             "id": w_id,
             "name": w_name,
             "expected": expected,
@@ -394,7 +502,18 @@ def main():
             },
             "ratio_x86_to_pure_c": x86_vs_pure,
             "ratio_x86_to_ulisp_c": x86_vs_ulisp_c,
-        })
+        }
+        if perf_enabled:
+            item["perf"] = {
+                "x86": x86_perf,
+                "ulisp_c": c_perf,
+                "pure_c": pure_c_perf,
+            }
+            item["gc_stats"] = {
+                "x86": x86_gc,
+                "ulisp_c": c_gc,
+            }
+        results.append(item)
 
     # Summary Display
     print("\n" + "=" * 98, flush=True)
@@ -410,13 +529,31 @@ def main():
         print(f"{r['name']:<32} | {x86_s:>14} | {c_s:>14} | {p_s:>13} | {ratio_s:>12}", flush=True)
     print("=" * 98, flush=True)
 
+    if perf_enabled:
+        print("\n" + "=" * 98, flush=True)
+        print(" HARDWARE PERFORMANCE COUNTERS (Linux perf stat & GC Stats)", flush=True)
+        print("=" * 98, flush=True)
+        print(f"{'Workload':<28} | {'x86 IPC':<9} | {'x86 BrMiss':<11} | {'x86 L1Miss':<11} | {'x86 GC Alloc':<14} | {'C IPC':<8}", flush=True)
+        print("-" * 98, flush=True)
+        for r in results:
+            xp = r.get("perf", {}).get("x86")
+            cp = r.get("perf", {}).get("ulisp_c")
+            xgc = r.get("gc_stats", {}).get("x86") or {}
+            x_ipc = f"{xp['ipc']:.2f}" if xp else "N/A"
+            x_brmiss = f"{xp['branch_miss_pct']:.2f}%" if xp else "N/A"
+            x_l1miss = f"{xp['cache_miss_pct']:.2f}%" if xp else "N/A"
+            c_ipc = f"{cp['ipc']:.2f}" if cp else "N/A"
+            alloc_s = xgc.get("alloc", "0 B")
+            print(f"{r['name']:<28} | {x_ipc:>9} | {x_brmiss:>11} | {x_l1miss:>11} | {alloc_s:>14} | {c_ipc:>8}", flush=True)
+        print("=" * 98, flush=True)
+
     # Generate Markdown Report
     md_content = f"""# ULisp Canonical Benchmark Report: x86-64 vs ULisp C vs Pure C
 
 - **Timestamp**: `{timestamp}`
 - **Environment**: `{os_name} {cpu_arch}`, `GCC {gcc_ver}`
 - **Compiler Engine**: `{'ulisp/bin/ulisp-boot' if os.path.exists(ULISP_BOOT) else 'ILisp'}`
-- **Conforms to**: DSN-33, Issue #620
+- **Conforms to**: DSN-33, Issue #620, Issue #622
 
 ## 1. 実行時間比較（Execution Latency）
 
@@ -435,11 +572,30 @@ def main():
     for r in results:
         md_content += f"| **{r['name']}** | {r['x86']['size_bytes']:,} B | {r['ulisp_c']['size_bytes']:,} B | {r['pure_c']['size_bytes']:,} B |\n"
 
+    if perf_enabled:
+        md_content += """
+## 3. ハードウェア性能カウンタ（Hardware Performance Counters via Linux perf）
+
+| ワークロード | x86-64 IPC | x86-64 Branch Miss % | x86-64 Cache Miss % | ULisp C IPC | Pure C IPC |
+|---|---|---|---|---|---|
+"""
+        for r in results:
+            xp = r.get("perf", {}).get("x86")
+            cp = r.get("perf", {}).get("ulisp_c")
+            pp = r.get("perf", {}).get("pure_c")
+            x_ipc = f"{xp['ipc']:.2f}" if xp else "N/A"
+            x_brmiss = f"{xp['branch_miss_pct']:.2f}%" if xp else "N/A"
+            x_l1miss = f"{xp['cache_miss_pct']:.2f}%" if xp else "N/A"
+            c_ipc = f"{cp['ipc']:.2f}" if cp else "N/A"
+            p_ipc = f"{pp['ipc']:.2f}" if pp else "N/A"
+            md_content += f"| **{r['name']}** | {x_ipc} | {x_brmiss} | {x_l1miss} | {c_ipc} | {p_ipc} |\n"
+
     md_content += """
 > **注記**:
 > - x86-64 Native は `gcc -nostdlib -static` でリンクされた libc 依存ゼロの Freestanding バイナリです。
 > - ULisp C は Pass 160 で出力された自己完結型 C99 ソースを `gcc -O2` でビルドしたバイナリです。
 > - Pure C は同一アルゴリズムの手書き最適化 C99 コードを `gcc -O2` でビルドした理論上限ベースラインです。
+> - IPC（Instructions Per Cycle）、Branch Miss %、Cache Miss % は Linux `perf stat` ハードウェアカウンタによる測定値です。
 """
 
     md_file = os.path.join(BUILD_DIR, "bench_results.md")
@@ -455,6 +611,7 @@ def main():
         "os": os_name,
         "arch": cpu_arch,
         "gcc": gcc_ver,
+        "perf_enabled": perf_enabled,
         "results": results,
     }
     json_file = os.path.join(BUILD_DIR, "bench_results.json")
@@ -472,3 +629,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

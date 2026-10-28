@@ -135,11 +135,15 @@
 
 ;;; --- Test 7: 10,000 Consecutive In-memory Read Iterations ---
 (write-string "--- Test 7: 10,000 In-memory Read Iterations ---\n")
-(let loop ((i 0) (sum 0))
-  (if (< i 10000)
-      (let* ((p (open-input-string "(+ 1 2)"))
-             (form (read p)))
-        (loop (+ i 1) (+ sum (cadr form))))
-      (test "10,000 read iterations sum" 10000 sum)))
+(let ((res
+       (let loop ((i 0) (sum 0))
+         (if (< i 10000)
+             (let* ((p (open-input-string "(+ 1 2)"))
+                    (form (read p)))
+               (if (equal? form '(+ 1 2))
+                   (loop (+ i 1) (+ sum 1))
+                   (loop (+ i 1) sum)))
+             sum))))
+  (test "10,000 read iterations sum" 10000 res))
 
 (write-string "=== All R7RS String Ports Tests Completed Successfully! ===\n")

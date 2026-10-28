@@ -11,6 +11,8 @@
 ;;   4: mature_size, 5: mature_free, 6: stack_bottom, 7: minor_count
 ;;   8: major_count, 9: remset_ptr, 10: remset_count, 11: gen_mode
 ;;   12: mature_max_size, 13: mature_growth_count, 14: profile_id, 15: debug_gc
+;;   16: stress_mode, 17: total_alloc_bytes, 18: total_survived_bytes
+;;   19: total_gc_time_ns, 20: stats_mode, 21: start_time_sec, 22: start_time_nsec
 
 (define *runtime-heap-default-size* (* 16 1024 1024)) ; 16MB default
 
@@ -40,6 +42,14 @@
 (define (runtime-gc-stress-mode)  (%to-fixnum (runtime-gc-state-ref 16)))
 (define (runtime-set-gc-stress-mode! v)
   (runtime-gc-state-set! 16 (if v 1 0)))
+
+;; GC Statistics accessors (Issue #622)
+(define (runtime-gc-alloc-bytes)    (%to-fixnum (runtime-gc-state-ref 17)))
+(define (runtime-gc-survived-bytes) (%to-fixnum (runtime-gc-state-ref 18)))
+(define (runtime-gc-total-time-ns)  (%to-fixnum (runtime-gc-state-ref 19)))
+(define (runtime-gc-stats-mode)     (%to-fixnum (runtime-gc-state-ref 20)))
+(define (runtime-set-gc-stats-mode! v)
+  (runtime-gc-state-set! 20 (if v 1 0)))
 
 ;; Initialize generational GC heap with profile
 (define (runtime-init-heap size-bytes profile-id debug-gc)

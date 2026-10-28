@@ -581,6 +581,10 @@ make test_gc_profile
 echo "-- Step 26d: Issue 568 Hybrid Exact & Conservative Stack Scanning --"
 make test_gc_hybrid
 
+# --- Step 26e: Runtime GC Statistics & Allocation Profiling (Issue 622) ---
+echo "-- Step 26e: Issue 622 Runtime GC Statistics & Allocation Profiling --"
+make test_gc_stats
+
 # --- Step 27: Contification & Local Closure Elimination (Issue 522) ---
 echo "-- Step 27: Issue 522 Contification & Local Closure Elimination --"
 assert "55" "(let loop ((n 10) (acc 0)) (if (= n 0) acc (loop (- n 1) (+ acc n))))"

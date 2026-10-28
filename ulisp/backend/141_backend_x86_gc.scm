@@ -68,15 +68,29 @@
   (emit "    push r13")
   (emit "    push r14")
   (emit "    push r15")
-  (emit "    sub rsp, 8")
+  (emit "    sub rsp, 48")
   (emit "    mov [rsp], rdi")                   ; preserve deepest_sp (Issue #568)
   (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    cmp qword ptr [r11 + 160], 0")
+  (emit "    je .L_gc_start_no_stats")
+  (emit "    mov rax, r12")
+  (emit "    sub rax, [r11 + 0]")               ; r12 - nursery_base / from
+  (emit "    test rax, rax")
+  (emit "    jle .L_gc_start_rec_time")
+  (emit "    add [r11 + 136], rax")             ; add to total_alloc_bytes
+  (emit ".L_gc_start_rec_time:")
+  (emit "    mov rax, 228")                     ; sys_clock_gettime
+  (emit "    mov rdi, 1")                       ; CLOCK_MONOTONIC
+  (emit "    lea rsi, [rsp + 16]")
+  (emit "    syscall")
+  (emit ".L_gc_start_no_stats:")
   (emit "    mov rax, [r11 + 88]")              ; gen_mode
   (emit "    cmp rax, 1")
   (emit "    je .L_gc_minor_start")
   ;; --- Dual-Space GC ---
   (emit ".L_gc_dual_start:")
   (emit "    mov rax, [r11 + 8]")               ; to
+  (emit "    mov [rsp + 8], rax")               ; save initial to for survived bytes
   (emit "    mov [r11 + 40], rax")              ; free_ptr = to
   (emit "    mov rbx, rax")                     ; scan_start = to
   (emit "    mov rsi, [r11 + 24]")              ; bottom
@@ -315,6 +329,9 @@
   (emit "    mov [r11 + 0], rcx")
   (emit "    mov [r11 + 8], rax")
   (emit "    inc qword ptr [r11 + 32]")
+  (emit "    mov rax, [r11 + 40]")              ; free_ptr
+  (emit "    sub rax, [rsp + 8]")               ; free_ptr - initial_to
+  (emit "    add [r11 + 144], rax")             ; total_survived_bytes += survived
   (emit "    mov r12, [r11 + 40]")              ; r12 = free_ptr
   (emit "    mov rax, [r11 + 0]")
   (emit "    add rax, [r11 + 16]")
@@ -325,7 +342,9 @@
   ;; --- Generational Minor GC ---
   (emit ".L_gc_minor_start:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
-  (emit "    mov rbx, [r11 + 40]")              ; scan_start = mature_free
+  (emit "    mov rax, [r11 + 40]")              ; mature_free
+  (emit "    mov [rsp + 8], rax")               ; save mature_free_start
+  (emit "    mov rbx, rax")                     ; scan_start = mature_free
   (emit "    mov rsi, [r11 + 48]")              ; bottom
   (emit "    test rsi, rsi")
   (emit "    jnz .L_gc_minor_has_bottom")
@@ -642,6 +661,7 @@
   (emit "    mov [r11 + 16], rax")              ; update mature_from
   (emit "    sub rax, rcx")                     ; diff = new - old
   (emit "    add [r11 + 40], rax")              ; mature_free += diff
+  (emit "    add [rsp + 8], rax")               ; mature_free_start += diff
   (emit ".L_gc_minor_mremap_ok:")
   (emit "    mov [r11 + 32], rdx")              ; mature_size = new_size
   (emit "    inc qword ptr [r11 + 104]")        ; growth_count++
@@ -653,8 +673,27 @@
   (emit "    mov [rdx], rax")
   (emit "    mov qword ptr [r11 + 80], 0")
   (emit "    inc qword ptr [r11 + 56]")
+  (emit "    mov rax, [r11 + 40]")              ; mature_free_end
+  (emit "    sub rax, [rsp + 8]")               ; mature_free_end - mature_free_start
+  (emit "    add [r11 + 144], rax")             ; total_survived_bytes += survived
   (emit ".L_gc_exit:")
-  (emit "    add rsp, 8")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    cmp qword ptr [r11 + 160], 0")
+  (emit "    je .L_gc_exit_no_stats")
+  (emit "    mov rax, 228")                     ; sys_clock_gettime
+  (emit "    mov rdi, 1")                       ; CLOCK_MONOTONIC
+  (emit "    lea rsi, [rsp + 32]")              ; store end timespec in [rsp+32..40]
+  (emit "    syscall")
+  (emit "    mov rax, [rsp + 32]")              ; end_sec
+  (emit "    sub rax, [rsp + 16]")              ; end_sec - start_sec
+  (emit "    imul rax, 1000000000")
+  (emit "    mov rcx, [rsp + 40]")              ; end_nsec
+  (emit "    sub rcx, [rsp + 24]")              ; end_nsec - start_nsec
+  (emit "    add rax, rcx")                     ; delta_ns
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    add [r11 + 152], rax")             ; total_gc_time_ns += delta_ns
+  (emit ".L_gc_exit_no_stats:")
+  (emit "    add rsp, 48")
   (emit "    pop r15")
   (emit "    pop r14")
   (emit "    pop r13")
