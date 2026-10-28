@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental
 
@@ -774,6 +774,15 @@ run_jit: bin/ulisp-jit
 bench: compiler
 	@mkdir -p build
 	$(PYTHON) benchmarks/benchmark_c_vs_x86.py
+
+bench_baseline: compiler
+	@mkdir -p build
+	$(PYTHON) benchmarks/benchmark_c_vs_x86.py --perf --iterations 30 --warmup 5 --baseline
+
+bench_verify: compiler
+	@mkdir -p build
+	$(PYTHON) benchmarks/benchmark_c_vs_x86.py --perf --iterations 5
+	$(PYTHON) benchmarks/verify_regression.py --threshold-latency 15.0 --threshold-size 5.0
 
 bench_stage2_vs_jit: bin/ulisp-jit
 	$(PYTHON) benchmarks/benchmark_stage2_vs_ulisp_jit.py

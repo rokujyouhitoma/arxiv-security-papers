@@ -143,3 +143,36 @@ make -C ulisp bench
 - **Markdown レポート**: `ulisp/build/bench_results.md` および `outputs/benchmarks/benchmark_c_vs_x86.md`
 - **JSON メトリクス**: `ulisp/build/bench_results.json` および `outputs/benchmarks/latest.json`
 
+---
+
+## 6. 正典性能ベースライン（Canonical Performance Baseline）
+
+最適化施策（Issue #618 S-RTyper 関数間アンボックス特化等）の効果測定および客観的比較の基準点として、30 回試行の安定測定データに基づく**「公式正典ベースライン」**を策定しています。
+
+- **正典ベースラインレポート**: [BASELINE.md](BASELINE.md)
+- **機械可読データセット**: `outputs/benchmarks/canonical_baseline.json`
+
+### 正典ベースラインの再記録プロトコル
+システム環境や基盤アーキテクチャの大幅な改訂時に、30 反復試行＋perf カウンタ＋GC 統計付きでベースラインを再確定します：
+```bash
+make -C ulisp bench_baseline
+```
+
+---
+
+## 7. 継続的性能監視と回帰検知（Continuous Regression Monitoring）
+
+日常の開発や CI パイプラインにおいて、予期せぬ実行時間悪化やバイナリ肥大化を自動検知します：
+
+```bash
+# 最新の測定値と正典ベースラインを比較し、性能回帰（閾値 +15%）やサイズ肥大化（閾値 +5%）を自動判定
+make -C ulisp bench_verify
+```
+
+回帰が検出された場合は終了コード 1 で停止し、`ulisp/build/regression_report.md` に詳細差分レポートが出力されます。
+
+```bash
+# カスタム閾値での手動検証
+python3 ulisp/benchmarks/verify_regression.py --threshold-latency 10.0 --threshold-size 5.0
+```
+

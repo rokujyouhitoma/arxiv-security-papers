@@ -16,7 +16,6 @@
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
 | **619** | ソース位置追跡情報（%source-loc）に基づく最小限 DWARF（.debug_line）セクション生成と GDB / perf デバッグ支援の実装 | Feature | Medium | New | [619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md](619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md) |
-| **623** | ULisp 正典性能ベースライン測定レポート（BASELINE.md）の策定と継続的性能監視基盤の構築 | Feature | Medium | New | [623-establish-canonical-performance-baseline-and-continuous-monitoring.md](623-establish-canonical-performance-baseline-and-continuous-monitoring.md) |
 
 
 
@@ -26,6 +25,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **623** | ULisp 正典性能ベースライン測定レポート（BASELINE.md）の策定と継続的性能監視基盤の構築 | Feature | 2026-10-28 | [closed/623-establish-canonical-performance-baseline-and-continuous-monitoring.md](closed/623-establish-canonical-performance-baseline-and-continuous-monitoring.md) |
 | **622** | 実行時 GC 統計プロファイル（ULISP_GC_STATS）および Linux perf ハードウェアカウンタ連携基盤の実装 | Feature | 2026-10-28 | [closed/622-implement-runtime-gc-stats-and-perf-hardware-counter-integration.md](closed/622-implement-runtime-gc-stats-and-perf-hardware-counter-integration.md) |
 | **611** | R7RS (scheme process-context) 環境変数取得手続き (get-environment-variable / get-environment-variables) の実装 | Feature | 2026-10-28 | [closed/611-implement-r7rs-process-context-environment-variables.md](closed/611-implement-r7rs-process-context-environment-variables.md) |
 | **621** | コンパイラ Nanopass 実行時間・メモリ消費プロファイラ（--time-passes）の実装 | Feature | 2026-10-27 | [closed/621-implement-compiler-pass-timing-and-memory-profiler.md](closed/621-implement-compiler-pass-timing-and-memory-profiler.md) |
