@@ -625,7 +625,7 @@
   (display "\n    Violating AST: ")
   (write expr)
   (newline)
-  (error "Nanopass Language Invariant Violation" (list pass-name lang-name)))
+  (raise (list 'nanopass-verifier-error pass-name lang-name)))
 
 (define (nanopass-verify-ast pass-name lang-name val phase)
   (if (or (eq? lang-name '*) (not (symbol? lang-name)))
@@ -799,16 +799,9 @@
     ((eq? pat '_)
      (cons #t '()))
     ((symbol? pat)
-     (let ((s (symbol->string pat)))
-       (cond
-         ;; Comma prefix variable `,var`
-         ((and (> (string-length s) 1) (char=? (string-ref s 0) #\,))
-          (let ((vname (string->symbol (substring s 1 (string-length s)))))
-            (cons #t (list (cons vname expr)))))
-         (else
-          (if (eq? pat expr)
-              (cons #t '())
-              #f)))))
+     (if (eq? pat expr)
+         (cons #t '())
+         #f))
     ((pair? pat)
      (cond
        ;; (unquote ...)
@@ -861,11 +854,7 @@
   (cond
     ((eq? pat '_) '())
     ((eq? pat '...) '())
-    ((symbol? pat)
-     (let ((s (symbol->string pat)))
-       (if (and (> (string-length s) 1) (char=? (string-ref s 0) #\,))
-           (list (string->symbol (substring s 1 (string-length s))))
-           '())))
+    ((symbol? pat) '())
     ((pair? pat)
      (if (eq? (car pat) 'unquote)
          (let ((sub (cadr pat)))

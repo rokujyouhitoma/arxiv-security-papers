@@ -208,15 +208,16 @@
     (else (%sym-assoc-string sym (cdr alist)))))
 
 (define (%symbol-find-string sym entries)
-  (if (or (null? entries) (not (pair? entries)))
-      (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
-        (if known
-            known
-            "?"))
-      (let ((entry (car entries)))
-        (if (and (pair? entry) (eq? (cdr entry) sym))
-            (car entry)
-            (%symbol-find-string sym (cdr entries))))))
+  (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
+    (if known
+        known
+        (let loop ((es entries))
+          (if (or (null? es) (not (pair? es)))
+              "?"
+              (let ((entry (car es)))
+                (if (and (pair? entry) (eq? (cdr entry) sym))
+                    (car entry)
+                    (loop (cdr es)))))))))
 
 (define (symbol->string sym)
   (%symbol-find-string sym (car *symbol-registry*)))

@@ -312,14 +312,20 @@
                        (cond
                          ((equal? offset -1)
                           (list (list '%raw-asm "    lea rdx, [rdx - 1]")
-                                (list '%raw-asm "    call ulisp_gc_write_barrier")))
+                                (list '%raw-asm "    sub rsp, 128")
+                                (list '%raw-asm "    call ulisp_gc_write_barrier")
+                                (list '%raw-asm "    add rsp, 128")))
                          ((equal? offset 7)
                           (list (list '%raw-asm "    lea rdx, [rdx + 7]")
-                                (list '%raw-asm "    call ulisp_gc_write_barrier")))
+                                (list '%raw-asm "    sub rsp, 128")
+                                (list '%raw-asm "    call ulisp_gc_write_barrier")
+                                (list '%raw-asm "    add rsp, 128")))
                          (else
                           (list (list '%raw-asm "    lea rdx, [rdx + rcx]")
                                 (list '%raw-asm "    mov rax, r10")
-                                (list '%raw-asm "    call ulisp_gc_write_barrier")))))
+                                (list '%raw-asm "    sub rsp, 128")
+                                (list '%raw-asm "    call ulisp_gc_write_barrier")
+                                (list '%raw-asm "    add rsp, 128")))))
                store-inst))))
 
       ((%store-byte)

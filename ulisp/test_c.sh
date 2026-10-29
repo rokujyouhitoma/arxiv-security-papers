@@ -111,6 +111,7 @@ run_test_file_c() {
     local out_bin="build/tmp_file_c_bin"
 
     echo "(!target c)" > "$in_file"
+    echo "(define (exit code) (/ 1 0))" >> "$in_file"
     for f in $stdlib "$test_file"; do
         cat "$f" >> "$in_file"
     done

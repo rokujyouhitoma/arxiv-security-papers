@@ -171,7 +171,7 @@
       (begin
         (write-string "=== SOME GC STRESS TESTS FAILED! ===\n")
         (flush-output-port)
-        (exit 1))
+        (/ 1 0))
       (begin
         (write-string "=== ALL ULisp Issue #577 GC Stress Tests PASSED! ===\n")
         #t)))
