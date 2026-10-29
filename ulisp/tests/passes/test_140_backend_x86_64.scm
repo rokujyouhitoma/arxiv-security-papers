@@ -72,6 +72,8 @@
     (assert-equal "main body contains selected instructions"
                   '((mov rax (%imm 42))
                     (add rax (%imm 10))
+                    (%raw-asm "    lea r11, [rip + ulisp_final_r12]")
+                    (%raw-asm "    mov [r11], r12")
                     (add rsp 8)
                     (pop r12)
                     (ret))

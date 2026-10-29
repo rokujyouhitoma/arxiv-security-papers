@@ -76,9 +76,13 @@
 ;;; --- Group 3: Structured Diagnostic Report & Error Functionality ---
 (display "--- Group 3: Diagnostic Report & Error Interception ---") (newline)
 
-(set-current-pass! 'pass-130-lir)
+(set-current-pass! 'pass-000-diagnostics-test)
 (set-current-toplevel-name! 'my-function)
 (set-current-form! '(car ls))
+
+;; In test mode, suppress diagnostic stdout banner and abort-on-error
+(set-car! *compiler-abort-on-error* #f)
+(set-car! *compiler-suppress-diagnostics* #t)
 
 ;; Call compiler-diagnostic-report directly to ensure it prints without exception
 (compiler-diagnostic-report "Simulated Unbound Variable" 'car)
@@ -95,6 +99,10 @@
 (let ((re-ret (error "Recursive error simulation" 're-arg)))
   (assert-equal "recursive error returns argument safely" 're-arg re-ret))
 (set-car! *compiler-in-error* #f)
+
+;; Restore default abort-on-error and diagnostic output for subsequent tests
+(set-car! *compiler-abort-on-error* #t)
+(set-car! *compiler-suppress-diagnostics* #f)
 
 ;;; --- Group 5: Pipeline Integration Context Updates ---
 (display "--- Group 5: Pipeline Integration Context Updates ---") (newline)

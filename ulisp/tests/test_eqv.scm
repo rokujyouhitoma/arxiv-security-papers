@@ -28,7 +28,7 @@
         (write-string (if (boolean? expected) (if expected "#t" "#f") "val"))
         (write-char #\newline)
         (flush-output-port)
-        #f)))
+        (exit 1))))
 
 (write-string "=== Running ULisp R7RS eqv? & Standard Predicates Tests ===\n")
 

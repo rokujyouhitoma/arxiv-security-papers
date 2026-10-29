@@ -170,7 +170,8 @@
   (if (> failures 0)
       (begin
         (write-string "=== SOME GC STRESS TESTS FAILED! ===\n")
-        #f)
+        (flush-output-port)
+        (exit 1))
       (begin
         (write-string "=== ALL ULisp Issue #577 GC Stress Tests PASSED! ===\n")
         #t)))

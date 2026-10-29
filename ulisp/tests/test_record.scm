@@ -156,4 +156,4 @@
     (begin
       (write-string "SOME DEFINE-RECORD-TYPE TESTS FAILED!\n")
       (flush-output-port)
-      #f))
+      (exit 1)))

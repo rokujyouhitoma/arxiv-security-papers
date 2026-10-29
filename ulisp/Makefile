@@ -556,7 +556,7 @@ endef
 build/ulisp_stdlib.s: compiler.scm stdlib_entry.scm $(ULISP_STD_LIBS)
 	@mkdir -p build
 	@echo "=== Compiling Standard Library Module (stdlib_entry.scm) ==="
-	@echo "(!module #t)" > build/stdlib_input.scm
+	@echo "(!gc none) (!module #t)" > build/stdlib_input.scm
 	@cat stdlib_entry.scm >> build/stdlib_input.scm
 	$(call COMPILE_SCM_TO_S,build/stdlib_input.scm,$@)
 
@@ -566,7 +566,7 @@ build/ulisp_stdlib.o: build/ulisp_stdlib.s
 build/ulisp_compiler.s: compiler.scm compiler_entry.scm $(COMPILER_BASE) $(FRONTEND_PASSES) $(LIR_PASSES) $(BACKEND_PASSES) compiler/driver.scm
 	@mkdir -p build
 	@echo "=== Compiling Compiler Module (compiler_entry.scm) ==="
-	@echo "(!allow-extern #t)" > build/compiler_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/compiler_input.scm
 	@cat compiler_entry.scm >> build/compiler_input.scm
 	$(call COMPILE_SCM_TO_S,build/compiler_input.scm,$@)
 
@@ -598,7 +598,7 @@ build/meta/compiler_env.sbi: compiler/module_header.scm
 build/compiler_base.s: $(COMPILER_BASE) build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling Compiler Base Module ==="
-	@echo "(!module-name compiler_base) (!import-sbi build/meta/compiler_env.sbi)" > build/compiler_base_in.scm
+	@echo "(!gc none) (!module-name compiler_base) (!import-sbi build/meta/compiler_env.sbi)" > build/compiler_base_in.scm
 	@cat $(COMPILER_BASE) >> build/compiler_base_in.scm
 	$(call COMPILE_SCM_TO_S,build/compiler_base_in.scm,$@)
 
@@ -608,7 +608,7 @@ build/compiler_base.o: build/compiler_base.s
 build/frontend_passes.s: $(FRONTEND_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling Frontend Passes Module ==="
-	@echo "(!module-name frontend_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/frontend_passes_in.scm
+	@echo "(!gc none) (!module-name frontend_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/frontend_passes_in.scm
 	@cat $(FRONTEND_PASSES) >> build/frontend_passes_in.scm
 	$(call COMPILE_SCM_TO_S,build/frontend_passes_in.scm,$@)
 
@@ -618,7 +618,7 @@ build/frontend_passes.o: build/frontend_passes.s
 build/lir_passes.s: $(LIR_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling LIR Passes Module ==="
-	@echo "(!module-name lir_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/lir_passes_in.scm
+	@echo "(!gc none) (!module-name lir_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/lir_passes_in.scm
 	@cat $(LIR_PASSES) >> build/lir_passes_in.scm
 	$(call COMPILE_SCM_TO_S,build/lir_passes_in.scm,$@)
 
@@ -628,7 +628,7 @@ build/lir_passes.o: build/lir_passes.s
 build/backend_passes.s: $(BACKEND_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling Backend Passes Module ==="
-	@echo "(!module-name backend_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/backend_passes_in.scm
+	@echo "(!gc none) (!module-name backend_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/backend_passes_in.scm
 	@cat $(BACKEND_PASSES) >> build/backend_passes_in.scm
 	$(call COMPILE_SCM_TO_S,build/backend_passes_in.scm,$@)
 
@@ -638,7 +638,7 @@ build/backend_passes.o: build/backend_passes.s
 build/compiler_driver.s: compiler/driver.scm build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling Driver Module ==="
-	@echo "(!allow-extern #t) (!import-sbi build/meta/compiler_env.sbi)" > build/compiler_driver_in.scm
+	@echo "(!gc none) (!allow-extern #t) (!import-sbi build/meta/compiler_env.sbi)" > build/compiler_driver_in.scm
 	@cat compiler/driver.scm >> build/compiler_driver_in.scm
 	$(call COMPILE_SCM_TO_S,build/compiler_driver_in.scm,$@)
 

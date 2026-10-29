@@ -377,7 +377,8 @@
                       (eq? (pipeline-dump-ir) 'all))
                   (dump-pass-ir id 'output output-ast))
               (if (and verify-mode vphase)
-                  (verify-pass-output vphase output-ast))
+                  (if (not (verify-pass-output vphase output-ast))
+                      (error "IR Verifier Invariant Violation in pass" id)))
               output-ast)
             (let ((output-ast (fn input-ast)))
               (if trace-mode
@@ -387,7 +388,8 @@
                       (eq? (pipeline-dump-ir) 'all))
                   (dump-pass-ir id 'output output-ast))
               (if (and verify-mode vphase)
-                  (verify-pass-output vphase output-ast))
+                  (if (not (verify-pass-output vphase output-ast))
+                      (error "IR Verifier Invariant Violation in pass" id)))
               output-ast))))))
 
 (define (run-pass-pipeline forms verify-mode trace-mode)
@@ -409,7 +411,8 @@
       (if (null? ps)
           (begin
             (if verify-mode
-                (verify-pass-output 'lir current-ast))
+                (if (not (verify-pass-output 'lir current-ast))
+                    (error "IR Verifier Invariant Violation in final LIR" current-ast)))
             current-ast)
           (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
             (loop (cdr ps) next-ast))))))

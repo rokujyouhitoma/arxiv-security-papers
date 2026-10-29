@@ -39,7 +39,7 @@ __safepoint_2:
   - [DSN-33 (ULisp 包括設計仕様書)](../../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) (第 1 章 レジスタアーキテクチャ、第 6 章 LIR / 最適化パス、第 8 章 クロージャ変換)
   - [ulisp/benchmarks/BASELINE.md](../../../ulisp/benchmarks/BASELINE.md) (正典性能ベースライン測定レポート)
 - **後続 Phase Issues**:
-  - [625-phase2-system-v-register-based-calling-convention.md](../625-phase2-system-v-register-based-calling-convention.md) (Phase 2: System V レジスタ引数呼出規約)
+  - [625-phase2-system-v-register-based-calling-convention.md](625-phase2-system-v-register-based-calling-convention.md) (Phase 2: System V レジスタ引数呼出規約)
   - [626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md](../626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md) (Phase 3: S-RTyper 連携アンボックス演算)
   - [627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md](../627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md) (Phase 4: ループ回転・末尾JMP・レジスタ割付とCパリティ検証)
 

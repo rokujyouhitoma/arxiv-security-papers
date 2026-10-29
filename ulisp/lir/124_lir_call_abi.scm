@@ -1,11 +1,14 @@
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 124: LIR Procedure Invocations & Call ABI Pass
-;;; Conforms to DSN-33 Architecture Specification & Issue #583
+;;; Conforms to DSN-33 Architecture Specification & Issue #583, #625
 ;;; =======================================================================
 ;;; Lowers general closure calls and direct static-label calls into LIR instructions,
-;;; handling argument stack evaluation, frame shift alignment, Tail Call Optimization (TCO),
+;;; handling System V AMD64 register argument passing (rdi, rsi, rdx, rcx, r8, r9),
+;;; stack spill argument evaluation, frame shift alignment, Tail Call Optimization (TCO),
 ;;; and exact GC safepoint registration.
 ;;; =======================================================================
+
+(define *arg-registers* '(%rdi %rsi %rdx %rcx %r8 %r9))
 
 (define (lir-compile-call proc args si env tail?)
   (let* ((num-args (length args))
@@ -42,19 +45,31 @@
           (begin
             (let loop ((i 0))
               (if (< i num-args)
-                  (let ((temp-offset (- aligned-si (* i 8)))
-                        (param-offset (* 8 (- num-args i))))
-                    (emit-lir! (list '%load '%rdx '%rsp temp-offset))
-                    (emit-lir! (list '%store '%rsp param-offset '%rdx))
-                    (loop (+ i 1)))))
-            (emit-lir! '(%load %rdx %r10 -1))
+                  (if (< i 6)
+                      (let ((temp-offset (- aligned-si (* i 8)))
+                            (reg (list-ref *arg-registers* i)))
+                        (emit-lir! (list '%load reg '%rsp temp-offset))
+                        (loop (+ i 1)))
+                      (let ((temp-offset (- aligned-si (* i 8)))
+                            (param-offset (* 8 (- num-args i))))
+                        (emit-lir! (list '%load '%r11 '%rsp temp-offset))
+                        (emit-lir! (list '%store '%rsp param-offset '%r11))
+                        (loop (+ i 1))))))
+            (emit-lir! '(%load %r11 %r10 -1))
             (emit-lir! (list '%mov '%rax (* num-args 4)))
-            (emit-lir! '(%jump %rdx)))
+            (emit-lir! '(%jump %r11)))
 
           ;; --- NON-TAIL CALL ---
           (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
                  (safepoint-lbl (new-safepoint-label!)))
             (record-safepoint! safepoint-lbl frame-shift bitmap)
+            ;; Load register arguments (0..min(num-args, 6)-1)
+            (let loop ((i 0))
+              (if (and (< i num-args) (< i 6))
+                  (let ((temp-offset (- aligned-si (* i 8)))
+                        (reg (list-ref *arg-registers* i)))
+                    (emit-lir! (list '%load reg '%rsp temp-offset))
+                    (loop (+ i 1)))))
             (emit-lir! (list '%mov '%rax (* num-args 4)))
             (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
@@ -83,11 +98,16 @@
         (begin
           (let loop ((i 0))
             (if (< i num-args)
-                (let ((temp-offset (- aligned-si (* i 8)))
-                      (param-offset (* 8 (- num-args i))))
-                  (emit-lir! (list '%load '%rdx '%rsp temp-offset))
-                  (emit-lir! (list '%store '%rsp param-offset '%rdx))
-                  (loop (+ i 1)))))
+                (if (< i 6)
+                    (let ((temp-offset (- aligned-si (* i 8)))
+                          (reg (list-ref *arg-registers* i)))
+                      (emit-lir! (list '%load reg '%rsp temp-offset))
+                      (loop (+ i 1)))
+                    (let ((temp-offset (- aligned-si (* i 8)))
+                          (param-offset (* 8 (- num-args i))))
+                      (emit-lir! (list '%load '%r11 '%rsp temp-offset))
+                      (emit-lir! (list '%store '%rsp param-offset '%r11))
+                      (loop (+ i 1))))))
           (emit-lir! (list '%mov '%rax (* num-args 4)))
           (emit-lir! (list '%direct-jump label)))
 
@@ -95,5 +115,12 @@
         (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
                (safepoint-lbl (new-safepoint-label!)))
           (record-safepoint! safepoint-lbl frame-shift bitmap)
+          ;; Load register arguments (0..min(num-args, 6)-1)
+          (let loop ((i 0))
+            (if (and (< i num-args) (< i 6))
+                (let ((temp-offset (- aligned-si (* i 8)))
+                      (reg (list-ref *arg-registers* i)))
+                  (emit-lir! (list '%load reg '%rsp temp-offset))
+                  (loop (+ i 1)))))
           (emit-lir! (list '%mov '%rax (* num-args 4)))
           (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))

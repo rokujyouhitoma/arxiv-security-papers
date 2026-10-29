@@ -210,4 +210,4 @@
     (begin
       (print-msg "SOME TESTS FAILED!")
       (print-msg "=======================================================")
-      #f))
+      (exit 1)))

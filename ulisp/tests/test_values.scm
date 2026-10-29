@@ -26,7 +26,8 @@
         (write-string " - Expected: ")
         (write-string (if (symbol? expected) (symbol->string expected) "val"))
         (write-char #\newline)
-        #f)))
+        (flush-output-port)
+        (exit 1))))
 
 (write-string "=== Running ULisp R7RS Multiple Values Tests ===\n")
 

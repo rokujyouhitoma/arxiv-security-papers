@@ -58,17 +58,19 @@
          (fn-name (and fn-entry (cdr fn-entry)))
          (blk-entry (and (pair? ctx) (assq 'block ctx)))
          (blk-name (and blk-entry (cdr blk-entry))))
-    (display "\n*** [VERIFIER ERROR] Phase: ")
-    (display phase)
-    (if fn-name
-        (begin (display " | Function: ") (display fn-name)))
-    (if blk-name
-        (begin (display " | Block: ") (display blk-name)))
-    (display " - ")
-    (display message)
-    (display "\n    Expression: ")
-    (write expr)
-    (newline)
+    (if (not (car *compiler-suppress-diagnostics*))
+        (begin
+          (display "\n*** [VERIFIER ERROR] Phase: ")
+          (display phase)
+          (if fn-name
+              (begin (display " | Function: ") (display fn-name)))
+          (if blk-name
+              (begin (display " | Block: ") (display blk-name)))
+          (display " - ")
+          (display message)
+          (display "\n    Expression: ")
+          (write expr)
+          (newline)))
     (if (car *verifier-strict*)
         (error "IR Verifier Invariant Violation" expr)
         #f)))

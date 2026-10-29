@@ -217,7 +217,7 @@
                (let ((zero-res (lvn-eval-const 0 env)))
                  (list #t (car zero-res) (cadr zero-res) (caddr zero-res))))
               (else (list #f #f #f env))))
-           ((= eq? eqv? char=? boolean=? symbol=?)
+           ((= eq? eqv? char=?)
             (cond
               ;; (= x x) -> #t, (eq? x x) -> #t, (eqv? x x) -> #t
               ((= vn1 vn2)
@@ -287,16 +287,21 @@
             ((lvn-vn-is-const? env vn-x)
              (let* ((v (lvn-vn-const-val env vn-x))
                     (ans (case op
-                           ((fixnum? integer? number?) (number? v))
+                           ((fixnum? integer? number? exact? exact-integer? real? rational? complex?) (number? v))
+                           ((inexact?) #f)
                            ((pair?) (pair? v))
                            ((null?) (null? v))
+                           ((list?) (list? v))
                            ((boolean?) (boolean? v))
                            ((char?) (char? v))
                            ((symbol?) (symbol? v))
+                           ((string?) (string? v))
                            ((zero?) (and (number? v) (= v 0)))
-                           (else #f)))
-                    (ans-res (lvn-eval-const ans env)))
-               (list #t (car ans-res) (cadr ans-res) (caddr ans-res))))
+                           (else 'unknown))))
+               (if (eq? ans 'unknown)
+                   (list #f #f #f env)
+                   (let ((ans-res (lvn-eval-const ans env)))
+                     (list #t (car ans-res) (cadr ans-res) (caddr ans-res))))))
             ;; 3. Check if vn-x has known pair constructor
             ((lvn-vn-is-pair? env vn-x)
              (case op

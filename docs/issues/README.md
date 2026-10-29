@@ -15,7 +15,6 @@
 | **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | High | New | [616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
-| **625** | ULisp x86-64 ネイティブバックエンド Phase 2: System V AMD64 レジスタ引数受渡し呼出規約（Register-Based Calling Convention）の導入 | Feature | High | New | [625-phase2-system-v-register-based-calling-convention.md](625-phase2-system-v-register-based-calling-convention.md) |
 | **626** | ULisp x86-64 ネイティブバックエンド Phase 3: S-RTyper 連携による完全アンボックス整数演算とタグ操作撲滅（Interprocedural Unboxing） | Feature | High | New | [626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md](626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md) |
 | **627** | ULisp x86-64 ネイティブバックエンド Phase 4: ループ回転・末尾呼出し JMP 最適化・大域レジスタ割り付けと Pure C パリティ検証 | Feature | High | New | [627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md](627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md) |
 | **628** | S 式括弧整合性 Linter（Parenthesis Depth Linter）の導入およびリーダー EOF 構文診断の強化 | Feature | High | New | [628-implement-sexpr-parenthesis-depth-linter-and-eof-diagnostic.md](628-implement-sexpr-parenthesis-depth-linter-and-eof-diagnostic.md) |
@@ -29,6 +28,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **625** | ULisp x86-64 ネイティブバックエンド Phase 2: System V AMD64 レジスタ引数受渡し呼出規約（Register-Based Calling Convention）の導入 | Feature | 2026-10-29 | [closed/625-phase2-system-v-register-based-calling-convention.md](closed/625-phase2-system-v-register-based-calling-convention.md) |
 | **624** | ULisp x86-64 ネイティブバックエンド Phase 1: 既知関数の直接呼出最適化（Direct Known-Function Calls）とクロージャ呼出オーバーヘッドの撲滅 | Feature | 2026-10-28 | [closed/624-phase1-direct-known-function-calls.md](closed/624-phase1-direct-known-function-calls.md) |
 | **623** | ULisp 正典性能ベースライン測定レポート（BASELINE.md）の策定と継続的性能監視基盤の構築 | Feature | 2026-10-28 | [closed/623-establish-canonical-performance-baseline-and-continuous-monitoring.md](closed/623-establish-canonical-performance-baseline-and-continuous-monitoring.md) |
 | **622** | 実行時 GC 統計プロファイル（ULISP_GC_STATS）および Linux perf ハードウェアカウンタ連携基盤の実装 | Feature | 2026-10-28 | [closed/622-implement-runtime-gc-stats-and-perf-hardware-counter-integration.md](closed/622-implement-runtime-gc-stats-and-perf-hardware-counter-integration.md) |

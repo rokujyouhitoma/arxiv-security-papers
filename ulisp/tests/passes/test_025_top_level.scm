@@ -17,7 +17,8 @@
       (begin
         (display "  [FAIL] ")
         (display name)
-        (newline))))
+        (newline)
+        (exit 1))))
 
 (display "=======================================================")
 (newline)

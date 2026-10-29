@@ -42,6 +42,41 @@
      (begin))))
 
 (%declare-extern-identifiers
+  quote
+  quasiquote
+  unquote
+  unquote-splicing
+  vector
+  bytevector
+  ...
+  _
+  guard
+  cons
+  list
+  append
+  map
+  nanopass-map2
+  nanopass-map3
+  lambda
+  let
+  let*
+  letrec
+  if
+  begin
+  set!
+  define
+  %program
+  entry
+  exit
+  L_src
+  L_core
+  L_anf
+  L_lifted
+  L_lir_raw
+  L_lir_canonical
+  L_x86_64
+  L_aarch64
+  L_c
   string-append2
   vector-append2
   bytevector-append2

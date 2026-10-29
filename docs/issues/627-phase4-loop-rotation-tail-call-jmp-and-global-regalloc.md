@@ -19,7 +19,7 @@ Pure C -O2 パリティ達成に向けた最終フェーズとして、**ルー�
 ## 2. トレーサビリティ / Traceability
 - **先行 Phase Issues**:
   - [624-phase1-direct-known-function-calls.md](624-phase1-direct-known-function-calls.md) (Phase 1: 既知関数の直接呼出)
-  - [625-phase2-system-v-register-based-calling-convention.md](625-phase2-system-v-register-based-calling-convention.md) (Phase 2: System V レジスタ引数呼出規約)
+  - [625-phase2-system-v-register-based-calling-convention.md](closed/625-phase2-system-v-register-based-calling-convention.md) (Phase 2: System V レジスタ引数呼出規約)
   - [626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md](626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md) (Phase 3: S-RTyper 連携アンボックス演算)
 - **正典仕様書 & 成果物**:
   - [ulisp/benchmarks/BASELINE.md](../../ulisp/benchmarks/BASELINE.md) (正典性能ベースライン測定レポート)

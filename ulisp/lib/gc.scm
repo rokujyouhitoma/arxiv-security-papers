@@ -137,6 +137,7 @@
   (set-gc-count! 0)
   (set-gc-free! to-space)
   (set-gc-profile-id! 4)                ; profile 4: dual-space
+  (%raw-store! (%get-heap-limit-ptr) 0 (%ptr-add from-space heap-size))
   (%set-heap-ptr! from-space))
 
 ;;; Initialize Nursery & Generational Copying Garbage Collector
@@ -152,10 +153,11 @@
   (%raw-store! (%get-gc-state-ptr) 64 0)             ; major count = 0
   (%raw-store! (%get-gc-state-ptr) 72 remset-ptr)
   (%raw-store! (%get-gc-state-ptr) 80 0)             ; remset count = 0
-  (%raw-store! (%get-gc-state-ptr) 88 1)             ; generational mode = 1
+  (%raw-store! (%get-gc-state-ptr) 88 (%to-raw 1))   ; generational mode = 1
   (%raw-store! (%get-gc-state-ptr) 96 (%to-raw (* mature-size 32))) ; default max mature size: 32x
   (%raw-store! (%get-gc-state-ptr) 104 0)            ; mature growth count = 0
   (set-gc-profile-id! 0)                             ; profile 0: standard default
+  (%raw-store! (%get-heap-limit-ptr) 0 (%ptr-add nursery-base nursery-size))
   (%set-heap-ptr! nursery-base))
 
 ;;; Initialize Generational GC with named execution profile (Issue #567)
@@ -208,7 +210,7 @@
   (let ((tag (%ptr-tag val)))
     (if (or (= tag 1) (= tag 3) (= tag 5) (= tag 7))
         (let ((addr (%ptr-untag val)))
-          (and (>= addr (gc-nursery-base))
+          (and (>= addr (%ptr-add (gc-nursery-base) 8))
                (< addr (%ptr-add (gc-nursery-base) (gc-nursery-size)))))
         #f)))
 
@@ -217,7 +219,7 @@
   (let ((tag (%ptr-tag val)))
     (if (or (= tag 1) (= tag 3) (= tag 5) (= tag 7))
         (let ((addr (%ptr-untag val)))
-          (and (>= addr (gc-from))
+          (and (>= addr (%ptr-add (gc-from) 8))
                (< addr (%ptr-add (gc-from) (gc-size)))))
         #f)))
 
@@ -656,6 +658,7 @@
             (set-gc-from! (gc-to))
             (set-gc-to! old-from)
             (set-gc-count! (+ (gc-count) 1))
+            (%raw-store! (%get-heap-limit-ptr) 0 (%ptr-add (gc-from) (gc-size)))
             ;; Update runtime heap pointer register (%r12)
             (%set-heap-ptr! new-heap-ptr)
             new-heap-ptr)))))

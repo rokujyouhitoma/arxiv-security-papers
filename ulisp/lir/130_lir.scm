@@ -223,6 +223,7 @@
          (params (caddr fn))
          (body (cadddr fn))
          (num-params (length params))
+         (num-reg-params (if (< num-params 6) num-params 6))
          (initial-raw-vars (if (unboxed-fn? label) params '())))
     (set-current-toplevel-name! label)
     (with-call-frame label fn
@@ -230,23 +231,40 @@
         (reset-lir!)
         ;; Build callee env:
         ;; %self at [rsp - 8]
-        ;; params at [rsp + 8 * (num-params - i)]
+        ;; params 0..5 in registers spilled to [rsp - 24 - 8*i]
+        ;; params 6+ at [rsp + 8 * (num-params - i)]
         (let* ((self-env (list (cons '%self (cons 'self -8))))
                (param-env
                 (let loop ((ps params) (i 0) (acc '()))
                   (if (null? ps) acc
-                      (let ((offset (* 8 (- num-params i))))
-                        (loop (cdr ps) (+ i 1)
-                              (cons (cons (car ps) (cons 'param offset)) acc))))))
+                      (if (< i 6)
+                          (let ((slot (- -24 (* 8 i))))
+                            (loop (cdr ps) (+ i 1)
+                                  (cons (cons (car ps) slot) acc)))
+                          (let ((offset (* 8 (- num-params i))))
+                            (loop (cdr ps) (+ i 1)
+                                  (cons (cons (car ps) (cons 'param offset)) acc)))))))
                (callee-env (cons (cons '%num-params num-params)
                                  (cons (cons '%raw-vars initial-raw-vars)
                                        (cons (cons '%stack-vars '())
                                              (append self-env param-env)))))
-               (callee-si -24))
+               (callee-si (- -24 (* 8 num-reg-params))))
           (track-lir-si! -8)
           (track-lir-si! -16)
+          ;; Track spilled parameter slots
+          (let loop ((i 0))
+            (if (< i num-reg-params)
+                (begin
+                  (track-lir-si! (- -24 (* 8 i)))
+                  (loop (+ i 1)))))
           (track-lir-si! callee-si)
           (emit-lir! '(%store %rsp -16 %rax))
+          ;; Store incoming argument registers into their callee stack slots
+          (let loop ((i 0))
+            (if (< i num-reg-params)
+                (begin
+                  (emit-lir! (list '%store '%rsp (- -24 (* 8 i)) (list-ref *arg-registers* i)))
+                  (loop (+ i 1)))))
           (lir-compile-expr body callee-si callee-env #t)
           (emit-lir! '(%return))
           (let* ((needed-frame (- 0 (car *lir-min-si*)))

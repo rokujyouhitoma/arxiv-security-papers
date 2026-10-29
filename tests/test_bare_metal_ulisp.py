@@ -487,11 +487,12 @@ def test_bare_metal_gc_directive_default_all():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        # Verify assembly contains .space 128 for ulisp_gc_state
+        # Verify assembly contains .space 256 for ulisp_gc_state and generational collector
         with open(s_path, "r", encoding="utf-8") as f_asm:
             asm_content = f_asm.read()
             assert "ulisp_gc_state:" in asm_content
-            assert ".space 128" in asm_content
+            assert ".space 256" in asm_content
+            assert "ulisp_gc_collect:" in asm_content
 
         link_res = subprocess.run(
             ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
@@ -544,15 +545,12 @@ def test_bare_metal_gc_directive_none_arena():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        # Verify assembly contains ulisp_gc_state: without .space (0-byte)
+        # Verify assembly omits ulisp_gc_collect and uses 12GB arena in (!gc none) mode
         with open(s_path, "r", encoding="utf-8") as f_asm:
             asm_content = f_asm.read()
             assert "ulisp_gc_state:" in asm_content
-            # Neither .space 64 nor .space 128 should follow ulisp_gc_state
-            gc_state_idx = asm_content.find("ulisp_gc_state:")
-            peek_buf_idx = asm_content.find("ulisp_peek_buf:")
-            between = asm_content[gc_state_idx:peek_buf_idx]
-            assert ".space" not in between
+            assert "ulisp_gc_collect:" not in asm_content
+            assert "12884901888" in asm_content
 
         link_res = subprocess.run(
             ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
@@ -600,15 +598,13 @@ def test_bare_metal_gc_directive_dual_space():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        # Verify assembly contains .space 64 for ulisp_gc_state
+        # Verify assembly configures 128MB dual-space heap and omits 8GB generational setup
         with open(s_path, "r", encoding="utf-8") as f_asm:
             asm_content = f_asm.read()
             assert "ulisp_gc_state:" in asm_content
-            gc_state_idx = asm_content.find("ulisp_gc_state:")
-            peek_buf_idx = asm_content.find("ulisp_peek_buf:")
-            between = asm_content[gc_state_idx:peek_buf_idx]
-            assert ".space 64" in between
-            assert ".space 128" not in between
+            assert "ulisp_gc_collect:" in asm_content
+            assert "134217728" in asm_content
+            assert "8589934592" not in asm_content
 
         link_res = subprocess.run(
             ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],

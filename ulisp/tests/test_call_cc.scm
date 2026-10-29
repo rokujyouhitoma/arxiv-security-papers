@@ -28,7 +28,7 @@
         (write-string (if (symbol? expected) (symbol->string expected) "val"))
         (write-char #\newline)
         (flush-output-port)
-        #f)))
+        (exit 1))))
 
 (define (make-box val) (cons val '()))
 (define (box-ref b) (car b))

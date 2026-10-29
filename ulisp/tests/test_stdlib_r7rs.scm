@@ -555,4 +555,4 @@
       (write-string "FAILURES ENCOUNTERED ===")
       (write-char #\newline)
       (flush-output-port)
-      #f))
+      (exit 1)))

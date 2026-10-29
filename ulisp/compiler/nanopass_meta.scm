@@ -318,6 +318,14 @@
 (define (nanopass-ast-valid-nt? lang-name expr nt-name)
   (nanopass-check-valid-node expr nt-name (nanopass-lookup-language lang-name)))
 
+(define (has-unlifted-lambda? expr)
+  (cond
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) 'quote) #f)
+    ((eq? (car expr) 'lambda) #t)
+    (else (or (has-unlifted-lambda? (car expr))
+              (has-unlifted-lambda? (cdr expr))))))
+
 (define (nanopass-ast-valid? lang-name expr)
   (nanopass-ast-valid-nt? lang-name expr
                           (nanopass-lang-entry (nanopass-lookup-language lang-name))))
@@ -367,7 +375,18 @@
              ((eq? head '%program)
               (and (eq? (car expr) '%program)
                    (pair? (cdr expr))
-                   (pair? (cddr expr))))
+                   (pair? (cddr expr))
+                   (if (eq? (nanopass-lang-name lang) 'L_lifted)
+                       (and (not (has-unlifted-lambda? (cadr expr)))
+                            (not (has-unlifted-lambda? (caddr expr)))
+                            (let check-fns ((fns (cadr expr)))
+                              (if (null? fns)
+                                  #t
+                                  (and (pair? fns)
+                                       (pair? (car fns))
+                                       (eq? (caar fns) '%function)
+                                       (check-fns (cdr fns))))))
+                       #t)))
              ((symbol? head)
               (let ((cls (nanopass-classify-meta-var head lang)))
                 (if cls

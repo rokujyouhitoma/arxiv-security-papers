@@ -27,7 +27,7 @@ ID: 629
 - **関連 Issue**:
   - [624-phase1-direct-known-function-calls.md](624-phase1-direct-known-function-calls.md) (Pass 110 改修時に 3 引数 append による変数脱落障害が発生)
   - [605-enhance-bootstrap-diagnostics-and-fallback-trace.md](closed/605-enhance-bootstrap-diagnostics-and-fallback-trace.md) (ブートストラップ失敗時の診断トレース)
-  - [625-phase2-system-v-register-based-calling-convention.md](625-phase2-system-v-register-based-calling-convention.md) (System V レジスタ引数呼出規約における引数整合性)
+  - [625-phase2-system-v-register-based-calling-convention.md](closed/625-phase2-system-v-register-based-calling-convention.md) (System V レジスタ引数呼出規約における引数整合性)
 
 ---
 

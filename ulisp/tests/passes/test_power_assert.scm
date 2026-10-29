@@ -94,11 +94,15 @@
 (let ((env '((ls . (param . -8))
              (cdr . (param . -16))
              (pred . (param . -24)))))
+  (set-car! *compiler-suppress-diagnostics* #t)
   (dump-lir-unbound-variable-diagnostic 'car env)
+  (set-car! *compiler-suppress-diagnostics* #f)
   (assert-true "dump diagnostic with env executed cleanly" #t))
 
 ;; Verify dump-lir-unbound-variable-diagnostic runs cleanly with empty env
+(set-car! *compiler-suppress-diagnostics* #t)
 (dump-lir-unbound-variable-diagnostic 'unbound '())
+(set-car! *compiler-suppress-diagnostics* #f)
 (assert-true "dump diagnostic with empty env executed cleanly" #t)
 
 ;;; --- Group 4: Power Assert Diagnostics & AST Expansion ---
@@ -128,11 +132,15 @@
 (let ((val (power-assert (= (+ 1 2) 3))))
   (assert-equal "power-assert on truthy condition returns result" #t val))
 
-;; Power-assert failure report output verification
+;; Power-assert failure report output verification (suppressed during unit test run)
+(set-car! *compiler-abort-on-error* #f)
+(set-car! *compiler-suppress-diagnostics* #t)
 (let ((ret (power-assert-report '(assq var env)
                                 '((var car) (env ((ls . (param . -8)))))
                                 #f)))
   (assert-equal "power-assert-report returns irritant form" '(assq var env) ret))
+(set-car! *compiler-abort-on-error* #t)
+(set-car! *compiler-suppress-diagnostics* #f)
 
 (display "=======================================================")
 (newline)

@@ -300,9 +300,27 @@
        (let ((base (cadr inst))
              (offset (caddr inst))
              (src (cadddr inst)))
-         (if (integer? src)
-             (list (list '%raw-asm (string-append "    mov qword ptr " (mem-op->str base offset) ", " (number->string src))))
-             (list (list 'mov (list '%disp offset (lower-lir-reg base)) (lower-lir-opnd src))))))
+         (let ((store-inst
+                (if (integer? src)
+                    (list (list '%raw-asm (string-append "    mov qword ptr " (mem-op->str base offset) ", " (number->string src))))
+                    (list (list 'mov (list '%disp offset (lower-lir-reg base)) (lower-lir-opnd src))))))
+           (if (and (not (integer? src))
+                    (not (eq? (car *backend-gc-mode*) 'none))
+                    (eq? base '%rdx)
+                    (or (equal? offset -1) (equal? offset 7) (eq? offset '%rcx)))
+               (append store-inst
+                       (cond
+                         ((equal? offset -1)
+                          (list (list '%raw-asm "    lea rdx, [rdx - 1]")
+                                (list '%raw-asm "    call ulisp_gc_write_barrier")))
+                         ((equal? offset 7)
+                          (list (list '%raw-asm "    lea rdx, [rdx + 7]")
+                                (list '%raw-asm "    call ulisp_gc_write_barrier")))
+                         (else
+                          (list (list '%raw-asm "    lea rdx, [rdx + rcx]")
+                                (list '%raw-asm "    mov rax, r10")
+                                (list '%raw-asm "    call ulisp_gc_write_barrier")))))
+               store-inst))))
 
       ((%store-byte)
        (let ((base (cadr inst))
@@ -483,8 +501,8 @@
           (list (if (> frame-shift 0)
                     (list (list '%raw-asm (string-append "    sub rsp, " (number->string frame-shift))))
                     '())
-                (list (list '%raw-asm "    mov rdx, [r10 - 1]")
-                      (list '%raw-asm "    call rdx"))
+                (list (list '%raw-asm "    mov r11, [r10 - 1]")
+                      (list '%raw-asm "    call r11"))
                 (if safepoint
                     (list (list '%raw-asm (string-append (if (symbol? safepoint) (symbol->string safepoint) safepoint) ":")))
                     '())
@@ -617,60 +635,70 @@
                   ;; 0 args
                   (list '%raw-asm (string-append (symbol->string call-0-lbl) ":")))
             sub-shift
-            (list (list '%raw-asm "    mov rdx, [r10 - 1]")
+            (list (list '%raw-asm "    mov r11, [r10 - 1]")
                   (list '%raw-asm "    mov rax, 0")
-                  (list '%raw-asm "    call rdx"))
+                  (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
                   ;; 1 arg
                   (list '%raw-asm (string-append (symbol->string call-1-lbl) ":"))
-                  (list '%raw-asm (string-append "    mov [rsp " (offset->string aligned-si) "], rax")))
+                  (list '%raw-asm (string-append "    mov [rsp " (offset->string aligned-si) "], rax"))
+                  (list '%raw-asm "    mov rdi, rax"))
             sub-shift
-            (list (list '%raw-asm "    mov rdx, [r10 - 1]")
+            (list (list '%raw-asm "    mov r11, [r10 - 1]")
                   (list '%raw-asm "    mov rax, 4")
-                  (list '%raw-asm "    call rdx"))
+                  (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
                   ;; 2 args
                   (list '%raw-asm (string-append (symbol->string call-2-lbl) ":"))
                   (list '%raw-asm "    mov rax, [rbx]")
                   (list '%raw-asm (string-append "    mov [rsp " (offset->string (+ aligned-si 8)) "], rax"))
+                  (list '%raw-asm "    mov rdi, rax")
                   (list '%raw-asm "    mov rax, [rbx + 8]")
-                  (list '%raw-asm (string-append "    mov [rsp " (offset->string aligned-si) "], rax")))
+                  (list '%raw-asm (string-append "    mov [rsp " (offset->string aligned-si) "], rax"))
+                  (list '%raw-asm "    mov rsi, rax"))
             sub-shift
-            (list (list '%raw-asm "    mov rdx, [r10 - 1]")
+            (list (list '%raw-asm "    mov r11, [r10 - 1]")
                   (list '%raw-asm "    mov rax, 8")
-                  (list '%raw-asm "    call rdx"))
+                  (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
                   ;; 3 args
                   (list '%raw-asm (string-append (symbol->string call-3-lbl) ":"))
                   (list '%raw-asm "    mov rax, [rbx]")
                   (list '%raw-asm (string-append "    mov [rsp " (offset->string (+ aligned-si 16)) "], rax"))
+                  (list '%raw-asm "    mov rdi, rax")
                   (list '%raw-asm "    mov rax, [rbx + 8]")
                   (list '%raw-asm (string-append "    mov [rsp " (offset->string (+ aligned-si 8)) "], rax"))
+                  (list '%raw-asm "    mov rsi, rax")
                   (list '%raw-asm "    mov rax, [rbx + 16]")
-                  (list '%raw-asm (string-append "    mov [rsp " (offset->string aligned-si) "], rax")))
+                  (list '%raw-asm (string-append "    mov [rsp " (offset->string aligned-si) "], rax"))
+                  (list '%raw-asm "    mov rdx, rax"))
             sub-shift
-            (list (list '%raw-asm "    mov rdx, [r10 - 1]")
+            (list (list '%raw-asm "    mov r11, [r10 - 1]")
                   (list '%raw-asm "    mov rax, 12")
-                  (list '%raw-asm "    call rdx"))
+                  (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
                   ;; 4 args
                   (list '%raw-asm (string-append (symbol->string call-4-lbl) ":"))
                   (list '%raw-asm "    mov rax, [rbx]")
                   (list '%raw-asm (string-append "    mov [rsp " (offset->string (+ aligned-si 24)) "], rax"))
+                  (list '%raw-asm "    mov rdi, rax")
                   (list '%raw-asm "    mov rax, [rbx + 8]")
                   (list '%raw-asm (string-append "    mov [rsp " (offset->string (+ aligned-si 16)) "], rax"))
+                  (list '%raw-asm "    mov rsi, rax")
                   (list '%raw-asm "    mov rax, [rbx + 16]")
                   (list '%raw-asm (string-append "    mov [rsp " (offset->string (+ aligned-si 8)) "], rax"))
+                  (list '%raw-asm "    mov rdx, rax")
                   (list '%raw-asm "    mov rax, [rbx + 24]")
-                  (list '%raw-asm (string-append "    mov [rsp " (offset->string aligned-si) "], rax")))
+                  (list '%raw-asm (string-append "    mov [rsp " (offset->string aligned-si) "], rax"))
+                  (list '%raw-asm "    mov rcx, rax"))
             sub-shift
-            (list (list '%raw-asm "    mov rdx, [r10 - 1]")
+            (list (list '%raw-asm "    mov r11, [r10 - 1]")
                   (list '%raw-asm "    mov rax, 16")
-                  (list '%raw-asm "    call rdx"))
+                  (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
                   (list '%raw-asm (string-append exit-str ":"))))))))
@@ -682,6 +710,7 @@
          (list (list '%raw-asm "    lea rcx, [rip + ulisp_stack_base]")
                (list '%raw-asm "    mov rcx, [rcx]")
                (list '%raw-asm "    sub rcx, rsp")
+               (list '%raw-asm "    add rcx, 256")
                (list '%raw-asm "    test rcx, rcx")
                (list '%raw-asm "    jle .L_cap_fallback_size")
                (list '%raw-asm "    cmp rcx, 8388608")
@@ -712,7 +741,7 @@
                (list '%raw-asm "    lea rdx, [rax + 1]")
                (list '%raw-asm (string-append "    mov [rsp " (offset->string k-si) "], rdx"))
                (list '%raw-asm "    lea rdi, [rax + 96]")
-               (list '%raw-asm "    mov rsi, rsp")
+               (list '%raw-asm "    lea rsi, [rsp - 256]")
                (list '%raw-asm "    cld")
                (list '%raw-asm "    rep movsb")
                (list '%raw-asm "    mov rax, rdx"))))
@@ -1163,7 +1192,7 @@
        (emit ".L_profile_compiler:")
        (emit "    mov r12, 2147483648")            ; nursery_size = 2GB
        (emit "    mov r13, 2147483648")            ; mature_size = 2GB
-       (emit "    mov rsi, 6442450944")            ; total_mmap = ~6.4GB
+       (emit "    mov rsi, 6442516480")            ; total_mmap = ~6.4GB + 64KB remset
        (emit "    mov r8, 8589934592")             ; max_mature = 8GB
        (emit "    mov r10, 1")                     ; profile_id = 1
        (emit "    jmp .L_profile_setup")

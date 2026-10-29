@@ -30,7 +30,7 @@
         (display actual)
         (write-char #\newline)
         (flush-output-port)
-        #f)))
+        (exit 1))))
 
 (write-string "=== Running ULisp Hygienic syntax-rules Macro Tests ===\n")
 

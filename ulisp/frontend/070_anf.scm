@@ -124,12 +124,16 @@
               (list '%program
                     (map (lambda (d)
                            (if (and (pair? d) (eq? (car d) 'define))
-                               (list 'define (cadr d) (anf-expr-depth (caddr d) 0))
+                               (if (pair? (cadr d))
+                                   (list 'define (caadr d) (anf-expr-depth (cons 'lambda (cons (cdadr d) (cddr d))) 0))
+                                   (list 'define (cadr d) (anf-expr-depth (caddr d) 0)))
                                (anf-expr-depth d 0)))
                          defs)
                     (anf-expr-depth main 0))))
            ((eq? (car form) 'define)
-            (list 'define (cadr form) (anf-expr-depth (caddr form) 0)))
+            (if (pair? (cadr form))
+                (list 'define (caadr form) (anf-expr-depth (cons 'lambda (cons (cdadr form) (cddr form))) 0))
+                (list 'define (cadr form) (anf-expr-depth (caddr form) 0))))
            (else
             (anf-expr-depth form 0)))))
     (if (and (verifier-enabled?) (assq 'L_anf (nanopass-get-languages)))

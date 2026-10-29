@@ -20,7 +20,7 @@ Pure C -O2 パリティ達成に向けた第 3 フェーズとして、**Fixnum 
 ## 2. トレーサビリティ / Traceability
 - **先行 Phase Issues**:
   - [624-phase1-direct-known-function-calls.md](624-phase1-direct-known-function-calls.md) (Phase 1: 既知関数の直接呼出)
-  - [625-phase2-system-v-register-based-calling-convention.md](625-phase2-system-v-register-based-calling-convention.md) (Phase 2: System V レジスタ引数呼出規約)
+  - [625-phase2-system-v-register-based-calling-convention.md](closed/625-phase2-system-v-register-based-calling-convention.md) (Phase 2: System V レジスタ引数呼出規約)
 - **関連 Issue**:
   - [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) (S-RTyper Pass 090 および LIR / バックエンドにおける関数間アンボックス特化)
 - **後続 Phase Issue**:

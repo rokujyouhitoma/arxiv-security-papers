@@ -144,6 +144,7 @@
            ((boolean?) (val->ast-const (boolean? v)))
            ((char?) (val->ast-const (char? v)))
            ((symbol?) (val->ast-const (symbol? v)))
+           ((list?) (val->ast-const (list? v)))
            ((car) (if (pair? v) (val->ast-const (car v)) #f))
            ((cdr) (if (pair? v) (val->ast-const (cdr v)) #f))
            (else #f))))
@@ -170,8 +171,8 @@
            ((>=) (if (and (number? v1) (number? v2)) (val->ast-const (>= v1 v2)) #f))
            ((eq? eqv?) (val->ast-const (eq? v1 v2)))
            ((char=?) (if (and (char? v1) (char? v2)) (val->ast-const (char=? v1 v2)) #f))
-           ((boolean=?) (if (and (boolean? v1) (boolean? v2)) (val->ast-const (eq? v1 v2)) #f))
-           ((symbol=?) (if (and (symbol? v1) (symbol? v2)) (val->ast-const (eq? v1 v2)) #f))
+           ((boolean=?) (val->ast-const (if (and (boolean? v1) (boolean? v2)) (eq? v1 v2) #f)))
+           ((symbol=?) (val->ast-const (if (and (symbol? v1) (symbol? v2)) (eq? v1 v2) #f)))
            (else #f))))
       (else #f))))
 

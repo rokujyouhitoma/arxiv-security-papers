@@ -123,4 +123,4 @@
       (write-string " FAILURE: Some runtime tests failed!\n")
       (write-string "=======================================================\n")
       (flush-output-port)
-      #f))
+      (exit 1)))
