@@ -21,7 +21,7 @@
 - 🎯 **[[REQ-03] プロジェクトユースケース台帳 (Project Use Case Ledger)](requirements/REQ-03-use_case_ledger.md)**
   - 6大ペルソナおよび国家サイバー統括室「サイバーセキュリティ人材フレームワーク2026」13役割に対応する全33ユースケース・業務価値創出フローを体系化。
 
-### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-33)
+### 3. 設計仕様 (Architecture & Feature Designs: DSN-01 〜 DSN-37)
 
 #### 上位・横断設計
 - 🏗️ **[[DSN-01] 全体高位アーキテクチャ設計書 (HLD)](designs/DSN-01-high_level_design.md)**
@@ -94,6 +94,14 @@
   - `alisp/`, `ilisp/` — 3大境界制御プリミティブ（`with-fuel`, `with-caps`, `define/c`）・S式構造化自己修復プロトコル（`diagnostic` / `patch`）・Managed Virtual Port・Bounded Autonomy（無暴走・無破壊・超省トークン）保証。
 - ⚡ **[[DSN-33] ULISP (Underlying LISP) x86-64 ネイティブ AOT コンパイラ包括設計仕様書](designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)**
   - `ulisp/`, `ilisp/backend/ulisp_codegen/` — Gauche ブートストラップから x86-64 Linux ELF 直結・Tagged Pointer・バンプアロケータ・TCO/フラットクロージャ・ILisp AOT バックエンド統合・3段階セルフホスティング。
+- 🚀 **[[DSN-34] MLISP (Meta-tracing LISP) 内因性メタトレーシング JIT 包括設計仕様書](designs/DSN-34-mlisp_endogenous_meta_tracing_jit_architecture_specification.md)**
+  - `mlisp/` — ホットループ検知・トレース記録・オプティマイザ・ネイティブ機械語 JIT 設計。
+- 📈 **[[DSN-35] ILISP/ULISP AOT/JIT 継続的性能ベンチマークフレームワーク設計書](designs/DSN-35-ilisp_ulisp_aot_jit_continuous_benchmarking_framework.md)**
+  - `benchmarks/` — AOT/JIT 性能測定・回帰検知・CI パイプライン統合ベンチマーク仕様。
+- 🛡️ **[[DSN-36] Zero-libc Pure Scheme ベアメタルランタイム包括設計仕様書](designs/DSN-36-zero_libc_pure_scheme_bare_metal_runtime.md)**
+  - `ulisp/lib/posix.scm` — libc/Cランタイム完全排除・Linux Raw Syscall・静的単一バイナリ自立型実行設計。
+- ⚡ **[[DSN-37] Synapse 二層分離並行処理基盤 ＆ AOT パイプライン仕様書](designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)**
+  - `runtime/synapse-core.scm` — R7RS 制御層とアフィン純粋計算層の二層分離・P2P ゼロコピー Move・FBIP・Fuel 強プリエンプション・M:N ロックフリー並列基盤。
 
 
 ### 4. ユーザーマニュアル ＆ AI エージェント連携 (Manuals & AI Integration)
