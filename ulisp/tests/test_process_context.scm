@@ -86,7 +86,12 @@
 ;;; 3. Command line procedure (command-line)
 (let ((cmd (command-line)))
   (assert-true "command-line returns a pair" (pair? cmd))
-  (assert-true "car of command-line is a string" (string? (car cmd))))
+  (assert-true "car of command-line is a string" (string? (car cmd)))
+  (let loop ((rest cmd))
+    (if (pair? rest)
+        (begin
+          (assert-true "command-line element is a string" (string? (car rest)))
+          (loop (cdr rest))))))
 
 ;;; 4. Final report
 (let ((fails (vector-ref *test-failures* 0)))

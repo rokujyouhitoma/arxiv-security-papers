@@ -9,7 +9,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ULISP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${ULISP_DIR}/build"
 mkdir -p "${BUILD_DIR}"
-export ULISP_QUIET=1
 
 echo "========================================================================"
 echo " Starting Nanopass Execution Profiler Test Suite (Issue #621)"

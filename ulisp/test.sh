@@ -50,9 +50,9 @@ if [ "${FORCE_ILISP:-0}" != "1" ]; then
 
     if [ -n "$ACTIVE_NATIVE" ]; then
         # Smoke test: verify native compiler can compile and execute a trivial integer form correctly
-        if echo "42" | ULISP_QUIET=1 "$ACTIVE_NATIVE" > "$TMP_S" 2>/dev/null && \
+        if echo "42" | "$ACTIVE_NATIVE" > "$TMP_S" 2>/dev/null && \
            $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S" 2>/dev/null && \
-           [ "$("./$TMP_BIN" 2>/dev/null)" = "42" ]; then
+           [ "$(ULISP_PRINT_RESULT=1 "./$TMP_BIN" 2>/dev/null)" = "42" ]; then
             USE_NATIVE_ULISP=true
         else
             rm -f "$ULISP_STAGE1"
@@ -64,7 +64,7 @@ fi
 if [ "$USE_NATIVE_ULISP" = true ]; then
     echo "=== Compiler Engine: ULisp Native AOT Compiler ($ACTIVE_NATIVE, Fast mode: < 1s) ==="
     compile_scheme() {
-        ULISP_QUIET=1 "$ACTIVE_NATIVE" <<< "$1" > "$2"
+        "$ACTIVE_NATIVE" <<< "$1" > "$2"
     }
 else
     echo "=== Compiler Engine: ILisp Python Interpreter (Fallback mode) ==="
@@ -122,7 +122,7 @@ assert() {
     fi
 
     # 3. Execute and compare output
-    if ! actual=$("./$TMP_BIN" 2>build/run_err.log); then
+    if ! actual=$(ULISP_PRINT_RESULT=1 "./$TMP_BIN" 2>build/run_err.log); then
         printf "\033[31m[EXEC FAIL]\033[0m %s (exit code $?)\n" "$input"
         cat build/run_err.log
         exit 1
@@ -143,7 +143,7 @@ assert_stdin() {
 
     compile_scheme "$program" "$TMP_S"
     $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S"
-    actual=$(printf "%s" "$stdin_input" | "./$TMP_BIN")
+    actual=$(printf "%s" "$stdin_input" | ULISP_PRINT_RESULT=1 "./$TMP_BIN")
 
 
     if [ "$actual" = "$expected" ]; then

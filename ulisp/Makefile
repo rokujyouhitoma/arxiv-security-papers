@@ -16,7 +16,7 @@ GOSH_BIN = $(shell command -v gosh 2>/dev/null)
 
 # --- 処理系エンジンの決定 (ULISP_BOOT があれば優先、なければ ILISP を使用) ---
 ifeq ($(shell test -x $(ULISP_BOOT) && echo yes),yes)
-    ULISP_COMPILER ?= env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) <
+    ULISP_COMPILER ?= env ULISP_GC_PROFILE=compiler ./$(ULISP_BOOT) <
     COMPILER_DEP = $(ULISP_BOOT)
     USE_NATIVE_BOOT = 1
 else
@@ -572,15 +572,15 @@ bootstrap_verify: stage2 stage3
 # 5. External host Scheme (gosh -> python/ilisp)
 define COMPILE_SCM_TO_S
 	@if [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./$(ULISP_BOOT) < $(1) > $(2); \
+		env ULISP_GC_PROFILE=compiler ./$(ULISP_BOOT) < $(1) > $(2); \
 	elif [ -x "build/ulisp-modular" ]; then \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-modular < $(1) > $(2); \
+		env ULISP_GC_PROFILE=compiler ./build/ulisp-modular < $(1) > $(2); \
 	elif [ -x "build/ulisp-fast" ]; then \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-fast < $(1) > $(2); \
+		env ULISP_GC_PROFILE=compiler ./build/ulisp-fast < $(1) > $(2); \
 	elif [ -x "build/scheme-stage2" ]; then \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage2 < $(1) > $(2); \
+		env ULISP_GC_PROFILE=compiler ./build/scheme-stage2 < $(1) > $(2); \
 	elif [ -x "build/scheme-stage1" ]; then \
-		env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/scheme-stage1 < $(1) > $(2); \
+		env ULISP_GC_PROFILE=compiler ./build/scheme-stage1 < $(1) > $(2); \
 	elif [ -n "$(GOSH_BIN)" ]; then \
 		$(GOSH_BIN) compiler.scm < $(1) > $(2); \
 	else \
@@ -621,7 +621,7 @@ test_split_link: build/ulisp-fast
 	./build/ulisp-fast build/test_split_input.scm > build/test_split.s
 	$(CC) -nostdlib -static build/test_split.s -o build/test_split
 	@echo "Executing compiled test binary:"
-	@res=$$(env ULISP_QUIET=1 ./build/test_split | tr -d '\r\n'); \
+	@res=$$(./build/test_split | tr -d '\r\n'); \
 	echo "Output: $$res"; \
 	test "$$res" = "Hello from split-linked ULisp!579"
 	@echo "SUCCESS: 2-split static linking verification PASSED!"

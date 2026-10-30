@@ -47,7 +47,7 @@ EOF
 ${COMPILER_CMD} < "${BUILD_DIR}/test_gc_stats_1.scm" > "${BUILD_DIR}/test_gc_stats_1.s"
 gcc -nostdlib -static "${BUILD_DIR}/test_gc_stats_1.s" -o "${BUILD_DIR}/test_gc_stats_1_bin"
 
-res=$("${BUILD_DIR}/test_gc_stats_1_bin" 2> "${BUILD_DIR}/test_gc_stats_1.err")
+res=$(ULISP_PRINT_RESULT=1 "${BUILD_DIR}/test_gc_stats_1_bin" 2> "${BUILD_DIR}/test_gc_stats_1.err")
 test "${res}" = "(1 2 3)"
 if [ -s "${BUILD_DIR}/test_gc_stats_1.err" ]; then
     echo "FAIL: Expected empty stderr when ULISP_GC_STATS is unset, got:"
@@ -60,7 +60,7 @@ echo "PASS: Quiet-by-default verified (stderr is empty)."
 # Test 2: x86-64 Freestanding Native - ULISP_GC_STATS=1
 # -----------------------------------------------------------------------
 echo "--- Test 2: x86-64 Freestanding - ULISP_GC_STATS=1 ---"
-res=$(ULISP_GC_STATS=1 "${BUILD_DIR}/test_gc_stats_1_bin" 2> "${BUILD_DIR}/test_gc_stats_2.err")
+res=$(ULISP_PRINT_RESULT=1 ULISP_GC_STATS=1 "${BUILD_DIR}/test_gc_stats_1_bin" 2> "${BUILD_DIR}/test_gc_stats_2.err")
 test "${res}" = "(1 2 3)"
 
 if ! grep -q "\[ULISP GC STATS\] Collections:" "${BUILD_DIR}/test_gc_stats_2.err"; then
@@ -97,7 +97,7 @@ EOF
 ${COMPILER_CMD} < "${BUILD_DIR}/test_gc_stats_3.scm" > "${BUILD_DIR}/test_gc_stats_3.s"
 gcc -nostdlib -static "${BUILD_DIR}/test_gc_stats_3.s" -o "${BUILD_DIR}/test_gc_stats_3_bin"
 
-res=$(ULISP_GC_STATS=1 "${BUILD_DIR}/test_gc_stats_3_bin" 2> "${BUILD_DIR}/test_gc_stats_3.err")
+res=$(ULISP_PRINT_RESULT=1 ULISP_GC_STATS=1 "${BUILD_DIR}/test_gc_stats_3_bin" 2> "${BUILD_DIR}/test_gc_stats_3.err")
 test "${res}" = "1"
 
 if ! grep -q "Alloc:" "${BUILD_DIR}/test_gc_stats_3.err"; then
@@ -119,7 +119,7 @@ EOF
 ${COMPILER_CMD} < "${BUILD_DIR}/test_gc_stats_4.scm" > "${BUILD_DIR}/test_gc_stats_4.c"
 gcc -O2 -Wno-unused-label "${BUILD_DIR}/test_gc_stats_4.c" -o "${BUILD_DIR}/test_gc_stats_4_bin"
 
-res_c=$(ULISP_GC_STATS=1 "${BUILD_DIR}/test_gc_stats_4_bin" 2> "${BUILD_DIR}/test_gc_stats_4.err")
+res_c=$(ULISP_PRINT_RESULT=1 ULISP_GC_STATS=1 "${BUILD_DIR}/test_gc_stats_4_bin" 2> "${BUILD_DIR}/test_gc_stats_4.err")
 test "${res_c}" = "(10 20 30)"
 
 if ! grep -q "\[ULISP GC STATS\] Collections:" "${BUILD_DIR}/test_gc_stats_4.err"; then
@@ -139,7 +139,7 @@ echo "PASS: C Backend ULISP_GC_STATS=1 verified."
 # Test 5: Disabled when ULISP_GC_STATS=0
 # -----------------------------------------------------------------------
 echo "--- Test 5: ULISP_GC_STATS=0 Explicit Disable ---"
-res=$(ULISP_GC_STATS=0 "${BUILD_DIR}/test_gc_stats_1_bin" 2> "${BUILD_DIR}/test_gc_stats_5.err")
+res=$(ULISP_PRINT_RESULT=1 ULISP_GC_STATS=0 "${BUILD_DIR}/test_gc_stats_1_bin" 2> "${BUILD_DIR}/test_gc_stats_5.err")
 test "${res}" = "(1 2 3)"
 if [ -s "${BUILD_DIR}/test_gc_stats_5.err" ]; then
     echo "FAIL: Expected empty stderr when ULISP_GC_STATS=0, got:"

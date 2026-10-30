@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **614** | ランタイムのデフォルト沈黙化（Quiet-by-Default）とコンパイラ成果物出力（明示的終了値 0 / -o オプション）の根本是正 | Refactor | High | New | [614-refactor-runtime-silence-by-default-and-compiler-cli-output.md](614-refactor-runtime-silence-by-default-and-compiler-cli-output.md) |
 | **615** | ビルドパイプラインからの GCC 呼出し排除と GNU as / ld 直接駆動（脱 GCC ドライバ）への移行 | Refactor | High | New | [615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md](615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md) |
 | **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | High | New | [616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
@@ -34,6 +33,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **614** | ランタイムのデフォルト沈黙化（Quiet-by-Default）と GCC / Linux 互換コンパイラ CLI インターフェース（-o / -S / -O / 引数パース / 明示的終了コード 0）の根本確立 | Refactor | 2026-10-31 | [closed/614-refactor-runtime-silence-by-default-and-compiler-cli-output.md](closed/614-refactor-runtime-silence-by-default-and-compiler-cli-output.md) |
 | **612** | R7RS (scheme char) ASCII 文字・文字列述語群および大小文字変換手続きの実装 | Feature | 2026-10-30 | [closed/612-implement-r7rs-char-ascii-predicates-and-conversions.md](closed/612-implement-r7rs-char-ascii-predicates-and-conversions.md) |
 | **610** | R7RS (scheme base) 未実装コア手続き群 (string, 多引数 map/for-each, floor/, exact-integer-sqrt) の実装 | Feature | 2026-10-30 | [closed/610-implement-r7rs-base-core-procedures.md](closed/610-implement-r7rs-base-core-procedures.md) |
 | **609** | R7RS case-lambda 構文および (scheme case-lambda) ライブラリの実装 | Feature | 2026-10-30 | [closed/609-implement-r7rs-case-lambda-syntax.md](closed/609-implement-r7rs-case-lambda-syntax.md) |

@@ -261,15 +261,15 @@ verify_and_promote() {
 
     echo "=== Running Smoke Test on $final_stage_name Binary ==="
     rm -f "$BUILD_DIR/smoke_test.s" "$BUILD_DIR/smoke_test"
-    echo "42" | ULISP_QUIET=1 "$final_compiler" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+    echo "42" | "$final_compiler" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
     if [ ! -s "$BUILD_DIR/smoke_test.s" ]; then
         echo "42" > "$BUILD_DIR/smoke_in.scm"
-        ULISP_QUIET=1 "$final_compiler" "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+        "$final_compiler" "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
         rm -f "$BUILD_DIR/smoke_in.scm"
     fi
     gcc -nostdlib -static "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test"
     local smoke_out
-    smoke_out="$("$BUILD_DIR/smoke_test" 2>/dev/null || true)"
+    smoke_out="$(ULISP_PRINT_RESULT=1 "$BUILD_DIR/smoke_test" 2>/dev/null || true)"
     if [ "$smoke_out" = "42" ]; then
         echo -e "\033[1;32mPASS: $final_stage_name binary produced functional executable (output: 42).\033[0m"
     else

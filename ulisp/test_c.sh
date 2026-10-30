@@ -63,7 +63,7 @@ assert_c() {
 
     if [ -x "bin/ulisp-boot" ]; then
         printf '%s\n' "$code" > build/tmp_c_in.scm
-        env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 bin/ulisp-boot build/tmp_c_in.scm > "$TMP_C" 2>build/compile_err.log || {
+        env ULISP_GC_PROFILE=compiler bin/ulisp-boot build/tmp_c_in.scm > "$TMP_C" 2>build/compile_err.log || {
             echo -e "\033[31m[COMPILE FAIL]\033[0m $expr"
             cat build/compile_err.log
             FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -88,9 +88,9 @@ assert_c() {
 
     local actual
     if [ -n "$stdin_input" ]; then
-        actual=$(echo -n "$stdin_input" | "$TMP_BIN")
+        actual=$(echo -n "$stdin_input" | env ULISP_PRINT_RESULT=1 "$TMP_BIN")
     else
-        actual=$("$TMP_BIN")
+        actual=$(env ULISP_PRINT_RESULT=1 "$TMP_BIN")
     fi
 
     if [ "$actual" = "$expected" ]; then
@@ -118,7 +118,7 @@ run_test_file_c() {
         cat "$f" >> "$in_file"
     done
     if [ -x "bin/ulisp-boot" ]; then
-        env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 bin/ulisp-boot "$in_file" > "$out_c" 2>build/compile_err.log || {
+        env ULISP_GC_PROFILE=compiler bin/ulisp-boot "$in_file" > "$out_c" 2>build/compile_err.log || {
             echo -e "\033[31m[COMPILE FAIL]\033[0m $test_file"
             cat build/compile_err.log
             FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -141,7 +141,7 @@ run_test_file_c() {
     }
 
     local actual
-    actual=$("./$out_bin" 2>build/run_err.log | tail -n 1)
+    actual=$(env ULISP_PRINT_RESULT=1 "./$out_bin" 2>build/run_err.log | tail -n 1)
     if [ "$actual" = "#t" ]; then
         echo -e "  \033[32m[PASS]\033[0m $desc ($test_file) => #t"
         PASS_COUNT=$((PASS_COUNT + 1))

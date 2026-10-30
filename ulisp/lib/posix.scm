@@ -36,6 +36,16 @@
 (define (sys-close fd)
   (%to-fixnum (%raw-syscall (%to-raw 3) (%to-raw fd) 0 0 0 0 0)))
 
+;; sys-dup2: sys_dup2(oldfd, newfd) -> syscall 33
+(define (sys-dup2 oldfd newfd)
+  (%to-fixnum (%raw-syscall (%to-raw 33) (%to-raw oldfd) (%to-raw newfd) 0 0 0 0)))
+
+(define (sys-write-stderr str)
+  (let ((len (string-length str)))
+    (if (> len 0)
+        (sys-write 2 (%ptr-untag str) len)
+        0)))
+
 ;; sys-mmap: sys_mmap(addr, len, prot, flags, fd, offset) -> syscall 9
 ;; PROT_READ|PROT_WRITE = 3, MAP_PRIVATE|MAP_ANONYMOUS = 34, fd = -1, offset = 0
 (define (sys-mmap length)
@@ -130,8 +140,41 @@
 ;;; 5. Process Context & Environment Variables (R7RS §6.14)
 ;;; -----------------------------------------------------------------------
 
+(define (sys-argc)
+  (let ((slot (%get-environ-ptr)))
+    (if (= slot 0)
+        0
+        (%to-fixnum (%raw-load slot 8)))))
+
+(define (sys-argv-ptr)
+  (let ((slot (%get-environ-ptr)))
+    (if (= slot 0)
+        0
+        (%raw-load slot 16))))
+
+(define (%posix-cstr->string ptr)
+  (let* ((len (%raw-c-strlen ptr))
+         (s (make-string len)))
+    (let loop ((i 0))
+      (if (< i len)
+          (begin
+            (string-set! s i (integer->char (%raw-load-u8 ptr i)))
+            (loop (+ i 1)))
+          s))))
+
 (define (command-line)
-  '("ulisp"))
+  (let ((argc (sys-argc))
+        (argv-ptr (sys-argv-ptr)))
+    (if (or (<= argc 0) (= argv-ptr 0))
+        '("ulisp")
+        (let loop ((i (- argc 1)) (acc '()))
+          (if (< i 0)
+              acc
+              (let ((str-ptr (%raw-load argv-ptr (* i 8))))
+                (if (= str-ptr 0)
+                    (loop (- i 1) (cons "" acc))
+                    (let ((s (%posix-cstr->string str-ptr)))
+                      (loop (- i 1) (cons s acc))))))))))
 
 (define (sys-environ-ptr)
   (let ((slot (%get-environ-ptr)))

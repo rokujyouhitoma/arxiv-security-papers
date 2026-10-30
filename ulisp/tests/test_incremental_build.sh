@@ -14,9 +14,9 @@ make build/ulisp-modular
 
 echo "=== [2/4] Verifying base functionality of build/ulisp-modular ==="
 echo '(+ 100 234)' > build/test_inc_base.scm
-env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-modular < build/test_inc_base.scm > build/test_inc_base.s
+env ULISP_GC_PROFILE=compiler ./build/ulisp-modular < build/test_inc_base.scm > build/test_inc_base.s
 gcc -nostdlib -static build/test_inc_base.s -o build/test_inc_base
-out=$(./build/test_inc_base)
+out=$(ULISP_PRINT_RESULT=1 ./build/test_inc_base)
 if [ "$out" != "334" ]; then
     echo "FAIL: Expected 334, got '$out'"
     exit 1
@@ -41,9 +41,9 @@ cat << 'EOF' > build/test_inc_fib.scm
       (+ (fib (- n 1)) (fib (- n 2)))))
 (fib 10)
 EOF
-env ULISP_GC_PROFILE=compiler ULISP_QUIET=1 ./build/ulisp-modular < build/test_inc_fib.scm > build/test_inc_fib.s
+env ULISP_GC_PROFILE=compiler ./build/ulisp-modular < build/test_inc_fib.scm > build/test_inc_fib.s
 gcc -nostdlib -static build/test_inc_fib.s -o build/test_inc_fib
-out_fib=$(./build/test_inc_fib)
+out_fib=$(ULISP_PRINT_RESULT=1 ./build/test_inc_fib)
 if [ "$out_fib" != "55" ]; then
     echo "FAIL: Expected 55, got '$out_fib'"
     exit 1

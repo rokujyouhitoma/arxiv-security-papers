@@ -49,11 +49,11 @@ run_backend_native_test() {
     local fixture_file="$2"
     local expected_output="$3"
 
-    # Ingest Canonical LIR directly, target x86_64 native backend (ULISP_QUIET=1 suppresses return value dump)
-    if cat "$fixture_file" | env ULISP_QUIET=1 $COMPILER_EXEC > "$TMP_S" 2>/dev/null; then
+    # Ingest Canonical LIR directly, target x86_64 native backend
+    if cat "$fixture_file" | $COMPILER_EXEC > "$TMP_S" 2>/dev/null; then
         if $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S" 2>/dev/null; then
             local actual_output
-            actual_output=$(env -u ULISP_QUIET "$TMP_BIN" 2>/dev/null || true)
+            actual_output=$(env ULISP_PRINT_RESULT=1 "$TMP_BIN" 2>/dev/null || true)
             if [ "$actual_output" = "$expected_output" ]; then
                 echo "  [PASS] $test_name (Output: $actual_output)"
                 PASSED=$((PASSED + 1))
