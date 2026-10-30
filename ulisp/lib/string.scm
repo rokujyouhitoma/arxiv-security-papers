@@ -332,4 +332,55 @@
 (define (string>=? s1 s2)
   (>= (%string-compare s1 s2) 0))
 
+;; ---------------------------------------------------------------------
+;; §6.7 & §7.1.3 (scheme char): String Case Conversions & Case Folding
+;; ---------------------------------------------------------------------
+(define (string-upcase str)
+  (string-map char-upcase str))
+
+(define (string-downcase str)
+  (string-map char-downcase str))
+
+(define (string-foldcase str)
+  (string-map char-foldcase str))
+
+;; ---------------------------------------------------------------------
+;; §6.7 & §7.1.3 (scheme char): Case-Insensitive String Comparisons
+;; ---------------------------------------------------------------------
+(define (%string-ci-compare s1 s2)
+  (let ((len1 (string-length s1))
+        (len2 (string-length s2)))
+    (let ((min-len (if (< len1 len2) len1 len2)))
+      (let loop ((i 0))
+        (if (< i min-len)
+            (let ((diff (%char-ci-compare (string-ref s1 i) (string-ref s2 i))))
+              (cond
+                ((< diff 0) -1)
+                ((> diff 0) 1)
+                (else (loop (+ i 1)))))
+            (cond
+              ((< len1 len2) -1)
+              ((> len1 len2) 1)
+              (else 0)))))))
+
+(define (string-ci=? s1 s2)
+  (let ((len1 (string-length s1))
+        (len2 (string-length s2)))
+    (if (= len1 len2)
+        (= (%string-ci-compare s1 s2) 0)
+        #f)))
+
+(define (string-ci<? s1 s2)
+  (< (%string-ci-compare s1 s2) 0))
+
+(define (string-ci>? s1 s2)
+  (> (%string-ci-compare s1 s2) 0))
+
+(define (string-ci<=? s1 s2)
+  (<= (%string-ci-compare s1 s2) 0))
+
+(define (string-ci>=? s1 s2)
+  (>= (%string-ci-compare s1 s2) 0))
+
+
 

@@ -158,11 +158,11 @@
 | **6.6** | `char?`, `char=?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 即値文字タグ判定・比較 |
 | **6.6** | `char->integer`, `integer->char` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | コードポイント相互変換 |
 | **6.6** | `char<?`, `char>?`, `char<=?`, `char>=?` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 複数引数対応文字順序比較述語 ([Issue #556](../../docs/issues/closed/556-implement-r7rs-character-comparison-predicates.md)) |
-| **6.6** | `char-ci=?`, `char-ci<?`, `char-ci>?`, `char-ci<=?`, `char-ci>=?` | **×** | - | 大文字小文字同一視文字比較 (Unicode / ASCII Case-folding 未実装) |
-| **6.6** | `char-alphabetic?`, `char-numeric?`, `char-whitespace?` | **×** | - | 文字種判定述語 (未実装) |
-| **6.6** | `char-upper-case?`, `char-lower-case?` | **×** | - | 大小文字判定述語 (未実装) |
-| **6.6** | `digit-value` | **×** | - | 数字文字の 10 進数値取得 (未実装) |
-| **6.6** | `char-upcase`, `char-downcase`, `char-foldcase` | **×** | - | 大小文字変換 (未実装) |
+| **6.6** | `char-ci=?`, `char-ci<?`, `char-ci>?`, `char-ci<=?`, `char-ci>=?` | **◎** | [ulisp/lib/char.scm](../lib/char.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 大文字小文字同一視文字比較 (ASCII Case-folding / Pass 030 連鎖比較脱糖完全準拠) ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
+| **6.6** | `char-alphabetic?`, `char-numeric?`, `char-whitespace?` | **◎** | [ulisp/lib/char.scm](../lib/char.scm) | 文字種判定述語 (ASCII 英字・数字・制御改行空白対応) ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
+| **6.6** | `char-upper-case?`, `char-lower-case?` | **◎** | [ulisp/lib/char.scm](../lib/char.scm) | 大小文字判定述語 ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
+| **6.6** | `digit-value` | **◎** | [ulisp/lib/char.scm](../lib/char.scm) | 数字文字の 10 進数値取得 (0-9、非数字は `#f`) ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
+| **6.6** | `char-upcase`, `char-downcase`, `char-foldcase` | **◎** | [ulisp/lib/char.scm](../lib/char.scm) | 大小文字変換・ASCII 単純ケースフォールディング ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
 
 #### 6.7 文字列 (Strings)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -175,8 +175,8 @@
 | **6.7** | `string<?`, `string>?`, `string<=?`, `string>=?` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 複数引数対応辞書式順序比較述語 ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
 | **6.7** | `string->list`, `list->string` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 文字列・リスト相互変換 (スライス対応) ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
 | **6.7** | `string` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 026](../frontend/026_desugar_constructors.scm) | 可変長引数文字並びからの文字列構築 (Pass 026 脱糖およびランタイム第一級関数) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
-| **6.7** | `string-ci=?`, `string-ci<?`, `string-ci>?`, `string-ci<=?`, `string-ci>=?` | **×** | - | 大文字小文字同一視辞書式順序比較 (未実装) |
-| **6.7** | `string-upcase`, `string-downcase`, `string-foldcase` | **×** | - | 文字列大小文字変換 (未実装) |
+| **6.7** | `string-ci=?`, `string-ci<?`, `string-ci>?`, `string-ci<=?`, `string-ci>=?` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 大文字小文字同一視辞書式順序比較 (Pass 030 連鎖比較脱糖対応) ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
+| **6.7** | `string-upcase`, `string-downcase`, `string-foldcase` | **◎** | [ulisp/lib/string.scm](../lib/string.scm) | 文字列大小文字変換およびケースフォールディング (`string-map` 連携) ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
 
 #### 6.8 ベクタ (Vectors)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -279,7 +279,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `(scheme base)` | コア構文、算術、リスト、ベクタ、継続、多値、ポート | **約 92%** | [ulisp/lib/scheme/base.sld](../lib/scheme/base.sld)<br>([ulisp/lib/*.scm](../lib/)) | 構文・`call/cc`・多値・ベクタ・GC・整数除算ペア・平方根・多引数 map/for-each 完備。有理数・複素数・浮動小数演算のみ非サポート ([Issue #562](../../docs/issues/562-implement-r7rs-standard-library-definitions-sld.md), [Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | `(scheme case-lambda)` | 可変個引数パターンマッチング | **◎ 100%** | [ulisp/lib/scheme/case-lambda.sld](../lib/scheme/case-lambda.sld)<br>[Pass 028](../frontend/028_desugar_bindings.scm) | `case-lambda` 構文の完全脱糖サポート（固定引数・可変個レスト引数・動的引数数ディスパッチ・引数不一致時例外 `raise`） ([Issue #609](../../docs/issues/closed/609-implement-r7rs-case-lambda-syntax.md)) |
-| `(scheme char)` | Unicode 大文字小文字変換・判定 | **約 20%** | [ulisp/lib/scheme/char.sld](../lib/scheme/char.sld)<br>([compiler/primitives.scm](../compiler/primitives.scm)) | `char=?`, `char->integer` のみ。Unicode 大小比較・Case-folding 未実装 |
+| `(scheme char)` | 大文字小文字変換・分類・同一視比較 | **◎ 100% (ASCII)** | [ulisp/lib/scheme/char.sld](../lib/scheme/char.sld)<br>([ulisp/lib/char.scm](../lib/char.scm)<br>[ulisp/lib/string.scm](../lib/string.scm)) | 全 19 手続き完備（文字種判定 6 種、大小文字変換・フォールディング 3 種、`char-ci*` 5 種、文字列大小変換 3 種、`string-ci*` 5 種、Pass 030 連鎖比較脱糖対応） ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
 | `(scheme complex)` | 複素数算術 | **× 0%** | [ulisp/lib/scheme/complex.sld](../lib/scheme/complex.sld) | 非サポート（Fixnum 優先アーキテクチャ） |
 | `(scheme cxr)` | `caaa...r` 〜 `cddddr` (全24種) | **◎ 100%** | [ulisp/lib/scheme/cxr.sld](../lib/scheme/cxr.sld) | R7RS 規定の全 24 種合成ペアアクセサをライブラリ定義内で完備 |
 | `(scheme eval)` | 動的評価 (`eval`, `environment`) | **✕\* 0%** | [ulisp/lib/scheme/eval.sld](../lib/scheme/eval.sld) | AOT の性質上除外（事前コンパイル時マクロ展開で完結） |

@@ -543,6 +543,36 @@
                       (define v 200))
                     (+ u v)))
 
+;;; =======================================================================
+;;; 11. R7RS (scheme char) Character & String Procedures (Issue #612)
+;;; =======================================================================
+(write-string "--- 11. (scheme char) Procedures ---")
+(write-char #\newline)
+(flush-output-port)
+
+(assert-equal "char-alphabetic? #\\A" #t (char-alphabetic? #\A))
+(assert-equal "char-alphabetic? #\\1" #f (char-alphabetic? #\1))
+(assert-equal "char-numeric? #\\7" #t (char-numeric? #\7))
+(assert-equal "char-numeric? #\\x" #f (char-numeric? #\x))
+(assert-equal "char-whitespace? #\\space" #t (char-whitespace? #\space))
+(assert-equal "char-upper-case? #\\G" #t (char-upper-case? #\G))
+(assert-equal "char-lower-case? #\\g" #t (char-lower-case? #\g))
+(assert-equal "digit-value #\\8" 8 (digit-value #\8))
+(assert-equal "digit-value #\\z" #f (digit-value #\z))
+(assert-equal "char-upcase #\\b" #\B (char-upcase #\b))
+(assert-equal "char-downcase #\\B" #\b (char-downcase #\B))
+(assert-equal "char-foldcase #\\B" #\b (char-foldcase #\B))
+(assert-equal "char-ci=? #\\a #\\A" #t (char-ci=? #\a #\A))
+(assert-equal "char-ci<? #\\A #\\b" #t (char-ci<? #\A #\b))
+(assert-equal "char-ci<? chain" #t (char-ci<? #\a #\B #\c))
+(assert-equal "string-upcase" "HELLO, WORLD!" (string-upcase "Hello, World!"))
+(assert-equal "string-downcase" "hello, world!" (string-downcase "Hello, World!"))
+(assert-equal "string-foldcase" "hello, world!" (string-foldcase "Hello, World!"))
+(assert-equal "string-ci=? equal" #t (string-ci=? "Scheme" "sChEmE"))
+(assert-equal "string-ci=? diff" #f (string-ci=? "Scheme" "Lisp"))
+(assert-equal "string-ci<? 2 args" #t (string-ci<? "abc" "ABD"))
+(assert-equal "string-ci<? chain" #t (string-ci<? "a" "B" "c" "D"))
+
 ;;; Summary
 (write-string "=== ULisp R7RS Standard Library Tests Completed: ")
 (if (= (vector-ref *test-failures* 0) 0)

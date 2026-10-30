@@ -9,6 +9,7 @@
 ;; Standard Library Modules
 (include "lib/posix.scm")
 (include "lib/list.scm")
+(include "lib/char.scm")
 (include "lib/string.scm")
 (include "lib/port.scm")
 (include "lib/printer.scm")

@@ -85,19 +85,21 @@ assert() {
     if [[ "$input" =~ gc- ]]; then
         full_input='(include "lib/posix.scm") (include "lib/gc.scm")'$'\n'"$input"
     elif [[ "$input" =~ bytevector || "$input" =~ utf8 ]]; then
-        full_input='(include "lib/string.scm") (include "lib/bytevector.scm")'$'\n'"$input"
+        full_input='(include "lib/char.scm") (include "lib/string.scm") (include "lib/bytevector.scm")'$'\n'"$input"
     elif [[ "$input" =~ delay || "$input" =~ force || "$input" =~ promise ]]; then
-        full_input='(include "lib/string.scm") (include "lib/vector.scm") (include "lib/promise.scm")'$'\n'"$input"
+        full_input='(include "lib/char.scm") (include "lib/string.scm") (include "lib/vector.scm") (include "lib/promise.scm")'$'\n'"$input"
     elif [[ "$input" =~ define-record-type || "$input" =~ vector ]]; then
-        full_input='(include "lib/string.scm") (include "lib/vector.scm")'$'\n'"$input"
+        full_input='(include "lib/char.scm") (include "lib/string.scm") (include "lib/vector.scm")'$'\n'"$input"
     elif [[ "$input" =~ open-input-string || "$input" =~ open-output-string || "$input" =~ "port\?" || "$input" =~ "input-port\?" || "$input" =~ "output-port\?" || "$input" =~ "textual-port\?" || "$input" =~ "get-output-string" ]]; then
-        full_input='(include "lib/posix.scm") (include "lib/list.scm") (include "lib/string.scm") (include "lib/port.scm") (include "lib/printer.scm") (include "lib/reader.scm") (include "lib/equality.scm") (include "lib/predicates.scm") (include "lib/exception.scm") (include "lib/values.scm") (include "lib/continuation.scm") (include "lib/parameter.scm") (include "lib/gc.scm")'$'\n'"$input"
+        full_input='(include "lib/posix.scm") (include "lib/list.scm") (include "lib/char.scm") (include "lib/string.scm") (include "lib/port.scm") (include "lib/printer.scm") (include "lib/reader.scm") (include "lib/equality.scm") (include "lib/predicates.scm") (include "lib/exception.scm") (include "lib/values.scm") (include "lib/continuation.scm") (include "lib/parameter.scm") (include "lib/gc.scm")'$'\n'"$input"
     elif [[ "$input" =~ parameter || "$input" =~ dynamic-wind ]]; then
-        full_input='(include "lib/posix.scm") (include "lib/list.scm") (include "lib/string.scm") (include "lib/port.scm") (include "lib/printer.scm") (include "lib/reader.scm") (include "lib/equality.scm") (include "lib/predicates.scm") (include "lib/exception.scm") (include "lib/values.scm") (include "lib/continuation.scm") (include "lib/parameter.scm") (include "lib/gc.scm")'$'\n'"$input"
+        full_input='(include "lib/posix.scm") (include "lib/list.scm") (include "lib/char.scm") (include "lib/string.scm") (include "lib/port.scm") (include "lib/printer.scm") (include "lib/reader.scm") (include "lib/equality.scm") (include "lib/predicates.scm") (include "lib/exception.scm") (include "lib/values.scm") (include "lib/continuation.scm") (include "lib/parameter.scm") (include "lib/gc.scm")'$'\n'"$input"
     elif [[ "$input" =~ list-copy || "$input" =~ make-list ]]; then
         full_input='(include "lib/list.scm")'$'\n'"$input"
-    elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string || "$input" =~ string-copy || "$input" =~ string-fill || "$input" =~ string-map || "$input" =~ string-for-each || "$input" =~ string-\>list || "$input" =~ list-\>string || "$input" =~ "string<" || "$input" =~ "string>" || "$input" =~ "string=" ]]; then
-        full_input='(include "lib/string.scm")'$'\n'"$input"
+    elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string || "$input" =~ string-copy || "$input" =~ string-fill || "$input" =~ string-map || "$input" =~ string-for-each || "$input" =~ string-\>list || "$input" =~ list-\>string || "$input" =~ "string<" || "$input" =~ "string>" || "$input" =~ "string=" || "$input" =~ string-ci || "$input" =~ string-upcase || "$input" =~ string-downcase || "$input" =~ string-foldcase ]]; then
+        full_input='(include "lib/char.scm") (include "lib/string.scm")'$'\n'"$input"
+    elif [[ "$input" =~ char- || "$input" =~ digit-value ]]; then
+        full_input='(include "lib/char.scm")'$'\n'"$input"
     else
         full_input="$input"
     fi

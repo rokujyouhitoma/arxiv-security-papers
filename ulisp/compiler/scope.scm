@@ -129,7 +129,12 @@
     cons list append reverse length memq assq
     make-string string-length string-ref string-set! string-copy string-copy! string-fill! string-append
     string=? string<? string>? string<=? string>=?
+    string-ci=? string-ci<? string-ci>? string-ci<=? string-ci>=?
+    string-upcase string-downcase string-foldcase
     char=? char<? char>? char<=? char>=?
+    char-ci=? char-ci<? char-ci>? char-ci<=? char-ci>=?
+    char-alphabetic? char-numeric? char-whitespace? char-upper-case? char-lower-case?
+    digit-value char-upcase char-downcase char-foldcase
     make-vector vector-length vector-ref vector-set! vector-copy vector-copy! vector-fill! vector-append
     vector->list list->vector string->list list->string
     make-bytevector bytevector-length bytevector-u8-ref bytevector-u8-set! bytevector-copy bytevector-copy! bytevector-append

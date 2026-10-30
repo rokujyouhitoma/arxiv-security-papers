@@ -1232,7 +1232,11 @@
                 utf8->string string->utf8
                 close-port close-input-port close-output-port get-output-string
                 open-input-string force promise?
-                abs exact-integer-sqrt)) 1)
+                abs exact-integer-sqrt
+                char-alphabetic? char-numeric? char-whitespace?
+                char-upper-case? char-lower-case? digit-value
+                char-upcase char-downcase char-foldcase
+                string-upcase string-downcase string-foldcase)) 1)
     ((memq op '(append equal? memq assq memv assv member assoc string=?
                 string-append2 bytevector-append2 list-ref list-tail
                 modulo floor/ floor-quotient floor-remainder
@@ -1242,7 +1246,9 @@
 (define (builtin-min-arity op)
   (cond
     ((memq op '(list vector string-append string)) 0)
-    ((memq op '(string<=? string>=? string<? string>?)) 1)
+    ((memq op '(string<=? string>=? string<? string>?
+                string-ci=? string-ci<? string-ci>? string-ci<=? string-ci>=?
+                char-ci=? char-ci<? char-ci>? char-ci<=? char-ci>=?)) 1)
     ((memq op '(%with-handler map for-each apply)) 2)
     (else #f)))
 ;;; =======================================================================
@@ -3990,7 +3996,12 @@
     cons list append reverse length memq assq
     make-string string-length string-ref string-set! string-copy string-copy! string-fill! string-append
     string=? string<? string>? string<=? string>=?
+    string-ci=? string-ci<? string-ci>? string-ci<=? string-ci>=?
+    string-upcase string-downcase string-foldcase
     char=? char<? char>? char<=? char>=?
+    char-ci=? char-ci<? char-ci>? char-ci<=? char-ci>=?
+    char-alphabetic? char-numeric? char-whitespace? char-upper-case? char-lower-case?
+    digit-value char-upcase char-downcase char-foldcase
     make-vector vector-length vector-ref vector-set! vector-copy vector-copy! vector-fill! vector-append
     vector->list list->vector string->list list->string
     make-bytevector bytevector-length bytevector-u8-ref bytevector-u8-set! bytevector-copy bytevector-copy! bytevector-append
@@ -6457,6 +6468,46 @@
      (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
          (cons 'string=? (map Expr args))
          (Expr (desugar-chain-cmp 'string=? args))))
+    ((char-ci<? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char-ci<? (map Expr args))
+         (Expr (desugar-chain-cmp 'char-ci<? args))))
+    ((char-ci>? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char-ci>? (map Expr args))
+         (Expr (desugar-chain-cmp 'char-ci>? args))))
+    ((char-ci<=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char-ci<=? (map Expr args))
+         (Expr (desugar-chain-cmp 'char-ci<=? args))))
+    ((char-ci>=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char-ci>=? (map Expr args))
+         (Expr (desugar-chain-cmp 'char-ci>=? args))))
+    ((char-ci=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'char-ci=? (map Expr args))
+         (Expr (desugar-chain-cmp 'char-ci=? args))))
+    ((string-ci<? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'string-ci<? (map Expr args))
+         (Expr (desugar-chain-cmp 'string-ci<? args))))
+    ((string-ci>? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'string-ci>? (map Expr args))
+         (Expr (desugar-chain-cmp 'string-ci>? args))))
+    ((string-ci<=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'string-ci<=? (map Expr args))
+         (Expr (desugar-chain-cmp 'string-ci<=? args))))
+    ((string-ci>=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'string-ci>=? (map Expr args))
+         (Expr (desugar-chain-cmp 'string-ci>=? args))))
+    ((string-ci=? . ,args)
+     (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
+         (cons 'string-ci=? (map Expr args))
+         (Expr (desugar-chain-cmp 'string-ci=? args))))
 
     ;; 2. Local Bindings (Pass 028)
     ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))

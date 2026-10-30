@@ -197,7 +197,11 @@
                 utf8->string string->utf8
                 close-port close-input-port close-output-port get-output-string
                 open-input-string force promise?
-                abs exact-integer-sqrt)) 1)
+                abs exact-integer-sqrt
+                char-alphabetic? char-numeric? char-whitespace?
+                char-upper-case? char-lower-case? digit-value
+                char-upcase char-downcase char-foldcase
+                string-upcase string-downcase string-foldcase)) 1)
     ((memq op '(append equal? memq assq memv assv member assoc string=?
                 string-append2 bytevector-append2 list-ref list-tail
                 modulo floor/ floor-quotient floor-remainder
@@ -207,6 +211,8 @@
 (define (builtin-min-arity op)
   (cond
     ((memq op '(list vector string-append string)) 0)
-    ((memq op '(string<=? string>=? string<? string>?)) 1)
+    ((memq op '(string<=? string>=? string<? string>?
+                string-ci=? string-ci<? string-ci>? string-ci<=? string-ci>=?
+                char-ci=? char-ci<? char-ci>? char-ci<=? char-ci>=?)) 1)
     ((memq op '(%with-handler map for-each apply)) 2)
     (else #f)))
