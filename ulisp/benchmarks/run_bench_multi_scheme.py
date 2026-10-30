@@ -82,7 +82,9 @@ def compile_ulisp_x86(name, expr):
         s_code = run_cmd([PYTHON_BIN, "-m", "ilisp", COMPILER_SCM], input_text=expr)
         with open(s_path, "w") as f:
             f.write(s_code)
-    run_cmd(["gcc", "-nostdlib", "-static", s_path, "-o", bin_path])
+    o_path = os.path.join(BUILD_DIR, f"{name}.o")
+    run_cmd(["as", "--64", s_path, "-o", o_path])
+    run_cmd(["ld", "-m", "elf_x86_64", "-static", o_path, "-o", bin_path])
     return bin_path
 
 def compile_ulisp_c(name, expr):

@@ -109,7 +109,7 @@ echo "(let loop ((i 0) (s 0)) (if (< i 10) (loop (+ i 1) (+ s i)) s))" | ./ulisp
 S 式先頭に `(!compile)` を指定することで、ULisp の Nanopass パイプライン経由でネイティブ x86-64 アセンブリを出力します（libc 依存ゼロの Freestanding ELF）：
 ```bash
 echo "(!compile) (define (fact n) (if (<= n 1) 1 (* n (fact (- n 1))))) (fact 5)" | ./ulisp/bin/ulisp-jit > fact.s
-gcc -nostdlib -static fact.s -o fact
+as --64 fact.s -o fact.o && ld -m elf_x86_64 -static fact.o -o fact
 ./fact # => 120
 ```
 

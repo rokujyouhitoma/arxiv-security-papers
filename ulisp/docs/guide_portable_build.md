@@ -45,12 +45,14 @@ ULisp は 2 系統のコード生成バックエンドを備えている：
    - macOS 標準の Python 3 または Homebrew (`brew install python`)
 
 ### B. Linux (Ubuntu, Debian, Fedora, Arch 等)
-1. **C コンパイラ & ビルドツール**:
+1. **アセンブラ・リンカ & ビルドツール**:
+   - ネイティブ x86-64 AOT ビルドには GNU binutils (`as`, `ld`) および make, python3 のみが必要であり、ネイティブ実行パスにおいて C コンパイラ（GCC/Clang）への依存はありません。
+   - ポータブル C バックエンドを使用する場合のみ GCC または Clang が必要です。
    ```bash
-   # Debian / Ubuntu
-   sudo apt-get update && sudo apt-get install -y build-essential python3
+   # Debian / Ubuntu (binutils, make, python3)
+   sudo apt-get update && sudo apt-get install -y binutils make python3
    # RHEL / Fedora
-   sudo dnf groupinstall "Development Tools" && sudo dnf install -y python3
+   sudo dnf install -y binutils make python3
    ```
 
 ### C. FreeBSD / OpenBSD
@@ -96,8 +98,9 @@ Linux x86-64 環境では、コミット済みの自己完結シードバイナ�
 # シードバイナリで ulisp_core.scm をコンパイル
 ./bin/ulisp-boot build/ulisp_core.scm > build/stage1.s
 
-# libc 不使用・静的リンクでバイナリ化
-gcc -nostdlib -static build/stage1.s -o build/scheme-stage1
+# libc 不使用・GNU as / ld 直接駆動による静的バイナリ化
+as --64 build/stage1.s -o build/stage1.o
+ld -m elf_x86_64 -static build/stage1.o -o build/scheme-stage1
 
 # 動作確認
 ./build/scheme-stage1 --version

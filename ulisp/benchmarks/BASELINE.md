@@ -47,12 +47,12 @@ ULisp ネイティブコンパイラ（`ulisp/bin/ulisp-boot`）によって生�
 
 | ワークロード | x86-64 Native (Bytes) | ULisp C -O2 (Bytes) | Pure C -O2 (Bytes) | libc 依存 | リンカ構成 |
 |---|---|---|---|:---:|---|
-| **Fibonacci (fib 30)** | 20,160 B | 17,192 B | 16,048 B | **なし (Freestanding)** | `gcc -nostdlib -static` |
-| **Tail-Recursive Loop (10M)** | 19,968 B | 17,120 B | 16,016 B | **なし (Freestanding)** | `gcc -nostdlib -static` |
-| **Ackermann (ack 3 7)** | 20,096 B | 17,232 B | 16,048 B | **なし (Freestanding)** | `gcc -nostdlib -static` |
-| **Higher-Order Closure (1M)** | 20,032 B | 21,920 B | 16,024 B | **なし (Freestanding)** | `gcc -nostdlib -static` |
-| **List Alloc & Traverse (100k)** | 20,096 B | 21,880 B | 16,104 B | **なし (Freestanding)** | `gcc -nostdlib -static` |
-| **Vector Indexing & Traverse (100k)** | 20,176 B | 22,016 B | 16,104 B | **なし (Freestanding)** | `gcc -nostdlib -static` |
+| **Fibonacci (fib 30)** | 20,160 B | 17,192 B | 16,048 B | **なし (Freestanding)** | `ld -m elf_x86_64 -static` |
+| **Tail-Recursive Loop (10M)** | 19,968 B | 17,120 B | 16,016 B | **なし (Freestanding)** | `ld -m elf_x86_64 -static` |
+| **Ackermann (ack 3 7)** | 20,096 B | 17,232 B | 16,048 B | **なし (Freestanding)** | `ld -m elf_x86_64 -static` |
+| **Higher-Order Closure (1M)** | 20,032 B | 21,920 B | 16,024 B | **なし (Freestanding)** | `ld -m elf_x86_64 -static` |
+| **List Alloc & Traverse (100k)** | 20,096 B | 21,880 B | 16,104 B | **なし (Freestanding)** | `ld -m elf_x86_64 -static` |
+| **Vector Indexing & Traverse (100k)** | 20,176 B | 22,016 B | 16,104 B | **なし (Freestanding)** | `ld -m elf_x86_64 -static` |
 
 ---
 

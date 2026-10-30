@@ -362,7 +362,7 @@ Chez Scheme の設計思想に基づき、ULisp はコンパイラを単一の�
                 ▼                                             ▼
        【 Stage 1 ブート 】                          【 Stage 2 生成 】
 python3 -m ilisp compiler.scm < compiler.scm > stage1.s   ./scheme-stage1 < compiler.scm > stage2.s
-gcc -o scheme-stage1 runtime.o stage1.s                   gcc -o scheme-stage2 runtime.o stage2.s
+as -o stage1.o stage1.s && ld -static -o scheme-stage1 stage1.o   as -o stage2.o stage2.s && ld -static -o scheme-stage2 stage2.o
                 │                                             │
                 └──────────────────────┬──────────────────────┘
                                        ▼
@@ -371,7 +371,7 @@ gcc -o scheme-stage1 runtime.o stage1.s                   gcc -o scheme-stage2 r
                       cmp stage2.s stage3.s  ===> 差分ゼロ (100% 一致)
 ```
 
-1. **Stage 1**: ILisp（プロジェクト標準の R7RS 準拠処理系 `python3 -m ilisp`）上で `compiler.scm` を実行し、自分自身をコンパイルして `stage1.s` を生成。`gcc` でリンクして実行可能バイナリ `scheme-stage1` を作成。
+1. **Stage 1**: ILisp（プロジェクト標準の R7RS 準拠処理系 `python3 -m ilisp`）上で `compiler.scm` を実行し、自分自身をコンパイルして `stage1.s` を生成。GNU `as` / `ld` でアセンブル・リンクして実行可能バイナリ `scheme-stage1` を作成。
 2. **Stage 2**: ネイティブバイナリ `scheme-stage1` を実行し、再度 `compiler.scm` をコンパイルして `stage2.s` を生成。リンクして `scheme-stage2` を作成。
 3. **Stage 3 ＆ 不動点検証 (Fixed-Point Verification)**:
    `scheme-stage2` で `compiler.scm` をコンパイルして `stage3.s` を生成。
@@ -388,7 +388,7 @@ gcc -o scheme-stage1 runtime.o stage1.s                   gcc -o scheme-stage2 r
 
 1. **ブートストラップシード (`bin/ulisp-boot`) の役割**:
    - 不動点検証を通過した安定版ネイティブコンパイラバイナリを `ulisp/bin/ulisp-boot` として配備・固定化する。
-   - 外部ライブラリ依存ゼロ（`gcc -nostdlib -static`）の単一 ELF バイナリであり、Python や外部環境の制約を受けずにミリ秒単位で起動する。
+   - 外部ライブラリ依存ゼロ（GNU `as` / `ld -static`）の単一 ELF バイナリであり、Python や外部環境の制約を受けずにミリ秒単位で起動する。
 2. **高速ビルドフロー (Fast Bootstrap)**:
    - 日常の開発時（`./bootstrap.sh` または `make stage1`）は、Python / ILisp を介さず、シードバイナリ `bin/ulisp-boot` を直接起動して最新の `ulisp_core.scm` をコンパイルする。
    - 所要時間は **約 0.3 秒〜数秒** で完了し、従来の Python インタプリタ実行（数分以上）と比較して数百倍の高速化を達成する。
@@ -431,7 +431,7 @@ ULisp のセルフホスティング達成後、本コンパイラは **ILisp (D
 
 1. **マクロ脱糖**: ILisp の高度な Scope Sets 衛生的マクロ（`syntax-rules`）、モジュール定義（`define-library`）、ALisp の契約構文（`define/c`）は、ILisp 側で純粋な Scheme コア形式（`lambda`, `if`, `let`, `set!`）に脱糖される。
 2. **ULisp へのパイプライン投入**: 脱糖された純粋 S 式ストリームを ULisp コンパイラに入力する。
-3. **ネイティブバイナリ出力**: ULisp が最適化された x86-64 アセンブリを生成し、`gcc` / `clang` を経由してホスト環境のネイティブ ELF バイナリを直接出力する。
+3. **ネイティブバイナリ出力**: ULisp が最適化された x86-64 アセンブリを生成し、GNU `as` / `ld`（または C バックエンド時は `gcc` / `clang`）を経由してホスト環境のネイティブ ELF バイナリを直接出力する。
 
 ### 6.3 ランタイム共有とネイティブ ELF 単一バイナリ生成
 

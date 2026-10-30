@@ -13,11 +13,14 @@ else
     PYTHON_BIN="python3"
 fi
 ILISP="${ILISP:-$PYTHON_BIN -m ilisp}"
-CC="gcc"
-CFLAGS="-Wall -Wextra -O0 -g"
+AS="${AS:-as}"
+LD="${LD:-ld}"
+ASFLAGS="${ASFLAGS:---64}"
+LDFLAGS="${LDFLAGS:--m elf_x86_64 -static}"
 
 mkdir -p build
 TMP_S="build/tmp_$$.s"
+TMP_O="build/tmp_$$.o"
 TMP_BIN="build/tmp_$$.bin"
 COMPILER="compiler.scm"
 ULISP_STAGE1="build/scheme-stage1"
@@ -51,13 +54,14 @@ if [ "${FORCE_ILISP:-0}" != "1" ]; then
     if [ -n "$ACTIVE_NATIVE" ]; then
         # Smoke test: verify native compiler can compile and execute a trivial integer form correctly
         if echo "42" | "$ACTIVE_NATIVE" > "$TMP_S" 2>/dev/null && \
-           $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S" 2>/dev/null && \
+           $AS $ASFLAGS "$TMP_S" -o "$TMP_O" 2>/dev/null && \
+           $LD $LDFLAGS "$TMP_O" -o "$TMP_BIN" 2>/dev/null && \
            [ "$(ULISP_PRINT_RESULT=1 "./$TMP_BIN" 2>/dev/null)" = "42" ]; then
             USE_NATIVE_ULISP=true
         else
             rm -f "$ULISP_STAGE1"
         fi
-        rm -f "$TMP_S" "$TMP_BIN"
+        rm -f "$TMP_S" "$TMP_O" "$TMP_BIN"
     fi
 fi
 
@@ -74,7 +78,7 @@ else
 fi
 
 cleanup() {
-    rm -f "$TMP_S" "$TMP_BIN"
+    rm -f "$TMP_S" "$TMP_O" "$TMP_BIN"
 }
 trap cleanup EXIT
 
@@ -115,7 +119,7 @@ assert() {
     fi
 
     # 2. Assemble and link freestanding zero-libc binary
-    if ! $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S" 2>build/asm_err.log; then
+    if ! ($AS $ASFLAGS "$TMP_S" -o "$TMP_O" 2>build/asm_err.log && $LD $LDFLAGS "$TMP_O" -o "$TMP_BIN" 2>>build/asm_err.log); then
         printf "\033[31m[ASSEMBLE FAIL]\033[0m %s\n" "$input"
         cat build/asm_err.log
         exit 1
@@ -142,7 +146,8 @@ assert_stdin() {
     stdin_input="$3"
 
     compile_scheme "$program" "$TMP_S"
-    $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S"
+    $AS $ASFLAGS "$TMP_S" -o "$TMP_O"
+    $LD $LDFLAGS "$TMP_O" -o "$TMP_BIN"
     actual=$(printf "%s" "$stdin_input" | ULISP_PRINT_RESULT=1 "./$TMP_BIN")
 
 

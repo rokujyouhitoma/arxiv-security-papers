@@ -45,7 +45,8 @@ cat <<'EOF' > "${BUILD_DIR}/test_gc_stats_1.scm"
 EOF
 
 ${COMPILER_CMD} < "${BUILD_DIR}/test_gc_stats_1.scm" > "${BUILD_DIR}/test_gc_stats_1.s"
-gcc -nostdlib -static "${BUILD_DIR}/test_gc_stats_1.s" -o "${BUILD_DIR}/test_gc_stats_1_bin"
+as --64 "${BUILD_DIR}/test_gc_stats_1.s" -o "${BUILD_DIR}/test_gc_stats_1.o"
+ld -m elf_x86_64 -static "${BUILD_DIR}/test_gc_stats_1.o" -o "${BUILD_DIR}/test_gc_stats_1_bin"
 
 res=$(ULISP_PRINT_RESULT=1 "${BUILD_DIR}/test_gc_stats_1_bin" 2> "${BUILD_DIR}/test_gc_stats_1.err")
 test "${res}" = "(1 2 3)"
@@ -95,7 +96,8 @@ cat <<'EOF' > "${BUILD_DIR}/test_gc_stats_3.scm"
 EOF
 
 ${COMPILER_CMD} < "${BUILD_DIR}/test_gc_stats_3.scm" > "${BUILD_DIR}/test_gc_stats_3.s"
-gcc -nostdlib -static "${BUILD_DIR}/test_gc_stats_3.s" -o "${BUILD_DIR}/test_gc_stats_3_bin"
+as --64 "${BUILD_DIR}/test_gc_stats_3.s" -o "${BUILD_DIR}/test_gc_stats_3.o"
+ld -m elf_x86_64 -static "${BUILD_DIR}/test_gc_stats_3.o" -o "${BUILD_DIR}/test_gc_stats_3_bin"
 
 res=$(ULISP_PRINT_RESULT=1 ULISP_GC_STATS=1 "${BUILD_DIR}/test_gc_stats_3_bin" 2> "${BUILD_DIR}/test_gc_stats_3.err")
 test "${res}" = "1"
@@ -117,7 +119,7 @@ cat <<'EOF' > "${BUILD_DIR}/test_gc_stats_4.scm"
 EOF
 
 ${COMPILER_CMD} < "${BUILD_DIR}/test_gc_stats_4.scm" > "${BUILD_DIR}/test_gc_stats_4.c"
-gcc -O2 -Wno-unused-label "${BUILD_DIR}/test_gc_stats_4.c" -o "${BUILD_DIR}/test_gc_stats_4_bin"
+${CC:-gcc} -O2 -Wno-unused-label "${BUILD_DIR}/test_gc_stats_4.c" -o "${BUILD_DIR}/test_gc_stats_4_bin"
 
 res_c=$(ULISP_PRINT_RESULT=1 ULISP_GC_STATS=1 "${BUILD_DIR}/test_gc_stats_4_bin" 2> "${BUILD_DIR}/test_gc_stats_4.err")
 test "${res_c}" = "(10 20 30)"

@@ -2,7 +2,7 @@
 ID: 615
 種別: Refactor
 優先度: High
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] ビルドパイプラインからの GCC 呼出し排除と GNU as / ld 直接駆動（脱 GCC ドライバ）への移行 (ID: 615)
@@ -27,11 +27,11 @@ ID: 615
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`AS = as`, `LD = ld` の導入、`$(CC) -nostdlib -static` から `$(AS)` / `$(LD)` 直接呼出しへの分離)
-- [ ] [ulisp/bootstrap.sh](../../ulisp/bootstrap.sh) (GCC 実行部分のエラーハンドリングを `as` / `ld` 呼出しへ刷新)
-- [ ] [ulisp/test.sh](../../ulisp/test.sh) (ネイティブテストのコンパイル・リンクコマンド刷新)
-- [ ] [ulisp/test_backend.sh](../../ulisp/test_backend.sh) (バックエンド検証における as/ld 直接制御)
-- [ ] [ulisp/docs/guide_portable_build.md](../../ulisp/docs/guide_portable_build.md) (ビルド要件および依存ツールチェーンドキュメントの更新)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`AS = as`, `LD = ld` の導入、`$(CC) -nostdlib -static` から `$(AS)` / `$(LD)` 直接呼出しへの分離)
+- [x] [ulisp/bootstrap.sh](../../ulisp/bootstrap.sh) (GCC 実行部分のエラーハンドリングを `as` / `ld` 呼出しへ刷新)
+- [x] [ulisp/test.sh](../../ulisp/test.sh) (ネイティブテストのコンパイル・リンクコマンド刷新)
+- [x] [ulisp/test_backend.sh](../../ulisp/test_backend.sh) (バックエンド検証における as/ld 直接制御)
+- [x] [ulisp/docs/guide_portable_build.md](../../ulisp/docs/guide_portable_build.md) (ビルド要件および依存ツールチェーンドキュメントの更新)
 
 ---
 
@@ -51,7 +51,7 @@ Target Branch: `feat/615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocat
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] ネイティブ x86-64 AOT ビルドおよびブートストラップにおいて `gcc` コマンドが一切呼び出されないこと。
-- [ ] `as` および `ld` の直接呼出しにより、Stage 1〜3 のブートストラップ（Fixed Point 一致）が 100% 成功すること。
-- [ ] `make test` および全 Nanopass 単体テストが回帰なく正常終了すること。
-- [ ] ドキュメント上の依存ツールチェーン要件から「C コンパイラ」がネイティブ実行パスから除外されていること。
+- [x] ネイティブ x86-64 AOT ビルドおよびブートストラップにおいて `gcc` コマンドが一切呼び出されないこと。
+- [x] `as` および `ld` の直接呼出しにより、Stage 1〜3 のブートストラップ（Fixed Point 一致）が 100% 成功すること。
+- [x] `make test` および全 Nanopass 単体テストが回帰なく正常終了すること。
+- [x] ドキュメント上の依存ツールチェーン要件から「C コンパイラ」がネイティブ実行パスから除外されていること。

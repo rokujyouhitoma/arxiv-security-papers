@@ -37,7 +37,8 @@ run_bench() {
 
     # 1. Compile x86-64
     printf "%s\n" "$expr" | $ILISP "$COMPILER" > "$s_file"
-    gcc -nostdlib -static "$s_file" -o "$bin_x86"
+    as --64 "$s_file" -o "${bin_x86}.o"
+    ld -m elf_x86_64 -static "${bin_x86}.o" -o "$bin_x86"
     local x86_size=$(wc -c < "$bin_x86")
 
     # 2. Compile Portable C

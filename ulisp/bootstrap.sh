@@ -181,17 +181,26 @@ compile_asm() {
     local asm_file="$2"
     local bin_file="$3"
     local in_file="${4:-"$BUILD_DIR/ulisp_core.scm"}"
-    local gcc_err="$BUILD_DIR/gcc_err.log"
+    local obj_file="${asm_file%.s}.o"
+    local tool_err="$BUILD_DIR/as_ld_err.log"
     local rc=0
-    gcc -nostdlib -static "$asm_file" -o "$bin_file" > "$gcc_err" 2>&1 || rc=$?
+    as --64 "$asm_file" -o "$obj_file" > "$tool_err" 2>&1 || rc=$?
     if [ "$rc" -ne 0 ]; then
-        echo -e "\033[1;31m[ERROR] $stage_name: gcc assembly/link failed with exit code $rc:\033[0m" >&2
-        cat "$gcc_err" >&2
-        diagnose_stage_failure "$stage_name (gcc)" "$asm_file" "$rc" "Assembler/Linker failed to compile generated .s file" "$in_file"
-        rm -f "$gcc_err"
+        echo -e "\033[1;31m[ERROR] $stage_name: as (assembler) failed with exit code $rc:\033[0m" >&2
+        cat "$tool_err" >&2
+        diagnose_stage_failure "$stage_name (as)" "$asm_file" "$rc" "Assembler failed to compile generated .s file" "$in_file"
+        rm -f "$tool_err"
         exit 1
     fi
-    rm -f "$gcc_err"
+    ld -m elf_x86_64 -static "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo -e "\033[1;31m[ERROR] $stage_name: ld (linker) failed with exit code $rc:\033[0m" >&2
+        cat "$tool_err" >&2
+        diagnose_stage_failure "$stage_name (ld)" "$asm_file" "$rc" "Linker failed to link generated .o file" "$in_file"
+        rm -f "$tool_err"
+        exit 1
+    fi
+    rm -f "$tool_err"
 }
 
 run_stage_try() {
@@ -210,7 +219,7 @@ if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ] && [ "$
     echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
 elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ "${BOOTSTRAP_WITH_GOSH:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
     echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using native seed ($BOOT_BIN)..."
-    if run_stage_try "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s" "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm" && gcc -nostdlib -static "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/scheme-stage1" 2>/dev/null; then
+    if run_stage_try "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s" "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm" && as --64 "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/stage1.o" 2>/dev/null && ld -m elf_x86_64 -static "$BUILD_DIR/stage1.o" -o "$BUILD_DIR/scheme-stage1" 2>/dev/null; then
         echo "  -> Stage 1 successfully compiled with native seed."
     elif [ -n "$GOSH_BIN" ]; then
         echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed (e.g. exit code 139 / ABI drift). Automatically falling back to Gauche ($GOSH_BIN)...\033[0m"
@@ -267,7 +276,8 @@ verify_and_promote() {
         "$final_compiler" "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
         rm -f "$BUILD_DIR/smoke_in.scm"
     fi
-    gcc -nostdlib -static "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test"
+    as --64 "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test.o"
+    ld -m elf_x86_64 -static "$BUILD_DIR/smoke_test.o" -o "$BUILD_DIR/smoke_test"
     local smoke_out
     smoke_out="$(ULISP_PRINT_RESULT=1 "$BUILD_DIR/smoke_test" 2>/dev/null || true)"
     if [ "$smoke_out" = "42" ]; then

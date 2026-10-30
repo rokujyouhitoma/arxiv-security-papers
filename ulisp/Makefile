@@ -2,9 +2,16 @@
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_char test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental lint_sexpr test_lint_sexpr test_reader_eof
 
-CC = gcc
+AS ?= as
+LD ?= ld
+ASFLAGS ?= --64
+LDFLAGS ?= -m elf_x86_64 -static
+CC ?= gcc
 CFLAGS = -Wall -Wextra -O0 -g
 CFLAGS_JIT = -no-pie -Wall -O2
+
+%.o: %.s
+	$(AS) $(ASFLAGS) $< -o $@
 
 ROOT_DIR = $(shell dirname $(CURDIR))
 PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.venv/bin/python; else echo python3; fi)
@@ -201,7 +208,8 @@ test_library: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_library.scm > build/test_library_runner.scm
 	@$(RUN_SCHEME) build/test_library_runner.scm
-	$(CC) -nostdlib -static -o build/test_library build/test_library.s
+	$(AS) $(ASFLAGS) build/test_library.s -o build/test_library.o
+	$(LD) $(LDFLAGS) build/test_library.o -o build/test_library
 	@echo "=== Executing compiled library x86-64 binary ==="
 	@res=$$(./build/test_library); echo "Output: $$res"; test "$$res" = "260"
 	@echo "SUCCESS: library x86-64 output 260 matches expected!"
@@ -214,7 +222,8 @@ test_runtime: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_scheme_runtime.scm > build/test_runtime_input.scm
 	$(ULISP_COMPILER) build/test_runtime_input.scm > build/test_runtime.s
-	$(CC) -nostdlib -static build/test_runtime.s -o build/test_runtime
+	$(AS) $(ASFLAGS) build/test_runtime.s -o build/test_runtime.o
+	$(LD) $(LDFLAGS) build/test_runtime.o -o build/test_runtime
 	./build/test_runtime < /dev/null
 
 test_lvn: build/compiler_passes.scm
@@ -256,7 +265,8 @@ test_loop_reg: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_loop_register_allocation.scm > build/test_loop_reg_runner.scm
 	@$(RUN_SCHEME) build/test_loop_reg_runner.scm
-	$(CC) -nostdlib -static -o build/test_loop_reg build/test_loop_reg.s
+	$(AS) $(ASFLAGS) build/test_loop_reg.s -o build/test_loop_reg.o
+	$(LD) $(LDFLAGS) build/test_loop_reg.o -o build/test_loop_reg
 	@echo "=== Executing compiled loop_sum binary (1,000,000 iters) ==="
 	@res=$$(./build/test_loop_reg); echo "Output: $$res"; test "$$res" = "499999500000"
 	@echo "SUCCESS: loop_sum output 499999500000 matches expected exactly!"
@@ -265,7 +275,8 @@ test_branch_fusion: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_branch_fusion.scm > build/test_branch_fusion_runner.scm
 	@$(RUN_SCHEME) build/test_branch_fusion_runner.scm
-	$(CC) -nostdlib -static -o build/test_predicates_fusion build/test_predicates_fusion.s
+	$(AS) $(ASFLAGS) build/test_predicates_fusion.s -o build/test_predicates_fusion.o
+	$(LD) $(LDFLAGS) build/test_predicates_fusion.o -o build/test_predicates_fusion
 	@echo "=== Executing compiled predicates fusion binary ==="
 	@res=$$(./build/test_predicates_fusion); echo "Output: $$res"; test "$$res" = "255"
 	@echo "SUCCESS: branch fusion predicates output 255 (1+2+4+8+16+32+64+128) matches expected!"
@@ -274,15 +285,18 @@ test_inplace_shuffle: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_inplace_shuffle.scm > build/test_inplace_shuffle_runner.scm
 	@$(RUN_SCHEME) build/test_inplace_shuffle_runner.scm
-	$(CC) -nostdlib -static -o build/test_inplace_shuffle build/test_inplace_shuffle.s
+	$(AS) $(ASFLAGS) build/test_inplace_shuffle.s -o build/test_inplace_shuffle.o
+	$(LD) $(LDFLAGS) build/test_inplace_shuffle.o -o build/test_inplace_shuffle
 	@echo "=== Executing compiled inplace shuffle loop_sum binary ==="
 	@res=$$(./build/test_inplace_shuffle); echo "Output: $$res"; test "$$res" = "499999500000"
 	@echo "SUCCESS: inplace shuffle loop_sum output 499999500000 matches expected exactly!"
-	$(CC) -nostdlib -static -o build/test_swap_loop build/test_swap_loop.s
+	$(AS) $(ASFLAGS) build/test_swap_loop.s -o build/test_swap_loop.o
+	$(LD) $(LDFLAGS) build/test_swap_loop.o -o build/test_swap_loop
 	@echo "=== Executing compiled swap_loop binary ==="
 	@res=$$(./build/test_swap_loop); echo "Output: $$res"; test "$$res" = "10"
 	@echo "SUCCESS: swap_loop output 10 (swap 10 20 -> 20 10 -> returns b=10) matches expected exactly!"
-	$(CC) -nostdlib -static -o build/test_countdown build/test_countdown.s
+	$(AS) $(ASFLAGS) build/test_countdown.s -o build/test_countdown.o
+	$(LD) $(LDFLAGS) build/test_countdown.o -o build/test_countdown
 	@echo "=== Executing compiled countdown binary ==="
 	@res=$$(./build/test_countdown); echo "Output: $$res"; test "$$res" = "5050"
 	@echo "SUCCESS: countdown sum(1..100) output 5050 matches expected exactly!"
@@ -345,112 +359,128 @@ test_exceptions: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm tests/test_exceptions.scm > build/test_exn_input.scm
 	$(ULISP_COMPILER) build/test_exn_input.scm > build/test_exn.s
-	$(CC) -nostdlib -static build/test_exn.s -o build/test_exn
+	$(AS) $(ASFLAGS) build/test_exn.s -o build/test_exn.o
+	$(LD) $(LDFLAGS) build/test_exn.o -o build/test_exn
 	./build/test_exn
 
 test_values: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
 	$(ULISP_COMPILER) build/test_values_input.scm > build/test_values.s
-	$(CC) -nostdlib -static build/test_values.s -o build/test_values
+	$(AS) $(ASFLAGS) build/test_values.s -o build/test_values.o
+	$(LD) $(LDFLAGS) build/test_values.o -o build/test_values
 	./build/test_values
 
 test_call_cc: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_call_cc.scm > build/test_call_cc_input.scm
 	$(ULISP_COMPILER) build/test_call_cc_input.scm > build/test_call_cc.s
-	$(CC) -nostdlib -static build/test_call_cc.s -o build/test_call_cc
+	$(AS) $(ASFLAGS) build/test_call_cc.s -o build/test_call_cc.o
+	$(LD) $(LDFLAGS) build/test_call_cc.o -o build/test_call_cc
 	./build/test_call_cc
 
 test_eqv: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_eqv.scm > build/test_eqv_input.scm
 	$(ULISP_COMPILER) build/test_eqv_input.scm > build/test_eqv.s
-	$(CC) -nostdlib -static build/test_eqv.s -o build/test_eqv
+	$(AS) $(ASFLAGS) build/test_eqv.s -o build/test_eqv.o
+	$(LD) $(LDFLAGS) build/test_eqv.o -o build/test_eqv
 	./build/test_eqv
 
 test_syntax_rules: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
 	$(ULISP_COMPILER) build/test_syntax_rules_input.scm > build/test_syntax_rules.s
-	$(CC) -nostdlib -static build/test_syntax_rules.s -o build/test_syntax_rules
+	$(AS) $(ASFLAGS) build/test_syntax_rules.s -o build/test_syntax_rules.o
+	$(LD) $(LDFLAGS) build/test_syntax_rules.o -o build/test_syntax_rules
 	./build/test_syntax_rules
 
 test_ports: $(COMPILER_DEP)
 	@mkdir -p build
 	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_ports.scm > build/test_ports_input.scm
 	$(ULISP_COMPILER) build/test_ports_input.scm > build/test_ports.s
-	$(CC) -nostdlib -static build/test_ports.s -o build/test_ports
+	$(AS) $(ASFLAGS) build/test_ports.s -o build/test_ports.o
+	$(LD) $(LDFLAGS) build/test_ports.o -o build/test_ports
 	./build/test_ports
 
 test_reader_eof: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_reader_eof.scm > build/test_reader_eof_input.scm
 	$(ULISP_COMPILER) build/test_reader_eof_input.scm > build/test_reader_eof.s
-	$(CC) -nostdlib -static build/test_reader_eof.s -o build/test_reader_eof
+	$(AS) $(ASFLAGS) build/test_reader_eof.s -o build/test_reader_eof.o
+	$(LD) $(LDFLAGS) build/test_reader_eof.o -o build/test_reader_eof
 	./build/test_reader_eof
 
 test_record: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_record.scm > build/test_record_input.scm
 	$(ULISP_COMPILER) build/test_record_input.scm > build/test_record.s
-	$(CC) -nostdlib -static build/test_record.s -o build/test_record
+	$(AS) $(ASFLAGS) build/test_record.s -o build/test_record.o
+	$(LD) $(LDFLAGS) build/test_record.o -o build/test_record
 	./build/test_record
 
 test_promise: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_promise.scm > build/test_promise_input.scm
 	$(ULISP_COMPILER) build/test_promise_input.scm > build/test_promise.s
-	$(CC) -nostdlib -static build/test_promise.s -o build/test_promise
+	$(AS) $(ASFLAGS) build/test_promise.s -o build/test_promise.o
+	$(LD) $(LDFLAGS) build/test_promise.o -o build/test_promise
 	./build/test_promise
 
 test_case_lambda: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_case_lambda.scm > build/test_case_lambda_input.scm
 	$(ULISP_COMPILER) build/test_case_lambda_input.scm > build/test_case_lambda.s
-	$(CC) -nostdlib -static build/test_case_lambda.s -o build/test_case_lambda
+	$(AS) $(ASFLAGS) build/test_case_lambda.s -o build/test_case_lambda.o
+	$(LD) $(LDFLAGS) build/test_case_lambda.o -o build/test_case_lambda
 	./build/test_case_lambda
 
 test_stdlib: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_stdlib_r7rs.scm > build/test_stdlib_input.scm
 	$(ULISP_COMPILER) build/test_stdlib_input.scm > build/test_stdlib.s
-	$(CC) -nostdlib -static build/test_stdlib.s -o build/test_stdlib
+	$(AS) $(ASFLAGS) build/test_stdlib.s -o build/test_stdlib.o
+	$(LD) $(LDFLAGS) build/test_stdlib.o -o build/test_stdlib
 	./build/test_stdlib
 
 test_base_procedures: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_base_procedures.scm > build/test_base_procedures_input.scm
 	$(ULISP_COMPILER) build/test_base_procedures_input.scm > build/test_base_procedures.s
-	$(CC) -nostdlib -static build/test_base_procedures.s -o build/test_base_procedures
+	$(AS) $(ASFLAGS) build/test_base_procedures.s -o build/test_base_procedures.o
+	$(LD) $(LDFLAGS) build/test_base_procedures.o -o build/test_base_procedures
 	./build/test_base_procedures
 
 test_char: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_char.scm > build/test_char_input.scm
 	$(ULISP_COMPILER) build/test_char_input.scm > build/test_char.s
-	$(CC) -nostdlib -static build/test_char.s -o build/test_char
+	$(AS) $(ASFLAGS) build/test_char.s -o build/test_char.o
+	$(LD) $(LDFLAGS) build/test_char.o -o build/test_char
 	./build/test_char
 
 test_process_context: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_process_context.scm > build/test_process_context_input.scm
 	$(ULISP_COMPILER) build/test_process_context_input.scm > build/test_process_context.s
-	$(CC) -nostdlib -static build/test_process_context.s -o build/test_process_context
+	$(AS) $(ASFLAGS) build/test_process_context.s -o build/test_process_context.o
+	$(LD) $(LDFLAGS) build/test_process_context.o -o build/test_process_context
 	./build/test_process_context
 
 test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_gc_growth.scm > build/test_gc_growth_input.scm
 	$(ULISP_COMPILER) build/test_gc_growth_input.scm > build/test_gc_growth.s
-	$(CC) -nostdlib -static build/test_gc_growth.s -o build/test_gc_growth
+	$(AS) $(ASFLAGS) build/test_gc_growth.s -o build/test_gc_growth.o
+	$(LD) $(LDFLAGS) build/test_gc_growth.o -o build/test_gc_growth
 	./build/test_gc_growth
 
 test_gc_profile: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_gc_profile.scm > build/test_gc_profile_input.scm
 	$(ULISP_COMPILER) build/test_gc_profile_input.scm > build/test_gc_profile.s
-	$(CC) -nostdlib -static build/test_gc_profile.s -o build/test_gc_profile
+	$(AS) $(ASFLAGS) build/test_gc_profile.s -o build/test_gc_profile.o
+	$(LD) $(LDFLAGS) build/test_gc_profile.o -o build/test_gc_profile
 	@echo "--- 1. Testing Default (Standard) Profile ---"
 	env -u ULISP_GC_PROFILE ./build/test_gc_profile
 	@echo "--- 2. Testing ULISP_GC_PROFILE=compiler ---"
@@ -463,7 +493,8 @@ test_gc_hybrid: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_gc_hybrid.scm > build/test_gc_hybrid_input.scm
 	$(ULISP_COMPILER) build/test_gc_hybrid_input.scm > build/test_gc_hybrid.s
-	$(CC) -nostdlib -static build/test_gc_hybrid.s -o build/test_gc_hybrid
+	$(AS) $(ASFLAGS) build/test_gc_hybrid.s -o build/test_gc_hybrid.o
+	$(LD) $(LDFLAGS) build/test_gc_hybrid.o -o build/test_gc_hybrid
 	@echo "--- 1. Testing Hybrid Exact-Conservative Scanning (Standard) ---"
 	./build/test_gc_hybrid
 	@echo "--- 2. Testing Hybrid Scanning with DEBUG_GC=1 ---"
@@ -475,13 +506,15 @@ test_gc_stress: $(COMPILER_DEP)
 	@echo "--- 1. Testing Native x86-64 Backend with ULISP_GC_STRESS=1 ---"
 	cat $(ULISP_STD_LIBS) tests/test_gc_stress.scm > build/test_gc_stress_input.scm
 	$(ULISP_COMPILER) build/test_gc_stress_input.scm > build/test_gc_stress_native.s
-	$(CC) -nostdlib -static build/test_gc_stress_native.s -o build/test_gc_stress_native
+	$(AS) $(ASFLAGS) build/test_gc_stress_native.s -o build/test_gc_stress_native.o
+	$(LD) $(LDFLAGS) build/test_gc_stress_native.o -o build/test_gc_stress_native
 	ULISP_GC_STRESS=1 ./build/test_gc_stress_native
 	@echo "--- 2. Testing Native x86-64 Backend with (!gc stress) Directive ---"
 	echo '(!gc stress)' > build/test_gc_stress_directive_input.scm
 	cat $(ULISP_STD_LIBS) tests/test_gc_stress.scm >> build/test_gc_stress_directive_input.scm
 	$(ULISP_COMPILER) build/test_gc_stress_directive_input.scm > build/test_gc_stress_directive.s
-	$(CC) -nostdlib -static build/test_gc_stress_directive.s -o build/test_gc_stress_directive
+	$(AS) $(ASFLAGS) build/test_gc_stress_directive.s -o build/test_gc_stress_directive.o
+	$(LD) $(LDFLAGS) build/test_gc_stress_directive.o -o build/test_gc_stress_directive
 	./build/test_gc_stress_directive
 	@echo "--- 3. Testing Portable C Backend with ULISP_GC_STRESS=1 ---"
 	echo '(!target c)' > build/test_gc_stress_c_input.scm
@@ -523,8 +556,11 @@ build/stage1.s: compiler.scm build/ulisp_core.scm
 	fi
 
 
-build/scheme-stage1: build/stage1.s
-	$(CC) -nostdlib -static $< -o $@
+build/stage1.o: build/stage1.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/scheme-stage1: build/stage1.o
+	$(LD) $(LDFLAGS) $< -o $@
 
 stage1: build/scheme-stage1
 bootstrap_stage1: stage1
@@ -533,8 +569,11 @@ build/stage2.s: build/scheme-stage1 build/ulisp_core.scm
 	@mkdir -p build
 	./build/scheme-stage1 < build/ulisp_core.scm > $@
 
-build/scheme-stage2: build/stage2.s
-	$(CC) -nostdlib -static $< -o $@
+build/stage2.o: build/stage2.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/scheme-stage2: build/stage2.o
+	$(LD) $(LDFLAGS) $< -o $@
 
 stage2: build/scheme-stage2
 bootstrap_stage2: stage2
@@ -543,8 +582,11 @@ build/stage3.s: build/scheme-stage2 build/ulisp_core.scm
 	@mkdir -p build
 	./build/scheme-stage2 < build/ulisp_core.scm > $@
 
-build/scheme-stage3: build/stage3.s
-	$(CC) -nostdlib -static $< -o $@
+build/stage3.o: build/stage3.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/scheme-stage3: build/stage3.o
+	$(LD) $(LDFLAGS) $< -o $@
 
 stage3: build/scheme-stage3
 bootstrap_stage3: stage3
@@ -597,7 +639,7 @@ build/ulisp_stdlib.s: compiler.scm stdlib_entry.scm $(ULISP_STD_LIBS)
 	$(call COMPILE_SCM_TO_S,build/stdlib_input.scm,$@)
 
 build/ulisp_stdlib.o: build/ulisp_stdlib.s
-	$(CC) -c $< -o $@
+	$(AS) $(ASFLAGS) $< -o $@
 
 build/ulisp_compiler.s: compiler.scm compiler_entry.scm $(COMPILER_BASE) $(FRONTEND_PASSES) $(LIR_PASSES) $(BACKEND_PASSES) compiler/driver.scm
 	@mkdir -p build
@@ -607,19 +649,20 @@ build/ulisp_compiler.s: compiler.scm compiler_entry.scm $(COMPILER_BASE) $(FRONT
 	$(call COMPILE_SCM_TO_S,build/compiler_input.scm,$@)
 
 build/ulisp_compiler.o: build/ulisp_compiler.s
-	$(CC) -c $< -o $@
+	$(AS) $(ASFLAGS) $< -o $@
 
 build/ulisp-fast: build/ulisp_stdlib.o build/ulisp_compiler.o
 	@mkdir -p build
 	@echo "=== Statically Linking Split Objects (ulisp_stdlib.o + ulisp_compiler.o) ==="
-	$(CC) -nostdlib -static $^ -o $@
+	$(LD) $(LDFLAGS) $^ -o $@
 
 test_split_link: build/ulisp-fast
 	@echo "=== Verifying 2-Split Statically Linked Compiler Binary (build/ulisp-fast) ==="
 	cat $(ULISP_STD_LIBS) > build/test_split_input.scm
 	@echo '(display "Hello from split-linked ULisp!\n") (display (+ 123 456)) (newline)' >> build/test_split_input.scm
 	./build/ulisp-fast build/test_split_input.scm > build/test_split.s
-	$(CC) -nostdlib -static build/test_split.s -o build/test_split
+	$(AS) $(ASFLAGS) build/test_split.s -o build/test_split.o
+	$(LD) $(LDFLAGS) build/test_split.o -o build/test_split
 	@echo "Executing compiled test binary:"
 	@res=$$(./build/test_split | tr -d '\r\n'); \
 	echo "Output: $$res"; \
@@ -639,7 +682,7 @@ build/compiler_base.s: $(COMPILER_BASE) build/meta/compiler_env.sbi
 	$(call COMPILE_SCM_TO_S,build/compiler_base_in.scm,$@)
 
 build/compiler_base.o: build/compiler_base.s
-	$(CC) -c $< -o $@
+	$(AS) $(ASFLAGS) $< -o $@
 
 build/frontend_passes.s: $(FRONTEND_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
@@ -649,7 +692,7 @@ build/frontend_passes.s: $(FRONTEND_PASSES) build/meta/compiler_env.sbi
 	$(call COMPILE_SCM_TO_S,build/frontend_passes_in.scm,$@)
 
 build/frontend_passes.o: build/frontend_passes.s
-	$(CC) -c $< -o $@
+	$(AS) $(ASFLAGS) $< -o $@
 
 build/lir_passes.s: $(LIR_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
@@ -659,7 +702,7 @@ build/lir_passes.s: $(LIR_PASSES) build/meta/compiler_env.sbi
 	$(call COMPILE_SCM_TO_S,build/lir_passes_in.scm,$@)
 
 build/lir_passes.o: build/lir_passes.s
-	$(CC) -c $< -o $@
+	$(AS) $(ASFLAGS) $< -o $@
 
 build/backend_passes.s: $(BACKEND_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
@@ -669,7 +712,7 @@ build/backend_passes.s: $(BACKEND_PASSES) build/meta/compiler_env.sbi
 	$(call COMPILE_SCM_TO_S,build/backend_passes_in.scm,$@)
 
 build/backend_passes.o: build/backend_passes.s
-	$(CC) -c $< -o $@
+	$(AS) $(ASFLAGS) $< -o $@
 
 build/compiler_driver.s: compiler/driver.scm build/meta/compiler_env.sbi
 	@mkdir -p build
@@ -679,7 +722,7 @@ build/compiler_driver.s: compiler/driver.scm build/meta/compiler_env.sbi
 	$(call COMPILE_SCM_TO_S,build/compiler_driver_in.scm,$@)
 
 build/compiler_driver.o: build/compiler_driver.s
-	$(CC) -c $< -o $@
+	$(AS) $(ASFLAGS) $< -o $@
 
 MODULAR_COMPILER_OBJS = build/ulisp_stdlib.o \
                         build/compiler_base.o \
@@ -691,7 +734,8 @@ MODULAR_COMPILER_OBJS = build/ulisp_stdlib.o \
 build/ulisp-modular: $(MODULAR_COMPILER_OBJS)
 	@mkdir -p build bin
 	@echo "=== Statically Linking Modular ULisp Binary ($@) ==="
-	$(CC) -nostdlib -static $^ -o $@
+	$(LD) $(LDFLAGS) $^ -o $@
+	cp $@ bin/ulisp-modular
 	cp $@ bin/ulisp-modular
 
 test_incremental: build/ulisp-modular
@@ -788,9 +832,12 @@ build/ulisp_jit.s: build/ulisp_jit_combined.scm compiler.scm
 
 
 
-bin/ulisp-jit: build/ulisp_jit.s
+build/ulisp_jit.o: build/ulisp_jit.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+bin/ulisp-jit: build/ulisp_jit.o
 	@mkdir -p bin
-	$(CC) -nostdlib -static -o $@ $<
+	$(LD) $(LDFLAGS) -o $@ $<
 	@echo "Successfully compiled native standalone ulisp-jit binary: $@"
 
 jit: bin/ulisp-jit
@@ -802,7 +849,8 @@ run_jit: bin/ulisp-jit
 	@echo "=== [2/2] Verifying ulisp-jit AOT Compilation ==="
 	@printf "(!compile)\n(define (fact n) (if (<= n 1) 1 (* n (fact (- n 1)))))\n(fact 5)\n" > build/test_jit_aot.scm
 	@./bin/ulisp-jit build/test_jit_aot.scm > build/test_jit_aot.s
-	@$(CC) -nostdlib -static -o build/test_jit_aot build/test_jit_aot.s
+	@$(AS) $(ASFLAGS) build/test_jit_aot.s -o build/test_jit_aot.o
+	@$(LD) $(LDFLAGS) -o build/test_jit_aot build/test_jit_aot.o
 	@test "$$(./build/test_jit_aot)" = "120"
 	@echo "SUCCESS: ulisp-jit AOT compilation verified (fact 5) = 120!"
 
@@ -848,7 +896,7 @@ test: test_lint_sexpr test_reader_eof test_passes test_pass_manager test_profile
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log
 	@if [ -d build ]; then \
-		find build -mindepth 1 ! -name 'scheme-stage*' ! -name 'stage*.s' -delete; \
+		find build -mindepth 1 ! -name 'scheme-stage*' ! -name 'stage*.s' ! -name 'stage*.o' -delete; \
 	fi
 
 distclean:

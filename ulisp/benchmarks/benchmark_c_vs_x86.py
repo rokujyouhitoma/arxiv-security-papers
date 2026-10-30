@@ -299,9 +299,11 @@ def compile_scheme_to_file(in_code: str, out_path: str):
 
 def compile_x86(workload_id: str, expr: str) -> str:
     s_path = os.path.join(BUILD_DIR, f"{workload_id}.s")
+    o_path = os.path.join(BUILD_DIR, f"{workload_id}.o")
     bin_path = os.path.join(BUILD_DIR, f"{workload_id}_x86")
     compile_scheme_to_file(expr, s_path)
-    run_cmd(["gcc", "-nostdlib", "-static", s_path, "-o", bin_path])
+    run_cmd(["as", "--64", s_path, "-o", o_path])
+    run_cmd(["ld", "-m", "elf_x86_64", "-static", o_path, "-o", bin_path])
     return bin_path
 
 
@@ -589,7 +591,7 @@ ULisp ネイティブコンパイラ（`ulisp/bin/ulisp-boot`）によって生�
 |---|---|---|---|:---:|---|
 """
     for r in results:
-        md += f"| **{r['name']}** | {r['x86']['size_bytes']:,} B | {r['ulisp_c']['size_bytes']:,} B | {r['pure_c']['size_bytes']:,} B | **なし (Freestanding)** | `gcc -nostdlib -static` |\n"
+        md += f"| **{r['name']}** | {r['x86']['size_bytes']:,} B | {r['ulisp_c']['size_bytes']:,} B | {r['pure_c']['size_bytes']:,} B | **なし (Freestanding)** | `ld -m elf_x86_64 -static` |\n"
 
     if perf_enabled:
         md += """
@@ -932,7 +934,7 @@ def main():
 
     md_content += """
 > **注記**:
-> - x86-64 Native は `gcc -nostdlib -static` でリンクされた libc 依存ゼロの Freestanding バイナリです。
+> - x86-64 Native は `as` / `ld -m elf_x86_64 -static` で直接アセンブル・リンクされた libc 依存ゼロの Freestanding バイナリです。
 > - ULisp C は Pass 160 で出力された自己完結型 C99 ソースを `gcc -O2` でビルドしたバイナリです。
 > - Pure C は同一アルゴリズムの手書き最適化 C99 コードを `gcc -O2` でビルドした理論上限ベースラインです。
 > - IPC（Instructions Per Cycle）、Branch Miss %、Cache Miss % は Linux `perf stat` ハードウェアカウンタによる測定値です。

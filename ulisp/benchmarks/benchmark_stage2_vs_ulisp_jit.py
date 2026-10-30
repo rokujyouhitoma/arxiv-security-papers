@@ -106,8 +106,10 @@ def benchmark_aot_compiled_binary(compiler_bin, code, iterations=50, is_jit=Fals
     # Compile to .s
     with open(s_path, "w") as out_f:
         subprocess.run([str(compiler_bin), in_path], stdout=out_f, check=True)
-    # Compile to Freestanding ELF
-    subprocess.run(["gcc", "-nostdlib", "-static", s_path, "-o", exe_path], check=True)
+    # Assemble and Link to Freestanding ELF
+    o_path = exe_path.with_suffix(".o")
+    subprocess.run(["as", "--64", str(s_path), "-o", str(o_path)], check=True)
+    subprocess.run(["ld", "-m", "elf_x86_64", "-static", str(o_path), "-o", str(exe_path)], check=True)
 
     times = []
     cmd = [exe_path]

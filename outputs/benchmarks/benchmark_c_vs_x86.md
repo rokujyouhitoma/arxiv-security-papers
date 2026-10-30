@@ -41,7 +41,7 @@
 | **Vector Indexing & Traverse (100k)** | 2.95 | 0.12% | 78.57% | 1.78 | 0.98 |
 
 > **注記**:
-> - x86-64 Native は `gcc -nostdlib -static` でリンクされた libc 依存ゼロの Freestanding バイナリです。
+> - x86-64 Native は `as` / `ld -m elf_x86_64 -static` で直接アセンブル・リンクされた libc 依存ゼロの Freestanding バイナリです。
 > - ULisp C は Pass 160 で出力された自己完結型 C99 ソースを `gcc -O2` でビルドしたバイナリです。
 > - Pure C は同一アルゴリズムの手書き最適化 C99 コードを `gcc -O2` でビルドした理論上限ベースラインです。
 > - IPC（Instructions Per Cycle）、Branch Miss %、Cache Miss % は Linux `perf stat` ハードウェアカウンタによる測定値です。

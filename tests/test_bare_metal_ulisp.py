@@ -25,6 +25,24 @@ def get_compiler_cmd():
     return ["python3", "-m", "ilisp", COMPILER_SCM]
 
 
+def link_asm_to_bin(s_path, bin_path):
+    o_path = s_path.rsplit(".", 1)[0] + ".o"
+    as_res = subprocess.run(
+        ["as", "--64", s_path, "-o", o_path],
+        capture_output=True,
+        text=True,
+    )
+    assert as_res.returncode == 0, f"Assembly failed: {as_res.stderr}"
+    ld_res = subprocess.run(
+        ["ld", "-m", "elf_x86_64", "-static", o_path, "-o", bin_path],
+        capture_output=True,
+        text=True,
+    )
+    assert ld_res.returncode == 0, f"Linking failed: {ld_res.stderr}"
+    assert os.path.exists(bin_path)
+    return ld_res
+
+
 def test_bare_metal_freestanding_execution():
     """Verify that a Scheme program linked with posix.scm runs under -nostdlib -static."""
     assert os.path.exists(COMPILER_SCM), f"Compiler not found: {COMPILER_SCM}"
@@ -69,12 +87,7 @@ def test_bare_metal_freestanding_execution():
         assert os.path.exists(s_path)
 
         # 2. Assemble and link with -nostdlib -static
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
         assert os.path.exists(bin_path)
 
         # 3. Verify static ELF without dynamic loader
@@ -131,12 +144,7 @@ def test_bare_metal_recursive_computation():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         run_res = subprocess.run([bin_path], capture_output=True)
         assert run_res.returncode == 0
@@ -214,12 +222,7 @@ def test_bare_metal_exact_gc_stackmap_unboxed():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         run_res = subprocess.run([bin_path], capture_output=True)
         assert run_res.returncode == 0
@@ -269,12 +272,7 @@ def test_buffered_io_syscall_reduction():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         # Run with strace counting write syscalls
         strace_res = subprocess.run(
@@ -352,12 +350,7 @@ def test_bare_metal_escape_analysis_stack_promotion():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         run_res = subprocess.run([bin_path], capture_output=True)
         assert run_res.returncode == 0
@@ -439,12 +432,7 @@ def test_bare_metal_nursery_generational_gc():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         run_res = subprocess.run([bin_path], capture_output=True)
         assert run_res.returncode == 0
@@ -494,12 +482,7 @@ def test_bare_metal_gc_directive_default_all():
             assert ".space 256" in asm_content
             assert "ulisp_gc_collect:" in asm_content
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         run_res = subprocess.run([bin_path], capture_output=True)
         assert run_res.returncode == 0
@@ -552,12 +535,7 @@ def test_bare_metal_gc_directive_none_arena():
             assert "ulisp_gc_collect:" not in asm_content
             assert "12884901888" in asm_content
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         run_res = subprocess.run([bin_path], capture_output=True)
         assert run_res.returncode == 0
@@ -606,12 +584,7 @@ def test_bare_metal_gc_directive_dual_space():
             assert "134217728" in asm_content
             assert "8589934592" not in asm_content
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         run_res = subprocess.run([bin_path], capture_output=True)
         assert run_res.returncode == 0
@@ -672,12 +645,7 @@ def test_bare_metal_automatic_gc_stress():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        link_res = subprocess.run(
-            ["gcc", "-nostdlib", "-static", s_path, "-o", bin_path],
-            capture_output=True,
-            text=True,
-        )
-        assert link_res.returncode == 0, f"Linking failed: {link_res.stderr}"
+        link_asm_to_bin(s_path, bin_path)
 
         run_res = subprocess.run([bin_path], capture_output=True)
         assert run_res.returncode == 0

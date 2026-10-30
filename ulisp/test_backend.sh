@@ -21,7 +21,10 @@ else
     PYTHON_BIN="python3"
 fi
 ILISP="${ILISP:-$PYTHON_BIN -m ilisp}"
-CC="${CC:-gcc}"
+AS="${AS:-as}"
+LD="${LD:-ld}"
+ASFLAGS="${ASFLAGS:---64}"
+LDFLAGS="${LDFLAGS:--m elf_x86_64 -static}"
 
 # Prefer native ulisp-boot if available, as in test.sh
 if [ -x "bin/ulisp-boot" ]; then
@@ -33,6 +36,7 @@ else
 fi
 
 TMP_S="build/tmp_backend_out.s"
+TMP_O="build/tmp_backend_out.o"
 TMP_BIN="build/tmp_backend_bin"
 mkdir -p build
 
@@ -51,7 +55,7 @@ run_backend_native_test() {
 
     # Ingest Canonical LIR directly, target x86_64 native backend
     if cat "$fixture_file" | $COMPILER_EXEC > "$TMP_S" 2>/dev/null; then
-        if $CC -nostdlib -static -o "$TMP_BIN" "$TMP_S" 2>/dev/null; then
+        if $AS $ASFLAGS "$TMP_S" -o "$TMP_O" 2>/dev/null && $LD $LDFLAGS "$TMP_O" -o "$TMP_BIN" 2>/dev/null; then
             local actual_output
             actual_output=$(env ULISP_PRINT_RESULT=1 "$TMP_BIN" 2>/dev/null || true)
             if [ "$actual_output" = "$expected_output" ]; then
@@ -69,7 +73,7 @@ run_backend_native_test() {
         echo "  [FAIL] $test_name (LIR Ingestion failed)"
         FAILED=$((FAILED + 1))
     fi
-    rm -f "$TMP_S" "$TMP_BIN"
+    rm -f "$TMP_S" "$TMP_O" "$TMP_BIN"
 }
 
 echo "--- Group 1: Direct LIR Ingestion -> x86-64 Backend Tests ---"
