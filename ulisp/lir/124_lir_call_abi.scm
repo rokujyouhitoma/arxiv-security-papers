@@ -111,6 +111,10 @@
          (cur-params-entry (assq '%num-params env))
          (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
          (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
+         (cur-fn-entry (assq '%current-func env))
+         (is-self-call (and cur-fn-entry (eq? (cdr cur-fn-entry) label)))
+         (loop-head-entry (and is-self-call (assq '%self-loop-head env)))
+         (self-loop-head (if loop-head-entry (cdr loop-head-entry) #f))
          (direct-simple? (and (<= num-args 6) (every-direct-simple-arg? args env))))
     (if direct-simple?
         ;; Fast path: All arguments are immediate constants or stack variables (no temp stack spill needed)
@@ -121,9 +125,11 @@
                   (emit-direct-simple-arg! (car as) (list-ref *arg-registers* i) env)
                   (loop (cdr as) (+ i 1)))))
           (if can-tco?
-              (begin
-                (emit-lir! (list '%mov '%rax (* num-args 4)))
-                (emit-lir! (list '%direct-jump label)))
+              (if self-loop-head
+                  (emit-lir! (list '%jump self-loop-head))
+                  (begin
+                    (emit-lir! (list '%mov '%rax (* num-args 4)))
+                    (emit-lir! (list '%direct-jump label))))
               (let* ((bitmap (compute-stackmap-bitmap frame-shift (- 0 frame-shift) '() env))
                      (safepoint-lbl (new-safepoint-label!)))
                 (record-safepoint! safepoint-lbl frame-shift bitmap)
@@ -160,8 +166,11 @@
                             (emit-lir! (list '%load '%r11 '%rsp temp-offset))
                             (emit-lir! (list '%store '%rsp param-offset '%r11))
                             (loop (+ i 1))))))
-                (emit-lir! (list '%mov '%rax (* num-args 4)))
-                (emit-lir! (list '%direct-jump label)))
+                (if self-loop-head
+                    (emit-lir! (list '%jump self-loop-head))
+                    (begin
+                      (emit-lir! (list '%mov '%rax (* num-args 4)))
+                      (emit-lir! (list '%direct-jump label)))))
 
               ;; --- NON-TAIL DIRECT CALL ---
               (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))

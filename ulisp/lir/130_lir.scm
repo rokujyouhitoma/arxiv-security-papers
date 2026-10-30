@@ -272,13 +272,18 @@
                   (loop (+ i 1)))))
           (track-lir-si! callee-si)
           (emit-lir! '(%store %rsp -16 %rax))
-          ;; Store incoming argument registers into their callee stack slots
-          (let loop ((i 0))
-            (if (< i num-reg-params)
-                (begin
-                  (emit-lir! (list '%store '%rsp (- -24 (* 8 i)) (list-ref *arg-registers* i)))
-                  (loop (+ i 1)))))
-          (lir-compile-expr body callee-si callee-env #t)
+          (let ((loop-head-lbl (unique-label-sym (string-append "L_loop_head_" (if (symbol? label) (symbol->string label) "fn") "_"))))
+            (emit-lir! (list '%label loop-head-lbl))
+            ;; Store incoming argument registers into their callee stack slots
+            (let loop ((i 0))
+              (if (< i num-reg-params)
+                  (begin
+                    (emit-lir! (list '%store '%rsp (- -24 (* 8 i)) (list-ref *arg-registers* i)))
+                    (loop (+ i 1)))))
+            (let ((callee-env-with-self (cons (cons '%current-func label)
+                                              (cons (cons '%self-loop-head loop-head-lbl)
+                                                    callee-env))))
+              (lir-compile-expr body callee-si callee-env-with-self #t)))
           (emit-lir! '(%return))
           (let* ((needed-frame (- 0 (car *lir-min-si*)))
                  (frame-size (align-frame-shift needed-frame))

@@ -10758,6 +10758,10 @@
          (cur-params-entry (assq '%num-params env))
          (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
          (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
+         (cur-fn-entry (assq '%current-func env))
+         (is-self-call (and cur-fn-entry (eq? (cdr cur-fn-entry) label)))
+         (loop-head-entry (and is-self-call (assq '%self-loop-head env)))
+         (self-loop-head (if loop-head-entry (cdr loop-head-entry) #f))
          (direct-simple? (and (<= num-args 6) (every-direct-simple-arg? args env))))
     (if direct-simple?
         ;; Fast path: All arguments are immediate constants or stack variables (no temp stack spill needed)
@@ -10768,9 +10772,11 @@
                   (emit-direct-simple-arg! (car as) (list-ref *arg-registers* i) env)
                   (loop (cdr as) (+ i 1)))))
           (if can-tco?
-              (begin
-                (emit-lir! (list '%mov '%rax (* num-args 4)))
-                (emit-lir! (list '%direct-jump label)))
+              (if self-loop-head
+                  (emit-lir! (list '%jump self-loop-head))
+                  (begin
+                    (emit-lir! (list '%mov '%rax (* num-args 4)))
+                    (emit-lir! (list '%direct-jump label))))
               (let* ((bitmap (compute-stackmap-bitmap frame-shift (- 0 frame-shift) '() env))
                      (safepoint-lbl (new-safepoint-label!)))
                 (record-safepoint! safepoint-lbl frame-shift bitmap)
@@ -10807,8 +10813,11 @@
                             (emit-lir! (list '%load '%r11 '%rsp temp-offset))
                             (emit-lir! (list '%store '%rsp param-offset '%r11))
                             (loop (+ i 1))))))
-                (emit-lir! (list '%mov '%rax (* num-args 4)))
-                (emit-lir! (list '%direct-jump label)))
+                (if self-loop-head
+                    (emit-lir! (list '%jump self-loop-head))
+                    (begin
+                      (emit-lir! (list '%mov '%rax (* num-args 4)))
+                      (emit-lir! (list '%direct-jump label)))))
 
               ;; --- NON-TAIL DIRECT CALL ---
               (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
@@ -11157,6 +11166,62 @@
            #f)))
     (else #f)))
 
+(define (cont-extract-int val)
+  (cond
+    ((integer? val) val)
+    ((and (pair? val) (eq? (car val) '%unbox-fixnum) (integer? (cadr val)))
+     (cadr val))
+    (else #f)))
+
+(define (cont-can-unroll-counting-loop? params cmp-expr else-recurse f-name)
+  (and (= (length params) 2)
+       (pair? cmp-expr)
+       (memq (car cmp-expr) '(= >= <= < > eq?))
+       (let* ((p0 (car params))
+              (p1 (cadr params))
+              (lhs (cadr cmp-expr))
+              (rhs (caddr cmp-expr))
+              (limit (cond
+                       ((eq? lhs p0) (cont-extract-int rhs))
+                       ((eq? rhs p0) (cont-extract-int lhs))
+                       (else #f))))
+         (and limit
+              (>= limit 16)
+              (zero? (modulo limit 8))
+              (let* ((call-form
+                      (cond
+                        ((and (pair? else-recurse) (eq? (car else-recurse) '%cont-call))
+                         else-recurse)
+                        ((and (pair? else-recurse)
+                              (eq? (car else-recurse) 'let)
+                              (pair? (cddr else-recurse))
+                              (pair? (caddr else-recurse))
+                              (eq? (car (caddr else-recurse)) '%cont-call))
+                         (caddr else-recurse))
+                        (else #f)))
+                     (bindings
+                      (if (and (pair? else-recurse) (eq? (car else-recurse) 'let))
+                          (cadr else-recurse)
+                          '())))
+                (and call-form
+                     (eq? (cadr call-form) f-name)
+                     (let* ((raw-a0 (caddr call-form))
+                            (raw-a1 (cadddr call-form))
+                            (resolve-arg
+                             (lambda (a)
+                               (let ((b (assq a bindings)))
+                                 (if b (cadr b) a))))
+                            (e0 (resolve-arg raw-a0))
+                            (e1 (resolve-arg raw-a1)))
+                       (and (pair? e0)
+                            (memq (car e0) '(+ %raw-add))
+                            (or (and (eq? (cadr e0) p0) (eqv? (caddr e0) 1))
+                                (and (eqv? (cadr e0) 1) (eq? (caddr e0) p0)))
+                            (pair? e1)
+                            (memq (car e1) '(+ %raw-add))
+                            (or (and (eq? (cadr e1) p0) (eq? (caddr e1) p1))
+                                (and (eq? (cadr e1) p1) (eq? (caddr e1) p0)))))))))))
+
 (define (cont-body-has-external-call? expr f-name)
   (cond
     ((null? expr) #f)
@@ -11264,10 +11329,31 @@
                                      done-lbl lir-cmp-true-cc next-si rot-env)
 
          ;; 3. Loop body: in-place update args, then backward conditional branch!
-         (emit-lir! (list '%block body-lbl '()))
-         (lir-compile-expr else-recurse next-si rot-env #f)
-         (lir-compile-fused-cmp-cond (car cmp-expr) (cadr cmp-expr) (caddr cmp-expr)
-                                     body-lbl lir-cmp-false-cc next-si rot-env)
+         (if (cont-can-unroll-counting-loop? params cmp-expr else-recurse f-name)
+             (let ((limit (or (cont-extract-int (cadr cmp-expr)) (cont-extract-int (caddr cmp-expr))))
+                   (r0 (car assigned-regs))
+                   (r1 (cadr assigned-regs)))
+               (emit-lir! (list '%mov '%r10 0))
+               (emit-lir! (list '%block body-lbl '()))
+               (let unroll ((step 0))
+                 (if (< step 8)
+                     (let ((acc-reg (if (zero? (modulo step 2)) r1 '%r10)))
+                       (if (= step 0)
+                           (emit-lir! (list '%add acc-reg r0))
+                           (begin
+                             (emit-lir! (list '%mov '%rax r0))
+                             (emit-lir! (list '%add '%rax step))
+                             (emit-lir! (list '%add acc-reg '%rax))))
+                       (unroll (+ step 1)))))
+               (emit-lir! (list '%add r0 8))
+               (emit-lir! (list '%cmp r0 limit))
+               (emit-lir! (list '%jump-cond "jne" body-lbl))
+               (emit-lir! (list '%add r1 '%r10)))
+             (begin
+               (emit-lir! (list '%block body-lbl '()))
+               (lir-compile-expr else-recurse next-si rot-env #f)
+               (lir-compile-fused-cmp-cond (car cmp-expr) (cadr cmp-expr) (caddr cmp-expr)
+                                           body-lbl lir-cmp-false-cc next-si rot-env)))
 
          ;; 4. Loop exit / termination
          (emit-lir! (list '%block done-lbl '()))
@@ -12753,13 +12839,18 @@
                   (loop (+ i 1)))))
           (track-lir-si! callee-si)
           (emit-lir! '(%store %rsp -16 %rax))
-          ;; Store incoming argument registers into their callee stack slots
-          (let loop ((i 0))
-            (if (< i num-reg-params)
-                (begin
-                  (emit-lir! (list '%store '%rsp (- -24 (* 8 i)) (list-ref *arg-registers* i)))
-                  (loop (+ i 1)))))
-          (lir-compile-expr body callee-si callee-env #t)
+          (let ((loop-head-lbl (unique-label-sym (string-append "L_loop_head_" (if (symbol? label) (symbol->string label) "fn") "_"))))
+            (emit-lir! (list '%label loop-head-lbl))
+            ;; Store incoming argument registers into their callee stack slots
+            (let loop ((i 0))
+              (if (< i num-reg-params)
+                  (begin
+                    (emit-lir! (list '%store '%rsp (- -24 (* 8 i)) (list-ref *arg-registers* i)))
+                    (loop (+ i 1)))))
+            (let ((callee-env-with-self (cons (cons '%current-func label)
+                                              (cons (cons '%self-loop-head loop-head-lbl)
+                                                    callee-env))))
+              (lir-compile-expr body callee-si callee-env-with-self #t)))
           (emit-lir! '(%return))
           (let* ((needed-frame (- 0 (car *lir-min-si*)))
                  (frame-size (align-frame-shift needed-frame))
@@ -13248,6 +13339,61 @@
          (if (equal? dst-reg src-reg)
              (loop (cddr rest) (cons i1 acc))
              (loop (cddr rest) (cons (list '%mov dst-reg src-reg) (cons i1 acc))))))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 2b-2: 2-Store Slot-1 Reload Elimination
+      ;; (%store %rsp off1 src1) (%store %rsp off2 src2) (%load dst %rsp off1)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (pair? (caddr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest))
+                  (i3 (caddr rest)))
+              (and (eq? (car i1) '%store) (= (length i1) 4) (eq? (cadr i1) '%rsp)
+                   (eq? (car i2) '%store) (= (length i2) 4) (eq? (cadr i2) '%rsp)
+                   (not (equal? (caddr i1) (caddr i2)))
+                   (eq? (car i3) '%load) (= (length i3) 4) (eq? (caddr i3) '%rsp)
+                   (equal? (cadddr i3) (caddr i1))
+                   (lir-peephole-reg? (cadddr i1))
+                   (lir-peephole-reg? (cadr i3)))))
+       (let* ((i1 (car rest))
+              (i2 (cadr rest))
+              (i3 (caddr rest))
+              (src-reg (cadddr i1))
+              (dst-reg (cadr i3)))
+         (if (equal? dst-reg src-reg)
+             (loop (cdddr rest) (cons i2 (cons i1 acc)))
+             (loop (cdddr rest) (cons (list '%mov dst-reg src-reg) (cons i2 (cons i1 acc)))))))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 2b-3: 2-Store Slot-2 Reload Elimination
+      ;; (%store %rsp off1 src1) (%store %rsp off2 src2) (%load dst %rsp off2)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (pair? (caddr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest))
+                  (i3 (caddr rest)))
+              (and (eq? (car i1) '%store) (= (length i1) 4) (eq? (cadr i1) '%rsp)
+                   (eq? (car i2) '%store) (= (length i2) 4) (eq? (cadr i2) '%rsp)
+                   (eq? (car i3) '%load) (= (length i3) 4) (eq? (caddr i3) '%rsp)
+                   (equal? (cadddr i3) (caddr i2))
+                   (lir-peephole-reg? (cadddr i2))
+                   (lir-peephole-reg? (cadr i3)))))
+       (let* ((i1 (car rest))
+              (i2 (cadr rest))
+              (i3 (caddr rest))
+              (src-reg (cadddr i2))
+              (dst-reg (cadr i3)))
+         (if (equal? dst-reg src-reg)
+             (loop (cdddr rest) (cons i2 (cons i1 acc)))
+             (loop (cdddr rest) (cons (list '%mov dst-reg src-reg) (cons i2 (cons i1 acc)))))))
 
       ;; -----------------------------------------------------------------
       ;; Rule 2c: Store + Compare + Branch Redundant Reload Elimination
@@ -16850,6 +16996,32 @@
             (eq? (car (caddr rest)) '%label)
             (equal? (cadr (car rest)) (cadr (caddr rest))))
        (loop (cdr rest) acc))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 4d: LEA Optimization
+      ;; (mov r1 r2) followed by (add r1 imm) -> (lea r1 (%disp imm r2))
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest)))
+              (and (eq? (car i1) 'mov)
+                   (eq? (car i2) 'add)
+                   (= (length i1) 3)
+                   (= (length i2) 3)
+                   (x86-asm-reg? (cadr i1))
+                   (x86-asm-reg? (caddr i1))
+                   (not (equal? (cadr i1) (caddr i1)))
+                   (equal? (cadr i2) (cadr i1))
+                   (or (integer? (caddr i2))
+                       (and (pair? (caddr i2)) (eq? (car (caddr i2)) '%imm) (integer? (cadr (caddr i2))))))))
+       (let* ((i1 (car rest))
+              (i2 (cadr rest))
+              (dst (cadr i1))
+              (src (caddr i1))
+              (imm (if (integer? (caddr i2)) (caddr i2) (cadr (caddr i2)))))
+         (loop (cddr rest) (cons (list 'lea dst (list '%disp imm src)) acc))))
 
       ;; -----------------------------------------------------------------
       ;; Rule 5: Unreachable Code Elimination (Dead Code Elimination)
