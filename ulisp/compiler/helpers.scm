@@ -652,9 +652,9 @@
      (let loop ((cur d) (len 2))
        (cond
          ((null? cur) len)
-         ((not (pair? cur)) (+ len 3 (datum-repr-length cur)))
+         ((not (pair? cur)) (+ (+ len 3) (datum-repr-length cur)))
          ((null? (cdr cur)) (+ len (datum-repr-length (car cur))))
-         (else (loop (cdr cur) (+ len (datum-repr-length (car cur)) 1))))))
+         (else (loop (cdr cur) (+ (+ len (datum-repr-length (car cur))) 1))))))
     (else 4)))
 
 (define (print-spaces n)
@@ -670,12 +670,12 @@
              (op-col (+ base-col 1))
              (args (cdr form)))
         (let loop ((as args)
-                   (cur-col (+ op-col (datum-repr-length op) 1))
+                   (cur-col (+ (+ op-col (datum-repr-length op)) 1))
                    (cols (list op-col)))
           (if (null? as)
               (reverse cols)
               (loop (cdr as)
-                    (+ cur-col (datum-repr-length (car as)) 1)
+                    (+ (+ cur-col (datum-repr-length (car as))) 1)
                     (cons cur-col cols)))))
       (list base-col)))
 
@@ -888,7 +888,8 @@
     (sys-getenv . "sys-getenv")
     (sys-bench-passes? . "sys-bench-passes?")
     (sys-clock-gettime-monotonic . "sys-clock-gettime-monotonic")
-    (gc-current-heap-bytes . "gc-current-heap-bytes")))
+    (gc-current-heap-bytes . "gc-current-heap-bytes")
+    (ulisp_arity_error . "ulisp_arity_error")))
 
 (define (symbol->raw-name sym)
   (let ((entry (assq sym (car *symbol-table*))))
@@ -950,7 +951,7 @@
 (define (expr-size expr)
   (cond
     ((not (pair? expr)) 1)
-    (else (+ 1 (expr-size (car expr)) (expr-size (cdr expr))))))
+    (else (+ (+ 1 (expr-size (car expr))) (expr-size (cdr expr))))))
 
 (define (%program? form)
   (and (pair? form) (eq? (car form) '%program)))

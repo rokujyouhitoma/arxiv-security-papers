@@ -220,3 +220,179 @@
        (not (escapes? var (caddr val)))
        (tail-calls-only? var body)
        (tail-calls-only? var (caddr val))))
+
+;;; -----------------------------------------------------------------------
+;;; Static Arity Checker (Issue #629)
+;;; Validates call sites against builtin primitives and known procedures.
+;;; -----------------------------------------------------------------------
+
+(define (formal-params-arity params)
+  (cond
+    ((symbol? params) (cons 'min 0))
+    ((null? params) (cons 'exact 0))
+    ((pair? params)
+     (let loop ((ps params) (cnt 0))
+       (cond
+         ((null? ps) (cons 'exact cnt))
+         ((symbol? ps) (cons 'min cnt))
+         ((pair? ps) (loop (cdr ps) (+ cnt 1)))
+         (else (cons 'exact cnt)))))
+    (else #f)))
+
+(define (check-arity-expr expr top-env local-env)
+  (cond
+    ((not (pair? expr)) #t)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) #t)
+         ((if)
+          (check-arity-expr (cadr expr) top-env local-env)
+          (check-arity-expr (caddr expr) top-env local-env)
+          (if (pair? (cdddr expr))
+              (check-arity-expr (cadddr expr) top-env local-env)
+              #t))
+         ((begin)
+          (for-each (lambda (e) (check-arity-expr e top-env local-env)) (cdr expr)))
+         ((let)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr))
+                 (new-local
+                  (let loop ((bs bindings) (acc local-env))
+                    (if (null? bs) acc
+                        (let* ((b (car bs))
+                               (var (car b))
+                               (val (cadr b)))
+                          (check-arity-expr val top-env local-env)
+                          (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                              (let ((ar (formal-params-arity (cadr val))))
+                                (if ar (loop (cdr bs) (cons (cons var ar) acc))
+                                    (loop (cdr bs) acc)))
+                              (loop (cdr bs) acc)))))))
+            (check-arity-expr body top-env new-local)))
+         ((letrec)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr))
+                 (rec-local
+                  (let loop ((bs bindings) (acc local-env))
+                    (if (null? bs) acc
+                        (let* ((b (car bs))
+                               (var (car b))
+                               (val (cadr b)))
+                          (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                              (let ((ar (formal-params-arity (cadr val))))
+                                (if ar (loop (cdr bs) (cons (cons var ar) acc))
+                                    (loop (cdr bs) acc)))
+                              (loop (cdr bs) acc)))))))
+            (for-each (lambda (b) (check-arity-expr (cadr b) top-env rec-local)) bindings)
+            (check-arity-expr body top-env rec-local)))
+         ((lambda)
+          (let ((body (caddr expr)))
+            (check-arity-expr body top-env local-env)))
+         ((%make-closure %make-closure-env)
+          (for-each (lambda (e) (check-arity-expr e top-env local-env)) (cddr expr)))
+         ((%cont-fun)
+          (let ((f-body (cadddr expr))
+                (in-body (cadr (cdddr expr))))
+            (check-arity-expr f-body top-env local-env)
+            (check-arity-expr in-body top-env local-env)))
+         ((%cont-call)
+          (for-each (lambda (e) (check-arity-expr e top-env local-env)) (cddr expr)))
+         ((%with-handler)
+          (check-arity-expr (cadr expr) top-env local-env)
+          (check-arity-expr (caddr expr) top-env local-env))
+         ((%raw-call/cc)
+          (check-arity-expr (cadr expr) top-env local-env))
+         ((%call-with-values)
+          (check-arity-expr (cadr expr) top-env local-env)
+          (check-arity-expr (caddr expr) top-env local-env))
+         ((%values)
+          (for-each (lambda (e) (check-arity-expr e top-env local-env)) (cdr expr)))
+         ((%program)
+          (let* ((defs (cadr expr))
+                 (main (caddr expr))
+                 (new-top
+                  (let loop ((ds defs) (acc top-env))
+                    (if (null? ds) acc
+                        (let ((d (car ds)))
+                          (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (pair? (cddr d)))
+                              (let ((name (cadr d))
+                                    (val (caddr d)))
+                                (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                                    (let ((ar (formal-params-arity (cadr val))))
+                                      (if ar (loop (cdr ds) (cons (cons name ar) acc))
+                                          (loop (cdr ds) acc)))
+                                    (loop (cdr ds) acc)))
+                              (loop (cdr ds) acc)))))))
+            (for-each (lambda (d)
+                        (if (and (pair? d) (eq? (car d) 'define))
+                            (check-arity-expr (caddr d) new-top local-env)
+                            (check-arity-expr d new-top local-env)))
+                      defs)
+            (check-arity-expr main new-top local-env)))
+         (else
+          ;; Call site: (op arg1 ... argN)
+          (let* ((args (cdr expr))
+                 (actual (length args)))
+            (if (symbol? op)
+                (let ((fixed (builtin-fixed-arity op))
+                      (min-a (builtin-min-arity op))
+                      (top-fn (assq op top-env))
+                      (loc-fn (assq op local-env)))
+                  (cond
+                    ((eq? op '-)
+                     (if (not (or (= actual 1) (= actual 2)))
+                         (error (string-append "[ULISP ARITY ERROR] Builtin procedure '-' expects 1 or 2 argument(s), but got "
+                                               (number->string actual))
+                                expr)))
+                    ((number? fixed)
+                     (if (not (= actual fixed))
+                         (error (string-append "[ULISP ARITY ERROR] Builtin procedure '"
+                                               (symbol->string op) "' expects "
+                                               (number->string fixed) " argument(s), but got "
+                                               (number->string actual))
+                                expr)))
+                    ((number? min-a)
+                     (if (< actual min-a)
+                         (error (string-append "[ULISP ARITY ERROR] Builtin procedure '"
+                                               (symbol->string op) "' requires at least "
+                                               (number->string min-a) " argument(s), but got "
+                                               (number->string actual))
+                                expr)))
+                    (loc-fn
+                     (let ((sig (cdr loc-fn)))
+                       (if (eq? (car sig) 'exact)
+                           (if (not (= actual (cdr sig)))
+                               (error (string-append "[ULISP ARITY ERROR] Local procedure '"
+                                                     (symbol->string op) "' expects "
+                                                     (number->string (cdr sig)) " argument(s), but got "
+                                                     (number->string actual))
+                                      expr))
+                           (if (< actual (cdr sig))
+                               (error (string-append "[ULISP ARITY ERROR] Local procedure '"
+                                                     (symbol->string op) "' requires at least "
+                                                     (number->string (cdr sig)) " argument(s), but got "
+                                                     (number->string actual))
+                                      expr)))))
+                    (top-fn
+                     (let ((sig (cdr top-fn)))
+                       (if (eq? (car sig) 'exact)
+                           (if (not (= actual (cdr sig)))
+                               (error (string-append "[ULISP ARITY ERROR] Procedure '"
+                                                     (symbol->string op) "' expects "
+                                                     (number->string (cdr sig)) " argument(s), but got "
+                                                     (number->string actual))
+                                      expr))
+                           (if (< actual (cdr sig))
+                               (error (string-append "[ULISP ARITY ERROR] Procedure '"
+                                                     (symbol->string op) "' requires at least "
+                                                     (number->string (cdr sig)) " argument(s), but got "
+                                                     (number->string actual))
+                                      expr))))))))
+            (if (pair? op)
+                (check-arity-expr op top-env local-env))
+            (for-each (lambda (a) (check-arity-expr a top-env local-env)) args))))))))
+
+(define (check-arity-all ast)
+  (check-arity-expr ast '() '())
+  ast)

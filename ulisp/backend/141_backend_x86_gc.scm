@@ -76,6 +76,24 @@
   (emit ".L_wb_done:")
   (emit "    ret"))
 
+(define (emit-arity-error-panic)
+  (emit "    .globl ulisp_arity_error")
+  (emit "    .weak ulisp_arity_error")
+  (emit "    .type ulisp_arity_error, @function")
+  (emit "    .p2align 4")
+  (emit "ulisp_arity_error:")
+  (emit "    lea rsi, [rip + .L_str_arity_panic]")
+  (emit "    mov rdx, 49")                      ; string length
+  (emit "    mov rax, 1")                       ; sys_write
+  (emit "    mov rdi, 2")                       ; stderr
+  (emit "    syscall")
+  (emit "    mov rax, 60")                      ; sys_exit
+  (emit "    mov rdi, 1")                       ; exit code 1
+  (emit "    syscall")
+  (emit ".L_str_arity_panic:")
+  (emit "    .asciz \"Fatal Error: ULisp Procedure Call Arity Mismatch\\n\"")
+  (emit "    .p2align 3"))
+
 (define (emit-gc-collector)
   (emit "    .globl ulisp_alloc_slow_trampoline")
   (emit "    .weak ulisp_alloc_slow_trampoline")

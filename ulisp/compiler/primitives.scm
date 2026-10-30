@@ -176,3 +176,35 @@
            (else #f))))
       (else #f))))
 
+;;; -----------------------------------------------------------------------
+;;; Builtin & Primitive Arity Signatures (Issue #629)
+;;; -----------------------------------------------------------------------
+
+(define (builtin-fixed-arity op)
+  (cond
+    ((eq? op '-) #f)
+    ((zero-arg-prim? op) 0)
+    ((memq op '(open-output-string)) 0)
+    ((unary-prim? op) 1)
+    ((binop-prim? op) 2)
+    ((triop-prim? op) 3)
+    ((septop-prim? op) 7)
+    ((memq op '(caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
+                cadddr cddddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+                cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+                reverse length
+                string->list list->string string->vector vector->string
+                utf8->string string->utf8
+                close-port close-input-port close-output-port get-output-string
+                open-input-string force promise?
+                abs)) 1)
+    ((memq op '(append equal? memq assq memv assv member assoc string=?
+                string-append2 bytevector-append2 list-ref list-tail)) 2)
+    (else #f)))
+
+(define (builtin-min-arity op)
+  (cond
+    ((memq op '(list vector string-append string)) 0)
+    ((memq op '(string<=? string>=? string<? string>?)) 1)
+    ((memq op '(%with-handler)) 2)
+    (else #f)))

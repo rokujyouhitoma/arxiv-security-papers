@@ -652,9 +652,9 @@
      (let loop ((cur d) (len 2))
        (cond
          ((null? cur) len)
-         ((not (pair? cur)) (+ len 3 (datum-repr-length cur)))
+         ((not (pair? cur)) (+ (+ len 3) (datum-repr-length cur)))
          ((null? (cdr cur)) (+ len (datum-repr-length (car cur))))
-         (else (loop (cdr cur) (+ len (datum-repr-length (car cur)) 1))))))
+         (else (loop (cdr cur) (+ (+ len (datum-repr-length (car cur))) 1))))))
     (else 4)))
 
 (define (print-spaces n)
@@ -670,12 +670,12 @@
              (op-col (+ base-col 1))
              (args (cdr form)))
         (let loop ((as args)
-                   (cur-col (+ op-col (datum-repr-length op) 1))
+                   (cur-col (+ (+ op-col (datum-repr-length op)) 1))
                    (cols (list op-col)))
           (if (null? as)
               (reverse cols)
               (loop (cdr as)
-                    (+ cur-col (datum-repr-length (car as)) 1)
+                    (+ (+ cur-col (datum-repr-length (car as))) 1)
                     (cons cur-col cols)))))
       (list base-col)))
 
@@ -888,7 +888,8 @@
     (sys-getenv . "sys-getenv")
     (sys-bench-passes? . "sys-bench-passes?")
     (sys-clock-gettime-monotonic . "sys-clock-gettime-monotonic")
-    (gc-current-heap-bytes . "gc-current-heap-bytes")))
+    (gc-current-heap-bytes . "gc-current-heap-bytes")
+    (ulisp_arity_error . "ulisp_arity_error")))
 
 (define (symbol->raw-name sym)
   (let ((entry (assq sym (car *symbol-table*))))
@@ -950,7 +951,7 @@
 (define (expr-size expr)
   (cond
     ((not (pair? expr)) 1)
-    (else (+ 1 (expr-size (car expr)) (expr-size (cdr expr))))))
+    (else (+ (+ 1 (expr-size (car expr))) (expr-size (cdr expr))))))
 
 (define (%program? form)
   (and (pair? form) (eq? (car form) '%program)))
@@ -1210,6 +1211,38 @@
            (else #f))))
       (else #f))))
 
+;;; -----------------------------------------------------------------------
+;;; Builtin & Primitive Arity Signatures (Issue #629)
+;;; -----------------------------------------------------------------------
+
+(define (builtin-fixed-arity op)
+  (cond
+    ((eq? op '-) #f)
+    ((zero-arg-prim? op) 0)
+    ((memq op '(open-output-string)) 0)
+    ((unary-prim? op) 1)
+    ((binop-prim? op) 2)
+    ((triop-prim? op) 3)
+    ((septop-prim? op) 7)
+    ((memq op '(caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
+                cadddr cddddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+                cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+                reverse length
+                string->list list->string string->vector vector->string
+                utf8->string string->utf8
+                close-port close-input-port close-output-port get-output-string
+                open-input-string force promise?
+                abs)) 1)
+    ((memq op '(append equal? memq assq memv assv member assoc string=?
+                string-append2 bytevector-append2 list-ref list-tail)) 2)
+    (else #f)))
+
+(define (builtin-min-arity op)
+  (cond
+    ((memq op '(list vector string-append string)) 0)
+    ((memq op '(string<=? string>=? string<? string>?)) 1)
+    ((memq op '(%with-handler)) 2)
+    (else #f)))
 ;;; =======================================================================
 ;;; ULisp Compiler: Nanopass Framework Metadata & Reflection Engine
 ;;; Conforms to DSN-33 Architecture Specification & Keep & Dybvig (2013)
@@ -3028,26 +3061,36 @@
   (let ((len (string-length str)))
     (if (>= len width)
         str
-        (let ((res (make-string width #\space)))
+        (let ((res (make-string width)))
           (let loop ((i 0))
             (if (< i len)
                 (begin
                   (string-set! res i (string-ref str i))
                   (loop (+ i 1)))
-                res))))))
+                (let fill ((j len))
+                  (if (< j width)
+                      (begin
+                        (string-set! res j #\space)
+                        (fill (+ j 1)))
+                      res))))))))
 
 (define (pad-left str width)
   (let ((len (string-length str)))
     (if (>= len width)
         str
         (let* ((pad (- width len))
-               (res (make-string width #\space)))
-          (let loop ((i 0))
-            (if (< i len)
+               (res (make-string width)))
+          (let fill ((j 0))
+            (if (< j pad)
                 (begin
-                  (string-set! res (+ pad i) (string-ref str i))
-                  (loop (+ i 1)))
-                res))))))
+                  (string-set! res j #\space)
+                  (fill (+ j 1)))
+                (let loop ((i 0))
+                  (if (< i len)
+                      (begin
+                        (string-set! res (+ pad i) (string-ref str i))
+                        (loop (+ i 1)))
+                      res))))))))
 
 (define (format-fixed-2-ms us)
   (let* ((total-cs (quotient (+ us 5) 10))
@@ -3296,6 +3339,9 @@
   (register-pass!
     (make-pass-descriptor 'pass-035-scope-resolve "Lexical Scope Resolution and Alpha-Conversion" 'frontend 0
       (lambda (forms) (scope-resolve-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
+  (register-pass!
+    (make-pass-descriptor 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
+      (lambda (forms) (check-arity-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
   (register-pass!
     (make-pass-descriptor 'pass-050-cp0 "CP0 Source Optimization" 'frontend 1
       (lambda (forms) (cp0-optimize forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
@@ -6561,6 +6607,182 @@
        (not (escapes? var (caddr val)))
        (tail-calls-only? var body)
        (tail-calls-only? var (caddr val))))
+
+;;; -----------------------------------------------------------------------
+;;; Static Arity Checker (Issue #629)
+;;; Validates call sites against builtin primitives and known procedures.
+;;; -----------------------------------------------------------------------
+
+(define (formal-params-arity params)
+  (cond
+    ((symbol? params) (cons 'min 0))
+    ((null? params) (cons 'exact 0))
+    ((pair? params)
+     (let loop ((ps params) (cnt 0))
+       (cond
+         ((null? ps) (cons 'exact cnt))
+         ((symbol? ps) (cons 'min cnt))
+         ((pair? ps) (loop (cdr ps) (+ cnt 1)))
+         (else (cons 'exact cnt)))))
+    (else #f)))
+
+(define (check-arity-expr expr top-env local-env)
+  (cond
+    ((not (pair? expr)) #t)
+    (else
+     (let ((op (car expr)))
+       (case op
+         ((quote) #t)
+         ((if)
+          (check-arity-expr (cadr expr) top-env local-env)
+          (check-arity-expr (caddr expr) top-env local-env)
+          (if (pair? (cdddr expr))
+              (check-arity-expr (cadddr expr) top-env local-env)
+              #t))
+         ((begin)
+          (for-each (lambda (e) (check-arity-expr e top-env local-env)) (cdr expr)))
+         ((let)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr))
+                 (new-local
+                  (let loop ((bs bindings) (acc local-env))
+                    (if (null? bs) acc
+                        (let* ((b (car bs))
+                               (var (car b))
+                               (val (cadr b)))
+                          (check-arity-expr val top-env local-env)
+                          (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                              (let ((ar (formal-params-arity (cadr val))))
+                                (if ar (loop (cdr bs) (cons (cons var ar) acc))
+                                    (loop (cdr bs) acc)))
+                              (loop (cdr bs) acc)))))))
+            (check-arity-expr body top-env new-local)))
+         ((letrec)
+          (let* ((bindings (cadr expr))
+                 (body (caddr expr))
+                 (rec-local
+                  (let loop ((bs bindings) (acc local-env))
+                    (if (null? bs) acc
+                        (let* ((b (car bs))
+                               (var (car b))
+                               (val (cadr b)))
+                          (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                              (let ((ar (formal-params-arity (cadr val))))
+                                (if ar (loop (cdr bs) (cons (cons var ar) acc))
+                                    (loop (cdr bs) acc)))
+                              (loop (cdr bs) acc)))))))
+            (for-each (lambda (b) (check-arity-expr (cadr b) top-env rec-local)) bindings)
+            (check-arity-expr body top-env rec-local)))
+         ((lambda)
+          (let ((body (caddr expr)))
+            (check-arity-expr body top-env local-env)))
+         ((%make-closure %make-closure-env)
+          (for-each (lambda (e) (check-arity-expr e top-env local-env)) (cddr expr)))
+         ((%cont-fun)
+          (let ((f-body (cadddr expr))
+                (in-body (cadr (cdddr expr))))
+            (check-arity-expr f-body top-env local-env)
+            (check-arity-expr in-body top-env local-env)))
+         ((%cont-call)
+          (for-each (lambda (e) (check-arity-expr e top-env local-env)) (cddr expr)))
+         ((%with-handler)
+          (check-arity-expr (cadr expr) top-env local-env)
+          (check-arity-expr (caddr expr) top-env local-env))
+         ((%raw-call/cc)
+          (check-arity-expr (cadr expr) top-env local-env))
+         ((%call-with-values)
+          (check-arity-expr (cadr expr) top-env local-env)
+          (check-arity-expr (caddr expr) top-env local-env))
+         ((%values)
+          (for-each (lambda (e) (check-arity-expr e top-env local-env)) (cdr expr)))
+         ((%program)
+          (let* ((defs (cadr expr))
+                 (main (caddr expr))
+                 (new-top
+                  (let loop ((ds defs) (acc top-env))
+                    (if (null? ds) acc
+                        (let ((d (car ds)))
+                          (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (pair? (cddr d)))
+                              (let ((name (cadr d))
+                                    (val (caddr d)))
+                                (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                                    (let ((ar (formal-params-arity (cadr val))))
+                                      (if ar (loop (cdr ds) (cons (cons name ar) acc))
+                                          (loop (cdr ds) acc)))
+                                    (loop (cdr ds) acc)))
+                              (loop (cdr ds) acc)))))))
+            (for-each (lambda (d)
+                        (if (and (pair? d) (eq? (car d) 'define))
+                            (check-arity-expr (caddr d) new-top local-env)
+                            (check-arity-expr d new-top local-env)))
+                      defs)
+            (check-arity-expr main new-top local-env)))
+         (else
+          ;; Call site: (op arg1 ... argN)
+          (let* ((args (cdr expr))
+                 (actual (length args)))
+            (if (symbol? op)
+                (let ((fixed (builtin-fixed-arity op))
+                      (min-a (builtin-min-arity op))
+                      (top-fn (assq op top-env))
+                      (loc-fn (assq op local-env)))
+                  (cond
+                    ((eq? op '-)
+                     (if (not (or (= actual 1) (= actual 2)))
+                         (error (string-append "[ULISP ARITY ERROR] Builtin procedure '-' expects 1 or 2 argument(s), but got "
+                                               (number->string actual))
+                                expr)))
+                    ((number? fixed)
+                     (if (not (= actual fixed))
+                         (error (string-append "[ULISP ARITY ERROR] Builtin procedure '"
+                                               (symbol->string op) "' expects "
+                                               (number->string fixed) " argument(s), but got "
+                                               (number->string actual))
+                                expr)))
+                    ((number? min-a)
+                     (if (< actual min-a)
+                         (error (string-append "[ULISP ARITY ERROR] Builtin procedure '"
+                                               (symbol->string op) "' requires at least "
+                                               (number->string min-a) " argument(s), but got "
+                                               (number->string actual))
+                                expr)))
+                    (loc-fn
+                     (let ((sig (cdr loc-fn)))
+                       (if (eq? (car sig) 'exact)
+                           (if (not (= actual (cdr sig)))
+                               (error (string-append "[ULISP ARITY ERROR] Local procedure '"
+                                                     (symbol->string op) "' expects "
+                                                     (number->string (cdr sig)) " argument(s), but got "
+                                                     (number->string actual))
+                                      expr))
+                           (if (< actual (cdr sig))
+                               (error (string-append "[ULISP ARITY ERROR] Local procedure '"
+                                                     (symbol->string op) "' requires at least "
+                                                     (number->string (cdr sig)) " argument(s), but got "
+                                                     (number->string actual))
+                                      expr)))))
+                    (top-fn
+                     (let ((sig (cdr top-fn)))
+                       (if (eq? (car sig) 'exact)
+                           (if (not (= actual (cdr sig)))
+                               (error (string-append "[ULISP ARITY ERROR] Procedure '"
+                                                     (symbol->string op) "' expects "
+                                                     (number->string (cdr sig)) " argument(s), but got "
+                                                     (number->string actual))
+                                      expr))
+                           (if (< actual (cdr sig))
+                               (error (string-append "[ULISP ARITY ERROR] Procedure '"
+                                                     (symbol->string op) "' requires at least "
+                                                     (number->string (cdr sig)) " argument(s), but got "
+                                                     (number->string actual))
+                                      expr))))))))
+            (if (pair? op)
+                (check-arity-expr op top-env local-env))
+            (for-each (lambda (a) (check-arity-expr a top-env local-env)) args))))))))
+
+(define (check-arity-all ast)
+  (check-arity-expr ast '() '())
+  ast)
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: CP0 Source-Level Optimization Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -8941,6 +9163,26 @@
        (list '%global-ref var))
       (else var))))
 
+(define (check-direct-call-arity op actual expr)
+  (if (symbol? op)
+      (let ((fixed (builtin-fixed-arity op))
+            (min-a (builtin-min-arity op)))
+        (cond
+          ((number? fixed)
+           (if (not (= actual fixed))
+               (error (string-append "[ULISP ARITY ERROR] Builtin procedure '"
+                                     (symbol->string op) "' expects "
+                                     (number->string fixed) " argument(s), but got "
+                                     (number->string actual))
+                      expr)))
+          ((number? min-a)
+           (if (< actual min-a)
+               (error (string-append "[ULISP ARITY ERROR] Builtin procedure '"
+                                     (symbol->string op) "' requires at least "
+                                     (number->string min-a) " argument(s), but got "
+                                     (number->string actual))
+                      expr)))))))
+
 ;;; Forward declarations / helpers for mutual recursion in closure conversion
 (define (convert-expr expr var-map)
   (cond
@@ -9001,6 +9243,8 @@
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else
+          (if (symbol? op)
+              (check-direct-call-arity op (length (cdr expr)) expr))
           (let ((known-entry (and (symbol? op) (assq op var-map))))
             (cond
               ;; 1. Local known function via var-map (%known-fn label)
@@ -13629,7 +13873,7 @@
     ((%r14 r14) "r14")
     ((%r15 r15) "r15")
     ((%al  al)  "al")
-    (else (if (symbol? reg) (symbol->string reg) reg))))
+    (else (if (symbol? reg) (symbol->raw-name reg) reg))))
 
 (define (mem-op->str base offset)
   (let ((base-str (reg->str base)))
@@ -13639,6 +13883,8 @@
 
 (define (operand->str opnd)
   (cond
+    ((string? opnd)
+     opnd)
     ((symbol? opnd)
      (reg->str opnd))
     ((integer? opnd)
@@ -14346,6 +14592,21 @@
                              (if (symbol? (car inst)) (symbol->string (car inst)) "?"))
               inst)))))
 
+(define (has-dynamic-num-args? insts)
+  (let loop ((is insts))
+    (if (or (null? is) (not (pair? is)))
+        #f
+        (let ((i (car is)))
+          (if (and (pair? i)
+                   (or (and (eq? (car i) '%load)
+                            (eq? (cadr i) '%rax)
+                            (eq? (caddr i) '%rsp)
+                            (pair? (cdddr i))
+                            (= (cadddr i) -16))
+                       (eq? (car i) '%num-args)))
+              #t
+              (loop (cdr is)))))))
+
 (define (select-instructions-function fn)
   (let* ((label (cadr fn))
          (label-str (if (symbol? label) (symbol->string label) label))
@@ -14353,11 +14614,22 @@
                             (string=? (substring label-str 0 9) "ulisp_fn_")))
          (frame-size-entry (assq 'frame-size (cddr fn)))
          (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
-         (body (cdr (assq 'body (cddr fn)))))
+         (params-entry (assq 'params (cddr fn)))
+         (params (if params-entry (cadr params-entry) '()))
+         (body (cdr (assq 'body (cddr fn))))
+         (expected-args (if (and (list? params) (not (has-dynamic-num-args? body)))
+                            (length params)
+                            #f)))
     (scan-x86-blocks! body)
-    (let* ((init-acc (list (list 'mov (list '%disp -8 'rsp) 'r10)
-                           (list '%label label)
-                           (list '%p2align 4)))
+    (let* ((guard-insts
+            (if expected-args
+                (list (list 'jcc 'jne "ulisp_arity_error")
+                      (list 'cmp 'rax (* expected-args 4)))
+                '()))
+           (init-acc (append guard-insts
+                             (list (list 'mov (list '%disp -8 'rsp) 'r10)
+                                   (list '%label label)
+                                   (list '%p2align 4))))
            (base-acc (if is-exported?
                          (append init-acc
                                  (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
@@ -14940,6 +15212,7 @@
     ;; Emit freestanding zero-libc runtime routines
     (emit-freestanding-runtime)
     (emit-oom-panic)
+    (emit-arity-error-panic)
     ;; Emit GC routines unless disabled
     (cond
       ((eq? gc-mode 'none) #f)
@@ -15413,6 +15686,24 @@
   (emit "    pop rcx")
   (emit ".L_wb_done:")
   (emit "    ret"))
+
+(define (emit-arity-error-panic)
+  (emit "    .globl ulisp_arity_error")
+  (emit "    .weak ulisp_arity_error")
+  (emit "    .type ulisp_arity_error, @function")
+  (emit "    .p2align 4")
+  (emit "ulisp_arity_error:")
+  (emit "    lea rsi, [rip + .L_str_arity_panic]")
+  (emit "    mov rdx, 49")                      ; string length
+  (emit "    mov rax, 1")                       ; sys_write
+  (emit "    mov rdi, 2")                       ; stderr
+  (emit "    syscall")
+  (emit "    mov rax, 60")                      ; sys_exit
+  (emit "    mov rdi, 1")                       ; exit code 1
+  (emit "    syscall")
+  (emit ".L_str_arity_panic:")
+  (emit "    .asciz \"Fatal Error: ULisp Procedure Call Arity Mismatch\\n\"")
+  (emit "    .p2align 3"))
 
 (define (emit-gc-collector)
   (emit "    .globl ulisp_alloc_slow_trampoline")

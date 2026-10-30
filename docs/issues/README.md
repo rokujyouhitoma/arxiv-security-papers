@@ -14,7 +14,7 @@
 | **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | High | New | [616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
-| **629** | 静的引数個数検証（Static Arity Checker）およびネイティブ実行時 Arity ガード診断の実装 | Feature | High | New | [629-implement-static-arity-checker-and-runtime-arity-guard.md](629-implement-static-arity-checker-and-runtime-arity-guard.md) |
+| **629** | 静的引数個数検証（Static Arity Checker）およびネイティブ実行時 Arity ガード診断の実装 | Feature | High | Closed | [closed/629-implement-static-arity-checker-and-runtime-arity-guard.md](closed/629-implement-static-arity-checker-and-runtime-arity-guard.md) |
 
 
 

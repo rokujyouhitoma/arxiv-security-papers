@@ -176,7 +176,7 @@
                                         (if (< i val-len)
                                             (begin
                                               (string-set! val i
-                                                           (integer->char (%raw-load-u8 entry-ptr (+ klen 1 i))))
+                                                           (integer->char (%raw-load-u8 entry-ptr (+ (+ klen 1) i))))
                                               (copy-val (+ i 1)))
                                             val)))
                                     ;; Did not end with '=', e.g. "NAME_OTHER=val"
@@ -218,7 +218,7 @@
                             (let copy-val ((j 0))
                               (if (< j val-len)
                                   (begin
-                                    (string-set! val j (integer->char (%raw-load-u8 entry-ptr (+ eq-pos 1 j))))
+                                    (string-set! val j (integer->char (%raw-load-u8 entry-ptr (+ (+ eq-pos 1) j))))
                                     (copy-val (+ j 1)))))
                             (scan-loop (+ idx 1) (cons (cons key val) acc))))))))))))
 

@@ -14,7 +14,7 @@
 ;;   16: stress_mode, 17: total_alloc_bytes, 18: total_survived_bytes
 ;;   19: total_gc_time_ns, 20: stats_mode, 21: start_time_sec, 22: start_time_nsec
 
-(define *runtime-heap-default-size* (* 16 1024 1024)) ; 16MB default
+(define *runtime-heap-default-size* (* (* 16 1024) 1024)) ; 16MB default
 
 (define (runtime-gc-state-ref idx)
   (%raw-load (%get-gc-state-ptr) (* idx 8)))
@@ -68,7 +68,7 @@
             ((= profile-id 1) 8589934592)  ; compiler: 8GB
             ((= profile-id 2) 4294967296)  ; server: 4GB
             (else 1073741824)))            ; standard: 1GB
-         (total-alloc (+ n-size (* m-size 2) 65536))
+         (total-alloc (+ n-size (+ (* m-size 2) 65536)))
          (heap (sys-mmap total-alloc)))
     (if (<= heap 0)
         (runtime-oom-exit)

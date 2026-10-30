@@ -40,7 +40,7 @@
     ((%r14 r14) "r14")
     ((%r15 r15) "r15")
     ((%al  al)  "al")
-    (else (if (symbol? reg) (symbol->string reg) reg))))
+    (else (if (symbol? reg) (symbol->raw-name reg) reg))))
 
 (define (mem-op->str base offset)
   (let ((base-str (reg->str base)))
@@ -50,6 +50,8 @@
 
 (define (operand->str opnd)
   (cond
+    ((string? opnd)
+     opnd)
     ((symbol? opnd)
      (reg->str opnd))
     ((integer? opnd)
@@ -757,6 +759,21 @@
                              (if (symbol? (car inst)) (symbol->string (car inst)) "?"))
               inst)))))
 
+(define (has-dynamic-num-args? insts)
+  (let loop ((is insts))
+    (if (or (null? is) (not (pair? is)))
+        #f
+        (let ((i (car is)))
+          (if (and (pair? i)
+                   (or (and (eq? (car i) '%load)
+                            (eq? (cadr i) '%rax)
+                            (eq? (caddr i) '%rsp)
+                            (pair? (cdddr i))
+                            (= (cadddr i) -16))
+                       (eq? (car i) '%num-args)))
+              #t
+              (loop (cdr is)))))))
+
 (define (select-instructions-function fn)
   (let* ((label (cadr fn))
          (label-str (if (symbol? label) (symbol->string label) label))
@@ -764,11 +781,22 @@
                             (string=? (substring label-str 0 9) "ulisp_fn_")))
          (frame-size-entry (assq 'frame-size (cddr fn)))
          (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
-         (body (cdr (assq 'body (cddr fn)))))
+         (params-entry (assq 'params (cddr fn)))
+         (params (if params-entry (cadr params-entry) '()))
+         (body (cdr (assq 'body (cddr fn))))
+         (expected-args (if (and (list? params) (not (has-dynamic-num-args? body)))
+                            (length params)
+                            #f)))
     (scan-x86-blocks! body)
-    (let* ((init-acc (list (list 'mov (list '%disp -8 'rsp) 'r10)
-                           (list '%label label)
-                           (list '%p2align 4)))
+    (let* ((guard-insts
+            (if expected-args
+                (list (list 'jcc 'jne "ulisp_arity_error")
+                      (list 'cmp 'rax (* expected-args 4)))
+                '()))
+           (init-acc (append guard-insts
+                             (list (list 'mov (list '%disp -8 'rsp) 'r10)
+                                   (list '%label label)
+                                   (list '%p2align 4))))
            (base-acc (if is-exported?
                          (append init-acc
                                  (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
@@ -1351,6 +1379,7 @@
     ;; Emit freestanding zero-libc runtime routines
     (emit-freestanding-runtime)
     (emit-oom-panic)
+    (emit-arity-error-panic)
     ;; Emit GC routines unless disabled
     (cond
       ((eq? gc-mode 'none) #f)

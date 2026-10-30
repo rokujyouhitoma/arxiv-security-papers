@@ -118,6 +118,26 @@
        (list '%global-ref var))
       (else var))))
 
+(define (check-direct-call-arity op actual expr)
+  (if (symbol? op)
+      (let ((fixed (builtin-fixed-arity op))
+            (min-a (builtin-min-arity op)))
+        (cond
+          ((number? fixed)
+           (if (not (= actual fixed))
+               (error (string-append "[ULISP ARITY ERROR] Builtin procedure '"
+                                     (symbol->string op) "' expects "
+                                     (number->string fixed) " argument(s), but got "
+                                     (number->string actual))
+                      expr)))
+          ((number? min-a)
+           (if (< actual min-a)
+               (error (string-append "[ULISP ARITY ERROR] Builtin procedure '"
+                                     (symbol->string op) "' requires at least "
+                                     (number->string min-a) " argument(s), but got "
+                                     (number->string actual))
+                      expr)))))))
+
 ;;; Forward declarations / helpers for mutual recursion in closure conversion
 (define (convert-expr expr var-map)
   (cond
@@ -178,6 +198,8 @@
          ((lambda)
           (convert-lambda #f (cadr expr) (caddr expr) var-map))
          (else
+          (if (symbol? op)
+              (check-direct-call-arity op (length (cdr expr)) expr))
           (let ((known-entry (and (symbol? op) (assq op var-map))))
             (cond
               ;; 1. Local known function via var-map (%known-fn label)

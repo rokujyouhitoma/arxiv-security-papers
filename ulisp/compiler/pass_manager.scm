@@ -174,26 +174,36 @@
   (let ((len (string-length str)))
     (if (>= len width)
         str
-        (let ((res (make-string width #\space)))
+        (let ((res (make-string width)))
           (let loop ((i 0))
             (if (< i len)
                 (begin
                   (string-set! res i (string-ref str i))
                   (loop (+ i 1)))
-                res))))))
+                (let fill ((j len))
+                  (if (< j width)
+                      (begin
+                        (string-set! res j #\space)
+                        (fill (+ j 1)))
+                      res))))))))
 
 (define (pad-left str width)
   (let ((len (string-length str)))
     (if (>= len width)
         str
         (let* ((pad (- width len))
-               (res (make-string width #\space)))
-          (let loop ((i 0))
-            (if (< i len)
+               (res (make-string width)))
+          (let fill ((j 0))
+            (if (< j pad)
                 (begin
-                  (string-set! res (+ pad i) (string-ref str i))
-                  (loop (+ i 1)))
-                res))))))
+                  (string-set! res j #\space)
+                  (fill (+ j 1)))
+                (let loop ((i 0))
+                  (if (< i len)
+                      (begin
+                        (string-set! res (+ pad i) (string-ref str i))
+                        (loop (+ i 1)))
+                      res))))))))
 
 (define (format-fixed-2-ms us)
   (let* ((total-cs (quotient (+ us 5) 10))
@@ -442,6 +452,9 @@
   (register-pass!
     (make-pass-descriptor 'pass-035-scope-resolve "Lexical Scope Resolution and Alpha-Conversion" 'frontend 0
       (lambda (forms) (scope-resolve-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
+  (register-pass!
+    (make-pass-descriptor 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
+      (lambda (forms) (check-arity-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
   (register-pass!
     (make-pass-descriptor 'pass-050-cp0 "CP0 Source Optimization" 'frontend 1
       (lambda (forms) (cp0-optimize forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
