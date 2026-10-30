@@ -74,7 +74,8 @@
        (let read-list ()
          (let ((c2 (ulisp-skip-ws-port p)))
            (cond
-             ((eof-object? c2) c2)
+             ((eof-object? c2)
+              (error "read: unexpected EOF while reading list" (port-filename p)))
              ((ulisp-char=? c2 #\))
               (port-read-char p) ; consume ')'
               '())
@@ -83,9 +84,16 @@
               (if (ulisp-is-delimiter? (port-peek-char p))
                   ;; Lone '.': dotted pair tail
                   (let ((cdr-val (port-read p)))
-                    (ulisp-skip-ws-port p)
-                    (port-read-char p) ; consume ')'
-                    cdr-val)
+                    (if (eof-object? cdr-val)
+                        (error "read: unexpected EOF while reading dotted pair tail" (port-filename p))
+                        (let ((c3 (ulisp-skip-ws-port p)))
+                          (if (eof-object? c3)
+                              (error "read: unexpected EOF expecting ')' after dotted pair" (port-filename p))
+                              (if (ulisp-char=? c3 #\))
+                                  (begin
+                                    (port-read-char p) ; consume ')'
+                                    cdr-val)
+                                  (error "read: expected ')' after dotted pair value" (port-filename p)))))))
                   ;; Token starting with '.' (e.g. the ellipsis '...')
                   (let ((elem (ulisp-read-dot-symbol p)))
                     (cons elem (read-list)))))
@@ -96,12 +104,18 @@
       ;; Quote: 'datum => (quote datum)
       ((ulisp-char=? c #\')
        (port-read-char p) ; consume '\''
-       (list 'quote (port-read p)))
+       (let ((datum (port-read p)))
+         (if (eof-object? datum)
+             (error "read: unexpected EOF after quote" (port-filename p))
+             (list 'quote datum))))
 
       ;; Quasiquote: `datum => (quasiquote datum)
       ((ulisp-char=? c #\`)
        (port-read-char p) ; consume '`'
-       (list 'quasiquote (port-read p)))
+       (let ((datum (port-read p)))
+         (if (eof-object? datum)
+             (error "read: unexpected EOF after quasiquote" (port-filename p))
+             (list 'quasiquote datum))))
 
       ;; Unquote: ,datum => (unquote datum), ,@datum => (unquote-splicing datum)
       ((ulisp-char=? c #\,)
@@ -109,8 +123,14 @@
        (if (ulisp-char=? (port-peek-char p) #\@)
            (begin
              (port-read-char p) ; consume '@'
-             (list 'unquote-splicing (port-read p)))
-           (list 'unquote (port-read p))))
+             (let ((datum (port-read p)))
+               (if (eof-object? datum)
+                   (error "read: unexpected EOF after unquote-splicing" (port-filename p))
+                   (list 'unquote-splicing datum))))
+           (let ((datum (port-read p)))
+             (if (eof-object? datum)
+                 (error "read: unexpected EOF after unquote" (port-filename p))
+                 (list 'unquote datum)))))
 
       ;; String: "..."
       ((ulisp-char=? c #\")
@@ -118,7 +138,9 @@
        (let read-str ((acc '()))
          (let ((ch (port-read-char p)))
            (cond
-             ((or (eof-object? ch) (ulisp-char=? ch #\"))
+             ((eof-object? ch)
+              (error "read: unexpected EOF while reading string literal" (port-filename p)))
+             ((ulisp-char=? ch #\")
               (ulisp-chars->string (reverse acc)))
              ((ulisp-char=? ch #\\)
               (let ((escaped (port-read-char p)))
@@ -149,7 +171,8 @@
             (let read-vec-list ()
               (let ((c3 (ulisp-skip-ws-port p)))
                 (cond
-                  ((eof-object? c3) c3)
+                  ((eof-object? c3)
+                   (error "read: unexpected EOF while reading vector literal" (port-filename p)))
                   ((ulisp-char=? c3 #\))
                    (port-read-char p) ; consume ')'
                    '(vector))
@@ -158,11 +181,14 @@
                          (let read-elems ()
                            (let ((elem (port-read p)))
                              (let ((c4 (ulisp-skip-ws-port p)))
-                               (if (or (eof-object? c4) (ulisp-char=? c4 #\)))
-                                   (begin
-                                     (if (not (eof-object? c4)) (port-read-char p))
-                                     (list elem))
-                                   (cons elem (read-elems))))))))))))
+                               (cond
+                                 ((eof-object? c4)
+                                  (error "read: unexpected EOF while reading vector literal" (port-filename p)))
+                                 ((ulisp-char=? c4 #\))
+                                  (port-read-char p)
+                                  (list elem))
+                                 (else
+                                  (cons elem (read-elems)))))))))))))
            ((and (ulisp-char=? c2 #\u) (ulisp-char=? (port-peek-char p) #\8))
             (port-read-char p) ; consume '8'
             (let ((c3 (ulisp-skip-ws-port p)))
@@ -172,7 +198,8 @@
                     (let read-bv-list ()
                       (let ((c4 (ulisp-skip-ws-port p)))
                         (cond
-                          ((eof-object? c4) c4)
+                          ((eof-object? c4)
+                           (error "read: unexpected EOF while reading bytevector literal" (port-filename p)))
                           ((ulisp-char=? c4 #\))
                            (port-read-char p)
                            '(bytevector))
@@ -181,11 +208,14 @@
                                  (let read-bv-elems ()
                                    (let ((elem (port-read p)))
                                      (let ((c5 (ulisp-skip-ws-port p)))
-                                       (if (or (eof-object? c5) (ulisp-char=? c5 #\)))
-                                           (begin
-                                             (if (not (eof-object? c5)) (port-read-char p))
-                                             (list elem))
-                                           (cons elem (read-bv-elems))))))))))))
+                                       (cond
+                                         ((eof-object? c5)
+                                          (error "read: unexpected EOF while reading bytevector literal" (port-filename p)))
+                                         ((ulisp-char=? c5 #\))
+                                          (port-read-char p)
+                                          (list elem))
+                                         (else
+                                          (cons elem (read-bv-elems)))))))))))))
                   #f)))
            ((ulisp-char=? c2 #\\)
             (let ((c3 (port-read-char p)))

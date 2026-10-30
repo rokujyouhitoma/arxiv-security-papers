@@ -146,4 +146,30 @@
              sum))))
   (test "10,000 read iterations sum" 10000 res))
 
+;;; --- Test 8: Issue #628 S-expression Reader EOF Diagnostics ---
+(write-string "--- Test 8: Reader EOF Syntax Error Diagnostics (Issue #628) ---\n")
+(let ((p (open-input-string "(1 2 3")))
+  (test "unclosed list raises error"
+        'caught-eof-error
+        (guard (e (else 'caught-eof-error))
+          (read p))))
+
+(let ((p (open-input-string "\"unclosed string")))
+  (test "unclosed string raises error"
+        'caught-eof-str
+        (guard (e (else 'caught-eof-str))
+          (read p))))
+
+(let ((p (open-input-string "#(1 2 3")))
+  (test "unclosed vector literal raises error"
+        'caught-eof-vec
+        (guard (e (else 'caught-eof-vec))
+          (read p))))
+
+(let ((p (open-input-string "'")))
+  (test "unclosed quote raises error"
+        'caught-eof-quote
+        (guard (e (else 'caught-eof-quote))
+          (read p))))
+
 (write-string "=== All R7RS String Ports Tests Completed Successfully! ===\n")

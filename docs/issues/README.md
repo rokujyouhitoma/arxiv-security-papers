@@ -14,7 +14,6 @@
 | **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | High | New | [616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
-| **628** | S 式括弧整合性 Linter（Parenthesis Depth Linter）の導入およびリーダー EOF 構文診断の強化 | Feature | High | New | [628-implement-sexpr-parenthesis-depth-linter-and-eof-diagnostic.md](628-implement-sexpr-parenthesis-depth-linter-and-eof-diagnostic.md) |
 | **629** | 静的引数個数検証（Static Arity Checker）およびネイティブ実行時 Arity ガード診断の実装 | Feature | High | New | [629-implement-static-arity-checker-and-runtime-arity-guard.md](629-implement-static-arity-checker-and-runtime-arity-guard.md) |
 
 
@@ -25,6 +24,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **628** | S 式括弧整合性 Linter（Parenthesis Depth Linter）の導入およびリーダー EOF 構文診断の強化 | Feature | 2026-10-30 | [closed/628-implement-sexpr-parenthesis-depth-linter-and-eof-diagnostic.md](closed/628-implement-sexpr-parenthesis-depth-linter-and-eof-diagnostic.md) |
 | **613** | ILisp における R7RS include / include-ci 構文およびライブラリ宣言 include の実装 | Feature | 2026-10-30 | [closed/613-implement-ilisp-r7rs-include-and-include-ci-support.md](closed/613-implement-ilisp-r7rs-include-and-include-ci-support.md) |
 | **627** | ULisp x86-64 ネイティブバックエンド Phase 4: ループ回転・末尾呼出し JMP 最適化・大域レジスタ割り付けと Pure C パリティ検証 | Feature | 2026-10-30 | [closed/627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md](closed/627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md) |
 | **626** | ULisp x86-64 ネイティブバックエンド Phase 3: S-RTyper 連携による完全アンボックス整数演算とタグ操作撲滅（Interprocedural Unboxing） | Feature | 2026-10-30 | [closed/626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md](closed/626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md) |
