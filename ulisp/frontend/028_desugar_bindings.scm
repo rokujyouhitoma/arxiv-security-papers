@@ -90,10 +90,144 @@
         (list 'let (list (list name val)) (if (null? rest) #f (make-body-expr rest))))))
 
 ;;; -----------------------------------------------------------------------
+;;; R7RS case-lambda Desugaring (Issue #609)
+;;; -----------------------------------------------------------------------
+
+(define (analyze-case-lambda-formals formals)
+  (cond
+    ((null? formals)
+     (list 'exact 0 '() #f))
+    ((symbol? formals)
+     (list 'rest 0 '() formals))
+    ((pair? formals)
+     (let loop ((cur formals) (fixed '()))
+       (cond
+         ((null? cur)
+          (list 'exact (length fixed) (reverse fixed) #f))
+         ((symbol? cur)
+          (list 'rest (length fixed) (reverse fixed) cur))
+         ((pair? cur)
+          (loop (cdr cur) (cons (car cur) fixed)))
+         (else
+          (error "Malformed formals in case-lambda:" formals)))))
+    (else
+     (error "Malformed formals in case-lambda:" formals))))
+
+(define (make-cl-params count)
+  (let loop ((i 0) (acc '()))
+    (if (>= i count)
+        (reverse acc)
+        (loop (+ i 1)
+              (cons (string->symbol (string-append "__cl_p" (number->string i)))
+                    acc)))))
+
+(define (symbols->cons-expr syms)
+  (if (null? syms)
+      ''()
+      (list 'cons (car syms) (symbols->cons-expr (cdr syms)))))
+
+(define (build-cl-rest-expr n-sym k num-params params)
+  (let ((sub-params (let loop ((ps params) (i 0))
+                      (cond
+                        ((null? ps) '())
+                        ((< i k) (loop (cdr ps) (+ i 1)))
+                        (else ps)))))
+    (let loop ((i 0))
+      (let ((actual-cnt (+ k i)))
+        (if (>= actual-cnt num-params)
+            (symbols->cons-expr sub-params)
+            (let ((slice (let take-loop ((ps sub-params) (cnt 0) (acc '()))
+                           (if (or (null? ps) (>= cnt i))
+                               (reverse acc)
+                               (take-loop (cdr ps) (+ cnt 1) (cons (car ps) acc))))))
+              (list 'if (list '= n-sym actual-cnt)
+                    (symbols->cons-expr slice)
+                    (loop (+ i 1)))))))))
+
+(define (desugar-case-lambda-clause clause n-sym num-params params)
+  (if (or (not (pair? clause)) (null? (cdr clause)))
+      (error "Malformed case-lambda clause:" clause)
+      (let* ((formals (car clause))
+             (bodies (cdr clause))
+             (info (analyze-case-lambda-formals formals))
+             (type (car info))
+             (k (cadr info))
+             (fixed-vars (caddr info))
+             (rest-var (cadddr info))
+             (test-expr
+              (if (eq? type 'exact)
+                  (list '= n-sym k)
+                  (if (= k 0)
+                      #t
+                      (list '>= n-sym k))))
+             (fixed-bindings
+              (let loop ((fvs fixed-vars) (ps params) (acc '()))
+                (if (null? fvs)
+                    (reverse acc)
+                    (loop (cdr fvs) (cdr ps) (cons (list (car fvs) (car ps)) acc)))))
+             (all-bindings
+              (if (eq? type 'rest)
+                  (append fixed-bindings
+                          (list (list rest-var (build-cl-rest-expr n-sym k num-params params))))
+                  fixed-bindings))
+             (clause-body
+              (if (null? all-bindings)
+                  (make-body-expr bodies)
+                  (list 'let all-bindings (make-body-expr bodies)))))
+        (list test-expr clause-body))))
+
+(define (desugar-case-lambda clauses)
+  (if (null? clauses)
+      (let ((n-sym (unique-symbol "cl_n_")))
+        (list 'lambda '()
+              (list 'let (list (list n-sym '(%num-args)))
+                    (list 'error "case-lambda: no matching clause for arity" n-sym))))
+      (let* ((clause-infos
+              (map (lambda (cl) (analyze-case-lambda-formals (car cl))) clauses))
+             (has-rest? (let loop ((infos clause-infos))
+                          (and (pair? infos)
+                               (or (eq? (caar infos) 'rest)
+                                   (loop (cdr infos))))))
+             (max-k (let loop ((infos clause-infos) (m 0))
+                      (if (null? infos)
+                          m
+                          (let ((k (cadar infos)))
+                            (loop (cdr infos) (if (> k m) k m))))))
+             (num-params (let ((target (if has-rest? (+ max-k 4) max-k)))
+                           (if (> target 8) target 8)))
+             (params (make-cl-params num-params))
+             (n-sym (unique-symbol "cl_n_"))
+             (dispatch-expr
+              (let loop ((cls clauses))
+                (if (null? cls)
+                    (list 'error "case-lambda: no matching clause for arity" n-sym)
+                    (let* ((cl (car cls))
+                           (desugared-cl (desugar-case-lambda-clause cl n-sym num-params params))
+                           (test (car desugared-cl))
+                           (body (cadr desugared-cl)))
+                      (if (eq? test #t)
+                          body
+                          (list 'if test
+                                body
+                                (loop (cdr cls))))))))
+             (sanitized-bindings
+              (let loop ((ps params) (i 0) (acc '()))
+                (if (null? ps)
+                    (reverse acc)
+                    (loop (cdr ps) (+ i 1)
+                          (cons (list (car ps) (list 'if (list '< i n-sym) (car ps) #f))
+                                acc))))))
+        (list 'lambda params
+              (list 'let (list (list n-sym '(%num-args)))
+                    (list 'let sanitized-bindings
+                          dispatch-expr))))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Bindings
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-bindings : L_src (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
+    ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))

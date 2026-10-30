@@ -111,6 +111,22 @@
 (let ((res (desugar-bindings '(begin (define x 10) (define y 20) (+ x y)))))
   (assert-equal "desugar-bindings expands to let" 'let (car res)))
 
+;; 14. analyze-case-lambda-formals analysis
+(assert-equal "analyze-case-lambda-formals null" '(exact 0 () #f) (analyze-case-lambda-formals '()))
+(assert-equal "analyze-case-lambda-formals fixed" '(exact 2 (a b) #f) (analyze-case-lambda-formals '(a b)))
+(assert-equal "analyze-case-lambda-formals dotted" '(rest 1 (a) rest) (analyze-case-lambda-formals '(a . rest)))
+(assert-equal "analyze-case-lambda-formals sym" '(rest 0 () args) (analyze-case-lambda-formals 'args))
+
+;; 15. desugar-case-lambda structure
+(let ((res (desugar-case-lambda '((() 0) ((x) x) ((x y) (+ x y))))))
+  (assert-equal "desugar-case-lambda root is lambda" 'lambda (car res))
+  (assert-equal "desugar-case-lambda params count" 8 (length (cadr res)))
+  (assert-true "desugar-case-lambda body has let" (and (pair? (caddr res)) (eq? (car (caddr res)) 'let))))
+
+;; 16. desugar-bindings on case-lambda
+(let ((res (desugar-bindings '(case-lambda ((x) x) ((x y) (+ x y))))))
+  (assert-equal "desugar-bindings on case-lambda produces lambda" 'lambda (car res)))
+
 (display "=======================================================") (newline)
 (display " Pass 028: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

@@ -721,6 +721,13 @@ assert "100" "(force (force (delay (delay 100))))"
 echo "-- Step 33b: Standalone R7RS Lazy Evaluation Test Suite (tests/test_promise.scm) --"
 make test_promise
 
+echo "-- Step 33c: Standalone R7RS case-lambda Test Suite (tests/test_case_lambda.scm) --"
+make test_case_lambda
+assert "42" "((case-lambda (() 10) ((x) (* x 2)) ((x y) (+ x y))) 21)"
+assert "30" "((case-lambda (() 10) ((x) (* x 2)) ((x y) (+ x y))) 10 20)"
+assert "10" "((case-lambda (() 10) ((x) (* x 2)) ((x y) (+ x y))))"
+assert "(1 2 3)" "((case-lambda ((x . rest) (cons x rest))) 1 2 3)"
+
 echo "-- Step 34: Standalone R7RS Standard Library Sequence Test Suite (tests/test_stdlib_r7rs.scm) --"
 make test_stdlib
 

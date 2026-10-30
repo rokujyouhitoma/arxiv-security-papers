@@ -286,6 +286,7 @@
          (Expr (desugar-chain-cmp 'string=? args))))
 
     ;; 2. Local Bindings (Pass 028)
+    ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))

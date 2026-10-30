@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **609** | R7RS case-lambda 構文および (scheme case-lambda) ライブラリの実装 | Feature | High | New | [609-implement-r7rs-case-lambda-syntax.md](609-implement-r7rs-case-lambda-syntax.md) |
 | **610** | R7RS (scheme base) 未実装コア手続き群 (string, 多引数 map/for-each, floor/, exact-integer-sqrt) の実装 | Feature | High | New | [610-implement-r7rs-base-core-procedures.md](610-implement-r7rs-base-core-procedures.md) |
 | **612** | R7RS (scheme char) ASCII 文字・文字列述語群および大小文字変換手続きの実装 | Feature | Medium | New | [612-implement-r7rs-char-ascii-predicates-and-conversions.md](612-implement-r7rs-char-ascii-predicates-and-conversions.md) |
 | **614** | ランタイムのデフォルト沈黙化（Quiet-by-Default）とコンパイラ成果物出力（明示的終了値 0 / -o オプション）の根本是正 | Refactor | High | New | [614-refactor-runtime-silence-by-default-and-compiler-cli-output.md](614-refactor-runtime-silence-by-default-and-compiler-cli-output.md) |
@@ -37,6 +36,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **609** | R7RS case-lambda 構文および (scheme case-lambda) ライブラリの実装 | Feature | 2026-10-30 | [closed/609-implement-r7rs-case-lambda-syntax.md](closed/609-implement-r7rs-case-lambda-syntax.md) |
 | **629** | 静的引数個数検証（Static Arity Checker）およびネイティブ実行時 Arity ガード診断の実装 | Feature | 2026-10-30 | [closed/629-implement-static-arity-checker-and-runtime-arity-guard.md](closed/629-implement-static-arity-checker-and-runtime-arity-guard.md) |
 | :---: | --- | :---: | :---: | :---: |
 | **628** | S 式括弧整合性 Linter（Parenthesis Depth Linter）の導入およびリーダー EOF 構文診断の強化 | Feature | 2026-10-30 | [closed/628-implement-sexpr-parenthesis-depth-linter-and-eof-diagnostic.md](closed/628-implement-sexpr-parenthesis-depth-linter-and-eof-diagnostic.md) |

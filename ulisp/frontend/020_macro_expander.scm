@@ -24,7 +24,7 @@
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
   (memq sym '(if begin lambda let let* letrec quote set! define define-values define-syntax syntax-rules define-record-type
-              cond case and or when unless delay delay-force do
+              cond case and or when unless delay delay-force do case-lambda
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
               vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector vector->string vector->string-range
@@ -391,6 +391,14 @@
                  (cons (macro-expand-all (cadr expanded) macro-table)
                        (safe-macro-expand-case-clauses (cddr expanded) macro-table)))
            expanded))
+      ((eq? (car expanded) (quote case-lambda))
+       (cons (quote case-lambda)
+             (map (lambda (clause)
+                    (if (pair? clause)
+                        (cons (car clause)
+                              (safe-macro-expand-list (cdr clause) macro-table))
+                        clause))
+                  (cdr expanded))))
       ((eq? (car expanded) (quote lambda))
        (if (and (pair? (cdr expanded)) (pair? (cddr expanded)))
            (cons (quote lambda)

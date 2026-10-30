@@ -226,6 +226,14 @@
 ;;; Validates call sites against builtin primitives and known procedures.
 ;;; -----------------------------------------------------------------------
 
+(define (ast-contains-num-args? expr)
+  (cond
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) '%num-args) #t)
+    (else
+     (or (ast-contains-num-args? (car expr))
+         (ast-contains-num-args? (cdr expr))))))
+
 (define (formal-params-arity params)
   (cond
     ((symbol? params) (cons 'min 0))
@@ -264,7 +272,10 @@
                                (var (car b))
                                (val (cadr b)))
                           (check-arity-expr val top-env local-env)
-                          (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                          (if (and (pair? val)
+                                   (eq? (car val) 'lambda)
+                                   (pair? (cdr val))
+                                   (not (and (pair? (cddr val)) (ast-contains-num-args? (caddr val)))))
                               (let ((ar (formal-params-arity (cadr val))))
                                 (if ar (loop (cdr bs) (cons (cons var ar) acc))
                                     (loop (cdr bs) acc)))
@@ -279,7 +290,10 @@
                         (let* ((b (car bs))
                                (var (car b))
                                (val (cadr b)))
-                          (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                          (if (and (pair? val)
+                                   (eq? (car val) 'lambda)
+                                   (pair? (cdr val))
+                                   (not (and (pair? (cddr val)) (ast-contains-num-args? (caddr val)))))
                               (let ((ar (formal-params-arity (cadr val))))
                                 (if ar (loop (cdr bs) (cons (cons var ar) acc))
                                     (loop (cdr bs) acc)))
@@ -318,7 +332,10 @@
                           (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (pair? (cddr d)))
                               (let ((name (cadr d))
                                     (val (caddr d)))
-                                (if (and (pair? val) (eq? (car val) 'lambda) (pair? (cdr val)))
+                                (if (and (pair? val)
+                                         (eq? (car val) 'lambda)
+                                         (pair? (cdr val))
+                                         (not (and (pair? (cddr val)) (ast-contains-num-args? (caddr val)))))
                                     (let ((ar (formal-params-arity (cadr val))))
                                       (if ar (loop (cdr ds) (cons (cons name ar) acc))
                                           (loop (cdr ds) acc)))

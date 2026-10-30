@@ -64,6 +64,7 @@
 | **4.2.6** | パラメータ一時束縛 | `(parameterize ((<param> <val>) ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `dynamic-wind` と連携する復元保証脱糖 |
 | **4.2.7** | 例外処理 (Exception handling) | `(guard (<var> <clause1> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 動的例外スタック脱糖 ([Issue #531](../../docs/issues/closed/531-implement-lightweight-exception-handling-guard-raise.md)) |
 | **4.2.8** | 準引用 (Quasiquotation) | `` `<qq-template> ``, `,`, `,@` | **◎** | [Pass 030](../frontend/030_desugar.scm) | リスト構築 `cons`/`append` へのマクロ脱糖 |
+| **4.2.9** | 多重アリティ分岐 (Case-lambda) | `(case-lambda <clause> ...)` | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 可変個引数パターンマッチング・動的アリティディスパッチ・GC安全スタックマップ ([Issue #609](../../docs/issues/closed/609-implement-r7rs-case-lambda-syntax.md)) |
 | **4.3.1** | 局所マクロ束縛 | `(let-syntax (<binding> ...) <body>)` | **×** | - | トップレベルマクロ優先のため未実装 |
 | **4.3.1** | 局所再帰マクロ束縛 | `(letrec-syntax (<binding> ...) <body>)` | **×** | - | 同上 |
 | **4.3.2** | 衛生的マクロ (Pattern language)| `(syntax-rules (<literal> ...) <syntax-rule> ...)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | パターン変数・省略記号 `...`・リテラル完全照合 ([Issue #533](../../docs/issues/closed/533-implement-hygienic-syntax-rules-macro-expander.md)) |
@@ -277,7 +278,7 @@
 | ライブラリ識別子 | 主な責務・内容 | サポート率 | 内部実装ファイル | 主なサポート機能 / 未サポート理由 |
 | :--- | :--- | :--- | :--- | :--- |
 | `(scheme base)` | コア構文、算術、リスト、ベクタ、継続、多値、ポート | **約 85%** | [ulisp/lib/scheme/base.sld](../lib/scheme/base.sld)<br>([ulisp/lib/*.scm](../lib/)) | 構文・`call/cc`・多値・ベクタ・GC 完備。有理数・複素数・浮動小数演算のみ非サポート ([Issue #562](../../docs/issues/562-implement-r7rs-standard-library-definitions-sld.md)) |
-| `(scheme case-lambda)` | 可変個引数パターンマッチング | **× 0%** | [ulisp/lib/scheme/case-lambda.sld](../lib/scheme/case-lambda.sld) | `case-lambda` 未実装（レスト引数 `(lambda (x . rest) ...)` で代替可能） |
+| `(scheme case-lambda)` | 可変個引数パターンマッチング | **◎ 100%** | [ulisp/lib/scheme/case-lambda.sld](../lib/scheme/case-lambda.sld)<br>[Pass 028](../frontend/028_desugar_bindings.scm) | `case-lambda` 構文の完全脱糖サポート（固定引数・可変個レスト引数・動的引数数ディスパッチ・引数不一致時例外 `raise`） ([Issue #609](../../docs/issues/closed/609-implement-r7rs-case-lambda-syntax.md)) |
 | `(scheme char)` | Unicode 大文字小文字変換・判定 | **約 20%** | [ulisp/lib/scheme/char.sld](../lib/scheme/char.sld)<br>([compiler/primitives.scm](../compiler/primitives.scm)) | `char=?`, `char->integer` のみ。Unicode 大小比較・Case-folding 未実装 |
 | `(scheme complex)` | 複素数算術 | **× 0%** | [ulisp/lib/scheme/complex.sld](../lib/scheme/complex.sld) | 非サポート（Fixnum 優先アーキテクチャ） |
 | `(scheme cxr)` | `caaa...r` 〜 `cddddr` (全24種) | **◎ 100%** | [ulisp/lib/scheme/cxr.sld](../lib/scheme/cxr.sld) | R7RS 規定の全 24 種合成ペアアクセサをライブラリ定義内で完備 |

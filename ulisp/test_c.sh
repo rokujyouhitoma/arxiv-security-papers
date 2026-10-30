@@ -320,6 +320,12 @@ assert_c "20" "(let ((x (vector 0))) (do ((i 0 (+ i 1))) ((= i 5) (vector-set! x
 assert_c "#f" "(do ((i 0 (+ i 1))) ((= i 3)))"
 assert_c "100" "(let ((count (vector 0))) (do () ((= (vector-ref count 0) 10) 100) (vector-set! count 0 (+ (vector-ref count 0) 1))))"
 
+echo "--- Step 16: R7RS Case-Lambda (Issue 609: case-lambda) ---"
+assert_c "42" "((case-lambda (() 42) ((x) (* x 2))))"
+assert_c "20" "((case-lambda (() 42) ((x) (* x 2))) 10)"
+assert_c "30" "((case-lambda ((x y) (+ x y)) ((x y . rest) (+ x y))) 10 20)"
+assert_c "(10 20 30)" "((case-lambda ((x . rest) (cons x rest))) 10 20 30)"
+
 rm -f "$TMP_C" "$TMP_BIN"
 
 echo "======================================================="
