@@ -6,29 +6,29 @@
 - **CPU Architecture**: `11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz` (4 Cores)
 - **Total Physical Memory**: `12251728 kB`
 - **C Toolchain**: `GCC 13` (`-O2 -Wall -Wextra`)
-- **Statistical Parameters**: `30 反復試行 (Warmup: 5 回)` による平均値 (Mean) ± 標準偏差 (StdDev) および中央値 (Median)
-- **Conforms to**: **DSN-33 (ULisp 統合仕様書)**, **Issue #620**, **Issue #622**, **Issue #623**, **Issue #624 (Phase 1)**, **Issue #625 (Phase 2)**
+- **Statistical Parameters**: `30 反復試行 (Warmup: 5 回)` / `Standard Evaluation (10 iters, 3 warmup)` による平均値 (Mean) ± 標準偏差 (StdDev) および中央値 (Median)
+- **Conforms to**: **DSN-33 (ULisp 統合仕様書)**, **Issue #620**, **Issue #622**, **Issue #623**, **Issue #624 (Phase 1)**, **Issue #625 (Phase 2)**, **Issue #626 (Phase 3)**
 
 ---
 
 ## 1. 概要と正典ベースラインの位置付け / Executive Summary
 
-本ドキュメントは、ULisp の次世代最適化施策（Issue #618 関数間アンボックス特化、Issue #578 スタック配置最適化、Pass 132/133 SSA/ピープホール）に着手する前に確定された**「公式正典ベースライン数値（Canonical Baseline Metrics）」**および各 Phase の進捗記録である。
+本ドキュメントは、ULisp の次世代最適化施策（Issue #618/#626 関数間アンボックス特化、Issue #578 スタック配置最適化、Pass 132/133 SSA/ピープホール）に着手する前に確定された**「公式正典ベースライン数値（Canonical Baseline Metrics）」**および各 Phase（Phase 1〜3）の進捗記録である。
 
 ULisp ネイティブコンパイラ（`ulisp/bin/ulisp-boot`）によって生成された Freestanding x86-64 ELF バイナリは、外部 C ライブラリ（glibc/musl）を一切リンクせず、Linux システムコール（`sys_write`, `sys_mmap`, `sys_clock_gettime`, `sys_exit`）を直接発行する完全自己完結型バイナリである。
 
 ---
 
-## 2. 実行時間ベンチマーク結果（Execution Latency — Phase 2 完了時点）
+## 2. 実行時間ベンチマーク結果（Execution Latency — Phase 3 完了時点）
 
-| ワークロード | Initial Baseline (ms) | Phase 1: Direct Call (ms) | Phase 2: SysV Reg ABI (ms) | ULisp C -O2 (ms) | Pure C -O2 (ms) | 対 Pure C 比率 (x86/Pure) | 対 ULisp C 比率 (x86/ULisp C) |
-|---|---|---|---|---|---|:---:|:---:|
-| **Fibonacci (fib 30)** | 17.12 ± 4.63 | 7.39 ± 0.35 | **5.59 ± 0.26 (min: 5.29)** | 10.47 ± 0.22 | 1.83 ± 0.17 | **3.05x** | **0.53x** |
-| **Tail-Recursive Loop (10M)** | 3.54 ± 0.24 | 3.41 ± 0.18 | **3.32 ± 0.14 (min: 3.16)** | 0.60 ± 0.08 | 0.54 ± 0.06 | **6.14x** | **5.56x** |
-| **Ackermann (ack 3 7)** | 5.89 ± 0.78 | 4.03 ± 0.31 | **4.17 ± 0.64 (min: 3.73)** | 4.05 ± 0.21 | 1.03 ± 0.14 | **4.05x** | **1.03x** |
-| **Higher-Order Closure (1M)** | 5.22 ± 2.25 | 4.88 ± 0.42 | **4.33 ± 0.67 (min: 3.63)** | 5.56 ± 0.31 | 0.54 ± 0.07 | **8.01x** | **0.78x** |
-| **List Alloc & Traverse (100k)** | 2.74 ± 1.12 | 2.12 ± 0.25 | **1.75 ± 0.21 (min: 1.50)** | 1.88 ± 0.27 | 1.10 ± 0.07 | **1.59x** | **0.93x** |
-| **Vector Indexing & Traverse (100k)** | 1.95 ± 0.57 | 1.52 ± 0.19 | **1.17 ± 0.06 (min: 1.10)** | 1.54 ± 0.22 | 0.87 ± 0.10 | **1.34x** | **0.76x** |
+| ワークロード | Initial Baseline (ms) | Phase 1: Direct Call (ms) | Phase 2: SysV Reg ABI (ms) | Phase 3: Interproc Unbox (ms) | ULisp C -O2 (ms) | Pure C -O2 (ms) | 対 Pure C 比率 (x86/Pure) | 対 ULisp C 比率 (x86/ULisp C) |
+|---|---|---|---|---|---|---|:---:|:---:|
+| **Fibonacci (fib 30)** | 17.12 ± 4.63 | 7.39 ± 0.35 | 5.59 ± 0.26 | **4.12 ± 0.15 (med: 4.09)** | 7.82 ± 0.44 | 1.80 ± 0.18 | **2.29x** | **0.53x** |
+| **Tail-Recursive Loop (10M)** | 3.54 ± 0.24 | 3.41 ± 0.18 | 3.32 ± 0.14 | **3.33 ± 0.20 (med: 3.26)** | 0.57 ± 0.03 | 0.50 ± 0.03 | **6.63x** | **5.84x** |
+| **Ackermann (ack 3 7)** | 5.89 ± 0.78 | 4.03 ± 0.31 | 4.17 ± 0.64 | **2.95 ± 0.25 (med: 2.86)** | 3.75 ± 0.30 | 1.05 ± 0.14 | **2.82x** | **0.79x** |
+| **Higher-Order Closure (1M)** | 5.22 ± 2.25 | 4.88 ± 0.42 | 4.33 ± 0.67 | **3.01 ± 0.50 (med: 2.80)** | 4.60 ± 0.19 | 0.51 ± 0.03 | **5.95x** | **0.65x** |
+| **List Alloc & Traverse (100k)** | 2.74 ± 1.12 | 2.12 ± 0.25 | 1.75 ± 0.21 | **1.45 ± 0.21 (med: 1.37)** | 4.27 ± 3.90 | 1.13 ± 0.10 | **1.28x** | **0.34x** |
+| **Vector Indexing & Traverse (100k)** | 1.95 ± 0.57 | 1.52 ± 0.19 | 1.17 ± 0.06 | **0.99 ± 0.03 (med: 0.98)** | 1.44 ± 0.20 | 0.80 ± 0.07 | **1.23x** | **0.69x** |
 
 ---
 
@@ -77,12 +77,12 @@ ULisp ネイティブコンパイラ（`ulisp/bin/ulisp-boot`）によって生�
 ```mermaid
 graph LR
     subgraph "Execution Time Ratio (Lower is Faster, Pure C = 1.0x)"
-        fib_30["Fibonacci (fib 30): 5.26x"]
-        loop_10m["Tail-Recursive Loop (10M): 6.43x"]
-        ack_3_7["Ackermann (ack 3 7): 5.36x"]
-        closure_1m["Higher-Order Closure (1M): 6.04x"]
-        list_100k["List Alloc & Traverse (100k): 2.30x"]
-        vector_100k["Vector Indexing & Traverse (100k): 2.23x"]
+        fib_30["Fibonacci (fib 30): 2.29x"]
+        loop_10m["Tail-Recursive Loop (10M): 6.63x"]
+        ack_3_7["Ackermann (ack 3 7): 2.82x"]
+        closure_1m["Higher-Order Closure (1M): 5.95x"]
+        list_100k["List Alloc & Traverse (100k): 1.28x"]
+        vector_100k["Vector Indexing & Traverse (100k): 1.23x"]
     end
 ```
 

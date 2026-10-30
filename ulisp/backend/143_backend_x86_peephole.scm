@@ -88,20 +88,59 @@
        (loop (cdr rest) acc))
 
       ;; -----------------------------------------------------------------
+      ;; Rule 4b: Redundant Jump Over Align to Next Immediate Label
+      ;; (jmp L1) followed immediately by (%p2align _) and (%label L1) -> (%p2align _) (%label L1)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (pair? (caddr rest))
+            (eq? (car (car rest)) 'jmp)
+            (eq? (car (cadr rest)) '%p2align)
+            (eq? (car (caddr rest)) '%label)
+            (equal? (cadr (car rest)) (cadr (caddr rest))))
+       (loop (cdr rest) acc))
+
+      ;; -----------------------------------------------------------------
       ;; Rule 5: Unreachable Code Elimination (Dead Code Elimination)
       ;; (jmp L) or (ret) followed by non-label instructions up to next label
       ;; -----------------------------------------------------------------
       ((and (x86-asm-unconditional-terminator? (car rest))
             (pair? (cdr rest))
-            (not (x86-asm-label-inst? (cadr rest))))
+            (not (x86-asm-label-inst? (cadr rest)))
+            (not (and (pair? (cadr rest)) (eq? (caadr rest) '%p2align))))
        (let skip ((tail (cdr rest)))
          (cond
            ((null? tail)
             (loop '() (cons (car rest) acc)))
-           ((x86-asm-label-inst? (car tail))
+           ((or (x86-asm-label-inst? (car tail))
+                (and (pair? (car tail)) (eq? (caar tail) '%p2align)))
             (loop tail (cons (car rest) acc)))
            (else
             (skip (cdr tail))))))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 4c: Jump to Return Simplification across intermediate blocks
+      ;; (jmp L1) ... (%label L_other) ... (%label L1) (ret) -> (ret)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (car rest))
+            (eq? (car (car rest)) 'jmp)
+            (let ((target (cadr (car rest))))
+              (let find-lbl ((scan (cdr rest)) (seen-other-label? #f))
+                (cond
+                  ((null? scan) #f)
+                  ((and (pair? (car scan))
+                        (eq? (caar scan) '%label)
+                        (equal? (cadar scan) target))
+                   (and seen-other-label?
+                        (pair? (cdr scan))
+                        (pair? (cadr scan))
+                        (eq? (caadr scan) 'ret)))
+                  ((and (pair? (car scan)) (eq? (caar scan) '%label))
+                   (find-lbl (cdr scan) #t))
+                  (else (find-lbl (cdr scan) seen-other-label?))))))
+       (loop (cdr rest) (cons '(ret) acc)))
 
       ;; Fallthrough: Keep instruction unchanged
       (else

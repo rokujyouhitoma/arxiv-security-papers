@@ -270,6 +270,10 @@
                                           (append known-env-entries var-map)))
                        (new-lbody (convert-expr lbody inner-map))
                        (fn-def (list '%function label params new-lbody)))
+                  (if (unboxed-fn? (car ki))
+                      (record-unboxed-fn! label))
+                  (if (unboxed-ret-fn? (car ki))
+                      (record-unboxed-ret-fn! label))
                   (add-lifted-function! fn-def)))
             (loop (cdr kis)))))
     ;; Prepare let-bindings for non-known bindings
@@ -348,6 +352,10 @@
                                 (append known-env-entries var-map)))
                        (new-lbody (convert-expr lbody inner-map))
                        (fn-def (list '%function label params new-lbody)))
+                  (if (unboxed-fn? (car ki))
+                      (record-unboxed-fn! label))
+                  (if (unboxed-ret-fn? (car ki))
+                      (record-unboxed-ret-fn! label))
                   (add-lifted-function! fn-def)))
             (loop (cdr kis)))))
     ;; 3. Filter non-known bindings and process them with original closure conversion

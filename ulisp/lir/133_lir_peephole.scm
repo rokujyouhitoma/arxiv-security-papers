@@ -56,6 +56,62 @@
        (loop (cddr rest) (cons (car rest) acc)))
 
       ;; -----------------------------------------------------------------
+      ;; Rule 2b: Store-Reload Elimination & Register Forwarding
+      ;; (%store %rsp offset src-reg) followed immediately by (%load dst-reg %rsp offset)
+      ;; -> if dst-reg == src-reg, keep only (%store %rsp offset src-reg)
+      ;; -> else (%store %rsp offset src-reg) followed by (%mov dst-reg src-reg)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest)))
+              (and (eq? (car i1) '%store)
+                   (eq? (car i2) '%load)
+                   (= (length i1) 4)
+                   (= (length i2) 4)
+                   (eq? (cadr i1) '%rsp)
+                   (eq? (caddr i2) '%rsp)
+                   (equal? (caddr i1) (cadddr i2))
+                   (lir-peephole-reg? (cadddr i1))
+                   (lir-peephole-reg? (cadr i2)))))
+       (let* ((i1 (car rest))
+              (i2 (cadr rest))
+              (src-reg (cadddr i1))
+              (dst-reg (cadr i2)))
+         (if (equal? dst-reg src-reg)
+             (loop (cddr rest) (cons i1 acc))
+             (loop (cddr rest) (cons (list '%mov dst-reg src-reg) (cons i1 acc))))))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 2c: Store + Compare + Branch Redundant Reload Elimination
+      ;; (%store %rsp off src-reg) (%mov %rax src-reg) (%cmp %rax imm) (%jump-cond cc lbl) (%load %rax %rsp off)
+      ;; -> drop the redundant (%load %rax %rsp off) since %rax already holds [rsp + off]
+      ;; -----------------------------------------------------------------
+      ((and (pair? rest)
+            (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (cdddr rest))
+            (pair? (cdr (cdddr rest)))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest))
+                  (i3 (caddr rest))
+                  (i4 (cadddr rest))
+                  (i5 (car (cdr (cdddr rest)))))
+              (and (pair? i1) (eq? (car i1) '%store) (= (length i1) 4) (eq? (cadr i1) '%rsp)
+                   (pair? i2) (eq? (car i2) '%mov) (= (length i2) 3) (eq? (cadr i2) '%rax) (equal? (caddr i2) (cadddr i1))
+                   (pair? i3) (memq (car i3) '(%cmp %raw-cmp)) (eq? (cadr i3) '%rax)
+                   (pair? i4) (eq? (car i4) '%jump-cond)
+                   (pair? i5) (eq? (car i5) '%load) (= (length i5) 4) (eq? (cadr i5) '%rax) (eq? (caddr i5) '%rsp)
+                   (equal? (cadddr i5) (caddr i1)))))
+       (let ((i1 (car rest))
+             (i2 (cadr rest))
+             (i3 (caddr rest))
+             (i4 (cadddr rest))
+             (tail (cdr (cdr (cdddr rest)))))
+         (loop tail (cons i4 (cons i3 (cons i2 (cons i1 acc)))))))
+
+      ;; -----------------------------------------------------------------
       ;; Rule 3: Redundant Jump to Next Immediate Label
       ;; (%jump L1) followed immediately by (%label L1) -> (%label L1)
       ;; -----------------------------------------------------------------

@@ -80,7 +80,26 @@
        (emit-lir! (list '%cmp '%rax r2))
        (emit-lir! (list '%jump-cond jmp-op target-label)))
 
-      ;; 6. General fallback: evaluate e1 to stack, evaluate e2 to rax, then cmp (stack si), rax
+      ;; 6. e2 is integer constant -> evaluate e1 to rax, then cmp rax, c2
+      (c2
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%cmp '%rax c2))
+       (emit-lir! (list '%jump-cond jmp-op target-label)))
+
+      ;; 7. e1 is integer constant -> evaluate e2 to rax, then reverse cmp rax, c1
+      (c1
+       (let ((rev-op (case op
+                       ((= eq?) '=)
+                       ((<)     '>)
+                       ((<=)    '>=)
+                       ((>)     '<)
+                       ((>=)    '<=)
+                       (else    op))))
+         (lir-compile-operand-for-op op e2 si env)
+         (emit-lir! (list '%cmp '%rax c1))
+         (emit-lir! (list '%jump-cond (jmp-cc-fn rev-op) target-label))))
+
+      ;; 8. General fallback: evaluate e1 to stack, evaluate e2 to rax, then cmp (stack si), rax
       (else
        (track-lir-si! si)
        (lir-compile-operand-for-op op e1 si env)
