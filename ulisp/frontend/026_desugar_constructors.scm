@@ -9,6 +9,17 @@
       ''()
       (cons 'cons (cons (car args) (cons (desugar-list (cdr args)) '())))))
 
+(define (desugar-string args)
+  (let* ((len (length args))
+         (str-sym (unique-symbol "str_")))
+    (let loop ((rest args) (idx 0) (sets '()))
+      (if (null? rest)
+          (list 'let (list (list str-sym (list 'make-string len)))
+                (cons 'begin (reverse (cons str-sym sets))))
+          (loop (cdr rest)
+                (+ idx 1)
+                (cons (list 'string-set! str-sym idx (car rest)) sets))))))
+
 (define (desugar-string-append args)
   (cond
     ((null? args) "")
@@ -83,6 +94,7 @@
 (define-pass desugar-constructors : L_src (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
     ((list . ,args) (desugar-list (map Expr args)))
+    ((string . ,args) (desugar-string (map Expr args)))
     ((string-append . ,args) (desugar-string-append (map Expr args)))
     ((vector . ,args) (desugar-vector (map Expr args)))
     ((vector-append . ,args) (desugar-vector-append (map Expr args)))

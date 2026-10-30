@@ -1232,16 +1232,18 @@
                 utf8->string string->utf8
                 close-port close-input-port close-output-port get-output-string
                 open-input-string force promise?
-                abs)) 1)
+                abs exact-integer-sqrt)) 1)
     ((memq op '(append equal? memq assq memv assv member assoc string=?
-                string-append2 bytevector-append2 list-ref list-tail)) 2)
+                string-append2 bytevector-append2 list-ref list-tail
+                modulo floor/ floor-quotient floor-remainder
+                truncate/ truncate-quotient truncate-remainder)) 2)
     (else #f)))
 
 (define (builtin-min-arity op)
   (cond
     ((memq op '(list vector string-append string)) 0)
     ((memq op '(string<=? string>=? string<? string>?)) 1)
-    ((memq op '(%with-handler)) 2)
+    ((memq op '(%with-handler map for-each apply)) 2)
     (else #f)))
 ;;; =======================================================================
 ;;; ULisp Compiler: Nanopass Framework Metadata & Reflection Engine
@@ -5629,6 +5631,17 @@
       ''()
       (cons 'cons (cons (car args) (cons (desugar-list (cdr args)) '())))))
 
+(define (desugar-string args)
+  (let* ((len (length args))
+         (str-sym (unique-symbol "str_")))
+    (let loop ((rest args) (idx 0) (sets '()))
+      (if (null? rest)
+          (list 'let (list (list str-sym (list 'make-string len)))
+                (cons 'begin (reverse (cons str-sym sets))))
+          (loop (cdr rest)
+                (+ idx 1)
+                (cons (list 'string-set! str-sym idx (car rest)) sets))))))
+
 (define (desugar-string-append args)
   (cond
     ((null? args) "")
@@ -5703,6 +5716,7 @@
 (define-pass desugar-constructors : L_src (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
     ((list . ,args) (desugar-list (map Expr args)))
+    ((string . ,args) (desugar-string (map Expr args)))
     ((string-append . ,args) (desugar-string-append (map Expr args)))
     ((vector . ,args) (desugar-vector (map Expr args)))
     ((vector-append . ,args) (desugar-vector-append (map Expr args)))
@@ -12786,6 +12800,15 @@
           (emit-lir! '(%sar %rcx 2))
           (emit-lir! '(%cqo))
           (emit-lir! '(%idiv %rcx))
+          (let ((l-done (unique-label-sym "mod_done")))
+            (emit-lir! (list '%cmp '%rdx 0))
+            (emit-lir! (list '%jump-if-zero l-done))
+            (emit-lir! '(%mov %r10 %rdx))
+            (emit-lir! '(%bit-xor %r10 %rcx))
+            (emit-lir! (list '%cmp '%r10 0))
+            (emit-lir! (list '%jump-cond "jge" l-done))
+            (emit-lir! '(%add %rdx %rcx))
+            (emit-lir! (list '%label l-done)))
           (emit-lir! '(%mov %rax %rdx))
           (emit-lir! '(%shl %rax 2)))
          ((quotient /)

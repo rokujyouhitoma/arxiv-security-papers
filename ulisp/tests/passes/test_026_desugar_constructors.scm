@@ -34,7 +34,13 @@
               '(cons 1 (cons 2 '()))
               (desugar-list '(1 2)))
 
-;; 2. desugar-string-append
+;; 2. desugar-string & desugar-string-append
+(let ((s-empty (desugar-string '())))
+  (assert-true "desugar-string empty returns let" (and (pair? s-empty) (eq? (car s-empty) 'let))))
+
+(let ((s-res (desugar-string '(#\a #\b))))
+  (assert-true "desugar-string returns let" (and (pair? s-res) (eq? (car s-res) 'let))))
+
 (assert-equal "desugar-string-append empty"
               ""
               (desugar-string-append '()))

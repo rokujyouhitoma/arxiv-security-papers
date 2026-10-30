@@ -295,6 +295,11 @@
             (string-set! s i (car curr))
             (loop (cdr curr) (+ i 1)))))))
 
+(define string
+  (case-lambda
+    (() "")
+    (chars (list->string chars))))
+
 ;; ---------------------------------------------------------------------
 ;; §6.7 Strings: Lexicographic Comparison (string<?, string>?, string<=?, string>=?)
 ;; ---------------------------------------------------------------------

@@ -66,6 +66,13 @@
     quotient
     remainder
     modulo
+    floor/
+    floor-quotient
+    floor-remainder
+    truncate/
+    truncate-quotient
+    truncate-remainder
+    exact-integer-sqrt
     gcd
     lcm
     square

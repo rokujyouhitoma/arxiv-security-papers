@@ -15,6 +15,7 @@
 (include "lib/reader.scm")
 (include "lib/equality.scm")
 (include "lib/predicates.scm")
+(include "lib/math.scm")
 (include "lib/bytevector.scm")
 (include "lib/vector.scm")
 (include "lib/promise.scm")

@@ -109,16 +109,16 @@
 | **6.2.6** | `zero?`, `positive?`, `negative?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 符号・ゼロ判定プリミティブ |
 | **6.2.6** | `odd?`, `even?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | LSB ビット判定 |
 | **6.2.6** | `+`, `-`, `*` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm)<br>[Pass 130](../lir/130_lir.scm) | 62-bit 加減乗算、定数畳み込み、x86/C バックエンド直結（加減算はタグシフト解除不要） |
-| **6.2.6** | `/`, `quotient`, `modulo` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数除算・剰余、ゼロ除算トラップ保護。※ネイティブ `modulo` は `idiv` 剰余 (切り捨て除算) のため、異符号オペランドでは R7RS の床除算剰余と結果が異なる (既知の制約) |
+| **6.2.6** | `/`, `quotient`, `modulo` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm)<br>[ulisp/lib/math.scm](../lib/math.scm) | 整数除算・床除算剰余、ゼロ除算トラップ保護。`modulo` は R7RS 準拠の `floor-remainder` として完全動作 ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.2.6** | `=`, `<`, `>`, `<=`, `>=` | **◎** | [Pass 130](../lir/130_lir.scm) | 整数比較、分岐融合 (Branch Fusion) 最適化 ([Issue #545](../../docs/issues/closed/545-implement-condition-branch-flag-fusion.md)) |
 | **6.2.6** | `max`, `min`, `abs` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 2引数固定で基本演算を提供 |
-| **6.2.6** | `floor/`, `floor-quotient`, `floor-remainder` | **×** | - | 床除算・剰余ペア (未実装) |
-| **6.2.6** | `truncate/`, `truncate-quotient`, `truncate-remainder` | **×** | - | 切り捨て除算・剰余ペア (未実装) |
+| **6.2.6** | `floor/`, `floor-quotient`, `floor-remainder` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 床除算・剰余ペア (多値および単値) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
+| **6.2.6** | `truncate/`, `truncate-quotient`, `truncate-remainder` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 切り捨て除算・剰余ペア (多値および単値) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.2.6** | `floor`, `ceiling`, `truncate`, `round` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数塔のため引数をそのまま返却（恒等写像） |
 | **6.2.6** | `rationalize` | **×** | - | 最適有理数近似 (未実装) |
 | **6.2.6** | `numerator`, `denominator` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数のみのため `numerator` は引数自身、`denominator` は 1 を返却 |
 | **6.2.6** | `remainder`, `gcd`, `lcm`, `square`, `expt` | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 切り捨て剰余、ユークリッド互除法 (可変長引数は `gcd-2`/`lcm-2` 左畳み込みへ脱糖)、繰り返し二乗法 O(log n) ([Issue #558](../../docs/issues/closed/558-implement-r7rs-elementary-integer-math-procedures.md)) |
-| **6.2.6** | `exact-integer-sqrt` | **×** | - | 平方根整数部と剰余の多値返却 (未実装) |
+| **6.2.6** | `exact-integer-sqrt` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 平方根整数部と剰余の多値返却 (二分探索法) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.2.6** | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `sqrt` | **×** | - | 超越関数 (浮動小数点非サポートのため未実装) |
 | **6.2.6** | `make-rectangular`, `make-polar`, `real-part`, `imag-part`, `magnitude`, `angle` | **×** | - | 複素数操作 (未実装) |
 | **6.2.6** | `exact`, `inexact` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 整数塔のため `exact` は恒等、`inexact` は非サポート |
@@ -174,7 +174,7 @@
 | **6.7** | `string-copy`, `string-copy!`, `string-fill!`, `string-map`, `string-for-each` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | オーバーラップ安全コピー・充填・反復マッピング ([Issue #551](../../docs/issues/closed/551-expand-r7rs-standard-library-procedures.md)) |
 | **6.7** | `string<?`, `string>?`, `string<=?`, `string>=?` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 複数引数対応辞書式順序比較述語 ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
 | **6.7** | `string->list`, `list->string` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 文字列・リスト相互変換 (スライス対応) ([Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md)) |
-| **6.7** | `string` | **×** | - | 可変長引数文字並びからの文字列構築 (未実装) |
+| **6.7** | `string` | **◎** | [ulisp/lib/string.scm](../lib/string.scm)<br>[Pass 026](../frontend/026_desugar_constructors.scm) | 可変長引数文字並びからの文字列構築 (Pass 026 脱糖およびランタイム第一級関数) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.7** | `string-ci=?`, `string-ci<?`, `string-ci>?`, `string-ci<=?`, `string-ci>=?` | **×** | - | 大文字小文字同一視辞書式順序比較 (未実装) |
 | **6.7** | `string-upcase`, `string-downcase`, `string-foldcase` | **×** | - | 文字列大小文字変換 (未実装) |
 
@@ -204,7 +204,7 @@
 | **6.10** | `call-with-current-continuation`, `call/cc` | **◎** | [spec_continuations_and_unwind.md](spec_continuations_and_unwind.md) | スタックセグメントコピー方式ファーストクラス継続 ([Issue #540](../../docs/issues/closed/540-implement-full-first-class-call-with-current-continuation-call-cc.md)) |
 | **6.10** | `dynamic-wind` | **◎** | [ulisp/lib/continuation.scm](../lib/continuation.scm) | LCA (Lowest Common Ancestor) による unwind/rewind 遷移 |
 | **6.10** | `values`, `call-with-values` | **◎** | [ulisp/lib/values.scm](../lib/values.scm) | ゼロアロケーション多値返却・受け渡し ABI ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
-| **6.10** | `map`, `for-each` (複数引数リスト版) | **△** | [ulisp/lib/list.scm](../lib/list.scm) | 単一リストおよびベクタ版は提供。多変数リスト版は未対応 |
+| **6.10** | `map`, `for-each` (複数引数リスト版) | **◎** | [ulisp/lib/list.scm](../lib/list.scm) | 単一リスト・2リスト高速走査および任意複数リスト引数対応 (最短終了) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 
 #### 6.11 例外機構 (Exceptions)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -277,7 +277,7 @@
 
 | ライブラリ識別子 | 主な責務・内容 | サポート率 | 内部実装ファイル | 主なサポート機能 / 未サポート理由 |
 | :--- | :--- | :--- | :--- | :--- |
-| `(scheme base)` | コア構文、算術、リスト、ベクタ、継続、多値、ポート | **約 85%** | [ulisp/lib/scheme/base.sld](../lib/scheme/base.sld)<br>([ulisp/lib/*.scm](../lib/)) | 構文・`call/cc`・多値・ベクタ・GC 完備。有理数・複素数・浮動小数演算のみ非サポート ([Issue #562](../../docs/issues/562-implement-r7rs-standard-library-definitions-sld.md)) |
+| `(scheme base)` | コア構文、算術、リスト、ベクタ、継続、多値、ポート | **約 92%** | [ulisp/lib/scheme/base.sld](../lib/scheme/base.sld)<br>([ulisp/lib/*.scm](../lib/)) | 構文・`call/cc`・多値・ベクタ・GC・整数除算ペア・平方根・多引数 map/for-each 完備。有理数・複素数・浮動小数演算のみ非サポート ([Issue #562](../../docs/issues/562-implement-r7rs-standard-library-definitions-sld.md), [Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | `(scheme case-lambda)` | 可変個引数パターンマッチング | **◎ 100%** | [ulisp/lib/scheme/case-lambda.sld](../lib/scheme/case-lambda.sld)<br>[Pass 028](../frontend/028_desugar_bindings.scm) | `case-lambda` 構文の完全脱糖サポート（固定引数・可変個レスト引数・動的引数数ディスパッチ・引数不一致時例外 `raise`） ([Issue #609](../../docs/issues/closed/609-implement-r7rs-case-lambda-syntax.md)) |
 | `(scheme char)` | Unicode 大文字小文字変換・判定 | **約 20%** | [ulisp/lib/scheme/char.sld](../lib/scheme/char.sld)<br>([compiler/primitives.scm](../compiler/primitives.scm)) | `char=?`, `char->integer` のみ。Unicode 大小比較・Case-folding 未実装 |
 | `(scheme complex)` | 複素数算術 | **× 0%** | [ulisp/lib/scheme/complex.sld](../lib/scheme/complex.sld) | 非サポート（Fixnum 優先アーキテクチャ） |

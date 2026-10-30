@@ -74,3 +74,68 @@
             (loop (* b b)
                   (quotient e 2)
                   (if (= (remainder e 2) 0) acc (* acc b)))))))
+
+;; ---------------------------------------------------------------------
+;; §6.2.6 Truncated & Floored Integer Division (SRFI 141)
+;; ---------------------------------------------------------------------
+(define (truncate-quotient n1 n2)
+  (quotient n1 n2))
+
+(define (truncate-remainder n1 n2)
+  (remainder n1 n2))
+
+(define (truncate/ n1 n2)
+  (let ((q (quotient n1 n2)))
+    (values q (- n1 (* q n2)))))
+
+(define (floor-quotient n1 n2)
+  (let* ((q (quotient n1 n2))
+         (r (- n1 (* q n2))))
+    (if (or (= r 0)
+            (if (< n1 0)
+                (< n2 0)
+                (>= n2 0)))
+        q
+        (- q 1))))
+
+(define (floor-remainder n1 n2)
+  (let ((r (remainder n1 n2)))
+    (if (or (= r 0)
+            (if (< n1 0)
+                (< n2 0)
+                (>= n2 0)))
+        r
+        (+ r n2))))
+
+(define (floor/ n1 n2)
+  (let* ((q (quotient n1 n2))
+         (r (- n1 (* q n2))))
+    (if (or (= r 0)
+            (if (< n1 0)
+                (< n2 0)
+                (>= n2 0)))
+        (values q r)
+        (values (- q 1) (+ r n2)))))
+
+;; ---------------------------------------------------------------------
+;; §6.2.6 exact-integer-sqrt (R7RS Section 6.2.6)
+;; ---------------------------------------------------------------------
+(define (exact-integer-sqrt k)
+  (if (< k 0)
+      (error "exact-integer-sqrt: argument must be non-negative" k)
+      (if (<= k 1)
+          (values k 0)
+          (let loop ((low 1)
+                     (high (if (< k 500000000) k 500000000))
+                     (ans 1))
+            (if (<= low high)
+                (let* ((mid (quotient (+ low high) 2))
+                       (sq (* mid mid)))
+                  (cond
+                    ((= sq k)
+                     (values mid 0))
+                    ((< sq k)
+                     (loop (+ mid 1) high mid))
+                    (else
+                     (loop low (- mid 1) ans))))
+                (values ans (- k (* ans ans))))))))

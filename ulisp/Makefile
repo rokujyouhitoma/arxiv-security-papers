@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental lint_sexpr test_lint_sexpr test_reader_eof
 
 CC = gcc
@@ -418,6 +418,13 @@ test_stdlib: $(COMPILER_DEP)
 	$(CC) -nostdlib -static build/test_stdlib.s -o build/test_stdlib
 	./build/test_stdlib
 
+test_base_procedures: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_base_procedures.scm > build/test_base_procedures_input.scm
+	$(ULISP_COMPILER) build/test_base_procedures_input.scm > build/test_base_procedures.s
+	$(CC) -nostdlib -static build/test_base_procedures.s -o build/test_base_procedures
+	./build/test_base_procedures
+
 test_process_context: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_process_context.scm > build/test_process_context_input.scm
@@ -829,7 +836,7 @@ test_gc_stats: compiler
 	@echo "=== Running Runtime GC Statistics Tests (Issue #622) ==="
 	bash tests/test_gc_stats.sh
 
-test: test_lint_sexpr test_reader_eof test_passes test_pass_manager test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
+test: test_lint_sexpr test_reader_eof test_passes test_pass_manager test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log
