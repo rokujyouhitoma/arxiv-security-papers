@@ -103,6 +103,32 @@
        (loop (cdr rest) acc))
 
       ;; -----------------------------------------------------------------
+      ;; Rule 4d: LEA Optimization
+      ;; (mov r1 r2) followed by (add r1 imm) -> (lea r1 (%disp imm r2))
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest)))
+              (and (eq? (car i1) 'mov)
+                   (eq? (car i2) 'add)
+                   (= (length i1) 3)
+                   (= (length i2) 3)
+                   (x86-asm-reg? (cadr i1))
+                   (x86-asm-reg? (caddr i1))
+                   (not (equal? (cadr i1) (caddr i1)))
+                   (equal? (cadr i2) (cadr i1))
+                   (or (integer? (caddr i2))
+                       (and (pair? (caddr i2)) (eq? (car (caddr i2)) '%imm) (integer? (cadr (caddr i2))))))))
+       (let* ((i1 (car rest))
+              (i2 (cadr rest))
+              (dst (cadr i1))
+              (src (caddr i1))
+              (imm (if (integer? (caddr i2)) (caddr i2) (cadr (caddr i2)))))
+         (loop (cddr rest) (cons (list 'lea dst (list '%disp imm src)) acc))))
+
+      ;; -----------------------------------------------------------------
       ;; Rule 5: Unreachable Code Elimination (Dead Code Elimination)
       ;; (jmp L) or (ret) followed by non-label instructions up to next label
       ;; -----------------------------------------------------------------

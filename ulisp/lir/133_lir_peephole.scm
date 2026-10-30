@@ -84,6 +84,61 @@
              (loop (cddr rest) (cons (list '%mov dst-reg src-reg) (cons i1 acc))))))
 
       ;; -----------------------------------------------------------------
+      ;; Rule 2b-2: 2-Store Slot-1 Reload Elimination
+      ;; (%store %rsp off1 src1) (%store %rsp off2 src2) (%load dst %rsp off1)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (pair? (caddr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest))
+                  (i3 (caddr rest)))
+              (and (eq? (car i1) '%store) (= (length i1) 4) (eq? (cadr i1) '%rsp)
+                   (eq? (car i2) '%store) (= (length i2) 4) (eq? (cadr i2) '%rsp)
+                   (not (equal? (caddr i1) (caddr i2)))
+                   (eq? (car i3) '%load) (= (length i3) 4) (eq? (caddr i3) '%rsp)
+                   (equal? (cadddr i3) (caddr i1))
+                   (lir-peephole-reg? (cadddr i1))
+                   (lir-peephole-reg? (cadr i3)))))
+       (let* ((i1 (car rest))
+              (i2 (cadr rest))
+              (i3 (caddr rest))
+              (src-reg (cadddr i1))
+              (dst-reg (cadr i3)))
+         (if (equal? dst-reg src-reg)
+             (loop (cdddr rest) (cons i2 (cons i1 acc)))
+             (loop (cdddr rest) (cons (list '%mov dst-reg src-reg) (cons i2 (cons i1 acc)))))))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 2b-3: 2-Store Slot-2 Reload Elimination
+      ;; (%store %rsp off1 src1) (%store %rsp off2 src2) (%load dst %rsp off2)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (pair? (caddr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest))
+                  (i3 (caddr rest)))
+              (and (eq? (car i1) '%store) (= (length i1) 4) (eq? (cadr i1) '%rsp)
+                   (eq? (car i2) '%store) (= (length i2) 4) (eq? (cadr i2) '%rsp)
+                   (eq? (car i3) '%load) (= (length i3) 4) (eq? (caddr i3) '%rsp)
+                   (equal? (cadddr i3) (caddr i2))
+                   (lir-peephole-reg? (cadddr i2))
+                   (lir-peephole-reg? (cadr i3)))))
+       (let* ((i1 (car rest))
+              (i2 (cadr rest))
+              (i3 (caddr rest))
+              (src-reg (cadddr i2))
+              (dst-reg (cadr i3)))
+         (if (equal? dst-reg src-reg)
+             (loop (cdddr rest) (cons i2 (cons i1 acc)))
+             (loop (cdddr rest) (cons (list '%mov dst-reg src-reg) (cons i2 (cons i1 acc)))))))
+
+      ;; -----------------------------------------------------------------
       ;; Rule 2c: Store + Compare + Branch Redundant Reload Elimination
       ;; (%store %rsp off src-reg) (%mov %rax src-reg) (%cmp %rax imm) (%jump-cond cc lbl) (%load %rax %rsp off)
       ;; -> drop the redundant (%load %rax %rsp off) since %rax already holds [rsp + off]
