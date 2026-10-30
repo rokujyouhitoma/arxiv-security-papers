@@ -127,6 +127,8 @@ _SPECIAL_FORM_NAMES = {
     "letrec",
     "letrec*",
     "begin",
+    "include",
+    "include-ci",
     "define",
     "define-values",
     "set!",
@@ -645,6 +647,48 @@ def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None)
                         eval_expr(step, curr_env)
                     curr_expr = body_exprs[-1]
                     continue
+
+                # (include string1 string2 ...) / (include-ci string1 string2 ...)
+                if op_name in ("include", "include-ci"):
+                    args = to_py_list(curr_expr.cdr)
+                    if not args:
+                        raise SchemeException(
+                            ErrorObject(
+                                f"{op_name}: requires at least one filename string",
+                                NIL,
+                                kind="file",
+                            )
+                        )
+                    from ilisp.reader import (
+                        active_include_context,
+                        extract_base_dir,
+                        extract_caller_file,
+                        read_all_from_file,
+                        resolve_include_path,
+                    )
+
+                    caller_file = extract_caller_file(curr_expr)
+                    base_dir = extract_base_dir(curr_expr)
+                    fold_case = op_name == "include-ci"
+
+                    last_res: Any = NIL
+                    for arg in args:
+                        if not isinstance(arg, str):
+                            raise SchemeException(
+                                ErrorObject(
+                                    f"{op_name}: argument must be a string, got {arg!r}",
+                                    NIL,
+                                    kind="file",
+                                )
+                            )
+                        canon_path = resolve_include_path(arg, base_dir=base_dir)
+                        with active_include_context(
+                            canon_path, caller_loc_file=caller_file
+                        ):
+                            exprs = read_all_from_file(canon_path, fold_case=fold_case)
+                            for step in exprs:
+                                last_res = eval_expr(step, curr_env)
+                    return last_res
 
                 # (define var val) or (define (name params...) body...)
                 if op_name == "define":

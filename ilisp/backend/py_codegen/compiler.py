@@ -228,6 +228,33 @@ class PythonASTCompiler:
             eval_expr(expr, self.env)
             return expr
 
+        if isinstance(op, Symbol) and op.name in ("include", "include-ci"):
+            from ilisp.reader import (
+                active_include_context,
+                extract_base_dir,
+                extract_caller_file,
+                read_all_from_file,
+                resolve_include_path,
+            )
+
+            caller_file = extract_caller_file(expr)
+            base_dir = extract_base_dir(expr)
+            fold_case = op.name == "include-ci"
+            args = to_py_list(expr.cdr)
+            all_exprs: List[Any] = []
+            for arg in args:
+                if isinstance(arg, str):
+                    canon_path = resolve_include_path(arg, base_dir=base_dir)
+                    with active_include_context(
+                        canon_path, caller_loc_file=caller_file
+                    ):
+                        sub_exprs = read_all_from_file(canon_path, fold_case=fold_case)
+                        all_exprs.extend(sub_exprs)
+            expanded = Cons(
+                Symbol.intern("begin"), to_lisp_list(all_exprs), loc=expr.loc
+            )
+            return self._expand_macros(expanded)
+
         if isinstance(op, Symbol):
             op_name = op.name
 

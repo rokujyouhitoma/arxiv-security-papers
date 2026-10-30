@@ -21,7 +21,7 @@ from ilisp.interop import (
     register_import_hook,
     unregister_import_hook,
 )
-from ilisp.reader import LispSyntaxError, Reader, read_all, read_one
+from ilisp.reader import LispSyntaxError, Reader, read_all, read_all_from_file, read_one
 from ilisp.repl import repl, run_file, run_string
 from ilisp.types import (
     NIL,
@@ -71,6 +71,7 @@ __all__ = [
     "Reader",
     "read_one",
     "read_all",
+    "read_all_from_file",
     "LispSyntaxError",
     "repl",
     "run_string",

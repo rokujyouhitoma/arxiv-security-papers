@@ -9,7 +9,6 @@
 | **609** | R7RS case-lambda 構文および (scheme case-lambda) ライブラリの実装 | Feature | High | New | [609-implement-r7rs-case-lambda-syntax.md](609-implement-r7rs-case-lambda-syntax.md) |
 | **610** | R7RS (scheme base) 未実装コア手続き群 (string, 多引数 map/for-each, floor/, exact-integer-sqrt) の実装 | Feature | High | New | [610-implement-r7rs-base-core-procedures.md](610-implement-r7rs-base-core-procedures.md) |
 | **612** | R7RS (scheme char) ASCII 文字・文字列述語群および大小文字変換手続きの実装 | Feature | Medium | New | [612-implement-r7rs-char-ascii-predicates-and-conversions.md](612-implement-r7rs-char-ascii-predicates-and-conversions.md) |
-| **613** | ILisp における R7RS include / include-ci 構文およびライブラリ宣言 include の実装 | Feature | High | New | [613-implement-ilisp-r7rs-include-and-include-ci-support.md](613-implement-ilisp-r7rs-include-and-include-ci-support.md) |
 | **614** | ランタイムのデフォルト沈黙化（Quiet-by-Default）とコンパイラ成果物出力（明示的終了値 0 / -o オプション）の根本是正 | Refactor | High | New | [614-refactor-runtime-silence-by-default-and-compiler-cli-output.md](614-refactor-runtime-silence-by-default-and-compiler-cli-output.md) |
 | **615** | ビルドパイプラインからの GCC 呼出し排除と GNU as / ld 直接駆動（脱 GCC ドライバ）への移行 | Refactor | High | New | [615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md](615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md) |
 | **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | High | New | [616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
@@ -26,6 +25,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: |
+| **613** | ILisp における R7RS include / include-ci 構文およびライブラリ宣言 include の実装 | Feature | 2026-10-30 | [closed/613-implement-ilisp-r7rs-include-and-include-ci-support.md](closed/613-implement-ilisp-r7rs-include-and-include-ci-support.md) |
 | **627** | ULisp x86-64 ネイティブバックエンド Phase 4: ループ回転・末尾呼出し JMP 最適化・大域レジスタ割り付けと Pure C パリティ検証 | Feature | 2026-10-30 | [closed/627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md](closed/627-phase4-loop-rotation-tail-call-jmp-and-global-regalloc.md) |
 | **626** | ULisp x86-64 ネイティブバックエンド Phase 3: S-RTyper 連携による完全アンボックス整数演算とタグ操作撲滅（Interprocedural Unboxing） | Feature | 2026-10-30 | [closed/626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md](closed/626-phase3-interprocedural-unboxing-and-raw-int64-arithmetic.md) |
 | **625** | ULisp x86-64 ネイティブバックエンド Phase 2: System V AMD64 レジスタ引数受渡し呼出規約（Register-Based Calling Convention）の導入 | Feature | 2026-10-29 | [closed/625-phase2-system-v-register-based-calling-convention.md](closed/625-phase2-system-v-register-based-calling-convention.md) |

@@ -6,10 +6,20 @@ modifiers (only, except, prefix, rename) and a global LibraryRegistry.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from ilisp.env import Environment, make_initial_env
-from ilisp.types import Cons, Symbol, is_null, is_pair, to_py_list
+from ilisp.types import (
+    NIL,
+    Cons,
+    ErrorObject,
+    SchemeException,
+    Symbol,
+    is_null,
+    is_pair,
+    to_py_list,
+)
 
 
 def parse_library_name(name_expr: Any) -> Tuple[str, ...]:
@@ -425,31 +435,110 @@ def execute_define_library(
 
     export_decls: List[Any] = []
 
-    # Pass 1: Process imports and begin expressions to populate lib_env
-    for decl in decls:
-        if not is_pair(decl) or not isinstance(decl.car, Symbol):
-            raise SyntaxError(f"Invalid declaration in define-library: {decl!r}")
+    # Pass 1: Process imports, begins, and includes to populate lib_env
+    from ilisp.reader import (
+        active_include_context,
+        extract_base_dir,
+        extract_caller_file,
+        read_all_from_file,
+        resolve_include_path,
+    )
 
-        decl_type = decl.car.name
+    caller_file = extract_caller_file(form)
+    form_base_dir = extract_base_dir(form)
 
-        # (import import-set ...)
-        if decl_type == "import":
-            import_specs = to_py_list(decl.cdr)
-            for spec in import_specs:
-                bindings = resolve_import_set(spec, registry)
-                for sym, val in bindings.items():
-                    lib_env.define(sym, val)
+    def process_decls(
+        decls_to_process: List[Any],
+        current_file: Optional[str] = None,
+        current_base_dir: Optional[str] = None,
+    ) -> None:
+        for decl in decls_to_process:
+            if not is_pair(decl) or not isinstance(decl.car, Symbol):
+                raise SyntaxError(f"Invalid declaration in define-library: {decl!r}")
 
-        # (begin expr ...)
-        elif decl_type == "begin":
-            body_exprs = to_py_list(decl.cdr)
-            for expr in body_exprs:
-                eval_expr(expr, lib_env)
+            decl_type = decl.car.name
 
-        elif decl_type == "export":
-            export_decls.append(decl)
-        else:
-            raise SyntaxError(f"Unsupported library declaration: {decl_type}")
+            # (import import-set ...)
+            if decl_type == "import":
+                import_specs = to_py_list(decl.cdr)
+                for spec in import_specs:
+                    bindings = resolve_import_set(spec, registry)
+                    for sym, val in bindings.items():
+                        lib_env.define(sym, val)
+
+            # (begin expr ...)
+            elif decl_type == "begin":
+                body_exprs = to_py_list(decl.cdr)
+                for expr in body_exprs:
+                    eval_expr(expr, lib_env)
+
+            # (include <string1> ...) or (include-ci <string1> ...)
+            elif decl_type in ("include", "include-ci"):
+                filenames = to_py_list(decl.cdr)
+                if not filenames:
+                    raise SchemeException(
+                        ErrorObject(
+                            f"{decl_type}: requires at least one filename string",
+                            NIL,
+                            kind="file",
+                        )
+                    )
+                b_dir = extract_base_dir(decl) or current_base_dir or form_base_dir
+                c_file = extract_caller_file(decl) or current_file or caller_file
+                fold_case = decl_type == "include-ci"
+                for fname in filenames:
+                    if not isinstance(fname, str):
+                        raise SchemeException(
+                            ErrorObject(
+                                f"{decl_type}: argument must be a string, got {fname!r}",
+                                NIL,
+                                kind="file",
+                            )
+                        )
+                    canon_path = resolve_include_path(fname, base_dir=b_dir)
+                    with active_include_context(canon_path, caller_loc_file=c_file):
+                        sub_exprs = read_all_from_file(canon_path, fold_case=fold_case)
+                        for expr in sub_exprs:
+                            eval_expr(expr, lib_env)
+
+            # (include-library-declarations <string1> ...)
+            elif decl_type == "include-library-declarations":
+                filenames = to_py_list(decl.cdr)
+                if not filenames:
+                    raise SchemeException(
+                        ErrorObject(
+                            f"{decl_type}: requires at least one filename string",
+                            NIL,
+                            kind="file",
+                        )
+                    )
+                b_dir = extract_base_dir(decl) or current_base_dir or form_base_dir
+                c_file = extract_caller_file(decl) or current_file or caller_file
+                for fname in filenames:
+                    if not isinstance(fname, str):
+                        raise SchemeException(
+                            ErrorObject(
+                                f"{decl_type}: argument must be a string, got {fname!r}",
+                                NIL,
+                                kind="file",
+                            )
+                        )
+                    canon_path = resolve_include_path(fname, base_dir=b_dir)
+                    with active_include_context(canon_path, caller_loc_file=c_file):
+                        sub_decls = read_all_from_file(canon_path, fold_case=False)
+                        sub_base_dir = os.path.dirname(canon_path)
+                        process_decls(
+                            sub_decls,
+                            current_file=canon_path,
+                            current_base_dir=sub_base_dir,
+                        )
+
+            elif decl_type == "export":
+                export_decls.append(decl)
+            else:
+                raise SyntaxError(f"Unsupported library declaration: {decl_type}")
+
+    process_decls(decls, current_file=caller_file, current_base_dir=form_base_dir)
 
     # Pass 2: Process exports now that all bindings exist in lib_env
     for decl in export_decls:

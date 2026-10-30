@@ -7,9 +7,20 @@ Scheme reader macros (', `, ,, ,@, #;).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+import contextlib
+import os
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
 
-from ilisp.types import EOF, NIL, Cons, SchemeComplex, SourceLocation, Symbol
+from ilisp.types import (
+    EOF,
+    NIL,
+    Cons,
+    ErrorObject,
+    SchemeComplex,
+    SchemeException,
+    SourceLocation,
+    Symbol,
+)
 
 if TYPE_CHECKING:
     from ilisp.port import TextualInputPort
@@ -46,6 +57,7 @@ class Reader:
         self,
         source: Union[str, TextualInputPort],
         filename: str = "<stdin>",
+        fold_case: bool = False,
     ) -> None:
         if isinstance(source, str):
             from ilisp.port import StringInputPort
@@ -58,7 +70,7 @@ class Reader:
         self.line: int = 1
         self.col: int = 1
         self._unread_buf: List[str] = []
-        self.fold_case: bool = False
+        self.fold_case: bool = fold_case
         self.labels: Dict[int, Any] = {}
 
     def _current_loc(self) -> SourceLocation:
@@ -815,15 +827,17 @@ class Reader:
         return result
 
 
-def read_one(text: str, filename: str = "<stdin>") -> Any:
+def read_one(text: str, filename: str = "<stdin>", fold_case: bool = False) -> Any:
     """Read a single S-expression from string."""
-    reader = Reader(text, filename=filename)
+    reader = Reader(text, filename=filename, fold_case=fold_case)
     return reader.read()
 
 
-def read_all(text: str, filename: str = "<stdin>") -> List[Any]:
+def read_all(
+    text: str, filename: str = "<stdin>", fold_case: bool = False
+) -> List[Any]:
     """Read all S-expressions from string until EOF."""
-    reader = Reader(text, filename=filename)
+    reader = Reader(text, filename=filename, fold_case=fold_case)
     results: List[Any] = []
     while True:
         datum = reader.read()
@@ -831,3 +845,121 @@ def read_all(text: str, filename: str = "<stdin>") -> List[Any]:
             break
         results.append(datum)
     return results
+
+
+def read_all_from_file(filepath: str, fold_case: bool = False) -> List[Any]:
+    """Read all S-expressions from a file path."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+    except (OSError, IOError) as exc:
+        raise SchemeException(
+            ErrorObject(
+                f"include: cannot read file '{filepath}': {exc}", NIL, kind="file"
+            )
+        ) from exc
+    return read_all(content, filename=filepath, fold_case=fold_case)
+
+
+_active_include_stack: List[str] = []
+
+
+def extract_base_dir(node: Any) -> Optional[str]:
+    """Extract directory path from AST node source location if available."""
+    loc = getattr(node, "loc", None)
+    filepath = getattr(loc, "file", None) or getattr(loc, "filename", None)
+    if isinstance(filepath, str) and filepath not in ("<stdin>", "<string>", ""):
+        return str(os.path.dirname(os.path.abspath(filepath)))
+    return None
+
+
+def extract_caller_file(node: Any) -> Optional[str]:
+    """Extract filename from AST node source location if available."""
+    loc = getattr(node, "loc", None)
+    filepath = getattr(loc, "file", None) or getattr(loc, "filename", None)
+    if isinstance(filepath, str) and filepath not in ("<stdin>", "<string>", ""):
+        return str(filepath)
+    return None
+
+
+def resolve_include_path(filename: str, base_dir: Optional[str] = None) -> str:
+    """Resolve an include file path against base directory, ILISP_LOAD_PATH, or cwd."""
+    if os.path.isabs(filename):
+        cand = os.path.realpath(filename)
+        if os.path.isfile(cand):
+            return cand
+        raise SchemeException(
+            ErrorObject(
+                f"include: cannot find or open file '{filename}'", NIL, kind="file"
+            )
+        )
+
+    candidates: List[str] = []
+    if base_dir:
+        candidates.append(base_dir)
+
+    load_path_env = os.environ.get("ILISP_LOAD_PATH", "")
+    if load_path_env:
+        for p in load_path_env.split(os.pathsep):
+            if p.strip():
+                candidates.append(p.strip())
+
+    candidates.append(os.getcwd())
+
+    for c_dir in candidates:
+        cand = os.path.realpath(os.path.join(c_dir, filename))
+        if os.path.isfile(cand):
+            return cand
+
+    raise SchemeException(
+        ErrorObject(f"include: cannot find or open file '{filename}'", NIL, kind="file")
+    )
+
+
+@contextlib.contextmanager
+def active_include_context(
+    canonical_path: str, caller_loc_file: Optional[str] = None
+) -> Iterator[None]:
+    """Context manager tracking active include file paths to prevent circular inclusion."""
+    caller_added = False
+    real_caller: Optional[str] = None
+    if caller_loc_file:
+        real_caller = os.path.realpath(caller_loc_file)
+        if real_caller == canonical_path:
+            raise SchemeException(
+                ErrorObject(
+                    f"include: circular dependency detected: '{canonical_path}' includes itself",
+                    NIL,
+                    kind="file",
+                )
+            )
+        if real_caller not in _active_include_stack:
+            _active_include_stack.append(real_caller)
+            caller_added = True
+
+    if canonical_path in _active_include_stack:
+        chain = " -> ".join(_active_include_stack + [canonical_path])
+        if caller_added and real_caller and real_caller in _active_include_stack:
+            _active_include_stack.remove(real_caller)
+        raise SchemeException(
+            ErrorObject(
+                f"include: circular dependency detected: {chain}",
+                NIL,
+                kind="file",
+            )
+        )
+
+    _active_include_stack.append(canonical_path)
+    try:
+        yield
+    finally:
+        if _active_include_stack and _active_include_stack[-1] == canonical_path:
+            _active_include_stack.pop()
+        elif canonical_path in _active_include_stack:
+            _active_include_stack.remove(canonical_path)
+
+        if caller_added and real_caller:
+            if _active_include_stack and _active_include_stack[-1] == real_caller:
+                _active_include_stack.pop()
+            elif real_caller in _active_include_stack:
+                _active_include_stack.remove(real_caller)
