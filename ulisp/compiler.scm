@@ -4357,10 +4357,14 @@
   (entry Program)
   (FunctionDecl (fn)
     (%function x (x ...) e))
+  (Atom (a)
+    (+ (%unbox-fixnum a)))
   (Expr (e)
     (- (lambda (x ...) e ...))
     (+ (annotate x e)
-       (%stack-cons a1 a2)))
+       (%stack-cons a1 a2)
+       (%box-fixnum e)
+       (%unbox-fixnum e)))
   (Program (p)
     (- (%program (d ...) e))
     (+ (%program (fn ...) e))))
@@ -7906,30 +7910,45 @@
          ;; Mutual recursion (letrec)
          ((letrec)
           (let* ((bindings (cadr expr))
-                 (body-expr (if (null? (cddr expr)) #f (caddr expr))))
-            (if (and (= (length bindings) 1)
+                 (body-expr (if (null? (cddr expr)) #f (caddr expr)))
+                 (init-call-args
+                  (if (and (= (length bindings) 1)
+                           (let* ((b (car bindings))
+                                  (val (cadr b)))
+                             (and (pair? val) (eq? (car val) 'lambda))))
+                      (extract-initial-call-args (caar bindings) body-expr)
+                      #f)))
+            (if (and init-call-args
                      (let* ((b (car bindings))
-                            (val (cadr b)))
-                       (and (pair? val) (eq? (car val) 'lambda)))
-                     (pair? body-expr)
-                     (eq? (car body-expr) (caar bindings))
-                     (let check-nums ((is (cdr body-expr)))
-                       (if (null? is) #t
-                           (if (number? (car is))
-                               (check-nums (cdr is))
-                               #f))))
-                ;; Desugared named-let loop
+                            (val (cadr b))
+                            (params (cadr val)))
+                       (and (= (length init-call-args) (length params))
+                            (let check-nums ((is init-call-args))
+                              (if (null? is) #t
+                                  (let ((arg-t (abstract-eval-expr (car is) env)))
+                                    (if (or (number? (car is)) (type-fixnum? arg-t))
+                                        (check-nums (cdr is))
+                                        #f)))))))
+                ;; Desugared named-let loop or single recursive numeric function
                 (let* ((b (car bindings))
                        (fn-name (car b))
                        (fn-val (cadr b))
                        (params (cadr fn-val))
                        (lbodies (cddr fn-val))
-                       (inits (cdr body-expr))
+                       (inits init-call-args)
                        (named-bindings (let make-bs ((ps params) (is inits) (acc '()))
                                          (if (or (null? ps) (null? is))
                                              (reverse acc)
-                                             (make-bs (cdr ps) (cdr is) (cons (list (car ps) (car is)) acc))))))
-                  (abstract-eval-named-let fn-name named-bindings lbodies env))
+                                             (make-bs (cdr ps) (cdr is) (cons (list (car ps) (car is)) acc)))))
+                       (fn-ret-t (abstract-eval-named-let fn-name named-bindings lbodies env)))
+                  (if (and (pair? body-expr) (eq? (car body-expr) fn-name))
+                      fn-ret-t
+                      (let ((ext-env (type-env-extend fn-name (type-closure fn-name params fn-ret-t) env))
+                            (body (cddr expr)))
+                        (let body-loop ((rest body) (last-t (type-top)))
+                          (if (null? rest)
+                              last-t
+                              (body-loop (cdr rest) (abstract-eval-expr (car rest) ext-env)))))))
                 ;; General letrec
                 (let* ((body (cddr expr))
                        (new-env (let bind-loop ((bs bindings) (e env))
@@ -7961,6 +7980,25 @@
 ;;; -----------------------------------------------------------------------
 ;;; 5. Named-let & Loop Fixpoint Iteration
 ;;; -----------------------------------------------------------------------
+
+(define (extract-initial-call-args fn-name expr)
+  (cond
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) fn-name) (cdr expr))
+    ((eq? (car expr) 'let)
+     (let ((bindings (cadr expr))
+           (body (if (pair? (cddr expr)) (caddr expr) #f)))
+       (let loop ((bs bindings))
+         (if (null? bs)
+             (extract-initial-call-args fn-name body)
+             (let ((res (extract-initial-call-args fn-name (cadar bs))))
+               (if res res (loop (cdr bs))))))))
+    ((eq? (car expr) 'begin)
+     (let loop ((es (cdr expr)))
+       (if (null? es) #f
+           (let ((res (extract-initial-call-args fn-name (car es))))
+             (if res res (loop (cdr es)))))))
+    (else #f)))
 
 (define (abstract-eval-named-let loop-name bindings body env)
   (let* ((vars (map car* bindings))
@@ -8070,10 +8108,12 @@
 ;;; =======================================================================
 
 (define *unboxed-functions* (cons '() '()))
+(define *unboxed-ret-functions* (cons '() '()))
 (define *rtyper-facts* (cons '() '()))
 
 (define (reset-rtyper!)
   (set-car! *unboxed-functions* '())
+  (set-car! *unboxed-ret-functions* '())
   (set-car! *rtyper-facts* '()))
 
 (define (record-rtyper-fact! var fact)
@@ -8088,6 +8128,38 @@
 
 (define (unboxed-fn? name)
   (memq name (car *unboxed-functions*)))
+
+(define (record-unboxed-ret-fn! name)
+  (set-car! *unboxed-ret-functions* (cons name (car *unboxed-ret-functions*))))
+
+(define (unboxed-ret-fn? name)
+  (memq name (car *unboxed-ret-functions*)))
+
+(define (unboxed-box-ret-call? op unboxed-fns)
+  (let loop ((fs unboxed-fns))
+    (cond
+      ((null? fs) #f)
+      ((and (pair? (car fs)) (eq? (caar fs) '%box-ret) (eq? (cdar fs) op)) #t)
+      (else (loop (cdr fs))))))
+
+(define (rtyper-raw-value-expr? expr raw-env)
+  (cond
+    ((symbol? expr) (raw-var? expr raw-env))
+    ((not (pair? expr)) #f)
+    ((memq (car expr) '(%raw-add %raw-sub %raw-mul %unbox-fixnum)) #t)
+    ((and (symbol? (car expr)) (unboxed-ret-fn? (car expr))) #t)
+    ((eq? (car expr) 'let)
+     (rtyper-raw-value-expr? (caddr expr) raw-env))
+    ((eq? (car expr) 'if)
+     (and (rtyper-raw-value-expr? (caddr expr) raw-env)
+          (pair? (cdddr expr))
+          (rtyper-raw-value-expr? (cadddr expr) raw-env)))
+    ((eq? (car expr) 'begin)
+     (let loop ((es (cdr expr)))
+       (if (null? (cdr es))
+           (rtyper-raw-value-expr? (car es) raw-env)
+           (loop (cdr es)))))
+    (else #f)))
 
 (define (raw-var? var raw-env)
   (memq var raw-env))
@@ -8163,23 +8235,180 @@
               (loop (cdr ps))
               #f)))))
 
+;;; Checks whether fn-name is invoked in a non-tail position within expr
+(define (non-tail-call-to? fn-name expr)
+  (cond
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) 'quote) #f)
+    ((eq? (car expr) 'let)
+     (or (occurs-in? fn-name (cadr expr))
+         (non-tail-call-to? fn-name (caddr expr))))
+    ((eq? (car expr) 'if)
+     (let ((test (cadr expr))
+           (then (caddr expr))
+           (else-opt (if (null? (cdddr expr)) '() (cadddr expr))))
+       (or (occurs-in? fn-name test)
+           (non-tail-call-to? fn-name then)
+           (if (null? else-opt) #f (non-tail-call-to? fn-name else-opt)))))
+    ((eq? (car expr) 'begin)
+     (let loop ((es (cdr expr)))
+       (cond
+         ((null? es) #f)
+         ((null? (cdr es)) (non-tail-call-to? fn-name (car es)))
+         (else (or (occurs-in? fn-name (car es))
+                   (loop (cdr es)))))))
+    (else
+     (occurs-in? fn-name (cdr expr)))))
+
 ;;; Fast O(1) detection of pure tail-recursive loops (maximum depth 30)
 (define (pure-tail-loop? fn-name lbody)
-  (let loop-chk ((e lbody) (depth 0))
-    (cond
-      ((> depth 30) #f)
-      ((not (pair? e)) #f)
-      ((eq? (car e) fn-name) #t)
-      ((eq? (car e) 'let)
-       (loop-chk (caddr e) (+ depth 1)))
-      ((eq? (car e) 'if)
-       (let ((test (cadr e))
-             (then (caddr e))
-             (else-opt (if (null? (cdddr e)) '() (cadddr e))))
-         (and (not (and (pair? test) (eq? (car test) fn-name)))
-              (or (loop-chk then (+ depth 1))
-                  (if (null? else-opt) #f (loop-chk else-opt (+ depth 1)))))))
-      (else #f))))
+  (and (not (non-tail-call-to? fn-name lbody))
+       (let loop-chk ((e lbody) (depth 0))
+         (cond
+           ((> depth 30) #f)
+           ((not (pair? e)) #f)
+           ((eq? (car e) fn-name) #t)
+           ((eq? (car e) 'let)
+            (loop-chk (caddr e) (+ depth 1)))
+           ((eq? (car e) 'if)
+            (let ((test (cadr e))
+                  (then (caddr e))
+                  (else-opt (if (null? (cdddr e)) '() (cadddr e))))
+              (and (not (and (pair? test) (eq? (car test) fn-name)))
+                   (or (loop-chk then (+ depth 1))
+                       (if (null? else-opt) #f (loop-chk else-opt (+ depth 1)))))))
+           (else #f)))))
+
+;;; Pure integer recursive function analysis (Interprocedural Unboxing: int64_t -> int64_t)
+(define (pure-int-atom? e int-vars)
+  (or (integer? e)
+      (and (symbol? e) (memq e int-vars))))
+
+(define (pure-int-cmp-expr? e int-vars)
+  (and (pair? e)
+       (cond
+         ((memq (car e) '(= < <= > >=))
+          (and (= (length e) 3)
+               (pure-int-atom? (cadr e) int-vars)
+               (pure-int-atom? (caddr e) int-vars)))
+         ((eq? (car e) 'zero?)
+          (and (= (length e) 2)
+               (pure-int-atom? (cadr e) int-vars)))
+         (else #f))))
+
+(define (pure-int-expr? expr fn-name int-vars bool-vars depth)
+  (cond
+    ((> depth 40) #f)
+    ((integer? expr) #t)
+    ((symbol? expr) (memq expr int-vars))
+    ((not (pair? expr)) #f)
+    (else
+     (let ((op (car expr)))
+       (cond
+         ((eq? op 'if)
+          (let ((test (cadr expr))
+                (then (caddr expr))
+                (else-opt (cdddr expr)))
+            (and (pair? else-opt)
+                 (or (and (symbol? test) (memq test bool-vars))
+                     (pure-int-cmp-expr? test int-vars))
+                 (pure-int-expr? then fn-name int-vars bool-vars (+ depth 1))
+                 (pure-int-expr? (car else-opt) fn-name int-vars bool-vars (+ depth 1)))))
+         ((eq? op 'let)
+          (let ((bindings (cadr expr))
+                (body (caddr expr)))
+            (let loop ((bs bindings) (ivs int-vars) (bvs bool-vars))
+              (if (null? bs)
+                  (pure-int-expr? body fn-name ivs bvs (+ depth 1))
+                  (let* ((b (car bs))
+                         (v (car b))
+                         (rhs (cadr b)))
+                    (cond
+                      ((pure-int-cmp-expr? rhs ivs)
+                       (loop (cdr bs) ivs (cons v bvs)))
+                      ((pure-int-expr? rhs fn-name ivs bvs (+ depth 1))
+                       (loop (cdr bs) (cons v ivs) bvs))
+                      (else #f)))))))
+         ((memq op '(+ - * %raw-add %raw-sub %raw-mul))
+          (and (= (length expr) 3)
+               (pure-int-expr? (cadr expr) fn-name int-vars bool-vars (+ depth 1))
+               (pure-int-expr? (caddr expr) fn-name int-vars bool-vars (+ depth 1))))
+         ((eq? op fn-name)
+          (let loop ((as (cdr expr)))
+            (if (null? as)
+                #t
+                (and (pure-int-expr? (car as) fn-name int-vars bool-vars (+ depth 1))
+                     (loop (cdr as))))))
+         (else #f))))))
+
+(define (fn-escapes-in-expr? fn-name expr)
+  (cond
+    ((symbol? expr) (eq? expr fn-name))
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) 'quote) #f)
+    ((eq? (car expr) 'let)
+     (or (let loop ((bs (cadr expr)))
+           (if (null? bs) #f
+               (or (fn-escapes-in-expr? fn-name (cadar bs))
+                   (loop (cdr bs)))))
+         (if (memq fn-name (map car* (cadr expr)))
+             #f
+             (fn-escapes-in-expr? fn-name (caddr expr)))))
+    ((eq? (car expr) 'if)
+     (or (fn-escapes-in-expr? fn-name (cadr expr))
+         (fn-escapes-in-expr? fn-name (caddr expr))
+         (if (null? (cdddr expr)) #f (fn-escapes-in-expr? fn-name (cadddr expr)))))
+    ((eq? (car expr) 'begin)
+     (let loop ((es (cdr expr)))
+       (if (null? es) #f
+           (or (fn-escapes-in-expr? fn-name (car es))
+               (loop (cdr es))))))
+    ((eq? (car expr) 'lambda)
+     (if (memq fn-name (cadr expr))
+         #f
+         (occurs-in? fn-name (caddr expr))))
+    (else
+     (if (eq? (car expr) fn-name)
+         (let loop ((as (cdr expr)))
+           (if (null? as) #f
+               (or (fn-escapes-in-expr? fn-name (car as))
+                   (loop (cdr as)))))
+         (or (fn-escapes-in-expr? fn-name (car expr))
+             (let loop ((as (cdr expr)))
+               (if (null? as) #f
+                   (or (fn-escapes-in-expr? fn-name (car as))
+                       (loop (cdr as))))))))))
+
+(define (pure-int-recursive-fn? fn-name params lbody body)
+  (and (pair? params)
+       (all-fixnum-params? params)
+       (occurs-in? fn-name lbody)
+       (not (fn-escapes-in-expr? fn-name lbody))
+       (not (fn-escapes-in-expr? fn-name body))
+       (pure-int-expr? lbody fn-name params '() 0)))
+
+;;; Ensures integer constants at exit branches of an unboxed-return function are raw
+(define (unbox-const-exit expr)
+  (cond
+    ((integer? expr)
+     (list '%unbox-fixnum expr))
+    ((not (pair? expr))
+     expr)
+    ((eq? (car expr) 'if)
+     (let ((test (cadr expr))
+           (then (caddr expr))
+           (else-part (if (null? (cdddr expr)) '() (cadddr expr))))
+       (list 'if test
+             (unbox-const-exit then)
+             (if (null? else-part) '() (unbox-const-exit else-part)))))
+    ((eq? (car expr) 'let)
+     (list 'let (cadr expr) (unbox-const-exit (caddr expr))))
+    ((eq? (car expr) 'begin)
+     (let loop ((rest (cdr expr)) (acc '()))
+       (if (null? (cdr rest))
+           (cons 'begin (append (reverse acc) (list (unbox-const-exit (car rest)))))
+           (loop (cdr rest) (cons (car rest) acc)))))
+    (else expr)))
 
 ;;; Traverses loop body to box any raw loop-variable returned at loop exit boundaries
 (define (box-raw-exit expr raw-vars fn-name)
@@ -8326,6 +8555,29 @@
                         (new-fn-val (list 'lambda params boxed-lbody))
                         (new-body (rtyper-expr-scoped body raw-env inner-unboxed-fns)))
                    (list op (list (list fn-name new-fn-val)) new-body))))
+              ((and (eq? op 'letrec)
+                    (= (length bindings) 1)
+                    (let* ((b (car bindings))
+                           (val (cadr b)))
+                      (and (pair? val)
+                           (eq? (car val) 'lambda)
+                           (pure-int-recursive-fn? (car b) (cadr val) (caddr val) body))))
+               ;; Interprocedural Unboxing (int64_t -> int64_t) for general pure integer recursive functions (e.g. fib, ack)
+               (let* ((b (car bindings))
+                      (fn-name (car b))
+                      (fn-val (cadr b))
+                      (params (cadr fn-val))
+                      (lbody (caddr fn-val))
+                      (loop-raw-env (append params raw-env))
+                      (inner-unboxed-fns (cons fn-name unboxed-fns)))
+                 (record-unboxed-fn! fn-name)
+                 (record-unboxed-ret-fn! fn-name)
+                 (let* ((typed-lbody (rtyper-expr-scoped lbody loop-raw-env inner-unboxed-fns))
+                        (raw-lbody (unbox-const-exit typed-lbody))
+                        (new-fn-val (list 'lambda params raw-lbody))
+                        (ext-unboxed-fns (cons (cons '%box-ret fn-name) unboxed-fns))
+                        (new-body (rtyper-expr-scoped body raw-env ext-unboxed-fns)))
+                   (list op (list (list fn-name new-fn-val)) new-body))))
               (else
                ;; Standard let bindings: propagate raw variables and record facts
                (let* ((new-bindings
@@ -8343,8 +8595,7 @@
                              (let* ((b (car bs))
                                     (var (car b))
                                     (val (cadr b)))
-                               (if (and (pair? val)
-                                        (memq (car val) '(%raw-add %raw-sub %raw-mul %unbox-fixnum)))
+                               (if (rtyper-raw-value-expr? val acc)
                                    (loop (cdr bs) (cons var acc))
                                    (loop (cdr bs) acc))))))
                       (new-body (rtyper-expr-scoped body extended-raw-env unboxed-fns)))
@@ -8355,6 +8606,16 @@
               (rtyper-binop op (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns) (rtyper-expr-scoped (caddr expr) raw-env unboxed-fns) raw-env)))
          ((binop-prim? op)
           (rtyper-binop op (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns) (rtyper-expr-scoped (caddr expr) raw-env unboxed-fns) raw-env))
+         ((unboxed-box-ret-call? op unboxed-fns)
+          ;; External boundary call into an unboxed-return function: unbox args and box result
+          (let ((args (cdr expr)))
+            (list '%box-fixnum
+                  (cons op
+                        (map (lambda (arg)
+                               (if (and (symbol? arg) (raw-var? arg raw-env))
+                                   arg
+                                   (list '%unbox-fixnum (rtyper-expr-scoped arg raw-env unboxed-fns))))
+                             args)))))
          ((memq op unboxed-fns)
           ;; Boundary call into an unboxed loop: unbox non-raw arguments at entry
           (let ((args (cdr expr)))
@@ -8832,6 +9093,10 @@
                                           (append known-env-entries var-map)))
                        (new-lbody (convert-expr lbody inner-map))
                        (fn-def (list '%function label params new-lbody)))
+                  (if (unboxed-fn? (car ki))
+                      (record-unboxed-fn! label))
+                  (if (unboxed-ret-fn? (car ki))
+                      (record-unboxed-ret-fn! label))
                   (add-lifted-function! fn-def)))
             (loop (cdr kis)))))
     ;; Prepare let-bindings for non-known bindings
@@ -8910,6 +9175,10 @@
                                 (append known-env-entries var-map)))
                        (new-lbody (convert-expr lbody inner-map))
                        (fn-def (list '%function label params new-lbody)))
+                  (if (unboxed-fn? (car ki))
+                      (record-unboxed-fn! label))
+                  (if (unboxed-ret-fn? (car ki))
+                      (record-unboxed-ret-fn! label))
                   (add-lifted-function! fn-def)))
             (loop (cdr kis)))))
     ;; 3. Filter non-known bindings and process them with original closure conversion
@@ -10451,57 +10720,109 @@
             (emit-lir! (list '%mov '%rax (* num-args 4)))
             (emit-lir! (list '%call-closure frame-shift safepoint-lbl)))))))
 
+(define (direct-call-simple-arg? arg env)
+  (cond
+    ((integer? arg) #t)
+    ((and (symbol? arg) (number? (env-stack-slot? arg env))) #t)
+    ((and (pair? arg) (eq? (car arg) '%unbox-fixnum))
+     (let ((inner (cadr arg)))
+       (or (integer? inner)
+           (and (symbol? inner)
+                (number? (env-stack-slot? inner env))
+                (memq inner (get-raw-vars env))))))
+    (else #f)))
+
+(define (every-direct-simple-arg? args env)
+  (let loop ((as args))
+    (if (null? as)
+        #t
+        (and (direct-call-simple-arg? (car as) env)
+             (loop (cdr as))))))
+
+(define (emit-direct-simple-arg! arg reg env)
+  (cond
+    ((integer? arg)
+     (emit-lir! (list '%mov reg (* arg 4))))
+    ((symbol? arg)
+     (let ((slot (env-stack-slot? arg env)))
+       (emit-lir! (list '%load reg '%rsp slot))))
+    ((and (pair? arg) (eq? (car arg) '%unbox-fixnum))
+     (let ((inner (cadr arg)))
+       (if (integer? inner)
+           (emit-lir! (list '%mov reg inner))
+           (let ((slot (env-stack-slot? inner env)))
+             (emit-lir! (list '%load reg '%rsp slot))))))))
+
 (define (lir-compile-direct-call label args si env tail?)
   (let* ((num-args (length args))
          (cur-params-entry (assq '%num-params env))
          (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
          (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
-         (frame-shift (align-frame-shift (if (= num-args 0)
-                                             (- 0 si)
-                                             (- (* 8 (- num-args 1)) si))))
-         (aligned-si (if (= num-args 0)
-                         (- 0 frame-shift)
-                         (- (* 8 (- num-args 1)) frame-shift))))
-    ;; 1. Evaluate arguments sequentially and place into temporary stack slots
-    (let loop ((as args) (curr-si aligned-si))
-      (if (not (null? as))
-          (begin
-            (track-lir-si! curr-si)
-            (lir-compile-expr (car as) curr-si env #f)
-            (emit-lir! (list '%store '%rsp curr-si '%rax))
-            (loop (cdr as) (- curr-si 8)))))
+         (direct-simple? (and (<= num-args 6) (every-direct-simple-arg? args env))))
+    (if direct-simple?
+        ;; Fast path: All arguments are immediate constants or stack variables (no temp stack spill needed)
+        (let ((frame-shift (align-frame-shift (- 0 si))))
+          (let loop ((as args) (i 0))
+            (if (not (null? as))
+                (begin
+                  (emit-direct-simple-arg! (car as) (list-ref *arg-registers* i) env)
+                  (loop (cdr as) (+ i 1)))))
+          (if can-tco?
+              (begin
+                (emit-lir! (list '%mov '%rax (* num-args 4)))
+                (emit-lir! (list '%direct-jump label)))
+              (let* ((bitmap (compute-stackmap-bitmap frame-shift (- 0 frame-shift) '() env))
+                     (safepoint-lbl (new-safepoint-label!)))
+                (record-safepoint! safepoint-lbl frame-shift bitmap)
+                (emit-lir! (list '%mov '%rax (* num-args 4)))
+                (emit-lir! (list '%direct-call label frame-shift safepoint-lbl)))))
+        ;; Standard path: Evaluate arguments sequentially into temporary stack slots
+        (let* ((frame-shift (align-frame-shift (if (= num-args 0)
+                                                   (- 0 si)
+                                                   (- (* 8 (- num-args 1)) si))))
+               (aligned-si (if (= num-args 0)
+                               (- 0 frame-shift)
+                               (- (* 8 (- num-args 1)) frame-shift))))
+          ;; 1. Evaluate arguments sequentially and place into temporary stack slots
+          (let loop ((as args) (curr-si aligned-si))
+            (if (not (null? as))
+                (begin
+                  (track-lir-si! curr-si)
+                  (lir-compile-expr (car as) curr-si env #f)
+                  (emit-lir! (list '%store '%rsp curr-si '%rax))
+                  (loop (cdr as) (- curr-si 8)))))
 
-    (if can-tco?
-        ;; --- TAIL CALL OPTIMIZATION (TCO) via Direct Jump ---
-        (begin
-          (let loop ((i 0))
-            (if (< i num-args)
-                (if (< i 6)
-                    (let ((temp-offset (- aligned-si (* i 8)))
-                          (reg (list-ref *arg-registers* i)))
-                      (emit-lir! (list '%load reg '%rsp temp-offset))
-                      (loop (+ i 1)))
-                    (let ((temp-offset (- aligned-si (* i 8)))
-                          (param-offset (* 8 (- num-args i))))
-                      (emit-lir! (list '%load '%r11 '%rsp temp-offset))
-                      (emit-lir! (list '%store '%rsp param-offset '%r11))
-                      (loop (+ i 1))))))
-          (emit-lir! (list '%mov '%rax (* num-args 4)))
-          (emit-lir! (list '%direct-jump label)))
+          (if can-tco?
+              ;; --- TAIL CALL OPTIMIZATION (TCO) via Direct Jump ---
+              (begin
+                (let loop ((i 0))
+                  (if (< i num-args)
+                      (if (< i 6)
+                          (let ((temp-offset (- aligned-si (* i 8)))
+                                (reg (list-ref *arg-registers* i)))
+                            (emit-lir! (list '%load reg '%rsp temp-offset))
+                            (loop (+ i 1)))
+                          (let ((temp-offset (- aligned-si (* i 8)))
+                                (param-offset (* 8 (- num-args i))))
+                            (emit-lir! (list '%load '%r11 '%rsp temp-offset))
+                            (emit-lir! (list '%store '%rsp param-offset '%r11))
+                            (loop (+ i 1))))))
+                (emit-lir! (list '%mov '%rax (* num-args 4)))
+                (emit-lir! (list '%direct-jump label)))
 
-        ;; --- NON-TAIL DIRECT CALL ---
-        (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
-               (safepoint-lbl (new-safepoint-label!)))
-          (record-safepoint! safepoint-lbl frame-shift bitmap)
-          ;; Load register arguments (0..min(num-args, 6)-1)
-          (let loop ((i 0))
-            (if (and (< i num-args) (< i 6))
-                (let ((temp-offset (- aligned-si (* i 8)))
-                      (reg (list-ref *arg-registers* i)))
-                  (emit-lir! (list '%load reg '%rsp temp-offset))
-                  (loop (+ i 1)))))
-          (emit-lir! (list '%mov '%rax (* num-args 4)))
-          (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))
+              ;; --- NON-TAIL DIRECT CALL ---
+              (let* ((bitmap (compute-stackmap-bitmap frame-shift aligned-si args env))
+                     (safepoint-lbl (new-safepoint-label!)))
+                (record-safepoint! safepoint-lbl frame-shift bitmap)
+                ;; Load register arguments (0..min(num-args, 6)-1)
+                (let loop ((i 0))
+                  (if (and (< i num-args) (< i 6))
+                      (let ((temp-offset (- aligned-si (* i 8)))
+                            (reg (list-ref *arg-registers* i)))
+                        (emit-lir! (list '%load reg '%rsp temp-offset))
+                        (loop (+ i 1)))))
+                (emit-lir! (list '%mov '%rax (* num-args 4)))
+                (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 125: LIR Continuation Transfer & Loop In-Place Shuffle Pass
 ;;; Conforms to DSN-33 Architecture Specification & Issue #583
@@ -11150,6 +11471,32 @@
                        (list 'let (list (list var then-e)) body)
                        (list (list 'let (list (list var else-e)) body))
                        si env tail?)))
+
+    ;; Single-use argument forwarding into 1-arg %direct-call: (let ((var val)) (%direct-call label var))
+    ((and (= (length bindings) 1)
+          (pair? body)
+          (eq? (car body) '%direct-call)
+          (= (length body) 3)
+          (eq? (caddr body) (caar bindings)))
+     (let* ((b (car bindings))
+            (val (cadr b))
+            (label (cadr body))
+            (cur-params-entry (assq '%num-params env))
+            (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
+            (can-tco? (and tail? (if cur-num-params (= cur-num-params 1) #f)))
+            (frame-shift (align-frame-shift (- 0 si))))
+       (lir-compile-expr val si env #f)
+       (emit-lir! '(%mov %rdi %rax))
+       (if can-tco?
+           (begin
+             (emit-lir! '(%mov %rax 4))
+             (emit-lir! (list '%direct-jump label)))
+           (let* ((bitmap (compute-stackmap-bitmap frame-shift (- 0 frame-shift) '() env))
+                  (safepoint-lbl (new-safepoint-label!)))
+             (record-safepoint! safepoint-lbl frame-shift bitmap)
+             (emit-lir! '(%mov %rax 4))
+             (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))
+
     (else
      (let loop ((bs bindings)
                 (curr-si si)
@@ -11168,15 +11515,30 @@
                   (next-si (if (> extra-bytes 0)
                                (- curr-si (+ 8 extra-bytes))
                                (- curr-si 8))))
-             (track-lir-si! curr-si)
-             (if (> extra-bytes 0)
-                 (track-lir-si! next-si))
-             (lir-compile-expr val curr-si env #f)
-             (emit-lir! (list '%store '%rsp curr-si '%rax))
-             (loop (cdr bs)
-                   next-si
-                   (cons (cons var curr-si)
-                         (set-stack-vars next-svars (set-raw-vars next-rvars new-env))))))))))
+             ;; Fast path: Last binding in let where body is commutative (+ prev-var var) or (%raw-add prev-var var)
+             (if (and (null? (cdr bs))
+                      (= extra-bytes 0)
+                      (pair? body)
+                      (memq (car body) '(+ %raw-add))
+                      (= (length body) 3)
+                      (eq? (caddr body) var)
+                      (symbol? (cadr body))
+                      (not (eq? (cadr body) var))
+                      (number? (env-stack-slot? (cadr body) new-env)))
+                 (let ((s1 (env-stack-slot? (cadr body) new-env))
+                       (lir-op (if (eq? (car body) '+) '%add '%raw-add)))
+                   (lir-compile-expr val curr-si new-env #f)
+                   (emit-lir! (list lir-op '%rax (list '%stack s1))))
+                 (begin
+                   (track-lir-si! curr-si)
+                   (if (> extra-bytes 0)
+                       (track-lir-si! next-si))
+                   (lir-compile-expr val curr-si new-env #f)
+                   (emit-lir! (list '%store '%rsp curr-si '%rax))
+                   (loop (cdr bs)
+                         next-si
+                         (cons (cons var curr-si)
+                               (set-stack-vars next-svars (set-raw-vars next-rvars new-env))))))))))))
 
 (define (lir-compile-if test then else-opt si env tail?)
   (let ((else-label (unique-label-sym "L_else"))
@@ -11459,7 +11821,26 @@
        (emit-lir! (list '%cmp '%rax r2))
        (emit-lir! (list '%jump-cond jmp-op target-label)))
 
-      ;; 6. General fallback: evaluate e1 to stack, evaluate e2 to rax, then cmp (stack si), rax
+      ;; 6. e2 is integer constant -> evaluate e1 to rax, then cmp rax, c2
+      (c2
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%cmp '%rax c2))
+       (emit-lir! (list '%jump-cond jmp-op target-label)))
+
+      ;; 7. e1 is integer constant -> evaluate e2 to rax, then reverse cmp rax, c1
+      (c1
+       (let ((rev-op (case op
+                       ((= eq?) '=)
+                       ((<)     '>)
+                       ((<=)    '>=)
+                       ((>)     '<)
+                       ((>=)    '<=)
+                       (else    op))))
+         (lir-compile-operand-for-op op e2 si env)
+         (emit-lir! (list '%cmp '%rax c1))
+         (emit-lir! (list '%jump-cond (jmp-cc-fn rev-op) target-label))))
+
+      ;; 8. General fallback: evaluate e1 to stack, evaluate e2 to rax, then cmp (stack si), rax
       (else
        (track-lir-si! si)
        (lir-compile-operand-for-op op e1 si env)
@@ -11593,8 +11974,13 @@
        (emit-lir! (list '%c-call "ulisp_flush" frame-shift))))))
 
 (define (lir-compile-unary op arg si env)
-  (lir-compile-expr arg si env #f)
-  (case op
+  (if (and (eq? op '%unbox-fixnum) (integer? arg))
+      (emit-lir! (list '%mov '%rax arg))
+      (if (and (eq? op '%unbox-fixnum) (symbol? arg) (memq arg (get-raw-vars env)))
+          (lir-compile-expr arg si env #f)
+          (begin
+            (lir-compile-expr arg si env #f)
+            (case op
     ((-)
      (emit-lir! '(%neg %rax)))
     ((fxadd1)
@@ -11785,7 +12171,7 @@
        (emit-lir! '(%add %rcx 13))
        (emit-lir! '(%add %rax 8))
        (emit-lir! '(%add %r12 %rax))
-       (emit-lir! '(%mov %rax %rcx))))))
+       (emit-lir! '(%mov %rax %rcx)))))))))
 
 (define (lir-compile-operand-for-op op e si env)
   (if (and (integer? e) (memq op '(%raw-add %raw-sub %raw-mul %raw-cmp)))
@@ -11802,22 +12188,65 @@
                   ((memq info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)) info)
                   (else #f)))))))
 
+(define (env-stack-slot? e env)
+  (and (symbol? e)
+       (let ((b (assq e env)))
+         (and b
+              (let ((info (cdr b)))
+                (cond
+                  ((number? info) info)
+                  ((and (pair? info) (eq? (car info) 'param)) (cdr info))
+                  (else #f)))))))
+
 (define (lir-compile-binop op e1 e2 si env)
   (let ((r1 (env-reg-var? e1 env))
-        (r2 (env-reg-var? e2 env)))
+        (r2 (env-reg-var? e2 env))
+        (s2 (env-stack-slot? e2 env))
+        (lir-op (case op
+                  ((+) '%add)
+                  ((-) '%sub)
+                  (else op))))
     (cond
-      ;; Fast path: op is + and e2 is a register variable
-      ((and (eq? op '+) r2)
+      ;; Fast path: op is + or %raw-add and e2 is a register variable
+      ((and (memq op '(+ %raw-add)) r2)
        (lir-compile-operand-for-op op e1 si env)
-       (emit-lir! (list '%add '%rax r2)))
-      ;; Fast path: op is + and e1 is a register variable
-      ((and (eq? op '+) r1)
+       (emit-lir! (list lir-op '%rax r2)))
+      ;; Fast path: op is + or %raw-add and e1 is a register variable
+      ((and (memq op '(+ %raw-add)) r1)
        (lir-compile-operand-for-op op e2 si env)
-       (emit-lir! (list '%add '%rax r1)))
-      ;; Fast path: op is - and e2 is a register variable
-      ((and (eq? op '-) r2)
+       (emit-lir! (list lir-op '%rax r1)))
+      ;; Fast path: op is - or %raw-sub and e2 is a register variable
+      ((and (memq op '(- %raw-sub)) r2)
        (lir-compile-operand-for-op op e1 si env)
-       (emit-lir! (list '%sub '%rax r2)))
+       (emit-lir! (list lir-op '%rax r2)))
+      ;; Fast path: op is %raw-add and e2 is an integer constant
+      ((and (eq? op '%raw-add) (integer? e2) (>= e2 -268435456) (<= e2 268435455))
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%raw-add '%rax e2)))
+      ;; Fast path: op is %raw-add and e1 is an integer constant
+      ((and (eq? op '%raw-add) (integer? e1) (>= e1 -268435456) (<= e1 268435455))
+       (lir-compile-operand-for-op op e2 si env)
+       (emit-lir! (list '%raw-add '%rax e1)))
+      ;; Fast path: op is %raw-sub and e2 is an integer constant
+      ((and (eq? op '%raw-sub) (integer? e2) (>= e2 -268435456) (<= e2 268435455))
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%raw-sub '%rax e2)))
+      ;; Fast path: op is + and e2 is an integer constant
+      ((and (eq? op '+) (integer? e2) (>= e2 -268435456) (<= e2 268435455))
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%add '%rax (* e2 4))))
+      ;; Fast path: op is + and e1 is an integer constant
+      ((and (eq? op '+) (integer? e1) (>= e1 -268435456) (<= e1 268435455))
+       (lir-compile-operand-for-op op e2 si env)
+       (emit-lir! (list '%add '%rax (* e1 4))))
+      ;; Fast path: op is - and e2 is an integer constant
+      ((and (eq? op '-) (integer? e2) (>= e2 -268435456) (<= e2 268435455))
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%sub '%rax (* e2 4))))
+      ;; Fast path: op is + / %raw-add / - / %raw-sub and e2 is a stack variable
+      ((and (memq op '(+ %raw-add - %raw-sub)) s2)
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list lir-op '%rax (list '%stack s2))))
       ;; Fast path: op is * and e2 is a register variable
       ((and (eq? op '*) r2)
        (lir-compile-operand-for-op op e1 si env)
@@ -12093,6 +12522,19 @@
      (and (symbol? expr) (memq expr raw-env)))
     ((memq (car expr) '(%raw-add %raw-sub %raw-mul %raw-cmp %raw-load %raw-syscall %to-raw %unbox-fixnum))
      #t)
+    ((and (eq? (car expr) '%direct-call)
+          (pair? (cdr expr))
+          (unboxed-ret-fn? (cadr expr)))
+     #t)
+    ((and (symbol? (car expr))
+          (unboxed-ret-fn? (car expr)))
+     #t)
+    ((eq? (car expr) 'let)
+     (raw-expr? (caddr expr) raw-env))
+    ((eq? (car expr) 'if)
+     (and (raw-expr? (caddr expr) raw-env)
+          (pair? (cdddr expr))
+          (raw-expr? (cadddr expr) raw-env)))
     (else #f)))
 
 (define (reset-lir!)
@@ -12778,6 +13220,62 @@
                    (lir-peephole-reg? (caddr i1)))))
        ;; Keep only the first mov (%mov r1 r2) and skip the second
        (loop (cddr rest) (cons (car rest) acc)))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 2b: Store-Reload Elimination & Register Forwarding
+      ;; (%store %rsp offset src-reg) followed immediately by (%load dst-reg %rsp offset)
+      ;; -> if dst-reg == src-reg, keep only (%store %rsp offset src-reg)
+      ;; -> else (%store %rsp offset src-reg) followed by (%mov dst-reg src-reg)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest)))
+              (and (eq? (car i1) '%store)
+                   (eq? (car i2) '%load)
+                   (= (length i1) 4)
+                   (= (length i2) 4)
+                   (eq? (cadr i1) '%rsp)
+                   (eq? (caddr i2) '%rsp)
+                   (equal? (caddr i1) (cadddr i2))
+                   (lir-peephole-reg? (cadddr i1))
+                   (lir-peephole-reg? (cadr i2)))))
+       (let* ((i1 (car rest))
+              (i2 (cadr rest))
+              (src-reg (cadddr i1))
+              (dst-reg (cadr i2)))
+         (if (equal? dst-reg src-reg)
+             (loop (cddr rest) (cons i1 acc))
+             (loop (cddr rest) (cons (list '%mov dst-reg src-reg) (cons i1 acc))))))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 2c: Store + Compare + Branch Redundant Reload Elimination
+      ;; (%store %rsp off src-reg) (%mov %rax src-reg) (%cmp %rax imm) (%jump-cond cc lbl) (%load %rax %rsp off)
+      ;; -> drop the redundant (%load %rax %rsp off) since %rax already holds [rsp + off]
+      ;; -----------------------------------------------------------------
+      ((and (pair? rest)
+            (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (cdddr rest))
+            (pair? (cdr (cdddr rest)))
+            (let ((i1 (car rest))
+                  (i2 (cadr rest))
+                  (i3 (caddr rest))
+                  (i4 (cadddr rest))
+                  (i5 (car (cdr (cdddr rest)))))
+              (and (pair? i1) (eq? (car i1) '%store) (= (length i1) 4) (eq? (cadr i1) '%rsp)
+                   (pair? i2) (eq? (car i2) '%mov) (= (length i2) 3) (eq? (cadr i2) '%rax) (equal? (caddr i2) (cadddr i1))
+                   (pair? i3) (memq (car i3) '(%cmp %raw-cmp)) (eq? (cadr i3) '%rax)
+                   (pair? i4) (eq? (car i4) '%jump-cond)
+                   (pair? i5) (eq? (car i5) '%load) (= (length i5) 4) (eq? (cadr i5) '%rax) (eq? (caddr i5) '%rsp)
+                   (equal? (cadddr i5) (caddr i1)))))
+       (let ((i1 (car rest))
+             (i2 (cadr rest))
+             (i3 (caddr rest))
+             (i4 (cadddr rest))
+             (tail (cdr (cdr (cdddr rest)))))
+         (loop tail (cons i4 (cons i3 (cons i2 (cons i1 acc)))))))
 
       ;; -----------------------------------------------------------------
       ;; Rule 3: Redundant Jump to Next Immediate Label
@@ -16339,20 +16837,59 @@
        (loop (cdr rest) acc))
 
       ;; -----------------------------------------------------------------
+      ;; Rule 4b: Redundant Jump Over Align to Next Immediate Label
+      ;; (jmp L1) followed immediately by (%p2align _) and (%label L1) -> (%p2align _) (%label L1)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (cdr rest))
+            (pair? (cddr rest))
+            (pair? (car rest))
+            (pair? (cadr rest))
+            (pair? (caddr rest))
+            (eq? (car (car rest)) 'jmp)
+            (eq? (car (cadr rest)) '%p2align)
+            (eq? (car (caddr rest)) '%label)
+            (equal? (cadr (car rest)) (cadr (caddr rest))))
+       (loop (cdr rest) acc))
+
+      ;; -----------------------------------------------------------------
       ;; Rule 5: Unreachable Code Elimination (Dead Code Elimination)
       ;; (jmp L) or (ret) followed by non-label instructions up to next label
       ;; -----------------------------------------------------------------
       ((and (x86-asm-unconditional-terminator? (car rest))
             (pair? (cdr rest))
-            (not (x86-asm-label-inst? (cadr rest))))
+            (not (x86-asm-label-inst? (cadr rest)))
+            (not (and (pair? (cadr rest)) (eq? (caadr rest) '%p2align))))
        (let skip ((tail (cdr rest)))
          (cond
            ((null? tail)
             (loop '() (cons (car rest) acc)))
-           ((x86-asm-label-inst? (car tail))
+           ((or (x86-asm-label-inst? (car tail))
+                (and (pair? (car tail)) (eq? (caar tail) '%p2align)))
             (loop tail (cons (car rest) acc)))
            (else
             (skip (cdr tail))))))
+
+      ;; -----------------------------------------------------------------
+      ;; Rule 4c: Jump to Return Simplification across intermediate blocks
+      ;; (jmp L1) ... (%label L_other) ... (%label L1) (ret) -> (ret)
+      ;; -----------------------------------------------------------------
+      ((and (pair? (car rest))
+            (eq? (car (car rest)) 'jmp)
+            (let ((target (cadr (car rest))))
+              (let find-lbl ((scan (cdr rest)) (seen-other-label? #f))
+                (cond
+                  ((null? scan) #f)
+                  ((and (pair? (car scan))
+                        (eq? (caar scan) '%label)
+                        (equal? (cadar scan) target))
+                   (and seen-other-label?
+                        (pair? (cdr scan))
+                        (pair? (cadr scan))
+                        (eq? (caadr scan) 'ret)))
+                  ((and (pair? (car scan)) (eq? (caar scan) '%label))
+                   (find-lbl (cdr scan) #t))
+                  (else (find-lbl (cdr scan) seen-other-label?))))))
+       (loop (cdr rest) (cons '(ret) acc)))
 
       ;; Fallthrough: Keep instruction unchanged
       (else

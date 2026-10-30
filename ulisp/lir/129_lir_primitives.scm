@@ -32,8 +32,13 @@
        (emit-lir! (list '%c-call "ulisp_flush" frame-shift))))))
 
 (define (lir-compile-unary op arg si env)
-  (lir-compile-expr arg si env #f)
-  (case op
+  (if (and (eq? op '%unbox-fixnum) (integer? arg))
+      (emit-lir! (list '%mov '%rax arg))
+      (if (and (eq? op '%unbox-fixnum) (symbol? arg) (memq arg (get-raw-vars env)))
+          (lir-compile-expr arg si env #f)
+          (begin
+            (lir-compile-expr arg si env #f)
+            (case op
     ((-)
      (emit-lir! '(%neg %rax)))
     ((fxadd1)
@@ -224,7 +229,7 @@
        (emit-lir! '(%add %rcx 13))
        (emit-lir! '(%add %rax 8))
        (emit-lir! '(%add %r12 %rax))
-       (emit-lir! '(%mov %rax %rcx))))))
+       (emit-lir! '(%mov %rax %rcx)))))))))
 
 (define (lir-compile-operand-for-op op e si env)
   (if (and (integer? e) (memq op '(%raw-add %raw-sub %raw-mul %raw-cmp)))
@@ -241,22 +246,65 @@
                   ((memq info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)) info)
                   (else #f)))))))
 
+(define (env-stack-slot? e env)
+  (and (symbol? e)
+       (let ((b (assq e env)))
+         (and b
+              (let ((info (cdr b)))
+                (cond
+                  ((number? info) info)
+                  ((and (pair? info) (eq? (car info) 'param)) (cdr info))
+                  (else #f)))))))
+
 (define (lir-compile-binop op e1 e2 si env)
   (let ((r1 (env-reg-var? e1 env))
-        (r2 (env-reg-var? e2 env)))
+        (r2 (env-reg-var? e2 env))
+        (s2 (env-stack-slot? e2 env))
+        (lir-op (case op
+                  ((+) '%add)
+                  ((-) '%sub)
+                  (else op))))
     (cond
-      ;; Fast path: op is + and e2 is a register variable
-      ((and (eq? op '+) r2)
+      ;; Fast path: op is + or %raw-add and e2 is a register variable
+      ((and (memq op '(+ %raw-add)) r2)
        (lir-compile-operand-for-op op e1 si env)
-       (emit-lir! (list '%add '%rax r2)))
-      ;; Fast path: op is + and e1 is a register variable
-      ((and (eq? op '+) r1)
+       (emit-lir! (list lir-op '%rax r2)))
+      ;; Fast path: op is + or %raw-add and e1 is a register variable
+      ((and (memq op '(+ %raw-add)) r1)
        (lir-compile-operand-for-op op e2 si env)
-       (emit-lir! (list '%add '%rax r1)))
-      ;; Fast path: op is - and e2 is a register variable
-      ((and (eq? op '-) r2)
+       (emit-lir! (list lir-op '%rax r1)))
+      ;; Fast path: op is - or %raw-sub and e2 is a register variable
+      ((and (memq op '(- %raw-sub)) r2)
        (lir-compile-operand-for-op op e1 si env)
-       (emit-lir! (list '%sub '%rax r2)))
+       (emit-lir! (list lir-op '%rax r2)))
+      ;; Fast path: op is %raw-add and e2 is an integer constant
+      ((and (eq? op '%raw-add) (integer? e2) (>= e2 -268435456) (<= e2 268435455))
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%raw-add '%rax e2)))
+      ;; Fast path: op is %raw-add and e1 is an integer constant
+      ((and (eq? op '%raw-add) (integer? e1) (>= e1 -268435456) (<= e1 268435455))
+       (lir-compile-operand-for-op op e2 si env)
+       (emit-lir! (list '%raw-add '%rax e1)))
+      ;; Fast path: op is %raw-sub and e2 is an integer constant
+      ((and (eq? op '%raw-sub) (integer? e2) (>= e2 -268435456) (<= e2 268435455))
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%raw-sub '%rax e2)))
+      ;; Fast path: op is + and e2 is an integer constant
+      ((and (eq? op '+) (integer? e2) (>= e2 -268435456) (<= e2 268435455))
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%add '%rax (* e2 4))))
+      ;; Fast path: op is + and e1 is an integer constant
+      ((and (eq? op '+) (integer? e1) (>= e1 -268435456) (<= e1 268435455))
+       (lir-compile-operand-for-op op e2 si env)
+       (emit-lir! (list '%add '%rax (* e1 4))))
+      ;; Fast path: op is - and e2 is an integer constant
+      ((and (eq? op '-) (integer? e2) (>= e2 -268435456) (<= e2 268435455))
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list '%sub '%rax (* e2 4))))
+      ;; Fast path: op is + / %raw-add / - / %raw-sub and e2 is a stack variable
+      ((and (memq op '(+ %raw-add - %raw-sub)) s2)
+       (lir-compile-operand-for-op op e1 si env)
+       (emit-lir! (list lir-op '%rax (list '%stack s2))))
       ;; Fast path: op is * and e2 is a register variable
       ((and (eq? op '*) r2)
        (lir-compile-operand-for-op op e1 si env)

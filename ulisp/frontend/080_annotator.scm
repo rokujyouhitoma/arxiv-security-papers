@@ -437,30 +437,45 @@
          ;; Mutual recursion (letrec)
          ((letrec)
           (let* ((bindings (cadr expr))
-                 (body-expr (if (null? (cddr expr)) #f (caddr expr))))
-            (if (and (= (length bindings) 1)
+                 (body-expr (if (null? (cddr expr)) #f (caddr expr)))
+                 (init-call-args
+                  (if (and (= (length bindings) 1)
+                           (let* ((b (car bindings))
+                                  (val (cadr b)))
+                             (and (pair? val) (eq? (car val) 'lambda))))
+                      (extract-initial-call-args (caar bindings) body-expr)
+                      #f)))
+            (if (and init-call-args
                      (let* ((b (car bindings))
-                            (val (cadr b)))
-                       (and (pair? val) (eq? (car val) 'lambda)))
-                     (pair? body-expr)
-                     (eq? (car body-expr) (caar bindings))
-                     (let check-nums ((is (cdr body-expr)))
-                       (if (null? is) #t
-                           (if (number? (car is))
-                               (check-nums (cdr is))
-                               #f))))
-                ;; Desugared named-let loop
+                            (val (cadr b))
+                            (params (cadr val)))
+                       (and (= (length init-call-args) (length params))
+                            (let check-nums ((is init-call-args))
+                              (if (null? is) #t
+                                  (let ((arg-t (abstract-eval-expr (car is) env)))
+                                    (if (or (number? (car is)) (type-fixnum? arg-t))
+                                        (check-nums (cdr is))
+                                        #f)))))))
+                ;; Desugared named-let loop or single recursive numeric function
                 (let* ((b (car bindings))
                        (fn-name (car b))
                        (fn-val (cadr b))
                        (params (cadr fn-val))
                        (lbodies (cddr fn-val))
-                       (inits (cdr body-expr))
+                       (inits init-call-args)
                        (named-bindings (let make-bs ((ps params) (is inits) (acc '()))
                                          (if (or (null? ps) (null? is))
                                              (reverse acc)
-                                             (make-bs (cdr ps) (cdr is) (cons (list (car ps) (car is)) acc))))))
-                  (abstract-eval-named-let fn-name named-bindings lbodies env))
+                                             (make-bs (cdr ps) (cdr is) (cons (list (car ps) (car is)) acc)))))
+                       (fn-ret-t (abstract-eval-named-let fn-name named-bindings lbodies env)))
+                  (if (and (pair? body-expr) (eq? (car body-expr) fn-name))
+                      fn-ret-t
+                      (let ((ext-env (type-env-extend fn-name (type-closure fn-name params fn-ret-t) env))
+                            (body (cddr expr)))
+                        (let body-loop ((rest body) (last-t (type-top)))
+                          (if (null? rest)
+                              last-t
+                              (body-loop (cdr rest) (abstract-eval-expr (car rest) ext-env)))))))
                 ;; General letrec
                 (let* ((body (cddr expr))
                        (new-env (let bind-loop ((bs bindings) (e env))
@@ -492,6 +507,25 @@
 ;;; -----------------------------------------------------------------------
 ;;; 5. Named-let & Loop Fixpoint Iteration
 ;;; -----------------------------------------------------------------------
+
+(define (extract-initial-call-args fn-name expr)
+  (cond
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) fn-name) (cdr expr))
+    ((eq? (car expr) 'let)
+     (let ((bindings (cadr expr))
+           (body (if (pair? (cddr expr)) (caddr expr) #f)))
+       (let loop ((bs bindings))
+         (if (null? bs)
+             (extract-initial-call-args fn-name body)
+             (let ((res (extract-initial-call-args fn-name (cadar bs))))
+               (if res res (loop (cdr bs))))))))
+    ((eq? (car expr) 'begin)
+     (let loop ((es (cdr expr)))
+       (if (null? es) #f
+           (let ((res (extract-initial-call-args fn-name (car es))))
+             (if res res (loop (cdr es)))))))
+    (else #f)))
 
 (define (abstract-eval-named-let loop-name bindings body env)
   (let* ((vars (map car* bindings))

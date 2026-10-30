@@ -68,6 +68,27 @@
   (assert-true "binop: cons emits %alloc instruction"
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc))) insts))))
 
+;; Test 3b: Raw int64 immediate and stack-slot fast paths (Issue #626)
+(reset-lir!)
+(lir-compile-binop '%raw-sub 'n 1 -8 '((n . -8) (*raw-vars* n)))
+(let ((insts (reverse (car *lir-instructions*))))
+  (assert-true "binop: (%raw-sub n 1) emits immediate (%raw-sub %rax 1) without stack spill"
+               (and (pair? (filter (lambda (i) (equal? i '(%raw-sub %rax 1))) insts))
+                    (null? (filter (lambda (i) (and (pair? i) (eq? (car i) '%store))) insts)))))
+
+(reset-lir!)
+(lir-compile-binop '%raw-add 'x 'y -8 '((x . -8) (y . -16) (*raw-vars* x y)))
+(let ((insts (reverse (car *lir-instructions*))))
+  (assert-true "binop: (%raw-add x y) on stack slots emits (%raw-add %rax (%stack -16)) without spill"
+               (and (pair? (filter (lambda (i) (equal? i '(%raw-add %rax (%stack -16)))) insts))
+                    (null? (filter (lambda (i) (and (pair? i) (eq? (car i) '%store))) insts)))))
+
+(reset-lir!)
+(lir-compile-unary '%unbox-fixnum 30 -8 '())
+(let ((insts (reverse (car *lir-instructions*))))
+  (assert-true "unary: (%unbox-fixnum 30) emits direct (%mov %rax 30) without sar"
+               (equal? insts '((%mov %rax 30)))))
+
 ;; Test 4: End-to-end AST to LIR compilation using Pass 129 primitives
 (let* ((ast '(let ((x 10) (y 20)) (+ x y)))
        (ast1 (desugar-all ast))
