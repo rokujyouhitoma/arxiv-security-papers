@@ -319,6 +319,80 @@
 (assert-true "6.4 function and conditional compilation produces %lir-program"
              (and (pair? lir-fn) (eq? (car lir-fn) '%lir-program)))
 
+;;; -----------------------------------------------------------------------
+;;; Group 7: Pass Injection Mechanism (inject-pass-after! / inject-pass-before!)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 7: Pass Injection Mechanism (Pluggable Extensions) ---\n")
+
+(init-default-pass-registry!)
+(define dummy-injected-pass (lambda (ast) ast))
+(define injected-desc-1
+  (make-pass-descriptor 'pass-injected-split-planes
+                        "Injected Split Planes Extension"
+                        'frontend
+                        0
+                        dummy-injected-pass
+                        #f
+                        'L_core
+                        'L_core
+                        '(pass-030-desugar)
+                        #t))
+
+;; 7.1 inject-pass-after!
+(inject-pass-after! 'pass-030-desugar injected-desc-1)
+(define pipeline-injected-1 (build-pipeline 0 '()))
+(define ids-injected-1 (map pass-id pipeline-injected-1))
+
+(assert-true "7.1 injected pass is registered in pipeline"
+             (memq 'pass-injected-split-planes ids-injected-1))
+
+;; Verify relative position: pass-injected-split-planes should immediately follow pass-030-desugar
+(define (pass-after? p1 p2 p-list)
+  (let loop ((ps p-list))
+    (cond
+      ((null? ps) #f)
+      ((null? (cdr ps)) #f)
+      ((and (eq? (car ps) p1) (eq? (cadr ps) p2)) #t)
+      (else (loop (cdr ps))))))
+
+(assert-true "7.2 injected pass directly follows target pass"
+             (pass-after? 'pass-030-desugar 'pass-injected-split-planes ids-injected-1))
+
+;; 7.3 inject-pass-before!
+(define injected-desc-2
+  (make-pass-descriptor 'pass-injected-pre-desugar
+                        "Injected Pre-Desugar Hook"
+                        'frontend
+                        0
+                        dummy-injected-pass
+                        #f
+                        'L_src
+                        'L_src
+                        '()
+                        #t))
+
+(inject-pass-before! 'pass-030-desugar injected-desc-2)
+(define ids-injected-2 (map pass-id (build-pipeline 0 '())))
+(assert-true "7.3 injected pass directly precedes target pass"
+             (pass-after? 'pass-injected-pre-desugar 'pass-030-desugar ids-injected-2))
+
+;; 7.4 Re-inject repositioning
+(inject-pass-after! 'pass-070-anf injected-desc-1)
+(define ids-injected-3 (map pass-id (build-pipeline 0 '())))
+(assert-true "7.4 re-injected pass moves to new location"
+             (pass-after? 'pass-070-anf 'pass-injected-split-planes ids-injected-3))
+(assert-false "7.5 old location is cleared"
+              (pass-after? 'pass-030-desugar 'pass-injected-split-planes ids-injected-3))
+
+;; 7.6 remove-injected-pass!
+(remove-injected-pass! 'pass-injected-split-planes)
+(remove-injected-pass! 'pass-injected-pre-desugar)
+(define ids-clean (map pass-id (build-pipeline 0 '())))
+(assert-false "7.6 removed pass-injected-split-planes no longer in pipeline"
+              (memq 'pass-injected-split-planes ids-clean))
+(assert-false "7.7 removed pass-injected-pre-desugar no longer in pipeline"
+              (memq 'pass-injected-pre-desugar ids-clean))
+
 (display "\n=======================================================\n")
 (display " Test Suite Completed: ")
 (display (car *pass-count*))
