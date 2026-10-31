@@ -9,6 +9,9 @@
 (define *scheduler-max-workers* 64)
 (define *scheduler-max-tasks* 10000000) ; 10M tasks upper bound
 
+;; Preemption execution hook (overridden when preempt.scm is loaded)
+(define budgeted-task-execute! (lambda (task) #f))
+
 ;; -----------------------------------------------------------------------
 ;; 1. <worker-context> Record Type (5 fields, fits in AMD64 registers)
 ;; -----------------------------------------------------------------------
@@ -199,6 +202,11 @@
 ;; 3. Task Execution Engine & Spawning
 ;; -----------------------------------------------------------------------
 
+(define (%is-budgeted-task? task)
+  (and (vector? task)
+       (> (vector-length task) 1)
+       (eq? (vector-ref task 0) '%%record-type-<budgeted-task>)))
+
 (define (scheduler-execute-task! task)
   (cond
     ;; DSN-37 task-context (Issue #633)
@@ -208,6 +216,9 @@
            (task-state-set! task 'running)
            #t)
          #t))
+    ;; DSN-37 budgeted-task with reductions (Issue #636)
+    ((%is-budgeted-task? task)
+     (budgeted-task-execute! task))
     ;; Scheme native coroutine context (Issue #634)
     ((coroutine-context? task)
      (if (not (coroutine-terminated? task))
@@ -226,7 +237,7 @@
     ((sched task target-worker-id)
      (if (not (work-stealing-scheduler? sched))
          (error "scheduler-spawn!: expected <work-stealing-scheduler>" sched)
-         (if (not (or (procedure? task) (coroutine-context? task) (task-context? task)))
+         (if (not (or (procedure? task) (coroutine-context? task) (task-context? task) (%is-budgeted-task? task)))
              (error "scheduler-spawn!: task must be procedure, coroutine, or task-context (CWE-843)" task)
              (if (not (scheduler-running? sched))
                  (error "scheduler-spawn!: cannot spawn into stopped scheduler" sched)
