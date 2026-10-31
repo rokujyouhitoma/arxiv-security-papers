@@ -59,6 +59,7 @@
   - [13.1 インタプリタ統合の 2 大利用モード](#131-インタプリタ統合の-2-大利用モード)
   - [13.2 AOT ネイティブ実行 vs インタプリタ実行の対比](#132-aot-ネイティブ実行-vs-インタプリタ実行の対比)
   - [13.3 共通 Scheme ランタイムの直交的共有アーキテクチャ](#133-共通-scheme-ランタイムの直交的共有アーキテクチャ)
+  - [13.4 ulisp/runtime/concurrency/ のモジュール構成と Dual-Mode ロード規約](#134-ulispruntimeconcurrency-のモジュール構成と-dual-mode-ロード規約)
 - [14. 実装ロードマップ ＆ 詳細タスクブレークダウン (WBS)](#14-実装ロードマップ--詳細タスクブレークダウン-wbs)
   - [14.1 段階的マイルストーン概要](#141-段階的マイルストーン概要)
   - [14.2 Phase 0: メモリ ＆ アトミック基底](#142-phase-0-メモリ--アトミック基底)
@@ -588,9 +589,27 @@ flowchart TD
 
 ## 13.3 共通 Scheme ランタイムの直交的共有アーキテクチャ
 
-アフィン部分言語コア（ASC）の中核データ構造（`TaskContext`, `Channel`, `LockFreeQueue`, `TaskArena`）はすべて純粋な Scheme レコード型（`define-record-type`）として定義されているため、**AOT コンパイラとインタプリタはまったく同一のランタイムライブラリ（`runtime/concurrency/asc_core.scm`）を共有**できる。
+アフィン部分言語コア（ASC）の中核データ構造（`TaskContext`, `Channel`, `LockFreeQueue`, `TaskArena`）はすべて純粋な Scheme レコード型（`define-record-type`）として定義されているため、**AOT コンパイラとインタプリタはまったく同一のランタイムライブラリ（`ulisp/runtime/concurrency/`）を共有**できる。
 
 これにより、開発者は「開発・プロトタイピング時はインタプリタ REPL で対話的にデバッグし、性能が求められる本番運用時は同一コードを uLisp AOT でコンパイルして Zero-libc ELF として自立走行させる」という理想的な開発サイクルを確立できる。
+
+## 13.4 `ulisp/runtime/concurrency/` のモジュール構成と Dual-Mode ロード規約
+
+第 9 章および第 10 章で規定した「ホスト・カーネル分離と適材適所の原則」に従い、`ulisp/runtime/concurrency/*.scm`（`arena.scm`, `atomic.scm`, `queue.scm`, `channel.scm`, `scheduler.scm`, `boundary.scm`, `epoch.scm`, `eval_adapter.scm`）は、通常のシングルスレッド R7RS プログラム用の標準ランタイム（`ulisp/stdlib_entry.scm` / `ULISP_RUNTIME_LIBS`）へ強制バンドルしてはならない（非使用時のバイナリ肥大化・コンパイル負荷ゼロの保証）。
+
+代わりに、並行計算プレーン（ASC）を利用するプログラムおよびテストスイートがオンデマンドに読み込む **Dual-Mode 3 層モジュール規約**を採用する：
+
+| 利用方式 | 記述構文 | 役割・位置づけ | uLisp AOT での動作 | ILisp インタプリタでの動作 |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. 正典 S 式インクルード (Canonical `include`)** | `(include "ulisp/runtime/concurrency/arena.scm")` | **推奨・正典（Canonical）**。本体ファイルは `define-library` に縛られない純粋な S 式モジュールとして記述。 | Pass 010（`010_library.scm`）がコンパイル時にファイルを探索・AST インライン展開（`%source-loc` 保持）。 | `evaluator.py` / `py_codegen` が呼び出し元またはリポジトリルート基準で S 式を展開。 |
+| **2. トップレベル静的・動的ロード (`load`)** | `(load "ulisp/runtime/concurrency/arena.scm")` | **REPL・スクリプト・テスト互換**。対話環境や単体テストから直感的にロード可能。 | トップレベルの定数文字列 `(load "...")` を Pass 010 が `include` と等価に静的展開し、単一 ELF へ AOT コンパイル可能。 | `prim_load`（`(scheme load)`）が実行時にファイルを読み取り評価。 |
+| **3. R7RS ライブラリ (`import`)** | `(import (ulisp concurrency arena))` | **名前空間カプセル化**。公開 API のみを `export` し内部補助関数（`%init-task-arena` 等）を隠蔽。 | `.sld` 定義内の `(include ...)` と `export` リストを Pass 010 が静的解決・シンボルマングリング。 | `module.py` が `.sld` ライブラリを検索し公開シンボルのみを環境へバインド。 |
+
+### モジュール記述・パス解決の不変条件
+1. **標準ランタイム非汚染（Zero Core Runtime Bloat）**:
+   - `ulisp/stdlib_entry.scm` および `ULISP_RUNTIME_LIBS` には `ulisp/runtime/concurrency/*.scm` を常時結合しない。
+2. **作業ディレクトリ非依存のパス解決**:
+   - プロジェクトルートディレクトリから実行した場合でも、`ulisp/` サブディレクトリ内から実行した場合でも、`"ulisp/runtime/concurrency/<module>.scm"` と `"runtime/concurrency/<module>.scm"` の双方が Pass 010（`find-included-file`）および ILisp（`resolve_include_path` / `prim_load`）によって透過的に解決されることを保証する。
 
 ---
 

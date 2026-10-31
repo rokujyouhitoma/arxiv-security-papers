@@ -104,13 +104,14 @@
                      imports
                      (append (reverse (cdr d)) body-forms)))
 
-              ;; (include "path" ...)
-              ((and (pair? d) (eq? (car d) 'include))
-               (let ((included-forms (slurp-included-files (cdr d))))
+              ;; (include "path" ...) or (include-ci "path" ...)
+              ((and (pair? d) (or (eq? (car d) 'include) (eq? (car d) 'include-ci)))
+               (let* ((included-forms (slurp-included-files (cdr d)))
+                      (clean-included (map strip-source-loc included-forms)))
                  (loop (cdr rest)
                        exports
                        imports
-                       (append (reverse included-forms) body-forms))))
+                       (append (reverse clean-included) body-forms))))
 
               (else
                ;; Skip unrecognized or unsupported declaration silently
@@ -123,7 +124,10 @@
 (define (include-form? form)
   (and (pair? form)
        (or (eq? (car form) 'include)
-           (eq? (car form) 'include-ci))))
+           (eq? (car form) 'include-ci)
+           (and (eq? (car form) 'load)
+                (pair? (cdr form))
+                (string? (cadr form))))))
 
 (define *include-path-stack* (cons '() '()))
 
@@ -162,7 +166,13 @@
                (p2 (open-input-file prefixed)))
           (if p2
               (begin (close-input-port p2) prefixed)
-              path)))))
+              (if (string-starts-with? path "ulisp/")
+                  (let* ((stripped (substring path 6 (string-length path)))
+                         (p3 (open-input-file stripped)))
+                    (if p3
+                        (begin (close-input-port p3) stripped)
+                        path))
+                  path))))))
 
 (define (resolve-include-path path)
   (if (path-traversal? path)
@@ -230,6 +240,44 @@
 ;;; 3. Import-Set Resolution & Name Mapping
 ;;; -----------------------------------------------------------------------
 
+;;; Convert library name list e.g. (ulisp concurrency arena) to "lib/ulisp/concurrency/arena.sld"
+(define (library-name->sld-path lib-name)
+  (let loop ((rest lib-name) (acc "lib"))
+    (if (null? rest)
+        (string-append acc ".sld")
+        (let* ((elem (car rest))
+               (part (cond
+                       ((symbol? elem) (symbol->string elem))
+                       ((number? elem) (number->string elem))
+                       (else "sub"))))
+          (loop (cdr rest) (string-append acc "/" part))))))
+
+;;; Attempt to locate and parse an external .sld file for lib-name
+(define (try-load-external-library lib-name)
+  (let* ((sld-rel (library-name->sld-path lib-name))
+         (resolved (find-included-file sld-rel))
+         (p (open-input-file resolved)))
+    (if (not p)
+        #f
+        (begin
+          (close-input-port p)
+          (let ((forms (slurp-single-file sld-rel)))
+            (let loop ((fs forms))
+              (if (null? fs)
+                  #f
+                  (let ((f (strip-source-loc (car fs))))
+                    (if (and (define-library-form? f)
+                             (equal? (cadr f) lib-name))
+                        (parse-define-library-form f)
+                        (loop (cdr fs)))))))))))
+
+;;; Lookup library record in registry, or lazily load from .sld if available
+(define (lookup-or-load-library lib-name lib-registry)
+  (let ((entry (assoc lib-name lib-registry)))
+    (if entry
+        (cdr entry)
+        (try-load-external-library lib-name))))
+
 ;;; Given an import-set and the library registry alist:
 ;;; Returns (cons <library-name> <symbol-mapping>)
 ;;; where symbol-mapping is ((<exported-name> . <local-bound-name>) ...)
@@ -292,10 +340,9 @@
      (let ((lib-name iset))
        (if (builtin-library-name? lib-name)
            (cons lib-name '())
-           (let ((entry (assoc lib-name lib-registry)))
-             (if entry
-                 (let* ((rec (cdr entry))
-                        (exports (lib-rec-exports rec))
+           (let ((rec (lookup-or-load-library lib-name lib-registry)))
+             (if rec
+                 (let* ((exports (lib-rec-exports rec))
                         (mapping (map (lambda (e) (cons (cdr e) (cdr e))) exports)))
                    (cons lib-name mapping))
                  ;; Library not found in current compilation unit
@@ -480,10 +527,9 @@
                                          (inst-info
                                           (if already-inst
                                               (cons (car already-inst) (cdr already-inst))
-                                              (let ((lib-entry (assoc lib-name registry)))
-                                                (if lib-entry
-                                                    (let* ((rec (cdr lib-entry))
-                                                           (inst-res (instantiate-library rec))
+                                              (let ((rec (lookup-or-load-library lib-name registry)))
+                                                (if rec
+                                                    (let* ((inst-res (instantiate-library rec))
                                                            (lib-defs (car inst-res))
                                                            (aliases (cdr inst-res)))
                                                       (cons lib-defs aliases))
