@@ -272,6 +272,7 @@
     (pass-128-lir-branch-fusion . "pass-128-lir-branch-fusion")
     (pass-133-lir-peephole . "pass-133-lir-peephole")
     (pass-140-backend-x86-64 . "pass-140-backend-x86-64")
+    (pass-144-backend-x86-elf . "pass-144-backend-x86-elf")
     (pass-150-backend-aarch64 . "pass-150-backend-aarch64")
     (pass-160-backend-c . "pass-160-backend-c")))
 

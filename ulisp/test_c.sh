@@ -64,14 +64,14 @@ assert_c() {
     if [ -x "bin/ulisp-boot" ]; then
         printf '%s\n' "$code" > build/tmp_c_in.scm
         env ULISP_GC_PROFILE=compiler bin/ulisp-boot build/tmp_c_in.scm > "$TMP_C" 2>build/compile_err.log || {
-            echo -e "\033[31m[COMPILE FAIL]\033[0m $expr"
+            printf "\033[31m[COMPILE FAIL]\033[0m %s\n" "$expr"
             cat build/compile_err.log
             FAIL_COUNT=$((FAIL_COUNT + 1))
             exit 1
         }
     else
         printf '%s\n' "$code" | $ILISP "$COMPILER" > "$TMP_C" 2>build/compile_err.log || {
-            echo -e "\033[31m[COMPILE FAIL]\033[0m $expr"
+            printf "\033[31m[COMPILE FAIL]\033[0m %s\n" "$expr"
             cat build/compile_err.log
             FAIL_COUNT=$((FAIL_COUNT + 1))
             exit 1
@@ -80,7 +80,7 @@ assert_c() {
 
     rm -f "$TMP_BIN"
     $CC $CFLAGS "$TMP_C" -o "$TMP_BIN" 2>build/gcc_err.log || {
-        echo -e "\033[31m[GCC BUILD FAIL]\033[0m $expr"
+        printf "\033[31m[GCC BUILD FAIL]\033[0m %s\n" "$expr"
         cat build/gcc_err.log
         FAIL_COUNT=$((FAIL_COUNT + 1))
         exit 1
@@ -94,10 +94,10 @@ assert_c() {
     fi
 
     if [ "$actual" = "$expected" ]; then
-        echo -e "  \033[32m[PASS]\033[0m $expr => $actual"
+        printf "  \033[32m[PASS]\033[0m %s => %s\n" "$expr" "$actual"
         PASS_COUNT=$((PASS_COUNT + 1))
     else
-        echo -e "  \033[31m[FAIL]\033[0m $expr => Expected '$expected', got '$actual'"
+        printf "  \033[31m[FAIL]\033[0m %s => Expected '%s', got '%s'\n" "$expr" "$expected" "$actual"
         FAIL_COUNT=$((FAIL_COUNT + 1))
         exit 1
     fi
@@ -119,14 +119,14 @@ run_test_file_c() {
     done
     if [ -x "bin/ulisp-boot" ]; then
         env ULISP_GC_PROFILE=compiler bin/ulisp-boot "$in_file" > "$out_c" 2>build/compile_err.log || {
-            echo -e "\033[31m[COMPILE FAIL]\033[0m $test_file"
+            printf "\033[31m[COMPILE FAIL]\033[0m %s\n" "$test_file"
             cat build/compile_err.log
             FAIL_COUNT=$((FAIL_COUNT + 1))
             exit 1
         }
     else
         printf '%s\n' "$(cat "$in_file")" | $ILISP "$COMPILER" > "$out_c" 2>build/compile_err.log || {
-            echo -e "\033[31m[COMPILE FAIL]\033[0m $test_file"
+            printf "\033[31m[COMPILE FAIL]\033[0m %s\n" "$test_file"
             cat build/compile_err.log
             FAIL_COUNT=$((FAIL_COUNT + 1))
             exit 1
@@ -134,7 +134,7 @@ run_test_file_c() {
     fi
 
     $CC $CFLAGS "$out_c" -o "$out_bin" 2>build/gcc_err.log || {
-        echo -e "\033[31m[GCC BUILD FAIL]\033[0m $test_file"
+        printf "\033[31m[GCC BUILD FAIL]\033[0m %s\n" "$test_file"
         cat build/gcc_err.log
         FAIL_COUNT=$((FAIL_COUNT + 1))
         exit 1
@@ -143,10 +143,10 @@ run_test_file_c() {
     local actual
     actual=$(env ULISP_PRINT_RESULT=1 "./$out_bin" 2>build/run_err.log | tail -n 1)
     if [ "$actual" = "#t" ]; then
-        echo -e "  \033[32m[PASS]\033[0m $desc ($test_file) => #t"
+        printf "  \033[32m[PASS]\033[0m %s (%s) => #t\n" "$desc" "$test_file"
         PASS_COUNT=$((PASS_COUNT + 1))
     else
-        echo -e "  \033[31m[FAIL]\033[0m $desc ($test_file) failed (got: '$actual')"
+        printf "  \033[31m[FAIL]\033[0m %s (%s) failed (got: '%s')\n" "$desc" "$test_file" "$actual"
         FAIL_COUNT=$((FAIL_COUNT + 1))
         exit 1
     fi

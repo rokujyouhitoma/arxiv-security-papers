@@ -379,7 +379,14 @@ class StandardOutputPort(TextualOutputPort):
     def write_char(self, ch: str) -> None:
         if not self.is_open:
             raise ValueError("I/O operation on closed port")
-        sys.stdout.write(ch)
+        try:
+            if len(ch) == 1 and ord(ch) >= 128:
+                sys.stdout.flush()
+                sys.stdout.buffer.write(bytes([ord(ch)]))
+            else:
+                sys.stdout.write(ch)
+        except Exception:
+            sys.stdout.write(ch)
         self._buf_len += len(ch)
         if self._buf_len >= self._buffer_size:
             self.flush()
@@ -391,6 +398,32 @@ class StandardOutputPort(TextualOutputPort):
         self._buf_len += len(s)
         if self._buf_len >= self._buffer_size:
             self.flush()
+
+    def write_u8(self, byte: int) -> None:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        try:
+            sys.stdout.flush()
+            sys.stdout.buffer.write(bytes([byte]))
+        except Exception:
+            pass
+        self._buf_len += 1
+        if self._buf_len >= self._buffer_size:
+            self.flush()
+
+    def write_bytevector(
+        self, bv: Any, start: int = 0, end: Optional[int] = None
+    ) -> None:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        raw = bv.elements if hasattr(bv, "elements") else bytes(bv)
+        e = len(raw) if end is None else end
+        try:
+            sys.stdout.flush()
+            sys.stdout.buffer.write(bytes(raw[start:e]))
+        except Exception:
+            pass
+        self.flush()
 
     def flush(self) -> None:
         if self.is_open:
@@ -418,6 +451,21 @@ class StandardErrorPort(TextualOutputPort):
         if not self.is_open:
             raise ValueError("I/O operation on closed port")
         sys.stderr.write(s)
+
+    def write_u8(self, byte: int) -> None:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        sys.stderr.buffer.write(bytes([byte]))
+
+    def write_bytevector(
+        self, bv: Any, start: int = 0, end: Optional[int] = None
+    ) -> None:
+        if not self.is_open:
+            raise ValueError("I/O operation on closed port")
+        raw = bv.elements if hasattr(bv, "elements") else bytes(bv)
+        e = len(raw) if end is None else end
+        sys.stderr.buffer.write(bytes(raw[start:e]))
+        self.flush()
 
     def flush(self) -> None:
         if self.is_open:

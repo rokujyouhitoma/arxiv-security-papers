@@ -77,6 +77,9 @@
 (include "backend/141_backend_x86_gc.scm")
 (include "backend/142_backend_x86_freestanding.scm")
 (include "backend/143_backend_x86_peephole.scm")
+(include "backend/elf64_builder.scm")
+(include "backend/144a_x86_assembler.scm")
+(include "backend/144_backend_x86_elf.scm")
 (include "backend/150_backend_aarch64.scm")
 (include "backend/160_backend_c.scm")
 

@@ -34,6 +34,12 @@
               ((or (eq? first '--target-lir)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'lir)))
                (loop (cdr forms) 'lir gc-mode verify trace debug))
+              ((or (eq? first '--target-elf)
+                   (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'elf)))
+               (loop (cdr forms) 'elf gc-mode verify trace debug))
+              ((or (eq? first '--target-asm)
+                   (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'asm)))
+               (loop (cdr forms) 'x86_64 gc-mode verify trace debug))
               ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
                (loop (cdr forms) (cadr first) gc-mode verify trace debug))
               ;; Extern symbol directives
@@ -165,9 +171,13 @@
   (run-pass-pipeline forms verify-mode trace-mode))
 
 (define (compile-backend lir-ast target gc-mode)
-  (let* ((tgt-str (cond ((eq? target 'c) "c") ((eq? target 'aarch64) "aarch64") (else "x86-64")))
+  (let* ((tgt-str (cond ((eq? target 'c) "c")
+                        ((eq? target 'aarch64) "aarch64")
+                        ((eq? target 'elf) "elf")
+                        (else "x86-64")))
          (pass-id (cond ((eq? target 'c) 'pass-160-backend-c)
                         ((eq? target 'aarch64) 'pass-150-backend-aarch64)
+                        ((eq? target 'elf) 'pass-144-backend-x86-elf)
                         (else 'pass-140-backend-x86-64)))
          (pass-name (string-append "Backend Code Generation (" tgt-str ")")))
     (set-current-pass! pass-id)
@@ -181,6 +191,8 @@
                            (emit-c lir-ast gc-mode))
                           ((eq? target 'aarch64)
                            (emit-aarch64 lir-ast gc-mode))
+                          ((eq? target 'elf)
+                           (emit-x86-64-elf lir-ast gc-mode))
                           (else
                            (emit-x86-64 lir-ast gc-mode))))
                    (t1 (current-time-monotonic-us))
@@ -194,6 +206,8 @@
                (emit-c lir-ast gc-mode))
               ((eq? target 'aarch64)
                (emit-aarch64 lir-ast gc-mode))
+              ((eq? target 'elf)
+               (emit-x86-64-elf lir-ast gc-mode))
               (else
                (emit-x86-64 lir-ast gc-mode))))))))
 
@@ -360,9 +374,13 @@
                    (exit 1))))
             ((string-starts-with? arg "--eval=")
              (loop (cdr rest) in-file out-file (substring arg 7 (string-length arg)) target opt-level verbose quiet time-passes dump-ir allow-extern module-name))
-            ((string=? arg "-S")
+            ((or (string=? arg "--target-elf") (string=? arg "-elf"))
+             (loop (cdr rest) in-file out-file inline-expr 'elf opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((or (string=? arg "--target-asm") (string=? arg "-S"))
              (loop (cdr rest) in-file out-file inline-expr 'x86_64 opt-level verbose quiet time-passes dump-ir allow-extern module-name))
-            ((or (string=? arg "-b") (string=? arg "-t"))
+            ((string=? arg "--target-lir")
+             (loop (cdr rest) in-file out-file inline-expr 'lir opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((or (string=? arg "-b") (string=? arg "-t") (string=? arg "--target"))
              (if (pair? (cdr rest))
                  (loop (cddr rest) in-file out-file inline-expr (string->symbol (cadr rest)) opt-level verbose quiet time-passes dump-ir allow-extern module-name)
                  (begin
@@ -443,7 +461,8 @@
 
   ;; 2. Redirect stdout if -o is specified
   (if (and cli-out-file (not (string=? cli-out-file "-")))
-      (let ((out-fd (sys-open cli-out-file 577 420)))
+      (let* ((mode (if (eq? cli-target 'elf) 493 420))
+             (out-fd (sys-open cli-out-file 577 mode)))
         (if (< out-fd 0)
             (begin
               (display-stderr (string-append "ulisp: error: cannot open output file: " cli-out-file "\n"))

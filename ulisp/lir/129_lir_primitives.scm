@@ -104,7 +104,7 @@
      (emit-lir! '(%bit-and %rax 7))
      (emit-lir! '(%cmp %rax 5))
      (emit-lir! '(%set-boolean %rax "sete")))
-    ((write-char %write-char)
+    ((write-char %write-char write-byte write-u8)
      (let ((frame-shift (align-frame-shift (- si))))
        (emit-lir! '(%mov %rdi %rax))
        (emit-lir! (list '%c-call "ulisp_write_char" frame-shift))))

@@ -63,6 +63,9 @@
                  (loop (+ i 1) len)
                  #f)))))
 
+(define (string=? s1 s2)
+  (string-equal? s1 s2))
+
 (define (escape-gas-string s)
   (let* ((len (string-length s))
          (extra (let count-loop ((i 0) (acc 0))

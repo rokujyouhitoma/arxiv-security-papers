@@ -88,6 +88,9 @@ BACKEND_PASSES = backend/backend_lang.scm \
                  backend/141_backend_x86_gc.scm \
                  backend/142_backend_x86_freestanding.scm \
                  backend/143_backend_x86_peephole.scm \
+                 backend/elf64_builder.scm \
+                 backend/144a_x86_assembler.scm \
+                 backend/144_backend_x86_elf.scm \
                  backend/150_backend_aarch64.scm \
                  backend/160_backend_c.scm
 
@@ -202,6 +205,18 @@ test_143: build/compiler_passes.scm
 	@cat build/compiler_passes.scm tests/passes/test_143_backend_x86_peephole.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
+test_144a: build/compiler_passes.scm
+	@cat build/compiler_passes.scm tests/passes/test_144a_x86_assembler.scm > build/runner_temp.scm
+	@$(RUN_SCHEME) build/runner_temp.scm
+
+test_elf64: build/compiler_passes.scm
+	@cat build/compiler_passes.scm tests/passes/test_elf64_builder.scm > build/runner_temp.scm
+	@$(RUN_SCHEME) build/runner_temp.scm
+
+test_144: build/compiler_passes.scm
+	@cat build/compiler_passes.scm tests/passes/test_144_backend_x86_elf.scm > build/runner_temp.scm
+	@$(RUN_SCHEME) build/runner_temp.scm
+
 
 
 test_library: build/compiler_passes.scm
@@ -311,6 +326,9 @@ test_lir_suite: compiler.scm
 
 test_backend: compiler.scm
 	@bash test_backend.sh
+
+test_differential_elf: build/ulisp-modular
+	@bash tests/test_differential_elf.sh
 
 test_hierarchical: test_lir_suite test_backend
 	@echo "=== All Hierarchical LIR Tests Passed ==="

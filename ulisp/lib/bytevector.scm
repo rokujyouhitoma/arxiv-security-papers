@@ -97,3 +97,23 @@
             (string-set! str i (integer->char (bytevector-u8-ref bv (+ start i))))
             (loop (+ i 1)))
           str))))
+
+;; ---------------------------------------------------------------------
+;; §6.9 Bytevectors: list->bytevector / bytevector->list
+;; ---------------------------------------------------------------------
+(define (list->bytevector lst)
+  (let* ((len (length lst))
+         (bv (%make-bytevector len)))
+    (let loop ((i 0) (rest lst))
+      (if (null? rest)
+          bv
+          (begin
+            (bytevector-u8-set! bv i (car rest))
+            (loop (+ i 1) (cdr rest)))))))
+
+(define (bytevector->list bv)
+  (let ((len (bytevector-length bv)))
+    (let loop ((i (- len 1)) (acc '()))
+      (if (< i 0)
+          acc
+          (loop (- i 1) (cons (bytevector-u8-ref bv i) acc))))))

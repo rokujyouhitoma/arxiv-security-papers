@@ -11,7 +11,7 @@ import math
 from fractions import Fraction
 from typing import Any, Union
 
-from ilisp.types import Values
+from ilisp.types import MutableString, Values
 
 Real = Union[int, float, Fraction]
 Number = Union[int, float, complex, Fraction]
@@ -672,9 +672,11 @@ def number_to_string(z: Real, radix: int = 10) -> str:
     return f"-{s}" if is_neg else s
 
 
-def string_to_number(s: str, radix: int = 10) -> Any:
+def string_to_number(s: Any, radix: int = 10) -> Any:
     """Parse string as a number in base radix (2, 8, 10, or 16), or return False on failure."""
-    if not isinstance(s, str):
+    if isinstance(s, MutableString):
+        s = str(s)
+    elif not isinstance(s, str):
         raise TypeError(f"string->number: expected string, got {s!r}")
     if radix not in (2, 8, 10, 16):
         raise ValueError(f"string->number: unsupported radix {radix}")

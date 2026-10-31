@@ -162,7 +162,9 @@ def main() -> None:
         help="Output binary/assembly file path (default: <stem> or a.out)",
     )
 
-    args = parser.parse_args()
+    args, extra_args = parser.parse_known_args()
+    if args.file:
+        sys.argv = [args.file] + extra_args
 
     if args.compile or args.assembly_only:
         from pathlib import Path

@@ -152,6 +152,7 @@ _SPECIAL_FORM_NAMES = {
     "with-exception-handler",
     "macroexpand-1",
     "macroexpand",
+    "cond-expand",
     ".",
 }
 _SPECIAL_FORM_SYMBOLS = {Symbol.intern(s) for s in _SPECIAL_FORM_NAMES}
@@ -326,6 +327,31 @@ def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None)
                     if not is_pair(args):
                         raise SyntaxError("quasiquote requires 1 argument")
                     return eval_quasiquote(car(args), curr_env)
+
+                # (cond-expand clause ...)
+                if op_name == "cond-expand":
+                    clauses = to_py_list(curr_expr.cdr)
+                    features = {"r7rs", "ilisp", "antigravity"}
+                    matched_exprs = None
+                    for clause in clauses:
+                        if not is_pair(clause):
+                            continue
+                        req = car(clause)
+                        body_list = to_py_list(cdr(clause))
+                        matched = False
+                        if req == Symbol.intern("else"):
+                            matched = True
+                        elif isinstance(req, Symbol) and req.name in features:
+                            matched = True
+                        if matched:
+                            matched_exprs = body_list
+                            break
+                    if matched_exprs is None or not matched_exprs:
+                        return NIL
+                    for step in matched_exprs[:-1]:
+                        eval_expr(step, curr_env)
+                    curr_expr = matched_exprs[-1]
+                    continue
 
                 # (if test then [else])
                 if op_name == "if":

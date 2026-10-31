@@ -1916,6 +1916,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "escape-gas-string": prim_escape_gas_string,
         "newline": prim_newline,
         "flush-output-port": prim_flush_output_port,
+        "ulisp-flush": prim_flush_output_port,
         "display": prim_display,
         "write": prim_write,
         "write-simple": prim_write_simple,
@@ -1925,6 +1926,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         # Bytevectors (R7RS 6.9)
         "bytevector?": prim_bytevector_p,
         "make-bytevector": prim_make_bytevector,
+        "%make-bytevector": prim_make_bytevector,
         "bytevector": prim_bytevector,
         "bytevector-length": prim_bytevector_length,
         "bytevector-u8-ref": prim_bytevector_u8_ref,
@@ -1944,6 +1946,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "peek-u8": port_mod.peek_u8,
         "u8-ready?": port_mod.u8_ready_p,
         "write-u8": port_mod.write_u8,
+        "write-byte": port_mod.write_u8,
         "read-bytevector": prim_read_bytevector,
         "read-bytevector!": prim_read_bytevector_bang,
         "write-bytevector": prim_write_bytevector,

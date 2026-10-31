@@ -12,7 +12,7 @@
              zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
              boolean? char? null? not symbol?
              car cdr pair? procedure? string?
-             write-char %write-char write-string %write-string flush-output-port ulisp-flush eof-object?
+             write-char %write-char write-byte write-u8 write-string %write-string flush-output-port ulisp-flush eof-object?
              make-string string-length
              bytevector? bytevector-length make-bytevector %make-bytevector
              vector? vector-length make-vector %make-vector

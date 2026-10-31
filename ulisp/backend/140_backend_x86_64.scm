@@ -5,9 +5,21 @@
 ;;; and Assembly Code Emission (L_asm_x86 -> GNU x86-64 Intel Syntax).
 ;;; =======================================================================
 
+(define *emit-line-sink* (cons #f '()))
+
+(define (set-emit-line-sink! sink)
+  (set-car! *emit-line-sink* sink))
+
+(define (get-emit-line-sink)
+  (car *emit-line-sink*))
+
 (define (emit line)
-  (write-string line)
-  (write-char #\newline))
+  (let ((sink (car *emit-line-sink*)))
+    (if sink
+        (sink line)
+        (begin
+          (write-string line)
+          (write-char #\newline)))))
 
 (define (backend-append-2 l1 l2)
   (if (null? l1)
@@ -422,7 +434,12 @@
       ((%cmp %raw-cmp)
        (let ((s1 (cadr inst))
              (s2 (caddr inst)))
-         (list (list 'cmp (lower-lir-opnd s1) (lower-lir-opnd s2)))))
+         (if (and (pair? s2) (eq? (car s2) '%imm)
+                  (let ((v (cadr s2)))
+                    (or (< v -2147483648) (> v 2147483647))))
+             (list (list 'mov 'r11 (lower-lir-opnd s2))
+                   (list 'cmp (lower-lir-opnd s1) 'r11))
+             (list (list 'cmp (lower-lir-opnd s1) (lower-lir-opnd s2))))))
 
       ((%set-boolean)
        (let ((cc (caddr inst)))
