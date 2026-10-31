@@ -97,6 +97,11 @@ graph TD
       - `-O1`: 基本的最適化（CP0, LIR ピープホール）を有効化
       - `-O2`: 高度最適化（LVN, Annotator, RTyper, Contify, エスケープ解析, 分岐融合等）を全開実行
     - 前提条件（Prerequisites）DAG 自動検証およびサイクル検出
+    - 動的パス注入機構 (Pass Injection API - Issue #637):
+      - `(inject-pass-after! target-id descriptor)`: 既存パスの直後に拡張パスを安全に挿入
+      - `(inject-pass-before! target-id descriptor)`: 指定パスの直前に挿入
+      - `(remove-injected-pass! id)`: 注入された拡張パスを除去
+      - ライブラリ側（`lib/ulisp/.../passes/`）からプラグイン的にパイプラインを拡張可能とし、コンパイラコアの純粋性を維持
     - 観測性フック: `--time-passes`（ミリ秒/ティックプロファイラ）、`--dump-ir=<pass>`（中間 AST ダンプ）、`--print-after-all`、`--trace-passes`（AST 差分表示）
     - IR Verifier 自動連携: パス実行直後の宣言的バリデーション実行
 

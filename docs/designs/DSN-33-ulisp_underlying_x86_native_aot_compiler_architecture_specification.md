@@ -41,6 +41,7 @@
   - [2.3 黄金比 Cheney's 2-Space コピーガベージコレクタ戦略 (Issue #501)](#23-黄金比-cheneys-2-space-コピーガベージコレクタ戦略-issue-501)
   - [2.4 シンボル表現と決定論的インターン（Interning）テーブル](#24-シンボル表現と決定論的インターンinterningテーブル)
   - [2.5 直列 Nanopass 型アーキテクチャと 2 段階 IR（HIR / LIR）設計](#25-直列-nanopass-型アーキテクチャと-2-段階-irhir--lir設計)
+  - [2.6 統一 Pass Manager 基盤と動的パス注入機構 (Pass Injection API) (Issue #598, #637)](#26-統一-pass-manager-基盤と動的パス注入機構-pass-injection-api-issue-598-637)
 - [3. 言語機能と低レイヤコード生成仕様](#3-言語機能と低レイヤコード生成仕様)
   - [3.1 即値・単項演算・述語](#31-即値単項演算述語)
   - [3.2 局所変数 (`let`) とスタックマッピング](#32-局所変数-let-とスタックマッピング)
@@ -258,6 +259,49 @@ Chez Scheme の設計思想に基づき、ULisp はコンパイラを単一の�
 ```
 
 詳細な各パス仕様および LIR 命令セット仕様については、[ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md) および [ulisp/docs/spec_lir.md](../../ulisp/docs/spec_lir.md) を参照のこと。
+
+### 2.6 統一 Pass Manager 基盤と動的パス注入機構 (Pass Injection API) (Issue #598, #637)
+
+ULisp コンパイラは、単一の固定パイプラインに縛られない高度な柔軟性と関心事の分離（Separation of Concerns）を実現するため、**統一 Pass Manager (`compiler/pass_manager.scm`)** を中核に据える。
+
+#### 1. Pass Descriptor による自己記述型パス定義
+各コンパイラパスは、以下の 10 要素タプルで構成される `pass-descriptor` として定義・登録される：
+```scheme
+(make-pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?)
+```
+- `prerequisites`: パス実行に必須となる先行パス ID のリスト（DAG 依存関係の静的検証に使用）。
+- `mandatory?`: 最適化レベルに関わらず必須実行されるパスか否か（`-O0` 整合性保証）。
+
+#### 2. 最適化レベルスケジューリング (-O0, -O1, -O2)
+Pass Manager はコマンドラインオプションや環境変数に応じてパイプラインを動的に再構成する：
+- `-O0`: 必須パス（ライブラリ脱糖、マクロ展開、Core 脱糖、ANF 変換、クロージャ変換、LIR、コード生成）のみ実行し、超高速デバッグコンパイルを提供。
+- `-O1`: CP0 自明分岐剪定、LIR ピープホール最適化を有効化。
+- `-O2`: LVN (ローカル値番号付け)、抽象解釈アノテータ、表現型推論・アンボクシング (RTyper)、Contify、TBAA・エスケープ解析、分岐融合を全開実行。
+
+#### 3. 動的パス注入機構 (Pluggable Pass Injection API / Issue #637)
+コンパイラコア（`frontend/`, `lir/`, `backend/`）の純粋性・中立性を堅持しつつ、並行処理（Synapse）やドメイン固有の言語拡張パスを安全に統合するため、オープン・クローズド原則（OCP）に基づく**パス注入 API** を提供する：
+- **`(inject-pass-after! target-id descriptor)`**: 既存パス `target-id` の直後に新パスを安全に挿入。同一 ID の既存登録を自動クリーンアップして重複を排除。
+- **`(inject-pass-before! target-id descriptor)`**: 指定パスの直前に挿入。
+- **`(remove-injected-pass! id)`**: 注入された拡張パスを安全に除去。
+
+```mermaid
+flowchart LR
+    subgraph LibraryLayer ["ライブラリ層 (lib/ulisp/.../passes/)"]
+        EP["拡張パス本体<br/>(例: pass_split_planes.scm)"]
+        INJ["(inject-synapse-split-planes-pass!)"]
+    end
+
+    subgraph CompilerCore ["コンパイラコア層 (compiler/pass_manager.scm)"]
+        API["inject-pass-after!<br/>inject-pass-before!"]
+        REG["*pass-registry*<br/>(動的 Nanopass パイプライン)"]
+    end
+
+    INJ -->|API 呼び出し| API
+    API -->|指定位置へ安全に挿入| REG
+    EP -.->|実行時ディスパッチ| REG
+```
+
+このアーキテクチャにより、ライブラリ固有の構文（`spawn-task` や `%asc-kernel` 等）をコンパイラ本体にハードコードすることなく、ライブラリ側（`lib/`）が自己完結してパスを提供し、コンパイラのパイプラインに動的 Inject できる完全な直交性が確立される。
 
 ---
 
