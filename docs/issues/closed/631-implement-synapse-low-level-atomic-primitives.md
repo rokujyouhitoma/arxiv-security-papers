@@ -19,7 +19,7 @@ title: "[FEAT] Scheme 低レベルアトミック命令 (atomic-cas! / atomic-bo
 
 [DSN-37: Synapse Dual-Plane Concurrent Runtime Architecture](../../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)（Phase 0 / Task 0.2）に基づき、uLisp ランタイムおよび AOT/JIT コンパイラ（x86-64 ネイティブバックエンドおよび C バックエンド）において、ミューテックス等の OS ロックを一切介さず CPU ハードウェアの Compare-And-Swap (`LOCK CMPXCHG`) およびメモリバリア (`MFENCE`) 命令へ直接展開される低レベルアトミックプリミティブおよび `<atomic-box>` 抽象データ型を実装する。
 
-本機能は、後続の Phase 0 Task 0.3（[Issue #632: Michael-Scott ノンブロッキング・ロックフリーキュー](../632-implement-synapse-michael-scott-lockfree-queue.md)）、Phase 1（[Issue #633: 線形所有権移譲チャネルおよび有界バックプレッシャー機構](../633-implement-synapse-first-class-p2p-channel.md)）、Phase 2（[Issue #635: 分散 M:N ワークスティーリングスケジューラおよび Chase-Lev Deque](../635-implement-synapse-work-stealing-scheduler.md)）、Phase 6（[Issue #642: 世代管理型投機タスク破棄および待機タスク世代ゲート検証](../642-implement-synapse-epoch-fencing-distributed-rollback.md)）など、Synapse Dual-Plane 並行ランタイムのすべてのロックフリーデータ構造を支える最下層ハードウェア同期基盤となる。
+本機能は、後続の Phase 0 Task 0.3（[Issue #632: Michael-Scott ノンブロッキング・ロックフリーキュー](632-implement-synapse-michael-scott-lockfree-queue.md)）、Phase 1（[Issue #633: 線形所有権移譲チャネルおよび有界バックプレッシャー機構](../633-implement-synapse-first-class-p2p-channel.md)）、Phase 2（[Issue #635: 分散 M:N ワークスティーリングスケジューラおよび Chase-Lev Deque](../635-implement-synapse-work-stealing-scheduler.md)）、Phase 6（[Issue #642: 世代管理型投機タスク破棄および待機タスク世代ゲート検証](../642-implement-synapse-epoch-fencing-distributed-rollback.md)）など、Synapse Dual-Plane 並行ランタイムのすべてのロックフリーデータ構造を支える最下層ハードウェア同期基盤となる。
 
 また、[DSN-37 セクション 13.4](../../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md) および先行完了した [Issue #630](630-implement-synapse-task-independent-bump-arena.md) と同様、**uLisp 専用スコープ**（ILisp への組み込み・テストは行わない）および**オンデマンド・モジュールロード設計**（コアランタイムを肥大化させず、`include` / `load` / `import` の 3 方式で利用可能）を厳格に遵守する。
 
@@ -84,7 +84,7 @@ title: "[FEAT] Scheme 低レベルアトミック命令 (atomic-cas! / atomic-bo
 - **先行 Issue (完了済)**:
   - [Issue #630: プロセスローカル・バンプアリーナ (Process-Local Ephemeral Bump Arena) と O(1) 一括リセットの実装](630-implement-synapse-task-independent-bump-arena.md)
 - **後続・依存先 Issue**:
-  - [Issue #632: Michael-Scott ノンブロッキング・ロックフリーキューの実装](../632-implement-synapse-michael-scott-lockfree-queue.md)
+  - [Issue #632: Michael-Scott ノンブロッキング・ロックフリーキューの実装](632-implement-synapse-michael-scott-lockfree-queue.md)
   - [Issue #633: 線形所有権移譲チャネルおよび有界バックプレッシャー機構の実装](../633-implement-synapse-first-class-p2p-channel.md)
   - [Issue #635: 分散 M:N ワークスティーリングスケジューラおよび Chase-Lev Deque の実装](../635-implement-synapse-work-stealing-scheduler.md)
   - [Issue #642: 世代管理型投機タスク破棄および待機タスク世代ゲート検証の実装](../642-implement-synapse-epoch-fencing-distributed-rollback.md)
