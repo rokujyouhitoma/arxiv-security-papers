@@ -32,8 +32,14 @@
          (rodata-bv (cadr assembled))
          (data-bv (caddr assembled))
          (bss-size (cadddr assembled))
-         (entry-off (car (cddddr assembled))))
-    (build-elf64-executable text-bv rodata-bv data-bv bss-size entry-off)))
+         (entry-off (car (cddddr assembled)))
+         (file-table (if (> (length assembled) 5) (list-ref assembled 5) '()))
+         (line-table (if (> (length assembled) 6) (list-ref assembled 6) '()))
+         (sym-table (if (> (length assembled) 7) (list-ref assembled 7) '()))
+         (debug-payload (if (or (pair? file-table) (pair? line-table))
+                            (list file-table line-table sym-table)
+                            #f)))
+    (build-elf64-executable-ex text-bv rodata-bv data-bv bss-size entry-off debug-payload)))
 
 ;;; -----------------------------------------------------------------------
 ;;; Pass 144 Entrypoint: Direct-to-ELF Native Code Generator

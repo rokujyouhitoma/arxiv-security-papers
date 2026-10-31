@@ -1057,9 +1057,11 @@
 
 ;; Main interface:
 ;; (assemble-x86-lines lines)
-;; Returns: (list text-bv rodata-bv data-bv bss-size entry-offset)
+;; Returns: (list text-bv rodata-bv data-bv bss-size entry-offset [file-table line-table sym-table])
 (define (assemble-x86-lines lines)
-  (let pass1-loop ((lines-rest lines)
+  (let ((file-table-box (cons '() '()))
+        (line-table-box (cons '() '())))
+    (let pass1-loop ((lines-rest lines)
                    (sym-table '())
                    (relocs '())
                    (text-ops '())
@@ -1128,6 +1130,22 @@
                              (string=? first ".intel_syntax"))
                          (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
                                      cur-sec text-len rodata-len data-len bss-len entry-off))
+
+                        ;; DWARF directives (Issue #619)
+                        ((string=? first ".file")
+                         (let* ((fid (if (pair? (cdr tokens)) (safe-string->number (cadr tokens)) 1))
+                                (fpath (if (and (pair? (cdr tokens)) (pair? (cddr tokens))) (caddr tokens) "source.scm")))
+                           (set-car! file-table-box (cons (cons (if fid fid 1) fpath) (car file-table-box)))
+                           (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
+                                       cur-sec text-len rodata-len data-len bss-len entry-off)))
+                        ((string=? first ".loc")
+                         (let* ((fid (if (pair? (cdr tokens)) (safe-string->number (cadr tokens)) 1))
+                                (line (if (and (pair? (cdr tokens)) (pair? (cddr tokens))) (safe-string->number (caddr tokens)) 1))
+                                (col (if (and (pair? (cdr tokens)) (pair? (cddr tokens)) (pair? (cdddr tokens)))
+                                         (safe-string->number (cadddr tokens)) 0)))
+                           (set-car! line-table-box (cons (list (if fid fid 1) (if line line 1) (if col col 0) text-len) (car line-table-box)))
+                           (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
+                                       cur-sec text-len rodata-len data-len bss-len entry-off)))
 
                         ;; Alignment
                         ((or (string=? first ".align") (string=? first ".p2align"))
@@ -1394,5 +1412,8 @@
                   (reloc-loop (cdr rels)))
                 #t))
 
-          ;; Return 5-element tuple: (text-bv rodata-bv data-bv bss-size entry-offset)
-          (list text-bv rodata-bv data-bv bss-len (if (= entry-off -1) 0 entry-off))))))
+          ;; Return tuple: (text-bv rodata-bv data-bv bss-size entry-offset file-table line-table sym-table)
+          (list text-bv rodata-bv data-bv bss-len (if (= entry-off -1) 0 entry-off)
+                (reverse (car file-table-box))
+                (reverse (car line-table-box))
+                sym-table))))))

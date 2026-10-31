@@ -330,6 +330,10 @@ test_backend: compiler.scm
 test_differential_elf: build/ulisp-modular
 	@bash tests/test_differential_elf.sh
 
+# --- Minimal DWARF Debug Info Verification (Issue #619) ---
+test-debug test_dwarf_debug: build/ulisp-modular
+	@bash tests/test_dwarf_debug.sh
+
 test_hierarchical: test_lir_suite test_backend
 	@echo "=== All Hierarchical LIR Tests Passed ==="
 

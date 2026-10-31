@@ -229,6 +229,59 @@
       (source-loc-form obj)
       obj))
 
+;;; Debug Symbol Generation Context (Conforms to DSN-33 & Issue #619)
+(define *debug-symbols-enabled* (cons #f '()))
+(define (debug-symbols-enabled?) (car *debug-symbols-enabled*))
+(define (enable-debug-symbols!) (set-car! *debug-symbols-enabled* #t))
+(define (disable-debug-symbols!) (set-car! *debug-symbols-enabled* #f))
+
+(define (sanitize-source-path path)
+  (if (not (string? path))
+      "source.scm"
+      (let loop ((i (- (string-length path) 1)) (acc '()))
+        (if (< i 0)
+            (list->string acc)
+            (let ((c (string-ref path i)))
+              (cond
+                ((char=? c #\") (loop (- i 1) acc))
+                ((char=? c #\\) (loop (- i 1) (cons #\/ acc)))
+                ((or (char=? c #\newline) (char=? c #\return) (char=? c #\tab))
+                 (loop (- i 1) (cons #\_ acc)))
+                (else (loop (- i 1) (cons c acc)))))))))
+
+(define *source-file-table* (cons '() '()))
+(define (reset-source-file-table!) (set-car! *source-file-table* '()))
+(define (get-source-file-table) (reverse (car *source-file-table*)))
+
+(define (register-source-file! path)
+  (let* ((clean-path (sanitize-source-path path))
+         (entry (assoc clean-path (car *source-file-table*))))
+    (if entry
+        (cdr entry)
+        (let* ((new-id (+ (length (car *source-file-table*)) 1)))
+          (set-car! *source-file-table* (cons (cons clean-path new-id) (car *source-file-table*)))
+          new-id))))
+
+(define *function-source-loc-table* (cons '() '()))
+(define (reset-function-source-loc-table!) (set-car! *function-source-loc-table* '()))
+(define (register-function-source-loc! fn file line col)
+  (let ((clean (sanitize-source-path file)))
+    (set-car! *function-source-loc-table*
+              (cons (cons fn (list clean line col))
+                    (car *function-source-loc-table*)))))
+(define (lookup-function-source-loc fn)
+  (let ((entry (assq fn (car *function-source-loc-table*))))
+    (if entry
+        (cdr entry)
+        (let loop ((es (car *function-source-loc-table*)))
+          (cond
+            ((null? es) #f)
+            ((and (symbol? (car (car es)))
+                  (not (eq? (car (car es)) '%main))
+                  (eq? (mangle-fn-label (car (car es))) fn))
+             (cdr (car es)))
+            (else (loop (cdr es))))))))
+
 ;;; Call Stack Tracing Context (Conforms to DSN-33 & Issue #604)
 (define *call-stack* (cons '() '()))
 (define *call-stack-depth-limit* (cons 32 '()))

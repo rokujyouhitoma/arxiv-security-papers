@@ -242,6 +242,13 @@
     (with-call-frame label fn
       (lambda ()
         (reset-lir!)
+        (let ((loc-info (lookup-function-source-loc label)))
+          (if (and (debug-symbols-enabled?) loc-info)
+              (let* ((file (car loc-info))
+                     (line (cadr loc-info))
+                     (col (caddr loc-info))
+                     (fid (register-source-file! file)))
+                (emit-lir! (list '%loc fid line col)))))
         ;; Build callee env:
         ;; %self at [rsp - 8]
         ;; params 0..5 in registers spilled to [rsp - 24 - 8*i]
@@ -302,6 +309,13 @@
         (main-expr (caddr prog)))
     (set-current-toplevel-name! '%main)
     (reset-lir!)
+    (let ((main-loc (lookup-function-source-loc '%main)))
+      (if (and (debug-symbols-enabled?) main-loc)
+          (let* ((file (car main-loc))
+                 (line (cadr main-loc))
+                 (col (caddr main-loc))
+                 (fid (register-source-file! file)))
+            (emit-lir! (list '%loc fid line col)))))
     (track-lir-si! -8)
     (lir-compile-expr main-expr -8 (list (cons '%raw-vars '()) (cons '%stack-vars '())) #f)
     (emit-lir! '(%return))

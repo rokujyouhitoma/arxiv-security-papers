@@ -201,10 +201,12 @@
           (loop (cdr ps) (append (reverse forms) acc))))))
 
 (define (read-datum-or-source-loc p path line)
-  (let ((expr (read p)))
+  (let ((cur-line (if (file-input-port? p) (port-line p) line))
+        (cur-col (if (file-input-port? p) (port-col p) 1))
+        (expr (read p)))
     (if (eof-object? expr)
         expr
-        (list '%source-loc path line 1 expr))))
+        (list '%source-loc path cur-line cur-col expr))))
 
 (define (slurp-single-file raw-path)
   (let ((path (resolve-include-path raw-path)))

@@ -230,6 +230,9 @@
 (define (lower-lir-instruction inst)
   (let ((op (car inst)))
     (case op
+      ((%loc)
+       (list (list '%loc (cadr inst) (caddr inst) (cadddr inst))))
+
       ((%label)
        (let ((lbl (cadr inst)))
          (list (list '%p2align 4)
@@ -878,6 +881,13 @@
 (define (emit-x86-asm-inst inst)
   (let ((op (car inst)))
     (case op
+      ((%loc)
+       (emit (string-append "    .loc "
+                            (number->string (cadr inst))
+                            " "
+                            (number->string (caddr inst))
+                            " "
+                            (number->string (cadddr inst)))))
       ((%label)
        (let ((lbl (cadr inst)))
          (emit (string-append (if (symbol? lbl) (symbol->string lbl) lbl) ":"))))
@@ -1006,6 +1016,13 @@
          (main-clause (assq '%asm-main (cdr asm-prog)))
          (main-body (cdr (assq 'body (cdr main-clause)))))
     (emit "    .intel_syntax noprefix")
+    (if (debug-symbols-enabled?)
+        (for-each
+          (lambda (entry)
+            (let ((path (car entry))
+                  (id (cdr entry)))
+              (emit (string-append "    .file " (number->string id) " \"" path "\""))))
+          (get-source-file-table)))
     (emit "    .text")
     (if (not (module-mode?))
         (begin

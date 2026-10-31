@@ -31,6 +31,9 @@
     n
     lbl)
   (Inst (inst)
+    ;; Debug & Source Location
+    (%loc n line col)
+
     ;; Control Flow
     (%label lbl)
     (%block lbl (x ...) inst ...)

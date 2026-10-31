@@ -30,6 +30,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **619** | ソース位置追跡情報（%source-loc）に基づく最小限 DWARF（.debug_line / .debug_info）セクション生成と GDB / perf デバッグ支援の実装 | Feature | 2026-10-31 | [closed/619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md](closed/619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | 2026-10-31 | [closed/618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](closed/618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
 | **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | 2026-10-31 | [closed/616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](closed/616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
 | **615** | ビルドパイプラインからの GCC 呼出し排除と GNU as / ld 直接駆動（脱 GCC ドライバ）への移行 | Refactor | 2026-10-31 | [closed/615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md](closed/615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md) |

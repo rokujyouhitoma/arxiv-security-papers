@@ -3,6 +3,70 @@
 ;;; Conforms to DSN-33 Architecture Specification & Issue #504
 ;;; =======================================================================
 
+
+;;; -----------------------------------------------------------------------
+;;; Debug-mode source line tracking (Issue #619)
+;;; Reads whole stdin text, scans top-level datum start lines, and wraps each
+;;; datum as (%source-loc file line col datum).
+;;; -----------------------------------------------------------------------
+(define (read-all-chars-to-string)
+  (let loop ((acc '()))
+    (let ((c (read-char)))
+      (if (eof-object? c)
+          (list->string (reverse acc))
+          (loop (cons c acc))))))
+
+;; Returns list of (line . col) for the start of each top-level datum.
+(define (scan-toplevel-datum-starts text)
+  (let ((len (string-length text)))
+    (let loop ((i 0) (line 1) (col 1) (depth 0) (in-str #f) (in-cmt #f) (in-atom #f) (acc '()))
+      (if (>= i len)
+          (reverse acc)
+          (let* ((c (string-ref text i))
+                 (nl? (char=? c #\newline))
+                 (nline (if nl? (+ line 1) line))
+                 (ncol (if nl? 1 (+ col 1))))
+            (cond
+              (in-cmt (loop (+ i 1) nline ncol depth #f (not nl?) #f acc))
+              (in-str
+               (cond ((char=? c #\\) (loop (+ i 2) line (+ col 2) depth #t #f #f acc))
+                     ((char=? c #\") (loop (+ i 1) nline ncol depth #f #f #f acc))
+                     (else (loop (+ i 1) nline ncol depth #t #f #f acc))))
+              ((char=? c #\;) (loop (+ i 1) nline ncol depth #f #t #f acc))
+              ((char=? c #\")
+               (loop (+ i 1) nline ncol depth #t #f #f
+                     (if (and (= depth 0) (not in-atom)) (cons (cons line col) acc) acc)))
+              ((or (char=? c #\space) (char=? c #\tab) (char=? c #\newline) (char=? c #\return))
+               (loop (+ i 1) nline ncol depth #f #f #f acc))
+              ((char=? c #\()
+               (loop (+ i 1) nline ncol (+ depth 1) #f #f #f
+                     (if (and (= depth 0) (not in-atom)) (cons (cons line col) acc) acc)))
+              ((char=? c #\))
+               (loop (+ i 1) nline ncol (if (> depth 0) (- depth 1) 0) #f #f #f acc))
+              ((and (char=? c #\#) (< (+ i 2) len) (char=? (string-ref text (+ i 1)) #\\))
+               ;; character literal: skip '#\x'
+               (loop (+ i 3) line (+ col 3) depth #f #f (= depth 0)
+                     (if (and (= depth 0) (not in-atom)) (cons (cons line col) acc) acc)))
+              (else
+               (loop (+ i 1) nline ncol depth #f #f (and (= depth 0) #t)
+                     (if (and (= depth 0) (not in-atom)) (cons (cons line col) acc) acc)))))))))
+
+(define (wrap-forms-with-locs forms starts file)
+  (let loop ((fs forms) (ss starts) (acc '()))
+    (cond
+      ((null? fs) (reverse acc))
+      ((null? ss) (loop (cdr fs) ss (cons (car fs) acc)))
+      (else (loop (cdr fs) (cdr ss)
+                  (cons (list '%source-loc file (car (car ss)) (cdr (car ss)) (car fs)) acc))))))
+
+(define *form-loc-table* (cons '() '()))
+
+(define (rewrap-forms-with-locs forms)
+  (map (lambda (f)
+         (let ((e (if (pair? f) (assq f (car *form-loc-table*)) #f)))
+           (if e (cdr e) f)))
+       forms))
+
 (define (read-all-forms)
   (let loop ((acc '()))
     (let ((expr (read)))
@@ -30,6 +94,12 @@
           (list target gc-mode '() verify trace debug)
           (let ((first (car forms)))
             (cond
+              ;; Source-loc wrapped datum (debug mode): unwrap, remember location
+              ((source-loc? first)
+               (let ((inner (source-loc-form first)))
+                 (if (pair? inner)
+                     (set-car! *form-loc-table* (cons (cons inner first) (car *form-loc-table*))))
+                 (loop (cons inner (cdr forms)) target gc-mode verify trace debug)))
               ;; Target directives
               ((or (eq? first '--target-lir)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'lir)))
@@ -131,6 +201,13 @@
                (loop (cdr forms) target gc-mode verify trace #t))
               ((and (pair? first) (eq? (car first) '!debug))
                (loop (cdr forms) target gc-mode verify trace #t))
+              ;; DWARF debug symbol directives (Issue #619)
+              ((or (eq? first '-g)
+                   (eq? first '--debug-symbols)
+                   (eq? first '!debug-symbols)
+                   (and (pair? first) (or (eq? (car first) '!debug-symbols) (eq? (car first) '--debug-symbols))))
+               (enable-debug-symbols!)
+               (loop (cdr forms) target gc-mode verify trace debug))
               ;; String/Symbol prefix directives (--dump-ir=..., --disable-pass=...)
               ((symbol? first)
                (let ((str (symbol->string first)))
@@ -316,6 +393,7 @@
   (display "  -o <file>             Write output to <file> instead of standard output\n")
   (display "  -e <expr>             Compile Scheme expression string directly to target output\n")
   (display "  -S                    Emit assembly code (default for native backends)\n")
+  (display "  -g                    Generate minimal DWARF debug information for GDB / perf\n")
   (display "  -b, --target <tgt>    Specify compilation target (x86_64, c, aarch64, lir)\n")
   (display "  -O0, -O1, -O2         Optimization level (0: minimal, 1: standard, 2: aggressive)\n")
   (display "  -v, --verbose         Enable verbose diagnostic messages to stderr\n")
@@ -378,6 +456,9 @@
              (loop (cdr rest) in-file out-file inline-expr 'elf opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((or (string=? arg "--target-asm") (string=? arg "-S"))
              (loop (cdr rest) in-file out-file inline-expr 'x86_64 opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((or (string=? arg "-g") (string=? arg "--debug-symbols") (string=? arg "-gline-tables-only"))
+             (enable-debug-symbols!)
+             (loop (cdr rest) in-file out-file inline-expr target opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((string=? arg "--target-lir")
              (loop (cdr rest) in-file out-file inline-expr 'lir opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((or (string=? arg "-b") (string=? arg "-t") (string=? arg "--target"))
@@ -421,6 +502,17 @@
              (loop (cdr rest) arg out-file inline-expr target opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             (else
              (loop (cdr rest) in-file out-file inline-expr target opt-level verbose quiet time-passes dump-ir allow-extern module-name)))))))
+
+(define (ensure-forms-source-loc forms file)
+  (if (or (not file) (string=? file "-") (eq? file 'none))
+      forms
+      (let loop ((fs forms) (line 1) (acc '()))
+        (if (null? fs)
+            (reverse acc)
+            (let ((f (car fs)))
+              (if (source-loc? f)
+                  (loop (cdr fs) (source-loc-line f) (cons f acc))
+                  (loop (cdr fs) (+ line 1) (cons (list '%source-loc file line 1 f) acc))))))))
 
 (define (read-all-forms-from-string str)
   (let ((p (open-input-string str)))
@@ -483,13 +575,25 @@
               (sys-close in-fd)))))
 
   ;; 4. Read forms
-  (let* ((raw (if cli-inline-expr
-                  (read-all-forms-from-string cli-inline-expr)
-                  (read-all-forms)))
+  (let* ((src-name (if (and cli-in-file (not (string=? cli-in-file "-"))) cli-in-file "stdin.scm"))
+         (dbg? (debug-symbols-enabled?))
+         (raw (cond
+                (cli-inline-expr (read-all-forms-from-string cli-inline-expr))
+                (dbg?
+                 (let* ((text (read-all-chars-to-string))
+                        (starts (scan-toplevel-datum-starts text))
+                        (plain (read-all-forms-from-string text)))
+                   (wrap-forms-with-locs plain starts src-name)))
+                (else (read-all-forms))))
          (directives (extract-directives-and-forms raw))
          (target (if cli-target cli-target (car directives)))
          (gc-mode (cadr directives))
-         (forms (caddr directives))
+         (forms (if (and dbg? (not cli-inline-expr))
+                    (begin
+                      (set-current-source-file! src-name)
+                      (register-source-file! src-name)
+                      (rewrap-forms-with-locs (caddr directives)))
+                    (caddr directives)))
          (verify-mode (cadddr directives))
          (trace-mode (car (cddddr directives)))
          (debug-mode (if (> (length directives) 5) (car (cdr (cddddr directives))) #f)))
