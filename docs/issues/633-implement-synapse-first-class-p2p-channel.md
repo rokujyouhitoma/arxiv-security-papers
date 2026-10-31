@@ -5,27 +5,27 @@ ID: 633
 ステータス: Open (New)
 ---
 
-# [FEAT] 第一級 P2P チャネルおよび有界バックプレッシャー機構の実装 (ID: 633)
+# [FEAT] 線形所有権移譲チャネルおよび有界バックプレッシャー機構の実装 (ID: 633)
 
 ## 1. 概要 / Summary
-[DSN-37] Phase 1 Task 1.2 に基づき、1対1 の所有権移譲を保証する第一級 P2P 通信チャネル（`make-channel`, `channel-send!`, `channel-recv!`）を実装する。
+[DSN-37] Phase 1 Task 1.2 に基づき、1対1 の所有権移譲を保証する線形所有権移譲通信チャネル（`make-channel`, `channel-send!`, `channel-recv!`）を実装する。
 容量 0 のランデブー同期および容量 $>0$ の有界バッファをサポートし、下流の遅延時に上流プロデューサを自動サスペンドさせる決定論的バックプレッシャー機構を確立する。
 
 ---
 
 ## 2. トレーサビリティ / Traceability
-- 設計仕様書: [DSN-37: Synapse 二層分離型並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#143-phase-1-通信--ロックフリー同期) (第 4 章 並行通信モデル、第 4.3.1 節 バックプレッシャー、第 14.3 節 Task 1.2)
+- 設計仕様書: [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#143-phase-1-通信--ロックフリー同期) (第 4 章 並行通信モデル、第 4.3.1 節 バックプレッシャー、第 14.3 節 Task 1.2)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `ulisp/runtime/synapse/channel.scm` (新規: P2P チャネル構造体および操作 API)
-- [ ] `tests/synapse/test_channel.scm` (新規: チャネル同期・有界テスト)
+- [ ] `ulisp/runtime/concurrency/channel.scm` (新規: 線形所有権移譲チャネル構造体および操作 API)
+- [ ] `tests/concurrency/test_channel.scm` (新規: チャネル同期・有界テスト)
 
 ---
 
 ## 4. 実装方針 / Implementation Plan
-Target Branch: `feat/633-synapse-p2p-channel`
+Target Branch: `feat/633-linear-channel`
 
 1. **チャネル構造体**:
    - `message-queue`, `recv-wait-queue`, `send-wait-queue`, `capacity`, `current-count` を保持。
@@ -44,4 +44,3 @@ Target Branch: `feat/633-synapse-p2p-channel`
 - [ ] 有界バッファ（capacity > 0）で満杯時に送信タスクが確実にサスペンドすること
 - [ ] メッセージ受信に伴い送信待機タスクが起床すること（バックプレッシャー解消）
 - [ ] 送受信で渡されるポインタの同一性（ゼロコピー Move）が検証されること
-

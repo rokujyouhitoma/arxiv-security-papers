@@ -8,13 +8,13 @@ ID: 638
 # [FEAT] アフィン線形所有権静的検査パス (check-affine-types) および自動 RAII Drop の実装 (ID: 638)
 
 ## 1. 概要 / Summary
-[DSN-37] Phase 3 Task 3.2 に基づき、Synapse-Core 内部構文木において、変数が複数回消費（Use-After-Move）されていないか、および禁止構文（`set!`, `call/cc` 等）が含まれていないかを静的検証する `check-affine-types` パスを実装する。
+[DSN-37] Phase 3 Task 3.2 に基づき、アフィン部分言語コア（ASC）内部構文木において、変数が複数回消費（Use-After-Move）されていないか、および禁止構文（`set!`, `call/cc` 等）が含まれていないかを静的検証する `check-affine-types` パスを実装する。
 未消費のままスコープを離脱する線形変数に対しては、自動的に解放コード（RAII Drop）を AST 末尾に注入する。
 
 ---
 
 ## 2. トレーサビリティ / Traceability
-- 設計仕様書: [DSN-37: Synapse 二層分離型並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#145-phase-3-nanopass-コンパイラ統合--fbip) (第 4.3 節 線形型理論、第 12.2 節 check-affine-types、第 14.5 節 Task 3.2)
+- 設計仕様書: [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#145-phase-3-nanopass-コンパイラ統合--fbip) (第 4.3 節 線形型理論、第 12.2 節 check-affine-types、第 14.5 節 Task 3.2)
 
 ---
 
@@ -41,4 +41,3 @@ Target Branch: `feat/638-nanopass-check-affine-types`
 - [ ] 二重使用コード（Use-After-Move）に対して正確な診断メッセージ付きでコンパイル拒絶すること
 - [ ] `set!` や `call/cc` を含むコードをコンパイルエラーとすること
 - [ ] 正常な線形コードが通過し、未消費変数に対する Drop コードが正しく生成されること
-

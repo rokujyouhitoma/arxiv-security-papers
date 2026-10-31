@@ -14,19 +14,19 @@ ID: 635
 ---
 
 ## 2. トレーサビリティ / Traceability
-- 設計仕様書: [DSN-37: Synapse 二層分離型並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#144-phase-2-mn-スケジューラ--強プリエンプション) (第 7.1 節 M:N スケジューラ、第 14.4 節 Task 2.2)
+- 設計仕様書: [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#144-phase-2-mn-スケジューラ--強プリエンプション) (第 7.1 節 M:N スケジューラ、第 14.4 節 Task 2.2)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `ulisp/runtime/synapse/scheduler.scm` (新規: M:N ワークスティーリングスケジューラ)
-- [ ] `ulisp/runtime/synapse/deque.scm` (新規: Chase-Lev ワークスティーリング Deque)
-- [ ] `tests/synapse/test_scheduler.scm` (新規: ワークスティーリング負荷分散テスト)
+- [ ] `ulisp/runtime/concurrency/scheduler.scm` (新規: M:N ワークスティーリングスケジューラ)
+- [ ] `ulisp/runtime/concurrency/deque.scm` (新規: Chase-Lev ワークスティーリング Deque)
+- [ ] `tests/concurrency/test_scheduler.scm` (新規: ワークスティーリング負荷分散テスト)
 
 ---
 
 ## 4. 実装方針 / Implementation Plan
-Target Branch: `feat/635-synapse-work-stealing-scheduler`
+Target Branch: `feat/635-work-stealing-scheduler`
 
 1. **Chase-Lev Deque**:
    - ワーカ自身は末尾（Bottom）に対して `push` / `pop`（スレッドセーフ・単一スレッドアクセス）。
@@ -44,4 +44,3 @@ Target Branch: `feat/635-synapse-work-stealing-scheduler`
 - [ ] ワーカースレッド間でのタスクスティールが正常に行われること
 - [ ] 不均等な負荷のタスク群を投入した際、全ワーカの CPU 稼働率がフラットに平準化されること
 - [ ] ワーカの停止およびシャットダウン処理がクリーンに完了すること
-

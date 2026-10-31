@@ -14,20 +14,20 @@ x86-64 の `lock cmpxchg` 命令に直結する Compare-And-Swap（CAS）およ�
 ---
 
 ## 2. トレーサビリティ / Traceability
-- 設計仕様書: [DSN-37: Synapse 二層分離型並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#142-phase-0-メモリ--アトミック基底) (第 6 章 排他制御、第 14.2 節 Task 0.2)
+- 設計仕様書: [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#142-phase-0-メモリ--アトミック基底) (第 6 章 排他制御、第 14.2 節 Task 0.2)
 - 関連仕様書: [DSN-33: uLisp x86-64 ネイティブ AOT コンパイラ包括設計仕様書](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `ulisp/runtime/synapse/atomic.scm` (新規: アトミックプリミティブ Scheme ラッパー)
+- [ ] `ulisp/runtime/concurrency/atomic.scm` (新規: アトミックプリミティブ Scheme ラッパー)
 - [ ] `ulisp/backend/140_backend_x86_64.scm` (変更: `atomic-cas!` の x86-64 LIR / 命令選択)
-- [ ] `tests/synapse/test_atomic.scm` (新規: アトミック並行テスト)
+- [ ] `tests/concurrency/test_atomic.scm` (新規: アトミック並行テスト)
 
 ---
 
 ## 4. 実装方針 / Implementation Plan
-Target Branch: `feat/631-synapse-atomic-primitives`
+Target Branch: `feat/631-atomic-primitives`
 
 1. **アトミック参照セル**:
    - `(define-record-type <atomic-box> (make-atomic-box val) atomic-box? (val atomic-box-ref atomic-box-set!))`
@@ -44,4 +44,3 @@ Target Branch: `feat/631-synapse-atomic-primitives`
 - [ ] 期待値不一致時に置換を行わず `#f` を返却すること
 - [ ] 複数スレッド／タスク競合下で厳密に 1 勝者のみが確定する単体テスト PASS
 - [ ] すべての内部リンクが相対パスリンク規約に準拠していること
-

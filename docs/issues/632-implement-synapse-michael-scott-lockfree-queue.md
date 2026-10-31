@@ -14,18 +14,18 @@ ID: 632
 ---
 
 ## 2. トレーサビリティ / Traceability
-- 設計仕様書: [DSN-37: Synapse 二層分離型並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#143-phase-1-通信--ロックフリー同期) (第 6 章 排他制御、第 14.3 節 Task 1.1)
+- 設計仕様書: [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#143-phase-1-通信--ロックフリー同期) (第 6 章 排他制御、第 14.3 節 Task 1.1)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `ulisp/runtime/synapse/queue.scm` (新規: Michael-Scott キュー実装)
-- [ ] `tests/synapse/test_queue.scm` (新規: ロックフリーキュー並行単体テスト)
+- [ ] `ulisp/runtime/concurrency/queue.scm` (新規: Michael-Scott キュー実装)
+- [ ] `tests/concurrency/test_queue.scm` (新規: ロックフリーキュー並行単体テスト)
 
 ---
 
 ## 4. 実装方針 / Implementation Plan
-Target Branch: `feat/632-synapse-michael-scott-queue`
+Target Branch: `feat/632-michael-scott-queue`
 
 1. **データ構造定義**:
    - `(define-record-type <queue-node> (make-queue-node value next) ...)`
@@ -45,4 +45,3 @@ Target Branch: `feat/632-synapse-michael-scott-queue`
 - [ ] 複数スレッドからの高頻度 Concurrent Enqueue/Dequeue でデータ欠損・順序逆転が 0 件
 - [ ] 空キューからの Dequeue が即座に `#f` を返すこと
 - [ ] すべての内部リンクが相対パスリンク規約に準拠していること
-

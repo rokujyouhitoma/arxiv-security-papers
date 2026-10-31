@@ -13,7 +13,7 @@ ID: 639
 ---
 
 ## 2. トレーサビリティ / Traceability
-- 設計仕様書: [DSN-37: Synapse 二層分離型並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#145-phase-3-nanopass-コンパイラ統合--fbip) (第 1.1 節 技術的出自、第 12.3 節 fbip-inplace-transform、第 14.5 節 Task 3.3)
+- 設計仕様書: [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#145-phase-3-nanopass-コンパイラ統合--fbip) (第 1.1 節 技術的出自、第 12.3 節 fbip-inplace-transform、第 14.5 節 Task 3.3)
 
 ---
 
@@ -39,4 +39,3 @@ Target Branch: `feat/639-nanopass-fbip-inplace-transform`
 - [ ] リストの走査・写像処理において、新規アリーナアロケーションが完全にスキップされること
 - [ ] 変換後のネイティブコードがセグメンテーションフォールトを起こさず、正しい計算結果を返すこと
 - [ ] メモリ消費量測定において、走査中のヒープ消費増分が 0 バイトであることを確認すること
-

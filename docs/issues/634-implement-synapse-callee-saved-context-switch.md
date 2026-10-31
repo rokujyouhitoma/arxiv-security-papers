@@ -14,21 +14,21 @@ ID: 634
 ---
 
 ## 2. トレーサビリティ / Traceability
-- 設計仕様書: [DSN-37: Synapse 二層分離型並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#144-phase-2-mn-スケジューラ--強プリエンプション) (第 5 章 メモリモデル、第 7.3 節 極小スタック、第 14.4 節 Task 2.1)
+- 設計仕様書: [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#144-phase-2-mn-スケジューラ--強プリエンプション) (第 5 章 メモリモデル、第 7.3 節 極小スタック、第 14.4 節 Task 2.1)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `ulisp/runtime/synapse/context.s` (新規: x86-64 アセンブラコンテキストスイッチ)
-- [ ] `ulisp/runtime/synapse/context.scm` (新規: Scheme インターフェース)
-- [ ] `tests/synapse/test_context_switch.scm` (新規: コンテキストスイッチ単体テスト)
+- [ ] `ulisp/runtime/concurrency/context.s` (新規: x86-64 アセンブラコンテキストスイッチ)
+- [ ] `ulisp/runtime/concurrency/context.scm` (新規: Scheme インターフェース)
+- [ ] `tests/concurrency/test_context_switch.scm` (新規: コンテキストスイッチ単体テスト)
 
 ---
 
 ## 4. 実装方針 / Implementation Plan
-Target Branch: `feat/634-synapse-native-context-switch`
+Target Branch: `feat/634-native-context-switch`
 
-1. **アセンブラ関数 `synapse_swap_context`**:
+1. **アセンブラ関数 `swap_context`**:
    - 引数 1 (`rdi`): 旧スタックポインタ格納先アドレス (`old_sp_ptr`)
    - 引数 2 (`rsi`): 新スタックポインタ (`new_sp`)
    - 処理:
@@ -46,4 +46,3 @@ Target Branch: `feat/634-synapse-native-context-switch`
 - [ ] 2 つのタスク間でコンテキストスイッチを往復させ、全レジスタ値が改変されないこと
 - [ ] スタックアライメント（16 バイト境界）が ABI 規約通りに維持されること
 - [ ] 1000 万回のスイッチでスタック破壊やセグメンテーションフォールトが 0 件
-

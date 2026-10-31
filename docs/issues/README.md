@@ -7,19 +7,19 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **630** | Synapse タスク独立バンプアリーナおよび O(1) 瞬時全破棄機構の実装 | Feature | High | New | [630-implement-synapse-task-independent-bump-arena.md](630-implement-synapse-task-independent-bump-arena.md) |
+| **630** | プロセスローカル・エフェメラルアリーナおよび O(1) 瞬時全破棄機構の実装 | Feature | High | New | [630-implement-synapse-task-independent-bump-arena.md](630-implement-synapse-task-independent-bump-arena.md) |
 | **631** | Scheme 低レベルアトミック命令 (atomic-cas! / atomic-box) の提供 | Feature | High | New | [631-implement-synapse-low-level-atomic-primitives.md](631-implement-synapse-low-level-atomic-primitives.md) |
 | **632** | Michael-Scott ノンブロッキング・ロックフリーキューの実装 | Feature | High | New | [632-implement-synapse-michael-scott-lockfree-queue.md](632-implement-synapse-michael-scott-lockfree-queue.md) |
-| **633** | 第一級 P2P チャネルおよび有界バックプレッシャー機構の実装 | Feature | High | New | [633-implement-synapse-first-class-p2p-channel.md](633-implement-synapse-first-class-p2p-channel.md) |
+| **633** | 線形所有権移譲チャネルおよび有界バックプレッシャー機構の実装 | Feature | High | New | [633-implement-synapse-first-class-p2p-channel.md](633-implement-synapse-first-class-p2p-channel.md) |
 | **634** | System V AMD64 Callee-saved 極小スタック・ネイティブコンテキストスイッチの実装 | Feature | High | New | [634-implement-synapse-callee-saved-context-switch.md](634-implement-synapse-callee-saved-context-switch.md) |
 | **635** | 分散 M:N ワークスティーリングスケジューラおよび Chase-Lev Deque の実装 | Feature | High | New | [635-implement-synapse-work-stealing-scheduler.md](635-implement-synapse-work-stealing-scheduler.md) |
-| **636** | Fuel カウンタ管理および協調的・強制的プリエンプション機構の実装 | Feature | High | New | [636-implement-synapse-fuel-preemption-mechanism.md](636-implement-synapse-fuel-preemption-mechanism.md) |
-| **637** | Nanopass コンパイラにおける二層プレーン分離パス (split-planes-pass) の実装 | Feature | High | New | [637-implement-nanopass-split-planes-pass.md](637-implement-nanopass-split-planes-pass.md) |
+| **636** | リダクション方式セーフポイント注入と協調的・強制的プリエンプション機構の実装 | Feature | High | New | [636-implement-synapse-fuel-preemption-mechanism.md](636-implement-synapse-fuel-preemption-mechanism.md) |
+| **637** | Nanopass コンパイラにおけるホスト・カーネル分離パス (split-planes-pass) の実装 | Feature | High | New | [637-implement-nanopass-split-planes-pass.md](637-implement-nanopass-split-planes-pass.md) |
 | **638** | アフィン線形所有権静的検査パス (check-affine-types) および自動 RAII Drop の実装 | Feature | High | New | [638-implement-nanopass-check-affine-types-and-raii-drop.md](638-implement-nanopass-check-affine-types-and-raii-drop.md) |
 | **639** | FBIP (Perceus) インプレース再利用最適化パス (fbip-inplace-transform) の実装 | Feature | High | New | [639-implement-nanopass-fbip-inplace-optimization.md](639-implement-nanopass-fbip-inplace-optimization.md) |
-| **640** | Nanopass ループバックエッジ・プロローグ Fuel 判定注入パス (inject-fuel-checks) の実装 | Feature | High | New | [640-implement-nanopass-inject-fuel-checks-pass.md](640-implement-nanopass-inject-fuel-checks-pass.md) |
-| **641** | プレーン間境界サニタイザおよびディープコピー機構の実装 | Feature | High | New | [641-implement-synapse-boundary-sanitizer-and-deep-copy.md](641-implement-synapse-boundary-sanitizer-and-deep-copy.md) |
-| **642** | Epoch Fencing による分散ロールバック制御および待機タスク Epoch Gate の実装 | Feature | High | New | [642-implement-synapse-epoch-fencing-distributed-rollback.md](642-implement-synapse-epoch-fencing-distributed-rollback.md) |
+| **640** | Nanopass ループバックエッジ・プロローグ セーフポイント判定自動注入パス (inject-safepoints) の実装 | Feature | High | New | [640-implement-nanopass-inject-fuel-checks-pass.md](640-implement-nanopass-inject-fuel-checks-pass.md) |
+| **641** | ホスト・カーネル境界サニタイザおよびディープコピー機構の実装 | Feature | High | New | [641-implement-synapse-boundary-sanitizer-and-deep-copy.md](641-implement-synapse-boundary-sanitizer-and-deep-copy.md) |
+| **642** | 世代管理型投機タスク破棄および待機タスク世代ゲート検証の実装 | Feature | High | New | [642-implement-synapse-epoch-fencing-distributed-rollback.md](642-implement-synapse-epoch-fencing-distributed-rollback.md) |
 | **643** | 10 万並行マイクロタスク耐久ベンチマークおよび STW-GC ゼロ検証スイートの実装 | Feature | High | New | [643-implement-synapse-benchmark-suite-and-stw-gc-verification.md](643-implement-synapse-benchmark-suite-and-stw-gc-verification.md) |
 | **644** | インタプリタ向け Dual-Mode 評価アダプタ (eval_adapter.scm) の実装 | Feature | Medium | New | [644-implement-synapse-interpreter-dual-mode-eval-adapter.md](644-implement-synapse-interpreter-dual-mode-eval-adapter.md) |
 | **645** | CI 向けマルチコア並行競合テストハーネス (concurrency_harness.scm) の実装 | Feature | High | New | [645-implement-synapse-multicore-concurrency-ci-harness.md](645-implement-synapse-multicore-concurrency-ci-harness.md) |

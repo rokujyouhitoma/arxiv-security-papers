@@ -100,7 +100,7 @@
   - `benchmarks/` — AOT/JIT 性能測定・回帰検知・CI パイプライン統合ベンチマーク仕様。
 - 🛡️ **[[DSN-36] Zero-libc Pure Scheme ベアメタルランタイム包括設計仕様書](designs/DSN-36-zero_libc_pure_scheme_bare_metal_runtime.md)**
   - `ulisp/lib/posix.scm` — libc/Cランタイム完全排除・Linux Raw Syscall・静的単一バイナリ自立型実行設計。
-- ⚡ **[[DSN-37] Synapse 二層分離並行処理基盤 ＆ AOT パイプライン仕様書](designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)**
+- ⚡ **[[DSN-37] ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT パイプライン仕様書](designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)**
   - `runtime/synapse-core.scm` — R7RS 制御層とアフィン純粋計算層の二層分離・P2P ゼロコピー Move・FBIP・Fuel 強プリエンプション・M:N ロックフリー並列基盤。
 
 
