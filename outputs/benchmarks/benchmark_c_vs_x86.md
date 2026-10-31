@@ -1,6 +1,6 @@
 # ULisp Canonical Benchmark Report: x86-64 vs ULisp C vs Pure C
 
-- **Timestamp**: `2026-10-30T00:38:57.583650+00:00`
+- **Timestamp**: `2026-10-31T06:52:41.465503+00:00`
 - **Environment**: `Linux x86_64 (6.18.54.1-microsoft-standard-WSL2)`, `GCC 13`
 - **CPU**: `11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz` (4 cores)
 - **Memory**: `12251728 kB`
@@ -11,34 +11,23 @@
 
 | ワークロード | x86-64 Native (ms) | ULisp C -O2 (ms) | Pure C -O2 (ms) | 対 Pure C 比率 (x86 / Pure) | 対 ULisp C 比率 (x86 / ULisp C) |
 |---|---|---|---|---|---|
-| **Fibonacci (fib 30)** | 4.17 ± 0.23 (min: 3.92) | 7.91 ± 0.37 (min: 7.49) | 1.81 ± 0.20 (min: 1.62) | **2.30x** | **0.53x** |
-| **Tail-Recursive Loop (10M)** | 1.75 ± 0.16 (min: 1.59) | 0.50 ± 0.07 (min: 0.44) | 0.48 ± 0.09 (min: 0.43) | **3.67x** | **3.53x** |
-| **Ackermann (ack 3 7)** | 2.92 ± 0.29 (min: 2.62) | 3.70 ± 0.26 (min: 3.33) | 0.98 ± 0.07 (min: 0.91) | **2.98x** | **0.79x** |
-| **Higher-Order Closure (1M)** | 2.99 ± 0.21 (min: 2.60) | 4.89 ± 0.35 (min: 4.42) | 0.47 ± 0.05 (min: 0.42) | **6.39x** | **0.61x** |
-| **List Alloc & Traverse (100k)** | 2.17 ± 0.61 (min: 1.48) | 1.60 ± 0.20 (min: 1.37) | 1.14 ± 0.15 (min: 0.95) | **1.90x** | **1.36x** |
-| **Vector Indexing & Traverse (100k)** | 0.99 ± 0.11 (min: 0.88) | 1.47 ± 0.22 (min: 1.21) | 0.80 ± 0.10 (min: 0.70) | **1.25x** | **0.68x** |
+| **Fibonacci (fib 30)** | 6.21 ± 0.26 (min: 5.77) | 14.94 ± 1.26 (min: 12.73) | 2.72 ± 0.25 (min: 2.27) | **2.29x** | **0.42x** |
+| **Tail-Recursive Loop (10M)** | 2.88 ± 0.19 (min: 2.64) | 1.14 ± 0.16 (min: 0.91) | 0.76 ± 0.15 (min: 0.65) | **3.78x** | **2.54x** |
+| **Ackermann (ack 3 7)** | 6.04 ± 1.15 (min: 5.10) | 5.46 ± 0.38 (min: 5.08) | 2.20 ± 0.40 (min: 1.65) | **2.75x** | **1.11x** |
+| **Higher-Order Closure (1M)** | 4.65 ± 1.08 (min: 3.42) | 6.81 ± 0.18 (min: 6.49) | 0.67 ± 0.08 (min: 0.59) | **6.97x** | **0.68x** |
+| **List Alloc & Traverse (100k)** | 1.91 ± 0.27 (min: 1.66) | 2.95 ± 0.50 (min: 2.16) | 1.76 ± 0.32 (min: 1.45) | **1.09x** | **0.65x** |
+| **Vector Indexing & Traverse (100k)** | 1.68 ± 0.54 (min: 1.31) | 2.10 ± 0.23 (min: 1.77) | 1.10 ± 0.10 (min: 1.00) | **1.52x** | **0.80x** |
 
 ## 2. バイナリフットプリント（Binary Size）
 
 | ワークロード | x86-64 Native (Bytes) | ULisp C -O2 (Bytes) | Pure C -O2 (Bytes) |
 |---|---|---|---|
-| **Fibonacci (fib 30)** | 20,160 B | 17,192 B | 16,048 B |
-| **Tail-Recursive Loop (10M)** | 19,968 B | 17,120 B | 16,016 B |
-| **Ackermann (ack 3 7)** | 20,096 B | 17,232 B | 16,048 B |
-| **Higher-Order Closure (1M)** | 20,032 B | 21,920 B | 16,024 B |
-| **List Alloc & Traverse (100k)** | 20,096 B | 21,880 B | 16,104 B |
-| **Vector Indexing & Traverse (100k)** | 20,176 B | 22,016 B | 16,104 B |
-
-## 3. ハードウェア性能カウンタ（Hardware Performance Counters via Linux perf）
-
-| ワークロード | x86-64 IPC | x86-64 Branch Miss % | x86-64 Cache Miss % | ULisp C IPC | Pure C IPC |
-|---|---|---|---|---|---|
-| **Fibonacci (fib 30)** | 2.68 | 0.03% | 58.55% | 1.90 | 4.06 |
-| **Tail-Recursive Loop (10M)** | 3.31 | 0.12% | 30.34% | 0.67 | 0.56 |
-| **Ackermann (ack 3 7)** | 1.05 | 14.21% | 58.03% | 1.13 | 1.82 |
-| **Higher-Order Closure (1M)** | 3.12 | 0.03% | 64.91% | 2.16 | 0.75 |
-| **List Alloc & Traverse (100k)** | 1.46 | 0.11% | 75.14% | 1.22 | 0.94 |
-| **Vector Indexing & Traverse (100k)** | 2.95 | 0.12% | 78.57% | 1.78 | 0.98 |
+| **Fibonacci (fib 30)** | 20,264 B | 16,992 B | 16,048 B |
+| **Tail-Recursive Loop (10M)** | 20,080 B | 16,920 B | 16,016 B |
+| **Ackermann (ack 3 7)** | 20,200 B | 17,024 B | 16,048 B |
+| **Higher-Order Closure (1M)** | 20,144 B | 21,720 B | 16,024 B |
+| **List Alloc & Traverse (100k)** | 20,208 B | 21,680 B | 16,104 B |
+| **Vector Indexing & Traverse (100k)** | 20,288 B | 21,816 B | 16,104 B |
 
 > **注記**:
 > - x86-64 Native は `as` / `ld -m elf_x86_64 -static` で直接アセンブル・リンクされた libc 依存ゼロの Freestanding バイナリです。

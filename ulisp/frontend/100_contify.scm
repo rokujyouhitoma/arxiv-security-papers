@@ -91,14 +91,6 @@
          (else
           (map contify-expr expr)))))))
 
-(define (occurs-in? var expr)
-  (cond
-    ((symbol? expr) (eq? expr var))
-    ((not (pair? expr)) #f)
-    (else
-     (or (occurs-in? var (car expr))
-         (occurs-in? var (cdr expr))))))
-
 (define (occurs-in-other-bindings? var bindings)
   (let loop ((bs bindings))
     (if (null? bs)

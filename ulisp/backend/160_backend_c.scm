@@ -56,14 +56,24 @@
     ((%r12) "reg_r12")
     (else (string-append "((char *)(uintptr_t)" (c-reg->str base) ")"))))
 
+(define (c-offset->str offset)
+  (cond
+    ((and (pair? offset) (eq? (car offset) '%sib))
+     (let* ((idx (c-reg->str (cadr offset)))
+            (scale (number->string (caddr offset)))
+            (disp (cadddr offset)))
+       (string-append "(" idx " * " scale " + (" (number->string disp) "))")))
+    ((number? offset) (number->string offset))
+    (else (c-reg->str offset))))
+
 (define (c-mem-ref base offset)
   (let ((base-str (c-base-ptr-str base))
-        (off-str (if (number? offset) (number->string offset) (c-reg->str offset))))
+        (off-str (c-offset->str offset)))
     (string-append "(*(uint64_t *)(" base-str " + (" off-str ")))")))
 
 (define (c-mem-byte-ref base offset)
   (let ((base-str (c-base-ptr-str base))
-        (off-str (if (number? offset) (number->string offset) (c-reg->str offset))))
+        (off-str (c-offset->str offset)))
     (string-append "(*(uint8_t *)(" base-str " + (" off-str ")))")))
 
 (define (c-operand->str opnd)

@@ -16,7 +16,64 @@
         (cons 'incoming '())          ; ((param . pred) . val)
         (cons 'replacements '())      ; (param . canonical-val)
         (cons 'terminators '())       ; (label . terminator-inst)
+        (cons 'rep-types '())         ; (val/param . rep-type)
         (cons 'current-block #f)))
+
+;;; -----------------------------------------------------------------------
+;;; Representation Type Lattice (Issue #618: bot <= raw-i64 <= top)
+;;; -----------------------------------------------------------------------
+(define (braun-rep-bot) 'bot)
+(define (braun-rep-raw-i64) 'raw-i64)
+(define (braun-rep-tagged-fixnum) 'tagged-fixnum)
+(define (braun-rep-top) 'top)
+
+(define (braun-rep-lub r1 r2)
+  (cond
+    ((eq? r1 'bot) r2)
+    ((eq? r2 'bot) r1)
+    ((eq? r1 r2) r1)
+    (else 'top)))
+
+(define (braun-set-rep-type! cfg val rep)
+  (let* ((reps (braun-cfg-ref cfg 'rep-types))
+         (entry (assoc val reps)))
+    (if entry
+        (set-cdr! entry rep)
+        (braun-cfg-set! cfg 'rep-types (cons (cons val rep) reps)))))
+
+(define (braun-get-rep-type cfg val)
+  (let* ((reps (braun-cfg-ref cfg 'rep-types))
+         (entry (assoc val reps)))
+    (if entry (cdr entry) 'bot)))
+
+(define (braun-infer-block-params-rep! cfg)
+  (let ((order (braun-cfg-ref cfg 'order)))
+    (for-each
+     (lambda (block-lbl)
+       (let ((params (braun-get-params cfg block-lbl))
+             (preds (braun-get-preds cfg block-lbl)))
+         (for-each
+          (lambda (param)
+            (let ((inferred-rep
+                   (let loop ((ps preds) (acc 'bot))
+                     (if (null? ps) acc
+                         (let* ((pred (car ps))
+                                (inc (braun-resolve-val cfg (braun-get-incoming cfg param pred)))
+                                (inc-rep (braun-get-rep-type cfg inc)))
+                           (loop (cdr ps) (braun-rep-lub acc inc-rep)))))))
+              (if (not (eq? inferred-rep 'bot))
+                  (braun-set-rep-type! cfg param inferred-rep))))
+          params)))
+     order)
+    cfg))
+
+(define (braun-get-raw-params cfg)
+  (let* ((reps (braun-cfg-ref cfg 'rep-types)))
+    (let loop ((rs reps) (acc '()))
+      (if (null? rs) (reverse acc)
+          (if (eq? (cdar rs) 'raw-i64)
+              (loop (cdr rs) (cons (caar rs) acc))
+              (loop (cdr rs) acc))))))
 
 (define (braun-cfg-ref cfg key)
   (let ((entry (assq key cfg)))

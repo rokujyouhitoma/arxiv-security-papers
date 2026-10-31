@@ -89,6 +89,31 @@
   (assert-true "unary: (%unbox-fixnum 30) emits direct (%mov %rax 30) without sar"
                (equal? insts '((%mov %rax 30)))))
 
+;; Test 3c: SIB zero-cost collection indexing (Issue #618)
+(reset-lir!)
+(lir-compile-binop 'vector-ref 'v 'i -8 '((v . -8) (i . -16)))
+(let ((insts (reverse (car *lir-instructions*))))
+  (assert-true "vector-ref: tagged index emits SIB (%load %rax %rdx (%sib %rax 2 3))"
+               (pair? (filter (lambda (i) (equal? i '(%load %rax %rdx (%sib %rax 2 3)))) insts))))
+
+(reset-lir!)
+(lir-compile-binop 'vector-ref 'v 'i -8 '((v . -8) (i . -16) (%raw-vars i)))
+(let ((insts (reverse (car *lir-instructions*))))
+  (assert-true "vector-ref: raw index emits SIB (%load %rax %rdx (%sib %rax 8 3))"
+               (pair? (filter (lambda (i) (equal? i '(%load %rax %rdx (%sib %rax 8 3)))) insts))))
+
+(reset-lir!)
+(lir-compile-triop 'vector-set! 'v 'i 'val -8 '((v . -8) (i . -16) (val . -24)))
+(let ((insts (reverse (car *lir-instructions*))))
+  (assert-true "vector-set!: tagged index emits SIB (%store %rdx (%sib %rcx 2 3) %r10)"
+               (pair? (filter (lambda (i) (equal? i '(%store %rdx (%sib %rcx 2 3) %r10))) insts))))
+
+(reset-lir!)
+(lir-compile-triop 'vector-set! 'v 'i 'val -8 '((v . -8) (i . -16) (val . -24) (%raw-vars i)))
+(let ((insts (reverse (car *lir-instructions*))))
+  (assert-true "vector-set!: raw index emits SIB (%store %rdx (%sib %rcx 8 3) %r10)"
+               (pair? (filter (lambda (i) (equal? i '(%store %rdx (%sib %rcx 8 3) %r10))) insts))))
+
 ;; Test 4: End-to-end AST to LIR compilation using Pass 129 primitives
 (let* ((ast '(let ((x 10) (y 20)) (+ x y)))
        (ast1 (desugar-all ast))

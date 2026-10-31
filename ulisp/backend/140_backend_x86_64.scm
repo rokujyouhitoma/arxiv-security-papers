@@ -56,9 +56,19 @@
 
 (define (mem-op->str base offset)
   (let ((base-str (reg->str base)))
-    (if (symbol? offset)
-        (string-append "[" base-str " + " (reg->str offset) "]")
-        (string-append "[" base-str " " (offset->string offset) "]"))))
+    (cond
+      ((and (pair? offset) (eq? (car offset) '%sib))
+       (let* ((idx (reg->str (cadr offset)))
+              (scale (number->string (caddr offset)))
+              (disp (cadddr offset))
+              (disp-str (cond ((= disp 0) "")
+                              ((> disp 0) (string-append " + " (number->string disp)))
+                              (else (string-append " - " (number->string (- 0 disp)))))))
+         (string-append "[" base-str " + " idx "*" scale disp-str "]")))
+      ((symbol? offset)
+       (string-append "[" base-str " + " (reg->str offset) "]"))
+      (else
+       (string-append "[" base-str " " (offset->string offset) "]")))))
 
 (define (operand->str opnd)
   (cond
@@ -76,9 +86,7 @@
          ((%stack)
           (string-append "[rsp " (offset->string (cadr opnd)) "]"))
          ((%disp)
-          (if (symbol? (cadr opnd))
-              (string-append "[" (reg->str (caddr opnd)) " + " (reg->str (cadr opnd)) "]")
-              (string-append "[" (reg->str (caddr opnd)) " " (offset->string (cadr opnd)) "]")))
+          (mem-op->str (caddr opnd) (cadr opnd)))
          ((%imm)
           (number->string (cadr opnd)))
          ((%mem)
@@ -321,7 +329,8 @@
            (if (and (not (integer? src))
                     (not (eq? (car *backend-gc-mode*) 'none))
                     (eq? base '%rdx)
-                    (or (equal? offset -1) (equal? offset 7) (eq? offset '%rcx)))
+                    (or (equal? offset -1) (equal? offset 7) (eq? offset '%rcx)
+                        (and (pair? offset) (eq? (car offset) '%sib))))
                (append store-inst
                        (cond
                          ((equal? offset -1)
@@ -335,7 +344,7 @@
                                 (list '%raw-asm "    call ulisp_gc_write_barrier")
                                 (list '%raw-asm "    add rsp, 128")))
                          (else
-                          (list (list '%raw-asm "    lea rdx, [rdx + rcx]")
+                          (list (list '%raw-asm (string-append "    lea rdx, " (mem-op->str base offset)))
                                 (list '%raw-asm "    mov rax, r10")
                                 (list '%raw-asm "    sub rsp, 128")
                                 (list '%raw-asm "    call ulisp_gc_write_barrier")

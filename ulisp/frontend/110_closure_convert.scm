@@ -486,6 +486,10 @@
                                           (inner-map (map (lambda (p) (cons p p)) params))
                                           (new-body (convert-expr lbody inner-map))
                                           (fn-def (list '%function label params new-body)))
+                                     (if (unboxed-fn? name)
+                                         (record-unboxed-fn! label))
+                                     (if (unboxed-ret-fn? name)
+                                         (record-unboxed-ret-fn! label))
                                      (add-lifted-function! fn-def))))))
                        (loop (cdr ds)))))
                ;; 3. Convert variable inits and main-expr

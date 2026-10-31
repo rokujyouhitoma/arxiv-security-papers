@@ -39,6 +39,14 @@
 (define (caadr x) (safe-car (safe-car (safe-cdr x))))
 (define (cddar x) (safe-cdr (safe-cdr (safe-car x))))
 
+(define (occurs-in? var expr)
+  (cond
+    ((symbol? expr) (eq? expr var))
+    ((not (pair? expr)) #f)
+    (else
+     (or (occurs-in? var (car expr))
+         (occurs-in? var (cdr expr))))))
+
 (define (memq item ls)
   (cond
     ((not (pair? ls)) #f)

@@ -328,6 +328,7 @@ def compile_pure_c(workload_id: str, c_source: str) -> str:
 def verify_output(bin_path: str) -> str:
     env = os.environ.copy()
     env.pop("ULISP_QUIET", None)
+    env["ULISP_PRINT_RESULT"] = "1"
     p = subprocess.run([bin_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True, env=env)
     return p.stdout.strip()
 

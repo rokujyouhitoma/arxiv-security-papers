@@ -20,6 +20,19 @@
           (memq (cadr reg) *canonical-lir-registers*)) #t)
     (else #f)))
 
+(define (lir-valid-sib? sib)
+  (and (pair? sib)
+       (eq? (car sib) '%sib)
+       (= (length sib) 4)
+       (lir-valid-register? (cadr sib))
+       (integer? (caddr sib))
+       (integer? (cadddr sib))))
+
+(define (lir-valid-offset? off)
+  (or (integer? off)
+      (lir-valid-register? off)
+      (lir-valid-sib? off)))
+
 (define (lir-valid-lvalue? opnd)
   (cond
     ((lir-valid-register? opnd) #t)
@@ -27,7 +40,7 @@
           (integer? (cadr opnd))) #t)
     ((and (pair? opnd) (eq? (car opnd) '%mem) (pair? (cdr opnd)) (pair? (cddr opnd)))
      (and (lir-valid-register? (cadr opnd))
-          (or (integer? (caddr opnd)) (lir-valid-register? (caddr opnd)))))
+          (lir-valid-offset? (caddr opnd))))
     ((and (symbol? opnd) (not (lir-symbol-starts-with-percent? opnd))) #t)
     (else #f)))
 
@@ -40,7 +53,7 @@
           (integer? (cadr opnd))) #t)
     ((and (pair? opnd) (eq? (car opnd) '%mem) (pair? (cdr opnd)) (pair? (cddr opnd)))
      (and (lir-valid-register? (cadr opnd))
-          (or (integer? (caddr opnd)) (lir-valid-register? (caddr opnd)))))
+          (lir-valid-offset? (caddr opnd))))
     (else #f)))
 
 (define (lir-atomic-operand? opnd)
@@ -201,14 +214,14 @@
            (if (and (= (length inst) 4)
                     (lir-valid-register? (cadr inst))
                     (lir-valid-register? (caddr inst))
-                    (or (integer? (cadddr inst)) (lir-valid-register? (cadddr inst))))
+                    (lir-valid-offset? (cadddr inst)))
                #t
                (lir-report-error "%load format must be (%load <dst-reg> <base-reg> <offset>)" inst)))
 
           ((%store)
            (if (and (= (length inst) 4)
                     (lir-valid-register? (cadr inst))
-                    (or (integer? (caddr inst)) (lir-valid-register? (caddr inst)))
+                    (lir-valid-offset? (caddr inst))
                     (lir-valid-operand? (cadddr inst)))
                #t
                (lir-report-error "%store format must be (%store <base-reg> <offset> <src>)" inst)))
@@ -217,14 +230,14 @@
            (if (and (= (length inst) 4)
                     (lir-valid-register? (cadr inst))
                     (lir-valid-register? (caddr inst))
-                    (integer? (cadddr inst)))
+                    (lir-valid-offset? (cadddr inst)))
                #t
                (lir-report-error "%load-byte-zx format must be (%load-byte-zx <dst> <base> <offset>)" inst)))
 
           ((%store-byte)
            (if (and (= (length inst) 4)
                     (lir-valid-register? (cadr inst))
-                    (integer? (caddr inst))
+                    (lir-valid-offset? (caddr inst))
                     (or (lir-valid-register? (cadddr inst)) (integer? (cadddr inst))))
                #t
                (lir-report-error "%store-byte format must be (%store-byte <base> <offset> <src>)" inst)))

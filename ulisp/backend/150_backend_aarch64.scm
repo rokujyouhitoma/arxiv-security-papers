@@ -38,9 +38,19 @@
 
 (define (arm-mem-op->str base offset)
   (let ((base-str (arm-reg->str base)))
-    (if (symbol? offset)
-        (string-append "[" base-str ", " (arm-reg->str offset) "]")
-        (string-append "[" base-str ", #" (number->string offset) "]"))))
+    (cond
+      ((and (pair? offset) (eq? (car offset) '%sib))
+       (let* ((idx (arm-reg->str (cadr offset)))
+              (scale (caddr offset))
+              (shift (case scale ((1) 0) ((2) 1) ((4) 2) ((8) 3) (else 0)))
+              (disp (cadddr offset)))
+         (if (= shift 0)
+             (string-append "[" base-str ", " idx "]")
+             (string-append "[" base-str ", " idx ", lsl #" (number->string shift) "]"))))
+      ((symbol? offset)
+       (string-append "[" base-str ", " (arm-reg->str offset) "]"))
+      (else
+       (string-append "[" base-str ", #" (number->string offset) "]")))))
 
 (define (arm-operand->str opnd)
   (cond

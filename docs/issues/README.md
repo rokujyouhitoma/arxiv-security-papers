@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | High | New | [618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
 | **630** | Synapse タスク独立バンプアリーナおよび O(1) 瞬時全破棄機構の実装 | Feature | High | New | [630-implement-synapse-task-independent-bump-arena.md](630-implement-synapse-task-independent-bump-arena.md) |
 | **631** | Scheme 低レベルアトミック命令 (atomic-cas! / atomic-box) の提供 | Feature | High | New | [631-implement-synapse-low-level-atomic-primitives.md](631-implement-synapse-low-level-atomic-primitives.md) |
 | **632** | Michael-Scott ノンブロッキング・ロックフリーキューの実装 | Feature | High | New | [632-implement-synapse-michael-scott-lockfree-queue.md](632-implement-synapse-michael-scott-lockfree-queue.md) |
@@ -31,6 +30,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | 2026-10-31 | [closed/618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](closed/618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |
 | **616** | Scheme ネイティブ x86-64 マシン語エンコーダおよび ELF64 実行可能バイナリ直接出力バックエンドの実装 | Feature | 2026-10-31 | [closed/616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md](closed/616-implement-native-x86-machine-code-encoder-and-direct-elf-generator.md) |
 | **615** | ビルドパイプラインからの GCC 呼出し排除と GNU as / ld 直接駆動（脱 GCC ドライバ）への移行 | Refactor | 2026-10-31 | [closed/615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md](closed/615-decouple-gcc-driver-and-migrate-to-direct-as-ld-invocation.md) |
 | **614** | ランタイムのデフォルト沈黙化（Quiet-by-Default）と GCC / Linux 互換コンパイラ CLI インターフェース（-o / -S / -O / 引数パース / 明示的終了コード 0）の根本確立 | Refactor | 2026-10-31 | [closed/614-refactor-runtime-silence-by-default-and-compiler-cli-output.md](closed/614-refactor-runtime-silence-by-default-and-compiler-cli-output.md) |
