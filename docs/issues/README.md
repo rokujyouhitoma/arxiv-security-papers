@@ -25,6 +25,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **646** | bootstrap.sh におけるシードバイナリ無限ループ停止の解消とタイムアウト・フォールバック機構の強化 | Bug | 2026-10-31 | [closed/646-fix-bootstrap-seed-hang-and-add-timeout-fallback.md](closed/646-fix-bootstrap-seed-hang-and-add-timeout-fallback.md) |
 | **634** | System V AMD64 Callee-saved 極小スタック・ネイティブコンテキストスイッチの実装 | Feature | 2026-10-31 | [closed/634-implement-synapse-callee-saved-context-switch.md](closed/634-implement-synapse-callee-saved-context-switch.md) |
 | **633** | 線形所有権移譲チャネルおよび有界バックプレッシャー機構の実装 | Feature | 2026-10-31 | [closed/633-implement-synapse-first-class-p2p-channel.md](closed/633-implement-synapse-first-class-p2p-channel.md) |
 | **632** | Michael-Scott ノンブロッキング・ロックフリーキューの実装 | Feature | 2026-10-31 | [closed/632-implement-synapse-michael-scott-lockfree-queue.md](closed/632-implement-synapse-michael-scott-lockfree-queue.md) |

@@ -123,7 +123,24 @@
         (%string-eq-loop s1 s2 0 len1)
         #f)))
 
-;;; Dynamic Symbol Registry in pure Scheme (shared across quoted literals and reader)
+;;; Dynamic Symbol Registry in pure Scheme (Hash Table with 1024 buckets - Issue #646)
+(define *symbol-str-buckets*
+  (let ((v (%make-vector 1024)))
+    (let loop ((i 0))
+      (if (< i 1024)
+          (begin
+            (vector-set! v i '())
+            (loop (+ i 1)))
+          v))))
+
+(define *symbol-sym-buckets*
+  (let ((v (%make-vector 1024)))
+    (let loop ((i 0))
+      (if (< i 1024)
+          (begin
+            (vector-set! v i '())
+            (loop (+ i 1)))
+          v))))
 (define *symbol-registry* (cons '() '()))
 (define *next-sym-id* (cons 100 '()))
 
@@ -153,15 +170,22 @@
             (%sym-id-taken? sym (cdr entries))))))
 
 (define (string->symbol str)
-  (let ((found (%string-find-symbol str (car *symbol-registry*))))
+  (let* ((h (%symbol-hash-str str))
+         (b-idx (modulo h 1024))
+         (bucket (vector-ref *symbol-str-buckets* b-idx))
+         (found (%string-find-symbol str bucket)))
     (if found
         found
-        (let loop ((h (%symbol-hash-str str)))
-          (let ((candidate (integer->symbol h)))
-            (if (%sym-id-taken? candidate (car *symbol-registry*))
-                (loop (modulo (+ (* h 33) 1) 16777213))
-                (begin
-                  (set-car! *symbol-registry* (cons (cons str candidate) (car *symbol-registry*)))
+        (let loop ((cand-h h))
+          (let* ((candidate (integer->symbol cand-h))
+                 (sym-b-idx (modulo (if (< cand-h 0) (- 0 cand-h) cand-h) 1024))
+                 (sym-bucket (vector-ref *symbol-sym-buckets* sym-b-idx)))
+            (if (%sym-id-taken? candidate sym-bucket)
+                (loop (modulo (+ (* cand-h 33) 1) 16777213))
+                (let ((entry (cons str candidate)))
+                  (vector-set! *symbol-str-buckets* b-idx (cons entry bucket))
+                  (vector-set! *symbol-sym-buckets* sym-b-idx (cons entry sym-bucket))
+                  (set-car! *symbol-registry* (cons entry (car *symbol-registry*)))
                   candidate)))))))
 
 (define *known-runtime-symbols*
@@ -220,7 +244,16 @@
                     (loop (cdr es)))))))))
 
 (define (symbol->string sym)
-  (%symbol-find-string sym (car *symbol-registry*)))
+  (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
+    (if known
+        known
+        (let* ((h (symbol->integer sym))
+               (b-idx (modulo (if (< h 0) (- 0 h) h) 1024))
+               (bucket (vector-ref *symbol-sym-buckets* b-idx))
+               (res (%symbol-find-string sym bucket)))
+          (if (string=? res "?")
+              (%symbol-find-string sym (car *symbol-registry*))
+              res)))))
 
 (define (string-copy-range str start end)
   (substring str start end))

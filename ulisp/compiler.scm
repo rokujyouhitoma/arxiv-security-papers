@@ -4,6 +4,18 @@
 ;;; =======================================================================
 
 ;;; Standard Helper Procedures (Self-hosting primitives)
+;; Host compatibility shim for Gauche / ILisp bootstrapping (Issue #646)
+(define (file-input-port? p)
+  (and (pair? p) (eq? (car p) '%file-input-port)))
+(define (port-line p)
+  (if (file-input-port? p)
+      (car (cadr (cddddr p)))
+      1))
+(define (port-col p)
+  (if (file-input-port? p)
+      (car (caddr (cddddr p)))
+      1))
+
 (define (fixnum->char n) (integer->char n))
 (define (char->fixnum c) (char->integer c))
 (define (char-numeric? c) (let ((n (char->integer c))) (and (>= n 48) (<= n 57))))

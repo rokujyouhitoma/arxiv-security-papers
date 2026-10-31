@@ -13,8 +13,10 @@ mkdir -p "$BUILD_DIR"
 export ULISP_GC_PROFILE=compiler
 
 echo "[0/4] Preparing unified compiler (entry_core.scm)..."
-make -C "$ULISP_DIR" -B compiler
-cp "$ULISP_DIR/entry_core.scm" "$BUILD_DIR/ulisp_core.scm"
+make -C "$ULISP_DIR" compiler
+if [ ! -f "$BUILD_DIR/ulisp_core.scm" ] || ! cmp -s "$ULISP_DIR/entry_core.scm" "$BUILD_DIR/ulisp_core.scm"; then
+    cp "$ULISP_DIR/entry_core.scm" "$BUILD_DIR/ulisp_core.scm"
+fi
 
 PYTHON_BIN="python3"
 if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
@@ -208,8 +210,12 @@ run_stage_try() {
     local asm_file="$2"
     shift 2
     local rc=0
-    "$@" < "$BUILD_DIR/ulisp_core.scm" > "$asm_file" 2>&1 || rc=$?
-    if [ "$rc" -ne 0 ] || grep -q "^\*\*\* ERROR:" "$asm_file" || [ ! -s "$asm_file" ]; then
+    local stage_timeout="${BOOTSTRAP_STAGE_TIMEOUT:-600s}"
+    timeout "$stage_timeout" "$@" < "$BUILD_DIR/ulisp_core.scm" > "$asm_file" 2>&1 || rc=$?
+    if [ "$rc" -eq 124 ]; then
+        echo -e "\033[1;33m[WARN] $stage_name timed out after $stage_timeout.\033[0m" >&2
+        return 1
+    elif [ "$rc" -ne 0 ] || grep -q "^\*\*\* ERROR:" "$asm_file" || [ ! -s "$asm_file" ]; then
         return 1
     fi
     return 0
@@ -222,7 +228,7 @@ elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" 
     if run_stage_try "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s" "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm" && as --64 "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/stage1.o" 2>/dev/null && ld -m elf_x86_64 -static "$BUILD_DIR/stage1.o" -o "$BUILD_DIR/scheme-stage1" 2>/dev/null; then
         echo "  -> Stage 1 successfully compiled with native seed."
     elif [ -n "$GOSH_BIN" ]; then
-        echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed (e.g. exit code 139 / ABI drift). Automatically falling back to Gauche ($GOSH_BIN)...\033[0m"
+        echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed (e.g. exit code 139 / timeout / ABI drift). Automatically falling back to Gauche ($GOSH_BIN)...\033[0m"
         run_stage "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
         compile_asm "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$BUILD_DIR/scheme-stage1"
     else
