@@ -238,6 +238,21 @@
              (src (cadddr inst)))
          (emit (string-append "    str " (arm-reg->str src) ", " (arm-mem-op->str base offset)))))
 
+      ((%memory-fence)
+       (emit "    dmb ish"))
+
+      ((%atomic-cas!)
+       (let ((dst (cadr inst))
+             (box (caddr inst))
+             (new (cadddr inst)))
+         (emit (string-append "    mov x10, " (arm-reg->str dst)))
+         (emit (string-append "    add x9, " (arm-reg->str box) ", #11"))
+         (emit (string-append "    casal " (arm-reg->str dst) ", " (arm-reg->str new) ", [x9]"))
+         (emit (string-append "    cmp " (arm-reg->str dst) ", x10"))
+         (emit "    cset x0, eq")
+         (emit "    lsl x0, x0, #6")
+         (emit "    add x0, x0, #47")))
+
       ((%store-byte)
        (let ((base (cadr inst))
              (offset (caddr inst))

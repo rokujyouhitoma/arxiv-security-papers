@@ -4,7 +4,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %num-args)))
+  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %num-args %memory-fence)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -28,7 +28,7 @@
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store!)))
+  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!)))
 
 (define (septop-prim? op)
   (memq op '(%raw-syscall)))

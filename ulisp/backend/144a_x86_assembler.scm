@@ -110,7 +110,7 @@
         ((add) 'add) ((sub) 'sub) ((and) 'and) ((or) 'or) ((xor) 'xor) ((cmp) 'cmp)
         ((bt) 'bt) ((test) 'test) ((imul) 'imul) ((idiv) 'idiv) ((div) 'div)
         ((shl) 'shl) ((shr) 'shr) ((sar) 'sar) ((neg) 'neg) ((not) 'not)
-        ((inc) 'inc) ((dec) 'dec)
+        ((inc) 'inc) ((dec) 'dec) ((mfence) 'mfence) ((cmpxchg) 'cmpxchg)
         (else 'unknown))
       (let ((s (if (string? sym-or-str) (safe-string-downcase sym-or-str) "")))
         (cond
@@ -173,6 +173,8 @@
           ((string=? s "not") 'not)
           ((string=? s "inc") 'inc)
           ((string=? s "dec") 'dec)
+          ((string=? s "mfence") 'mfence)
+          ((or (string=? s "cmpxchg") (string=? s "cmpxchgq")) 'cmpxchg)
           (else 'unknown)))))
 
 (define (reg-id info) (if (pair? info) (car info) 0))
@@ -1041,6 +1043,27 @@
             (modrm (make-modrm 3 ext (reg-id r-info))))
        (list (list rex 255 modrm) #f)))
 
+    ;; MFENCE: 0F AE F0
+    ((mfence)
+     (list '(15 174 240) #f))
+
+    ;; CMPXCHG r/m64, r64: REX.W 0F B1 /r
+    ((cmpxchg)
+     (let* ((dst (car opnds))
+            (src (cadr opnds))
+            (s-info (lookup-x86-reg (cadr src))))
+       (case (car dst)
+         ((mem)
+          (let ((enc (encode-modrm-sib-disp #t s-info dst)))
+            (list (asm-flatten (list (enc-rex enc) '(15 177) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f)))
+         ((reg)
+          (let* ((d-info (lookup-x86-reg (cadr dst)))
+                 (rex (make-rex #t (reg-ext? s-info) #f (reg-ext? d-info)))
+                 (modrm (make-modrm 3 (reg-id s-info) (reg-id d-info))))
+            (list (list rex 15 177 modrm) #f)))
+         (else
+          (list '(144) #f)))))
+
     (else
      (list '(144) #f)))))
 
@@ -1288,8 +1311,10 @@
 
                         ;; Instruction
                         (else
-                         (let* ((mnem first)
-                                (opnd-strs (let loop ((ts (cdr tokens)) (cur '()) (acc '()))
+                         (let* ((has-lock? (and (string=? (safe-string-downcase first) "lock") (pair? (cdr tokens))))
+                                (mnem (if has-lock? (cadr tokens) first))
+                                (raw-opnd-tokens (if has-lock? (cddr tokens) (cdr tokens)))
+                                (opnd-strs (let loop ((ts raw-opnd-tokens) (cur '()) (acc '()))
                                              (cond
                                                ((null? ts)
                                                 (if (null? cur) (reverse acc)
@@ -1302,9 +1327,9 @@
                                                (else
                                                 (loop (cdr ts) (cons (car ts) cur) acc)))))
                                 (opnds (map parse-operand-str opnd-strs))
-                                (res (assemble-inst mnem opnds text-len)))
+                                (res (assemble-inst mnem opnds (if has-lock? (+ text-len 1) text-len))))
                            (if (pair? res)
-                               (let* ((bytes (car res))
+                               (let* ((bytes (if has-lock? (cons 240 (car res)) (car res)))
                                       (reloc (cadr res))
                                       (new-relocs (if reloc
                                                       (cons (cons (car reloc) (cons 'text (cdr reloc))) relocs)

@@ -144,7 +144,8 @@
     power-assert-report dump-lir-unbound-variable-diagnostic
     %raw-load %raw-load-u8 %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
     %ptr-add %ptr-tag %ptr-untag %ptr-tag-add %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table))
+    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table
+    %memory-fence %atomic-cas!))
 
 (define (scope-primitive-symbol? sym)
   (or (scope-special-form? sym)

@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **631** | Scheme 低レベルアトミック命令 (atomic-cas! / atomic-box) の提供 | Feature | High | New | [631-implement-synapse-low-level-atomic-primitives.md](631-implement-synapse-low-level-atomic-primitives.md) |
 | **632** | Michael-Scott ノンブロッキング・ロックフリーキューの実装 | Feature | High | New | [632-implement-synapse-michael-scott-lockfree-queue.md](632-implement-synapse-michael-scott-lockfree-queue.md) |
 | **633** | 線形所有権移譲チャネルおよび有界バックプレッシャー機構の実装 | Feature | High | New | [633-implement-synapse-first-class-p2p-channel.md](633-implement-synapse-first-class-p2p-channel.md) |
 | **634** | System V AMD64 Callee-saved 極小スタック・ネイティブコンテキストスイッチの実装 | Feature | High | New | [634-implement-synapse-callee-saved-context-switch.md](634-implement-synapse-callee-saved-context-switch.md) |
@@ -29,6 +28,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **631** | Scheme 低レベルアトミック命令 (atomic-cas! / atomic-box) の提供 | Feature | 2026-10-31 | [closed/631-implement-synapse-low-level-atomic-primitives.md](closed/631-implement-synapse-low-level-atomic-primitives.md) |
 | **630** | プロセスローカル・エフェメラルアリーナおよび O(1) 瞬時全破棄機構の実装 | Feature | 2026-10-31 | [closed/630-implement-synapse-task-independent-bump-arena.md](closed/630-implement-synapse-task-independent-bump-arena.md) |
 | **619** | ソース位置追跡情報（%source-loc）に基づく最小限 DWARF（.debug_line / .debug_info）セクション生成と GDB / perf デバッグ支援の実装 | Feature | 2026-10-31 | [closed/619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md](closed/619-generate-minimal-dwarf-debug-line-for-gdb-and-perf.md) |
 | **618** | S-RTyper（Pass 090）および LIR / バックエンドにおける関数間アンボックス特化とタグオーバーヘッド撲滅 | Feature | 2026-10-31 | [closed/618-eliminate-tagging-overhead-with-interprocedural-unboxing.md](closed/618-eliminate-tagging-overhead-with-interprocedural-unboxing.md) |

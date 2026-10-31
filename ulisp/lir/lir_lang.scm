@@ -95,6 +95,8 @@
     (%box-fixnum opnd1 opnd2)
     (%unbox-fixnum opnd1 opnd2)
     (%syscall)
+    (%memory-fence)
+    (%atomic-cas! reg1 reg2 reg3)
 
     ;; Runtime / GC / CC / Values
     (%alloc opnd bytes tag)

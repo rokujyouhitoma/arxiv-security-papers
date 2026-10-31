@@ -300,10 +300,18 @@
                #t
                (lir-report-error (string-append (symbol->string op) " shift count must be an integer") inst)))
 
-          ((%cqo %syscall %raise)
+          ((%cqo %syscall %raise %memory-fence)
            (if (= (length inst) 1)
                #t
                (lir-report-error (string-append (symbol->string op) " takes zero operands") inst)))
+
+          ((%atomic-cas!)
+           (if (and (= (length inst) 4)
+                    (lir-valid-register? (cadr inst))
+                    (lir-valid-register? (caddr inst))
+                    (lir-valid-register? (cadddr inst)))
+               #t
+               (lir-report-error "%atomic-cas! format must be (%atomic-cas! <dst-reg> <box-reg> <new-reg>)" inst)))
 
           ((%idiv)
            (if (and (= (length inst) 2) (lir-valid-operand? (cadr inst)))

@@ -35,7 +35,8 @@
               boolean? char? symbol? string? list? vector? bytevector?
               write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
               values call-with-values dynamic-wind call/cc call-with-current-continuation
-              guard raise %raw-call/cc %with-handler)))
+              guard raise %raw-call/cc %with-handler
+              %memory-fence %atomic-cas!)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Pattern Matching Utilities

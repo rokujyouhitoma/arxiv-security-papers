@@ -1103,7 +1103,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %num-args)))
+  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %num-args %memory-fence)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -1127,7 +1127,7 @@
              %raw-add %raw-sub %raw-mul %raw-cmp)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store!)))
+  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!)))
 
 (define (septop-prim? op)
   (memq op '(%raw-syscall)))
@@ -4076,7 +4076,8 @@
     power-assert-report dump-lir-unbound-variable-diagnostic
     %raw-load %raw-load-u8 %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
     %ptr-add %ptr-tag %ptr-untag %ptr-tag-add %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table))
+    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table
+    %memory-fence %atomic-cas!))
 
 (define (scope-primitive-symbol? sym)
   (or (scope-special-form? sym)
@@ -5158,7 +5159,8 @@
               boolean? char? symbol? string? list? vector? bytevector?
               write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
               values call-with-values dynamic-wind call/cc call-with-current-continuation
-              guard raise %raw-call/cc %with-handler)))
+              guard raise %raw-call/cc %with-handler
+              %memory-fence %atomic-cas!)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Pattern Matching Utilities
@@ -10027,7 +10029,7 @@
         ((annotate) (tbaa-type-class (caddr expr)))
         ((car cdr set-car! set-cdr!) 'pair)
         ((%closure-ref %closure-set!) 'closure)
-        ((vector-ref vector-set!) 'vector)
+        ((vector-ref vector-set! %atomic-cas!) 'vector)
         ((bytevector-u8-ref bytevector-u8-set!) 'bytevector)
         ((%raw-load %raw-load-u8 %raw-store!) 'raw)
         (else 'unknown))))
@@ -10192,7 +10194,7 @@
                               (cdr expr))))))
 
          ;; TBAA Store: invalidates only non-disjoint types
-         ((set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store!)
+         ((set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store! %atomic-cas! %memory-fence)
           (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
                         (cdr expr))))
 
@@ -10224,7 +10226,7 @@
                 (let* ((e (car es))
                        (transformed (alias-escape-transform-expr e escaped-set cur-loads))
                        (next-loads
-                        (if (and (pair? e) (memq (car e) '(set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store!)))
+                        (if (and (pair? e) (memq (car e) '(set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store! %atomic-cas! %memory-fence)))
                             (tbaa-invalidate-loads e cur-loads)
                             cur-loads)))
                   (loop (cdr es) next-loads (cons transformed acc))))))
@@ -10411,6 +10413,8 @@
     (%box-fixnum opnd1 opnd2)
     (%unbox-fixnum opnd1 opnd2)
     (%syscall)
+    (%memory-fence)
+    (%atomic-cas! reg1 reg2 reg3)
 
     ;; Runtime / GC / CC / Values
     (%alloc opnd bytes tag)
@@ -10736,10 +10740,18 @@
                #t
                (lir-report-error (string-append (symbol->string op) " shift count must be an integer") inst)))
 
-          ((%cqo %syscall %raise)
+          ((%cqo %syscall %raise %memory-fence)
            (if (= (length inst) 1)
                #t
                (lir-report-error (string-append (symbol->string op) " takes zero operands") inst)))
+
+          ((%atomic-cas!)
+           (if (and (= (length inst) 4)
+                    (lir-valid-register? (cadr inst))
+                    (lir-valid-register? (caddr inst))
+                    (lir-valid-register? (cadddr inst)))
+               #t
+               (lir-report-error "%atomic-cas! format must be (%atomic-cas! <dst-reg> <box-reg> <new-reg>)" inst)))
 
           ((%idiv)
            (if (and (= (length inst) 2) (lir-valid-operand? (cadr inst)))
@@ -12767,7 +12779,10 @@
       ((peek-char %peek-char)
        (emit-lir! (list '%c-call "ulisp_peek_char" frame-shift)))
       ((flush-output-port ulisp-flush)
-       (emit-lir! (list '%c-call "ulisp_flush" frame-shift))))))
+       (emit-lir! (list '%c-call "ulisp_flush" frame-shift)))
+      ((%memory-fence)
+       (emit-lir! '(%memory-fence))
+       (emit-lir! '(%mov %rax 111))))))
 
 (define (lir-compile-unary op arg si env)
   (if (and (eq? op '%unbox-fixnum) (integer? arg))
@@ -13255,7 +13270,12 @@
      (emit-lir! (list '%load '%rdx '%rsp si))
      (emit-lir! '(%add %rdx %rcx))
      (emit-lir! '(%store %rdx 0 %r10))
-     (emit-lir! '(%mov %rax 63)))))
+     (emit-lir! '(%mov %rax 63)))
+    ((%atomic-cas!)
+     (emit-lir! '(%mov %rcx %rax))
+     (emit-lir! (list '%load '%rax '%rsp (- si 8)))
+     (emit-lir! (list '%load '%rdx '%rsp si))
+     (emit-lir! '(%atomic-cas! %rax %rdx %rcx)))))
 
 (define (lir-compile-raw-syscall args si env)
   (let ((num (car args))
@@ -14698,6 +14718,30 @@
 
       ((%syscall)
        (list (list 'syscall)))
+
+      ((%memory-fence)
+       (list (list '%raw-asm "    mfence")))
+
+      ((%atomic-cas!)
+       (let ((dst (cadr inst))
+             (box (caddr inst))
+             (new (cadddr inst)))
+         (let ((cas-insts
+                (list (list '%raw-asm (string-append "    lock cmpxchg qword ptr [" (reg->str box) " + 11], " (reg->str new)))
+                      (list '%raw-asm "    sete al")
+                      (list '%raw-asm "    movzx eax, al")
+                      (list '%raw-asm "    shl rax, 6")
+                      (list '%raw-asm "    add rax, 0x2F"))))
+           (if (not (eq? (car *backend-gc-mode*) 'none))
+               (append cas-insts
+                       (list (list '%raw-asm "    mov r10, rax")
+                             (list '%raw-asm (string-append "    lea rdx, [" (reg->str box) " + 11]"))
+                             (list '%raw-asm (string-append "    mov rax, " (reg->str new)))
+                             (list '%raw-asm "    sub rsp, 128")
+                             (list '%raw-asm "    call ulisp_gc_write_barrier")
+                             (list '%raw-asm "    add rsp, 128")
+                             (list '%raw-asm "    mov rax, r10")))
+               cas-insts))))
 
       ((%mov)
        (let ((dst (cadr inst))
@@ -18620,7 +18664,7 @@
         ((add) 'add) ((sub) 'sub) ((and) 'and) ((or) 'or) ((xor) 'xor) ((cmp) 'cmp)
         ((bt) 'bt) ((test) 'test) ((imul) 'imul) ((idiv) 'idiv) ((div) 'div)
         ((shl) 'shl) ((shr) 'shr) ((sar) 'sar) ((neg) 'neg) ((not) 'not)
-        ((inc) 'inc) ((dec) 'dec)
+        ((inc) 'inc) ((dec) 'dec) ((mfence) 'mfence) ((cmpxchg) 'cmpxchg)
         (else 'unknown))
       (let ((s (if (string? sym-or-str) (safe-string-downcase sym-or-str) "")))
         (cond
@@ -18683,6 +18727,8 @@
           ((string=? s "not") 'not)
           ((string=? s "inc") 'inc)
           ((string=? s "dec") 'dec)
+          ((string=? s "mfence") 'mfence)
+          ((or (string=? s "cmpxchg") (string=? s "cmpxchgq")) 'cmpxchg)
           (else 'unknown)))))
 
 (define (reg-id info) (if (pair? info) (car info) 0))
@@ -19551,6 +19597,27 @@
             (modrm (make-modrm 3 ext (reg-id r-info))))
        (list (list rex 255 modrm) #f)))
 
+    ;; MFENCE: 0F AE F0
+    ((mfence)
+     (list '(15 174 240) #f))
+
+    ;; CMPXCHG r/m64, r64: REX.W 0F B1 /r
+    ((cmpxchg)
+     (let* ((dst (car opnds))
+            (src (cadr opnds))
+            (s-info (lookup-x86-reg (cadr src))))
+       (case (car dst)
+         ((mem)
+          (let ((enc (encode-modrm-sib-disp #t s-info dst)))
+            (list (asm-flatten (list (enc-rex enc) '(15 177) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f)))
+         ((reg)
+          (let* ((d-info (lookup-x86-reg (cadr dst)))
+                 (rex (make-rex #t (reg-ext? s-info) #f (reg-ext? d-info)))
+                 (modrm (make-modrm 3 (reg-id s-info) (reg-id d-info))))
+            (list (list rex 15 177 modrm) #f)))
+         (else
+          (list '(144) #f)))))
+
     (else
      (list '(144) #f)))))
 
@@ -19798,8 +19865,10 @@
 
                         ;; Instruction
                         (else
-                         (let* ((mnem first)
-                                (opnd-strs (let loop ((ts (cdr tokens)) (cur '()) (acc '()))
+                         (let* ((has-lock? (and (string=? (safe-string-downcase first) "lock") (pair? (cdr tokens))))
+                                (mnem (if has-lock? (cadr tokens) first))
+                                (raw-opnd-tokens (if has-lock? (cddr tokens) (cdr tokens)))
+                                (opnd-strs (let loop ((ts raw-opnd-tokens) (cur '()) (acc '()))
                                              (cond
                                                ((null? ts)
                                                 (if (null? cur) (reverse acc)
@@ -19812,9 +19881,9 @@
                                                (else
                                                 (loop (cdr ts) (cons (car ts) cur) acc)))))
                                 (opnds (map parse-operand-str opnd-strs))
-                                (res (assemble-inst mnem opnds text-len)))
+                                (res (assemble-inst mnem opnds (if has-lock? (+ text-len 1) text-len))))
                            (if (pair? res)
-                               (let* ((bytes (car res))
+                               (let* ((bytes (if has-lock? (cons 240 (car res)) (car res)))
                                       (reloc (cadr res))
                                       (new-relocs (if reloc
                                                       (cons (cons (car reloc) (cons 'text (cdr reloc))) relocs)
@@ -20223,6 +20292,21 @@
              (offset (caddr inst))
              (src (cadddr inst)))
          (emit (string-append "    str " (arm-reg->str src) ", " (arm-mem-op->str base offset)))))
+
+      ((%memory-fence)
+       (emit "    dmb ish"))
+
+      ((%atomic-cas!)
+       (let ((dst (cadr inst))
+             (box (caddr inst))
+             (new (cadddr inst)))
+         (emit (string-append "    mov x10, " (arm-reg->str dst)))
+         (emit (string-append "    add x9, " (arm-reg->str box) ", #11"))
+         (emit (string-append "    casal " (arm-reg->str dst) ", " (arm-reg->str new) ", [x9]"))
+         (emit (string-append "    cmp " (arm-reg->str dst) ", x10"))
+         (emit "    cset x0, eq")
+         (emit "    lsl x0, x0, #6")
+         (emit "    add x0, x0, #47")))
 
       ((%store-byte)
        (let ((base (cadr inst))
@@ -21045,6 +21129,16 @@
              (offset (caddr inst))
              (src (cadddr inst)))
          (emit (string-append "    " (c-mem-ref base offset) " = " (c-operand->str src) ";"))))
+
+      ((%memory-fence)
+       (emit "    __sync_synchronize();"))
+
+      ((%atomic-cas!)
+       (let ((dst (cadr inst))
+             (box (caddr inst))
+             (new (cadddr inst)))
+         (emit (string-append "    " (c-reg->str dst) " = __sync_bool_compare_and_swap((uint64_t *)((char *)(uintptr_t)" (c-reg->str box) " + 11), " (c-reg->str dst) ", " (c-reg->str new) ") ? 0x6F : 0x2F;"))
+         (emit (string-append "    ulisp_gc_write_barrier((uint64_t)((char *)(uintptr_t)" (c-reg->str box) " + 11), " (c-reg->str new) ");"))))
 
       ((%store-byte)
        (let ((base (cadr inst))

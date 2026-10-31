@@ -256,6 +256,16 @@
              (src (cadddr inst)))
          (emit (string-append "    " (c-mem-ref base offset) " = " (c-operand->str src) ";"))))
 
+      ((%memory-fence)
+       (emit "    __sync_synchronize();"))
+
+      ((%atomic-cas!)
+       (let ((dst (cadr inst))
+             (box (caddr inst))
+             (new (cadddr inst)))
+         (emit (string-append "    " (c-reg->str dst) " = __sync_bool_compare_and_swap((uint64_t *)((char *)(uintptr_t)" (c-reg->str box) " + 11), " (c-reg->str dst) ", " (c-reg->str new) ") ? 0x6F : 0x2F;"))
+         (emit (string-append "    ulisp_gc_write_barrier((uint64_t)((char *)(uintptr_t)" (c-reg->str box) " + 11), " (c-reg->str new) ");"))))
+
       ((%store-byte)
        (let ((base (cadr inst))
              (offset (caddr inst))

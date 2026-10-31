@@ -310,6 +310,30 @@
       ((%syscall)
        (list (list 'syscall)))
 
+      ((%memory-fence)
+       (list (list '%raw-asm "    mfence")))
+
+      ((%atomic-cas!)
+       (let ((dst (cadr inst))
+             (box (caddr inst))
+             (new (cadddr inst)))
+         (let ((cas-insts
+                (list (list '%raw-asm (string-append "    lock cmpxchg qword ptr [" (reg->str box) " + 11], " (reg->str new)))
+                      (list '%raw-asm "    sete al")
+                      (list '%raw-asm "    movzx eax, al")
+                      (list '%raw-asm "    shl rax, 6")
+                      (list '%raw-asm "    add rax, 0x2F"))))
+           (if (not (eq? (car *backend-gc-mode*) 'none))
+               (append cas-insts
+                       (list (list '%raw-asm "    mov r10, rax")
+                             (list '%raw-asm (string-append "    lea rdx, [" (reg->str box) " + 11]"))
+                             (list '%raw-asm (string-append "    mov rax, " (reg->str new)))
+                             (list '%raw-asm "    sub rsp, 128")
+                             (list '%raw-asm "    call ulisp_gc_write_barrier")
+                             (list '%raw-asm "    add rsp, 128")
+                             (list '%raw-asm "    mov rax, r10")))
+               cas-insts))))
+
       ((%mov)
        (let ((dst (cadr inst))
              (src (caddr inst)))
