@@ -19,7 +19,7 @@ title: "[FEAT] Michael-Scott ノンブロッキング・ロックフリーキュ
 
 [DSN-37: Synapse Dual-Plane Concurrent Runtime Architecture](../../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)（第 6 章「排他制御の現実解：Michael-Scott ロックフリーキュー」および第 14.3 節 Phase 1 Task 1.1）に基づき、スピンロックや OS ミューテックスを一切使用せず、[Issue #631](631-implement-synapse-low-level-atomic-primitives.md) で実装したハードウェア CAS プリミティブ（`atomic-cas!` / `<atomic-box>` / `<atomic-stamped-box>`）のみを用いて動作する **Michael-Scott ノンブロッキング FIFO キュー (`<lock-free-queue>`)** を Pure uLisp Scheme で実装する。
 
-本モジュールは、後続の [Issue #633: 線形所有権移譲チャネル (`channel.scm`)](../633-implement-synapse-first-class-p2p-channel.md) におけるメッセージバッファキュー（`message-queue`）および送受信待機タスクキュー（`recv-wait-queue` / `send-wait-queue`）、さらに [Issue #635: 分散 M:N ワークスティーリングスケジューラ (`scheduler.scm`)](../635-implement-synapse-work-stealing-scheduler.md) のグローバルインジェクションキューの中核データ構造として機能する。
+本モジュールは、後続の [Issue #633: 線形所有権移譲チャネル (`channel.scm`)](633-implement-synapse-first-class-p2p-channel.md) におけるメッセージバッファキュー（`message-queue`）および送受信待機タスクキュー（`recv-wait-queue` / `send-wait-queue`）、さらに [Issue #635: 分散 M:N ワークスティーリングスケジューラ (`scheduler.scm`)](../635-implement-synapse-work-stealing-scheduler.md) のグローバルインジェクションキューの中核データ構造として機能する。
 
 先行する [Issue #630](630-implement-synapse-task-independent-bump-arena.md)・[Issue #631](631-implement-synapse-low-level-atomic-primitives.md) と同様、**uLisp 専用スコープ**（`ilisp/` への組み込みや `tests/ilisp/` でのテストは行わない）および [DSN-37 セクション 13.4](../../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md) の**オンデマンド・モジュールロード設計**（コアランタイムにはバンドルせず、`include` / `load` / `import` の 3 方式で利用可能）を厳格に遵守する。
 
@@ -28,7 +28,7 @@ title: "[FEAT] Michael-Scott ノンブロッキング・ロックフリーキュ
 ## 2. ガバナンス・専門エージェント多角レビュー (Governance & Multi-Agent Reviews)
 
 1. **Project Manager (PM) [Chair]**:
-   - DSN-37 Phase 1（通信 & ロックフリー同期）の最初のマイルストーン（Task 1.1）。完了済みの [Issue #631](631-implement-synapse-low-level-atomic-primitives.md) を基盤とし、後続の [Issue #633](../633-implement-synapse-first-class-p2p-channel.md)（チャネル）および [Issue #635](../635-implement-synapse-work-stealing-scheduler.md)（スケジューラ）の直接の前提条件となる。スコープは uLisp ランタイム（`ulisp/`）および `tests/concurrency/` に限定する。
+   - DSN-37 Phase 1（通信 & ロックフリー同期）の最初のマイルストーン（Task 1.1）。完了済みの [Issue #631](631-implement-synapse-low-level-atomic-primitives.md) を基盤とし、後続の [Issue #633](633-implement-synapse-first-class-p2p-channel.md)（チャネル）および [Issue #635](../635-implement-synapse-work-stealing-scheduler.md)（スケジューラ）の直接の前提条件となる。スコープは uLisp ランタイム（`ulisp/`）および `tests/concurrency/` に限定する。
 2. **IT Specialist (Programming Languages & Compilers / PLC)**:
    - `ulisp/runtime/concurrency/queue.scm` が `atomic.scm` のインラインハードウェア命令 `atomic-cas!`（x86-64 `lock cmpxchg qword ptr [rdx + 11], rcx`）および `<atomic-stamped-box>` を直接活用し、関数呼び出しやボクシングのオーバーヘッドを最小化した S 式レコード構造でコンパイルされることを保証する。
 3. **Software Development (SWD)**:
@@ -81,7 +81,7 @@ title: "[FEAT] Michael-Scott ノンブロッキング・ロックフリーキュ
   - [Issue #630: プロセスローカル・エフェメラルアリーナおよび O(1) 瞬時全破棄機構の実装](630-implement-synapse-task-independent-bump-arena.md)
   - [Issue #631: Scheme 低レベルアトミック命令 (atomic-cas! / atomic-box) の提供](631-implement-synapse-low-level-atomic-primitives.md)
 - **後続・依存先 Issue**:
-  - [Issue #633: 線形所有権移譲チャネルおよび有界バックプレッシャー機構の実装](../633-implement-synapse-first-class-p2p-channel.md)
+  - [Issue #633: 線形所有権移譲チャネルおよび有界バックプレッシャー機構の実装](633-implement-synapse-first-class-p2p-channel.md)
   - [Issue #635: 分散 M:N ワークスティーリングスケジューラおよび Chase-Lev Deque の実装](../635-implement-synapse-work-stealing-scheduler.md)
   - [Issue #643: 10 万並行マイクロタスク耐久ベンチマークおよび STW-GC ゼロ検証スイートの実装](../643-implement-synapse-benchmark-suite-and-stw-gc-verification.md)
   - [Issue #645: CI 向けマルチコア並行競合テストハーネス (concurrency_harness.scm) の実装](../645-implement-synapse-multicore-concurrency-ci-harness.md)
