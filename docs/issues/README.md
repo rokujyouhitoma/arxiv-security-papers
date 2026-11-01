@@ -7,7 +7,7 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **645** | CI 向けマルチコア並行競合テストハーネス (concurrency_harness.scm) の実装 | Feature | High | New | [645-implement-synapse-multicore-concurrency-ci-harness.md](645-implement-synapse-multicore-concurrency-ci-harness.md) |
+| **645** | CI 向けマルチコア並行競合テストハーネス (concurrency_harness.scm) の実装 | Feature | High | In Progress | [645-implement-synapse-multicore-concurrency-ci-harness.md](645-implement-synapse-multicore-concurrency-ci-harness.md) |
 
 ---
 
