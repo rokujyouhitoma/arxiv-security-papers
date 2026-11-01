@@ -83,6 +83,8 @@
     >
     <=
     >=
+    number->string
+    string->number
 
     ;; §6.3 Booleans
     boolean?

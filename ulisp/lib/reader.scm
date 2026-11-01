@@ -27,6 +27,130 @@
        (let ((code (char->integer c)))
          (and (>= code 48) (<= code 57)))))
 
+;;; -----------------------------------------------------------------------
+;;; R7RS §6.2.6 string->number and Radix Support (CWE-190 Overflow Hardened)
+;;; -----------------------------------------------------------------------
+
+(define *ulisp-fixnum-max* 288230376151711743)
+(define *ulisp-fixnum-min-abs* (+ *ulisp-fixnum-max* 1))
+
+(define (ulisp-digit-value c radix)
+  (if (eof-object? c)
+      #f
+      (let ((code (char->integer c)))
+        (cond
+          ;; '0' - '9'
+          ((and (>= code 48) (<= code 57))
+           (let ((val (- code 48)))
+             (if (< val radix) val #f)))
+          ;; 'a' - 'f'
+          ((and (>= code 97) (<= code 102))
+           (if (= radix 16)
+               (+ (- code 97) 10)
+               #f))
+          ;; 'A' - 'F'
+          ((and (>= code 65) (<= code 70))
+           (if (= radix 16)
+               (+ (- code 65) 10)
+               #f))
+          (else #f)))))
+
+(define (string->number-core str radix explicit-radix?)
+  (if (not (string? str))
+      #f
+      (let ((len (string-length str)))
+        (if (= len 0)
+            #f
+            (let parse-prefix ((i 0)
+                               (radix-found #f)
+                               (exactness-found #f)
+                               (neg? #f)
+                               (sign-found? #f))
+              (cond
+                ;; Check prefix: '#' followed by prefix char
+                ((and (< (+ i 1) len)
+                      (char=? (string-ref str i) #\#))
+                 (let ((c (string-ref str (+ i 1))))
+                   (cond
+                     ;; #b / #B
+                     ((or (char=? c #\b) (char=? c #\B))
+                      (if radix-found
+                          #f ; duplicate radix
+                          (parse-prefix (+ i 2) 2 exactness-found neg? sign-found?)))
+                     ;; #o / #O
+                     ((or (char=? c #\o) (char=? c #\O))
+                      (if radix-found
+                          #f
+                          (parse-prefix (+ i 2) 8 exactness-found neg? sign-found?)))
+                     ;; #d / #D
+                     ((or (char=? c #\d) (char=? c #\D))
+                      (if radix-found
+                          #f
+                          (parse-prefix (+ i 2) 10 exactness-found neg? sign-found?)))
+                     ;; #x / #X
+                     ((or (char=? c #\x) (char=? c #\X))
+                      (if radix-found
+                          #f
+                          (parse-prefix (+ i 2) 16 exactness-found neg? sign-found?)))
+                     ;; #e / #E (exact)
+                     ((or (char=? c #\e) (char=? c #\E))
+                      (if exactness-found
+                          #f
+                          (parse-prefix (+ i 2) radix-found 'exact neg? sign-found?)))
+                     ;; #i / #I (inexact: unsupported in integer-only ulisp)
+                     ((or (char=? c #\i) (char=? c #\I))
+                      #f)
+                     (else #f))))
+                ;; Check sign '+' or '-'
+                ((and (< i len)
+                      (not sign-found?)
+                      (or (char=? (string-ref str i) #\+)
+                          (char=? (string-ref str i) #\-)))
+                 (let ((is-minus (char=? (string-ref str i) #\-)))
+                   (parse-prefix (+ i 1) radix-found exactness-found is-minus #t)))
+                ;; Finished prefixes and signs: validate and parse digits
+                (else
+                 (let* ((effective-radix
+                         (cond
+                           ((and radix-found explicit-radix?)
+                            (if (= radix-found radix) radix #f))
+                           (radix-found radix-found)
+                           (else radix))))
+                   (if (or (not effective-radix)
+                           (not (or (= effective-radix 2)
+                                    (or (= effective-radix 8)
+                                        (or (= effective-radix 10)
+                                            (= effective-radix 16))))))
+                       #f
+                       (if (>= i len)
+                           #f ; no digits present
+                           (let ((limit (if neg? *ulisp-fixnum-min-abs* *ulisp-fixnum-max*)))
+                             (let parse-digits ((pos i)
+                                                (acc 0)
+                                                (count 0))
+                               (if (>= pos len)
+                                   (if (= count 0)
+                                       #f
+                                       (if neg? (- 0 acc) acc))
+                                   (let ((d (ulisp-digit-value (string-ref str pos) effective-radix)))
+                                     (if (not d)
+                                         #f ; invalid digit
+                                         (let ((q (quotient limit effective-radix))
+                                               (r (modulo limit effective-radix)))
+                                           (if (or (> acc q) (and (= acc q) (> d r)))
+                                               #f ; overflow
+                                               (parse-digits (+ pos 1)
+                                                             (+ (* acc effective-radix) d)
+                                                             (+ count 1)))))))))))))))))))
+
+(define (string->number-radix s r)
+  (string->number-core s r #t))
+
+(define-syntax string->number
+  (syntax-rules ()
+    ((string->number s) (string->number-core s 10 #f))
+    ((string->number s r) (string->number-core s r #t))))
+
 (define (ulisp-skip-ws-port p)
   (let ((c (port-peek-char p)))
     (cond
@@ -167,6 +291,23 @@
                       (read-kw (cons next acc)))))))
            ((ulisp-char=? c2 #\t) #t)
            ((ulisp-char=? c2 #\f) #f)
+           ;; R7RS Radix & Exactness Prefixes for numbers: #b, #o, #d, #x, #e
+           ((or (ulisp-char=? c2 #\b) (ulisp-char=? c2 #\B)
+                (ulisp-char=? c2 #\o) (ulisp-char=? c2 #\O)
+                (ulisp-char=? c2 #\d) (ulisp-char=? c2 #\D)
+                (ulisp-char=? c2 #\x) (ulisp-char=? c2 #\X)
+                (ulisp-char=? c2 #\e) (ulisp-char=? c2 #\E))
+            (let read-num-token ((acc (list c2 #\#)))
+              (let ((next (port-peek-char p)))
+                (if (or (ulisp-is-delimiter? next) (eof-object? next))
+                    (let* ((num-str (ulisp-chars->string (reverse acc)))
+                           (n (string->number-core num-str 10 #f)))
+                      (if n
+                          n
+                          (error "read: invalid number syntax" num-str)))
+                    (begin
+                      (port-read-char p)
+                      (read-num-token (cons next acc)))))))
            ((ulisp-char=? c2 #\() ; Vector literal #( ... )
             (let read-vec-list ()
               (let ((c3 (ulisp-skip-ws-port p)))
@@ -251,15 +392,12 @@
                    ((and (>= len 1)
                          (or (ulisp-is-digit? (car chars))
                              (and (or (ulisp-char=? (car chars) #\-) (ulisp-char=? (car chars) #\+))
-                                  (and (> len 1) (ulisp-is-digit? (cadr chars))))))
-                    (let* ((neg? (ulisp-char=? (car chars) #\-))
-                           (digit-chars (if (or (ulisp-char=? (car chars) #\-) (ulisp-char=? (car chars) #\+))
-                                            (cdr chars)
-                                            chars)))
-                      (let parse-digits ((ds digit-chars) (num 0))
-                        (if (null? ds)
-                            (if neg? (- 0 num) num)
-                            (parse-digits (cdr ds) (+ (* num 10) (- (char->integer (car ds)) 48)))))))
+                                  (> len 1))))
+                    (let* ((num-str (ulisp-chars->string chars))
+                           (n (string->number-core num-str 10 #f)))
+                      (if n
+                          n
+                          (string->symbol num-str))))
                    ;; Otherwise, Symbol
                    (else
                     (string->symbol (ulisp-chars->string chars)))))

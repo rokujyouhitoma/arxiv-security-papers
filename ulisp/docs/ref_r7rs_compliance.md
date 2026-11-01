@@ -123,7 +123,7 @@
 | **6.2.6** | `make-rectangular`, `make-polar`, `real-part`, `imag-part`, `magnitude`, `angle` | **×** | - | 複素数操作 (未実装) |
 | **6.2.6** | `exact`, `inexact` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 整数塔のため `exact` は恒等、`inexact` は非サポート |
 | **6.2.6** | `number->string` | **◎** | [ulisp/lib/string.scm](../lib/string.scm) | 10進数 Fixnum の文字列変換完全サポート |
-| **6.2.6** | `string->number` | **△** | [ulisp/lib/reader.scm](../lib/reader.scm) | S 式パーサ内部で 10 進整数を解析可能 |
+| **6.2.6** | `string->number` | **◎** | [ulisp/lib/reader.scm](../lib/reader.scm) | 基数 (2, 8, 10, 16)、プレフィックス (`#b`, `#o`, `#d`, `#x`, `#e`)、CWE-190 Fixnum オーバーフロー防御 ([Issue #652](../../docs/issues/closed/652-implement-r7rs-string-to-number-radix-support.md)) |
 
 #### 6.3 真偽値 (Booleans)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
