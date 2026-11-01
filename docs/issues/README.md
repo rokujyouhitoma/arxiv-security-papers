@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **645** | CI 向けマルチコア並行競合テストハーネス (concurrency_harness.scm) の実装 | Feature | High | In Progress | [645-implement-synapse-multicore-concurrency-ci-harness.md](645-implement-synapse-multicore-concurrency-ci-harness.md) |
 
 ---
 
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **645** | CI 向けマルチコア並行競合テストハーネス (concurrency_harness.scm) の実装 | Feature | 2026-11-01 | [closed/645-implement-synapse-multicore-concurrency-ci-harness.md](closed/645-implement-synapse-multicore-concurrency-ci-harness.md) |
 | **644** | インタプリタ向け Dual-Mode 評価アダプタ (eval_adapter.scm) の実装 | Feature | 2026-11-01 | [closed/644-implement-synapse-interpreter-dual-mode-eval-adapter.md](closed/644-implement-synapse-interpreter-dual-mode-eval-adapter.md) |
 | **643** | 10 万並行マイクロタスク耐久ベンチマークおよび STW-GC ゼロ検証スイートの実装 | Feature | 2026-11-01 | [closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md](closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md) |
 | **642** | 世代管理型投機タスク破棄および待機タスク世代ゲート検証の実装 | Feature | 2026-11-01 | [closed/642-implement-synapse-epoch-fencing-distributed-rollback.md](closed/642-implement-synapse-epoch-fencing-distributed-rollback.md) |

@@ -158,6 +158,10 @@ watch_js: activate ## Watch frontend JS sources and automatically recompile bund
 .PHONY: test
 test: pytest ## pytest
 
+.PHONY: test_concurrency_ci
+test_concurrency_ci: ## Run 100-iteration multicore concurrency CI harness in uLisp
+	$(MAKE) -C ulisp test_concurrency_ci
+
 .PHONY: test_stream
 test_stream: activate ## Run Unix stream CLI pipeline unit and integration tests
 	PYTHONPATH=src ${VENV_BIN}/pytest tests/cli/ -v
