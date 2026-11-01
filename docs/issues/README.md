@@ -7,6 +7,16 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
+| **647** | R7RS §4.3.3 マクロ構文エラー報告構文 (syntax-error) の実装 | Feature | High | New | [647-implement-r7rs-syntax-error-syntax.md](647-implement-r7rs-syntax-error-syntax.md) |
+| **648** | R7RS-large (SRFI 1 Lists) 高階リスト操作手続き群の実装 | Feature | High | New | [648-implement-srfi-1-higher-order-list-procedures.md](648-implement-srfi-1-higher-order-list-procedures.md) |
+| **649** | R7RS-large (SRFI 69 / 125) 汎用ハッシュテーブル API の実装 | Feature | High | New | [649-implement-r7rs-hash-table-api.md](649-implement-r7rs-hash-table-api.md) |
+| **650** | R7RS §4.2.2 厳密な左から右への評価順序を保証する letrec* 構文の実装 | Feature | High | New | [650-implement-r7rs-letrec-star-evaluation-order.md](650-implement-r7rs-letrec-star-evaluation-order.md) |
+| **651** | R7RS §6.13 / §6.14 (scheme file) 上位ファイルポート API およびファイル操作手続きの実装 | Feature | High | New | [651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md](651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md) |
+| **652** | R7RS §6.2.6 string->number の可変基数 (2/8/10/16進数) 対応と数値リテラルパースの拡充 | Feature | High | New | [652-implement-r7rs-string-to-number-radix-support.md](652-implement-r7rs-string-to-number-radix-support.md) |
+| **653** | R7RS §6.2.6 max および min 手続きの可変長引数対応 | Feature | High | New | [653-implement-r7rs-max-min-variadic-arguments.md](653-implement-r7rs-max-min-variadic-arguments.md) |
+| **654** | R7RS-large (SRFI 28) 基本フォーマット文字列手続き (format) の実装 | Feature | Medium | New | [654-implement-srfi-28-basic-format-string.md](654-implement-srfi-28-basic-format-string.md) |
+| **655** | R7RS-large (SRFI 132 / 95) リストおよびベクタソート手続きの実装 | Feature | Medium | New | [655-implement-r7rs-list-and-vector-sort-procedures.md](655-implement-r7rs-list-and-vector-sort-procedures.md) |
+| **656** | R7RS §6.13.3 循環参照・共有構造表記対応ライター (write-simple, write-shared) の実装 | Feature | Medium | New | [656-implement-r7rs-write-simple-and-write-shared.md](656-implement-r7rs-write-simple-and-write-shared.md) |
 
 ---
 
