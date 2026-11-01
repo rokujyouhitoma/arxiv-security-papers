@@ -95,9 +95,9 @@ assert() {
     elif [[ "$input" =~ define-record-type || "$input" =~ vector ]]; then
         full_input='(include "lib/char.scm") (include "lib/string.scm") (include "lib/vector.scm")'$'\n'"$input"
     elif [[ "$input" =~ open-input-string || "$input" =~ open-output-string || "$input" =~ "port\?" || "$input" =~ "input-port\?" || "$input" =~ "output-port\?" || "$input" =~ "textual-port\?" || "$input" =~ "get-output-string" ]]; then
-        full_input='(include "lib/posix.scm") (include "lib/list.scm") (include "lib/char.scm") (include "lib/string.scm") (include "lib/port.scm") (include "lib/printer.scm") (include "lib/reader.scm") (include "lib/equality.scm") (include "lib/predicates.scm") (include "lib/exception.scm") (include "lib/values.scm") (include "lib/continuation.scm") (include "lib/parameter.scm") (include "lib/gc.scm")'$'\n'"$input"
+        full_input='(include "lib/posix.scm") (include "lib/list.scm") (include "lib/char.scm") (include "lib/string.scm") (include "lib/port.scm") (include "lib/printer.scm") (include "lib/reader.scm") (include "lib/equality.scm") (include "lib/predicates.scm") (include "lib/math.scm") (include "lib/bytevector.scm") (include "lib/vector.scm") (include "lib/exception.scm") (include "lib/values.scm") (include "lib/continuation.scm") (include "lib/parameter.scm") (include "lib/gc.scm")'$'\n'"$input"
     elif [[ "$input" =~ parameter || "$input" =~ dynamic-wind ]]; then
-        full_input='(include "lib/posix.scm") (include "lib/list.scm") (include "lib/char.scm") (include "lib/string.scm") (include "lib/port.scm") (include "lib/printer.scm") (include "lib/reader.scm") (include "lib/equality.scm") (include "lib/predicates.scm") (include "lib/exception.scm") (include "lib/values.scm") (include "lib/continuation.scm") (include "lib/parameter.scm") (include "lib/gc.scm")'$'\n'"$input"
+        full_input='(include "lib/posix.scm") (include "lib/list.scm") (include "lib/char.scm") (include "lib/string.scm") (include "lib/port.scm") (include "lib/printer.scm") (include "lib/reader.scm") (include "lib/equality.scm") (include "lib/predicates.scm") (include "lib/math.scm") (include "lib/bytevector.scm") (include "lib/vector.scm") (include "lib/exception.scm") (include "lib/values.scm") (include "lib/continuation.scm") (include "lib/parameter.scm") (include "lib/gc.scm")'$'\n'"$input"
     elif [[ "$input" =~ list-copy || "$input" =~ make-list ]]; then
         full_input='(include "lib/list.scm")'$'\n'"$input"
     elif [[ "$input" =~ string-\>symbol || "$input" =~ symbol-\>string || "$input" =~ string-copy || "$input" =~ string-fill || "$input" =~ string-map || "$input" =~ string-for-each || "$input" =~ string-\>list || "$input" =~ list-\>string || "$input" =~ "string<" || "$input" =~ "string>" || "$input" =~ "string=" || "$input" =~ string-ci || "$input" =~ string-upcase || "$input" =~ string-downcase || "$input" =~ string-foldcase ]]; then
@@ -737,6 +737,12 @@ assert "(1 2 3)" "((case-lambda ((x . rest) (cons x rest))) 1 2 3)"
 
 echo "-- Step 34: Standalone R7RS Standard Library Sequence Test Suite (tests/test_stdlib_r7rs.scm) --"
 make test_stdlib
+
+echo "-- Step 34b: Standalone SRFI-1 List Library Test Suite (tests/test_srfi1.scm) --"
+make test_srfi1
+
+echo "-- Step 34c: Standalone R7RS Hash Table Test Suite (tests/test_hashtable.scm) --"
+make test_hashtable
 
 # --- Step 35: R7RS Iteration Syntax (Issue 559: do) ---
 echo "-- Step 35: Issue 559 R7RS Iteration Syntax (do) --"

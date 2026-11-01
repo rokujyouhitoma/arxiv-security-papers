@@ -314,7 +314,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | **SRFI 117** | Queues based on Lists (リストベースキュー) | **×** | - | 未実装 |
 | **SRFI 121** | Generators (ジェネレータ・イテレータ) | **△** | - | ファーストクラス継続 (`call/cc`) によるコルーチンジェネレータ作成可能 |
 | **SRFI 124** | Ephemerons (弱参照ペア・GC 協調) | **×** | - | コピー GC 構造上未実装 |
-| **SRFI 125** | Intermediate Hash Tables (ハッシュテーブル) | **△** | - | `*symbol-registry*` で内部ハッシュ探索あり。ユーザ向け汎用テーブル API は未提供 |
+| **SRFI 125** | Intermediate Hash Tables (ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/125.sld](../lib/srfi/125.sld)<br>[ulisp/lib/scheme/hash-table.sld](../lib/scheme/hash-table.sld) | R7RS-large / SRFI 125 互換ハッシュテーブル。24-bit 決定論的素数モジュラス、動的リハッシュ、多値 pop!、述語・アクセサ・反復・比較完備 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
 | **SRFI 127** | Lazy Sequences (遅延リスト lseq) | **△** | [ulisp/lib/promise.scm](../lib/promise.scm) | SRFI-45 遅延評価プロミスにより構築可能 |
 | **SRFI 128** | Comparators (比較器) | **×** | - | 未実装 |
 | **SRFI 132** | Sort Libraries (ソート・マージアルゴリズム) | **×** | - | 未実装 |
@@ -355,7 +355,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | **SRFI 48** | Intermediate Format Strings (中級フォーマット) | **×** | - | 未実装 |
 | **SRFI 60** | Integers as Bits (整数ビット表現・操作) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 62-bit Fixnum ビットマスク演算プリミティブ群 |
 | **SRFI 64** | Test Suites API (ユニットテスト標準) | **△** | [ulisp/test.sh](../test.sh)<br>[ulisp/test_c.sh](../test_c.sh) | 自前アサーション・テストランナーで運用 |
-| **SRFI 69** | Basic Hash Tables (基本ハッシュテーブル) | **△** | - | シンボルインターン内部ハッシュあり。汎用 API は未提供 |
+| **SRFI 69** | Basic Hash Tables (基本ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/69.sld](../lib/srfi/69.sld) | 基本ハッシュテーブル API 完全準拠。`make-hash-table`, `hash-table-ref/default`, `hash-table-walk` 等 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
 | **SRFI 88** | Keyword Objects (キーワードオブジェクト `:key`) | **×** | - | シンボルで代用 |
 | **SRFI 89** | Optional Positional and Named Parameters | **×** | - | 未実装 |
 | **SRFI 95** | Sorting and Merging (SLIB ソート・マージ) | **×** | - | 未実装 |
@@ -442,6 +442,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #592](../../docs/issues/592-implement-r7rs-internal-definition-desugaring.md): 内部定義（内部 define / 相互再帰）の脱糖
    - [Issue #647](../../docs/issues/closed/647-implement-r7rs-syntax-error-syntax.md): `syntax-error` (マクロ構文エラー報告構文)
    - [Issue #648](../../docs/issues/closed/648-implement-srfi-1-higher-order-list-procedures.md): SRFI 1 高階リスト操作手続き群 (`fold`, `filter`, `iota`, `partition`, `any`, `every` 等) の完全実装
+   - [Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md): SRFI 69 / SRFI 125 / `(scheme hash-table)` 汎用ハッシュテーブル API の完全実装
 4. **アーキテクチャ特性に基づく設計トレードオフ**:
    - `eval`, `load`, `repl` などの動的実行系は、AOT コンパイラのバイナリ独立性・フットプリント最小化を優先して意図的に除外。
    - 数値塔（Number Tower）は 62-bit 即値 Fixnum（下位 2-bit `00b` タグ）を基本とし、加減算のゼロオーバーヘッド化と高速実行を優先。

@@ -15,6 +15,32 @@
   (eq? a b))
 
 ;; ---------------------------------------------------------------------
+;; §6.1 Equivalence predicates: equal?
+;; ---------------------------------------------------------------------
+(define (equal? a b)
+  (cond
+    ((eq? a b) #t)
+    ((and (number? a) (number? b)) (= a b))
+    ((and (string? a) (string? b)) (string=? a b))
+    ((and (char? a) (char? b)) (char=? a b))
+    ((and (bytevector? a) (bytevector? b)) (bytevector=? a b))
+    ((and (vector? a) (vector? b))
+     (let ((len-a (vector-length a))
+           (len-b (vector-length b)))
+       (if (= len-a len-b)
+           (let loop ((i 0))
+             (if (= i len-a)
+                 #t
+                 (if (equal? (vector-ref a i) (vector-ref b i))
+                     (loop (+ i 1))
+                     #f)))
+           #f)))
+    ((and (pair? a) (pair? b))
+     (and (equal? (car a) (car b))
+          (equal? (cdr a) (cdr b))))
+    (else #f)))
+
+;; ---------------------------------------------------------------------
 ;; §6.3 Booleans: boolean=?
 ;; ---------------------------------------------------------------------
 (define (boolean=? a b)

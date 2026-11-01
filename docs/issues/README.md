@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **649** | R7RS-large (SRFI 69 / 125) 汎用ハッシュテーブル API の実装 | Feature | High | New | [649-implement-r7rs-hash-table-api.md](649-implement-r7rs-hash-table-api.md) |
 | **650** | R7RS §4.2.2 厳密な左から右への評価順序を保証する letrec* 構文の実装 | Feature | High | New | [650-implement-r7rs-letrec-star-evaluation-order.md](650-implement-r7rs-letrec-star-evaluation-order.md) |
 | **651** | R7RS §6.13 / §6.14 (scheme file) 上位ファイルポート API およびファイル操作手続きの実装 | Feature | High | New | [651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md](651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md) |
 | **652** | R7RS §6.2.6 string->number の可変基数 (2/8/10/16進数) 対応と数値リテラルパースの拡充 | Feature | High | New | [652-implement-r7rs-string-to-number-radix-support.md](652-implement-r7rs-string-to-number-radix-support.md) |
@@ -22,6 +21,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **649** | R7RS-large (SRFI 69 / 125) 汎用ハッシュテーブル API の実装 | Feature | 2026-11-01 | [closed/649-implement-r7rs-hash-table-api.md](closed/649-implement-r7rs-hash-table-api.md) |
 | **648** | R7RS-large (SRFI 1 Lists) 高階リスト操作手続き群の実装 | Feature | 2026-11-01 | [closed/648-implement-srfi-1-higher-order-list-procedures.md](closed/648-implement-srfi-1-higher-order-list-procedures.md) |
 | **647** | R7RS §4.3.3 マクロ構文エラー報告構文 (syntax-error) の実装 | Feature | 2026-11-01 | [closed/647-implement-r7rs-syntax-error-syntax.md](closed/647-implement-r7rs-syntax-error-syntax.md) |
 | :---: | --- | :--- | :---: | :---: |
