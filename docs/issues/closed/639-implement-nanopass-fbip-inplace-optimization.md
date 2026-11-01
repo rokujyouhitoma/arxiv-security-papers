@@ -2,16 +2,16 @@
 ID: 639
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] FBIP (Perceus) インプレース再利用最適化パス (fbip-inplace-transform) の実装 (ID: 639)
 
 ## 1. 概要 / Summary
-[DSN-37] Phase 3 Task 3.3 に基づき、uLisp 多段 Nanopass コンパイラにおいて、アフィン線形所有権静的検査パス（Issue #638: `check-affine-types`）の出力を受け、参照カウント 1（単一参照）であることが静的に保証された不変データ構造の更新を、新規アリーナ割り当てを行わずに生メモリ直接上書きへ変換する **FBIP（Functional But In-Place / Perceus）最適化パス (`fbip-inplace-transform`)** を実装する。
+[DSN-37] Phase 3 Task 3.3 に基づき、uLisp 多段 Nanopass コンパイラにおいて、アフィン線形所有権静的検査パス（Issue #638: `check-affine-types`）の出力を受け、参照カウント 1（単一参照）であることが静的に保証された不変データ構造の更新を、新規アリーナ割り当てを行わずに生メモリ直接上書きへ変換する **FBIP（Functional But In-Place / Perceus）最適化パス (`fbip-inplace-transform`)** を実装した。
 
 関数型プログラミングの参照透過性・不変データ構造の記述性を完全に維持しながら、コンパイル後の実行時においてはアリーナバンプアロケータのオフセット加算コードをバイパスし、メモリ割り当てゼロ（完全ゼロアロケーション）での高速なデータ構造更新・再帰走査を実現する。
-Issue #637, #638 で確立された直交アーキテクチャに従い、コンパイラコア（`frontend/`）を汚さず、ライブラリ側（`ulisp/lib/ulisp/concurrency/passes/`）に配置して Pass Manager に動的 Inject するプラグイン型拡張として構築する。
+Issue #637, #638 で確立された直交アーキテクチャに従い、コンパイラコア（`frontend/`）を汚さず、ライブラリ側（`ulisp/lib/ulisp/concurrency/passes/`）に配置して Pass Manager に動的 Inject するプラグイン型拡張として構築した。
 
 ---
 
@@ -105,3 +105,65 @@ Target Branch: `feat/639-nanopass-fbip-inplace-transform`
    - `make -C ulisp test_pass_fbip`: 全テストケース PASS。
    - `make -C ulisp lint_sexpr`: 全ファイル S 式括弧整合性 PASS。
    - 相対パスリンク 100% 準拠（絶対パス 0 件）。
+
+---
+
+## 7. 検証結果 / Verification Results
+
+### 7.1 単体・統合テスト検証 (`make -C ulisp test_pass_fbip`)
+```text
+=======================================================
+ Starting Synapse FBIP In-Place Reuse Tests
+=======================================================
+
+--- Group 1: FBIP Predicates & Drop Collection ---
+  [PASS] 1.1 affine-drop-form? detects %affine-drop!
+  [PASS] 1.2 affine-drop-form? rejects other symbols
+  [PASS] 1.3 cons-form? detects binary cons
+  [PASS] 1.4 cons-form? rejects unary cons
+  [PASS] 1.5 cons-form? rejects ternary cons
+  [PASS] 1.6 collect-drops collects p1
+  [PASS] 1.7 collect-drops collects p2
+
+--- Group 2: Cons In-Place Reuse Transformation ---
+  [PASS] 2.1 fresh cons converted to %fbip-reuse-pair!
+  [PASS] 2.2 target of reuse is old-pair
+  [PASS] 2.3 car argument preserved
+  [PASS] 2.4 cdr argument preserved
+  [PASS] 2.5 redundant %affine-drop! is eliminated
+
+--- Group 3: Non-Reused Allocations ---
+  [PASS] 3.1 cons without available drop remains normal cons
+
+--- Group 4: ASC Kernel FBIP Transformation ---
+  [PASS] 4.1 kernel output is %asc-kernel
+  [PASS] 4.2 kernel body has no leftover %affine-drop!
+
+--- Group 5: Pass Manager Injection & Pipeline Integration ---
+  [PASS] 5.1 pass-synapse-split-planes in pipeline
+  [PASS] 5.2 pass-synapse-check-affine in pipeline
+  [PASS] 5.3 pass-synapse-fbip in pipeline
+  [PASS] 5.4 fbip pass directly follows check-affine pass
+  [PASS] 5.5 pipeline satisfies all DAG prerequisites
+  [PASS] 5.6 non-kernel form preserved
+  [PASS] 5.7 kernel form transformed
+  [PASS] 5.8 fbip pass cleanly removed
+
+=======================================================
+ Test Suite Completed: 23 / 23 assertions passed.
+=======================================================
+```
+
+### 7.2 Synapse 並行処理系・Nanopass 回帰テスト一括合格
+`test_arena`, `test_atomic`, `test_queue`, `test_channel`, `test_context_switch`, `test_scheduler`, `test_preemption`, `test_pass_split_planes`, `test_pass_check_affine`, `test_pass_fbip` の合計 626 アサーション以上のテストが 100% PASS することを確認。
+
+### 7.3 S 式構文整合性検証
+`make -C ulisp lint_sexpr` により、全 105 ファイルの括弧不整合 0 件（All balanced）を確認。
+
+### 7.4 直交アーキテクチャ・パス整合性検証
+コンパイラコア（`frontend/`）に一切手を加えず、ライブラリ側（`ulisp/lib/ulisp/concurrency/passes/`）から `inject-synapse-fbip-pass!` により動的注入するプラグイン型アーキテクチャが完全に機能することを確認。全ファイル相対パス 100%（絶対パス 0 件）。
+
+---
+
+## 8. 結論
+[DSN-37] Phase 3 Task 3.3 のすべての要件および DoD 完了基準を完全に満たしたため、本 Issue をクローズとする。
