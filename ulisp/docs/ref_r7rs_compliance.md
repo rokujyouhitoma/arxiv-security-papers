@@ -255,12 +255,12 @@
 ##### 6.13.3 出力手続き (Output Procedures)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
-| **6.13.3** | `write`, `display` | **◎** | [ulisp/lib/printer.scm](../lib/printer.scm) | S 式シリアライザおよび文字列表現出力 |
-| **6.13.3** | `write-char`, `write-string`, `newline` | **◎** | [ulisp/lib/port.scm](../lib/port.scm)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | バッファ付きテキスト出力 |
+| **6.13.3** | `write`, `display` | **◎** | [ulisp/lib/printer.scm](../lib/printer.scm) | S 式シリアライザおよび文字列表現出力（循環データ安全・datum label 対応、第一級手続き） |
+| **6.13.3** | `write-char`, `write-string`, `newline` | **◎** | [ulisp/lib/port.scm](../lib/port.scm)<br>[ulisp/lib/posix.scm](../lib/posix.scm)<br>[ulisp/lib/printer.scm](../lib/printer.scm) | バッファ付きテキスト出力および改行手続き |
 | **6.13.3** | `write-u8` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 1 バイト生データ出力 |
 | **6.13.3** | `write-bytevector` | **◎** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | バイトベクタ一括出力 |
 | **6.13.3** | `flush-output-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 出力バッファ強制フラッシュ |
-| **6.13.3** | `write-shared`, `write-simple` | **×** | - | 循環参照表記（`#1=` / `#1#`）出力 (未実装) |
+| **6.13.3** | `write-shared`, `write-simple` | **◎** | [ulisp/lib/printer.scm](../lib/printer.scm) | 共有・循環参照表記（`#1=` / `#1#`）出力、木構造高速出力、第一級手続き ([Issue #656](../../docs/issues/closed/656-implement-r7rs-write-simple-and-write-shared.md)) |
 
 #### 6.14 システムインターフェース (System Interface)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -293,7 +293,7 @@
 | `(scheme read)` | S 式リーダー (`read`) | **◎ 100%** | [ulisp/lib/scheme/read.sld](../lib/scheme/read.sld)<br>([ulisp/lib/reader.scm](../lib/reader.scm)) | 自前完全再帰下降パーサ完備 |
 | `(scheme repl)` | 対話型 REPL | **✕\* 0%** | [ulisp/lib/scheme/repl.sld](../lib/scheme/repl.sld) | AOT コンパイラのため静的バイナリ出力が正典 |
 | `(scheme time)` | 時間計測 (`current-second`) | **△ 約 30%** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld) | `current-second`, `current-jiffy`, `jiffies-per-second` 基本ラッパー定義 |
-| `(scheme write)` | S 式ライター (`write`, `display`) | **約 70%** | [ulisp/lib/scheme/write.sld](../lib/scheme/write.sld)<br>([ulisp/lib/printer.scm](../lib/printer.scm)) | `write`, `display` 完備。`write-shared` は未実装 |
+| `(scheme write)` | S 式ライター (`write`, `display`, `write-shared`, `write-simple`) | **◎ 100%** | [ulisp/lib/scheme/write.sld](../lib/scheme/write.sld)<br>([ulisp/lib/printer.scm](../lib/printer.scm)) | `write`, `display`, `write-shared`, `write-simple` 完備。SRFI 38 / R7RS datum label 循環・共有表記対応 ([Issue #656](../../docs/issues/closed/656-implement-r7rs-write-simple-and-write-shared.md)) |
 
 ---
 

@@ -12509,7 +12509,7 @@
       ;; 4. Branch Fusion: pair?
       ((and (pair? test) (eq? (car test) 'pair?) (= (length test) 2))
        (lir-compile-expr (cadr test) si env #f)
-       (emit-lir! '(%bit-and %rax 3))
+       (emit-lir! '(%bit-and %rax 7))
        (emit-lir! (list '%cmp '%rax 1))
        (emit-lir! (list '%jump-cond "jne" else-label)))
 
