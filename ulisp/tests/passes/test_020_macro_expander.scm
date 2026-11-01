@@ -68,6 +68,37 @@
                 '((if #f #f (begin 100)))
                 expanded))
 
+;; 5. syntax-error keyword preservation
+(assert-true "core keyword syntax-error not renamed"
+             (core-form-or-primitive? 'syntax-error))
+
+;; 6. syntax-error in syntax-rules macro expansion
+(let* ((orig-abort (car *compiler-abort-on-error*))
+       (orig-suppress (car *compiler-suppress-diagnostics*))
+       (forms '((define-syntax check-positive
+                  (syntax-rules ()
+                    ((_ 0) (syntax-error "zero is not allowed" 0))
+                    ((_ x) (+ x 1))))
+                (check-positive 0))))
+  (set-car! *compiler-abort-on-error* #f)
+  (set-car! *compiler-suppress-diagnostics* #t)
+  (let ((res (expand-macros-in-forms forms)))
+    ;; Under suppressed abort, error returns irritants '(0), forms result is '((0))
+    (assert-equal "syntax-error trapped during expansion" '((0)) res))
+  (set-car! *compiler-abort-on-error* orig-abort)
+  (set-car! *compiler-suppress-diagnostics* orig-suppress))
+
+;; 7. syntax-error directly in forms
+(let* ((orig-abort (car *compiler-abort-on-error*))
+       (orig-suppress (car *compiler-suppress-diagnostics*))
+       (forms '((syntax-error "direct syntax-error test" a b))))
+  (set-car! *compiler-abort-on-error* #f)
+  (set-car! *compiler-suppress-diagnostics* #t)
+  (let ((res (expand-macros-in-forms forms)))
+    (assert-equal "direct syntax-error trapped during expansion" '((a b)) res))
+  (set-car! *compiler-abort-on-error* orig-abort)
+  (set-car! *compiler-suppress-diagnostics* orig-suppress))
+
 (display "=======================================================") (newline)
 (display " Pass 020: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

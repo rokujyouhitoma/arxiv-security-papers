@@ -68,7 +68,7 @@
 | **4.3.1** | 局所マクロ束縛 | `(let-syntax (<binding> ...) <body>)` | **×** | - | トップレベルマクロ優先のため未実装 |
 | **4.3.1** | 局所再帰マクロ束縛 | `(letrec-syntax (<binding> ...) <body>)` | **×** | - | 同上 |
 | **4.3.2** | 衛生的マクロ (Pattern language)| `(syntax-rules (<literal> ...) <syntax-rule> ...)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | パターン変数・省略記号 `...`・リテラル完全照合 ([Issue #533](../../docs/issues/closed/533-implement-hygienic-syntax-rules-macro-expander.md)) |
-| **4.3.3** | マクロ構文エラー | `(syntax-error <message> <args> ...)` | **×** | - | 未実装 |
+| **4.3.3** | マクロ構文エラー | `(syntax-error <message> <args> ...)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm) | マクロ展開時および脱糖時エラー検出・明示的コンパイル中断・予約語保護・irritants 報告 ([Issue #647](../../docs/issues/647-implement-r7rs-syntax-error-syntax.md)) |
 
 ---
 
@@ -440,6 +440,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #559](../../docs/issues/closed/559-implement-r7rs-do-loop-syntax.md): `do` (反復実行構文)
    - [Issue #560](../../docs/issues/closed/560-implement-r7rs-define-values-syntax.md): `define-values` (多値定義構文)
    - [Issue #592](../../docs/issues/592-implement-r7rs-internal-definition-desugaring.md): 内部定義（内部 define / 相互再帰）の脱糖
+   - [Issue #647](../../docs/issues/closed/647-implement-r7rs-syntax-error-syntax.md): `syntax-error` (マクロ構文エラー報告構文)
 4. **アーキテクチャ特性に基づく設計トレードオフ**:
    - `eval`, `load`, `repl` などの動的実行系は、AOT コンパイラのバイナリ独立性・フットプリント最小化を優先して意図的に除外。
    - 数値塔（Number Tower）は 62-bit 即値 Fixnum（下位 2-bit `00b` タグ）を基本とし、加減算のゼロオーバーヘッド化と高速実行を優先。

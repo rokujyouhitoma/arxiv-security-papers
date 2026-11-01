@@ -205,6 +205,15 @@
         (irritants (cddr expr)))
     (list 'raise (cons 'list (cons ''error-object (cons msg irritants))))))
 
+(define (desugar-syntax-error expr)
+  (let ((msg (if (and (pair? (cdr expr)) (string? (cadr expr)))
+                 (cadr expr)
+                 "invalid syntax"))
+        (irritants (if (and (pair? (cdr expr)) (string? (cadr expr)))
+                       (cddr expr)
+                       (cdr expr))))
+    (error (string-append "syntax-error: " msg) irritants)))
+
 (define (desugar-gcd args)
   (cond
     ((null? args) 0)
@@ -398,6 +407,8 @@
     ((%call-with-values ,p1 ,p2) (list '%call-with-values (Expr p1) (Expr p2)))
     ((error ,args ...) (Expr (desugar-error (cons 'error args))))
     ((error . ,args) (Expr (desugar-error (cons 'error args))))
+    ((syntax-error ,args ...) (Expr (desugar-syntax-error (cons 'syntax-error args))))
+    ((syntax-error . ,args) (Expr (desugar-syntax-error (cons 'syntax-error args))))
     ((%with-handler ,h ,b) (list '%with-handler (Expr h) (Expr b)))
     ((with-exception-handler ,h ,b) (list '%with-handler (Expr h) (Expr b)))
 

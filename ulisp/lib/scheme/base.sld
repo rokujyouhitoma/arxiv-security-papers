@@ -36,12 +36,13 @@
     unquote
     unquote-splicing
 
-    ;; §5.3 Variable definitions
+    ;; §5.3 Variable definitions & §4.3 Macros
     define
     define-values
     define-record-type
     define-syntax
     syntax-rules
+    syntax-error
 
     ;; §6.1 Equivalence predicates
     eq?

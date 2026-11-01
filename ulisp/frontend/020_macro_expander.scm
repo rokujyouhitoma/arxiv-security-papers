@@ -23,7 +23,7 @@
 
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
-  (memq sym '(if begin lambda let let* letrec quote set! define define-values define-syntax syntax-rules define-record-type
+  (memq sym '(if begin lambda let let* letrec quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
               cond case and or when unless delay delay-force do case-lambda
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
@@ -386,6 +386,14 @@
        expanded)
       ((eq? (car expanded) (quote quote))
        expanded)
+      ((eq? (car expanded) (quote syntax-error))
+       (let ((msg (if (and (pair? (cdr expanded)) (string? (cadr expanded)))
+                      (cadr expanded)
+                      "invalid syntax"))
+             (irritants (if (and (pair? (cdr expanded)) (string? (cadr expanded)))
+                            (cddr expanded)
+                            (cdr expanded))))
+         (error (string-append "syntax-error: " msg) irritants)))
       ((eq? (car expanded) (quote case))
        (if (and (pair? (cdr expanded)) (pair? (cddr expanded)))
            (cons (quote case)
