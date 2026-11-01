@@ -231,10 +231,10 @@
 | **6.13.1** | `textual-port?`, `binary-port?`, `port-open?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | テキスト/バイナリ識別および状態判定 |
 | **6.13.1** | `close-port`, `close-input-port`, `close-output-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ポートクローズ |
 | **6.13.1** | `current-input-port`, `current-output-port`, `current-error-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 標準入力 (`fd 0`)・標準出力 (`fd 1`)・標準エラー出力 (`fd 2`) |
-| **6.13.1** | `open-input-file`, `open-binary-input-file` | **△** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `open` システムコールラッパー (読み取り) |
-| **6.13.1** | `open-output-file`, `open-binary-output-file` | **△** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `open` システムコールラッパー (書き込み) |
-| **6.13.1** | `call-with-input-file`, `call-with-output-file` | **△** | [ulisp/lib/port.scm](../lib/port.scm) | ファイルオープン・手続き実行・自動クローズ |
-| **6.13.1** | `with-input-from-file`, `with-output-to-file` | **△** | [ulisp/lib/port.scm](../lib/port.scm) | カレントポート一時付け替え実行 |
+| **6.13.1** | `open-input-file`, `open-binary-input-file` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | POSIX `open` システムコールラッパー (読み取り) ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
+| **6.13.1** | `open-output-file`, `open-binary-output-file` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | POSIX `open` システムコールラッパー (4096B バッファ付き書き込み) ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
+| **6.13.1** | `call-with-input-file`, `call-with-output-file` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ファイルオープン・手続き実行・例外安全自動クローズ ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
+| **6.13.1** | `with-input-from-file`, `with-output-to-file` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | カレントポート動的パラメータ一時付け替え実行 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | **6.13.1** | `open-input-string`, `open-output-string`, `get-output-string` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | メモリ上文字列ポート ([Issue #534](../../docs/issues/closed/534-implement-r7rs-string-ports.md)) |
 | **6.13.1** | `open-input-bytevector`, `open-output-bytevector`, `get-output-bytevector` | **△** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | メモリ上バイナリバイトベクタポート |
 
@@ -266,7 +266,7 @@
 | :--- | :--- | :---: | :--- | :--- |
 | **6.14** | `exit`, `emergency-exit` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `sys-exit` 終了コード返却 |
 | **6.14** | `load` | **✕\*** | - | 動的コードロード (AOT のためビルド時静的リンクで代替) |
-| **6.14** | `file-exists?`, `delete-file` | **△** | [ulisp/lib/posix.scm](../lib/posix.scm) | 低レベル syscall で可能。ポート API 未整備 |
+| **6.14** | `file-exists?`, `delete-file` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `sys-access`(21) および `sys-unlink`(87) システムコール連携 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | **6.14** | `command-line` | **△** | [runtime.c](../runtime.c) | ランタイム引数渡しで基本対応 |
 | **6.14** | `get-environment-variable`, `get-environment-variables` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `environ` 走査・連想リスト構築 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
 | **6.14** | `current-second`, `current-jiffy`, `jiffies-per-second` | **△** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld) | 高精度タイマー・POSIX `gettimeofday` ラッパー |
@@ -283,7 +283,7 @@
 | `(scheme complex)` | 複素数算術 | **× 0%** | [ulisp/lib/scheme/complex.sld](../lib/scheme/complex.sld) | 非サポート（Fixnum 優先アーキテクチャ） |
 | `(scheme cxr)` | `caaa...r` 〜 `cddddr` (全24種) | **◎ 100%** | [ulisp/lib/scheme/cxr.sld](../lib/scheme/cxr.sld) | R7RS 規定の全 24 種合成ペアアクセサをライブラリ定義内で完備 |
 | `(scheme eval)` | 動的評価 (`eval`, `environment`) | **✕\* 0%** | [ulisp/lib/scheme/eval.sld](../lib/scheme/eval.sld) | AOT の性質上除外（事前コンパイル時マクロ展開で完結） |
-| `(scheme file)` | ファイル入出力 | **△ 約 40%** | [ulisp/lib/scheme/file.sld](../lib/scheme/file.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)) | POSIX `sys-read`/`sys-write` 実装済み。上位ストリーム関数は未整備 |
+| `(scheme file)` | ファイル入出力 | **◎ 100%** | [ulisp/lib/scheme/file.sld](../lib/scheme/file.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)<br>[ulisp/lib/port.scm](../lib/port.scm)) | 上位ファイルポート・動的カレントポート切り替え・例外安全自動クローズ・システムファイル操作完備 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | `(scheme inexact)` | 浮動小数点数・超越関数 | **× 0%** | [ulisp/lib/scheme/inexact.sld](../lib/scheme/inexact.sld) | 非サポート（整数・Tagged Pointer 設計） |
 | `(scheme lazy)` | 遅延評価 (`delay`, `force`) | **◎ 100%** | [ulisp/lib/scheme/lazy.sld](../lib/scheme/lazy.sld)<br>([ulisp/lib/promise.scm](../lib/promise.scm)) | SRFI-45 準拠プロミス完備 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
 | `(scheme load)` | スクリプト動的ロード | **✕\* 0%** | [ulisp/lib/scheme/load.sld](../lib/scheme/load.sld) | AOT の性質上除外（`import` またはビルド時結合で代替） |

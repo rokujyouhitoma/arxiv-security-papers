@@ -12,9 +12,30 @@
 (define *stdout-port* (list '%standard-output-port 1))
 (define *stderr-port* (list '%standard-output-port 2))
 
-(define (current-input-port) *stdin-port*)
-(define (current-output-port) *stdout-port*)
-(define (current-error-port) *stderr-port*)
+(define *current-input-port-cell* (cons *stdin-port* '()))
+(define *current-output-port-cell* (cons *stdout-port* '()))
+(define *current-error-port-cell* (cons *stderr-port* '()))
+
+(define (current-input-port arg)
+  (if (= (%num-args) 0)
+      (car *current-input-port-cell*)
+      (begin
+        (set-car! *current-input-port-cell* arg)
+        arg)))
+
+(define (current-output-port arg)
+  (if (= (%num-args) 0)
+      (car *current-output-port-cell*)
+      (begin
+        (set-car! *current-output-port-cell* arg)
+        arg)))
+
+(define (current-error-port arg)
+  (if (= (%num-args) 0)
+      (car *current-error-port-cell*)
+      (begin
+        (set-car! *current-error-port-cell* arg)
+        arg)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Port Predicates (R7RS Section 6.13.1)
@@ -29,6 +50,9 @@
 (define (file-input-port? p)
   (and (pair? p) (eq? (car p) '%file-input-port)))
 
+(define (file-output-port? p)
+  (and (pair? p) (eq? (car p) '%file-output-port)))
+
 (define (standard-input-port? p)
   (and (pair? p) (eq? (car p) '%standard-input-port)))
 
@@ -39,8 +63,9 @@
   (or (string-input-port? p)
       (or (string-output-port? p)
           (or (file-input-port? p)
-              (or (standard-input-port? p)
-                  (standard-output-port? p))))))
+              (or (file-output-port? p)
+                  (or (standard-input-port? p)
+                      (standard-output-port? p)))))))
 
 (define (input-port? p)
   (or (string-input-port? p)
@@ -49,18 +74,52 @@
 
 (define (output-port? p)
   (or (string-output-port? p)
-      (standard-output-port? p)))
+      (or (file-output-port? p)
+          (standard-output-port? p))))
 
-(define (textual-port? p)
-  (port? p))
+(define (file-input-binary? p)
+  (let ((tail (cddddr (cddddr p))))
+    (if (pair? tail)
+        (car tail)
+        #f)))
+
+(define (file-output-binary? p)
+  (let ((tail (cdr (cddddr p))))
+    (if (pair? tail)
+        (car tail)
+        #f)))
 
 (define (binary-port? p)
-  #f)
+  (cond
+    ((file-input-port? p) (file-input-binary? p))
+    ((file-output-port? p) (file-output-binary? p))
+    (else #f)))
+
+(define (textual-port? p)
+  (and (port? p) (not (binary-port? p))))
 
 (define (port-open? p)
   (cond
     ((file-input-port? p) (>= (cadr p) 0))
+    ((file-output-port? p) (>= (cadr p) 0))
     (else (port? p))))
+
+(define (port-flush-output p)
+  (cond
+    ((file-output-port? p)
+     (let* ((fd (cadr p))
+            (buf-cell (caddr p))
+            (len-cell (cadddr p))
+            (buf (car buf-cell))
+            (len (car len-cell)))
+       (if (and (>= fd 0) (> len 0))
+           (begin
+             (sys-write fd (%ptr-untag buf) len)
+             (set-car! len-cell 0)
+             #t)
+           #t)))
+    (else
+     (ulisp-flush))))
 
 (define (close-port p)
   (cond
@@ -72,13 +131,22 @@
              (set-car! (cdr p) -1)
              #t)
            #t)))
+    ((file-output-port? p)
+     (let ((fd (cadr p)))
+       (if (>= fd 0)
+           (begin
+             (port-flush-output p)
+             (sys-close fd)
+             (set-car! (cdr p) -1)
+             #t)
+           #t)))
     (else #t)))
 
 (define (close-input-port p)
   (close-port p))
 
 (define (close-output-port p)
-  #t)
+  (close-port p))
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. String Port Constructors and Extractors (R7RS Section 6.13.1)
@@ -99,7 +167,48 @@
                 (cons 0 '())        ; buffer len
                 (cons 1 '())        ; line (1-indexed)
                 (cons 1 '())        ; col (1-indexed)
-                filename)))))
+                filename
+                #f)))))             ; binary? #f
+
+(define (open-binary-input-file filename)
+  (let ((fd (sys-open filename 0 0)))
+    (if (< fd 0)
+        #f
+        (let ((buf (make-string 4096)))
+          (list '%file-input-port
+                fd
+                (cons buf '())
+                (cons 0 '())        ; read pos
+                (cons 0 '())        ; buffer len
+                (cons 1 '())        ; line (1-indexed)
+                (cons 1 '())        ; col (1-indexed)
+                filename
+                #t)))))             ; binary? #t
+
+;; O_WRONLY(1) | O_CREAT(64) | O_TRUNC(512) = 577, mode = 0666 (438)
+(define (open-output-file filename)
+  (let ((fd (sys-open filename 577 438)))
+    (if (< fd 0)
+        (error "open-output-file: failed to open file" filename)
+        (let ((buf (make-string 4096)))
+          (list '%file-output-port
+                fd
+                (cons buf '())
+                (cons 0 '())        ; write len
+                filename
+                #f)))))             ; binary? #f
+
+(define (open-binary-output-file filename)
+  (let ((fd (sys-open filename 577 438)))
+    (if (< fd 0)
+        (error "open-binary-output-file: failed to open file" filename)
+        (let ((buf (make-string 4096)))
+          (list '%file-output-port
+                fd
+                (cons buf '())
+                (cons 0 '())        ; write len
+                filename
+                #t)))))             ; binary? #t
 
 (define (port-line p)
   (cond
@@ -114,6 +223,7 @@
 (define (port-filename p)
   (cond
     ((file-input-port? p) (car (cdddr (cddddr p))))
+    ((file-output-port? p) (car (cddddr p)))
     (else "")))
 
 (define (open-output-string)
@@ -237,6 +347,22 @@
          (string-set! buf len ch)
          (set-car! len-cell (+ len 1))
          #t)))
+    ((file-output-port? p)
+     (let* ((fd (cadr p))
+            (buf-cell (caddr p))
+            (len-cell (cadddr p))
+            (buf (car buf-cell))
+            (len (car len-cell)))
+       (if (>= len 4096)
+           (begin
+             (sys-write fd (%ptr-untag buf) len)
+             (string-set! buf 0 ch)
+             (set-car! len-cell 1)
+             #t)
+           (begin
+             (string-set! buf len ch)
+             (set-car! len-cell (+ len 1))
+             #t))))
     ((and (pair? p) (eq? (car p) '%standard-output-port) (= (cadr p) 2))
      (let ((buf (cons 0 (cons 0 '()))))
        (%raw-store! (%ptr-untag buf) 0 (%to-raw (char->integer ch)))
@@ -254,6 +380,20 @@
                (port-write-char (string-ref str i) p)
                (loop (+ i 1)))
              #t))))
+    ((file-output-port? p)
+     (let* ((fd (cadr p))
+            (slen (string-length str)))
+       (if (>= slen 4096)
+           (begin
+             (port-flush-output p)
+             (sys-write fd (%ptr-untag str) slen)
+             #t)
+           (let loop ((i 0))
+             (if (< i slen)
+                 (begin
+                   (port-write-char (string-ref str i) p)
+                   (loop (+ i 1)))
+                 #t)))))
     ((and (pair? p) (eq? (car p) '%standard-output-port) (= (cadr p) 2))
      (let ((slen (string-length str)))
        (if (> slen 0)
@@ -263,26 +403,136 @@
      (%write-string str))))
 
 ;;; -----------------------------------------------------------------------
-;;; 5. R7RS Polymorphic Macros for Standard Port Operations
+;;; 5. High-Level Port Control & File Port Procedures (R7RS Section 6.13.1)
 ;;; -----------------------------------------------------------------------
+
+(define (call-with-port port proc)
+  (guard (exc (else (close-port port) (raise exc)))
+    (let ((ans (proc port)))
+      (close-port port)
+      ans)))
+
+(define (call-with-input-file filename proc)
+  (let ((p (open-input-file filename)))
+    (if (not p)
+        (error "call-with-input-file: failed to open file" filename)
+        (call-with-port p proc))))
+
+(define (call-with-output-file filename proc)
+  (call-with-port (open-output-file filename) proc))
+
+(define (with-input-from-file filename thunk)
+  (let ((p (open-input-file filename)))
+    (if (not p)
+        (error "with-input-from-file: failed to open file" filename)
+        (let ((old-p (current-input-port)))
+          (current-input-port p)
+          (guard (exc (else
+                       (current-input-port old-p)
+                       (close-port p)
+                       (raise exc)))
+            (let ((ans (thunk)))
+              (current-input-port old-p)
+              (close-port p)
+              ans))))))
+
+(define (with-output-to-file filename thunk)
+  (let ((p (open-output-file filename)))
+    (let ((old-p (current-output-port)))
+      (current-output-port p)
+      (guard (exc (else
+                   (current-output-port old-p)
+                   (close-port p)
+                   (raise exc)))
+        (let ((ans (thunk)))
+          (current-output-port old-p)
+          (close-port p)
+          ans)))))
+
+(define (port-read-u8 p)
+  (let ((ch (port-read-char p)))
+    (if (eof-object? ch)
+        ch
+        (char->integer ch))))
+
+(define (port-peek-u8 p)
+  (let ((ch (port-peek-char p)))
+    (if (eof-object? ch)
+        ch
+        (char->integer ch))))
+
+(define (port-write-u8 b p)
+  (port-write-char (integer->char b) p))
+
+(define (port-read-line p)
+  (let ((ch (port-read-char p)))
+    (if (eof-object? ch)
+        ch
+        (let loop ((acc (list ch)))
+          (let ((next (port-peek-char p)))
+            (cond
+              ((eof-object? next)
+               (list->string (reverse acc)))
+              ((char=? next #\newline)
+               (port-read-char p)
+               (list->string (reverse acc)))
+              ((char=? next (integer->char 13))
+               (port-read-char p)
+               (let ((after-cr (port-peek-char p)))
+                 (if (and (not (eof-object? after-cr)) (char=? after-cr #\newline))
+                     (port-read-char p)
+                     #t))
+               (list->string (reverse acc)))
+              (else
+               (port-read-char p)
+               (loop (cons next acc)))))))))
+
+;;; -----------------------------------------------------------------------
+;;; 6. R7RS Polymorphic Macros for Standard Port Operations
+;;; -----------------------------------------------------------------------
+
+(define-syntax flush-output-port
+  (syntax-rules ()
+    ((flush-output-port) (port-flush-output (current-output-port)))
+    ((flush-output-port p) (port-flush-output p))))
 
 (define-syntax read-char
   (syntax-rules ()
-    ((read-char) (%read-char))
+    ((read-char) (port-read-char (current-input-port)))
     ((read-char p) (port-read-char p))))
 
 (define-syntax peek-char
   (syntax-rules ()
-    ((peek-char) (%peek-char))
+    ((peek-char) (port-peek-char (current-input-port)))
     ((peek-char p) (port-peek-char p))))
+
+(define-syntax read-line
+  (syntax-rules ()
+    ((read-line) (port-read-line (current-input-port)))
+    ((read-line p) (port-read-line p))))
+
+(define-syntax read-u8
+  (syntax-rules ()
+    ((read-u8) (port-read-u8 (current-input-port)))
+    ((read-u8 p) (port-read-u8 p))))
+
+(define-syntax peek-u8
+  (syntax-rules ()
+    ((peek-u8) (port-peek-u8 (current-input-port)))
+    ((peek-u8 p) (port-peek-u8 p))))
 
 (define-syntax write-char
   (syntax-rules ()
-    ((write-char c) (%write-char c))
+    ((write-char c) (port-write-char c (current-output-port)))
     ((write-char c p) (port-write-char c p))))
+
+(define-syntax write-u8
+  (syntax-rules ()
+    ((write-u8 b) (port-write-u8 b (current-output-port)))
+    ((write-u8 b p) (port-write-u8 b p))))
 
 (define-syntax write-string
   (syntax-rules ()
-    ((write-string s) (%write-string s))
+    ((write-string s) (port-write-string s (current-output-port)))
     ((write-string s p) (port-write-string s p))))
 

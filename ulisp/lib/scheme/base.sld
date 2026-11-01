@@ -209,11 +209,13 @@
     current-input-port
     current-output-port
     current-error-port
+    call-with-port
     port?
     input-port?
     output-port?
     textual-port?
     binary-port?
+    port-open?
     open-input-string
     open-output-string
     get-output-string

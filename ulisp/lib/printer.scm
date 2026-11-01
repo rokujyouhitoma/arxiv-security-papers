@@ -104,15 +104,15 @@
 
 (define-syntax newline
   (syntax-rules ()
-    ((newline) (port-newline *stdout-port*))
+    ((newline) (port-newline (current-output-port)))
     ((newline p) (port-newline p))))
 
 (define-syntax display
   (syntax-rules ()
-    ((display val) (port-display val *stdout-port*))
+    ((display val) (port-display val (current-output-port)))
     ((display val p) (port-display val p))))
 
 (define-syntax write
   (syntax-rules ()
-    ((write val) (port-write val *stdout-port*))
+    ((write val) (port-write val (current-output-port)))
     ((write val p) (port-write val p))))

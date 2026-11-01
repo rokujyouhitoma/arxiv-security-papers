@@ -291,5 +291,5 @@
 
 (define-syntax read
   (syntax-rules ()
-    ((read) (port-read *stdin-port*))
+    ((read) (port-read (current-input-port)))
     ((read p) (port-read p))))

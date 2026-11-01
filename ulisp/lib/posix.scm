@@ -40,6 +40,26 @@
 (define (sys-dup2 oldfd newfd)
   (%to-fixnum (%raw-syscall (%to-raw 33) (%to-raw oldfd) (%to-raw newfd) 0 0 0 0)))
 
+;; sys-access: sys_access(path, mode) -> syscall 21
+(define (sys-access path mode)
+  (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+    (%to-fixnum (%raw-syscall (%to-raw 21) path-ptr (%to-raw mode) 0 0 0 0))))
+
+;; sys-unlink: sys_unlink(path) -> syscall 87
+(define (sys-unlink path)
+  (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+    (%to-fixnum (%raw-syscall (%to-raw 87) path-ptr 0 0 0 0 0))))
+
+;; R7RS §6.14 File management
+(define (file-exists? filename)
+  (= (sys-access filename 0) 0))
+
+(define (delete-file filename)
+  (let ((ret (sys-unlink filename)))
+    (if (= ret 0)
+        #t
+        (error "delete-file: failed to delete file" filename))))
+
 (define (sys-write-stderr str)
   (let ((len (string-length str)))
     (if (> len 0)
