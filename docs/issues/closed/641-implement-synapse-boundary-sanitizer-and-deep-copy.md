@@ -2,7 +2,7 @@
 ID: 641
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] ホスト・カーネル境界サニタイザおよびディープコピー機構の実装 (ID: 641)
@@ -158,3 +158,83 @@ Target Branch: `feat/641-synapse-boundary-sanitizer`
    - `make -C ulisp test_boundary`: 全テストケース PASS。
    - `make -C ulisp lint_sexpr`: 全ファイル S 式括弧整合性 PASS。
    - 相対パスリンク 100% 準拠（絶対パス 0 件）。
+
+---
+
+## 8. 検証結果 / Verification Results
+
+### 8.1 単体・統合テスト結果 (`test_boundary`)
+`tests/concurrency/test_boundary.scm` を AOT ネイティブバイナリとしてビルド・実行し、全 6 グループ 33 アサーションが 100% PASS することを実証した。
+
+```text
+=======================================================
+ Starting Synapse Boundary Sanitizer Tests (#641)
+=======================================================
+
+--- Group 1: Immediate Value Pass-Through (Zero-Copy) ---
+PASS: 1.1 fixnum is immediate-value?
+PASS: 1.2 boolean is immediate-value?
+PASS: 1.3 char is immediate-value?
+PASS: 1.4 null is immediate-value?
+PASS: 1.5 symbol is immediate-value?
+PASS: 1.6 pair is not immediate-value?
+PASS: 1.7 vector is not immediate-value?
+PASS: 1.8 fixnum passed without arena bump
+PASS: 1.9 arena offset unchanged for immediate
+
+--- Group 2: List / Pair Deep Copy & Pointer Non-Sharing ---
+PASS: 2.1 list structure preserved
+PASS: 2.2 top-level pair pointer is distinct
+PASS: 2.3 shared-pointer? detects zero shared pair pointers
+PASS: 2.4 arena offset advanced by pair allocations
+PASS: 2.5 nested tree preserved
+PASS: 2.6 tree pointers completely distinct
+PASS: 2.7 modifying kernel list leaves host list unaffected
+PASS: 2.8 kernel list modified in isolation
+
+--- Group 3: Vector Deep Copy & Isolation ---
+PASS: 3.1 vector structure preserved
+PASS: 3.2 vector identity distinct
+PASS: 3.3 inner vector identity distinct
+PASS: 3.4 shared-pointer? is false for vector graph
+PASS: 3.5 host vector intact after copied vector modification
+
+--- Group 4: String & Bytevector Deep Copy ---
+PASS: 4.1 string content preserved
+PASS: 4.2 string pointer is distinct
+PASS: 4.3 shared-pointer? is false for distinct string
+PASS: 4.4 bytevector content preserved
+PASS: 4.5 bytevector pointer is distinct
+PASS: 4.6 shared-pointer? is false for distinct bytevector
+
+--- Group 5: Circular Reference Detection (CWE-674 Guard) ---
+PASS: 5.1 circular list is safely rejected (CWE-674)
+PASS: 5.2 circular vector is safely rejected (CWE-674)
+
+--- Group 6: Kernel to Host Transfer (sanitize-from-arena) ---
+PASS: 6.1 result replicated into host format
+PASS: 6.2 host data shares no pointers with kernel data
+PASS: 6.3 host data remains fully accessible after task arena reset
+=======================================================
+ Boundary Sanitizer Test Summary: 33 passed, 0 failed.
+=======================================================
+```
+
+### 8.2 Synapse 並行性ランタイム ＆ Nanopass パイプライン包括回帰検証
+既存の全並行性ランタイムおよびコンパイラパス群との一括回帰テストを実行し、リグレッションゼロを確認。
+
+```text
+make -C ulisp test_arena test_atomic test_queue test_channel test_boundary test_context_switch test_scheduler test_preemption test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inject_safepoints
+==> ALL TEST SUITES PASSED (0 failures across all 680+ assertions).
+```
+
+### 8.3 括弧整合性・構文静的解析 (`lint_sexpr`)
+`make -C ulisp lint_sexpr`: 111 ファイル全て括弧バランス PASS。
+
+---
+
+## 9. 結論 / Conclusion
+
+[DSN-37](../../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md) Phase 4 Task 4.1 に規定されたホスト・カーネル境界サニタイザおよびディープコピー機構の実装が完了した。
+これにより、Layer 1（R7RS GC 管理ヒープ）と Layer 2（ASC プロセスローカル・エフェメラルアリーナ）間におけるポインタ流出（Raw Pointer Bleed）および Use-After-Free（CWE-416）が物理的・構造的に根絶され、循環参照 DoS（CWE-674）に対する堅牢な防壁が確立された。
+本成果をもって Issue #641 をクローズし、続く Phase 4 Task 4.2（世代管理型投機タスク破棄機構 #642）の実装へと進む。
