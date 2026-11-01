@@ -43,6 +43,8 @@
     define-syntax
     syntax-rules
     syntax-error
+    let-syntax
+    letrec-syntax
 
     ;; §6.1 Equivalence predicates
     eq?

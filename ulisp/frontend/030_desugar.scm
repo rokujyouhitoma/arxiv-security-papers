@@ -443,6 +443,10 @@
     ((error . ,args) (Expr (desugar-error (cons 'error args))))
     ((syntax-error ,args ...) (Expr (desugar-syntax-error (cons 'syntax-error args))))
     ((syntax-error . ,args) (Expr (desugar-syntax-error (cons 'syntax-error args))))
+    ((let-syntax ,args ...) (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))
+    ((let-syntax . ,args) (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))
+    ((letrec-syntax ,args ...) (error "syntax-error [R7RS §4.3.1]: unexpanded letrec-syntax encountered in desugar" args))
+    ((letrec-syntax . ,args) (error "syntax-error [R7RS §4.3.1]: unexpanded letrec-syntax encountered in desugar" args))
     ((%with-handler ,h ,b) (list '%with-handler (Expr h) (Expr b)))
     ((with-exception-handler ,h ,b) (list '%with-handler (Expr h) (Expr b)))
 

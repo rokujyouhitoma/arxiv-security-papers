@@ -65,8 +65,8 @@
 | **4.2.7** | 例外処理 (Exception handling) | `(guard (<var> <clause1> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 動的例外スタック脱糖 ([Issue #531](../../docs/issues/closed/531-implement-lightweight-exception-handling-guard-raise.md)) |
 | **4.2.8** | 準引用 (Quasiquotation) | `` `<qq-template> ``, `,`, `,@` | **◎** | [Pass 030](../frontend/030_desugar.scm) | リスト構築 `cons`/`append` へのマクロ脱糖 |
 | **4.2.9** | 多重アリティ分岐 (Case-lambda) | `(case-lambda <clause> ...)` | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 可変個引数パターンマッチング・動的アリティディスパッチ・GC安全スタックマップ ([Issue #609](../../docs/issues/closed/609-implement-r7rs-case-lambda-syntax.md)) |
-| **4.3.1** | 局所マクロ束縛 | `(let-syntax (<binding> ...) <body>)` | **×** | - | トップレベルマクロ優先のため未実装 |
-| **4.3.1** | 局所再帰マクロ束縛 | `(letrec-syntax (<binding> ...) <body>)` | **×** | - | 同上 |
+| **4.3.1** | 局所マクロ束縛 | `(let-syntax (<binding> ...) <body>)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | レキシカルスコープマクロ環境展開・非再帰性保証 ([Issue #657](../../docs/issues/closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md)) |
+| **4.3.1** | 局所再帰マクロ束縛 | `(letrec-syntax (<binding> ...) <body>)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | 相互再帰および自己再帰マクロ展開・アリティディスパッチ完全サポート ([Issue #657](../../docs/issues/closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md)) |
 | **4.3.2** | 衛生的マクロ (Pattern language)| `(syntax-rules (<literal> ...) <syntax-rule> ...)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | パターン変数・省略記号 `...`・リテラル完全照合 ([Issue #533](../../docs/issues/closed/533-implement-hygienic-syntax-rules-macro-expander.md)) |
 | **4.3.3** | マクロ構文エラー | `(syntax-error <message> <args> ...)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm) | マクロ展開時および脱糖時エラー検出・明示的コンパイル中断・予約語保護・irritants 報告 ([Issue #647](../../docs/issues/647-implement-r7rs-syntax-error-syntax.md)) |
 
@@ -444,6 +444,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #647](../../docs/issues/closed/647-implement-r7rs-syntax-error-syntax.md): `syntax-error` (マクロ構文エラー報告構文)
    - [Issue #648](../../docs/issues/closed/648-implement-srfi-1-higher-order-list-procedures.md): SRFI 1 高階リスト操作手続き群 (`fold`, `filter`, `iota`, `partition`, `any`, `every` 等) の完全実装
    - [Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md): SRFI 69 / SRFI 125 / `(scheme hash-table)` 汎用ハッシュテーブル API の完全実装
+   - [Issue #657](../../docs/issues/closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md): `let-syntax` / `letrec-syntax` (局所マクロ束縛および局所相互再帰マクロ構文) の完全実装
 4. **アーキテクチャ特性に基づく設計トレードオフ**:
    - `eval`, `load`, `repl` などの動的実行系は、AOT コンパイラのバイナリ独立性・フットプリント最小化を優先して意図的に除外。
    - 数値塔（Number Tower）は 62-bit 即値 Fixnum（下位 2-bit `00b` タグ）を基本とし、加減算のゼロオーバーヘッド化と高速実行を優先。

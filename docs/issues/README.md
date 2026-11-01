@@ -7,6 +7,14 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
+| **658** | R7RS §4.2.1 cond-expand 機能識別子および library 判定構文の拡充 | Feature | High | New | [658-expand-r7rs-cond-expand-feature-identifiers.md](658-expand-r7rs-cond-expand-feature-identifiers.md) |
+| **659** | R7RS §4.1.7 大文字小文字無視ファイル包含構文 (include-ci) の実装 | Feature | Medium | New | [659-implement-r7rs-include-ci-syntax.md](659-implement-r7rs-include-ci-syntax.md) |
+| **660** | R7RS §6.13 バイトベクタポートおよびノンブロッキング入力述語 (char-ready? / u8-ready?) の完全実装 | Feature | High | New | [660-implement-r7rs-bytevector-ports-and-ready-predicates.md](660-implement-r7rs-bytevector-ports-and-ready-predicates.md) |
+| **661** | R7RS §6.14 (scheme time) 高精度時間計測手続き群の完全準拠実装 | Feature | High | New | [661-implement-r7rs-scheme-time-procedures.md](661-implement-r7rs-scheme-time-procedures.md) |
+| **662** | R7RS-large / SRFI 141 6モード整数除算手続き群の実装 | Feature | Medium | New | [662-implement-srfi-141-integer-division.md](662-implement-srfi-141-integer-division.md) |
+| **663** | R7RS-large / SRFI 111 Boxes 単一要素可変セル API の実装 | Feature | Medium | New | [663-implement-srfi-111-boxes.md](663-implement-srfi-111-boxes.md) |
+| **664** | R7RS-large / SRFI 145 Assumptions 表明構文 (assume / assert) の実装 | Feature | Medium | New | [664-implement-srfi-145-assumptions.md](664-implement-srfi-145-assumptions.md) |
+| **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | High | New | [665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
 
 ---
 
@@ -14,6 +22,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **657** | R7RS §4.3.1 局所マクロ束縛構文 (let-syntax / letrec-syntax) の実装 | Feature | 2026-11-02 | [closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md](closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md) |
 | **656** | R7RS §6.13.3 循環参照・共有構造表記対応ライター (write-simple, write-shared) の実装 | Feature | 2026-11-01 | [closed/656-implement-r7rs-write-simple-and-write-shared.md](closed/656-implement-r7rs-write-simple-and-write-shared.md) |
 | **655** | R7RS-large (SRFI 132 / 95) リストおよびベクタソート手続きの実装 | Feature | 2026-11-01 | [closed/655-implement-r7rs-list-and-vector-sort-procedures.md](closed/655-implement-r7rs-list-and-vector-sort-procedures.md) |
 | **654** | R7RS-large (SRFI 28) 基本フォーマット文字列手続き (format) の実装 | Feature | 2026-11-01 | [closed/654-implement-srfi-28-basic-format-string.md](closed/654-implement-srfi-28-basic-format-string.md) |

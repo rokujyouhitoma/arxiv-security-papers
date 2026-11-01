@@ -5219,6 +5219,7 @@
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
   (memq sym '(if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
+              let-syntax letrec-syntax
               cond case and or when unless delay delay-force do case-lambda
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
@@ -5521,6 +5522,104 @@
         (list 'syntax-rules-macro name literals rules))
       (error "parse-syntax-rules-def: invalid define-syntax syntax" form)))
 
+(define (rename-symbol-in-tree tree old-sym new-sym)
+  (cond
+    ((null? tree) '())
+    ((eq? tree old-sym) new-sym)
+    ((pair? tree)
+     (cons (rename-symbol-in-tree (car tree) old-sym new-sym)
+           (rename-symbol-in-tree (cdr tree) old-sym new-sym)))
+    ((vector? tree)
+     (list->vector (rename-symbol-in-tree (vector->list tree) old-sym new-sym)))
+    (else tree)))
+
+(define (apply-rename-map tree rename-map)
+  (let loop ((cur rename-map) (res tree))
+    (if (null? cur)
+        res
+        (let* ((entry (car cur))
+               (old-sym (car entry))
+               (new-sym (cdr entry)))
+          (loop (cdr cur) (rename-symbol-in-tree res old-sym new-sym))))))
+
+(define (parse-macro-binding b)
+  ;; b is (<name> (syntax-rules (<literal> ...) (<pattern> <template>) ...))
+  (if (and (pair? b)
+           (symbol? (car b))
+           (pair? (cdr b))
+           (pair? (cadr b))
+           (eq? (car (cadr b)) 'syntax-rules)
+           (pair? (cdr (cadr b))))
+      (let* ((name (car b))
+             (sr-spec (cadr b))
+             (literals (cadr sr-spec))
+             (rules (cddr sr-spec)))
+        (cons name (list 'syntax-rules-macro name literals rules)))
+      (error "syntax-error [R7RS §4.3.1]: invalid macro binding syntax" b)))
+
+(define (expand-let-syntax expr macro-table is-rec)
+  (if (and (pair? (cdr expr))
+           (list? (cadr expr))
+           (pair? (cddr expr)))
+      (let* ((raw-bindings (cadr expr))
+             (body (cddr expr)))
+        (if is-rec
+            ;; letrec-syntax: transformers and body share the new-macro-table
+            (let* ((local-entries (map parse-macro-binding raw-bindings))
+                   (new-macro-table (append local-entries macro-table))
+                   (expanded-body
+                    (if (null? (cdr body))
+                        (macro-expand-all (car body) new-macro-table)
+                        (cons 'begin
+                              (map (lambda (e) (macro-expand-all e new-macro-table)) body)))))
+              expanded-body)
+            ;; let-syntax: transformers are in outer scope, body is in new scope
+            (let loop ((bs raw-bindings)
+                       (local-entries '())
+                       (extra-outer '())
+                       (restore-map '()))
+              (if (null? bs)
+                  (let* ((new-macro-table (append local-entries (append extra-outer macro-table)))
+                         (expanded-body
+                          (if (null? (cdr body))
+                              (macro-expand-all (car body) new-macro-table)
+                              (cons 'begin
+                                    (map (lambda (e) (macro-expand-all e new-macro-table)) body)))))
+                    (apply-rename-map expanded-body restore-map))
+                  (let* ((b (car bs))
+                         (parsed (parse-macro-binding b))
+                         (name (car parsed))
+                         (macro-desc (cdr parsed))
+                         (literals (macro-literals macro-desc))
+                         (rules (macro-rules macro-desc))
+                         (outer-entry (assq name macro-table)))
+                    (if outer-entry
+                        ;; Outer macro exists: rename name in template to alias pointing to outer macro
+                        (let* ((alias (hygiene-gensym name))
+                               (renamed-rules
+                                (map (lambda (r)
+                                       (list (car r)
+                                             (rename-symbol-in-tree (cadr r) name alias)))
+                                     rules))
+                               (new-desc (list 'syntax-rules-macro name literals renamed-rules)))
+                          (loop (cdr bs)
+                                (cons (cons name new-desc) local-entries)
+                                (cons (cons alias (cdr outer-entry)) extra-outer)
+                                restore-map))
+                        ;; No outer macro: rename name in template to restore-alias so it is not re-expanded locally
+                        (let* ((restore-alias (hygiene-gensym name))
+                               (renamed-rules
+                                (map (lambda (r)
+                                       (list (car r)
+                                             (rename-symbol-in-tree (cadr r) name restore-alias)))
+                                     rules))
+                               (new-desc (list 'syntax-rules-macro name literals renamed-rules)))
+                          (loop (cdr bs)
+                                (cons (cons name new-desc) local-entries)
+                                extra-outer
+                                (cons (cons restore-alias name) restore-map)))))))))
+      (error "syntax-error [R7RS §4.3.1]: invalid let-syntax/letrec-syntax syntax" expr)))
+
 (define (macro-expand-1 expr macro-table)
   (if (and (pair? expr) (symbol? (car expr)))
       (let ((entry (assq (car expr) macro-table)))
@@ -5617,6 +5716,10 @@
            expanded))
       ((eq? (car expanded) (quote define-record-type))
        expanded)
+      ((eq? (car expanded) (quote let-syntax))
+       (expand-let-syntax expanded macro-table #f))
+      ((eq? (car expanded) (quote letrec-syntax))
+       (expand-let-syntax expanded macro-table #t))
       ((or (eq? (car expanded) (quote let))
            (eq? (car expanded) (quote let*))
            (eq? (car expanded) (quote letrec))
@@ -6834,6 +6937,10 @@
     ((error . ,args) (Expr (desugar-error (cons 'error args))))
     ((syntax-error ,args ...) (Expr (desugar-syntax-error (cons 'syntax-error args))))
     ((syntax-error . ,args) (Expr (desugar-syntax-error (cons 'syntax-error args))))
+    ((let-syntax ,args ...) (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))
+    ((let-syntax . ,args) (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))
+    ((letrec-syntax ,args ...) (error "syntax-error [R7RS §4.3.1]: unexpanded letrec-syntax encountered in desugar" args))
+    ((letrec-syntax . ,args) (error "syntax-error [R7RS §4.3.1]: unexpanded letrec-syntax encountered in desugar" args))
     ((%with-handler ,h ,b) (list '%with-handler (Expr h) (Expr b)))
     ((with-exception-handler ,h ,b) (list '%with-handler (Expr h) (Expr b)))
 
