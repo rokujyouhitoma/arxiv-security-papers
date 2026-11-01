@@ -3037,6 +3037,63 @@
       ((eq? (pass-id (car ps)) id) #t)
       (else (loop (cdr ps))))))
 
+(define (inject-pass-after! target-id descriptor)
+  (let* ((id (pass-id descriptor))
+         (current (car *pass-registry*))
+         ;; First, filter out any existing entry with the same id to avoid duplicates
+         (cleaned (let filter-loop ((ps current))
+                    (cond
+                      ((null? ps) '())
+                      ((eq? (pass-id (car ps)) id) (filter-loop (cdr ps)))
+                      (else (cons (car ps) (filter-loop (cdr ps))))))))
+    (let insert-loop ((ps cleaned) (acc '()) (found? #f))
+      (cond
+        ((null? ps)
+         (if found?
+             (begin
+               (set-car! *pass-registry* (reverse acc))
+               id)
+             (error "inject-pass-after!: target pass not found in registry" target-id)))
+        ((eq? (pass-id (car ps)) target-id)
+         (insert-loop (cdr ps)
+                      (cons descriptor (cons (car ps) acc))
+                      #t))
+        (else
+         (insert-loop (cdr ps) (cons (car ps) acc) found?))))))
+
+(define (inject-pass-before! target-id descriptor)
+  (let* ((id (pass-id descriptor))
+         (current (car *pass-registry*))
+         (cleaned (let filter-loop ((ps current))
+                    (cond
+                      ((null? ps) '())
+                      ((eq? (pass-id (car ps)) id) (filter-loop (cdr ps)))
+                      (else (cons (car ps) (filter-loop (cdr ps))))))))
+    (let insert-loop ((ps cleaned) (acc '()) (found? #f))
+      (cond
+        ((null? ps)
+         (if found?
+             (begin
+               (set-car! *pass-registry* (reverse acc))
+               id)
+             (error "inject-pass-before!: target pass not found in registry" target-id)))
+        ((eq? (pass-id (car ps)) target-id)
+         (insert-loop (cdr ps)
+                      (cons (car ps) (cons descriptor acc))
+                      #t))
+        (else
+         (insert-loop (cdr ps) (cons (car ps) acc) found?))))))
+
+(define (remove-injected-pass! id)
+  (let* ((current (car *pass-registry*))
+         (filtered (let loop ((ps current))
+                     (cond
+                       ((null? ps) '())
+                       ((eq? (pass-id (car ps)) id) (loop (cdr ps)))
+                       (else (cons (car ps) (loop (cdr ps))))))))
+    (set-car! *pass-registry* filtered)
+    id))
+
 ;;; -----------------------------------------------------------------------
 ;;; 3. Pipeline Configuration & Tuning Options
 ;;; -----------------------------------------------------------------------
