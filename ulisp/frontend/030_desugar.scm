@@ -238,6 +238,30 @@
            curr
            (loop (list 'lcm-2 curr (car rest)) (cdr rest)))))))
 
+(define (desugar-max args)
+  (cond
+    ((null? args) (error "max: requires at least one argument"))
+    ((null? (cdr args)) (car args))
+    ((null? (cddr args)) (list 'max-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'max-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'max-2 curr (car rest)) (cdr rest)))))))
+
+(define (desugar-min args)
+  (cond
+    ((null? args) (error "min: requires at least one argument"))
+    ((null? (cdr args)) (car args))
+    ((null? (cddr args)) (list 'min-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'min-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'min-2 curr (car rest)) (cdr rest)))))))
+
 ;;; =======================================================================
 ;;; Canonical Nanopass DSL Pass: desugar-all
 ;;; Transforms high-level L_src AST into canonical L_core AST
@@ -388,6 +412,8 @@
     ((bytevector-copy! . ,args) (Expr (desugar-bytevector-copy! (map Expr args))))
     ((gcd . ,args) (Expr (desugar-gcd (map Expr args))))
     ((lcm . ,args) (Expr (desugar-lcm (map Expr args))))
+    ((max . ,args) (Expr (desugar-max (map Expr args))))
+    ((min . ,args) (Expr (desugar-min (map Expr args))))
 
     ;; 4. Dynamic & Multiple Values (Pass 029)
     ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))

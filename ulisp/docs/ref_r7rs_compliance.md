@@ -111,7 +111,8 @@
 | **6.2.6** | `+`, `-`, `*` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm)<br>[Pass 130](../lir/130_lir.scm) | 62-bit 加減乗算、定数畳み込み、x86/C バックエンド直結（加減算はタグシフト解除不要） |
 | **6.2.6** | `/`, `quotient`, `modulo` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm)<br>[ulisp/lib/math.scm](../lib/math.scm) | 整数除算・床除算剰余、ゼロ除算トラップ保護。`modulo` は R7RS 準拠の `floor-remainder` として完全動作 ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.2.6** | `=`, `<`, `>`, `<=`, `>=` | **◎** | [Pass 130](../lir/130_lir.scm) | 整数比較、分岐融合 (Branch Fusion) 最適化 ([Issue #545](../../docs/issues/closed/545-implement-condition-branch-flag-fusion.md)) |
-| **6.2.6** | `max`, `min`, `abs` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 2引数固定で基本演算を提供 |
+| **6.2.6** | `max`, `min` | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 1引数以上可変長引数対応、インライン二項連鎖脱糖 (`max-2`/`min-2`)、case-lambda 第一級手続き ([Issue #653](../../docs/issues/closed/653-implement-r7rs-max-min-variadic-arguments.md)) |
+| **6.2.6** | `abs` | **◎** | [compiler/helpers.scm](../compiler/helpers.scm)<br>[ulisp/lib/math.scm](../lib/math.scm) | 絶対値計算プリミティブ |
 | **6.2.6** | `floor/`, `floor-quotient`, `floor-remainder` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 床除算・剰余ペア (多値および単値) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.2.6** | `truncate/`, `truncate-quotient`, `truncate-remainder` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 切り捨て除算・剰余ペア (多値および単値) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.2.6** | `floor`, `ceiling`, `truncate`, `round` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数塔のため引数をそのまま返却（恒等写像） |

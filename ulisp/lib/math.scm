@@ -7,6 +7,9 @@
 ;;;   - `gcd` / `lcm` calls are desugared by Pass 030 into left-folded
 ;;;     chains of the binary kernels `gcd-2` / `lcm-2` (variadic support,
 ;;;     0 args -> 0 / 1, 1 arg -> |n|).
+;;;   - `max` / `min` calls are desugared by Pass 030 into left-folded
+;;;     chains of `max-2` / `min-2` (variadic support, 1 arg -> x,
+;;;     2+ args -> (max-2 ...)). Procedural objects are provided via case-lambda.
 ;;;   - `abs` is intentionally NOT defined here because compiler/helpers.scm
 ;;;     already defines it inside build/ulisp_core.scm (duplicate top-level
 ;;;     definition avoidance). `%math-abs` is used internally instead.
@@ -139,3 +142,37 @@
                     (else
                      (loop low (- mid 1) ans))))
                 (values ans (- k (* ans ans))))))))
+
+;; ---------------------------------------------------------------------
+;; §6.2.6 max and min (variadic support, Issue #653)
+;; Binary kernels for desugared inlined comparisons and first-class procedures.
+;; ---------------------------------------------------------------------
+(define (max-2 a b)
+  (if (> a b) a b))
+
+(define (min-2 a b)
+  (if (< a b) a b))
+
+(define max
+  (case-lambda
+    ((a) a)
+    ((a b) (max-2 a b))
+    ((a b c) (max-2 (max-2 a b) c))
+    ((a b c d) (max-2 (max-2 (max-2 a b) c) d))
+    ((a b c d . rest)
+     (let loop ((m (max-2 (max-2 (max-2 a b) c) d)) (r rest))
+       (if (null? r)
+           m
+           (loop (max-2 m (car r)) (cdr r)))))))
+
+(define min
+  (case-lambda
+    ((a) a)
+    ((a b) (min-2 a b))
+    ((a b c) (min-2 (min-2 a b) c))
+    ((a b c d) (min-2 (min-2 (min-2 a b) c) d))
+    ((a b c d . rest)
+     (let loop ((m (min-2 (min-2 (min-2 a b) c) d)) (r rest))
+       (if (null? r)
+           m
+           (loop (min-2 m (car r)) (cdr r)))))))
