@@ -7,7 +7,7 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **639** | FBIP (Perceus) インプレース再利用最適化パス (fbip-inplace-transform) の実装 | Feature | High | New | [639-implement-nanopass-fbip-inplace-optimization.md](639-implement-nanopass-fbip-inplace-optimization.md) |
+| **639** | FBIP (Perceus) インプレース再利用最適化パス (fbip-inplace-transform) の実装 | Feature | High | In Progress | [639-implement-nanopass-fbip-inplace-optimization.md](639-implement-nanopass-fbip-inplace-optimization.md) |
 | **640** | Nanopass ループバックエッジ・プロローグ セーフポイント判定自動注入パス (inject-safepoints) の実装 | Feature | High | New | [640-implement-nanopass-inject-fuel-checks-pass.md](640-implement-nanopass-inject-fuel-checks-pass.md) |
 | **641** | ホスト・カーネル境界サニタイザおよびディープコピー機構の実装 | Feature | High | New | [641-implement-synapse-boundary-sanitizer-and-deep-copy.md](641-implement-synapse-boundary-sanitizer-and-deep-copy.md) |
 | **642** | 世代管理型投機タスク破棄および待機タスク世代ゲート検証の実装 | Feature | High | New | [642-implement-synapse-epoch-fencing-distributed-rollback.md](642-implement-synapse-epoch-fencing-distributed-rollback.md) |
