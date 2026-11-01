@@ -2,42 +2,121 @@
 ID: 638
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Open (In Progress)
 ---
 
 # [FEAT] アフィン線形所有権静的検査パス (check-affine-types) および自動 RAII Drop の実装 (ID: 638)
 
 ## 1. 概要 / Summary
-[DSN-37] Phase 3 Task 3.2 に基づき、アフィン部分言語コア（ASC）内部構文木において、変数が複数回消費（Use-After-Move）されていないか、および禁止構文（`set!`, `call/cc` 等）が含まれていないかを静的検証する `check-affine-types` パスを実装する。
-未消費のままスコープを離脱する線形変数に対しては、自動的に解放コード（RAII Drop）を AST 末尾に注入する。
+[DSN-37] Phase 3 Task 3.2 に基づき、uLisp 多段 Nanopass コンパイラにおいて、プレーン分離パス（Issue #637: `split-planes-pass`）によって抽出されたアフィン部分言語コア（Layer 2: ASC / `%asc-kernel`）構文木を対象に、**アフィン線形型静的検査および自動 RAII Drop 注入パス (`check-affine-types`)** を実装する。
+
+本パスは、変数の二重消費（Use-After-Move / CWE-416）や可変副作用（`set!` 等 / CWE-362）、非局所的脱出（`call/cc`）をコンパイル時に静的排除するとともに、未消費のままスコープを離脱する線形リソースに対して自動的に即時解放コード（`%affine-drop!`）を AST 末尾に注入し、ガベージコレクションに依存しない決定論的メモリ管理を実現する。
+Issue #637 で確立されたアーキテクチャ原則に従い、コンパイラコア（`frontend/`）を汚さず、ライブラリ側（`ulisp/lib/ulisp/concurrency/passes/`）に配置して Pass Manager に動的 Inject するプラグイン型拡張として構築する。
 
 ---
 
-## 2. トレーサビリティ / Traceability
-- 設計仕様書: [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md#145-phase-3-nanopass-コンパイラ統合--fbip) (第 4.3 節 線形型理論、第 12.2 節 check-affine-types、第 14.5 節 Task 3.2)
+## 2. 背景と設計原則 / Background & Design Principles
+- **線形論理に基づく所有権の数理的保証 (DSN-37 Section 4.3)**:
+  アフィン部分言語コア（ASC）内の各変数 $x$ は、以下の不変条件を厳格に満たす：
+  $$\forall x \in \text{Variables}, \quad \text{Count}(x) \le 1$$
+  - $\text{Count}(x) = 1$: 単一の関数呼び出し、チャネル送信（`channel-send!` / `send!`）への譲渡（Move）。
+  - $\text{Count}(x) > 1$: 同一スコープ内での再利用（Use-After-Move）。コンパイル時エラーとして拒絶。
+  - $\text{Count}(x) = 0$: スコープ離脱時に未消費。自動 RAII Drop（`%affine-drop!`）を注入して即時解放。
+- **純粋計算性の静的保証 (DSN-37 Section 2.2 & 12.2)**:
+  ASC カーネル内では、共有状態の破壊や競合を物理排除するため、破壊的代入構文（`set!`, `set-car!`, `set-cdr!`, `vector-set!`, `string-set!`, `bytevector-u8-set!`）および継続大域脱出（`call/cc`, `dynamic-wind`）を静的エラーとしてコンパイル拒絶する。
+- **Pass Manager による直交的パス注入 (Issue #637 アーキテクチャ整合)**:
+  本パスは `ulisp/compiler/pass_manager.scm` の `inject-pass-after!` API を通じて `pass-synapse-split-planes` の直後に挿入され、コンパイラコアの R7RS 独立性を 100% 維持する。
 
 ---
 
-## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `ulisp/passes/pass_check_affine.scm` (新規: アフィン線形型検査パス)
-- [ ] `tests/passes/test_pass_check_affine.scm` (新規: 線形性静的エラー検証テスト)
+## 3. トレーサビリティ / Traceability
+- **アーキテクチャ設計仕様書**:
+  - [DSN-37: ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT コンパイルパイプライン包括的アーキテクチャ設計書](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)
+    - 第 2.2 節: 並列計算プレーン（Layer 2: アフィン部分言語コア / ASC）
+    - 第 4.1 節: 線形所有権移譲チャネル（Linear Ownership Transfer Channel）
+    - 第 4.3 節: 線形型理論に基づく不変条件とバックプレッシャー
+    - 第 12.2 節: `check-affine-types` (線形所有権検査と自動 RAII Drop)
+    - 第 14.5 節: Phase 3 Nanopass コンパイラ統合 ＆ FBIP (Task 3.2)
+  - [DSN-33: ULisp x86 Native AOT コンパイラアーキテクチャ仕様書](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+    - 第 2.6 節: 統一 Pass Manager 基盤と動的パス注入機構 (Pass Injection API)
+- **前提 Issue**:
+  - [Issue #633: 線形所有権型 P2P チャネル](closed/633-implement-synapse-first-class-p2p-channel.md)
+  - [Issue #637: ホスト・カーネル分離パス (split-planes-pass) および動的パス注入機構](closed/637-implement-nanopass-split-planes-pass.md)
 
 ---
 
-## 4. 実装方針 / Implementation Plan
+## 4. 影響範囲と関連ファイル / Scope and Affected Files
+
+### 新規作成
+- `ulisp/lib/ulisp/concurrency/passes/pass_check_affine.scm`: アフィン線形所有権静的検査および RAII Drop 注入パス本体
+- `ulisp/lib/ulisp/concurrency/passes/check_affine.sld`: R7RS ライブラリ定義 `(ulisp concurrency passes check-affine)`
+- `tests/concurrency/test_pass_check_affine.scm`: 線形性違反検出および RAII Drop 注入単体テストスイート
+
+### 既存更新
+- `ulisp/Makefile`:
+  - `test_pass_check_affine` ターゲットの追加
+  - `lint_sexpr` への新規ファイル追加
+  - `test` ターゲットへの統合
+- `docs/issues/README.md`: Issue #638 ステータス更新（In Progress）
+
+---
+
+## 5. 実装方針 / Implementation Plan
 Target Branch: `feat/638-nanopass-check-affine-types`
 
-1. **禁止構文の排除**:
-   - `set!`, `set-car!`, `set-cdr!`, `call/cc` の出現を検知した場合、ファイル名と行番号を付けて即座にコンパイルエラーを出力。
-2. **線形型環境（Type Environment）による使用カウント**:
-   - 変数が関数引数やチャネル送信式に渡された時点で「消費済み（Consumed）」とマーク。
-   - 同一スコープ内で再度その変数を参照しようとした場合、「Use-After-Move」エラーを報告。
-3. **スコープ末尾での自動 RAII Drop コード生成**:
-   - スコープ離脱時に未消費のまま残っている線形変数に対し、オブジェクト破棄コードを注入。
+### 5.1 禁止構文・副作用の静的検出アルゴリズム
+- 検査対象 AST: `%asc-kernel` ノードの内部式。
+- 以下のシンボルがオペレータまたは参照として出現した場合、即座に例外・コンパイルエラーを出力：
+  - 破壊的代入: `set!`, `set-car!`, `set-cdr!`, `vector-set!`, `string-set!`, `bytevector-u8-set!` (CWE-362)
+  - 大域継続・脱出: `call/cc`, `call-with-current-continuation`, `dynamic-wind`
+  - エラー形式: `[AFFINE-COMPILER-ERROR] Forbidden side-effect or control-flow syntax in ASC kernel: <form>`
+
+### 5.2 線形所有権環境（Linear Ownership Environment）と消費追跡
+1. **線形変数の定義**:
+   - `%asc-kernel` の引数リストに含まれる変数のうち、キャプチャモードが `'linear-move`（チャネル等）または複合リソースであるもの。
+   - 内部の `let`, `let*` で生成されるローカル線形束縛。
+2. **状態遷移モデル**:
+   - `Available` (未消費・所有権保持)
+   - `Moved` (消費済み・所有権移譲完了)
+3. **消費操作（Move）の検知**:
+   - 関数呼び出しの実引数スロットへの指定
+   - チャネル送信式 `(channel-send! ch val)` / `(send! ch val)` への指定
+4. **Use-After-Move 検出 (CWE-416 防御)**:
+   - 既に `Moved` 状態にあるシンボルを再度読み取り・参照しようとした場合、以下のコンパイルエラーを出力して中断：
+     `[AFFINE-LINEARITY-VIOLATION] Use-After-Move detected: variable <var> has already been transferred`
+5. **分岐（`if`）の消費状態統合**:
+   - `then` 節と `else` 節における線形変数の消費状態を追跡。
+   - 両節で消費された場合は合流後も `Moved`。
+   - 一方のみで消費された場合、未消費側の節末尾に自動 RAII Drop を補填して状態を一致させる。
+
+### 5.3 自動 RAII Drop コード生成
+- スコープ終端（`let` 本体末尾、`%asc-kernel` 本体末尾）において、環境内に `Available` のまま残存している線形変数群を収集。
+- リソース解放呼び出し `(%affine-drop! <var>)` を生成し、本体式の直前に逐次実行ブロック（`begin`）として注入。
+
+### 5.4 Pluggable Pass Injection 登録
+- `pass-descriptor`:
+  - ID: `'pass-synapse-check-affine`
+  - Prerequisites: `'(pass-synapse-split-planes)`
+- 注入手続き:
+  `(inject-synapse-check-affine-pass!)`
+  Pass Manager の `(inject-pass-after! 'pass-synapse-split-planes (synapse-check-affine-descriptor))` を呼び出し。
 
 ---
 
-## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 二重使用コード（Use-After-Move）に対して正確な診断メッセージ付きでコンパイル拒絶すること
-- [ ] `set!` や `call/cc` を含むコードをコンパイルエラーとすること
-- [ ] 正常な線形コードが通過し、未消費変数に対する Drop コードが正しく生成されること
+## 6. 完了条件 / Success Criteria (DoD)
+
+### 定量的検証項目
+1. **禁止構文の静的拒絶**:
+   - `set!`, `set-car!`, `vector-set!`, `call/cc` を含むカーネルコードが例外 `[AFFINE-COMPILER-ERROR]` で 100% 拒絶されること。
+2. **Use-After-Move の静的拒絶**:
+   - 同一線形変数が 2 回以上 Move されるコード（チャネル二重送信、二重引数渡し）が例外 `[AFFINE-LINEARITY-VIOLATION]` で 100% 拒絶されること。
+3. **正当な線形コードの透過**:
+   - 1 回のみ消費される線形コード（チャネル送受信、チェイン処理）がエラーなくパスを通過すること。
+4. **自動 RAII Drop の正確な注入**:
+   - 未消費の線形変数に対し、スコープ末尾に `(%affine-drop! <var>)` が正しく注入された AST が生成されること。
+5. **Pass Manager 連携**:
+   - `inject-synapse-check-affine-pass!` により `pass-synapse-split-planes` の直後に挿入され、Prerequisite DAG 検証が PASS すること。
+6. **全テストハーネスの合格**:
+   - `make -C ulisp test_pass_check_affine`: 全テストケース PASS。
+   - `make -C ulisp lint_sexpr`: 全ファイル S 式括弧整合性 PASS。
+   - 相対パスリンク 100% 準拠（絶対パス 0 件）。
