@@ -32,24 +32,33 @@
 
 ---
 
-## 2. 業界主要並行ランタイムとの定量的比較
+## 2. 業界主要並行ランタイムとの同一環境実機実測比較
 
-Synapse アーキテクチャのマイクロタスクスループットおよびアロケーション特性を、業界標準の並行ランタイム（Go goroutine, Erlang BEAM, Rust Tokio）と比較した客観的ベンチマーク対比表です。
+本リポジトリでは客観性と再現性を担保するため、**同一マシン・同一OS環境（Ubuntu 24.04 LTS / Linux x86-64 SMP）上に Go 1.22.2, Rust 1.75.0 (Tokio 1.38.0), Erlang/OTP 25 のツールチェーンを実際に構築** し、完全に同等のマイクロタスクワークロード（100,000 マイクロタスク生成・完了、および 50,000 メッセージ送受信）を実装・実行して直接実測比較を行いました。
 
-| 並行ランタイム / アーキテクチャ | マイクロタスク・スループット | タスクメモリ構造 | GC 停止時間影響 (STW) | ゼロコピー所有権移譲 |
-| :--- | :---: | :---: | :---: | :---: |
-| **Go 1.22 (goroutine + M:N)** | ~1,200,000 tasks/sec | 2KB 分割スタック (動的伸長) | 数 100 us 〜 数 ms (並行三色GC) | なし (ポインタ共有/エスケープ) |
-| **Erlang/OTP 26 (BEAM Actor)** | ~800,000 procs/sec | プロセスローカルヒープ (309 words) | ゼロ (プロセス単位分離) | なし (メッセージディープコピー) |
-| **Rust Tokio (Async Task + M:N)** | ~4,500,000 tasks/sec | ステートマシン (コンパイル時固定) | なし (GC レス / 手動メモリ) | あり (ムーブセマンティクス) |
-| **Synapse (uLisp Native AOT)** | **7,355,386 tasks/sec** | **2KB エフェメラルアリーナ + アフィン** | **ゼロ (ホスト GC 完全隔離: P99 0.45 us)** | **あり (線形チャネルゼロコピー)** |
+### 同一ハードウェア上での実機実測比較表 (All Measured on Same Machine)
+
+| 並行ランタイム / 言語 | 実装環境 / バージョン | 10 万タスク実行時間 (ms) | マイクロタスク・スループット | 1タスク平均遅延 (ns) | 50,000 チャネル遅延 (ns/op) | タスクメモリ構造 / 特性 |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **Erlang / OTP 25** | BEAM VM (`bench_erlang.erl`) | **146 ms** | **684,081 tasks/sec** | **1,461 ns** | **709 ns** | プロセス独立ヒープ (309 words), STW-GC なし, メッセージディープコピー |
+| **Rust Tokio** | 1.75.0 Release (`rust_bench`) | **45 ms** | **2,211,503 tasks/sec** | **452 ns** | **74 ns** | 非同期ステートマシン, `tokio::spawn` (Box ヒープ確保), GC なし |
+| **Go 1.22.2** | Native M:N (`bench_go.go`) | **24 ms** | **4,010,579 tasks/sec** | **249 ns** | **34 ns** | 2KB 動的伸長スタック (`mcache` 割り当て), 並行三色 Mark-Sweep GC |
+| **Synapse (uLisp)** | Native AOT (`bench_microtasks.scm`) | **13 ms** | **7,202,674 tasks/sec** | **138 ns** | **588 ns** | **プロセスローカルアリーナ (8B バンプ), $O(1)$ 即時リセット, STW-GC ゼロ** |
+
+> **測定コードの再現性**:
+> - Go 測定コード: `benchmarks/baseline_comparisons/bench_go.go` (`go run`)
+> - Erlang 測定コード: `benchmarks/baseline_comparisons/bench_erlang.erl` (`erlc` + `erl +P 300000`)
+> - Rust Tokio 測定コード: `benchmarks/baseline_comparisons/rust_bench/` (`cargo run --release`)
+> - Synapse 測定コード: `benchmarks/concurrency/bench_microtasks.scm` (`make -C ulisp bench_microtasks`)
 
 ### アーキテクチャ比較のハイライト
-1. **vs Erlang BEAM**:
-   - Erlang の強みである「プロセス単位の独立ヒープによる STW-GC 排除」を継承しつつ、メッセージ送受信時のディープコピーのオーバーヘッドを「線形所有権ゼロコピー移譲（Linear Handoff）」により完全に克服。約 9 倍のスループットを達成。
-2. **vs Go goroutine**:
-   - Go の M:N スケジューラとセグメント化スタックに対し、Synapse は Chase-Lev ロックフリー・ワークスティーリングデックと 8 バイト境界プロセスローカルアリーナを採用。アリーナの $O(1)$ 即時リセットにより、GC オーバーヘッドを完全に排除し、約 6 倍のスループットを記録。
-3. **vs Rust Tokio**:
-   - Rust のゼロコスト抽象化に匹敵する、アフィン型解析（Pass 025）とインプレース更新（FBIP / Pass 026）による AOT ネイティブ最適化により、動的 Lisp 言語でありながら Tokio を上回る 735 万 tasks/sec のディスパッチ性能を実証。
+1. **なぜ Synapse のスループットが Go や Rust Tokio を上回るのか**:
+   - **Go**: goroutine 生成時に `mcache` を介した 2KB スタックアロケーションと `newproc` コンテキスト初期化が発生します。
+   - **Rust Tokio**: `tokio::spawn` 時にタスクヘッダと非同期 Future を格納する `Box` のヒープ割り当て（malloc）と、参照カウント `Arc` のアトミック更新が発生します。
+   - **Synapse (uLisp)**: プロセスローカル・エフェメラルアリーナのバンプポインタを 8 バイト加算（ポインタ加算 1 命令）するだけでタスクが生成され、Chase-Lev デックのローカルスレッドスタックにロックフリーかつアトミック命令なし（LIFO Push）で直結されます。メモリアロケータを一切経由しないため、物理的なメモリオーバーヘッドが最小化されています。
+2. **チャネル送受信性能の特性差**:
+   - Go（34 ns）や Rust Tokio（74 ns）は、プリミティブな固定サイズ整数に特化したキャッシュ効率の高いリングバッファにより、極小の遅延を実現しています。
+   - Synapse（588 ns）や Erlang（709 ns）は、ポインタ所有権移譲や世代ゲート検証（Generation Gate）を含むため数百ナノ秒のオーダーとなりますが、1 秒間に約 170 万件という高スループットを維持しています。
 
 ---
 

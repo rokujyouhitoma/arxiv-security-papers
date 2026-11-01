@@ -60,3 +60,8 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+
+# Baseline Benchmark Artifacts
+benchmarks/baseline_comparisons/rust_bench/target/
+benchmarks/baseline_comparisons/*.beam
+benchmarks/baseline_comparisons/*.dump
