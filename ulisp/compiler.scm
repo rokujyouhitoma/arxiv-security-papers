@@ -6653,6 +6653,11 @@
            curr
            (loop (list 'min-2 curr (car rest)) (cdr rest)))))))
 
+(define (desugar-format args)
+  (if (null? args)
+      (error "format: too few arguments (requires format-string)")
+      (list '%format (car args) (cons 'list (cdr args)))))
+
 ;;; =======================================================================
 ;;; Canonical Nanopass DSL Pass: desugar-all
 ;;; Transforms high-level L_src AST into canonical L_core AST
@@ -6805,6 +6810,7 @@
     ((lcm . ,args) (Expr (desugar-lcm (map Expr args))))
     ((max . ,args) (Expr (desugar-max (map Expr args))))
     ((min . ,args) (Expr (desugar-min (map Expr args))))
+    ((format . ,args) (Expr (desugar-format (map Expr args))))
 
     ;; 4. Dynamic & Multiple Values (Pass 029)
     ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))

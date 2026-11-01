@@ -351,7 +351,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | **SRFI 18 / 226**| Multithreading & Control (スレッド並行処理) | **×** | - | シングルスレッドモデル |
 | **SRFI 26** | Notation for Specializing Parameters (`cut`, `cute`) | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | 部分適用マクロ展開器で動作 |
 | **SRFI 27** | Sources of Random Bits (擬似乱数生成器) | **×** | - | 未実装 |
-| **SRFI 28** | Basic Format Strings (基本文字列フォーマット) | **△** | [ulisp/lib/printer.scm](../lib/printer.scm) | `display` / `write` の連続出力で代用 |
+| **SRFI 28** | Basic Format Strings (基本文字列フォーマット) | **◎** | [ulisp/lib/format.scm](../lib/format.scm)<br>[ulisp/lib/srfi/28.sld](../lib/srfi/28.sld)<br>[Pass 030](../frontend/030_desugar.scm) | 基本フォーマット文字列 API 完全準拠。`~a`/`~A` (display), `~s`/`~S` (write), `~%` (newline), `~~` (チルダ文字)。静的脱糖インライン展開および `case-lambda` による第一級オブジェクト・引数過不足厳格検証 ([Issue #654](../../docs/issues/closed/654-implement-srfi-28-basic-format-string.md)) |
 | **SRFI 45** | Primitives for Expressing Iterative Lazy Algorithms | **◎** | [ulisp/lib/promise.scm](../lib/promise.scm) | `delay`, `force`, `delay-force`, `make-promise` 完全準拠 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
 | **SRFI 48** | Intermediate Format Strings (中級フォーマット) | **×** | - | 未実装 |
 | **SRFI 60** | Integers as Bits (整数ビット表現・操作) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 62-bit Fixnum ビットマスク演算プリミティブ群 |
