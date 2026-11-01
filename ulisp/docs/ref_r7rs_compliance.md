@@ -139,7 +139,7 @@
 | **6.4** | `cons`, `car`, `cdr` | **◎** | [Pass 060](../frontend/060_lvn.scm)<br>[Pass 130](../lir/130_lir.scm) | ペア生成・要素取得、LVN / 純粋アクセサ最適化 |
 | **6.4** | `set-car!`, `set-cdr!` | **◎** | [ulisp/lib/gc.scm](../lib/gc.scm) | 破壊的代入、世代別 GC ライトバリア・リメンバーセット記録 |
 | **6.4** | `caar`, `cadr`, `cdar`, `cddr`, `caddr`, `cdddr`, `cadddr` | **◎** | [Pass 030](../frontend/030_desugar.scm) | リスト短縮アクセサ |
-| **6.4** | `list?`, `list`, `length`, `reverse`, `append` | **◎** | [ulisp/lib/predicates.scm](../lib/predicates.scm)<br>[ulisp/lib/string.scm](../lib/string.scm) | 基本リスト操作 |
+| **6.4** | `list?`, `list`, `length`, `reverse`, `append` | **◎** | [ulisp/lib/list.scm](../lib/list.scm)<br>[ulisp/lib/predicates.scm](../lib/predicates.scm) | 基本リスト操作 (length, reverse, append 完備) |
 | **6.4** | `memq`, `memv`, `member` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 要素探索 |
 | **6.4** | `assq`, `assv`, `assoc` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 連想リストキー探索 |
 | **6.4** | `make-list`, `list-copy` | **◎** | [ulisp/lib/list.scm](../lib/list.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 浅いスパイン複製・充填生成 ([Issue #551](../../docs/issues/closed/551-expand-r7rs-standard-library-procedures.md)) |
@@ -304,7 +304,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 
 | 仕様番号 (SRFI) | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・代替手段 |
 | :--- | :--- | :---: | :--- | :--- |
-| **SRFI 1** | Lists (高機能リスト処理: `fold`, `unfold`, `filter`, `take`, `drop` 等) | **△** | [ulisp/lib/list.scm](../lib/list.scm) | 基本関数（`append`, `reverse`, `length`, `memq`, `assq`）のみ。高階畳み込み系は未提供 |
+| **SRFI 1** | Lists (高機能リスト処理: `fold`, `unfold`, `filter`, `take`, `drop` 等) | **◎** | [ulisp/lib/list.scm](../lib/list.scm)<br>[ulisp/lib/srfi/1.sld](../lib/srfi/1.sld)<br>[ulisp/lib/scheme/list.sld](../lib/scheme/list.sld) | Constructors, Predicates, Selectors, Fold/Unfold, Searching/Filtering, Alist 操作を完全実装・TCO 最適化済 ([Issue #648](../../docs/issues/closed/648-implement-srfi-1-higher-order-list-procedures.md)) |
 | **SRFI 9** | Records (`define-record-type`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 完全サポート ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md)) |
 | **SRFI 11** | Syntax for multiple values (`let-values`, `let*-values`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 完全サポート ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
 | **SRFI 39** | Parameter objects (`make-parameter`, `parameterize`) | **◎** | [ulisp/lib/parameter.scm](../lib/parameter.scm) | 完全サポート ([Issue #537](../../docs/issues/closed/537-implement-r7rs-parameters-and-parameterize.md)) |
@@ -441,6 +441,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #560](../../docs/issues/closed/560-implement-r7rs-define-values-syntax.md): `define-values` (多値定義構文)
    - [Issue #592](../../docs/issues/592-implement-r7rs-internal-definition-desugaring.md): 内部定義（内部 define / 相互再帰）の脱糖
    - [Issue #647](../../docs/issues/closed/647-implement-r7rs-syntax-error-syntax.md): `syntax-error` (マクロ構文エラー報告構文)
+   - [Issue #648](../../docs/issues/closed/648-implement-srfi-1-higher-order-list-procedures.md): SRFI 1 高階リスト操作手続き群 (`fold`, `filter`, `iota`, `partition`, `any`, `every` 等) の完全実装
 4. **アーキテクチャ特性に基づく設計トレードオフ**:
    - `eval`, `load`, `repl` などの動的実行系は、AOT コンパイラのバイナリ独立性・フットプリント最小化を優先して意図的に除外。
    - 数値塔（Number Tower）は 62-bit 即値 Fixnum（下位 2-bit `00b` タグ）を基本とし、加減算のゼロオーバーヘッド化と高速実行を優先。
