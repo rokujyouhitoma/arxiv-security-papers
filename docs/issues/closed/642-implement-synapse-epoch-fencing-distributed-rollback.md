@@ -2,7 +2,7 @@
 ID: 642
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] 世代管理型投機タスク破棄および待機タスク世代ゲート検証の実装 (ID: 642)
@@ -171,3 +171,69 @@ Target Branch: `feat/642-speculative-cancellation`
    - `make -C ulisp lint_sexpr`: 括弧整合性 PASS。
    - 全並行性ランタイム（`test_arena`, `test_atomic`, `test_queue`, `test_channel`, `test_boundary`, `test_context_switch`, `test_scheduler`, `test_preemption`, 全パス）との一括回帰テスト PASS。
    - 相対パスリンク 100% 準拠（絶対パス 0 件）。
+
+---
+
+## 8. 検証結果 / Verification Results
+
+本機能の実装完了に伴い、AOT ネイティブコンパイル環境（`bin/ulisp-boot`）における厳格な単体・結合テストスイートおよび全並行性回帰テストを実施した。
+
+### 8.1 単体および結合テスト検証 (`test_epoch.scm`)
+
+- **実行コマンド**: `make -C ulisp test_epoch`
+- **結果**: **43 passed, 0 failed (100% PASS)**
+
+| グループ | 検証内容 | アサーション数 | 結果 |
+| :--- | :--- | :---: | :---: |
+| **Group 1** | 世代カウンタ・アトミック更新・境界値防護（CWE-190） | 8 | PASS |
+| **Group 2** | タスクへの Epoch 不変バインド＆レジストリ登録・解除 | 5 | PASS |
+| **Group 3** | ロールバック時の命令バジェットゼロ化・$O(1)$ アリーナリセット | 15 | PASS |
+| **Group 4** | 待機タスク世代ゲート検証（Generation Gate・CWE-362 防護） | 8 | PASS |
+| **Group 5** | 第 1 級継続（`call/cc`）チェックポイント連携バックトラック | 4 | PASS |
+| **Group 6** | 10,000 タスク一括ロールバック耐久ストレス＆テレメトリ整合性 | 3 | PASS |
+| **合計** | **全項目 PASS (0 失敗)** | **43** | **PASS** |
+
+### 8.2 全並行性ランタイム＆Nanopass 回帰テスト検証
+
+`make -C ulisp` において既存の全並行性・コンパイラパスと一括回帰テストを実施し、全件 100% PASS を確認。
+
+```text
+[PASS] S-expression parenthesis check passed for 114 file(s) (all balanced).
+[PASS] test_arena: ALL PROCESS-LOCAL EPHEMERAL ARENA TESTS PASSED!
+[PASS] test_atomic: Atomic Primitives Test Summary: 50 passed, 0 failed.
+[PASS] test_queue: Michael-Scott Queue Test Summary: 102 passed, 0 failed.
+[PASS] test_channel: Linear Ownership Channel Test Summary: 107 passed, 0 failed.
+[PASS] test_boundary: Boundary Sanitizer Test Summary: 33 passed, 0 failed.
+[PASS] test_epoch: Epoch Fencing & Rollback Test Summary: 43 passed, 0 failed.
+[PASS] test_context_switch: Native Context Switch Test Summary: 61 passed, 0 failed.
+[PASS] test_scheduler: Work-Stealing Scheduler Test Summary: 102 passed, 0 failed.
+[PASS] test_preemption: Preemption & Reduction Safepoint Test Summary: 77 passed, 0 failed.
+[PASS] test_pass_split_planes: 35 / 35 assertions passed.
+[PASS] test_pass_check_affine: 35 / 35 assertions passed.
+[PASS] test_pass_fbip: 23 / 23 assertions passed.
+[PASS] test_pass_inject_safepoints: 28 / 28 assertions passed.
+```
+
+### 8.3 静的解析およびリポジトリ品質ゲート検証
+
+- `make py_compile`: 全 Python ソース構文検証 PASS（構文エラー 0 件）
+- `make static_analysis`: Radon / Xenon / Mypy 厳格検証 PASS（`Success: no issues found in 617 source files`）
+- `scripts/lint_sexpr.py`: 全 114 ファイル S 式括弧整合性 PASS
+- 相対パス検証: 全変更ファイルにおける絶対パス 0 件検出
+
+---
+
+## 9. 結論 / Conclusion
+
+[DSN-37](../../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md) Phase 4 Task 4.2 で定義された **世代管理型投機タスク破棄および待機タスク世代ゲート検証（Generation Gate）** の設計・実装・テストが完了した。
+
+1. **コントロールプレーン連携型投機タスク破棄**:
+   - `epoch-current`, `epoch-advance!`, `epoch-rollback-to!` により、不要となった旧世代の並列タスク群の命令バジェットをアトミックにゼロ化し、次期セーフポイントでの即時停止を実現した。
+   - アボートされたタスクが専有するエフェメラルアリーナ（`<task-arena>`）は $O(1)$ 瞬時解放され、メモリリークゼロを保証。
+2. **待機タスク Generation Gate 保護**:
+   - チャネル待機（`TASK_WAITING_CHANNEL`）中のタスクがロールバック後に起床した際、無効化世代のタスクを自動検知して安全に `'terminated` へ強制遷移。
+   - 新世代チャネルに流入したメッセージの不正消費・データ汚染（CWE-362）を完全に排除。
+3. **第 1 級継続（`call/cc`）連携**:
+   - `epoch-checkpoint` により、探索木の枝刈り・バックトラックと世代ロールバックを不可分に結合。
+
+これにより、DSN-37 Phase 4（ホスト・カーネル境界 ＆ 世代管理型投機タスク破棄）の全タスクが完了し、次期マイルストーンである Phase 5（10 万並行ワークロードベンチマーク #643）への移行基盤が完全に整った。本 Issue を完了（Closed）とする。
