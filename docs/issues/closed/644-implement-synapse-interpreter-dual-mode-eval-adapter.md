@@ -2,7 +2,7 @@
 ID: 644
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] インタプリタ向け Dual-Mode 評価アダプタ (eval_adapter.scm) の実装 (ID: 644)

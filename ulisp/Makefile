@@ -112,7 +112,7 @@ build/compiler_passes.scm: $(PASSES_LIB)
 	cat $^ > $@
 
 lint_sexpr:
-	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
+	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm runtime/concurrency/eval_adapter.scm lib/ulisp/concurrency/eval_adapter.sld $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
 
 test_lint_sexpr:
 	@$(PYTHON) tests/test_lint_sexpr.py
@@ -316,6 +316,14 @@ test_preemption: $(COMPILER_DEP) build/context.o
 	$(AS) $(ASFLAGS) build/test_preemption.s -o build/test_preemption.o
 	$(LD) $(LDFLAGS) build/test_preemption.o build/context.o -o build/test_preemption
 	./build/test_preemption < /dev/null
+
+test_eval_adapter: $(COMPILER_DEP) build/context.o
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm > build/test_eval_adapter_input.scm
+	$(ULISP_COMPILER) build/test_eval_adapter_input.scm > build/test_eval_adapter.s
+	$(AS) $(ASFLAGS) build/test_eval_adapter.s -o build/test_eval_adapter.o
+	$(LD) $(LDFLAGS) build/test_eval_adapter.o build/context.o -o build/test_eval_adapter
+	./build/test_eval_adapter < /dev/null
 
 bench_microtasks: $(COMPILER_DEP) build/context.o
 	@mkdir -p build
@@ -1027,7 +1035,7 @@ test_gc_stats: compiler
 	@echo "=== Running Runtime GC Statistics Tests (Issue #622) ==="
 	bash tests/test_gc_stats.sh
 
-test: test_lint_sexpr test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inject_safepoints test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_preemption test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
+test: test_lint_sexpr test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inject_safepoints test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_preemption test_eval_adapter test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log
