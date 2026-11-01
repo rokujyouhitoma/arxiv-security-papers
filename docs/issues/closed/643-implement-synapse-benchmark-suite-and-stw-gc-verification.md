@@ -2,7 +2,7 @@
 ID: 643
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] 10 万並行マイクロタスク耐久ベンチマークおよび STW-GC ゼロ検証スイートの実装 (ID: 643)

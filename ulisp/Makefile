@@ -112,7 +112,7 @@ build/compiler_passes.scm: $(PASSES_LIB)
 	cat $^ > $@
 
 lint_sexpr:
-	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm
+	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
 
 test_lint_sexpr:
 	@$(PYTHON) tests/test_lint_sexpr.py
@@ -316,6 +316,24 @@ test_preemption: $(COMPILER_DEP) build/context.o
 	$(AS) $(ASFLAGS) build/test_preemption.s -o build/test_preemption.o
 	$(LD) $(LDFLAGS) build/test_preemption.o build/context.o -o build/test_preemption
 	./build/test_preemption < /dev/null
+
+bench_microtasks: $(COMPILER_DEP) build/context.o
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm > build/bench_microtasks_input.scm
+	$(ULISP_COMPILER) build/bench_microtasks_input.scm > build/bench_microtasks.s
+	$(AS) $(ASFLAGS) build/bench_microtasks.s -o build/bench_microtasks.o
+	$(LD) $(LDFLAGS) build/bench_microtasks.o build/context.o -o build/bench_microtasks
+	./build/bench_microtasks < /dev/null
+
+bench_latency_under_gc: $(COMPILER_DEP) build/context.o
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm > build/bench_latency_under_gc_input.scm
+	$(ULISP_COMPILER) build/bench_latency_under_gc_input.scm > build/bench_latency_under_gc.s
+	$(AS) $(ASFLAGS) build/bench_latency_under_gc.s -o build/bench_latency_under_gc.o
+	$(LD) $(LDFLAGS) build/bench_latency_under_gc.o build/context.o -o build/bench_latency_under_gc
+	./build/bench_latency_under_gc < /dev/null
+
+bench_concurrency: bench_microtasks bench_latency_under_gc
 
 test_lvn: build/compiler_passes.scm
 	@mkdir -p build
