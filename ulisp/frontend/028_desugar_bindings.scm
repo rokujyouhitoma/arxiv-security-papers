@@ -16,6 +16,9 @@
       (list 'let (list (car bindings))
             (desugar-let* (cdr bindings) bodies))))
 
+(define (desugar-letrec* bindings bodies)
+  (list 'letrec bindings (make-body-expr bodies)))
+
 (define (desugar-named-let expr)
   (let* ((name (cadr expr))
          (bindings (caddr expr))
@@ -229,6 +232,8 @@
   (Expr : Expr (ir) -> Expr ()
     ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
+    ((letrec* ,bindings . ,bodies) (guard (list? bindings))
+     (Expr (desugar-letrec* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
     ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))

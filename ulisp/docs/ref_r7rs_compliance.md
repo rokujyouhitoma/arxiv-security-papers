@@ -50,7 +50,7 @@
 | **4.2.2** | 名前付き let (Named let) | `(let <variable> (<binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 局所末尾再帰ループ `letrec` に脱糖 |
 | **4.2.2** | 直列束縛 | `(let* (<binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | ネストした `let` に脱糖 |
 | **4.2.2** | 相互再帰束縛 | `(letrec (<binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm)<br>[Pass 110](../frontend/110_closure_convert.scm) | 相互再帰クロージャ束縛 |
-| **4.2.2** | 評価順序保証相互再帰 | `(letrec* (<binding> ...) <body>)` | **△** | [Pass 030](../frontend/030_desugar.scm) | `letrec` と同等として処理 |
+| **4.2.2** | 評価順序保証相互再帰 | `(letrec* (<binding> ...) <body>)` | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 左から右への厳密評価・相互再帰脱糖 ([Issue #650](../../docs/issues/closed/650-implement-r7rs-letrec-star-evaluation-order.md)) |
 | **4.2.2** | 多値束縛 | `(let-values (<mv-binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `call-with-values` に脱糖 ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
 | **4.2.2** | 直列多値束縛 | `(let*-values (<mv-binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | ネストした `let-values` に脱糖 ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
 | **4.2.3** | 順序実行 (Sequencing) | `(begin <expression1> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm)<br>[Pass 070](../frontend/070_anf.scm) | 直列実行ブロック |

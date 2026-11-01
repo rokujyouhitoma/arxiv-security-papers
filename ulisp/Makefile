@@ -621,6 +621,14 @@ test_hashtable: $(COMPILER_DEP)
 	$(LD) $(LDFLAGS) build/test_hashtable.o -o build/test_hashtable
 	./build/test_hashtable
 
+test_letrec_star: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_letrec_star.scm > build/test_letrec_star_input.scm
+	$(ULISP_COMPILER) build/test_letrec_star_input.scm > build/test_letrec_star.s
+	$(AS) $(ASFLAGS) build/test_letrec_star.s -o build/test_letrec_star.o
+	$(LD) $(LDFLAGS) build/test_letrec_star.o -o build/test_letrec_star
+	./build/test_letrec_star
+
 test_char: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_char.scm > build/test_char_input.scm
@@ -1061,7 +1069,7 @@ test_gc_stats: compiler
 	@echo "=== Running Runtime GC Statistics Tests (Issue #622) ==="
 	bash tests/test_gc_stats.sh
 
-test: test_lint_sexpr test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inject_safepoints test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
+test: test_lint_sexpr test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inject_safepoints test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log

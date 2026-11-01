@@ -343,7 +343,7 @@
                                                         (var-escapes? var (caddr other-val))
                                                         (if (binding-lambda? other-val)
                                                             (var-escapes? var (caddr other-val))
-                                                            (occurs-in? var other-val))))
+                                                            (var-escapes? var other-val))))
                                                   (loop (cdr bs))))))))
                          (if esc?
                              #f
@@ -396,8 +396,12 @@
           ;; Mixed or escaping path: standard closure conversion for non-known bindings
           (let* ((outer-var-map
                   (let loop ((rvs rec-vars) (acc base-outer-var-map))
-                    (if (null? rvs) acc
-                        (loop (cdr rvs) (cons (cons (car rvs) (car rvs)) acc)))))
+                    (cond
+                      ((null? rvs) acc)
+                      ((assq (car rvs) known-env-entries)
+                       (loop (cdr rvs) acc))
+                      (else
+                       (loop (cdr rvs) (cons (cons (car rvs) (car rvs)) acc))))))
                  (processed-bindings
                   (map (lambda (b)
                          (let ((var (car b)) (val (cadr b)))

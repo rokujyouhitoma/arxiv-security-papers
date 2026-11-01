@@ -337,6 +337,8 @@
     ;; 2. Local Bindings (Pass 028)
     ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
+    ((letrec* ,bindings . ,bodies) (guard (list? bindings))
+     (Expr (desugar-letrec* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
     ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))

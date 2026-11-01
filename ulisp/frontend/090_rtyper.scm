@@ -552,7 +552,7 @@
                                              (typed-lbody (rtyper-expr-scoped lbody loop-raw-env inner-unboxed-fns))
                                              (raw-lbody (unbox-const-exit typed-lbody)))
                                         (list fn-name (list 'lambda params raw-lbody)))
-                                      (list fn-name (rtyper-expr-scoped fn-val raw-env inner-unboxed-fns)))))
+                                      (list fn-name (rtyper-expr-scoped fn-val raw-env ext-unboxed-fns)))))
                               bindings))
                         (new-body (rtyper-expr-scoped body raw-env ext-unboxed-fns)))
                    (list op new-bindings new-body))))

@@ -2608,6 +2608,7 @@
     (set! x e)
     (let ((x e1) ...) e ...)
     (letrec ((x e1) ...) e ...)
+    (letrec* ((x e1) ...) e ...)
     (let* ((x e1) ...) e ...)
     (do ((x e1 e2) ...) (e_test e_res ...) e_cmd ...)
     (cond (e1 e2) ... (else e_else))
@@ -2634,6 +2635,7 @@
     (- (cond (e1 e2) ... (else e_else)))
     (- (case key (dat e ...) ... (else e_else)))
     (- (let* ((x e1) ...) e ...))
+    (- (letrec* ((x e1) ...) e ...))
     (- (do ((x e1 e2) ...) (e_test e_res ...) e_cmd ...))
     (- (and e ...))
     (- (or e ...))
@@ -4112,7 +4114,7 @@
 ;;; -----------------------------------------------------------------------
 
 (define *scope-runtime-special-forms*
-  '(quote if begin set! lambda let letrec
+  '(quote if begin set! lambda let letrec letrec*
     %make-closure %make-closure-env %closure-ref %closure-set!
     %cont-fun %cont-call %with-handler %raw-call/cc %call-with-values
     %values %program define define-values define-record-type))
@@ -5216,7 +5218,7 @@
 
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
-  (memq sym '(if begin lambda let let* letrec quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
+  (memq sym '(if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
               cond case and or when unless delay delay-force do case-lambda
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
@@ -5387,7 +5389,7 @@
                (collect-template-binders body pat-vars literals))))
     ;; (let ((<var> <init>) ...) <body> ...)
     ;; or named let: (let <name> ((<var> <init>) ...) <body> ...)
-    ((and (memq (car tmpl) '(let let* letrec)) (pair? (cdr tmpl)))
+    ((and (memq (car tmpl) '(let let* letrec letrec*)) (pair? (cdr tmpl)))
      (cond
        ;; named let: (let <name> ((<var> <init>) ...) ...)
        ((and (eq? (car tmpl) 'let) (symbol? (cadr tmpl)) (pair? (cddr tmpl)))
@@ -5617,7 +5619,8 @@
        expanded)
       ((or (eq? (car expanded) (quote let))
            (eq? (car expanded) (quote let*))
-           (eq? (car expanded) (quote letrec)))
+           (eq? (car expanded) (quote letrec))
+           (eq? (car expanded) (quote letrec*)))
        (if (and (pair? (cdr expanded)) (symbol? (cadr expanded)))
            (if (and (pair? (cddr expanded)) (pair? (cdddr expanded)))
                (cons (car expanded)
@@ -6054,6 +6057,9 @@
       (list 'let (list (car bindings))
             (desugar-let* (cdr bindings) bodies))))
 
+(define (desugar-letrec* bindings bodies)
+  (list 'letrec bindings (make-body-expr bodies)))
+
 (define (desugar-named-let expr)
   (let* ((name (cadr expr))
          (bindings (caddr expr))
@@ -6267,6 +6273,8 @@
   (Expr : Expr (ir) -> Expr ()
     ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
+    ((letrec* ,bindings . ,bodies) (guard (list? bindings))
+     (Expr (desugar-letrec* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
     ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
@@ -6720,6 +6728,8 @@
     ;; 2. Local Bindings (Pass 028)
     ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))
     ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
+    ((letrec* ,bindings . ,bodies) (guard (list? bindings))
+     (Expr (desugar-letrec* bindings bodies)))
     ((let ,name ,bindings . ,bodies) (guard (symbol? name))
      (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
     ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
@@ -9309,7 +9319,7 @@
                                              (typed-lbody (rtyper-expr-scoped lbody loop-raw-env inner-unboxed-fns))
                                              (raw-lbody (unbox-const-exit typed-lbody)))
                                         (list fn-name (list 'lambda params raw-lbody)))
-                                      (list fn-name (rtyper-expr-scoped fn-val raw-env inner-unboxed-fns)))))
+                                      (list fn-name (rtyper-expr-scoped fn-val raw-env ext-unboxed-fns)))))
                               bindings))
                         (new-body (rtyper-expr-scoped body raw-env ext-unboxed-fns)))
                    (list op new-bindings new-body))))
@@ -9924,7 +9934,7 @@
                                                         (var-escapes? var (caddr other-val))
                                                         (if (binding-lambda? other-val)
                                                             (var-escapes? var (caddr other-val))
-                                                            (occurs-in? var other-val))))
+                                                            (var-escapes? var other-val))))
                                                   (loop (cdr bs))))))))
                          (if esc?
                              #f
@@ -9977,8 +9987,12 @@
           ;; Mixed or escaping path: standard closure conversion for non-known bindings
           (let* ((outer-var-map
                   (let loop ((rvs rec-vars) (acc base-outer-var-map))
-                    (if (null? rvs) acc
-                        (loop (cdr rvs) (cons (cons (car rvs) (car rvs)) acc)))))
+                    (cond
+                      ((null? rvs) acc)
+                      ((assq (car rvs) known-env-entries)
+                       (loop (cdr rvs) acc))
+                      (else
+                       (loop (cdr rvs) (cons (cons (car rvs) (car rvs)) acc))))))
                  (processed-bindings
                   (map (lambda (b)
                          (let ((var (car b)) (val (cadr b)))

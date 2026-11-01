@@ -111,7 +111,7 @@
 ;;; -----------------------------------------------------------------------
 
 (define *scope-runtime-special-forms*
-  '(quote if begin set! lambda let letrec
+  '(quote if begin set! lambda let letrec letrec*
     %make-closure %make-closure-env %closure-ref %closure-set!
     %cont-fun %cont-call %with-handler %raw-call/cc %call-with-values
     %values %program define define-values define-record-type))

@@ -23,7 +23,7 @@
 
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
-  (memq sym '(if begin lambda let let* letrec quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
+  (memq sym '(if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
               cond case and or when unless delay delay-force do case-lambda
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
@@ -194,7 +194,7 @@
                (collect-template-binders body pat-vars literals))))
     ;; (let ((<var> <init>) ...) <body> ...)
     ;; or named let: (let <name> ((<var> <init>) ...) <body> ...)
-    ((and (memq (car tmpl) '(let let* letrec)) (pair? (cdr tmpl)))
+    ((and (memq (car tmpl) '(let let* letrec letrec*)) (pair? (cdr tmpl)))
      (cond
        ;; named let: (let <name> ((<var> <init>) ...) ...)
        ((and (eq? (car tmpl) 'let) (symbol? (cadr tmpl)) (pair? (cddr tmpl)))
@@ -424,7 +424,8 @@
        expanded)
       ((or (eq? (car expanded) (quote let))
            (eq? (car expanded) (quote let*))
-           (eq? (car expanded) (quote letrec)))
+           (eq? (car expanded) (quote letrec))
+           (eq? (car expanded) (quote letrec*)))
        (if (and (pair? (cdr expanded)) (symbol? (cadr expanded)))
            (if (and (pair? (cddr expanded)) (pair? (cdddr expanded)))
                (cons (car expanded)

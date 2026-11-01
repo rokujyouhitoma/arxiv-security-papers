@@ -127,6 +127,20 @@
 (let ((res (desugar-bindings '(case-lambda ((x) x) ((x y) (+ x y))))))
   (assert-equal "desugar-bindings on case-lambda produces lambda" 'lambda (car res)))
 
+;; 17. desugar-letrec* empty and bindings
+(let ((res (desugar-letrec* '((x 1) (y (+ x 2))) '((+ x y)))))
+  (assert-equal "desugar-letrec* wraps in letrec" 'letrec (car res))
+  (assert-equal "desugar-letrec* bindings count" 2 (length (cadr res))))
+
+;; 18. desugar-bindings on letrec*
+(let ((res (desugar-bindings '(letrec* ((x 1) (y (+ x 2))) (+ x y)))))
+  (assert-equal "desugar-bindings on letrec* expands to letrec" 'letrec (car res)))
+
+(let ((res (desugar-bindings '(letrec* ((even? (lambda (n) (if (= n 0) #t (odd? (- n 1)))))
+                                       (odd?  (lambda (n) (if (= n 0) #f (even? (- n 1))))))
+                                (even? 10)))))
+  (assert-equal "desugar-bindings on letrec* mutual procs is letrec" 'letrec (car res)))
+
 (display "=======================================================") (newline)
 (display " Pass 028: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)
