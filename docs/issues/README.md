@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **640** | Nanopass ループバックエッジ・プロローグ セーフポイント判定自動注入パス (inject-safepoints) の実装 | Feature | High | In Progress | [640-implement-nanopass-inject-fuel-checks-pass.md](640-implement-nanopass-inject-fuel-checks-pass.md) |
 | **641** | ホスト・カーネル境界サニタイザおよびディープコピー機構の実装 | Feature | High | New | [641-implement-synapse-boundary-sanitizer-and-deep-copy.md](641-implement-synapse-boundary-sanitizer-and-deep-copy.md) |
 | **642** | 世代管理型投機タスク破棄および待機タスク世代ゲート検証の実装 | Feature | High | New | [642-implement-synapse-epoch-fencing-distributed-rollback.md](642-implement-synapse-epoch-fencing-distributed-rollback.md) |
 | **643** | 10 万並行マイクロタスク耐久ベンチマークおよび STW-GC ゼロ検証スイートの実装 | Feature | High | New | [643-implement-synapse-benchmark-suite-and-stw-gc-verification.md](643-implement-synapse-benchmark-suite-and-stw-gc-verification.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **640** | Nanopass ループバックエッジ・プロローグ セーフポイント判定自動注入パス (inject-safepoints) の実装 | Feature | 2026-11-01 | [closed/640-implement-nanopass-inject-fuel-checks-pass.md](closed/640-implement-nanopass-inject-fuel-checks-pass.md) |
 | **639** | FBIP (Perceus) インプレース再利用最適化パス (fbip-inplace-transform) の実装 | Feature | 2026-11-01 | [closed/639-implement-nanopass-fbip-inplace-optimization.md](closed/639-implement-nanopass-fbip-inplace-optimization.md) |
 | **638** | アフィン線形所有権静的検査パス (check-affine-types) および自動 RAII Drop の実装 | Feature | 2026-11-01 | [closed/638-implement-nanopass-check-affine-types-and-raii-drop.md](closed/638-implement-nanopass-check-affine-types-and-raii-drop.md) |
 | **637** | Nanopass コンパイラへの動的パス注入機構 (Pass Injection) と Synapse プレーン分離パス (split-planes-pass) の実装 | Feature | 2026-11-01 | [closed/637-implement-nanopass-split-planes-pass.md](closed/637-implement-nanopass-split-planes-pass.md) |
