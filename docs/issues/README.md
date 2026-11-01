@@ -7,7 +7,7 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **655** | R7RS-large (SRFI 132 / 95) リストおよびベクタソート手続きの実装 | Feature | Medium | New | [655-implement-r7rs-list-and-vector-sort-procedures.md](655-implement-r7rs-list-and-vector-sort-procedures.md) |
+| **655** | R7RS-large (SRFI 132 / 95) リストおよびベクタソート手続きの実装 | Feature | Medium | Closed (Completed) | [655-implement-r7rs-list-and-vector-sort-procedures.md](closed/655-implement-r7rs-list-and-vector-sort-procedures.md) |
 | **656** | R7RS §6.13.3 循環参照・共有構造表記対応ライター (write-simple, write-shared) の実装 | Feature | Medium | New | [656-implement-r7rs-write-simple-and-write-shared.md](656-implement-r7rs-write-simple-and-write-shared.md) |
 
 ---

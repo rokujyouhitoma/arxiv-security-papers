@@ -92,7 +92,7 @@
     ((cdr)
      (emit-lir! '(%load %rax %rax 7)))
     ((pair? procedure?)
-     (emit-lir! '(%bit-and %rax 3))
+     (emit-lir! '(%bit-and %rax 7))
      (emit-lir! '(%cmp %rax 1))
      (emit-lir! '(%set-boolean %rax "sete")))
     ((string?)

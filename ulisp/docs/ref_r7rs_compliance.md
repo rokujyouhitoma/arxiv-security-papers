@@ -318,7 +318,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | **SRFI 125** | Intermediate Hash Tables (ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/125.sld](../lib/srfi/125.sld)<br>[ulisp/lib/scheme/hash-table.sld](../lib/scheme/hash-table.sld) | R7RS-large / SRFI 125 互換ハッシュテーブル。24-bit 決定論的素数モジュラス、動的リハッシュ、多値 pop!、述語・アクセサ・反復・比較完備 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
 | **SRFI 127** | Lazy Sequences (遅延リスト lseq) | **△** | [ulisp/lib/promise.scm](../lib/promise.scm) | SRFI-45 遅延評価プロミスにより構築可能 |
 | **SRFI 128** | Comparators (比較器) | **×** | - | 未実装 |
-| **SRFI 132** | Sort Libraries (ソート・マージアルゴリズム) | **×** | - | 未実装 |
+| **SRFI 132** | Sort Libraries (ソート・マージアルゴリズム) | **◎** | [ulisp/lib/sort.scm](../lib/sort.scm)<br>[ulisp/lib/srfi/132.sld](../lib/srfi/132.sld)<br>[ulisp/lib/scheme/sort.sld](../lib/scheme/sort.sld) | R7RS-large / SRFI 132 安定ソート・マージ完全準拠。`list-sort`, `list-sort!`, `vector-sort`, `vector-sort!`, `list-merge`, `vector-merge`, `list-sorted?`, `vector-sorted?` ([Issue #655](../../docs/issues/closed/655-implement-r7rs-list-and-vector-sort-procedures.md)) |
 | **SRFI 133** | Vectors (高機能ベクタ操作) | **◎** (準拠) | [ulisp/lib/vector.scm](../lib/vector.scm)<br>[Pass 030](../frontend/030_desugar.scm) | `vector-copy`, `vector-copy!`, `vector-append`, `vector-fill!`, `vector-map`, `vector-for-each` 等を網羅 |
 | **SRFI 134** | Immutable Deques (不変両端キュー) | **×** | - | 未実装 |
 | **SRFI 135** | Immutable Texts (不変テキスト) | **×** | - | 未実装 |
@@ -359,7 +359,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | **SRFI 69** | Basic Hash Tables (基本ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/69.sld](../lib/srfi/69.sld) | 基本ハッシュテーブル API 完全準拠。`make-hash-table`, `hash-table-ref/default`, `hash-table-walk` 等 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
 | **SRFI 88** | Keyword Objects (キーワードオブジェクト `:key`) | **×** | - | シンボルで代用 |
 | **SRFI 89** | Optional Positional and Named Parameters | **×** | - | 未実装 |
-| **SRFI 95** | Sorting and Merging (SLIB ソート・マージ) | **×** | - | 未実装 |
+| **SRFI 95** | Sorting and Merging (SLIB ソート・マージ) | **◎** | [ulisp/lib/sort.scm](../lib/sort.scm)<br>[ulisp/lib/srfi/95.sld](../lib/srfi/95.sld) | SLIB / SRFI 95 互換ソート・マージ API 完全準拠。`sort`, `sort!`, `sorted?`, `merge`, `merge!` ([Issue #655](../../docs/issues/closed/655-implement-r7rs-list-and-vector-sort-procedures.md)) |
 | **SRFI 115** | Scheme Regular Expressions (正規表現 SRE) | **×** | - | 未実装 |
 | **SRFI 145** | Assumptions (`assert`, `assume`) | **△** | [Pass 030](../frontend/030_desugar.scm) | `guard` / `raise` / `error` で代用可能 |
 | **SRFI 170** | POSIX API (低レベルシステムコール) | **◎** (一部) | [ulisp/lib/posix.scm](../lib/posix.scm) | `sys-read`, `sys-write`, `sys-mmap`, `sys-exit`, `%raw-syscall` を実装 |
