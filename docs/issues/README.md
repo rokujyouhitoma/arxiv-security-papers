@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **647** | R7RS §4.3.3 マクロ構文エラー報告構文 (syntax-error) の実装 | Feature | High | New | [647-implement-r7rs-syntax-error-syntax.md](647-implement-r7rs-syntax-error-syntax.md) |
 | **648** | R7RS-large (SRFI 1 Lists) 高階リスト操作手続き群の実装 | Feature | High | New | [648-implement-srfi-1-higher-order-list-procedures.md](648-implement-srfi-1-higher-order-list-procedures.md) |
 | **649** | R7RS-large (SRFI 69 / 125) 汎用ハッシュテーブル API の実装 | Feature | High | New | [649-implement-r7rs-hash-table-api.md](649-implement-r7rs-hash-table-api.md) |
 | **650** | R7RS §4.2.2 厳密な左から右への評価順序を保証する letrec* 構文の実装 | Feature | High | New | [650-implement-r7rs-letrec-star-evaluation-order.md](650-implement-r7rs-letrec-star-evaluation-order.md) |
@@ -23,6 +22,8 @@
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
+| :---: | --- | :--- | :---: | :---: |
+| **647** | R7RS §4.3.3 マクロ構文エラー報告構文 (syntax-error) の実装 | Feature | 2026-11-01 | [closed/647-implement-r7rs-syntax-error-syntax.md](closed/647-implement-r7rs-syntax-error-syntax.md) |
 | :---: | --- | :--- | :---: | :---: |
 | **645** | CI 向けマルチコア並行競合テストハーネス (concurrency_harness.scm) の実装 | Feature | 2026-11-01 | [closed/645-implement-synapse-multicore-concurrency-ci-harness.md](closed/645-implement-synapse-multicore-concurrency-ci-harness.md) |
 | **644** | インタプリタ向け Dual-Mode 評価アダプタ (eval_adapter.scm) の実装 | Feature | 2026-11-01 | [closed/644-implement-synapse-interpreter-dual-mode-eval-adapter.md](closed/644-implement-synapse-interpreter-dual-mode-eval-adapter.md) |
