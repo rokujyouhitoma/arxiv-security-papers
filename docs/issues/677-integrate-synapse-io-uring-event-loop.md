@@ -57,3 +57,4 @@ Target Branch: `feat/677-io-uring-event-loop`
 - [ ] I/O 完了時にタスクが自動起床し、データ送受信結果を正しく取得できること。
 - [ ] `make -C ulisp test_io_uring` が 100% PASS すること。
 - [ ] 相対パス規則（Gate 3）の完全適合（絶対パス 0 件）。
+

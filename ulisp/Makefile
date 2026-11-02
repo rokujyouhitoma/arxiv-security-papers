@@ -1,6 +1,6 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
-        test_split_link test_incremental lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inject_safepoints
+        test_split_link test_incremental lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inject_safepoints
 
 AS ?= as
 LD ?= ld
@@ -293,6 +293,10 @@ build/context.o: runtime/concurrency/context.s
 	@mkdir -p build
 	$(AS) $(ASFLAGS) runtime/concurrency/context.s -o build/context.o
 
+build/thread.o: runtime/concurrency/thread.s
+	@mkdir -p build
+	$(AS) $(ASFLAGS) runtime/concurrency/thread.s -o build/thread.o
+
 test_context_switch: $(COMPILER_DEP) build/context.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_context_switch.scm > build/test_context_switch_input.scm
@@ -301,13 +305,21 @@ test_context_switch: $(COMPILER_DEP) build/context.o
 	$(LD) $(LDFLAGS) build/test_context_switch.o build/context.o -o build/test_context_switch
 	./build/test_context_switch < /dev/null
 
-test_scheduler: $(COMPILER_DEP) build/context.o
+test_scheduler: $(COMPILER_DEP) build/context.o build/thread.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_scheduler.scm > build/test_scheduler_input.scm
 	$(ULISP_COMPILER) build/test_scheduler_input.scm > build/test_scheduler.s
 	$(AS) $(ASFLAGS) build/test_scheduler.s -o build/test_scheduler.o
-	$(LD) $(LDFLAGS) build/test_scheduler.o build/context.o -o build/test_scheduler
+	$(LD) $(LDFLAGS) build/test_scheduler.o build/context.o build/thread.o -o build/test_scheduler
 	./build/test_scheduler < /dev/null
+
+test_multithread_scheduler: $(COMPILER_DEP) build/context.o build/thread.o
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_multithread_scheduler.scm > build/test_multithread_scheduler_input.scm
+	$(ULISP_COMPILER) build/test_multithread_scheduler_input.scm > build/test_multithread_scheduler.s
+	$(AS) $(ASFLAGS) build/test_multithread_scheduler.s -o build/test_multithread_scheduler.o
+	$(LD) $(LDFLAGS) build/test_multithread_scheduler.o build/context.o build/thread.o -o build/test_multithread_scheduler
+	./build/test_multithread_scheduler < /dev/null
 
 test_preemption: $(COMPILER_DEP) build/context.o
 	@mkdir -p build
@@ -325,12 +337,12 @@ test_eval_adapter: $(COMPILER_DEP) build/context.o
 	$(LD) $(LDFLAGS) build/test_eval_adapter.o build/context.o -o build/test_eval_adapter
 	./build/test_eval_adapter < /dev/null
 
-test_concurrency_harness: $(COMPILER_DEP) build/context.o
+test_concurrency_harness: $(COMPILER_DEP) build/context.o build/thread.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm > build/test_concurrency_harness_input.scm
 	$(ULISP_COMPILER) build/test_concurrency_harness_input.scm > build/test_concurrency_harness.s
 	$(AS) $(ASFLAGS) build/test_concurrency_harness.s -o build/test_concurrency_harness.o
-	$(LD) $(LDFLAGS) build/test_concurrency_harness.o build/context.o -o build/test_concurrency_harness
+	$(LD) $(LDFLAGS) build/test_concurrency_harness.o build/context.o build/thread.o -o build/test_concurrency_harness
 	./build/test_concurrency_harness < /dev/null
 
 test_concurrency_ci: test_concurrency_harness

@@ -19,6 +19,7 @@
 (load "ulisp/runtime/concurrency/epoch.scm")
 (load "ulisp/runtime/concurrency/context.scm")
 (load "ulisp/runtime/concurrency/deque.scm")
+(load "ulisp/runtime/concurrency/thread.scm")
 (load "ulisp/runtime/concurrency/scheduler.scm")
 (load "ulisp/runtime/concurrency/preempt.scm")
 (load "ulisp/runtime/concurrency/eval_adapter.scm")

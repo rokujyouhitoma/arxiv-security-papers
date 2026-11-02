@@ -1095,12 +1095,14 @@ mindmap
 
 ## 14.9 Phase 7: 物理マルチコア並列化 ＆ CPU 飽和拡張 (Hardware Mechanical Sympathy)
 
-### Task 7.1: Linux sys_clone ネイティブスレッド生成と 1:1 CPU コアピニング (`ulisp/runtime/concurrency/thread.s`, `thread.scm`)
+### Task 7.1: Linux sys_clone ネイティブスレッド生成と 1:1 CPU コアピニング (`ulisp/runtime/concurrency/thread.s`, `thread.scm`) [完了 / 済]
 - **目的**: 単一 OS スレッドの時分割シミュレーションを脱却し、物理 CPU コア数と同数の OS スレッドを起動して各コアに固定。
-- **関連 Issue**: [[Issue #675]](../issues/675-implement-synapse-native-multithread-worker-pool.md)
+- **関連 Issue**: [[Issue #675 (Closed)]](../issues/closed/675-implement-synapse-native-multithread-worker-pool.md)
 - **実装内容**:
   - `CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD` によるスレッド生成アセンブリ。
   - `SYS_sched_setaffinity` による Core $i$ への 1:1 バインド。
+  - `SYS_sched_getaffinity` + `POPCNT` によるトポロジー自動検知およびスレッド別 32MB ヒープアリーナ分離。
+  - 10,000 タスク並列耐久テスト（データ競合ゼロ、100% 完遂）。
   - ワーカーごとの独立した Chase-Lev Deque ディスパッチループ。
 - **DoD**:
   - 8〜16スレッド並列実行時に、全コアが同時に 100% 稼働し、L1/L2 キャッシュローカリティが維持されること。

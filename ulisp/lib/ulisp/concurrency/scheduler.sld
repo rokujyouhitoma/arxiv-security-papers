@@ -41,6 +41,8 @@
     scheduler-worker-step!
     scheduler-execute-task!
     scheduler-run!
+    scheduler-run-parallel!
+    scheduler-start-native-workers!
     scheduler-stats
 
     ;; Channel wake integration
@@ -57,7 +59,8 @@
     (ulisp concurrency deque)
     (ulisp concurrency queue)
     (ulisp concurrency channel)
-    (ulisp concurrency context))
+    (ulisp concurrency context)
+    (ulisp concurrency thread))
 
   (include "../../../runtime/concurrency/scheduler.scm"))
 

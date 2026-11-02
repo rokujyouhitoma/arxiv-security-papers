@@ -420,3 +420,64 @@
               (cons 'tasks-completed (scheduler-tasks-completed sched))
               (cons 'global-queue-size (queue-size (scheduler-global-queue sched)))
               (cons 'workers worker-stats-list)))))
+
+;; -----------------------------------------------------------------------
+;; 8. Native Multithreading Engine (DSN-37 Section 7.4 & Issue #675)
+;; -----------------------------------------------------------------------
+
+(define (%scheduler-worker-native-loop sched worker-id)
+  (begin
+    ;; 1:1 CPU core pinning
+    (guard (exn (else #f))
+      (set-thread-affinity! worker-id))
+    (let loop ()
+      (if (scheduler-running? sched)
+          (let ((executed? (scheduler-worker-step! sched worker-id)))
+            (if (not executed?)
+                (%scheduler-idle-backoff!)
+                #f)
+            (loop))
+          #t))))
+
+(define (scheduler-start-native-workers! sched)
+  (if (not (work-stealing-scheduler? sched))
+      (error "scheduler-start-native-workers!: expected <work-stealing-scheduler>" sched)
+      (let* ((num-workers (scheduler-worker-count sched))
+             (tids-box (vector '())))
+        ;; Spawn workers 1 to num-workers - 1 as OS native threads
+        (let spawn-loop ((w 1))
+          (if (< w num-workers)
+              (let* ((worker-id w)
+                     (tid (spawn-native-thread
+                           (lambda (wid) (%scheduler-worker-native-loop sched wid))
+                           worker-id)))
+                (vector-set! tids-box 0 (cons tid (vector-ref tids-box 0)))
+                (spawn-loop (+ w 1)))
+              (reverse (vector-ref tids-box 0)))))))
+
+(define scheduler-run-parallel!
+  (case-lambda
+    ((sched)
+     (scheduler-run-parallel! sched *scheduler-max-tasks*))
+    ((sched max-tasks)
+     (if (not (work-stealing-scheduler? sched))
+         (error "scheduler-run-parallel!: expected <work-stealing-scheduler>" sched)
+         (let* ((num-workers (scheduler-worker-count sched)))
+           (if (<= num-workers 1)
+               ;; Fallback to single-thread run if worker count <= 1
+               (scheduler-run! sched max-tasks)
+               (let ((tids (scheduler-start-native-workers! sched)))
+                 ;; Worker 0 runs on the calling (main) thread
+                 (let main-loop ()
+                   (if (not (scheduler-running? sched))
+                       (scheduler-tasks-completed sched)
+                       (let* ((spawned (scheduler-tasks-spawned sched))
+                              (completed (scheduler-tasks-completed sched)))
+                         (if (or (>= completed max-tasks)
+                                 (and (>= completed spawned) (> spawned 0)))
+                             (begin
+                               (scheduler-stop! sched)
+                               completed)
+                             (begin
+                               (scheduler-worker-step! sched 0)
+                               (main-loop)))))))))))))

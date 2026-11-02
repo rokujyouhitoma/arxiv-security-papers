@@ -56,3 +56,4 @@ Target Branch: `feat/676-futex-park-unpark-primitives`
 - [ ] チャネル送信およびタスク投入時に休止中ワーカーが即座に起床すること。
 - [ ] `make -C ulisp test_futex` および既存並行テストが 100% PASS すること。
 - [ ] 相対パス規則（Gate 3）の完全適合（絶対パス 0 件）。
+
