@@ -1064,14 +1064,14 @@ mindmap
 - **DoD**:
   - 各再起動戦略がユニットテストで 100% 意図通り動作し、Crash Loop 時に安全に停止・エスカレーションすること。
 
-### Task 6.3: エフェメラルアリーナ O(1) 破棄と融合した Fail-Fast "Let It Crash" セマンティクス (`ulisp/runtime/concurrency/panic.scm`)
+### Task 6.3: エフェメラルアリーナ O(1) 破棄と融合した Fail-Fast "Let It Crash" セマンティクス (`ulisp/runtime/concurrency/panic.scm`) 【実装完了】
 - **目的**: 局所的な無理なエラー回復を排し、事前条件違反時の即時終了とクリーンな状態での再起動を保証。
-- **関連 Issue**: [[Issue #668]](../issues/668-implement-synapse-fail-fast-let-it-crash-semantics.md)
+- **関連 Issue**: [[Issue #668 (完了)]](../issues/closed/668-implement-synapse-fail-fast-let-it-crash-semantics.md)
 - **実装内容**:
   - `(synapse-panic! reason)` 脱出プリミティブとスタック巻き戻し。
   - パニック発生時のアリーナバンプポインタ $O(1)$ 即時リセットおよび線形チャネル Drop（RAII 保証）。
 - **DoD**:
-  - パニック時に他タスクのヒープ/スタックを一切汚染せず、メモリリーク 0 で新品の再起動が行われること。
+  - パニック時に他タスクのヒープ/スタックを一切汚染せず、メモリリーク 0 で新品の再起動が行われること（全 56 テスト PASS 達成済み）。
 
 ### Task 6.4: 動的タスク再起動を透過化するプロセス名レジストリ (`ulisp/runtime/concurrency/registry.scm`)
 - **目的**: タスク再起動に伴う Task ID / チャネルアドレス変更をクライアント側に対して透過化。

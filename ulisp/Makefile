@@ -329,6 +329,14 @@ test_links_monitors: $(COMPILER_DEP) build/context.o build/thread.o
 	$(LD) $(LDFLAGS) build/test_links_monitors.o build/context.o build/thread.o -o build/test_links_monitors
 	./build/test_links_monitors < /dev/null
 
+test_let_it_crash: $(COMPILER_DEP) build/context.o build/thread.o
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_let_it_crash.scm > build/test_let_it_crash_input.scm
+	$(ULISP_COMPILER) build/test_let_it_crash_input.scm > build/test_let_it_crash.s
+	$(AS) $(ASFLAGS) build/test_let_it_crash.s -o build/test_let_it_crash.o
+	$(LD) $(LDFLAGS) build/test_let_it_crash.o build/context.o build/thread.o -o build/test_let_it_crash
+	./build/test_let_it_crash < /dev/null
+
 test_preemption: $(COMPILER_DEP) build/context.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_preemption.scm > build/test_preemption_input.scm

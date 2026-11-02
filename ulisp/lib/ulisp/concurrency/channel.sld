@@ -47,6 +47,7 @@
     task-steals-count-set!
     task-has-handoff?
     task-handoff-box
+    task-handoff
     task-set-handoff!
     task-take-handoff!
     task-links-box
@@ -63,6 +64,12 @@
     task-register-channel!
     task-unregister-channel!
     task-poison-owned-channels!
+    task-arena-box
+    task-arena
+    task-set-arena!
+    task-escape-k-box
+    task-escape-continuation
+    task-set-escape-continuation!
 
     ;; <channel-waiter> Record
     <channel-waiter>

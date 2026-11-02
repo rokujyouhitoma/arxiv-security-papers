@@ -16,7 +16,6 @@
 | **664** | R7RS-large / SRFI 145 Assumptions 表明構文 (assume / assert) の実装 | Feature | Medium | New | [664-implement-srfi-145-assumptions.md](664-implement-srfi-145-assumptions.md) |
 | **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | High | New | [665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
 | **667** | Erlang/OTP 型スーパービジョンツリー (Supervision Tree) と再起動戦略 (one-for-one / all / rest) の実装 | Feature | High | New | [667-implement-synapse-supervision-tree-and-restart-strategies.md](667-implement-synapse-supervision-tree-and-restart-strategies.md) |
-| **668** | エフェメラルアリーナ O(1) 即時破棄と融合した Fail-Fast "Let It Crash" セマンティクスおよびパニック機構の確立 | Feature | Medium | New | [668-implement-synapse-fail-fast-let-it-crash-semantics.md](668-implement-synapse-fail-fast-let-it-crash-semantics.md) |
 | **669** | 動的タスク再起動を透過化する Synapse プロセス名レジストリ (Registry) と透過的チャネル再バインド機構の実装 | Feature | Medium | New | [669-implement-synapse-process-registry-and-dynamic-rebinding.md](669-implement-synapse-process-registry-and-dynamic-rebinding.md) |
 | **670** | 構造化クラッシュレポート (SASL 相当) 生成と Layer 1 コントロールプレーン非同期転送・可観測性基盤の実装 | Feature | Medium | New | [670-implement-synapse-structured-crash-reporting-and-observability.md](670-implement-synapse-structured-crash-reporting-and-observability.md) |
 | **676** | Linux SYS_futex に基づくワーカー待機 (Park) およびチャネル起床 (Unpark) による省電力・低遅延同期機構の実装 | Feature | High | New | [676-implement-synapse-futex-park-unpark-primitives.md](676-implement-synapse-futex-park-unpark-primitives.md) |
@@ -28,6 +27,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **668** | エフェメラルアリーナ O(1) 即時破棄と融合した Fail-Fast "Let It Crash" セマンティクスおよびパニック機構の確立 | Feature | 2026-11-02 | [closed/668-implement-synapse-fail-fast-let-it-crash-semantics.md](closed/668-implement-synapse-fail-fast-let-it-crash-semantics.md) |
 | **666** | Synapse タスク間双方向リンク (link)・単方向監視 (monitor) およびチャネル毒化防止機構の実装 | Feature | 2026-11-02 | [closed/666-implement-synapse-task-links-and-monitors.md](closed/666-implement-synapse-task-links-and-monitors.md) |
 | **675** | Linux sys_clone ネイティブスレッド生成と CPU コアピニング (sched_setaffinity) による物理マルチコア並列実行エンジンの実装 | Feature | 2026-11-02 | [closed/675-implement-synapse-native-multithread-worker-pool.md](closed/675-implement-synapse-native-multithread-worker-pool.md) |
 | **674** | スケジューラ統計カウンタのアトミック化による並行終了判定の不整合・ハング防止 | Bug | 2026-11-02 | [closed/674-fix-synapse-scheduler-stats-atomic-counters.md](closed/674-fix-synapse-scheduler-stats-atomic-counters.md) |

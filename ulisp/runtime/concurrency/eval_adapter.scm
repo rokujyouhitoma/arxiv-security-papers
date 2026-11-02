@@ -143,9 +143,9 @@
     ((not obj) #f)
     ((task-arena? obj) obj)
     ((task-context? obj)
-     (let ((tgt (task-target-obj obj)))
-       (if (task-arena? tgt)
-           tgt
+     (let ((a (task-arena obj)))
+       (if (and a (task-arena? a))
+           a
            #f)))
     ((budgeted-task? obj)
      (let ((tgt (task-target-obj obj)))
@@ -486,5 +486,15 @@
       (eval-env-bind! env 'task-reductions task-reductions)
       (eval-env-bind! env 'task-exhausted? task-exhausted?)
       (eval-env-bind! env 'scheduler-yield! scheduler-yield!)
+      ;; Fault Tolerance & Let-It-Crash (#668)
+      (eval-env-bind! env 'synapse-panic! synapse-panic!)
+      (eval-env-bind! env 'synapse-secure-panic! synapse-secure-panic!)
+      (eval-env-bind! env 'synapse-assert-true! synapse-assert-true!)
+      (eval-env-bind! env 'with-synapse-task-boundary with-synapse-task-boundary)
+      (eval-env-bind! env 'current-synapse-task current-synapse-task)
+      (eval-env-bind! env 'task-link! task-link!)
+      (eval-env-bind! env 'task-unlink! task-unlink!)
+      (eval-env-bind! env 'task-monitor task-monitor)
+      (eval-env-bind! env 'task-demonitor task-demonitor)
       env)))
 

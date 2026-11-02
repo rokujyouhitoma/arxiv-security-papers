@@ -50,7 +50,8 @@
                       arena-base arena-offset arena-capacity
                       blocked-on epoch next-run
                       reduction-exhaustions steals-count handoff-box
-                      links-box monitors-box monitored-by-box trap-exit-box owned-channels-box)
+                      links-box monitors-box monitored-by-box trap-exit-box owned-channels-box
+                      arena-box escape-k-box)
   task-context?
   (tid                   %task-tid)
   (state                 %task-state                 %task-state-set!)
@@ -70,7 +71,9 @@
   (monitors-box          %task-monitors-box)
   (monitored-by-box      %task-monitored-by-box)
   (trap-exit-box         %task-trap-exit-box)
-  (owned-channels-box    %task-owned-channels-box))
+  (owned-channels-box    %task-owned-channels-box)
+  (arena-box             %task-arena-box)
+  (escape-k-box          %task-escape-k-box))
 
 ;; -----------------------------------------------------------------------
 ;; Global Monotonically Increasing Atomic Task ID Allocator (#673)
@@ -97,19 +100,22 @@
                            0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
                            (make-atomic-box '()) (make-atomic-box '())
                            (make-atomic-box '()) (make-atomic-box #f)
-                           (make-atomic-box '()))))
+                           (make-atomic-box '())
+                           (make-atomic-box #f) (make-atomic-box #f))))
     ((tid)
      (%make-task-context tid 'ready *task-default-reductions* 0 0
                          0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
                          (make-atomic-box '()) (make-atomic-box '())
                          (make-atomic-box '()) (make-atomic-box #f)
-                         (make-atomic-box '())))
+                         (make-atomic-box '())
+                         (make-atomic-box #f) (make-atomic-box #f)))
     ((tid epoch)
      (%make-task-context tid 'ready *task-default-reductions* 0 0
                          0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)
                          (make-atomic-box '()) (make-atomic-box '())
                          (make-atomic-box '()) (make-atomic-box #f)
-                         (make-atomic-box '())))
+                         (make-atomic-box '())
+                         (make-atomic-box #f) (make-atomic-box #f)))
     ((tid state reductions continuation-pc stack-pointer
       arena-base arena-offset arena-capacity
       blocked-on epoch next-run
@@ -121,7 +127,8 @@
                          (make-atomic-box #f)
                          (make-atomic-box '()) (make-atomic-box '())
                          (make-atomic-box '()) (make-atomic-box #f)
-                         (make-atomic-box '())))))
+                         (make-atomic-box '())
+                         (make-atomic-box #f) (make-atomic-box #f)))))
 
 (define (task-tid t)
   (if (not (task-context? t))
@@ -257,6 +264,14 @@
       (error "task-handoff-box: expected <task-context>" t)
       (%task-handoff-box t)))
 
+(define (task-handoff t)
+  (if (not (task-context? t))
+      (error "task-handoff: expected <task-context>" t)
+      (let ((cell (atomic-ref (%task-handoff-box t))))
+        (if (pair? cell)
+            (cdr cell)
+            #f))))
+
 (define (task-set-handoff! t val)
   (if (not (task-context? t))
       (error "task-set-handoff!: expected <task-context>" t)
@@ -321,6 +336,36 @@
 
 (define (task-owned-channels t)
   (atomic-ref (task-owned-channels-box t)))
+
+(define (task-arena-box t)
+  (if (not (task-context? t))
+      (error "task-arena-box: expected <task-context>" t)
+      (%task-arena-box t)))
+
+(define (task-arena t)
+  (atomic-ref (task-arena-box t)))
+
+(define (task-set-arena! t arena)
+  (if (not (task-context? t))
+      (error "task-set-arena!: expected <task-context>" t)
+      (begin
+        (atomic-set! (task-arena-box t) arena)
+        arena)))
+
+(define (task-escape-k-box t)
+  (if (not (task-context? t))
+      (error "task-escape-k-box: expected <task-context>" t)
+      (%task-escape-k-box t)))
+
+(define (task-escape-continuation t)
+  (atomic-ref (task-escape-k-box t)))
+
+(define (task-set-escape-continuation! t k)
+  (if (not (task-context? t))
+      (error "task-set-escape-continuation!: expected <task-context>" t)
+      (begin
+        (atomic-set! (task-escape-k-box t) k)
+        k)))
 
 (define (task-register-channel! t ch)
   (if (not (task-context? t))

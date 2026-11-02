@@ -34,6 +34,10 @@
     make-default-eval-env
     set-eval-yield-hook!
     eval-yield-hook)
-  (import (scheme base))
+  (import (scheme base)
+          (ulisp concurrency channel)
+          (ulisp concurrency arena)
+          (ulisp concurrency links)
+          (ulisp concurrency panic))
   (include "ulisp/runtime/concurrency/eval_adapter.scm"))
 
