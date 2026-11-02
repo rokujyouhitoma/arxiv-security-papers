@@ -38,6 +38,7 @@
           (ulisp concurrency channel)
           (ulisp concurrency arena)
           (ulisp concurrency links)
-          (ulisp concurrency panic))
+          (ulisp concurrency panic)
+          (ulisp concurrency supervisor))
   (include "ulisp/runtime/concurrency/eval_adapter.scm"))
 

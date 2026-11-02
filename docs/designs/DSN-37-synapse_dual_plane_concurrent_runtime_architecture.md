@@ -1054,15 +1054,15 @@ mindmap
 - **DoD**:
   - リンクされたタスクがクラッシュ時に道連れ終了すること、モニタタスクにダウン理由が配送されること、チャネル待機がデッドロックしないこと（全 49 テスト PASS 達成済み）。
 
-### Task 6.2: Erlang/OTP 型スーパービジョンツリーと再起動戦略 (`ulisp/runtime/concurrency/supervisor.scm`)
+### Task 6.2: Erlang/OTP 型スーパービジョンツリーと再起動戦略 (`ulisp/runtime/concurrency/supervisor.scm`) 【実装完了】
 - **目的**: 階層的プロセスツリーによる自律的障害復旧と Flapping (Crash Loop) の防止。
-- **関連 Issue**: [[Issue #667]](../issues/667-implement-synapse-supervision-tree-and-restart-strategies.md)
+- **関連 Issue**: [[Issue #667 (完了)]](../issues/closed/667-implement-synapse-supervision-tree-and-restart-strategies.md)
 - **実装内容**:
   - `<supervisor-spec>` および `<child-spec>` レコード定義。
   - 3大再起動戦略（`one-for-one`, `one-for-all`, `rest-for-one`）の実装。
   - スライディング時間窓による再起動頻度制限（MaxRestarts / MaxTime）と上位エスカレーション。
 - **DoD**:
-  - 各再起動戦略がユニットテストで 100% 意図通り動作し、Crash Loop 時に安全に停止・エスカレーションすること。
+  - 各再起動戦略がユニットテストで 100% 意図通り動作し、Crash Loop 時に安全に停止・エスカレーションすること（全 38 テスト PASS 達成済み）。
 
 ### Task 6.3: エフェメラルアリーナ O(1) 破棄と融合した Fail-Fast "Let It Crash" セマンティクス (`ulisp/runtime/concurrency/panic.scm`) 【実装完了】
 - **目的**: 局所的な無理なエラー回復を排し、事前条件違反時の即時終了とクリーンな状態での再起動を保証。

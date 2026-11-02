@@ -496,5 +496,13 @@
       (eval-env-bind! env 'task-unlink! task-unlink!)
       (eval-env-bind! env 'task-monitor task-monitor)
       (eval-env-bind! env 'task-demonitor task-demonitor)
+      ;; Supervision Tree (#667)
+      (eval-env-bind! env 'make-child-spec make-child-spec)
+      (eval-env-bind! env 'make-supervisor-spec make-supervisor-spec)
+      (eval-env-bind! env 'make-supervisor make-supervisor)
+      (eval-env-bind! env 'supervisor-start! supervisor-start!)
+      (eval-env-bind! env 'supervisor-stop! supervisor-stop!)
+      (eval-env-bind! env 'supervisor-handle-child-down! supervisor-handle-child-down!)
+      (eval-env-bind! env 'supervisor-child-task supervisor-child-task)
       env)))
 

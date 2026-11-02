@@ -337,6 +337,14 @@ test_let_it_crash: $(COMPILER_DEP) build/context.o build/thread.o
 	$(LD) $(LDFLAGS) build/test_let_it_crash.o build/context.o build/thread.o -o build/test_let_it_crash
 	./build/test_let_it_crash < /dev/null
 
+test_supervisor: $(COMPILER_DEP) build/context.o build/thread.o
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_supervisor.scm > build/test_supervisor_input.scm
+	$(ULISP_COMPILER) build/test_supervisor_input.scm > build/test_supervisor.s
+	$(AS) $(ASFLAGS) build/test_supervisor.s -o build/test_supervisor.o
+	$(LD) $(LDFLAGS) build/test_supervisor.o build/context.o build/thread.o -o build/test_supervisor
+	./build/test_supervisor < /dev/null
+
 test_preemption: $(COMPILER_DEP) build/context.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_preemption.scm > build/test_preemption_input.scm
