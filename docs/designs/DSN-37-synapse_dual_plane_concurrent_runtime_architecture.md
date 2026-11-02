@@ -11,6 +11,52 @@
 
 ---
 
+## 関連 Issue 台帳トレーサビリティ (Issue #630 以降の関連マッピング)
+
+本設計書（DSN-37）に規定されたアーキテクチャ、コンポーネント、コンパイラパス、検証スイート、および耐障害性拡張は、以下の Issue 群を通じて段階的・反復的に開発・検証・管理されている：
+
+### 1. 実装・検証済み基盤 Issue (Closed Issues #630 〜 #645)
+
+| Issue ID | タイトル | 担当プレーン / コンポーネント | 完了日 | 詳細リンク |
+| :---: | :--- | :--- | :---: | :--- |
+| **#630** | タスク独立バンプアリーナの実装 | Layer 2: メモリ基盤 (`arena.scm`) | 2026-10-31 | [Issue #630](../issues/closed/630-implement-synapse-task-independent-bump-arena.md) |
+| **#631** | 低レベルアトミックプリミティブの実装 | Layer 2: 同期基盤 (`atomic.scm`) | 2026-10-31 | [Issue #631](../issues/closed/631-implement-synapse-low-level-atomic-primitives.md) |
+| **#632** | Michael-Scott ロックフリーキューの実装 | Layer 2: キュー基盤 (`queue.scm`) | 2026-10-31 | [Issue #632](../issues/closed/632-implement-synapse-michael-scott-lockfree-queue.md) |
+| **#633** | 線形所有権移譲チャネルの実装 | Layer 2: 通信基盤 (`channel.scm`) | 2026-10-31 | [Issue #633](../issues/closed/633-implement-synapse-first-class-p2p-channel.md) |
+| **#634** | Callee-saved 極小コンテキストスイッチの実装 | Layer 2: 実行コンテキスト (`context.s`, `context.scm`) | 2026-10-31 | [Issue #634](../issues/closed/634-implement-synapse-callee-saved-context-switch.md) |
+| **#635** | 分散 M:N ワークスティーリングスケジューラの実装 | Layer 2: スケジューラ (`scheduler.scm`, `deque.scm`) | 2026-11-01 | [Issue #635](../issues/closed/635-implement-synapse-work-stealing-scheduler.md) |
+| **#636** | リダクション方式セーフポイント・プリエンプションの実装 | Layer 2: 強プリエンプション (`preempt.scm`) | 2026-11-01 | [Issue #636](../issues/closed/636-implement-synapse-fuel-preemption-mechanism.md) |
+| **#637** | Nanopass プレーン分離パスの実装 | Nanopass コンパイラ (`pass_split_planes.scm`) | 2026-11-01 | [Issue #637](../issues/closed/637-implement-nanopass-split-planes-pass.md) |
+| **#638** | アフィン線形所有権検査＆自動 RAII Drop パスの実装 | Nanopass コンパイラ (`pass_check_affine.scm`) | 2026-11-01 | [Issue #638](../issues/closed/638-implement-nanopass-check-affine-types-and-raii-drop.md) |
+| **#639** | FBIP (Perceus) インプレース再利用最適化パスの実装 | Nanopass コンパイラ (`pass_fbip.scm`) | 2026-11-01 | [Issue #639](../issues/closed/639-implement-nanopass-fbip-inplace-optimization.md) |
+| **#640** | セーフポイント判定自動注入パスの実装 | Nanopass コンパイラ (`pass_inject_safepoints.scm`) | 2026-11-01 | [Issue #640](../issues/closed/640-implement-nanopass-inject-fuel-checks-pass.md) |
+| **#641** | ホスト・カーネル境界サニタイザの実装 | Boundary Guard (`boundary.scm`) | 2026-11-01 | [Issue #641](../issues/closed/641-implement-synapse-boundary-sanitizer-and-deep-copy.md) |
+| **#642** | 世代管理型投機タスク破棄・世代ゲートの実装 | 分散ロールバック (`epoch.scm`) | 2026-11-01 | [Issue #642](../issues/closed/642-implement-synapse-epoch-fencing-distributed-rollback.md) |
+| **#643** | 10万マイクロタスク耐久＆STW-GCゼロ検証スイートの実装 | ベンチマーク・実証 (`benchmarks/concurrency/`) | 2026-11-01 | [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md) |
+| **#644** | インタプリタ向け Dual-Mode 評価アダプタの実装 | インタプリタ統合 (`eval_adapter.scm`) | 2026-11-01 | [Issue #644](../issues/closed/644-implement-synapse-interpreter-dual-mode-eval-adapter.md) |
+| **#645** | CI 向けマルチコア並行競合テストハーネスの実装 | CI 品質ゲート (`tests/concurrency/`) | 2026-11-01 | [Issue #645](../issues/closed/645-implement-synapse-multicore-concurrency-ci-harness.md) |
+
+### 2. Erlang/OTP 型耐障害性拡張 Issue (Open Issues #666 〜 #670)
+
+| Issue ID | タイトル | 拡張カテゴリ / 責務 | ステータス | 詳細リンク |
+| :---: | :--- | :--- | :---: | :--- |
+| **#666** | タスク間双方向リンク (link)・単方向監視 (monitor) およびチャネル毒化防止機構の実装 | 耐障害性基盤: 異常検知・シグナル伝播 (`links.scm`) | New | [Issue #666](../issues/666-implement-synapse-task-links-and-monitors.md) |
+| **#667** | Erlang/OTP 型スーパービジョンツリー (Supervision Tree) と再起動戦略の実装 | 耐障害性基盤: 自律復旧・木構造監視 (`supervisor.scm`) | New | [Issue #667](../issues/667-implement-synapse-supervision-tree-and-restart-strategies.md) |
+| **#668** | エフェメラルアリーナ O(1) 即時破棄と融合した Fail-Fast "Let It Crash" セマンティクスおよびパニック機構の確立 | 耐障害性基盤: 不変条件防御・パニック (`panic.scm`) | New | [Issue #668](../issues/668-implement-synapse-fail-fast-let-it-crash-semantics.md) |
+| **#669** | 動的タスク再起動を透過化する Synapse プロセス名レジストリ (Registry) と透過的チャネル再バインド機構の実装 | 耐障害性基盤: 名前解決・動的バインド (`registry.scm`) | New | [Issue #669](../issues/669-implement-synapse-process-registry-and-dynamic-rebinding.md) |
+| **#670** | 構造化クラッシュレポート (SASL 相当) 生成と Layer 1 コントロールプレーン非同期転送・可観測性基盤の実装 | 耐障害性基盤: 可観測性・診断ログ (`crash_logger.scm`) | New | [Issue #670](../issues/670-implement-synapse-structured-crash-reporting-and-observability.md) |
+
+### 3. 並行 ID 採番アトミック化・データ競合是正 Issue (Open Issues #671 〜 #674)
+
+| Issue ID | タイトル | 修正カテゴリ / 責務 | ステータス | 詳細リンク |
+| :---: | :--- | :--- | :---: | :--- |
+| **#671** | コルーチン ID 採番における非アトミック更新の解消と並行 ID 重複防止 | コンテキスト基盤: コルーチン ID アトミック化 (`context.scm`) | Closed (Resolved) | [Issue #671](../issues/closed/671-fix-synapse-coroutine-id-atomic-allocation.md) |
+| **#672** | epoch-advance! におけるフェッチ後再読み取り競合の是正と同一 Epoch 重複返却の解消 | 世代管理基盤: Epoch 原子的進行保証 (`epoch.scm`) | New | [Issue #672](../issues/672-fix-synapse-epoch-advance-atomic-return-race.md) |
+| **#673** | グローバルアトミック Task ID (TID) 自動採番機構の導入と手動指定衝突の防止 | タスク基盤: 一意 TID 自動割当 (`channel.scm`, `preempt.scm`) | New | [Issue #673](../issues/673-implement-synapse-global-atomic-task-id-allocator.md) |
+| **#674** | スケジューラ統計カウンタのアトミック化による並行終了判定の不整合・ハング防止 | スケジューラ基盤: 統計アトミック化 (`scheduler.scm`) | New | [Issue #674](../issues/674-fix-synapse-scheduler-stats-atomic-counters.md) |
+
+---
+
 ## 体系目次
 
 - [1. システム設計思想と技術的出自](#1-システム設計思想と技術的出自)
@@ -41,6 +87,13 @@
   - [8.1 境界におけるデータサニタイズ（Shared-Nothing）](#81-境界におけるデータサニタイズshared-nothing)
   - [8.2 外側 call/cc と並列タスクの世代管理型投機タスク破棄](#82-外側-callcc-と並列タスクの世代管理型投機タスク破棄)
   - [8.3 待機中タスクのアボート保証（Generation Gate）](#83-待機中タスクのアボート保証generation-gate)
+  - [8.4 Erlang/OTP 型耐障害性・自己修復アーキテクチャ（Fault-Tolerant Supervision）](#84-erlangotp-型耐障害性自己修復アーキテクチャfault-tolerant-supervision)
+    - [8.4.1 タスク間双方向リンク（link）と単方向監視（monitor）](#841-タスク間双方向リンクlinkと単方向監視monitor)
+    - [8.4.2 チャネル毒化防止（Poisoning / Auto-Close）とデッドロック遮断](#842-チャネル毒化防止poisoning--auto-closeとデッドロック遮断)
+    - [8.4.3 Supervision Tree（階層型監視木）と再起動戦略](#843-supervision-tree階層型監視木と再起動戦略)
+    - [8.4.4 "Let It Crash" 哲学とエフェメラルアリーナ O(1) 瞬時解放の融合](#844-let-it-crash-哲学とエフェメラルアリーナ-o1-瞬時解放の融合)
+    - [8.4.5 プロセス名レジストリ（Registry）と動的チャネル再バインド](#845-プロセス名レジストリregistryと動的チャネル再バインド)
+    - [8.4.6 構造化クラッシュレポート（SASL 相当）と Layer 1 境界非同期転送](#846-構造化クラッシュレポートsasl-相当と-layer-1-境界非同期転送)
 - [9. 全処理を本アーキテクチャに統一してはならない 4 つの構造的理由](#9-全処理を本アーキテクチャに統一してはならない-4-つの構造的理由)
   - [9.1 ① 境界サニタイズ（ディープコピー）の激しいオーバーヘッド](#91--境界サニタイズディープコピーの激しいオーバーヘッド)
   - [9.2 ② 言語制約による表現力・開発効率の極端な低下](#92--言語制約による表現力開発効率の極端な低下)
@@ -68,6 +121,7 @@
   - [14.5 Phase 3: Nanopass コンパイラ統合 ＆ FBIP](#145-phase-3-nanopass-コンパイラ統合--fbip)
   - [14.6 Phase 4: ホスト・カーネル境界 ＆ 世代管理型投機タスク破棄](#146-phase-4-ホストカーネル境界--世代管理型投機タスク破棄)
   - [14.7 Phase 5: 統合検証 ＆ 性能ベンチマーク](#147-phase-5-統合検証--性能ベンチマーク)
+  - [14.8 Phase 6: Erlang/OTP 型耐障害性拡張 (Fault-Tolerant Supervision)](#148-phase-6-erlangotp-型耐障害性拡張-fault-tolerant-supervision)
 - [15. 全 16 専門エージェント合同設計審査承認記録 (Review & Sign-Off Ledger)](#15-全-16-専門エージェント合同設計審査承認記録-review--sign-off-ledger)
 - [16. 結論とアーキテクチャ設計原則](#16-結論とアーキテクチャ設計原則)
 
@@ -429,6 +483,92 @@ Erlang BEAM の Reduction 機構に倣い、uLisp の AOT コンパイラパス�
 ## 8.3 待機中タスクのアボート保証（Generation Gate）
 
 チャネル待機（`TASK_WAITING_CHANNEL`）でスリープ中のタスクがゾンビ化するのを防ぐため、起床直後に必ず `(eq? (task-epoch task) current-valid-epoch)` をアトミック検証する（世代ゲート検証 / Generation Gate）。不一致を検知した場合は直ちに `TASK_TERMINATED` へ遷移し、アリーナを一括リセットする。
+
+## 8.4 Erlang/OTP 型耐障害性・自己修復アーキテクチャ（Fault-Tolerant Supervision）
+
+BEAM（Erlang/OTP）の最大の技術的強みである「耐障害性（Fault Tolerance）」と「自律自己修復（Self-Healing）」を Synapse のホスト・カーネル分離型アーキテクチャへ体系的に統合する。
+本機構は、先行して確立されたプロセスローカル・エフェメラルアリーナ（Shared-Nothing）、M:N ワークスティーリング、およびリダクション方式プリエンプションを基盤とし、障害の局所化・安全な伝播・自律再起動を達成する。
+
+```mermaid
+flowchart TD
+    subgraph Layer1Host ["Layer 1: R7RS Control Plane (Supervision Tree)"]
+        RootSup["Root Supervisor (R7RS)"]
+        WorkerSup["Worker Supervisor (one-for-one)"]
+        PipelineSup["Pipeline Supervisor (one-for-all)"]
+        CrashLog["Crash Logger / SASL Receiver"]
+        Reg["Name Registry (whereis / register)"]
+        
+        RootSup --> WorkerSup
+        RootSup --> PipelineSup
+    end
+
+    subgraph Layer2Kernel ["Layer 2: アフィン計算プレーン (ASC Workers)"]
+        W1["Worker Task 1 (Arena #1)"]
+        W2["Worker Task 2 (Arena #2)"]
+        PipeA["Stage A (Fetcher)"]
+        PipeB["Stage B (Parser)"]
+        PipeC["Stage C (Writer)"]
+        
+        PipeA -->|"Linear Chan"| PipeB
+        PipeB -->|"Linear Chan"| PipeC
+    end
+
+    WorkerSup -->|Supervises| W1
+    WorkerSup -->|Supervises| W2
+    PipelineSup -->|Supervises| PipeA
+    PipelineSup -->|Supervises| PipeB
+    PipelineSup -->|Supervises| PipeC
+
+    W1 -.->|"task-link! (Bidirectional)"| W2
+    PipeB -.->|"Crash (Panic!)"| PipeCrash["Fail-Fast: O(1) Arena Reset"]
+    PipeCrash -.->|"Auto-Poison"| PipeC
+    PipeCrash -.->|"Down Signal"| PipelineSup
+    PipelineSup ==>|"Restart Pipeline"| Layer2Kernel
+    PipeCrash -.->|"Async Crash Report"| CrashLog
+```
+
+### 8.4.1 タスク間双方向リンク（link）と単方向監視（monitor）
+- **双方向リンク (`task-link! task-a task-b`)**:
+  - 二つのタスク間で運命を共有する。一方がクラッシュした場合、リンク先タスク群へ `EXIT` シグナルをアトミックに連鎖伝播させる。
+  - トラップフラグ（`trap-exit`）が偽であるタスクは道連れで即座に終了する（カスケード終了によるゾンビ排除）。
+- **単方向監視 (`task-monitor observer-task target-task`)**:
+  - 監視対象タスクの終了理由（正常終了、アリーナ枯渇、パニック等）を検知し、監視元タスクのチャネルへ `'(DOWN <ref> <target-id> <reason>)` 通知メッセージを配送する。監視元の生死は対象タスクに影響を与えない。
+- **関連 Issue**: [[Issue #666]](../issues/666-implement-synapse-task-links-and-monitors.md)
+
+### 8.4.2 チャネル毒化防止（Poisoning / Auto-Close）とデッドロック遮断
+- チャネルで `channel-recv!` または `channel-send!` 待機中のタスクが存在する状況下で、通信対向タスクが異常終了した場合、待機側タスクが永久に起床されないデッドロック（CWE-833）を防止する。
+- タスク終了時に保有チャネルのステータスフラグを `CHANNEL_POISONED` へ不可逆遷移させ、待機キュー内の全タスクを即時に `TASK_ERROR` 状態で起床させて脱出させる。
+- **関連 Issue**: [[Issue #666]](../issues/666-implement-synapse-task-links-and-monitors.md)
+
+### 8.4.3 Supervision Tree（階層型監視木）と再起動戦略
+- Layer 1（R7RS 制御プレーン）または専用の監視タスクを木構造（Tree）として編成し、末端ワーカーの死活を自律監視する。
+- **3大再起動戦略（Restart Strategies）**:
+  1. `one-for-one`: クラッシュした当該タスクのみを新品のアリーナで再生成する（独立したワーカー群に適用）。
+  2. `one-for-all`: 密結合したパイプライン内の1タスクが死んだ際、配下の全タスクを一括終了・再生成する（ステージ間の状態不整合を排除）。
+  3. `rest-for-one`: 起動順序に依存関係がある場合、障害が発生したタスクおよびそれ以降に起動されたタスク群のみを順次再起動する。
+- **再起動頻度制限（MaxRestarts / MaxTime）**:
+  - 設定された時間窓（Time Window）内で再起動回数が上限を超えた場合（Flapping / Crash Loop 状態）、スーパーバイザ自身が上位の親スーパーバイザへクラッシュをエスカレーションし、無限再起動による CPU 枯渇（CWE-400）を遮断する。
+- **関連 Issue**: [[Issue #667]](../issues/667-implement-synapse-supervision-tree-and-restart-strategies.md)
+
+### 8.4.4 "Let It Crash" 哲学とエフェメラルアリーナ O(1) 瞬時解放の融合
+- **Fail-Fast パニック (`synapse-panic! reason`)**:
+  - 不変条件違反、パケット破損、メモリ限界に直面した際、ASC 内部で無理な局所エラー回復を行わず即座にタスクを停止する。
+- **ゼロコスト・クリーンアップ**:
+  - タスク独立アリーナのバンプポインタを $O(1)$ で 0 リセットするだけで全メモリが回収され、GC 走査やファイナライザ遅延が一切発生しない。
+  - 共有メモリを持たない（Shared-Nothing）ため、クラッシュしたタスクが他タスクのヒープやスタックを汚染することは原理的にあり得ず、新品のクリーンな状態での再起動が保証される。
+- **関連 Issue**: [[Issue #668]](../issues/668-implement-synapse-fail-fast-let-it-crash-semantics.md)
+
+### 8.4.5 プロセス名レジストリ（Registry）と動的チャネル再バインド
+- スーパーバイザによってタスクが再起動されると、新しい Task Context と新しいローカルチャネルが割り当てられる。
+- **論理名解決 (`synapse-register!`, `synapse-whereis`)**:
+  - クライアントタスクは相手の物理ポインタではなく論理名（シンボル）を参照する。
+  - 再起動時にスーパーバイザがレジストリをアトミックに更新することで、通信相手は意識することなく透過的に最新の通信路へ再接続できる。
+- **関連 Issue**: [[Issue #669]](../issues/669-implement-synapse-process-registry-and-dynamic-rebinding.md)
+
+### 8.4.6 構造化クラッシュレポート（SASL 相当）と Layer 1 境界非同期転送
+- タスク異常終了時、障害解析に必要なコンテキスト（Task ID、Epoch、消費 Fuel、アリーナ消費量、障害理由コード、直前メッセージサマリ）を構造化レコード `<crash-report>` として瞬時にパックする。
+- ロックフリーキューを通じて Layer 1（R7RS 制御プレーン）の非同期ロガーへ転送し、計算層（Layer 2）のリアルタイム性を一切損なうことなく、本番環境での可観測性（Observability）と監査トレーサビリティを確立する。
+- **関連 Issue**: [[Issue #670]](../issues/670-implement-synapse-structured-crash-reporting-and-observability.md)
 
 ---
 
@@ -821,6 +961,57 @@ mindmap
   - メモリ可視性、CAS ループのライブロック検出、および未解放メモリ検出。
 - **DoD**:
   - 並行ストレステストが 100 反復連続で 100% PASS すること。
+
+---
+
+## 14.8 Phase 6: Erlang/OTP 型耐障害性拡張 (Fault-Tolerant Supervision)
+
+### Task 6.1: タスク間双方向リンク・単方向監視およびチャネル毒化防止 (`ulisp/runtime/concurrency/links.scm`)
+- **目的**: タスク異常終了の即時検知、シグナル連鎖伝播、および対向チャネル待機タスクのデッドロック防止。
+- **関連 Issue**: [[Issue #666]](../issues/666-implement-synapse-task-links-and-monitors.md)
+- **実装内容**:
+  - `(task-link! a b)` による双方向運命共有と `EXIT` シグナル連鎖伝播。
+  - `(task-monitor observer target)` による単方向 `'DOWN` 通知メッセージ送信。
+  - 異常終了タスクの保有チャネルの `CHANNEL_POISONED` アトミック遷移と待機タスクの即時アンブロック。
+- **DoD**:
+  - リンクされたタスクがクラッシュ時に道連れ終了すること、モニタタスクにダウン理由が配送されること、チャネル待機がデッドロックしないこと。
+
+### Task 6.2: Erlang/OTP 型スーパービジョンツリーと再起動戦略 (`ulisp/runtime/concurrency/supervisor.scm`)
+- **目的**: 階層的プロセスツリーによる自律的障害復旧と Flapping (Crash Loop) の防止。
+- **関連 Issue**: [[Issue #667]](../issues/667-implement-synapse-supervision-tree-and-restart-strategies.md)
+- **実装内容**:
+  - `<supervisor-spec>` および `<child-spec>` レコード定義。
+  - 3大再起動戦略（`one-for-one`, `one-for-all`, `rest-for-one`）の実装。
+  - スライディング時間窓による再起動頻度制限（MaxRestarts / MaxTime）と上位エスカレーション。
+- **DoD**:
+  - 各再起動戦略がユニットテストで 100% 意図通り動作し、Crash Loop 時に安全に停止・エスカレーションすること。
+
+### Task 6.3: エフェメラルアリーナ O(1) 破棄と融合した Fail-Fast "Let It Crash" セマンティクス (`ulisp/runtime/concurrency/panic.scm`)
+- **目的**: 局所的な無理なエラー回復を排し、事前条件違反時の即時終了とクリーンな状態での再起動を保証。
+- **関連 Issue**: [[Issue #668]](../issues/668-implement-synapse-fail-fast-let-it-crash-semantics.md)
+- **実装内容**:
+  - `(synapse-panic! reason)` 脱出プリミティブとスタック巻き戻し。
+  - パニック発生時のアリーナバンプポインタ $O(1)$ 即時リセットおよび線形チャネル Drop（RAII 保証）。
+- **DoD**:
+  - パニック時に他タスクのヒープ/スタックを一切汚染せず、メモリリーク 0 で新品の再起動が行われること。
+
+### Task 6.4: 動的タスク再起動を透過化するプロセス名レジストリ (`ulisp/runtime/concurrency/registry.scm`)
+- **目的**: タスク再起動に伴う Task ID / チャネルアドレス変更をクライアント側に対して透過化。
+- **関連 Issue**: [[Issue #669]](../issues/669-implement-synapse-process-registry-and-dynamic-rebinding.md)
+- **実装内容**:
+  - ロックフリーな論理名レジストリ（`synapse-register!`, `synapse-unregister!`, `synapse-whereis`）。
+  - 自動名前解決・フォールバック送信ユーティリティ（`synapse-send-named!`）。
+- **DoD**:
+  - タスク再起動後もクライアントが同一の論理名で継続通信できること。
+
+### Task 6.5: 構造化クラッシュレポート生成と Layer 1 可観測性基盤 (`ulisp/runtime/concurrency/crash_logger.scm`)
+- **目的**: クラッシュ診断コンテキストの自動記録と、Layer 1 コントロールプレーンへの非同期転送。
+- **関連 Issue**: [[Issue #670]](../issues/670-implement-synapse-structured-crash-reporting-and-observability.md)
+- **実装内容**:
+  - `<crash-report>` レコードの生成（Task ID, Epoch, Fuel, Arena, Reason, Message Summary）。
+  - ロックフリーリングバッファを用いた Layer 1 側ロガーへの非同期引き渡し。
+- **DoD**:
+  - タスククラッシュ時に診断ログが欠損なく Layer 1 で取得でき、計算層の並行性能を損なわないこと。
 
 ---
 

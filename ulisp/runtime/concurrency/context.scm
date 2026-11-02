@@ -217,7 +217,18 @@
 ;; 5. <coroutine-context> & High-Level Context Switch API
 ;; -----------------------------------------------------------------------
 
-(define *coroutine-next-id* (vector 1))
+(define *coroutine-next-id* (make-atomic-box 1))
+
+(define (allocate-coroutine-id!)
+  (atomic-fetch-add! *coroutine-next-id* 1))
+
+(define (coroutine-next-id-current)
+  (atomic-ref *coroutine-next-id*))
+
+(define (coroutine-reset-next-id! val)
+  (if (not (integer? val))
+      (error "coroutine-reset-next-id!: val must be an integer" val)
+      (atomic-set! *coroutine-next-id* val)))
 
 (define-record-type <coroutine-context>
   (%make-coroutine-context id stack entry-fn owns-stack?)
@@ -238,8 +249,7 @@
                 (stk (if (task-stack? stack-or-size)
                          stack-or-size
                          (make-task-stack stack-or-size)))
-                (cid (vector-ref *coroutine-next-id* 0)))
-           (vector-set! *coroutine-next-id* 0 (+ cid 1))
+                (cid (allocate-coroutine-id!)))
            (setup-task-stack stk entry-fn)
            (%make-coroutine-context cid stk entry-fn owns?))))))
 

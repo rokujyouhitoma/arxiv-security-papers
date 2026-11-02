@@ -9,6 +9,7 @@
 ;;;   Group 6: Security & Boundary Guards (CWE-787 / CWE-843 / CWE-416)
 ;;; =======================================================================
 
+(load "ulisp/runtime/concurrency/atomic.scm")
 (load "ulisp/runtime/concurrency/context.scm")
 
 (define *test-context-failures* (vector 0))
@@ -210,6 +211,42 @@
 
   (free-coroutine-context! (vector-ref ctx-a-box 0))
   (free-coroutine-context! (vector-ref ctx-b-box 0)))
+
+;; 4c. Atomic Coroutine ID Allocation & Monotonic Increment (#671)
+(write-string "--- Group 4c: Atomic Coroutine ID Allocation & Invariants (#671) ---\n")
+(flush-output-port)
+
+(let* ((initial-id (coroutine-next-id-current))
+       (id1 (allocate-coroutine-id!))
+       (id2 (allocate-coroutine-id!))
+       (id3 (allocate-coroutine-id!)))
+  (assert-equal id2 (+ id1 1) "allocate-coroutine-id! id2 is id1 + 1")
+  (assert-equal id3 (+ id2 1) "allocate-coroutine-id! id3 is id2 + 1")
+  (assert-equal (coroutine-next-id-current) (+ id3 1) "coroutine-next-id-current matches id3 + 1"))
+
+;; Verify make-coroutine-context automatically assigns sequential atomic IDs
+(let* ((c-base (coroutine-next-id-current))
+       (co1 (make-coroutine-context (lambda () 1)))
+       (co2 (make-coroutine-context (lambda () 2)))
+       (co3 (make-coroutine-context (lambda () 3))))
+  (assert-equal (coroutine-id co1) c-base "co1 has atomic id equal to c-base")
+  (assert-equal (coroutine-id co2) (+ c-base 1) "co2 has atomic id c-base + 1")
+  (assert-equal (coroutine-id co3) (+ c-base 2) "co3 has atomic id c-base + 2")
+  (free-coroutine-context! co1)
+  (free-coroutine-context! co2)
+  (free-coroutine-context! co3))
+
+;; Verify coroutine-reset-next-id!
+(coroutine-reset-next-id! 1000)
+(assert-equal (coroutine-next-id-current) 1000 "coroutine-reset-next-id! resets to 1000")
+(let ((co-1000 (make-coroutine-context (lambda () 10))))
+  (assert-equal (coroutine-id co-1000) 1000 "co-1000 has coroutine-id 1000")
+  (assert-equal (coroutine-next-id-current) 1001 "coroutine-next-id-current advances to 1001")
+  (free-coroutine-context! co-1000))
+
+;; Verify coroutine-reset-next-id! rejects non-integer (CWE-843)
+(assert-error (lambda () (coroutine-reset-next-id! "not-an-integer"))
+              "coroutine-reset-next-id! rejects string (CWE-843)")
 
 ;; -----------------------------------------------------------------------
 ;; Group 5: 10,000,000 Context Switches Endurance Stress Test

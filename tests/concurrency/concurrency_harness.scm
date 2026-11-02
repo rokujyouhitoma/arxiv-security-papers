@@ -315,6 +315,35 @@
             #t)))))
 
 ;; -----------------------------------------------------------------------
+;; 6b. Scenario 4b: Atomic Coroutine ID Allocation & Monotonic Invariant (#671)
+;; -----------------------------------------------------------------------
+
+(define (run-scenario-coroutine-id-atomic! iter prng)
+  (begin
+    (vector-set! *harness-current-scenario* 0 "Scenario 4b: Atomic Coroutine ID Allocation (#671)")
+    (let* ((count 25)
+           (start-id (coroutine-next-id-current))
+           (allocated (vector (make-vector count 0))))
+      (let alloc-loop ((i 0))
+        (if (< i count)
+            (begin
+              (inject-jitter! prng 10)
+              (let ((id (allocate-coroutine-id!)))
+                (vector-set! (vector-ref allocated 0) i id)
+                (alloc-loop (+ i 1))))
+            #t))
+      (let ((ids (vector-ref allocated 0)))
+        (let check-loop ((i 0))
+          (if (< i (- count 1))
+              (begin
+                (harness-assert-equal (+ (vector-ref ids i) 1) (vector-ref ids (+ i 1))
+                                      "Coroutine ID must be strictly monotonically increasing without collisions")
+                (check-loop (+ i 1)))
+              #t))
+        (harness-assert-equal (coroutine-next-id-current) (+ start-id count)
+                              "Coroutine global next id must match start-id + count")))))
+
+;; -----------------------------------------------------------------------
 ;; 7. Scenario 5: 100-Iteration Flakiness Elimination & CI Reporting Controller
 ;; -----------------------------------------------------------------------
 
@@ -337,7 +366,8 @@
                 (run-scenario-jitter-channel! iter iter-prng)
                 (run-scenario-deque-aba! iter iter-prng)
                 (run-scenario-epoch-rollback! iter iter-prng)
-                (run-scenario-arena-no-leak! iter iter-prng)))
+                (run-scenario-arena-no-leak! iter iter-prng)
+                (run-scenario-coroutine-id-atomic! iter iter-prng)))
 
             ;; Print periodic progress tick every 10 iterations
             (if (= (modulo iter 10) 0)

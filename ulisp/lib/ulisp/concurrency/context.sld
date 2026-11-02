@@ -30,6 +30,10 @@
 
     ;; <coroutine-context> & Context Switching API
     <coroutine-context>
+    *coroutine-next-id*
+    allocate-coroutine-id!
+    coroutine-next-id-current
+    coroutine-reset-next-id!
     make-coroutine-context
     coroutine-context?
     coroutine-id
@@ -51,6 +55,7 @@
     bench-swap-context!
     context-stats)
   (import (scheme base)
-          (scheme case-lambda))
+          (scheme case-lambda)
+          (ulisp concurrency atomic))
   (include "ulisp/runtime/concurrency/context.scm"))
 
