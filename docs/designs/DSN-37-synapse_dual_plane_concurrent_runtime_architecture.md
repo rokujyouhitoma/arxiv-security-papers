@@ -55,6 +55,14 @@
 | **#673** | グローバルアトミック Task ID (TID) 自動採番機構の導入と手動指定衝突の防止 | タスク基盤: 一意 TID 自動割当 (`channel.scm`, `preempt.scm`) | Closed (Resolved) | [Issue #673](../issues/closed/673-implement-synapse-global-atomic-task-id-allocator.md) |
 | **#674** | スケジューラ統計カウンタのアトミック化による並行終了判定の不整合・ハング防止 | スケジューラ基盤: 統計アトミック化 (`scheduler.scm`) | Closed (Resolved) | [Issue #674](../issues/closed/674-fix-synapse-scheduler-stats-atomic-counters.md) |
 
+### 4. 物理マルチコア並列化・CPU飽和アーキテクチャ Issue (Open Issues #675 〜 #677)
+
+| Issue ID | タイトル | 修正カテゴリ / 責務 | ステータス | 詳細リンク |
+| :---: | :--- | :--- | :---: | :--- |
+| **#675** | Linux sys_clone ネイティブスレッド生成と CPU コアピニング (sched_setaffinity) による物理マルチコア並列実行エンジンの実装 | 並列基盤: 1:1 OSスレッド・コアバインド (`thread.s`, `scheduler.scm`) | New | [Issue #675](../issues/675-implement-synapse-native-multithread-worker-pool.md) |
+| **#676** | Linux SYS_futex に基づくワーカー待機 (Park) およびチャネル起床 (Unpark) による省電力・低遅延同期機構の実装 | 同期基盤: 低遅延・省電力待機 (`futex.s`, `scheduler.scm`) | New | [Issue #676](../issues/676-implement-synapse-futex-park-unpark-primitives.md) |
+| **#677** | Linux io_uring 統合による非同期ゼロコピー I/O イベント駆動およびタスクサスペンド・リジューム機構の実装 | I/O基盤: ゼロsyscall非同期I/O (`io_uring.s`, `scheduler.scm`) | New | [Issue #677](../issues/677-integrate-synapse-io-uring-event-loop.md) |
+
 ---
 
 ## 体系目次
@@ -83,6 +91,10 @@
   - [7.1 M:N 超軽量タスクと分散ワークスティーリング](#71-mn-超軽量タスクと分散ワークスティーリング)
   - [7.2 リダクション方式セーフポイント注入による決定論的プリエンプション](#72-リダクション方式セーフポイント注入による決定論的プリエンプション)
   - [7.3 極小スタック・コルーチンコンテキストスイッチ](#73-極小スタックコルーチンコンテキストスイッチ)
+  - [7.4 物理マルチコア並列化と CPU 飽和アーキテクチャ（Hardware Mechanical Sympathy）](#74-物理マルチコア並列化と-cpu-飽和アーキテクチャhardware-mechanical-sympathy)
+    - [7.4.1 Linux sys_clone ネイティブスレッド生成と 1:1 CPU コアピニング (sched_setaffinity)](#741-linux-sys_clone-ネイティブスレッド生成と-11-cpu-コアピニング-sched_setaffinity)
+    - [7.4.2 Linux SYS_futex によるワーカー待機 (Park) とチャネル即時起床 (Unpark)](#742-linux-sys_futex-によるワーカー待機-park-とチャネル即時起床-unpark)
+    - [7.4.3 Linux io_uring 統合によるゼロシステムコール非同期 I/O とタスクサスペンド](#743-linux-io_uring-統合によるゼロシステムコール非同期-io-とタスクサスペンド)
 - [8. コントロールプレーン境界と分散ロールバック制御](#8-コントロールプレーン境界と分散ロールバック制御)
   - [8.1 境界におけるデータサニタイズ（Shared-Nothing）](#81-境界におけるデータサニタイズshared-nothing)
   - [8.2 外側 call/cc と並列タスクの世代管理型投機タスク破棄](#82-外側-callcc-と並列タスクの世代管理型投機タスク破棄)
@@ -122,6 +134,7 @@
   - [14.6 Phase 4: ホスト・カーネル境界 ＆ 世代管理型投機タスク破棄](#146-phase-4-ホストカーネル境界--世代管理型投機タスク破棄)
   - [14.7 Phase 5: 統合検証 ＆ 性能ベンチマーク](#147-phase-5-統合検証--性能ベンチマーク)
   - [14.8 Phase 6: Erlang/OTP 型耐障害性拡張 (Fault-Tolerant Supervision)](#148-phase-6-erlangotp-型耐障害性拡張-fault-tolerant-supervision)
+  - [14.9 Phase 7: 物理マルチコア並列化 ＆ CPU 飽和拡張 (Hardware Mechanical Sympathy)](#149-phase-7-物理マルチコア並列化--cpu-飽和拡張-hardware-mechanical-sympathy)
 - [15. 全 16 専門エージェント合同設計審査承認記録 (Review & Sign-Off Ledger)](#15-全-16-専門エージェント合同設計審査承認記録-review--sign-off-ledger)
 - [16. 結論とアーキテクチャ設計原則](#16-結論とアーキテクチャ設計原則)
 
@@ -444,6 +457,71 @@ Erlang BEAM の Reduction 機構に倣い、uLisp の AOT コンパイラパス�
 ## 7.3 極小スタック・コルーチンコンテキストスイッチ
 
 スタックの退避・復元は、x86-64 System V ABI の Callee-saved レジスタ（`rsp`, `rbp`, `rbx`, `r12-r15`）のみを交換するわずか 10〜15 命令の低レベルアセンブラルーチン（`swap_context`）により極超高速に実行される。
+
+## 7.4 物理マルチコア並列化と CPU 飽和アーキテクチャ（Hardware Mechanical Sympathy）
+
+単一 OS スレッド上の協調的スケジューリングを超え、現代のマルチコア CPU（AMD Zen / Intel Xeon）の演算・キャッシュ・メモリ・I/O 帯域を物理限界まで飽和させるためのハードウェア協調設計。
+
+```mermaid
+flowchart TD
+    subgraph HostSystem["Linux OS & Hardware CPU Sockets"]
+        Core0["CPU Core 0 (L1/L2 Cache)"]
+        Core1["CPU Core 1 (L1/L2 Cache)"]
+        CoreN["CPU Core N-1 (L1/L2 Cache)"]
+    end
+
+    subgraph NativeWorkers["Synapse Native Worker Threads (sys_clone)"]
+        W0["Worker Thread 0<br/>(Core 0 Pinned)"]
+        W1["Worker Thread 1<br/>(Core 1 Pinned)"]
+        WN["Worker Thread N-1<br/>(Core N-1 Pinned)"]
+    end
+
+    subgraph SynapsePlane["M:N Dual-Plane Concurrency Runtime"]
+        DQ0["Chase-Lev Deque 0<br/>Local Ephemeral Arena"]
+        DQ1["Chase-Lev Deque 1<br/>Local Ephemeral Arena"]
+        DQN["Chase-Lev Deque N-1<br/>Local Ephemeral Arena"]
+        FutexControl["SYS_futex Park/Unpark Engine"]
+        IOUring["Linux io_uring Engine (SQ/CQ Ring)"]
+    end
+
+    Core0 --- W0
+    Core1 --- W1
+    CoreN --- WN
+
+    W0 --- DQ0
+    W1 --- DQ1
+    WN --- DQN
+
+    DQ0 <-->|Work-Stealing| DQ1
+    DQ1 <-->|Work-Stealing| DQN
+
+    W0 -.->|Idle: FUTEX_WAIT| FutexControl
+    W1 -.->|Task Spawn: FUTEX_WAKE| FutexControl
+    W0 -.->|Async I/O: task-yield| IOUring
+```
+
+### 7.4.1 Linux sys_clone ネイティブスレッド生成と 1:1 CPU コアピニング (sched_setaffinity)
+1. **OS ネイティブスレッド化 (`sys_clone`)**:
+   - `CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD` を用いて、物理コア数と同数のネイティブスレッドを独立起動。
+2. **CPU Pinning (`sched_setaffinity`)**:
+   - ワーカー $i$ を CPU Core $i$ に 1:1 で固定。コア間マイグレーションに伴う L1/L2 キャッシュフラッシュを物理的に 0 に抑え、Hot Cache を常時維持。
+3. **完全 Shared-Nothing アリーナ拘束**:
+   - ワーカーは R7RS のグローバルヒープ（STW-GC 対象）に一切アクセスせず、タスク固有の `Ephemeral Arena` のみでメモリ確保・O(1) 瞬時破棄を行う。これにより、GC によるコア停止時間をゼロにする。
+
+### 7.4.2 Linux SYS_futex によるワーカー待機 (Park) とチャネル即時起床 (Unpark)
+1. **ビジースピンの完全排除**:
+   - タスク枯渇時にビジーウェイトを続けず、Linux の `SYS_futex`（`FUTEX_WAIT_PRIVATE`）によりカーネルレベルでスレッドを省電力休止。
+   - 余計なスピンによるメモリバスのキャッシュコヒーレンシ（Snoop Traffic）圧迫を抑止。
+2. **即時起床 (`FUTEX_WAKE_PRIVATE`)**:
+   - チャネルへのメッセージ投入（`channel-send!`）や新規タスク生成時に、休止中ワーカーをマイクロ秒未満で即時起床。
+
+### 7.4.3 Linux io_uring 統合によるゼロシステムコール非同期 I/O とタスクサスペンド
+1. **非同期リング mmap**:
+   - `SYS_io_uring_setup` により、カーネルと共有する SQ（Submission Queue）および CQ（Completion Queue）リングバッファを確立。
+2. **タスクレベルサスペンド**:
+   - ディスク読み書きやソケット通信発行時、タスクは状態を `'waiting-io` に遷移させて CPU を別タスクに即座に譲渡（Head-of-Line Blocking の完全排除）。
+3. **ゼロシステムコール（SQPOLL）**:
+   - カーネルスレッドが SQ リングをポーリングするため、ユーザー空間からシステムコールを発行することなく毎秒数百万件の I/O を CPU 負荷最小で消化。
 
 ---
 
@@ -1012,6 +1090,39 @@ mindmap
   - ロックフリーリングバッファを用いた Layer 1 側ロガーへの非同期引き渡し。
 - **DoD**:
   - タスククラッシュ時に診断ログが欠損なく Layer 1 で取得でき、計算層の並行性能を損なわないこと。
+
+---
+
+## 14.9 Phase 7: 物理マルチコア並列化 ＆ CPU 飽和拡張 (Hardware Mechanical Sympathy)
+
+### Task 7.1: Linux sys_clone ネイティブスレッド生成と 1:1 CPU コアピニング (`ulisp/runtime/concurrency/thread.s`, `thread.scm`)
+- **目的**: 単一 OS スレッドの時分割シミュレーションを脱却し、物理 CPU コア数と同数の OS スレッドを起動して各コアに固定。
+- **関連 Issue**: [[Issue #675]](../issues/675-implement-synapse-native-multithread-worker-pool.md)
+- **実装内容**:
+  - `CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD` によるスレッド生成アセンブリ。
+  - `SYS_sched_setaffinity` による Core $i$ への 1:1 バインド。
+  - ワーカーごとの独立した Chase-Lev Deque ディスパッチループ。
+- **DoD**:
+  - 8〜16スレッド並列実行時に、全コアが同時に 100% 稼働し、L1/L2 キャッシュローカリティが維持されること。
+
+### Task 7.2: Linux SYS_futex によるワーカー待機 (Park) およびチャネル起床 (Unpark) (`ulisp/runtime/concurrency/futex.s`, `futex.scm`)
+- **目的**: ビジースピンによる無駄な CPU 消費とキャッシュコヒーレンシ（Snoop Traffic）圧迫の完全排除。
+- **関連 Issue**: [[Issue #676]](../issues/676-implement-synapse-futex-park-unpark-primitives.md)
+- **実装内容**:
+  - `SYS_futex`（`FUTEX_WAIT_PRIVATE` / `FUTEX_WAKE_PRIVATE`）アセンブリシステムコールラッパー。
+  - タスク枯渇ワーカーのカーネルレベル省電力休止（Park）と、チャネルメッセージ到着時の即時起床（Unpark）。
+- **DoD**:
+  - タスク不在時に CPU 使用率が 0% に低下し、タスク投入時にマイクロ秒未満で全ワーカーが再開すること。
+
+### Task 7.3: Linux io_uring 統合によるゼロシステムコール非同期 I/O とタスクサスペンド (`ulisp/runtime/concurrency/io_uring.s`, `io_uring.scm`)
+- **目的**: I/O ブロックによる OS スレッドの停止（Head-of-Line Blocking）を排除し、ストレージ/ネットワーク帯域を飽和。
+- **関連 Issue**: [[Issue #677]](../issues/677-integrate-synapse-io-uring-event-loop.md)
+- **実装内容**:
+  - `SYS_io_uring_setup` による SQ/CQ リングバッファの共有 mmap。
+  - `async-read!` / `async-write!` 発行時のタスク状態 `'waiting-io` 遷移と即時 CPU 譲渡。
+  - 完了イベント（CQE）検知時の自動 `'ready` 復帰と Deque 再投入。
+- **DoD**:
+  - 並行 I/O 実行下で OS スレッドがブロックされず、他タスクの計算が継続すること。
 
 ---
 
