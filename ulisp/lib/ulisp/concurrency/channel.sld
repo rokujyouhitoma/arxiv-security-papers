@@ -46,7 +46,23 @@
     task-steals-count
     task-steals-count-set!
     task-has-handoff?
+    task-handoff-box
+    task-set-handoff!
     task-take-handoff!
+    task-links-box
+    task-links
+    task-monitors-box
+    task-monitors
+    task-monitored-by-box
+    task-monitored-by
+    task-trap-exit?
+    task-trap-exit!
+    task-wake!
+    task-owned-channels-box
+    task-owned-channels
+    task-register-channel!
+    task-unregister-channel!
+    task-poison-owned-channels!
 
     ;; <channel-waiter> Record
     <channel-waiter>
@@ -67,6 +83,7 @@
     channel-current-count
     channel-count
     channel-closed?
+    channel-poisoned?
     channel-empty?
     channel-full?
     channel-send!
@@ -75,6 +92,7 @@
     channel-try-recv!
     channel-try-recv-with-status!
     channel-close!
+    channel-poison!
     channel-deep-copy
     broadcast-send!
     channel-stats)

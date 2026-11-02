@@ -18,5 +18,5 @@
   (import
     (scheme base))
 
-  (include "../../../runtime/concurrency/thread.scm"))
+  (include "ulisp/runtime/concurrency/thread.scm"))
 

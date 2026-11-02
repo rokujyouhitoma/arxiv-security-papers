@@ -49,7 +49,8 @@
   (%make-task-context tid state reductions continuation-pc stack-pointer
                       arena-base arena-offset arena-capacity
                       blocked-on epoch next-run
-                      reduction-exhaustions steals-count handoff-box)
+                      reduction-exhaustions steals-count handoff-box
+                      links-box monitors-box monitored-by-box trap-exit-box owned-channels-box)
   task-context?
   (tid                   %task-tid)
   (state                 %task-state                 %task-state-set!)
@@ -64,7 +65,12 @@
   (next-run              %task-next-run              %task-next-run-set!)
   (reduction-exhaustions %task-reduction-exhaustions %task-reduction-exhaustions-set!)
   (steals-count          %task-steals-count          %task-steals-count-set!)
-  (handoff-box           %task-handoff-box))
+  (handoff-box           %task-handoff-box)
+  (links-box             %task-links-box)
+  (monitors-box          %task-monitors-box)
+  (monitored-by-box      %task-monitored-by-box)
+  (trap-exit-box         %task-trap-exit-box)
+  (owned-channels-box    %task-owned-channels-box))
 
 ;; -----------------------------------------------------------------------
 ;; Global Monotonically Increasing Atomic Task ID Allocator (#673)
@@ -88,13 +94,22 @@
     (()
      (let ((tid (allocate-task-id!)))
        (%make-task-context tid 'ready *task-default-reductions* 0 0
-                           0 0 4096 #f 0 #f 0 0 (make-atomic-box #f))))
+                           0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
+                           (make-atomic-box '()) (make-atomic-box '())
+                           (make-atomic-box '()) (make-atomic-box #f)
+                           (make-atomic-box '()))))
     ((tid)
      (%make-task-context tid 'ready *task-default-reductions* 0 0
-                         0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)))
+                         0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
+                         (make-atomic-box '()) (make-atomic-box '())
+                         (make-atomic-box '()) (make-atomic-box #f)
+                         (make-atomic-box '())))
     ((tid epoch)
      (%make-task-context tid 'ready *task-default-reductions* 0 0
-                         0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)))
+                         0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)
+                         (make-atomic-box '()) (make-atomic-box '())
+                         (make-atomic-box '()) (make-atomic-box #f)
+                         (make-atomic-box '())))
     ((tid state reductions continuation-pc stack-pointer
       arena-base arena-offset arena-capacity
       blocked-on epoch next-run
@@ -103,7 +118,10 @@
                          arena-base arena-offset arena-capacity
                          blocked-on epoch next-run
                          reduction-exhaustions steals-count
-                         (make-atomic-box #f)))))
+                         (make-atomic-box #f)
+                         (make-atomic-box '()) (make-atomic-box '())
+                         (make-atomic-box '()) (make-atomic-box #f)
+                         (make-atomic-box '())))))
 
 (define (task-tid t)
   (if (not (task-context? t))
@@ -234,6 +252,19 @@
       (error "task-has-handoff?: expected <task-context>" t)
       (pair? (atomic-ref (%task-handoff-box t)))))
 
+(define (task-handoff-box t)
+  (if (not (task-context? t))
+      (error "task-handoff-box: expected <task-context>" t)
+      (%task-handoff-box t)))
+
+(define (task-set-handoff! t val)
+  (if (not (task-context? t))
+      (error "task-set-handoff!: expected <task-context>" t)
+      (begin
+        (atomic-set! (%task-handoff-box t) (cons #t val))
+        (%memory-fence)
+        val)))
+
 (define task-take-handoff!
   (case-lambda
     ((t) (task-take-handoff! t #f))
@@ -244,6 +275,99 @@
            (if (pair? cell)
                (cdr cell)
                empty-default))))))
+
+;; 耐障害性・リンク・モニタ・チャネル所有メタデータアクセサ
+(define (task-links-box t)
+  (if (not (task-context? t))
+      (error "task-links-box: expected <task-context>" t)
+      (%task-links-box t)))
+
+(define (task-links t)
+  (atomic-ref (task-links-box t)))
+
+(define (task-monitors-box t)
+  (if (not (task-context? t))
+      (error "task-monitors-box: expected <task-context>" t)
+      (%task-monitors-box t)))
+
+(define (task-monitors t)
+  (atomic-ref (task-monitors-box t)))
+
+(define (task-monitored-by-box t)
+  (if (not (task-context? t))
+      (error "task-monitored-by-box: expected <task-context>" t)
+      (%task-monitored-by-box t)))
+
+(define (task-monitored-by t)
+  (atomic-ref (task-monitored-by-box t)))
+
+(define (task-trap-exit? t)
+  (if (not (task-context? t))
+      (error "task-trap-exit?: expected <task-context>" t)
+      (atomic-ref (%task-trap-exit-box t))))
+
+(define (task-trap-exit! t val)
+  (if (not (task-context? t))
+      (error "task-trap-exit!: expected <task-context>" t)
+      (let ((b (if val #t #f)))
+        (atomic-set! (%task-trap-exit-box t) b)
+        (%memory-fence)
+        b)))
+
+(define (task-owned-channels-box t)
+  (if (not (task-context? t))
+      (error "task-owned-channels-box: expected <task-context>" t)
+      (%task-owned-channels-box t)))
+
+(define (task-owned-channels t)
+  (atomic-ref (task-owned-channels-box t)))
+
+(define (task-register-channel! t ch)
+  (if (not (task-context? t))
+      (error "task-register-channel!: expected <task-context>" t)
+      (if (not (channel? ch))
+          (error "task-register-channel!: expected <channel>" ch)
+          (let retry ()
+            (let* ((box (%task-owned-channels-box t))
+                   (cur (atomic-ref box)))
+              (if (memq ch cur)
+                  #t
+                  (if (atomic-cas! box cur (cons ch cur))
+                      #t
+                      (retry))))))))
+
+(define (task-unregister-channel! t ch)
+  (if (not (task-context? t))
+      (error "task-unregister-channel!: expected <task-context>" t)
+      (if (not (channel? ch))
+          (error "task-unregister-channel!: expected <channel>" ch)
+          (let retry ()
+            (let* ((box (%task-owned-channels-box t))
+                   (cur (atomic-ref box)))
+              (if (not (memq ch cur))
+                  #t
+                  (let ((new-list (let remove-ch ((xs cur))
+                                    (cond ((null? xs) '())
+                                          ((eq? (car xs) ch) (cdr xs))
+                                          (else (cons (car xs) (remove-ch (cdr xs))))))))
+                    (if (atomic-cas! box cur new-list)
+                        #t
+                        (retry)))))))))
+
+(define task-poison-owned-channels!
+  (case-lambda
+    ((t) (task-poison-owned-channels! t 'killed #f))
+    ((t reason) (task-poison-owned-channels! t reason #f))
+    ((t reason wake-hook)
+     (if (not (task-context? t))
+         (error "task-poison-owned-channels!: expected <task-context>" t)
+         (let ((chs (atomic-swap! (%task-owned-channels-box t) '())))
+           (let loop ((xs chs))
+             (if (null? xs)
+                 #t
+                 (begin
+                   (channel-poison! (car xs) reason wake-hook)
+                   (loop (cdr xs))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 3. <channel-waiter> Record Type (Wait Queue Entry)
@@ -371,7 +495,13 @@
 (define (channel-closed? ch)
   (if (not (channel? ch))
       (error "channel-closed?: expected <channel>" ch)
-      (atomic-ref (%channel-closed-box ch))))
+      (let ((val (atomic-ref (%channel-closed-box ch))))
+        (if val #t #f))))
+
+(define (channel-poisoned? ch)
+  (if (not (channel? ch))
+      (error "channel-poisoned?: expected <channel>" ch)
+      (eq? (atomic-ref (%channel-closed-box ch)) 'poisoned)))
 
 (define (channel-empty? ch)
   (if (not (channel? ch))
@@ -402,7 +532,7 @@
                 #t)))))
 
 (define (%wake-task! task wake-hook)
-  (if task
+  (if (and task (not (eq? (%task-state task) 'terminated)))
       (begin
         (%task-blocked-on-set! task #f)
         (%task-state-set! task 'ready)
@@ -410,6 +540,11 @@
         (let ((hook (or wake-hook (atomic-ref *channel-wake-hook-box*))))
           (if hook
               (hook task))))))
+
+(define task-wake!
+  (case-lambda
+    ((task) (%wake-task! task #f))
+    ((task wake-hook) (%wake-task! task wake-hook))))
 
 ;; Pop next valid, unclaimed <channel-waiter> from a wait queue.
 ;; Any waiter whose task fails the Generation Gate is transitioned to 'terminated.
@@ -459,9 +594,16 @@
       (error "channel-send!: expected <channel>" ch)
       (if (and sender-task (not (task-context? sender-task)))
           (error "channel-send!: expected <task-context> or #f" sender-task)
-          (if (atomic-ref (%channel-closed-box ch))
-              (error "channel-send!: cannot send on closed channel" ch)
-              ;; Fast Path 1: Direct zero-copy handoff to a waiting receiver
+          (let ((closed-state (atomic-ref (%channel-closed-box ch))))
+            (cond
+              ((eq? closed-state 'poisoned)
+               (if (not allow-suspend?)
+                   (cons #f 'poisoned)
+                   (error "channel-send!: cannot send on poisoned channel (CWE-833)" ch)))
+              (closed-state
+               (error "channel-send!: cannot send on closed channel" ch))
+              (else
+               ;; Fast Path 1: Direct zero-copy handoff to a waiting receiver
               (let ((recv-waiter (%pop-live-waiter! (%channel-recv-wait-queue ch))))
                 (if recv-waiter
                     (let ((recv-task (%waiter-task recv-waiter)))
@@ -490,7 +632,7 @@
                                     (%memory-fence)))
                               (enqueue-lockfree! (%channel-send-wait-queue ch) waiter)
                               (atomic-fetch-add! (%channel-backpressure-count-box ch) 1)
-                              'suspended)))))))))
+                              'suspended)))))))))))
 
 (define channel-send!
   (case-lambda
@@ -542,19 +684,24 @@
                         (%wake-task! sender-task wake-hook)
                         (cons #t val))
                       ;; Slow Path: No buffered message and no waiting sender
-                      (if (atomic-ref (%channel-closed-box ch))
-                          (cons #f 'closed)
-                          (if (not allow-suspend?)
-                              (cons #f empty-default)
-                              (let ((waiter (make-channel-waiter receiver-task #f)))
-                                (if receiver-task
-                                    (begin
-                                      (atomic-set! (%task-handoff-box receiver-task) #f)
-                                      (%task-blocked-on-set! receiver-task ch)
-                                      (%task-state-set! receiver-task 'waiting-channel)
-                                      (%memory-fence)))
-                                (enqueue-lockfree! (%channel-recv-wait-queue ch) waiter)
-                                (cons #f 'suspended)))))))))))
+                      (let ((closed-state (atomic-ref (%channel-closed-box ch))))
+                        (cond
+                          ((eq? closed-state 'poisoned)
+                           (cons #f 'poisoned))
+                          (closed-state
+                           (cons #f 'closed))
+                          (else
+                           (if (not allow-suspend?)
+                               (cons #f empty-default)
+                               (let ((waiter (make-channel-waiter receiver-task #f)))
+                                 (if receiver-task
+                                     (begin
+                                       (atomic-set! (%task-handoff-box receiver-task) #f)
+                                       (%task-blocked-on-set! receiver-task ch)
+                                       (%task-state-set! receiver-task 'waiting-channel)
+                                       (%memory-fence)))
+                                 (enqueue-lockfree! (%channel-recv-wait-queue ch) waiter)
+                                 (cons #f 'suspended)))))))))))))
 
 (define channel-recv!
   (case-lambda
@@ -587,6 +734,7 @@
          (error "channel-close!: expected <channel>" ch)
          (begin
            (atomic-set! (%channel-closed-box ch) #t)
+           (%memory-fence)
            ;; Wake any waiting receivers so they observe closed state
            (let wake-recvs ()
              (let ((w (%pop-live-waiter! (%channel-recv-wait-queue ch))))
@@ -594,6 +742,49 @@
                    (begin
                      (%wake-task! (%waiter-task w) wake-hook)
                      (wake-recvs)))))
+           ;; Wake any waiting senders so they do not hang forever on closed channel
+           (let wake-sends ()
+             (let ((w (%pop-live-waiter! (%channel-send-wait-queue ch))))
+               (if w
+                   (begin
+                     (%wake-task! (%waiter-task w) wake-hook)
+                     (wake-sends)))))
+           #t)))))
+
+(define channel-poison!
+  (case-lambda
+    ((ch) (channel-poison! ch 'poisoned #f))
+    ((ch reason) (channel-poison! ch reason #f))
+    ((ch reason wake-hook)
+     (if (not (channel? ch))
+         (error "channel-poison!: expected <channel>" ch)
+         (begin
+           (atomic-set! (%channel-closed-box ch) 'poisoned)
+           (%memory-fence)
+           ;; 1. Wake all waiting receivers and notify them of poisoning
+           (let wake-recvs ()
+             (let ((w (%pop-live-waiter! (%channel-recv-wait-queue ch))))
+               (if w
+                   (let ((t (%waiter-task w)))
+                     (if t
+                         (begin
+                           (atomic-set! (%task-handoff-box t) (cons #f (cons 'poisoned reason)))
+                           (%task-blocked-on-set! t #f)
+                           (%task-state-set! t 'ready)
+                           (%wake-task! t wake-hook)))
+                     (wake-recvs)))))
+           ;; 2. Wake all waiting senders and notify them of poisoning
+           (let wake-sends ()
+             (let ((w (%pop-live-waiter! (%channel-send-wait-queue ch))))
+               (if w
+                   (let ((t (%waiter-task w)))
+                     (if t
+                         (begin
+                           (atomic-set! (%task-handoff-box t) (cons #f (cons 'poisoned reason)))
+                           (%task-blocked-on-set! t #f)
+                           (%task-state-set! t 'ready)
+                           (%wake-task! t wake-hook)))
+                     (wake-sends)))))
            #t)))))
 
 ;; Structural deep copy for fan-out broadcast so mutable pairs, vectors,

@@ -1044,15 +1044,15 @@ mindmap
 
 ## 14.8 Phase 6: Erlang/OTP 型耐障害性拡張 (Fault-Tolerant Supervision)
 
-### Task 6.1: タスク間双方向リンク・単方向監視およびチャネル毒化防止 (`ulisp/runtime/concurrency/links.scm`)
+### Task 6.1: タスク間双方向リンク・単方向監視およびチャネル毒化防止 (`ulisp/runtime/concurrency/links.scm`) 【実装完了】
 - **目的**: タスク異常終了の即時検知、シグナル連鎖伝播、および対向チャネル待機タスクのデッドロック防止。
-- **関連 Issue**: [[Issue #666]](../issues/666-implement-synapse-task-links-and-monitors.md)
+- **関連 Issue**: [[Issue #666 (完了)]](../issues/closed/666-implement-synapse-task-links-and-monitors.md)
 - **実装内容**:
   - `(task-link! a b)` による双方向運命共有と `EXIT` シグナル連鎖伝播。
   - `(task-monitor observer target)` による単方向 `'DOWN` 通知メッセージ送信。
   - 異常終了タスクの保有チャネルの `CHANNEL_POISONED` アトミック遷移と待機タスクの即時アンブロック。
 - **DoD**:
-  - リンクされたタスクがクラッシュ時に道連れ終了すること、モニタタスクにダウン理由が配送されること、チャネル待機がデッドロックしないこと。
+  - リンクされたタスクがクラッシュ時に道連れ終了すること、モニタタスクにダウン理由が配送されること、チャネル待機がデッドロックしないこと（全 49 テスト PASS 達成済み）。
 
 ### Task 6.2: Erlang/OTP 型スーパービジョンツリーと再起動戦略 (`ulisp/runtime/concurrency/supervisor.scm`)
 - **目的**: 階層的プロセスツリーによる自律的障害復旧と Flapping (Crash Loop) の防止。

@@ -37,4 +37,4 @@
     *min-reduction-budget*
     *max-reduction-budget*)
   (import (scheme base))
-  (include "../../../runtime/concurrency/preempt.scm"))
+  (include "ulisp/runtime/concurrency/preempt.scm"))

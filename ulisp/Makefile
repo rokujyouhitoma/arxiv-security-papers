@@ -321,6 +321,14 @@ test_multithread_scheduler: $(COMPILER_DEP) build/context.o build/thread.o
 	$(LD) $(LDFLAGS) build/test_multithread_scheduler.o build/context.o build/thread.o -o build/test_multithread_scheduler
 	./build/test_multithread_scheduler < /dev/null
 
+test_links_monitors: $(COMPILER_DEP) build/context.o build/thread.o
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_links_monitors.scm > build/test_links_monitors_input.scm
+	$(ULISP_COMPILER) build/test_links_monitors_input.scm > build/test_links_monitors.s
+	$(AS) $(ASFLAGS) build/test_links_monitors.s -o build/test_links_monitors.o
+	$(LD) $(LDFLAGS) build/test_links_monitors.o build/context.o build/thread.o -o build/test_links_monitors
+	./build/test_links_monitors < /dev/null
+
 test_preemption: $(COMPILER_DEP) build/context.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_preemption.scm > build/test_preemption_input.scm

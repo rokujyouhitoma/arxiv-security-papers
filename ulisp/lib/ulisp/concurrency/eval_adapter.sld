@@ -35,5 +35,5 @@
     set-eval-yield-hook!
     eval-yield-hook)
   (import (scheme base))
-  (include "../../../runtime/concurrency/eval_adapter.scm"))
+  (include "ulisp/runtime/concurrency/eval_adapter.scm"))
 

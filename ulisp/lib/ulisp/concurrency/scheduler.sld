@@ -59,8 +59,9 @@
     (ulisp concurrency deque)
     (ulisp concurrency queue)
     (ulisp concurrency channel)
+    (ulisp concurrency links)
     (ulisp concurrency context)
     (ulisp concurrency thread))
 
-  (include "../../../runtime/concurrency/scheduler.scm"))
+  (include "ulisp/runtime/concurrency/scheduler.scm"))
 

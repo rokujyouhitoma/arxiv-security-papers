@@ -30,5 +30,5 @@
     (scheme base)
     (ulisp concurrency atomic))
 
-  (include "../../../runtime/concurrency/deque.scm"))
+  (include "ulisp/runtime/concurrency/deque.scm"))
 

@@ -22,4 +22,4 @@
     epoch-stats
     epoch-reset-stats!
     epoch-reset-global!)
-  (include "../../../runtime/concurrency/epoch.scm"))
+  (include "ulisp/runtime/concurrency/epoch.scm"))
