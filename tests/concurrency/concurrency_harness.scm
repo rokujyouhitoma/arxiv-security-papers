@@ -382,6 +382,45 @@
                               "Task global next id must match start-id + count")))))
 
 ;; -----------------------------------------------------------------------
+;; 6d. Scenario 4d: Atomic Scheduler Stats Counters Invariant (#674)
+;; -----------------------------------------------------------------------
+
+(define (run-scenario-scheduler-stats-atomic! iter prng)
+  (begin
+    (vector-set! *harness-current-scenario* 0 "Scenario 4d: Atomic Scheduler Stats Counters (#674)")
+    (let* ((sched (make-work-stealing-scheduler 2 32))
+           (increments 20))
+      (begin
+        (harness-assert-equal (scheduler-tasks-spawned sched) 0 "Scheduler initial tasks-spawned must be 0")
+        (harness-assert-equal (scheduler-tasks-completed sched) 0 "Scheduler initial tasks-completed must be 0")
+
+        ;; Simulate concurrent increments with chaos jitter
+        (let loop ((k 0))
+          (if (< k increments)
+              (begin
+                (inject-jitter! prng 8)
+                (%scheduler-tasks-spawned-inc! sched)
+                (inject-jitter! prng 8)
+                (%scheduler-tasks-completed-inc! sched)
+                (loop (+ k 1)))
+              #t))
+
+        (harness-assert-equal (scheduler-tasks-spawned sched) increments
+                              "Scheduler tasks-spawned must match total increments without lost updates")
+        (harness-assert-equal (scheduler-tasks-completed sched) increments
+                              "Scheduler tasks-completed must match total increments without lost updates")
+        (harness-assert-equal (scheduler-total-spawned sched) (scheduler-tasks-spawned sched)
+                              "Scheduler total-spawned alias must strictly match tasks-spawned")
+        (harness-assert-equal (scheduler-total-completed sched) (scheduler-tasks-completed sched)
+                              "Scheduler total-completed alias must strictly match tasks-completed")
+
+        ;; Verify reset restores 0
+        (%scheduler-stats-reset! sched)
+        (harness-assert-equal (scheduler-tasks-spawned sched) 0 "Scheduler tasks-spawned must reset to 0")
+        (harness-assert-equal (scheduler-tasks-completed sched) 0 "Scheduler tasks-completed must reset to 0")
+        (scheduler-stop! sched)))))
+
+;; -----------------------------------------------------------------------
 ;; 7. Scenario 5: 100-Iteration Flakiness Elimination & CI Reporting Controller
 ;; -----------------------------------------------------------------------
 
@@ -406,7 +445,8 @@
                 (run-scenario-epoch-rollback! iter iter-prng)
                 (run-scenario-arena-no-leak! iter iter-prng)
                 (run-scenario-coroutine-id-atomic! iter iter-prng)
-                (run-scenario-task-id-atomic! iter iter-prng)))
+                (run-scenario-task-id-atomic! iter iter-prng)
+                (run-scenario-scheduler-stats-atomic! iter iter-prng)))
 
             ;; Print periodic progress tick every 10 iterations
             (if (= (modulo iter 10) 0)

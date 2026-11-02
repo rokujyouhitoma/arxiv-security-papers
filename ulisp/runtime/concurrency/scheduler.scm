@@ -128,8 +128,8 @@
 
 (define (%make-scheduler-stats)
   (let ((s (make-vector 2)))
-    (vector-set! s 0 0)
-    (vector-set! s 1 0)
+    (vector-set! s 0 (make-atomic-box 0))
+    (vector-set! s 1 (make-atomic-box 0))
     s))
 
 (define (%make-scheduler-internal worker-count workers)
@@ -179,10 +179,14 @@
   (eq? (scheduler-state sched) 'stopped))
 
 (define (scheduler-tasks-spawned sched)
-  (vector-ref (%scheduler-stats sched) 0))
+  (if (not (work-stealing-scheduler? sched))
+      (error "scheduler-tasks-spawned: expected <work-stealing-scheduler>" sched)
+      (atomic-ref (vector-ref (%scheduler-stats sched) 0))))
 
 (define (scheduler-tasks-completed sched)
-  (vector-ref (%scheduler-stats sched) 1))
+  (if (not (work-stealing-scheduler? sched))
+      (error "scheduler-tasks-completed: expected <work-stealing-scheduler>" sched)
+      (atomic-ref (vector-ref (%scheduler-stats sched) 1))))
 
 (define (scheduler-total-spawned sched)
   (scheduler-tasks-spawned sched))
@@ -191,12 +195,18 @@
   (scheduler-tasks-completed sched))
 
 (define (%scheduler-tasks-spawned-inc! sched)
-  (let ((s (%scheduler-stats sched)))
-    (vector-set! s 0 (+ (vector-ref s 0) 1))))
+  (atomic-fetch-add! (vector-ref (%scheduler-stats sched) 0) 1))
 
 (define (%scheduler-tasks-completed-inc! sched)
-  (let ((s (%scheduler-stats sched)))
-    (vector-set! s 1 (+ (vector-ref s 1) 1))))
+  (atomic-fetch-add! (vector-ref (%scheduler-stats sched) 1) 1))
+
+(define (%scheduler-stats-reset! sched)
+  (if (not (work-stealing-scheduler? sched))
+      (error "%scheduler-stats-reset!: expected <work-stealing-scheduler>" sched)
+      (let ((s (%scheduler-stats sched)))
+        (atomic-set! (vector-ref s 0) 0)
+        (atomic-set! (vector-ref s 1) 0)
+        #t)))
 
 ;; -----------------------------------------------------------------------
 ;; 3. Task Execution Engine & Spawning

@@ -53,7 +53,7 @@
 | **#671** | コルーチン ID 採番における非アトミック更新の解消と並行 ID 重複防止 | コンテキスト基盤: コルーチン ID アトミック化 (`context.scm`) | Closed (Resolved) | [Issue #671](../issues/closed/671-fix-synapse-coroutine-id-atomic-allocation.md) |
 | **#672** | epoch-advance! におけるフェッチ後再読み取り競合の是正と同一 Epoch 重複返却の解消 | 世代管理基盤: Epoch 原子的進行保証 (`epoch.scm`) | Closed (Resolved) | [Issue #672](../issues/closed/672-fix-synapse-epoch-advance-atomic-return-race.md) |
 | **#673** | グローバルアトミック Task ID (TID) 自動採番機構の導入と手動指定衝突の防止 | タスク基盤: 一意 TID 自動割当 (`channel.scm`, `preempt.scm`) | Closed (Resolved) | [Issue #673](../issues/closed/673-implement-synapse-global-atomic-task-id-allocator.md) |
-| **#674** | スケジューラ統計カウンタのアトミック化による並行終了判定の不整合・ハング防止 | スケジューラ基盤: 統計アトミック化 (`scheduler.scm`) | New | [Issue #674](../issues/674-fix-synapse-scheduler-stats-atomic-counters.md) |
+| **#674** | スケジューラ統計カウンタのアトミック化による並行終了判定の不整合・ハング防止 | スケジューラ基盤: 統計アトミック化 (`scheduler.scm`) | Closed (Resolved) | [Issue #674](../issues/closed/674-fix-synapse-scheduler-stats-atomic-counters.md) |
 
 ---
 

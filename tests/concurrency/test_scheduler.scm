@@ -207,6 +207,51 @@
   (assert-equal (scheduler-state sched) 'stopped "scheduler-state is 'stopped after stop!"))
 
 ;; -----------------------------------------------------------------------
+;; Group 3b: Atomic Scheduler Stats Counters & Monotonic Invariants (#674)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 3b: Atomic Scheduler Stats Counters (#674) ---\n")
+(flush-output-port)
+
+(let ((sched (make-work-stealing-scheduler 2 64)))
+  (assert-equal (scheduler-tasks-spawned sched) 0 "initial tasks-spawned is 0")
+  (assert-equal (scheduler-tasks-completed sched) 0 "initial tasks-completed is 0")
+  (assert-equal (scheduler-total-spawned sched) 0 "scheduler-total-spawned matches tasks-spawned (0)")
+  (assert-equal (scheduler-total-completed sched) 0 "scheduler-total-completed matches tasks-completed (0)")
+
+  ;; Verify atomic increment operations
+  (%scheduler-tasks-spawned-inc! sched)
+  (assert-equal (scheduler-tasks-spawned sched) 1 "tasks-spawned is 1 after inc")
+  (assert-equal (scheduler-total-spawned sched) 1 "total-spawned reflects 1")
+
+  (%scheduler-tasks-completed-inc! sched)
+  (assert-equal (scheduler-tasks-completed sched) 1 "tasks-completed is 1 after inc")
+  (assert-equal (scheduler-total-completed sched) 1 "total-completed reflects 1")
+
+  ;; Perform rapid 100 increments
+  (let loop ((k 0))
+    (if (< k 100)
+        (begin
+          (%scheduler-tasks-spawned-inc! sched)
+          (%scheduler-tasks-completed-inc! sched)
+          (loop (+ k 1)))
+        #t))
+
+  (assert-equal (scheduler-tasks-spawned sched) 101 "tasks-spawned reached 101")
+  (assert-equal (scheduler-tasks-completed sched) 101 "tasks-completed reached 101")
+
+  ;; Reset stats
+  (assert-true (%scheduler-stats-reset! sched) "%scheduler-stats-reset! returns #t")
+  (assert-equal (scheduler-tasks-spawned sched) 0 "tasks-spawned is 0 after reset")
+  (assert-equal (scheduler-tasks-completed sched) 0 "tasks-completed is 0 after reset")
+
+  ;; Guard against non-scheduler object (CWE-843)
+  (assert-error (lambda () (scheduler-tasks-spawned "invalid")) "scheduler-tasks-spawned rejects non-scheduler (CWE-843)")
+  (assert-error (lambda () (scheduler-tasks-completed 12345)) "scheduler-tasks-completed rejects non-scheduler (CWE-843)")
+  (assert-error (lambda () (%scheduler-stats-reset! #f)) "%scheduler-stats-reset! rejects non-scheduler (CWE-843)")
+
+  (scheduler-stop! sched))
+
+;; -----------------------------------------------------------------------
 ;; Group 4: Asymmetric Work-Stealing Load Balancing & Channel Wake
 ;; -----------------------------------------------------------------------
 (write-string "--- Group 4: Asymmetric Load Balancing & Work-Stealing ---\n")

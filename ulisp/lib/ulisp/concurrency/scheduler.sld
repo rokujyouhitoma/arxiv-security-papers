@@ -30,8 +30,11 @@
     scheduler-state
     scheduler-running?
     scheduler-stop!
+    scheduler-tasks-spawned
+    scheduler-tasks-completed
     scheduler-total-spawned
     scheduler-total-completed
+    %scheduler-stats-reset!
 
     ;; Execution and work-stealing
     scheduler-spawn!
