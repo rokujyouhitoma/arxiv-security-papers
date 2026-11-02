@@ -20,7 +20,6 @@
 | **668** | エフェメラルアリーナ O(1) 即時破棄と融合した Fail-Fast "Let It Crash" セマンティクスおよびパニック機構の確立 | Feature | Medium | New | [668-implement-synapse-fail-fast-let-it-crash-semantics.md](668-implement-synapse-fail-fast-let-it-crash-semantics.md) |
 | **669** | 動的タスク再起動を透過化する Synapse プロセス名レジストリ (Registry) と透過的チャネル再バインド機構の実装 | Feature | Medium | New | [669-implement-synapse-process-registry-and-dynamic-rebinding.md](669-implement-synapse-process-registry-and-dynamic-rebinding.md) |
 | **670** | 構造化クラッシュレポート (SASL 相当) 生成と Layer 1 コントロールプレーン非同期転送・可観測性基盤の実装 | Feature | Medium | New | [670-implement-synapse-structured-crash-reporting-and-observability.md](670-implement-synapse-structured-crash-reporting-and-observability.md) |
-| **672** | epoch-advance! におけるフェッチ後再読み取り競合の是正と同一 Epoch 重複返却の解消 | Bug | High | New | [672-fix-synapse-epoch-advance-atomic-return-race.md](672-fix-synapse-epoch-advance-atomic-return-race.md) |
 | **673** | グローバルアトミック Task ID (TID) 自動採番機構の導入と手動指定衝突の防止 | Feature | High | New | [673-implement-synapse-global-atomic-task-id-allocator.md](673-implement-synapse-global-atomic-task-id-allocator.md) |
 | **674** | スケジューラ統計カウンタのアトミック化による並行終了判定の不整合・ハング防止 | Bug | High | New | [674-fix-synapse-scheduler-stats-atomic-counters.md](674-fix-synapse-scheduler-stats-atomic-counters.md) |
 
@@ -30,6 +29,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **672** | epoch-advance! におけるフェッチ後再読み取り競合の是正と同一 Epoch 重複返却の解消 | Bug | 2026-11-02 | [closed/672-fix-synapse-epoch-advance-atomic-return-race.md](closed/672-fix-synapse-epoch-advance-atomic-return-race.md) |
 | **671** | コルーチン ID 採番における非アトミック更新の解消と並行 ID 重複防止 | Bug | 2026-11-02 | [closed/671-fix-synapse-coroutine-id-atomic-allocation.md](closed/671-fix-synapse-coroutine-id-atomic-allocation.md) |
 | **657** | R7RS §4.3.1 局所マクロ束縛構文 (let-syntax / letrec-syntax) の実装 | Feature | 2026-11-02 | [closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md](closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md) |
 | **656** | R7RS §6.13.3 循環参照・共有構造表記対応ライター (write-simple, write-shared) の実装 | Feature | 2026-11-01 | [closed/656-implement-r7rs-write-simple-and-write-shared.md](closed/656-implement-r7rs-write-simple-and-write-shared.md) |

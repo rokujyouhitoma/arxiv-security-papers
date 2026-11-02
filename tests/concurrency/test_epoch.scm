@@ -107,6 +107,19 @@
                   #f)))
   (assert-true rejected "1.8 epoch-set-floor! rejects 0 (CWE-190)"))
 
+;; Atomic return value verification (#672)
+(let* ((ep3 (epoch-advance!))
+       (ep4 (epoch-advance!))
+       (ep5 (epoch-advance!))
+       (ep6 (epoch-advance!))
+       (ep7 (epoch-advance!)))
+  (assert-equal ep3 3 "1.9a epoch-advance! atomically returns 3")
+  (assert-equal ep4 4 "1.9b epoch-advance! atomically returns 4")
+  (assert-equal ep5 5 "1.9c epoch-advance! atomically returns 5")
+  (assert-equal ep6 6 "1.9d epoch-advance! atomically returns 6")
+  (assert-equal ep7 7 "1.9e epoch-advance! atomically returns 7")
+  (assert-equal (epoch-current) 7 "1.10 epoch-current matches last advanced epoch (7)"))
+
 ;;; -----------------------------------------------------------------------
 ;;; Group 2: Task Epoch Binding & Registration Registry
 ;;; -----------------------------------------------------------------------

@@ -250,6 +250,15 @@
             ;; Speculative Task-spec bound to Epoch 2
             (epoch-bind-task! task-spec 2 arena-spec)))
 
+        ;; Advance multiple times under jitter to verify atomic monotonic return values (#672)
+        (let* ((ep3 (epoch-advance!))
+               (dummy1 (inject-jitter! prng 5))
+               (ep4 (epoch-advance!)))
+          (begin
+            (harness-assert-equal ep3 3 "Epoch advance must atomically return 3 (#672)")
+            (harness-assert-equal ep4 4 "Epoch advance must atomically return 4 (#672)")
+            (harness-assert-equal (epoch-current) 4 "Current epoch must match 4")))
+
         (arena-allocate! arena-spec 64)
         (harness-assert-true (> (arena-used-bytes arena-spec) 0) "Speculative arena must have allocations")
 

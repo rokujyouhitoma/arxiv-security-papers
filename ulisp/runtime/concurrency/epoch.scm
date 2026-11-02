@@ -34,9 +34,7 @@
   (atomic-ref *epoch-active-floor*))
 
 (define (epoch-advance!)
-  (begin
-    (atomic-fetch-add! *epoch-global-counter* 1)
-    (epoch-current)))
+  (+ (atomic-fetch-add! *epoch-global-counter* 1) 1))
 
 (define (epoch-set-floor! floor-val)
   (if (or (not (integer? floor-val)) (< floor-val 1))
