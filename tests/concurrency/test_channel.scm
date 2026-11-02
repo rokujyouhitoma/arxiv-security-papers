@@ -100,6 +100,44 @@
   (assert-equal (channel-capacity ch-int) 2 "make-channel-internal sets capacity 2"))
 
 ;; -----------------------------------------------------------------------
+;; Group 1b: Atomic Task ID (TID) Allocation & Monotonic Invariants (#673)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 1b: Atomic Task ID Allocation & Monotonic Invariants (#673) ---\n")
+(flush-output-port)
+
+(let* ((base-tid (task-next-id-current))
+       (tid1 (allocate-task-id!))
+       (tid2 (allocate-task-id!))
+       (tid3 (allocate-task-id!)))
+  (assert-equal tid2 (+ tid1 1) "allocate-task-id! tid2 is tid1 + 1")
+  (assert-equal tid3 (+ tid2 1) "allocate-task-id! tid3 is tid2 + 1")
+  (assert-equal (task-next-id-current) (+ tid3 1) "task-next-id-current reflects advances"))
+
+;; 0-arg (make-task-context) automatic TID allocation
+(let* ((cur (task-next-id-current))
+       (auto-t1 (make-task-context))
+       (auto-t2 (make-task-context))
+       (auto-t3 (make-task-context)))
+  (assert-equal (task-tid auto-t1) cur "0-arg make-task-context assigns current TID")
+  (assert-equal (task-tid auto-t2) (+ cur 1) "0-arg make-task-context advances TID by 1")
+  (assert-equal (task-tid auto-t3) (+ cur 2) "0-arg make-task-context advances TID by 2")
+  (assert-true (eq? (task-state auto-t1) 'ready) "auto-t1 has initial state 'ready")
+  (assert-equal (task-reductions auto-t1) 4096 "auto-t1 has default reductions 4096"))
+
+;; task-reset-next-id! verification
+(task-reset-next-id! 50000)
+(assert-equal (task-next-id-current) 50000 "task-reset-next-id! sets next TID to 50000")
+(let ((t50k (make-task-context)))
+  (assert-equal (task-tid t50k) 50000 "make-task-context after reset receives 50000")
+  (assert-equal (task-next-id-current) 50001 "task-next-id-current increments to 50001"))
+
+;; Guard against non-integer reset (CWE-843)
+(let ((rejected (guard (exn (else #t))
+                  (task-reset-next-id! "invalid-tid")
+                  #f)))
+  (assert-true rejected "task-reset-next-id! rejects non-integer (CWE-843)"))
+
+;; -----------------------------------------------------------------------
 ;; Group 2: Rendezvous Synchronous Channels (capacity = 0)
 ;; -----------------------------------------------------------------------
 (write-string "--- Group 2: Rendezvous Synchronous Channels (capacity = 0) ---\n")

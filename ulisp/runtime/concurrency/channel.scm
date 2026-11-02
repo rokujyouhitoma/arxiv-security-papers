@@ -66,8 +66,29 @@
   (steals-count          %task-steals-count          %task-steals-count-set!)
   (handoff-box           %task-handoff-box))
 
+;; -----------------------------------------------------------------------
+;; Global Monotonically Increasing Atomic Task ID Allocator (#673)
+;; -----------------------------------------------------------------------
+
+(define *task-next-id* (make-atomic-box 1))
+
+(define (allocate-task-id!)
+  (atomic-fetch-add! *task-next-id* 1))
+
+(define (task-next-id-current)
+  (atomic-ref *task-next-id*))
+
+(define (task-reset-next-id! val)
+  (if (not (integer? val))
+      (error "task-reset-next-id!: val must be an integer" val)
+      (atomic-set! *task-next-id* val)))
+
 (define make-task-context
   (case-lambda
+    (()
+     (let ((tid (allocate-task-id!)))
+       (%make-task-context tid 'ready *task-default-reductions* 0 0
+                           0 0 4096 #f 0 #f 0 0 (make-atomic-box #f))))
     ((tid)
      (%make-task-context tid 'ready *task-default-reductions* 0 0
                          0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)))

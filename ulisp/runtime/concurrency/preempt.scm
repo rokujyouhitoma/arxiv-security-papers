@@ -48,8 +48,12 @@
 
 (define make-budgeted-task
   (case-lambda
-    ((id task-obj)
-     (%make-budgeted-task-impl id task-obj *default-reduction-budget*))
+    ((task-obj)
+     (%make-budgeted-task-impl (allocate-task-id!) task-obj *default-reduction-budget*))
+    ((arg1 arg2)
+     (if (integer? arg1)
+         (%make-budgeted-task-impl arg1 arg2 *default-reduction-budget*)
+         (%make-budgeted-task-impl (allocate-task-id!) arg1 arg2)))
     ((id task-obj budget)
      (%make-budgeted-task-impl id task-obj budget))))
 

@@ -9,6 +9,10 @@
     ;; Constants & Hooks
     *task-default-reductions*
     *channel-max-capacity*
+    *task-next-id*
+    allocate-task-id!
+    task-next-id-current
+    task-reset-next-id!
     set-channel-wake-hook!
     channel-wake-hook
     set-channel-epoch-validator!

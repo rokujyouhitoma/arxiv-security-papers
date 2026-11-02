@@ -353,6 +353,35 @@
                               "Coroutine global next id must match start-id + count")))))
 
 ;; -----------------------------------------------------------------------
+;; 6c. Scenario 4c: Atomic Task ID Allocation & Monotonic Invariant (#673)
+;; -----------------------------------------------------------------------
+
+(define (run-scenario-task-id-atomic! iter prng)
+  (begin
+    (vector-set! *harness-current-scenario* 0 "Scenario 4c: Atomic Task ID Allocation (#673)")
+    (let* ((count 25)
+           (start-id (task-next-id-current))
+           (allocated (vector (make-vector count 0))))
+      (let alloc-loop ((i 0))
+        (if (< i count)
+            (begin
+              (inject-jitter! prng 10)
+              (let ((task (make-task-context)))
+                (vector-set! (vector-ref allocated 0) i (task-tid task))
+                (alloc-loop (+ i 1))))
+            #t))
+      (let ((ids (vector-ref allocated 0)))
+        (let check-loop ((i 0))
+          (if (< i (- count 1))
+              (begin
+                (harness-assert-equal (+ (vector-ref ids i) 1) (vector-ref ids (+ i 1))
+                                      "Task ID must be strictly monotonically increasing without collisions")
+                (check-loop (+ i 1)))
+              #t))
+        (harness-assert-equal (task-next-id-current) (+ start-id count)
+                              "Task global next id must match start-id + count")))))
+
+;; -----------------------------------------------------------------------
 ;; 7. Scenario 5: 100-Iteration Flakiness Elimination & CI Reporting Controller
 ;; -----------------------------------------------------------------------
 
@@ -376,7 +405,8 @@
                 (run-scenario-deque-aba! iter iter-prng)
                 (run-scenario-epoch-rollback! iter iter-prng)
                 (run-scenario-arena-no-leak! iter iter-prng)
-                (run-scenario-coroutine-id-atomic! iter iter-prng)))
+                (run-scenario-coroutine-id-atomic! iter iter-prng)
+                (run-scenario-task-id-atomic! iter iter-prng)))
 
             ;; Print periodic progress tick every 10 iterations
             (if (= (modulo iter 10) 0)
