@@ -61,3 +61,4 @@ Target Branch: `feat/704-implement-srfi-158-generators-and-accumulators`
 - [ ] ジェネレータ生成、合成、変換、およびアキュムレータによる消費のテストケースが PASS すること。
 - [ ] AOT ネイティブコンパイルおよび Portable C バックエンドの両方で回帰テストが PASS すること。
 - [ ] `make verify_r7rs_traceability` が 100% PASS し、`ref_r7rs_compliance.md` のステータスが **◎** に更新されること。
+

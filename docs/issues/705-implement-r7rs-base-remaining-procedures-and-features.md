@@ -64,3 +64,4 @@ Target Branch: `feat/705-implement-r7rs-base-remaining-procedures-and-features`
 - [ ] `(features)` の返却リストに `r7rs` やアーキテクチャ特性（エンディアン等）が含まれること。
 - [ ] AOT ネイティブコンパイルおよび回帰テストが PASS すること。
 - [ ] `make verify_r7rs_traceability` が 100% PASS し、`ref_r7rs_compliance.md` の該当項目ステータスが **◎** に更新されること。
+

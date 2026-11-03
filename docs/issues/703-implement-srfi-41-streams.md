@@ -58,3 +58,4 @@ Target Branch: `feat/703-implement-srfi-41-streams`
 - [ ] 無限ストリーム走査時において O(1) 空間計算量が維持され、空間リークやスタックオーバーフローが発生しないこと。
 - [ ] AOT ネイティブコンパイルおよび Portable C バックエンドの両方で回帰テストが PASS すること。
 - [ ] `make verify_r7rs_traceability` が 100% PASS し、`ref_r7rs_compliance.md` のステータスが **◎** に更新されること。
+

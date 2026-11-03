@@ -56,3 +56,4 @@ Target Branch: `feat/701-implement-srfi-128-comparators`
 - [ ] 標準型（Fixnum、真偽値、文字、文字列、シンボル、ペア、ベクタ）に対する基本コンパレータおよび比較マクロが期待通り動作すること。
 - [ ] AOT ネイティブコンパイル (x86-64 / AArch64) および Portable C バックエンドの両方で回帰テストが PASS すること。
 - [ ] `make verify_r7rs_traceability` が 100% PASS し、`ref_r7rs_compliance.md` のステータスが **◎** に更新されること。
+

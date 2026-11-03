@@ -61,3 +61,4 @@ Target Branch: `feat/702-implement-srfi-113-sets-and-bags`
 - [ ] 集合の構築、基本操作、集合代数演算（和・積・差）、およびマルチセット多重度管理のテストケースが網羅されていること。
 - [ ] AOT ネイティブコンパイルおよび Portable C バックエンドの両方で回帰テストが PASS すること。
 - [ ] `make verify_r7rs_traceability` が 100% PASS し、`ref_r7rs_compliance.md` のステータスが **◎** に更新されること。
+
