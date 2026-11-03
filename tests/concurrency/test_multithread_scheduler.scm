@@ -233,6 +233,56 @@
 (assert-error (lambda () (scheduler-run-parallel! "invalid")) "scheduler-run-parallel! rejects non-scheduler (CWE-843)")
 
 ;; -----------------------------------------------------------------------
+;; Group 7: NUMA Parallel Execution & Hierarchical Work Stealing (#681)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 7: NUMA Parallel Execution & Work Stealing (#681) ---\n")
+(flush-output-port)
+
+(let* ((worker-count 4)
+       (node-count 2)
+       (sched (make-work-stealing-scheduler worker-count 256 node-count))
+       (n-tasks 2000)
+       (accum (make-atomic-box 0)))
+
+  (assert-equal (scheduler-node-count sched) 2 "sched node-count is 2")
+
+  ;; Asymmetrically spawn tasks: 1,000 into Worker 0 (Node 0), 1,000 into Worker 2 (Node 1)
+  (let spawn-loop ((i 0))
+    (if (< i 1000)
+        (begin
+          (scheduler-spawn! sched (lambda () (atomic-fetch-add! accum 1)) 0)
+          (scheduler-spawn! sched (lambda () (atomic-fetch-add! accum 1)) 2)
+          (spawn-loop (+ i 1)))
+        #t))
+
+  (assert-equal (scheduler-total-spawned sched) n-tasks "2,000 tasks spawned across NUMA nodes")
+
+  (let ((completed (scheduler-run-parallel! sched n-tasks)))
+    (assert-equal completed n-tasks "scheduler-run-parallel! completed 2,000 tasks in NUMA topology")
+    (assert-equal (atomic-ref accum) n-tasks "atomic accumulator matches 2,000 across threads")
+    (assert-equal (scheduler-total-completed sched) n-tasks "scheduler-total-completed is 2,000"))
+
+  ;; Inspect stats to verify NUMA distribution and work-stealing
+  (let* ((stats (scheduler-stats sched))
+         (w-stats (cdr (assq 'workers stats)))
+         (executed-sum
+          (let sum-loop ((ws w-stats) (acc 0))
+            (if (null? ws)
+                acc
+                (sum-loop (cdr ws) (+ acc (cdr (assq 'tasks-executed (car ws)))))))))
+    (assert-equal executed-sum n-tasks "sum of worker executed tasks equals 2,000")
+    (write-string "  [INFO] NUMA Parallel Execution Completed: ")
+    (write-string (number->string executed-sum))
+    (write-string " tasks distributed across ")
+    (write-string (number->string worker-count))
+    (write-string " native workers across ")
+    (write-string (number->string node-count))
+    (write-string " NUMA nodes.\n")
+    (flush-output-port))
+
+  (scheduler-stop! sched))
+
+;; -----------------------------------------------------------------------
 ;; Test Suite Summary
 ;; -----------------------------------------------------------------------
 (let ((passes (vector-ref *test-mt-passes* 0))

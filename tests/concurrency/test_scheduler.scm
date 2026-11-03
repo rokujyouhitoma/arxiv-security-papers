@@ -405,6 +405,114 @@
                 "scheduler-spawn! rejects spawning into stopped scheduler"))
 
 ;; -----------------------------------------------------------------------
+;; Group 7: NUMA-Aware Hierarchical Work-Stealing Topology & 2-Tier Stealing (#681)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 7: NUMA-Aware Hierarchical Work-Stealing (#681) ---\n")
+
+;; 7a. Linux SYS_getcpu integration
+(let* ((cpu-node (get-current-cpu-node))
+       (core-id (car cpu-node))
+       (node-id (cdr cpu-node)))
+  (assert-true (integer? core-id) "get-current-core-id returns integer")
+  (assert-true (>= core-id 0) "core-id is non-negative")
+  (assert-true (integer? node-id) "get-current-node-id returns integer")
+  (assert-true (>= node-id 0) "node-id is non-negative")
+  (assert-equal (get-current-core-id) core-id "get-current-core-id matches cpu-node car")
+  (assert-equal (get-current-node-id) node-id "get-current-node-id matches cpu-node cdr"))
+
+;; 7b. Scheduler NUMA Topology Configuration
+(let ((sched (make-work-stealing-scheduler 4 32 2)))
+  (assert-equal (scheduler-worker-count sched) 4 "worker-count is 4")
+  (assert-equal (scheduler-node-count sched) 2 "node-count is 2")
+  ;; Node 0 workers: worker 0 and worker 1
+  (let ((w0 (scheduler-get-worker sched 0))
+        (w1 (scheduler-get-worker sched 1))
+        (w2 (scheduler-get-worker sched 2))
+        (w3 (scheduler-get-worker sched 3)))
+    (assert-equal (worker-node-id w0) 0 "worker 0 belongs to node 0")
+    (assert-equal (worker-node-id w1) 0 "worker 1 belongs to node 0")
+    (assert-equal (worker-node-id w2) 1 "worker 2 belongs to node 1")
+    (assert-equal (worker-node-id w3) 1 "worker 3 belongs to node 1")
+    (let ((node0-workers (scheduler-node-workers sched 0))
+          (node1-workers (scheduler-node-workers sched 1)))
+      (assert-equal (vector-length node0-workers) 2 "node 0 has 2 workers")
+      (assert-equal (vector-ref node0-workers 0) 0 "node 0 worker 0 is wid 0")
+      (assert-equal (vector-ref node0-workers 1) 1 "node 0 worker 1 is wid 1")
+      (assert-equal (vector-length node1-workers) 2 "node 1 has 2 workers")
+      (assert-equal (vector-ref node1-workers 0) 2 "node 1 worker 0 is wid 2")
+      (assert-equal (vector-ref node1-workers 1) 3 "node 1 worker 1 is wid 3")))
+
+  ;; 7c. Tier 1 Intra-Node Stealing Verification
+  ;; Worker 0 pushes 50 tasks into its local deque. Worker 1 steals from Worker 0 (same NUMA node).
+  (let ((done-box (make-atomic-box 0)))
+    (let push-loop ((i 0))
+      (if (< i 50)
+          (begin
+            (scheduler-spawn! sched (lambda () (atomic-fetch-add! done-box 1)) 0)
+            (push-loop (+ i 1)))
+          #t))
+    ;; Step worker 1 to steal intra-node from worker 0
+    (let step-loop ((i 0))
+      (if (< i 10)
+          (begin
+            (scheduler-worker-step! sched 1)
+            (step-loop (+ i 1)))
+          #t))
+    (let ((w1 (scheduler-get-worker sched 1)))
+      (assert-true (> (worker-local-steals-succeeded w1) 0) "worker 1 succeeded at local (intra-node) steals")
+      (assert-equal (worker-remote-steals-succeeded w1) 0 "worker 1 had zero remote steals during intra-node workload")))
+
+  ;; 7d. Tier 2 Inter-Node Fallback Stealing Verification
+  ;; Node 0 (Worker 0 and 1) is completely exhausted.
+  ;; Spawn 50 tasks into Worker 2 (Node 1). Worker 0 (Node 0) must fall back to Tier 2 remote steal!
+  (let ((w0 (scheduler-get-worker sched 0))
+        (w1 (scheduler-get-worker sched 1))
+        (w2 (scheduler-get-worker sched 2)))
+    ;; Drain remaining tasks from worker 0 & 1 first
+    (scheduler-run! sched 50)
+    (assert-equal (deque-count (worker-deque w0)) 0 "worker 0 deque drained")
+    (assert-equal (deque-count (worker-deque w1)) 0 "worker 1 deque drained")
+    ;; Now spawn solely to worker 2 (node 1)
+    (let push-remote-loop ((i 0))
+      (if (< i 50)
+          (begin
+            (scheduler-spawn! sched (lambda () #t) 2)
+            (push-remote-loop (+ i 1)))
+          #t))
+    ;; Worker 0 (node 0) steps: local node 0 is empty, so Tier 2 must steal from node 1!
+    (let step-remote-loop ((i 0))
+      (if (< i 10)
+          (begin
+            (scheduler-worker-step! sched 0)
+            (step-remote-loop (+ i 1)))
+          #t))
+    (assert-true (> (worker-remote-steals-succeeded w0) 0) "worker 0 succeeded at remote (inter-node) steals")
+    ;; Complete all tasks
+    (scheduler-run! sched 100)
+    (assert-equal (scheduler-tasks-completed sched) 100 "all tasks completed across tiers")
+    (scheduler-stop! sched)))
+
+;; 7e. NUMA Scheduler Boundary & CWE Protection Guards
+(assert-error (lambda () (make-work-stealing-scheduler 4 32 0))
+              "make-work-stealing-scheduler rejects 0 node-count (CWE-400)")
+(assert-error (lambda () (make-work-stealing-scheduler 4 32 -1))
+              "make-work-stealing-scheduler rejects negative node-count (CWE-20)")
+(assert-error (lambda () (make-work-stealing-scheduler 4 32 5))
+              "make-work-stealing-scheduler rejects node-count > worker-count (CWE-400)")
+(assert-error (lambda () (make-work-stealing-scheduler 4 32 'bad))
+              "make-work-stealing-scheduler rejects non-integer node-count (CWE-843)")
+(let ((s (make-work-stealing-scheduler 4 32 2)))
+  (assert-error (lambda () (scheduler-node-workers s -1))
+                "scheduler-node-workers rejects negative node-id (CWE-400)")
+  (assert-error (lambda () (scheduler-node-workers s 2))
+                "scheduler-node-workers rejects node-id >= node-count (CWE-400)")
+  (assert-error (lambda () (scheduler-node-workers s 'invalid))
+                "scheduler-node-workers rejects non-integer node-id (CWE-843)")
+  (assert-error (lambda () (scheduler-node-workers 'not-a-sched 0))
+                "scheduler-node-workers rejects non-scheduler (CWE-843)")
+  (scheduler-stop! s))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

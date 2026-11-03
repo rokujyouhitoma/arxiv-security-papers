@@ -20,6 +20,12 @@
 (define (%sys-online-cpu-count)
   1)
 
+(define (%sys-getcpu-core)
+  0)
+
+(define (%sys-getcpu-node)
+  0)
+
 (define (%sys-thread-exit! code)
   (if (integer? code) 0 0))
 
@@ -35,6 +41,21 @@
     (if (and (integer? cnt) (> cnt 0))
         cnt
         1)))
+
+(define (get-current-core-id)
+  (let ((core (%sys-getcpu-core)))
+    (if (and (integer? core) (>= core 0))
+        core
+        0)))
+
+(define (get-current-node-id)
+  (let ((node (%sys-getcpu-node)))
+    (if (and (integer? node) (>= node 0))
+        node
+        0)))
+
+(define (get-current-cpu-node)
+  (cons (get-current-core-id) (get-current-node-id)))
 
 (define (set-thread-affinity! core-id)
   (if (not (integer? core-id))

@@ -37,9 +37,10 @@
 ;;   futex-cell       : <futex-cell> or #f for parking idle workers (Issue #676)
 
 (define-record-type <worker-context>
-  (%make-worker-context id deque current-task-box rng-state-box stats futex-cell)
+  (%make-worker-context id node-id deque current-task-box rng-state-box stats futex-cell)
   worker-context?
   (id               worker-id)
+  (node-id          worker-node-id)
   (deque            worker-deque)
   (current-task-box %worker-current-task-box)
   (rng-state-box    %worker-rng-state-box)
@@ -47,11 +48,15 @@
   (futex-cell       worker-futex-cell           %worker-futex-cell-set!))
 
 (define (%make-worker-stats)
-  (let ((s (make-vector 4)))
+  (let ((s (make-vector 8)))
     (vector-set! s 0 0)
     (vector-set! s 1 0)
     (vector-set! s 2 0)
     (vector-set! s 3 0)
+    (vector-set! s 4 0)
+    (vector-set! s 5 0)
+    (vector-set! s 6 0)
+    (vector-set! s 7 0)
     s))
 
 (define (%make-worker-box val)
@@ -59,15 +64,19 @@
     (vector-set! b 0 val)
     b))
 
-(define (make-worker-context id initial-cap)
-  (let* ((dq (make-chase-lev-deque initial-cap))
-         (seed (+ 123456789 (* (+ id 1) 1103515245)))
-         (seed-clamped (if (= seed 0) 987654321 seed))
-         (cur-box (%make-worker-box #f))
-         (rng-box (%make-worker-box seed-clamped))
-         (stats (%make-worker-stats))
-         (futex-cell ((vector-ref *scheduler-make-futex-cell-box* 0))))
-    (%make-worker-context id dq cur-box rng-box stats futex-cell)))
+(define make-worker-context
+  (case-lambda
+    ((id initial-cap)
+     (make-worker-context id 0 initial-cap))
+    ((id node-id initial-cap)
+     (let* ((dq (make-chase-lev-deque initial-cap))
+            (seed (+ 123456789 (* (+ id 1) 1103515245)))
+            (seed-clamped (if (= seed 0) 987654321 seed))
+            (cur-box (%make-worker-box #f))
+            (rng-box (%make-worker-box seed-clamped))
+            (stats (%make-worker-stats))
+            (futex-cell ((vector-ref *scheduler-make-futex-cell-box* 0))))
+       (%make-worker-context id node-id dq cur-box rng-box stats futex-cell)))))
 
 (define (worker-current-task worker)
   (vector-ref (%worker-current-task-box worker) 0))
@@ -83,6 +92,18 @@
 
 (define (worker-yields worker)
   (vector-ref (%worker-stats worker) 3))
+
+(define (worker-local-steals-attempted worker)
+  (vector-ref (%worker-stats worker) 4))
+
+(define (worker-local-steals-succeeded worker)
+  (vector-ref (%worker-stats worker) 5))
+
+(define (worker-remote-steals-attempted worker)
+  (vector-ref (%worker-stats worker) 6))
+
+(define (worker-remote-steals-succeeded worker)
+  (vector-ref (%worker-stats worker) 7))
 
 (define (worker-rng-seed worker)
   (vector-ref (%worker-rng-state-box worker) 0))
@@ -113,16 +134,38 @@
   (let ((s (%worker-stats worker)))
     (vector-set! s 2 (+ (vector-ref s 2) 1))))
 
+(define (%worker-local-steals-att-inc! worker)
+  (let ((s (%worker-stats worker)))
+    (vector-set! s 1 (+ (vector-ref s 1) 1))
+    (vector-set! s 4 (+ (vector-ref s 4) 1))))
+
+(define (%worker-local-steals-succ-inc! worker)
+  (let ((s (%worker-stats worker)))
+    (vector-set! s 2 (+ (vector-ref s 2) 1))
+    (vector-set! s 5 (+ (vector-ref s 5) 1))))
+
+(define (%worker-remote-steals-att-inc! worker)
+  (let ((s (%worker-stats worker)))
+    (vector-set! s 1 (+ (vector-ref s 1) 1))
+    (vector-set! s 6 (+ (vector-ref s 6) 1))))
+
+(define (%worker-remote-steals-succ-inc! worker)
+  (let ((s (%worker-stats worker)))
+    (vector-set! s 2 (+ (vector-ref s 2) 1))
+    (vector-set! s 7 (+ (vector-ref s 7) 1))))
+
 (define (%worker-yields-inc! worker)
   (let ((s (%worker-stats worker)))
     (vector-set! s 3 (+ (vector-ref s 3) 1))))
 
 ;; -----------------------------------------------------------------------
-;; 2. <work-stealing-scheduler> Record Type (5 fields, fits in AMD64 registers)
+;; 2. <work-stealing-scheduler> Record Type (NUMA-Aware Hierarchical Topology)
 ;; -----------------------------------------------------------------------
 ;; Fields:
 ;;   worker-count  : fixnum count of workers
+;;   node-count    : fixnum count of NUMA nodes
 ;;   workers       : vector of <worker-context>
+;;   node-workers  : vector of vectors of worker IDs per node
 ;;   global-queue  : <lock-free-queue> (Michael-Scott queue) for global tasks
 ;;   state-box     : <atomic-box> holding 'init | 'running | 'stopped
 ;;   stats         : 2-element vector:
@@ -130,13 +173,24 @@
 ;;                   [1] completed tasks count
 
 (define-record-type <work-stealing-scheduler>
-  (%make-work-stealing-scheduler worker-count workers global-queue state-box stats)
+  (%make-work-stealing-scheduler worker-count node-count workers node-workers global-queue state-box stats)
   work-stealing-scheduler?
   (worker-count  scheduler-worker-count)
+  (node-count    scheduler-node-count)
   (workers       scheduler-workers)
+  (node-workers  %scheduler-node-workers)
   (global-queue  scheduler-global-queue)
   (state-box     %scheduler-state-box)
   (stats         %scheduler-stats))
+
+(define (scheduler-node-workers sched node-id)
+  (if (not (work-stealing-scheduler? sched))
+      (error "scheduler-node-workers: expected <work-stealing-scheduler>" sched)
+      (if (not (integer? node-id))
+          (error "scheduler-node-workers: node-id must be an integer (CWE-843)" node-id)
+          (if (or (< node-id 0) (>= node-id (scheduler-node-count sched)))
+              (error "scheduler-node-workers: node-id out of range (CWE-400)" node-id)
+              (vector-ref (%scheduler-node-workers sched) node-id)))))
 
 (define (%make-scheduler-stats)
   (let ((s (make-vector 2)))
@@ -144,33 +198,72 @@
     (vector-set! s 1 (make-atomic-box 0))
     s))
 
-(define (%make-scheduler-internal worker-count workers)
+(define (%make-scheduler-internal worker-count node-count workers node-workers)
   (let ((gq (make-lock-free-queue))
         (box (make-atomic-box 'running))
         (stats (%make-scheduler-stats)))
-    (%make-work-stealing-scheduler worker-count workers gq box stats)))
+    (%make-work-stealing-scheduler worker-count node-count workers node-workers gq box stats)))
 
-(define (%init-workers! vec i n cap)
+(define (%build-node-workers-table worker-count node-count)
+  (let ((table (make-vector node-count)))
+    (let ((counts (make-vector node-count 0)))
+      (let count-loop ((i 0))
+        (if (< i worker-count)
+            (let ((node (quotient (* i node-count) worker-count)))
+              (vector-set! counts node (+ (vector-ref counts node) 1))
+              (count-loop (+ i 1)))
+            #t))
+      (let alloc-loop ((n 0))
+        (if (< n node-count)
+            (begin
+              (vector-set! table n (make-vector (vector-ref counts n)))
+              (alloc-loop (+ n 1)))
+            #t))
+      (let ((indices (make-vector node-count 0)))
+        (let fill-loop ((i 0))
+          (if (< i worker-count)
+              (let* ((node (quotient (* i node-count) worker-count))
+                     (idx (vector-ref indices node))
+                     (vec (vector-ref table node)))
+                (vector-set! vec idx i)
+                (vector-set! indices node (+ idx 1))
+                (fill-loop (+ i 1)))
+              #t)))
+      table)))
+
+(define (%init-workers! vec i n cap node-count)
   (if (< i n)
-      (let ((w (make-worker-context i cap)))
+      (let* ((node-id (quotient (* i node-count) n))
+             (w (make-worker-context i node-id cap)))
         (vector-set! vec i w)
-        (%init-workers! vec (+ i 1) n cap))
+        (%init-workers! vec (+ i 1) n cap node-count))
       vec))
 
 (define make-work-stealing-scheduler
   (case-lambda
     (()
-     (make-work-stealing-scheduler *scheduler-default-workers*))
+     (make-work-stealing-scheduler *scheduler-default-workers* *deque-default-capacity* 1))
     ((worker-count)
-     (make-work-stealing-scheduler worker-count *deque-default-capacity*))
+     (make-work-stealing-scheduler worker-count *deque-default-capacity* 1))
     ((worker-count initial-deque-cap)
+     (make-work-stealing-scheduler worker-count initial-deque-cap 1))
+    ((worker-count initial-deque-cap node-count)
      (if (not (integer? worker-count))
          (error "make-work-stealing-scheduler: worker-count must be an integer (CWE-843)" worker-count)
          (if (or (< worker-count 1) (> worker-count *scheduler-max-workers*))
              (error "make-work-stealing-scheduler: worker-count out of range [1..64] (CWE-400)" worker-count)
-             (let ((workers (make-vector worker-count)))
-               (%init-workers! workers 0 worker-count initial-deque-cap)
-               (%make-scheduler-internal worker-count workers)))))))
+             (if (not (integer? initial-deque-cap))
+                 (error "make-work-stealing-scheduler: initial-deque-cap must be an integer (CWE-843)" initial-deque-cap)
+                 (if (or (< initial-deque-cap 2) (> initial-deque-cap 1048576))
+                     (error "make-work-stealing-scheduler: initial-deque-cap out of range (CWE-400)" initial-deque-cap)
+                     (if (not (integer? node-count))
+                         (error "make-work-stealing-scheduler: node-count must be an integer (CWE-843)" node-count)
+                         (if (or (< node-count 1) (> node-count worker-count))
+                             (error "make-work-stealing-scheduler: node-count out of range [1..worker-count] (CWE-400)" node-count)
+                             (let ((workers (make-vector worker-count))
+                                   (node-workers (%build-node-workers-table worker-count node-count)))
+                               (%init-workers! workers 0 worker-count initial-deque-cap node-count)
+                               (%make-scheduler-internal worker-count node-count workers node-workers)))))))))))
 
 (define (scheduler-get-worker sched worker-id)
   (if (not (work-stealing-scheduler? sched))
@@ -311,29 +404,90 @@
                             (%worker-yields-inc! w)
                             #f))))))))))
 
-(define (%steal-loop sched worker num-workers start-victim-offset attempts)
-  (if (>= attempts (* 2 num-workers))
+(define (%find-worker-index vec wid i len)
+  (if (>= i len)
+      0
+      (if (= (vector-ref vec i) wid)
+          i
+          (%find-worker-index vec wid (+ i 1) len))))
+
+;; Tier 1: Intra-Node Steal
+;; Attempts to steal from peer workers located on the same NUMA node.
+(define (%tier1-steal-loop sched worker local-workers local-len my-idx start-offset attempts max-attempts)
+  (if (>= attempts max-attempts)
       #f
-      (let* ((victim-id (modulo (+ (+ (worker-id worker) start-victim-offset) attempts) num-workers))
+      (let* ((step (+ 1 (modulo (+ start-offset attempts) (- local-len 1))))
+             (victim-idx (modulo (+ my-idx step) local-len))
+             (victim-id (vector-ref local-workers victim-idx))
              (victim (scheduler-get-worker sched victim-id))
              (victim-dq (worker-deque victim)))
-        (%worker-steals-att-inc! worker)
+        (%worker-local-steals-att-inc! worker)
         (let ((stolen (deque-steal! victim-dq)))
           (cond
             ((eq? stolen 'empty)
-             (%steal-loop sched worker num-workers start-victim-offset (+ attempts 1)))
+             (%tier1-steal-loop sched worker local-workers local-len my-idx start-offset (+ attempts 1) max-attempts))
             ((eq? stolen 'abort)
-             (%steal-loop sched worker num-workers start-victim-offset (+ attempts 1)))
+             (%tier1-steal-loop sched worker local-workers local-len my-idx start-offset (+ attempts 1) max-attempts))
             (else
-             (%worker-steals-succ-inc! worker)
+             (%worker-local-steals-succ-inc! worker)
              stolen))))))
+
+;; Tier 2: Inter-Node Fallback Steal
+;; Attempts to steal from workers on remote NUMA nodes when local node is exhausted.
+(define (%tier2-steal-loop sched worker node-count my-node node-workers rand-node-seed rand-w-seed attempts max-attempts)
+  (if (>= attempts max-attempts)
+      #f
+      (let* ((node-offset (+ 1 (modulo (+ rand-node-seed attempts) (- node-count 1))))
+             (target-node (modulo (+ my-node node-offset) node-count))
+             (remote-workers (vector-ref node-workers target-node))
+             (rem-len (vector-length remote-workers)))
+        (if (<= rem-len 0)
+            (%tier2-steal-loop sched worker node-count my-node node-workers rand-node-seed rand-w-seed (+ attempts 1) max-attempts)
+            (let* ((w-offset (modulo (+ rand-w-seed attempts) rem-len))
+                   (victim-id (vector-ref remote-workers w-offset))
+                   (victim (scheduler-get-worker sched victim-id))
+                   (victim-dq (worker-deque victim)))
+              (%worker-remote-steals-att-inc! worker)
+              (let ((stolen (deque-steal! victim-dq)))
+                (cond
+                  ((eq? stolen 'empty)
+                   (%tier2-steal-loop sched worker node-count my-node node-workers rand-node-seed rand-w-seed (+ attempts 1) max-attempts))
+                  ((eq? stolen 'abort)
+                   (%tier2-steal-loop sched worker node-count my-node node-workers rand-node-seed rand-w-seed (+ attempts 1) max-attempts))
+                  (else
+                   (%worker-remote-steals-succ-inc! worker)
+                   stolen))))))))
 
 (define (%scheduler-try-steal! sched worker num-workers)
   (if (<= num-workers 1)
       #f
-      (let* ((rand-val (worker-next-random! worker))
-             (offset (+ (modulo rand-val (- num-workers 1)) 1)))
-        (%steal-loop sched worker num-workers offset 0))))
+      (let* ((node-count (scheduler-node-count sched))
+             (node-workers (%scheduler-node-workers sched))
+             (my-node (worker-node-id worker))
+             (local-workers (vector-ref node-workers my-node))
+             (local-len (vector-length local-workers))
+             (wid (worker-id worker)))
+        ;; Tier 1: Try local NUMA node peers first
+        (let ((tier1-task
+               (if (> local-len 1)
+                   (let* ((my-idx (%find-worker-index local-workers wid 0 local-len))
+                          (rand-val (worker-next-random! worker))
+                          (start-offset (modulo rand-val (- local-len 1)))
+                          (max-attempts (* 2 (- local-len 1))))
+                     (%tier1-steal-loop sched worker local-workers local-len my-idx start-offset 0 max-attempts))
+                   #f)))
+          (if tier1-task
+              tier1-task
+              ;; Tier 2: Fallback to remote NUMA nodes if node-count > 1
+              (if (> node-count 1)
+                  (let* ((remote-count (- num-workers local-len)))
+                    (if (> remote-count 0)
+                        (let* ((rand-node-seed (worker-next-random! worker))
+                               (rand-w-seed (worker-next-random! worker))
+                               (max-remote-attempts (* 2 remote-count)))
+                          (%tier2-steal-loop sched worker node-count my-node node-workers rand-node-seed rand-w-seed 0 max-remote-attempts))
+                        #f))
+                  #f))))))
 
 (define (%scheduler-run-and-record! sched worker task)
   (let ((cur-box (%worker-current-task-box worker)))
@@ -433,9 +587,14 @@
         (%collect-worker-stats
          sched num-workers (+ i 1)
          (cons (list (cons 'id (worker-id w))
+                     (cons 'node-id (worker-node-id w))
                      (cons 'tasks-executed (worker-tasks-executed w))
                      (cons 'steals-attempted (worker-steals-attempted w))
                      (cons 'steals-succeeded (worker-steals-succeeded w))
+                     (cons 'local-steals-attempted (worker-local-steals-attempted w))
+                     (cons 'local-steals-succeeded (worker-local-steals-succeeded w))
+                     (cons 'remote-steals-attempted (worker-remote-steals-attempted w))
+                     (cons 'remote-steals-succeeded (worker-remote-steals-succeeded w))
                      (cons 'yields (worker-yields w))
                      (cons 'deque-count (deque-count (worker-deque w))))
                acc)))))
@@ -444,8 +603,10 @@
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-stats: expected <work-stealing-scheduler>" sched)
       (let* ((num-workers (scheduler-worker-count sched))
+             (num-nodes (scheduler-node-count sched))
              (worker-stats-list (%collect-worker-stats sched num-workers 0 '())))
         (list (cons 'worker-count num-workers)
+              (cons 'node-count num-nodes)
               (cons 'state (scheduler-state sched))
               (cons 'tasks-spawned (scheduler-tasks-spawned sched))
               (cons 'tasks-completed (scheduler-tasks-completed sched))

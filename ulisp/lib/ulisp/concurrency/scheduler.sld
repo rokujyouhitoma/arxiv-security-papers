@@ -13,11 +13,16 @@
     <worker-context>
     worker-context?
     worker-id
+    worker-node-id
     worker-deque
     worker-current-task
     worker-tasks-executed
     worker-steals-attempted
     worker-steals-succeeded
+    worker-local-steals-attempted
+    worker-local-steals-succeeded
+    worker-remote-steals-attempted
+    worker-remote-steals-succeeded
     worker-yields
     worker-rng-seed
     worker-next-random!
@@ -25,6 +30,8 @@
 
     ;; Core scheduler operations
     scheduler-worker-count
+    scheduler-node-count
+    scheduler-node-workers
     scheduler-workers
     scheduler-global-queue
     scheduler-get-worker
