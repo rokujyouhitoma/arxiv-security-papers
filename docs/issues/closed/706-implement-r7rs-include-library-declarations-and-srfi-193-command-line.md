@@ -58,3 +58,4 @@ Target Branch: `feat/706-implement-r7rs-include-library-declarations-and-srfi-19
 - [x] `command-line`, `command-name`, `command-args`, `script-file`, `script-directory` が R7RS §6.14 および SRFI 193 仕様通りに動作すること。
 - [x] `ulisp/lib/srfi/193.sld` が作成され、`make verify_r7rs_traceability` および AOT テストが 100% PASS すること。
 - [x] [ref_r7rs_compliance.md](../../../ulisp/docs/ref_r7rs_compliance.md) で `include-library-declarations`, `command-line`, `SRFI 193` が **◎** に更新されていること。
+

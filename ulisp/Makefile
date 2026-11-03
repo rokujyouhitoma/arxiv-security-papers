@@ -38,7 +38,7 @@ ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port
                  lib/reader.scm lib/equality.scm lib/predicates.scm lib/math.scm lib/bytevector.scm \
                  lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
                  lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/comparator.scm lib/set.scm \
-                 lib/stream.scm lib/generator.scm lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
+                 lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
                  $(ULISP_RUNTIME_LIBS)
 
 COMPILER_BASE = compiler/helpers.scm \
@@ -873,6 +873,14 @@ test_generator: $(COMPILER_DEP)
 	$(AS) $(ASFLAGS) build/test_generator.s -o build/test_generator.o
 	$(LD) $(LDFLAGS) build/test_generator.o -o build/test_generator
 	./build/test_generator
+
+test_list_queue_lseq: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_list_queue_lseq.scm > build/test_list_queue_lseq_input.scm
+	$(ULISP_COMPILER) build/test_list_queue_lseq_input.scm > build/test_list_queue_lseq.s
+	$(AS) $(ASFLAGS) build/test_list_queue_lseq.s -o build/test_list_queue_lseq.o
+	$(LD) $(LDFLAGS) build/test_list_queue_lseq.o -o build/test_list_queue_lseq
+	./build/test_list_queue_lseq
 
 test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build
