@@ -95,8 +95,8 @@
 ;; Benchmark 2: Linear Channel Messaging & Ring Relay
 ;; -----------------------------------------------------------------------
 (define (run-channel-relay-benchmark n-relays)
-  (bench-print-header "2. Linear Channel High-Throughput Messaging & Ring Relay")
-  (let* ((ch (make-channel 1024))
+  (bench-print-header "2. Linear Channel High-Throughput Messaging & SPSC Ring Relay")
+  (let* ((ch (make-spsc-channel 1024))
          (t0 (get-monotonic-time-ns)))
     ;; Streaming burst: send n-relays messages through channel
     (let loop ((i 0))

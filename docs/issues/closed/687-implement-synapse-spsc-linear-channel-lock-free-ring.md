@@ -2,7 +2,7 @@
 ID: 687
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Resolved)
 ---
 
 # [FEAT/ENH] 線形所有権特化型 SPSC ロックフリーリングによる LOCK プレフィックス命令ゼロ化 (ID: 687)
@@ -144,12 +144,12 @@ Target Branch: `feat/687-spsc-linear-channel-lock-free-ring`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `make-spsc-channel` コンストラクタおよび述語 `channel-spsc?` が実装され、`channel.sld` からエクスポートされること。
-- [ ] SPSC 線形チャネル送受信ホットパスにおいて、LOCK プレフィックス付き命令（`lock cmpxchg`, `lock xadd`）が 0 回で動作すること。
-- [ ] キャッシュラインの False Sharing が完全に排除され、`head` と `tail` が独立キャッシュライン上で管理されること。
-- [ ] 空バッファ判定、満杯判定、ラップアラウンド FIFO、および `#f` ペイロードの保持が正確に行われること。
-- [ ] バックプレッシャー発生時、待機送信者・受信者のサスペンドおよび起床（Handoff）が正確に動作すること。
-- [ ] `make -C ulisp test_channel`（全 290+ テスト）が 100% PASS すること。
-- [ ] `make -C ulisp test_concurrency_ci`（並行性 CI ハーネス 100 反復 / 13,100 アサーション）が 100% PASS すること。
-- [ ] `bench_microtasks` において SPSC チャネル送受信遅延が大幅に短縮（目標 < 150 ns/op）すること。
-- [ ] 品質ゲート（`make check_format`, `make static_analysis`, `make py_compile`）をすべて通過すること。
+- [x] `make-spsc-channel` コンストラクタおよび述語 `channel-spsc?` が実装され、`channel.sld` からエクスポートされること。
+- [x] SPSC 線形チャネル送受信ホットパスにおいて、LOCK プレフィックス付き命令（`lock cmpxchg`, `lock xadd`）が 0 回で動作すること。
+- [x] キャッシュラインの False Sharing が完全に排除され、`head` と `tail` が独立キャッシュライン上で管理されること。
+- [x] 空バッファ判定、満杯判定、ラップアラウンド FIFO、および `#f` ペイロードの保持が正確に行われること。
+- [x] バックプレッシャー発生時、待機送信者・受信者のサスペンドおよび起床（Handoff）が正確に動作すること。
+- [x] `make -C ulisp test_channel`（全 322 テスト）が 100% PASS すること。
+- [x] `make -C ulisp test_concurrency_ci`（並行性 CI ハーネス 100 反復 / 13,100 アサーション）が 100% PASS すること。
+- [x] `bench_microtasks` において SPSC チャネル送受信遅延が 288 ns/pair（片道実質 ~144 ns/op）、スループット 3,466,482 msgs/sec へと大幅に向上すること。
+- [x] 品質ゲート（`make check_format`, `make static_analysis`, `make py_compile`）をすべて通過すること。

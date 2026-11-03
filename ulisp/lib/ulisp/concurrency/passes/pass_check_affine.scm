@@ -283,11 +283,16 @@
                     (val-ast (car val-r))
                     (env-after (cdr val-r))
                     (is-lin? (linear-variable? v))
+                    (opt-val-ast (if (and is-lin?
+                                          (pair? val-ast)
+                                          (eq? (car val-ast) 'make-channel))
+                                     (cons 'make-spsc-channel (cdr val-ast))
+                                     val-ast))
                     (env-with-v (if is-lin?
                                     (lin-env-add-available env-after v)
                                     env-after)))
                (init-loop (cdr bs)
-                          (cons (list v val-ast) acc-b)
+                          (cons (list v opt-val-ast) acc-b)
                           env-with-v
                           (if is-lin? (cons v new-vars) new-vars)))
              ;; Process body with new variables in scope

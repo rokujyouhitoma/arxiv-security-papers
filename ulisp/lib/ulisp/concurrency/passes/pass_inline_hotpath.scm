@@ -138,7 +138,7 @@
      (if (symbol? rhs)
          (type-env-lookup env rhs)
          #f))
-    ((memq (car rhs) '(make-channel make-channel-internal make-bounded-channel))
+    ((memq (car rhs) '(make-channel make-spsc-channel make-channel-internal make-bounded-channel))
      'channel)
     ((memq (car rhs) '(make-task-arena make-ephemeral-arena make-arena %init-task-arena))
      'ephemeral-arena)
