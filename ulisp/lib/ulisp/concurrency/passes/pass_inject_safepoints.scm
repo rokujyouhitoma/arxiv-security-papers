@@ -226,7 +226,10 @@
     #t))
 
 (define (inject-synapse-safepoints-pass!)
-  (inject-pass-after! 'pass-synapse-fbip (synapse-inject-safepoints-descriptor)))
+  ;; Canonical order: fbip -> inline-hotpath (Issue #682) -> inject-safepoints.
+  (if (pass-registered? 'pass-synapse-inline-hotpath)
+      (inject-pass-after! 'pass-synapse-inline-hotpath (synapse-inject-safepoints-descriptor))
+      (inject-pass-after! 'pass-synapse-fbip (synapse-inject-safepoints-descriptor))))
 
 (define (remove-synapse-safepoints-pass!)
   (remove-injected-pass! 'pass-synapse-inject-safepoints))
