@@ -7,12 +7,17 @@
   (export
     native-thread-supported?
     online-cpu-count
+    get-current-core-id
+    get-current-node-id
+    get-current-cpu-node
     set-thread-affinity!
     spawn-native-thread
     exit-native-thread!
     %sys-spawn-thread
     %sys-set-affinity!
     %sys-online-cpu-count
+    %sys-getcpu-core
+    %sys-getcpu-node
     %sys-thread-exit!)
 
   (import

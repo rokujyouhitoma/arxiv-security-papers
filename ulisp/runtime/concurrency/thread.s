@@ -42,6 +42,7 @@
 .equ SYS_EXIT,            60
 .equ SYS_SCHED_SETAFFINITY, 203
 .equ SYS_SCHED_GETAFFINITY, 204
+.equ SYS_GETCPU,           309
 
 # mmap flags: PROT_READ|PROT_WRITE = 3, MAP_PRIVATE|MAP_ANONYMOUS = 0x22
 .equ PROT_READ_WRITE,     3
@@ -337,6 +338,68 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_online_cpu_count:
 
 .L_popcnt_cached:
     shl rax, 2                          # Tag as Scheme Fixnum
+    ret
+
+# -----------------------------------------------------------------------
+# 4b. Hardware Topology: Current CPU Core and NUMA Node Primitive
+#     Scheme: (%sys-getcpu-core), (%sys-getcpu-node)
+# -----------------------------------------------------------------------
+    .globl ulisp_fn__pctsys_getcpu_core
+    .globl ulisp_fn___lib_ulisp_concurrency_thread___pctsys_getcpu_core
+    .type ulisp_fn__pctsys_getcpu_core, @function
+    .p2align 4
+ulisp_fn__pctsys_getcpu_core:
+ulisp_fn___lib_ulisp_concurrency_thread___pctsys_getcpu_core:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 16                         # space for cpu (rsp) and node (rsp+4)
+    mov dword ptr [rsp], 0
+    mov dword ptr [rsp + 4], 0
+    mov rax, SYS_GETCPU
+    lea rdi, [rsp]                      # cpup
+    lea rsi, [rsp + 4]                  # nodep
+    xor rdx, rdx                        # unused
+    syscall
+    test rax, rax
+    jnz .L_getcpu_core_fail
+    mov eax, [rsp]                      # raw core id
+    shl rax, 2                          # fixnum tag
+    add rsp, 16
+    pop rbp
+    ret
+.L_getcpu_core_fail:
+    xor rax, rax                        # fixnum 0
+    add rsp, 16
+    pop rbp
+    ret
+
+    .globl ulisp_fn__pctsys_getcpu_node
+    .globl ulisp_fn___lib_ulisp_concurrency_thread___pctsys_getcpu_node
+    .type ulisp_fn__pctsys_getcpu_node, @function
+    .p2align 4
+ulisp_fn__pctsys_getcpu_node:
+ulisp_fn___lib_ulisp_concurrency_thread___pctsys_getcpu_node:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 16
+    mov dword ptr [rsp], 0
+    mov dword ptr [rsp + 4], 0
+    mov rax, SYS_GETCPU
+    lea rdi, [rsp]
+    lea rsi, [rsp + 4]
+    xor rdx, rdx
+    syscall
+    test rax, rax
+    jnz .L_getcpu_node_fail
+    mov eax, [rsp + 4]                  # raw node id
+    shl rax, 2                          # fixnum tag
+    add rsp, 16
+    pop rbp
+    ret
+.L_getcpu_node_fail:
+    xor rax, rax                        # fixnum 0
+    add rsp, 16
+    pop rbp
     ret
 
 # -----------------------------------------------------------------------
