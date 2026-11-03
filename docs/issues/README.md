@@ -16,7 +16,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **706** | R7RS-small 残余構文 (include-library-declarations) および SRFI 193 (command-line) の完全実装 | Feature | High | New | [706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md](706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md) |
 | **707** | R7RS-large Red Edition / SRFI 117 (scheme list-queue) および SRFI 127 (scheme lseq) の実装 | Feature | High | New | [707-implement-srfi-117-list-queues-and-srfi-127-lazy-sequences.md](707-implement-srfi-117-list-queues-and-srfi-127-lazy-sequences.md) |
 | **708** | R7RS-large Red Edition / SRFI 14 (scheme charset) 文字集合ライブラリの実装 | Feature | High | New | [708-implement-srfi-14-character-sets.md](708-implement-srfi-14-character-sets.md) |
 | **709** | R7RS-large Tangerine Edition / SRFI 146 (scheme mapping) 不変マッピングライブラリの実装 | Feature | High | New | [709-implement-srfi-146-immutable-mappings.md](709-implement-srfi-146-immutable-mappings.md) |
@@ -36,6 +35,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **706** | R7RS-small 残余構文 (include-library-declarations) および SRFI 193 (command-line) の完全実装 | Feature | 2026-11-04 | [closed/706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md](closed/706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md) |
 | **705** | R7RS-small (scheme base) 残余コア手続き群 (features, input/output-port-open?) の完全実装 | Feature | 2026-11-03 | [closed/705-implement-r7rs-base-remaining-procedures-and-features.md](closed/705-implement-r7rs-base-remaining-procedures-and-features.md) |
 | **704** | R7RS-large / SRFI 158 (scheme generator) 汎用ジェネレータ・アキュムレータライブラリの実装 | Feature | 2026-11-03 | [closed/704-implement-srfi-158-generators-and-accumulators.md](closed/704-implement-srfi-158-generators-and-accumulators.md) |
 | **703** | R7RS-large / SRFI 41 (scheme stream) 遅延評価ストリームライブラリの実装 | Feature | 2026-11-03 | [closed/703-implement-srfi-41-streams.md](closed/703-implement-srfi-41-streams.md) |

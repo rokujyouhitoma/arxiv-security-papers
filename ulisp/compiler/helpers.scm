@@ -1111,7 +1111,7 @@
 ;;; -----------------------------------------------------------------------
 
 (define (ulisp-supported-feature? feat)
-  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix))
+  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix srfi-193))
       #t
       #f))
 
@@ -1120,7 +1120,7 @@
        (or (and (eq? (car name) 'scheme)
                 (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load list hash-table sort division box comparator set stream generator)))
            (and (eq? (car name) 'srfi)
-                (memq (cadr name) '(1 28 41 69 95 111 113 121 125 128 132 141 145 158)))
+                (memq (cadr name) '(1 28 41 69 95 111 113 121 125 128 132 141 145 158 193)))
            (and (eq? (car name) 'ulisp)
                 (memq (cadr name) '(base core native))))))
 

@@ -187,6 +187,28 @@
               '((define x 10) (+ x 20))
               desugared-std)
 
+;;; --- Group 4.5: include-library-declarations (R7RS §5.6.1, Issue #706) ---
+(display "--- Group 4.5: include-library-declarations ---") (newline)
+(with-output-to-file "build/test_inc_lib_decls.scm"
+  (lambda ()
+    (write '(export inc-val inc-double))
+    (newline)
+    (write '(begin
+              (define inc-val 21)
+              (define (inc-double x) (* x 2))))
+    (newline)))
+
+(let* ((lib-form '(define-library (test inc-decls)
+                    (import (scheme base))
+                    (include-library-declarations "build/test_inc_lib_decls.scm")))
+       (rec (parse-define-library-form lib-form)))
+  (assert-equal "include-library-declarations parsed exports"
+                '((inc-val . inc-val) (inc-double . inc-double))
+                (lib-rec-exports rec))
+  (assert-equal "include-library-declarations parsed body"
+                '((define inc-val 21) (define (inc-double x) (* x 2)))
+                (lib-rec-body rec)))
+
 ;;; --- Group 5: Full AOT Pipeline Compilation to LIR, x86-64, and C ---
 (display "--- Group 5: Full AOT Pipeline Compilation to LIR, x86-64, and C ---") (newline)
 

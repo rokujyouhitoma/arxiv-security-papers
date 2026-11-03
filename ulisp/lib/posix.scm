@@ -205,7 +205,10 @@
             (loop (+ i 1)))
           s))))
 
-(define (command-line)
+(define *command-line-override* (cons #f '()))
+(define *script-file-override* (cons #f '()))
+
+(define (%raw-command-line)
   (let ((argc (sys-argc))
         (argv-ptr (sys-argv-ptr)))
     (if (or (<= argc 0) (= argv-ptr 0))
@@ -218,6 +221,71 @@
                     (loop (- i 1) (cons "" acc))
                     (let ((s (%posix-cstr->string str-ptr)))
                       (loop (- i 1) (cons s acc))))))))))
+
+;; §6.14 / SRFI 193 command-line parameter & procedure
+(define command-line
+  (case-lambda
+    (()
+     (let ((ov (car *command-line-override*)))
+       (if ov ov (%raw-command-line))))
+    ((new-cmd-line)
+     (set-car! *command-line-override* new-cmd-line)
+     new-cmd-line)))
+
+;; SRFI 193 command-name, command-args, script-file, script-directory
+(define (%srfi193-last-slash-index s)
+  (let loop ((i (- (string-length s) 1)))
+    (cond
+      ((< i 0) -1)
+      ((char=? (string-ref s i) #\/) i)
+      (else (loop (- i 1))))))
+
+(define (%srfi193-strip-scm-ext s)
+  (let ((len (string-length s)))
+    (if (and (> len 4)
+             (char=? (string-ref s (- len 4)) #\.)
+             (char=? (string-ref s (- len 3)) #\s)
+             (char=? (string-ref s (- len 2)) #\c)
+             (char=? (string-ref s (- len 1)) #\m))
+        (substring s 0 (- len 4))
+        s)))
+
+(define (command-name)
+  (let ((cmd (command-line)))
+    (if (not (pair? cmd))
+        #f
+        (let ((arg0 (car cmd)))
+          (if (or (not (string? arg0)) (= (string-length arg0) 0))
+              #f
+              (let* ((slash-idx (%srfi193-last-slash-index arg0))
+                     (base (if (>= slash-idx 0)
+                               (substring arg0 (+ slash-idx 1) (string-length arg0))
+                               arg0)))
+                (if (= (string-length base) 0)
+                    #f
+                    (%srfi193-strip-scm-ext base))))))))
+
+(define (command-args)
+  (let ((cmd (command-line)))
+    (if (pair? cmd)
+        (cdr cmd)
+        '())))
+
+(define script-file
+  (case-lambda
+    (() (car *script-file-override*))
+    ((new-path)
+     (set-car! *script-file-override* new-path)
+     new-path)))
+
+(define (script-directory)
+  (let ((sf (script-file)))
+    (if (not (string? sf))
+        #f
+        (let ((slash-idx (%srfi193-last-slash-index sf)))
+          (if (>= slash-idx 0)
+              (substring sf 0 (+ slash-idx 1))
+              "./")))))
 
 (define (sys-environ-ptr)
   (let ((slot (%get-environ-ptr)))
@@ -312,8 +380,8 @@
 (define (sys-getenv name)
   (get-environment-variable name))
 
-;; §6.14 System interface - features (R7RS-small, Issue #705)
+;; §6.14 System interface - features (R7RS-small, Issue #705, #706)
 (define (features)
-  '(r7rs ulisp exact-closed ieee-float full-unicode little-endian x86-64 lp64 posix linux unix gnu-linux))
+  '(r7rs ulisp exact-closed ieee-float full-unicode little-endian x86-64 lp64 posix linux unix gnu-linux srfi-193))
 
 

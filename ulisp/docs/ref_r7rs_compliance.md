@@ -90,7 +90,7 @@
 | **5.5** | レコード型定義 (Record-types) | `(define-record-type <name> (<ctor> ...) <pred> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 固定長ベクタ脱糖マクロ・型述語・アクセサ・ミューテータ完備 ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md)) |
 | **5.6** | ライブラリ定義 (Libraries) | `(define-library (<name> ...) <lib-decl> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | R7RS-small モジュール宣言・フラット展開 ([Issue #548](../../docs/issues/closed/548-implement-r7rs-define-library-and-import-syntax.md)) |
 | **5.6** | シンボルエクスポート | `(export <export-spec> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | 名前空間公開設定・`rename` 対応 |
-| **5.6** | ライブラリ内包宣言 | `(include-library-declarations <string1> ...)` | **×** | - | ライブラリ宣言節の外部ファイル分割取り込み（未実装、`include` で代替） |
+| **5.6** | ライブラリ内包宣言 | `(include-library-declarations <string1> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | ライブラリ宣言節の外部ファイル分割取り込み・再帰展開完全対応 ([Issue #706](../../docs/issues/closed/706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md)) |
 
 ---
 
@@ -276,7 +276,7 @@
 | **6.14** | `exit`, `emergency-exit` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `sys-exit` 終了コード返却 |
 | **6.14** | `load` | **✕\*** | - | 動的コードロード (AOT のためビルド時静的リンクで代替) |
 | **6.14** | `file-exists?`, `delete-file` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `sys-access`(21) および `sys-unlink`(87) システムコール連携 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
-| **6.14** | `command-line` | **△** | [runtime.c](../runtime.c) | ランタイム引数渡しで基本対応 |
+| **6.14** | `command-line` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm)<br>[ulisp/lib/srfi/193.sld](../lib/srfi/193.sld) | POSIX `argc`/`argv` 直接取得および SRFI 193 パラメータ更新完全対応 ([Issue #706](../../docs/issues/closed/706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md)) |
 | **6.14** | `get-environment-variable`, `get-environment-variables` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `environ` 走査・連想リスト構築 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
 | **6.14** | `current-second`, `current-jiffy`, `jiffies-per-second` | **◎** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | POSIX clock_gettime (REALTIME / MONOTONIC) 直結ナノ秒精度時間取得・1M jiffies/sec ([Issue #661](../../docs/issues/closed/661-implement-r7rs-scheme-time-procedures.md)) |
 | **6.14** | `features` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | `cond-expand` で有効な機能識別子シンボルリスト返却手続き ([Issue #705](../../docs/issues/closed/705-implement-r7rs-base-remaining-procedures-and-features.md)) |
@@ -433,7 +433,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 | **SRFI 106** | Basic Socket Interface (POSIX TCP/IP) | **×** | - | 低レベル Berkeley ソケット通信（未実装） |
 | **SRFI 145** | Assumptions (`assert`, `assume`) | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/145.sld](../lib/srfi/145.sld) | SRFI 145 前提表明構文完全準拠。述語真偽値返却、失敗時条件式付きエラー送出 ([Issue #664](../../docs/issues/closed/664-implement-srfi-145-assumptions.md)) |
 | **SRFI 170** | POSIX API (低レベルシステムコール) | **◎** (一部) | [ulisp/lib/posix.scm](../lib/posix.scm) | `sys-read`, `sys-write`, `sys-mmap`, `sys-exit`, `%raw-syscall` を実装 |
-| **SRFI 193** | Command line (コマンドライン情報) | **△** | [runtime.c](../runtime.c) | `command-line` 基本サポート |
+| **SRFI 193** | Command line (コマンドライン情報) | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm)<br>[ulisp/lib/srfi/193.sld](../lib/srfi/193.sld) | `command-line`, `command-name`, `command-args`, `script-file`, `script-directory` 完備 ([Issue #706](../../docs/issues/closed/706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md)) |
 | **SRFI 194** | Random data generators (乱数ジェネレータ) | **×** | - | 未実装 |
 | **SRFI 216** | SICP Prerequisites (SICP 演習前提機能) | **△** | [ulisp/lib/*.scm](../lib/) | `runtime`, `parallel-execute` 等の一部を除き主要プリミティブ完備 |
 

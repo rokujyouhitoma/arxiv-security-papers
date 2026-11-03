@@ -114,6 +114,15 @@
                        imports
                        (append (reverse clean-included) body-forms))))
 
+              ;; (include-library-declarations "path" ...) (R7RS §5.6.1, Issue #706)
+              ((and (pair? d) (eq? (car d) 'include-library-declarations))
+               (let* ((included-decls (slurp-included-files-mode (cdr d) #f))
+                      (clean-decls (map strip-source-loc included-decls)))
+                 (loop (append clean-decls (cdr rest))
+                       exports
+                       imports
+                       body-forms)))
+
               ;; (cond-expand <ce-clause> ...)
               ((and (pair? d) (eq? (car d) 'cond-expand))
                (let ((matched-decls (expand-cond-expand (cdr d))))
