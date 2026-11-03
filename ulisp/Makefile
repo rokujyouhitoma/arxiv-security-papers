@@ -41,7 +41,7 @@ ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port
                  lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
                  $(ULISP_RUNTIME_LIBS)
 
-ULISP_LARGE_LIBS = lib/set.scm lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/charset.scm lib/mapping.scm
+ULISP_LARGE_LIBS = lib/set.scm lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/charset.scm lib/mapping.scm lib/ilist.scm lib/ideque.scm
 
 COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm \
@@ -899,6 +899,14 @@ test_mapping: $(COMPILER_DEP)
 	$(AS) $(ASFLAGS) build/test_mapping.s -o build/test_mapping.o
 	$(LD) $(LDFLAGS) build/test_mapping.o -o build/test_mapping
 	./build/test_mapping
+
+test_ilist_ideque: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) lib/ilist.scm lib/ideque.scm tests/test_ilist_ideque.scm > build/test_ilist_ideque_input.scm
+	$(ULISP_COMPILER) build/test_ilist_ideque_input.scm > build/test_ilist_ideque.s
+	$(AS) $(ASFLAGS) build/test_ilist_ideque.s -o build/test_ilist_ideque.o
+	$(LD) $(LDFLAGS) build/test_ilist_ideque.o -o build/test_ilist_ideque
+	./build/test_ilist_ideque
 
 test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build

@@ -1111,7 +1111,7 @@
 ;;; -----------------------------------------------------------------------
 
 (define (ulisp-supported-feature? feat)
-  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix srfi-14 srfi-117 srfi-127 srfi-146 srfi-193))
+  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
       #t
       #f))
 
