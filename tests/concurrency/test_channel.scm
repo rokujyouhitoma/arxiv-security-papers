@@ -543,6 +543,34 @@
   (assert-equal (channel-count ch3) 0 "ch3 count is 0"))
 
 ;; -----------------------------------------------------------------------
+;; Group 9: Flat Unboxed Ring Buffer Architecture (Issue #685)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 9: Flat Unboxed Memory Buffer (Issue #685) ---\n")
+(flush-output-port)
+
+(let* ((cap 4)
+       (ch (make-channel cap))
+       (ring (channel-ring-buffer ch)))
+  (assert-true (vector? ring) "flat ring buffer is a vector")
+  (assert-equal (vector-length ring) 4 "flat ring buffer length matches rounded capacity")
+  ;; Slot elements are direct unboxed sentinel *ring-empty*, NOT atomic-box!
+  (assert-true (not (atomic-box? (vector-ref ring 0))) "slot 0 is unboxed, not <atomic-box>")
+  (assert-true (not (atomic-box? (vector-ref ring 1))) "slot 1 is unboxed, not <atomic-box>")
+  (assert-true (not (atomic-box? (vector-ref ring 2))) "slot 2 is unboxed, not <atomic-box>")
+  (assert-true (not (atomic-box? (vector-ref ring 3))) "slot 3 is unboxed, not <atomic-box>")
+  (assert-true (eq? (vector-ref ring 0) *ring-empty*) "slot 0 initialized to *ring-empty*")
+  (assert-true (eq? (vector-ref ring 1) *ring-empty*) "slot 1 initialized to *ring-empty*")
+
+  ;; Send and verify direct unboxed slot write (no atomic-box wrapper)
+  (assert-true (channel-try-send! ch 42) "enqueue into flat ring buffer succeeds")
+  (assert-equal (vector-ref ring 0) 42 "slot 0 directly contains payload 42 (unboxed, no wrapper)")
+  (assert-true (eq? (vector-ref ring 1) *ring-empty*) "slot 1 remains *ring-empty*")
+
+  ;; Dequeue and verify slot is cleared directly to *ring-empty*
+  (assert-equal (channel-recv! ch) 42 "dequeue returns payload 42")
+  (assert-true (eq? (vector-ref ring 0) *ring-empty*) "slot 0 reset to *ring-empty* after dequeue"))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

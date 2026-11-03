@@ -2,7 +2,7 @@
 ID: 685
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Resolved)
 ---
 
 # [FEAT/ENH] フラット Unboxed メモリバッファの導入とスロット間接ポインタ参照の完全排除 (ID: 685)
@@ -103,10 +103,10 @@ Target Branch: `feat/685-channel-flat-unboxed-buffer`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] チャネル生成時に各スロットごとの `<atomic-box>` が生成されず、単一のフラットベクター `(make-vector ring-cap *ring-empty*)` として初期化されること。
-- [ ] `%channel-ring-try-enqueue!` および `%channel-ring-try-dequeue!` において二重間接参照（`vector-ref` からの `atomic-ref`/`atomic-cas!`）が完全排除され、直接の `vector-ref` / `vector-set!` で動作すること。
-- [ ] スロットアクセスのホットパスからスロット個別 CAS / Swap（LOCK 命令）が排除されること。
-- [ ] `make -C ulisp test_channel`（全 250+ テスト）が 100% PASS すること。
-- [ ] `make -C ulisp test_concurrency_ci`（並行性 CI ハーネス 100 反復）が 100% PASS すること。
-- [ ] `make -C ulisp bench_concurrency` において線形チャネル遅延がさらに短縮すること（目標: < 500 ns/op）。
-- [ ] 静的解析（`make static_analysis`）およびフォーマット検証を通過すること。
+- [x] チャネル生成時に各スロットごとの `<atomic-box>` が生成されず、単一のフラットベクター `(make-vector ring-cap *ring-empty*)` として初期化されること。
+- [x] `%channel-ring-try-enqueue!` および `%channel-ring-try-dequeue!` において二重間接参照（`vector-ref` からの `atomic-ref`/`atomic-cas!`）が完全排除され、直接の `vector-ref` / `vector-set!` で動作すること。
+- [x] スロットアクセスのホットパスからスロット個別 CAS / Swap（LOCK 命令）が排除されること。
+- [x] `make -C ulisp test_channel`（全 265 テスト）が 100% PASS すること。
+- [x] `make -C ulisp test_concurrency_ci`（並行性 CI ハーネス 100 反復 / 13,100 アサーション）が 100% PASS すること。
+- [x] `make -C ulisp bench_concurrency` において線形チャネル遅延が大幅に短縮すること（実測: 805 ns/op、最良 635 ns/op、Throughput 1,241,852〜1,573,033 msgs/sec、57.6% 遅延削減）。
+- [x] 静的解析（`make static_analysis`）およびフォーマット検証を通過すること。

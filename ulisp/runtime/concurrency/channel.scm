@@ -492,13 +492,7 @@
          (let* ((ring-cap (if (> capacity 0) (%round-to-power-of-two capacity) 0))
                 (ring-mask (if (> ring-cap 0) (- ring-cap 1) #f))
                 (ring (if (> ring-cap 0)
-                          (let ((vec (make-vector ring-cap #f)))
-                            (let init-loop ((i 0))
-                              (if (>= i ring-cap)
-                                  vec
-                                  (begin
-                                    (vector-set! vec i (make-atomic-box *ring-empty*))
-                                    (init-loop (+ i 1))))))
+                          (make-vector ring-cap *ring-empty*)
                           #f))
                 (head-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f))
                 (tail-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f))
@@ -536,13 +530,7 @@
                  (ring-cap (if (> capacity 0) (%round-to-power-of-two capacity) 0))
                  (ring-mask (if (> ring-cap 0) (- ring-cap 1) #f))
                  (ring (if (> ring-cap 0)
-                           (let ((vec (make-vector ring-cap #f)))
-                             (let init-loop ((i 0))
-                               (if (>= i ring-cap)
-                                   vec
-                                   (begin
-                                     (vector-set! vec i (make-atomic-box *ring-empty*))
-                                     (init-loop (+ i 1))))))
+                           (make-vector ring-cap *ring-empty*)
                            #f))
                  (head-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f))
                  (tail-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f)))
@@ -652,18 +640,17 @@
               (if (>= (- cur-head cur-tail) cap)
                   #f
                   (if (atomic-cas! head-box cur-head (+ cur-head 1))
-                      (let* ((slot-idx (bitwise-and cur-head mask))
-                             (slot-box (vector-ref ring slot-idx)))
+                      (let* ((slot-idx (bitwise-and cur-head mask)))
                         (let spin ()
-                          (let ((old (atomic-ref slot-box)))
+                          (let ((old (vector-ref ring slot-idx)))
                             (if (not (eq? old *ring-empty*))
                                 (begin
                                   (futex-spin-pause! 4)
                                   (spin))
-                                (if (atomic-cas! slot-box *ring-empty* val)
-                                    #t
-                                    (spin)))))
-                        #t)
+                                (begin
+                                  (vector-set! ring slot-idx val)
+                                  (%memory-fence)
+                                  #t)))))
                       (retry)))))))))
 
 (define (%channel-ring-try-dequeue! ch)
@@ -680,15 +667,17 @@
               (if (>= cur-tail cur-head)
                   #f
                   (if (atomic-cas! tail-box cur-tail (+ cur-tail 1))
-                      (let* ((slot-idx (bitwise-and cur-tail mask))
-                             (slot-box (vector-ref ring slot-idx)))
+                      (let* ((slot-idx (bitwise-and cur-tail mask)))
                         (let spin ()
-                          (let ((val (atomic-swap! slot-box *ring-empty*)))
+                          (let ((val (vector-ref ring slot-idx)))
                             (if (eq? val *ring-empty*)
                                 (begin
                                   (futex-spin-pause! 4)
                                   (spin))
-                                (cons #t val)))))
+                                (begin
+                                  (vector-set! ring slot-idx *ring-empty*)
+                                  (%memory-fence)
+                                  (cons #t val))))))
                       (retry)))))))))
 
 ;; -----------------------------------------------------------------------
