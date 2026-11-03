@@ -2,25 +2,25 @@
 ID: 684
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] チャネル容量の Power-of-Two ビットマスク化と剰余除算 (idiv) の完全排除 (ID: 684)
 
 ## 1. 概要 / Summary
-現在の `ulisp/runtime/concurrency/channel.scm` におけるリングバッファインデックス計算は、`%channel-ring-try-enqueue!` および `%channel-ring-try-dequeue!` 内で `(modulo cur-head cap)` および `(modulo cur-tail cap)` により行われている。
-x86-64 アーキテクチャにおいて `idiv`（整数除算）命令は 20〜40 CPU サイクルを消費し、パイプラインの重大なストール要因となっている。
-本 Issue では、チャネル生成時に物理リングバッファ容量（`ring-capacity`）を直近の 2 の冪乗（$2^k \ge \text{capacity}$）へ切り上げ、対応するビットマスク `ring-mask`（`ring-capacity - 1`）をレコード内にキャッシュ保持する。
-これにより、ホットパスのインデックス計算を `(bitwise-and cur-head ring-mask)` および `(bitwise-and cur-tail ring-mask)` に置換し、1 サイクル（~0.3 ns）の単一ビット演算に最適化し、線形チャネルの送受信遅延を大幅に削減する。
+現在の `ulisp/runtime/concurrency/channel.scm` におけるリングバッファインデックス計算は、`%channel-ring-try-enqueue!` および `%channel-ring-try-dequeue!` 内で `(modulo cur-head cap)` および `(modulo cur-tail cap)` により行われていた。
+x86-64 アーキテクチャにおいて `idiv`（整数除算）命令は 20〜40 CPU サイクルを消費し、パイプラインの重大なストール要因となっていた。
+本 Issue では、チャネル生成時に物理リングバッファ容量（`ring-capacity`）を直近の 2 の冪乗（$2^k \ge \text{capacity}$）へ切り上げ、対応するビットマスク `ring-mask`（`ring-capacity - 1`）をレコード内にキャッシュ保持した。
+これにより、ホットパスのインデックス計算を `(bitwise-and cur-head ring-mask)` および `(bitwise-and cur-tail ring-mask)` に置換し、1 サイクル（~0.3 ns）の単一ビット演算に最適化し、線形チャネルの送受信遅延を大幅に削減（681 ns -> 610 ns、スループット 1.63M msgs/sec 達成）した。
 
 ---
 
 ## 2. トレーサビリティ / Traceability
 - **関連仕様**: DSN-37 Section 4, 4.3.1 (Linear Ownership Transfer Channel & Ring Buffer Architecture)
 - **関連 Issue**: 
-  - [Issue #680](closed/680-implement-synapse-channel-cacheline-padding-unboxed-fastpath.md): キャッシュラインパディングと Unboxed Fast-Path
-  - [Issue #682](closed/682-implement-nanopass-concurrency-hotpath-inlining-and-type-check-elimination.md): Nanopass ホットパスインライン化
-  - [Issue #685](685-implement-channel-flat-unboxed-memory-buffer.md): フラット Unboxed メモリバッファ導入（後続）
+  - [Issue #680](680-implement-synapse-channel-cacheline-padding-unboxed-fastpath.md): キャッシュラインパディングと Unboxed Fast-Path
+  - [Issue #682](682-implement-nanopass-concurrency-hotpath-inlining-and-type-check-elimination.md): Nanopass ホットパスインライン化
+  - [Issue #685](../685-implement-channel-flat-unboxed-memory-buffer.md): フラット Unboxed メモリバッファ導入（後続）
 - **ベンチマーク基準**: `docs/benchmarks/concurrency_evaluation.md`（線形チャネル送受信遅延 681 ns/op からの短縮）
 
 ---
@@ -93,10 +93,11 @@ Target Branch: `feat/684-channel-power-of-two-bitmask`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `%round-to-power-of-two` が $n=1..1048576$ の全範囲で正確な 2 の冪乗を返すこと。
-- [ ] `<channel>` レコードに `ring-mask` が保持され、`channel-ring-mask` アクセサが公開されること。
-- [ ] `%channel-ring-try-enqueue!` および `%channel-ring-try-dequeue!` から `modulo` が 100% 排除され、`bitwise-and` が使用されていること。
-- [ ] 非 2 冪容量（例: `capacity = 3`）においても、論理満杯（3 件）およびバックプレッシャーが正確に機能すること。
-- [ ] `make -C ulisp test_channel`（全 220+ テスト）が 100% PASS すること。
-- [ ] `make -C ulisp bench_concurrency` においてチャネル送受信遅延の短縮が確認できること。
-- [ ] 作業ツリーの静的解析（`make static_analysis`）およびフォーマット検証を通過すること。
+- [x] `%round-to-power-of-two` が $n=1..1048576$ の全範囲で正確な 2 の冪乗を返すこと。
+- [x] `<channel>` レコードに `ring-mask` が保持され、`channel-ring-mask` アクセサが公開されること。
+- [x] `%channel-ring-try-enqueue!` および `%channel-ring-try-dequeue!` から `modulo` が 100% 排除され、`bitwise-and` が使用されていること。
+- [x] 非 2 冪容量（例: `capacity = 3`）においても、論理満杯（3 件）およびバックプレッシャーが正確に機能すること。
+- [x] `make -C ulisp test_channel`（全 252 テスト）が 100% PASS すること。
+- [x] `make -C ulisp bench_concurrency` においてチャネル送受信遅延の短縮が確認できること（681 ns -> 610 ns、スループット 1.63M msgs/sec）。
+- [x] 作業ツリーの静的解析（`make static_analysis`）およびフォーマット検証を通過すること。
+
