@@ -17,7 +17,7 @@
 | **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | High | New | [665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
 | **669** | 動的タスク再起動を透過化する Synapse プロセス名レジストリ (Registry) と透過的チャネル再バインド機構の実装 | Feature | Medium | Closed | [669-implement-synapse-process-registry-and-dynamic-rebinding.md](closed/669-implement-synapse-process-registry-and-dynamic-rebinding.md) |
 | **670** | 構造化クラッシュレポート (SASL 相当) 生成と Layer 1 コントロールプレーン非同期転送・可観測性基盤の実装 | Feature | Medium | Closed | [670-implement-synapse-structured-crash-reporting-and-observability.md](closed/670-implement-synapse-structured-crash-reporting-and-observability.md) |
-| **677** | Linux io_uring 統合による非同期ゼロコピー I/O イベント駆動およびタスクサスペンド・リジューム機構の実装 | Feature | High | New | [677-integrate-synapse-io-uring-event-loop.md](677-integrate-synapse-io-uring-event-loop.md) |
+| **677** | Linux io_uring 統合による非同期ゼロコピー I/O イベント駆動およびタスクサスペンド・リジューム機構の実装 | Feature | High | Closed | [677-integrate-synapse-io-uring-event-loop.md](closed/677-integrate-synapse-io-uring-event-loop.md) |
 
 ---
 
