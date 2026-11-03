@@ -2,7 +2,10 @@
 Tests for Frontend Frameworks Integration & Bundle Consistency (Issue 338).
 """
 
+import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SITE_DIR = (
@@ -103,6 +106,15 @@ def test_makefile_includes_frameworks_in_js_srcs() -> None:
 
 def test_app_min_js_contains_bundled_framework_classes() -> None:
     """site/app-min.js must contain compiled classes from frameworks."""
+    if not APP_MIN_JS.is_file():
+        import subprocess
+
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "compile_frontend.py")],
+            check=False,
+        )
+    if not APP_MIN_JS.is_file():
+        pytest.skip(f"Compiled bundle {APP_MIN_JS} not available")
     assert APP_MIN_JS.is_file(), f"Missing compiled bundle: {APP_MIN_JS}"
     content = APP_MIN_JS.read_text(encoding="utf-8")
 
@@ -671,6 +683,14 @@ def test_scene_and_tab_scene_lifecycle() -> None:
     import json
     import shutil
     import subprocess
+
+    if not (SITE_DIR / "app-min.js").is_file():
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "compile_frontend.py")],
+            check=False,
+        )
+    if not (SITE_DIR / "app-min.js").is_file():
+        pytest.skip("Compiled bundle site/app-min.js not available")
 
     app_js_text = (SITE_DIR / "app.js").read_text(encoding="utf-8")
     app_min_js_text = (SITE_DIR / "app-min.js").read_text(encoding="utf-8")

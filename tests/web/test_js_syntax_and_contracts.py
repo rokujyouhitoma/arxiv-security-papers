@@ -347,7 +347,9 @@ class TestJsSyntaxAndContracts(unittest.TestCase):
 
         # Extract file paths from FRAMEWORK_SRCS, APP_SRCS, and DASHBOARD_SRCS
         src_pattern = re.compile(r'"((?:src/web/)?site/[^"]+\.js)"')
-        referenced_sources = set(src_pattern.findall(content))
+        referenced_sources = {
+            s for s in src_pattern.findall(content) if not s.endswith("-min.js")
+        }
 
         self.assertGreater(
             len(referenced_sources),

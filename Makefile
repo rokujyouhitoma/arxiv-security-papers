@@ -156,7 +156,7 @@ watch_js: activate ## Watch frontend JS sources and automatically recompile bund
 	${VENV_PYTHON} scripts/compile_frontend.py --watch
 
 .PHONY: test
-test: pytest ## pytest
+test: build_js pytest ## pytest
 
 .PHONY: test_concurrency_ci
 test_concurrency_ci: ## Run 100-iteration multicore concurrency CI harness in uLisp

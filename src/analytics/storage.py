@@ -25,10 +25,15 @@ logger = logging.getLogger(__name__)
 
 def _apply_baseline_to_conn(conn: Any) -> None:
     from database.migrations.connection import SQLiteAdapter
+    from database.migrations.inspector import SchemaInspector
     from database.migrations.models import MigrationFile
     from database.migrations.runner import MigrationRunner
 
     adapter = SQLiteAdapter(db_path=Path(":memory:"), connection=conn)
+    SchemaInspector.ensure_schema_migrations_table(adapter)
+    applied = {rec.version for rec in SchemaInspector.get_applied_migrations(adapter)}
+    if "0001" in applied:
+        return
     runner = MigrationRunner(adapter=adapter)
     mig_dir = Path(__file__).resolve().parent.parent / "database" / "migrations" / "sql"
     if not mig_dir.exists():

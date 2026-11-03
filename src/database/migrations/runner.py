@@ -9,7 +9,7 @@ Conforms to DSN-30 Section 6 specification.
 import datetime
 import hashlib
 import time
-from typing import Any, List, Set
+from typing import Any, List, Optional, Set
 
 from .connection import DatabaseAdapter
 from .inspector import SchemaInspector
@@ -104,6 +104,18 @@ class MigrationRunner:
         except Exception:
             pass
 
+    def _find_applied_record(self, version: str) -> Optional[MigrationRecord]:
+        SchemaInspector.ensure_schema_migrations_table(self.adapter)
+        for rec in SchemaInspector.get_applied_migrations(self.adapter):
+            if rec.version == version:
+                return rec
+        return None
+
+    @staticmethod
+    def _execute_statements(cur: Any, stmts: List[str]) -> None:
+        for stmt in stmts:
+            cur.execute(stmt)
+
     def apply(self, migration: MigrationFile) -> MigrationRecord:
         """
         Atomically applies an .up.sql migration file within a single transaction.
@@ -115,7 +127,10 @@ class MigrationRunner:
                 f"Migration file not found: {migration.filepath}"
             )
 
-        SchemaInspector.ensure_schema_migrations_table(self.adapter)
+        existing = self._find_applied_record(migration.version)
+        if existing is not None:
+            return existing
+
         content = migration.filepath.read_text(encoding="utf-8")
         checksum = self.compute_checksum(content)
         stmts = self.split_sql_statements(content)
@@ -127,8 +142,7 @@ class MigrationRunner:
         self._begin_transaction(conn)
         cur = conn.cursor()
         try:
-            for stmt in stmts:
-                cur.execute(stmt)
+            self._execute_statements(cur, stmts)
 
             elapsed_ms = max(0, int(round((time.perf_counter() - start_time) * 1000)))
             applied_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -180,7 +194,9 @@ class MigrationRunner:
                 f"Migration file not found: {migration.filepath}"
             )
 
-        SchemaInspector.ensure_schema_migrations_table(self.adapter)
+        if self._find_applied_record(migration.version) is None:
+            return
+
         content = migration.filepath.read_text(encoding="utf-8")
         stmts = self.split_sql_statements(content)
 
@@ -188,8 +204,7 @@ class MigrationRunner:
         self._begin_transaction(conn)
         cur = conn.cursor()
         try:
-            for stmt in stmts:
-                cur.execute(stmt)
+            self._execute_statements(cur, stmts)
 
             delete_sql = "DELETE FROM schema_migrations WHERE version = ?"
             cur.execute(delete_sql, (migration.version,))
