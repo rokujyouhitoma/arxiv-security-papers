@@ -15,7 +15,6 @@
 | **663** | R7RS-large / SRFI 111 Boxes 単一要素可変セル API の実装 | Feature | Medium | New | [663-implement-srfi-111-boxes.md](663-implement-srfi-111-boxes.md) |
 | **664** | R7RS-large / SRFI 145 Assumptions 表明構文 (assume / assert) の実装 | Feature | Medium | New | [664-implement-srfi-145-assumptions.md](664-implement-srfi-145-assumptions.md) |
 | **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | High | New | [665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
-| **682** | Nanopass コンパイラによる並行ホットプリミティブのネイティブインライン展開と型検査除去 | Feature | Medium | In Progress | [682-implement-nanopass-concurrency-hotpath-inlining-and-type-check-elimination.md](682-implement-nanopass-concurrency-hotpath-inlining-and-type-check-elimination.md) |
 | **683** | Linux io_uring カーネルポーリング (SQPOLL) と登録バッファによるゼロシステムコール I/O の統合 | Feature | Medium | New | [683-integrate-synapse-io-uring-sqpoll-and-registered-buffers.md](683-integrate-synapse-io-uring-sqpoll-and-registered-buffers.md) |
 
 ---
@@ -24,6 +23,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **682** | Nanopass コンパイラによる並行ホットプリミティブのネイティブインライン展開と型検査除去 | Feature | 2026-11-03 | [closed/682-implement-nanopass-concurrency-hotpath-inlining-and-type-check-elimination.md](closed/682-implement-nanopass-concurrency-hotpath-inlining-and-type-check-elimination.md) |
 | **681** | NUMA-Aware 階層型 Work-Stealing スケジューリングの実装 | Feature | 2026-11-03 | [closed/681-implement-synapse-numa-aware-hierarchical-work-stealing.md](closed/681-implement-synapse-numa-aware-hierarchical-work-stealing.md) |
 | **680** | 線形チャネルの 64 バイト・キャッシュラインパディングと Unboxed Fast-Path による False Sharing 排除 | Feature | 2026-11-03 | [closed/680-implement-synapse-channel-cacheline-padding-unboxed-fastpath.md](closed/680-implement-synapse-channel-cacheline-padding-unboxed-fastpath.md) |
 | **679** | 適応的スピン (Adaptive Spinning) による Futex システムコールの削減とタスク起床遅延の極小化 | Feature | 2026-11-03 | [closed/679-implement-synapse-adaptive-spinning-futex-reduction.md](closed/679-implement-synapse-adaptive-spinning-futex-reduction.md) |
