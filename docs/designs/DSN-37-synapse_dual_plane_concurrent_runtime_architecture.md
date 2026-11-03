@@ -36,17 +36,17 @@
 | **#644** | インタプリタ向け Dual-Mode 評価アダプタの実装 | インタプリタ統合 (`eval_adapter.scm`) | 2026-11-01 | [Issue #644](../issues/closed/644-implement-synapse-interpreter-dual-mode-eval-adapter.md) |
 | **#645** | CI 向けマルチコア並行競合テストハーネスの実装 | CI 品質ゲート (`tests/concurrency/`) | 2026-11-01 | [Issue #645](../issues/closed/645-implement-synapse-multicore-concurrency-ci-harness.md) |
 
-### 2. Erlang/OTP 型耐障害性拡張 Issue (Open Issues #666 〜 #670)
+### 2. Erlang/OTP 型耐障害性拡張 Issue (完了 / Closed Issues #666 〜 #670)
 
 | Issue ID | タイトル | 拡張カテゴリ / 責務 | ステータス | 詳細リンク |
 | :---: | :--- | :--- | :---: | :--- |
-| **#666** | タスク間双方向リンク (link)・単方向監視 (monitor) およびチャネル毒化防止機構の実装 | 耐障害性基盤: 異常検知・シグナル伝播 (`links.scm`) | New | [Issue #666](../issues/666-implement-synapse-task-links-and-monitors.md) |
-| **#667** | Erlang/OTP 型スーパービジョンツリー (Supervision Tree) と再起動戦略の実装 | 耐障害性基盤: 自律復旧・木構造監視 (`supervisor.scm`) | New | [Issue #667](../issues/667-implement-synapse-supervision-tree-and-restart-strategies.md) |
-| **#668** | エフェメラルアリーナ O(1) 即時破棄と融合した Fail-Fast "Let It Crash" セマンティクスおよびパニック機構の確立 | 耐障害性基盤: 不変条件防御・パニック (`panic.scm`) | New | [Issue #668](../issues/668-implement-synapse-fail-fast-let-it-crash-semantics.md) |
-| **#669** | 動的タスク再起動を透過化する Synapse プロセス名レジストリ (Registry) と透過的チャネル再バインド機構の実装 | 耐障害性基盤: 名前解決・動的バインド (`registry.scm`) | New | [Issue #669](../issues/669-implement-synapse-process-registry-and-dynamic-rebinding.md) |
-| **#670** | 構造化クラッシュレポート (SASL 相当) 生成と Layer 1 コントロールプレーン非同期転送・可観測性基盤の実装 | 耐障害性基盤: 可観測性・診断ログ (`crash_logger.scm`) | New | [Issue #670](../issues/670-implement-synapse-structured-crash-reporting-and-observability.md) |
+| **#666** | タスク間双方向リンク (link)・単方向監視 (monitor) およびチャネル毒化防止機構の実装 | 耐障害性基盤: 異常検知・シグナル伝播 (`links.scm`) | Closed (Resolved) | [Issue #666](../issues/closed/666-implement-synapse-task-links-and-monitors.md) |
+| **#667** | Erlang/OTP 型スーパービジョンツリー (Supervision Tree) と再起動戦略の実装 | 耐障害性基盤: 自律復旧・木構造監視 (`supervisor.scm`) | Closed (Resolved) | [Issue #667](../issues/closed/667-implement-synapse-supervision-tree-and-restart-strategies.md) |
+| **#668** | エフェメラルアリーナ O(1) 即時破棄と融合した Fail-Fast "Let It Crash" セマンティクスおよびパニック機構の確立 | 耐障害性基盤: 不変条件防御・パニック (`panic.scm`) | Closed (Resolved) | [Issue #668](../issues/closed/668-implement-synapse-fail-fast-let-it-crash-semantics.md) |
+| **#669** | 動的タスク再起動を透過化する Synapse プロセス名レジストリ (Registry) と透過的チャネル再バインド機構の実装 | 耐障害性基盤: 名前解決・動的バインド (`registry.scm`) | Closed (Resolved) | [Issue #669](../issues/closed/669-implement-synapse-process-registry-and-dynamic-rebinding.md) |
+| **#670** | 構造化クラッシュレポート (SASL 相当) 生成と Layer 1 コントロールプレーン非同期転送・可観測性基盤の実装 | 耐障害性基盤: 可観測性・診断ログ (`crash_logger.scm`) | Closed (Resolved) | [Issue #670](../issues/closed/670-implement-synapse-structured-crash-reporting-and-observability.md) |
 
-### 3. 並行 ID 採番アトミック化・データ競合是正 Issue (Open Issues #671 〜 #674)
+### 3. 並行 ID 採番アトミック化・データ競合是正 Issue (完了 / Closed Issues #671 〜 #674)
 
 | Issue ID | タイトル | 修正カテゴリ / 責務 | ステータス | 詳細リンク |
 | :---: | :--- | :--- | :---: | :--- |
@@ -55,13 +55,13 @@
 | **#673** | グローバルアトミック Task ID (TID) 自動採番機構の導入と手動指定衝突の防止 | タスク基盤: 一意 TID 自動割当 (`channel.scm`, `preempt.scm`) | Closed (Resolved) | [Issue #673](../issues/closed/673-implement-synapse-global-atomic-task-id-allocator.md) |
 | **#674** | スケジューラ統計カウンタのアトミック化による並行終了判定の不整合・ハング防止 | スケジューラ基盤: 統計アトミック化 (`scheduler.scm`) | Closed (Resolved) | [Issue #674](../issues/closed/674-fix-synapse-scheduler-stats-atomic-counters.md) |
 
-### 4. 物理マルチコア並列化・CPU飽和アーキテクチャ Issue (Open Issues #675 〜 #677)
+### 4. 物理マルチコア並列化・CPU飽和アーキテクチャ Issue (完了 / Closed Issues #675 〜 #677)
 
 | Issue ID | タイトル | 修正カテゴリ / 責務 | ステータス | 詳細リンク |
 | :---: | :--- | :--- | :---: | :--- |
 | **#675** | Linux sys_clone ネイティブスレッド生成と CPU コアピニング (sched_setaffinity) による物理マルチコア並列実行エンジンの実装 | 並列基盤: 1:1 OSスレッド・コアバインド (`thread.s`, `scheduler.scm`) | Closed (Resolved) | [Issue #675](../issues/closed/675-implement-synapse-native-multithread-worker-pool.md) |
 | **#676** | Linux SYS_futex に基づくワーカー待機 (Park) およびチャネル起床 (Unpark) による省電力・低遅延同期機構の実装 | 同期基盤: 低遅延・省電力待機 (`futex.s`, `scheduler.scm`) | Closed (Resolved) | [Issue #676](../issues/closed/676-implement-synapse-futex-park-unpark-primitives.md) |
-| **#677** | Linux io_uring 統合による非同期ゼロコピー I/O イベント駆動およびタスクサスペンド・リジューム機構の実装 | I/O基盤: ゼロsyscall非同期I/O (`io_uring.s`, `scheduler.scm`) | New | [Issue #677](../issues/677-integrate-synapse-io-uring-event-loop.md) |
+| **#677** | Linux io_uring 統合による非同期ゼロコピー I/O イベント駆動およびタスクサスペンド・リジューム機構の実装 | I/O基盤: ゼロsyscall非同期I/O (`io_uring.s`, `scheduler.scm`) | Closed (Resolved) | [Issue #677](../issues/closed/677-integrate-synapse-io-uring-event-loop.md) |
 
 ---
 
@@ -611,12 +611,12 @@ flowchart TD
   - トラップフラグ（`trap-exit`）が偽であるタスクは道連れで即座に終了する（カスケード終了によるゾンビ排除）。
 - **単方向監視 (`task-monitor observer-task target-task`)**:
   - 監視対象タスクの終了理由（正常終了、アリーナ枯渇、パニック等）を検知し、監視元タスクのチャネルへ `'(DOWN <ref> <target-id> <reason>)` 通知メッセージを配送する。監視元の生死は対象タスクに影響を与えない。
-- **関連 Issue**: [[Issue #666]](../issues/666-implement-synapse-task-links-and-monitors.md)
+- **関連 Issue**: [[Issue #666]](../issues/closed/666-implement-synapse-task-links-and-monitors.md)
 
 ### 8.4.2 チャネル毒化防止（Poisoning / Auto-Close）とデッドロック遮断
 - チャネルで `channel-recv!` または `channel-send!` 待機中のタスクが存在する状況下で、通信対向タスクが異常終了した場合、待機側タスクが永久に起床されないデッドロック（CWE-833）を防止する。
 - タスク終了時に保有チャネルのステータスフラグを `CHANNEL_POISONED` へ不可逆遷移させ、待機キュー内の全タスクを即時に `TASK_ERROR` 状態で起床させて脱出させる。
-- **関連 Issue**: [[Issue #666]](../issues/666-implement-synapse-task-links-and-monitors.md)
+- **関連 Issue**: [[Issue #666]](../issues/closed/666-implement-synapse-task-links-and-monitors.md)
 
 ### 8.4.3 Supervision Tree（階層型監視木）と再起動戦略
 - Layer 1（R7RS 制御プレーン）または専用の監視タスクを木構造（Tree）として編成し、末端ワーカーの死活を自律監視する。
@@ -626,7 +626,7 @@ flowchart TD
   3. `rest-for-one`: 起動順序に依存関係がある場合、障害が発生したタスクおよびそれ以降に起動されたタスク群のみを順次再起動する。
 - **再起動頻度制限（MaxRestarts / MaxTime）**:
   - 設定された時間窓（Time Window）内で再起動回数が上限を超えた場合（Flapping / Crash Loop 状態）、スーパーバイザ自身が上位の親スーパーバイザへクラッシュをエスカレーションし、無限再起動による CPU 枯渇（CWE-400）を遮断する。
-- **関連 Issue**: [[Issue #667]](../issues/667-implement-synapse-supervision-tree-and-restart-strategies.md)
+- **関連 Issue**: [[Issue #667]](../issues/closed/667-implement-synapse-supervision-tree-and-restart-strategies.md)
 
 ### 8.4.4 "Let It Crash" 哲学とエフェメラルアリーナ O(1) 瞬時解放の融合
 - **Fail-Fast パニック (`synapse-panic! reason`)**:
@@ -634,19 +634,19 @@ flowchart TD
 - **ゼロコスト・クリーンアップ**:
   - タスク独立アリーナのバンプポインタを $O(1)$ で 0 リセットするだけで全メモリが回収され、GC 走査やファイナライザ遅延が一切発生しない。
   - 共有メモリを持たない（Shared-Nothing）ため、クラッシュしたタスクが他タスクのヒープやスタックを汚染することは原理的にあり得ず、新品のクリーンな状態での再起動が保証される。
-- **関連 Issue**: [[Issue #668]](../issues/668-implement-synapse-fail-fast-let-it-crash-semantics.md)
+- **関連 Issue**: [[Issue #668]](../issues/closed/668-implement-synapse-fail-fast-let-it-crash-semantics.md)
 
 ### 8.4.5 プロセス名レジストリ（Registry）と動的チャネル再バインド
 - スーパーバイザによってタスクが再起動されると、新しい Task Context と新しいローカルチャネルが割り当てられる。
 - **論理名解決 (`synapse-register!`, `synapse-whereis`)**:
   - クライアントタスクは相手の物理ポインタではなく論理名（シンボル）を参照する。
   - 再起動時にスーパーバイザがレジストリをアトミックに更新することで、通信相手は意識することなく透過的に最新の通信路へ再接続できる。
-- **関連 Issue**: [[Issue #669]](../issues/669-implement-synapse-process-registry-and-dynamic-rebinding.md)
+- **関連 Issue**: [[Issue #669]](../issues/closed/669-implement-synapse-process-registry-and-dynamic-rebinding.md)
 
 ### 8.4.6 構造化クラッシュレポート（SASL 相当）と Layer 1 境界非同期転送
 - タスク異常終了時、障害解析に必要なコンテキスト（Task ID、Epoch、消費 Fuel、アリーナ消費量、障害理由コード、直前メッセージサマリ）を構造化レコード `<crash-report>` として瞬時にパックする。
 - ロックフリーキューを通じて Layer 1（R7RS 制御プレーン）の非同期ロガーへ転送し、計算層（Layer 2）のリアルタイム性を一切損なうことなく、本番環境での可観測性（Observability）と監査トレーサビリティを確立する。
-- **関連 Issue**: [[Issue #670]](../issues/670-implement-synapse-structured-crash-reporting-and-observability.md)
+- **関連 Issue**: [[Issue #670]](../issues/closed/670-implement-synapse-structured-crash-reporting-and-observability.md)
 
 ---
 
@@ -1073,23 +1073,26 @@ mindmap
 - **DoD**:
   - パニック時に他タスクのヒープ/スタックを一切汚染せず、メモリリーク 0 で新品の再起動が行われること（全 56 テスト PASS 達成済み）。
 
-### Task 6.4: 動的タスク再起動を透過化するプロセス名レジストリ (`ulisp/runtime/concurrency/registry.scm`)
+### Task 6.4: 動的タスク再起動を透過化するプロセス名レジストリ (`ulisp/runtime/concurrency/registry.scm`) [完了 / 済]
 - **目的**: タスク再起動に伴う Task ID / チャネルアドレス変更をクライアント側に対して透過化。
-- **関連 Issue**: [[Issue #669]](../issues/669-implement-synapse-process-registry-and-dynamic-rebinding.md)
+- **関連 Issue**: [[Issue #669 (完了)]](../issues/closed/669-implement-synapse-process-registry-and-dynamic-rebinding.md)
 - **実装内容**:
-  - ロックフリーな論理名レジストリ（`synapse-register!`, `synapse-unregister!`, `synapse-whereis`）。
+  - 64 分割 `<atomic-box>` バケットによるロックフリー論理名レジストリ（`synapse-register!`, `synapse-unregister!`, `synapse-whereis`）。
   - 自動名前解決・フォールバック送信ユーティリティ（`synapse-send-named!`）。
+  - スーパーバイザ再起動時の動的チャネル再バインド（`synapse-rebind!`）。
 - **DoD**:
-  - タスク再起動後もクライアントが同一の論理名で継続通信できること。
+  - タスク再起動後もクライアントが同一の論理名で継続通信できること（全 54 テスト PASS 達成済み）。
 
-### Task 6.5: 構造化クラッシュレポート生成と Layer 1 可観測性基盤 (`ulisp/runtime/concurrency/crash_logger.scm`)
+### Task 6.5: 構造化クラッシュレポート生成と Layer 1 可観測性基盤 (`ulisp/runtime/concurrency/crash_logger.scm`) [完了 / 済]
 - **目的**: クラッシュ診断コンテキストの自動記録と、Layer 1 コントロールプレーンへの非同期転送。
-- **関連 Issue**: [[Issue #670]](../issues/670-implement-synapse-structured-crash-reporting-and-observability.md)
+- **関連 Issue**: [[Issue #670 (完了)]](../issues/closed/670-implement-synapse-structured-crash-reporting-and-observability.md)
 - **実装内容**:
   - `<crash-report>` レコードの生成（Task ID, Epoch, Fuel, Arena, Reason, Message Summary）。
   - ロックフリーリングバッファを用いた Layer 1 側ロガーへの非同期引き渡し。
+  - SASL 形式診断テキストフォーマッタおよび S 式シリアライザ。
+  - パニック・スーパーバイザ自動連携フックおよびメトリクス集計。
 - **DoD**:
-  - タスククラッシュ時に診断ログが欠損なく Layer 1 で取得でき、計算層の並行性能を損なわないこと。
+  - タスククラッシュ時に診断ログが欠損なく Layer 1 で取得でき、計算層の並行性能を損なわないこと（全 57 テスト PASS 達成済み）。
 
 ---
 
@@ -1107,24 +1110,25 @@ mindmap
 - **DoD**:
   - 8〜16スレッド並列実行時に、全コアが同時に 100% 稼働し、L1/L2 キャッシュローカリティが維持されること。
 
-### Task 7.2: Linux SYS_futex によるワーカー待機 (Park) およびチャネル起床 (Unpark) (`ulisp/runtime/concurrency/futex.s`, `futex.scm`)
+### Task 7.2: Linux SYS_futex によるワーカー待機 (Park) およびチャネル起床 (Unpark) (`ulisp/runtime/concurrency/futex.s`, `futex.scm`) [完了 / 済]
 - **目的**: ビジースピンによる無駄な CPU 消費とキャッシュコヒーレンシ（Snoop Traffic）圧迫の完全排除。
-- **関連 Issue**: [[Issue #676]](../issues/closed/676-implement-synapse-futex-park-unpark-primitives.md)
+- **関連 Issue**: [[Issue #676 (完了)]](../issues/closed/676-implement-synapse-futex-park-unpark-primitives.md)
 - **実装内容**:
   - `SYS_futex`（`FUTEX_WAIT_PRIVATE` / `FUTEX_WAKE_PRIVATE`）アセンブリシステムコールラッパー。
   - タスク枯渇ワーカーのカーネルレベル省電力休止（Park）と、チャネルメッセージ到着時の即時起床（Unpark）。
 - **DoD**:
-  - タスク不在時に CPU 使用率が 0% に低下し、タスク投入時にマイクロ秒未満で全ワーカーが再開すること。
+  - タスク不在時に CPU 使用率が 0% に低下し、タスク投入時にマイクロ秒未満で全ワーカーが再開すること（全テスト PASS 達成済み）。
 
-### Task 7.3: Linux io_uring 統合によるゼロシステムコール非同期 I/O とタスクサスペンド (`ulisp/runtime/concurrency/io_uring.s`, `io_uring.scm`)
+### Task 7.3: Linux io_uring 統合によるゼロシステムコール非同期 I/O とタスクサスペンド (`ulisp/runtime/concurrency/io_uring.s`, `io_uring.scm`) [完了 / 済]
 - **目的**: I/O ブロックによる OS スレッドの停止（Head-of-Line Blocking）を排除し、ストレージ/ネットワーク帯域を飽和。
-- **関連 Issue**: [[Issue #677]](../issues/677-integrate-synapse-io-uring-event-loop.md)
+- **関連 Issue**: [[Issue #677 (完了)]](../issues/closed/677-integrate-synapse-io-uring-event-loop.md)
 - **実装内容**:
   - `SYS_io_uring_setup` による SQ/CQ リングバッファの共有 mmap。
-  - `async-read!` / `async-write!` 発行時のタスク状態 `'waiting-io` 遷移と即時 CPU 譲渡。
-  - 完了イベント（CQE）検知時の自動 `'ready` 復帰と Deque 再投入。
+  - `io-uring-submit-read!` / `io-uring-submit-write!` / `io-uring-submit-nop!` 発行時のタスク状態 `'waiting-io` 遷移と即時 CPU 譲渡。
+  - 完了イベント（CQE）検知（`io-uring-poll-completions!`）時の自動 `'ready` 復帰と結果引き渡し。
+  - Seccomp/コンテナ制限環境への自動フォールバック・シミュレータ内蔵。
 - **DoD**:
-  - 並行 I/O 実行下で OS スレッドがブロックされず、他タスクの計算が継続すること。
+  - 並行 I/O 実行下で OS スレッドがブロックされず、他タスクの計算が継続すること（全 61 テスト PASS 達成済み）。
 
 ---
 
