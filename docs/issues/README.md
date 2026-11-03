@@ -16,6 +16,11 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
+| **701** | R7RS-large / SRFI 128 (scheme comparator) 第一級比較器ライブラリの実装 | Feature | High | New | [701-implement-srfi-128-comparators.md](701-implement-srfi-128-comparators.md) |
+| **702** | R7RS-large / SRFI 113 (scheme set) 集合およびマルチセット (Bags) データ構造の実装 | Feature | High | New | [702-implement-srfi-113-sets-and-bags.md](702-implement-srfi-113-sets-and-bags.md) |
+| **703** | R7RS-large / SRFI 41 (scheme stream) 遅延評価ストリームライブラリの実装 | Feature | High | New | [703-implement-srfi-41-streams.md](703-implement-srfi-41-streams.md) |
+| **704** | R7RS-large / SRFI 158 (scheme generator) 汎用ジェネレータ・アキュムレータライブラリの実装 | Feature | Medium | New | [704-implement-srfi-158-generators-and-accumulators.md](704-implement-srfi-158-generators-and-accumulators.md) |
+| **705** | R7RS-small (scheme base) 残余コア手続き群 (features, input/output-port-open?) の完全実装 | Feature | High | New | [705-implement-r7rs-base-remaining-procedures-and-features.md](705-implement-r7rs-base-remaining-procedures-and-features.md) |
 
 ---
 
