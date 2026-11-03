@@ -16,6 +16,26 @@
 ;; 1. AST Affine Syntax Linter (CWE-416 / Linearity Guard)
 ;; -----------------------------------------------------------------------
 
+;; Fault-tolerance and supervision stubs (overridden when panic.scm / links.scm / supervisor.scm are loaded)
+(define synapse-panic! (case-lambda (() #f) ((r) #f) ((r d) #f)))
+(define synapse-secure-panic! (case-lambda (() #f) ((r) #f) ((r d) #f)))
+(define synapse-assert-true! (case-lambda ((c) #f) ((c m) #f)))
+(define with-synapse-task-boundary (case-lambda ((t) #f) ((t thunk) #f)))
+(define current-synapse-task (lambda () #f))
+(define task-link! (lambda (a b) #f))
+(define task-unlink! (lambda (a b) #f))
+(define task-monitor (lambda (a b) -1))
+(define task-demonitor (lambda (a b) #f))
+(define task-trap-exit! (lambda (t v) #f))
+(define task-trapping-exit? (lambda (t) #f))
+(define make-child-spec (case-lambda ((id thunk) #f) ((id thunk restart-type) #f)))
+(define make-supervisor-spec (case-lambda ((strategy) #f) ((strategy max-restarts) #f) ((strategy max-restarts period-seconds) #f)))
+(define make-supervisor (lambda (spec children) #f))
+(define supervisor-start! (lambda (sup) #f))
+(define supervisor-stop! (lambda (sup) #f))
+(define supervisor-handle-child-down! (lambda (sup ref tid reason) #f))
+(define supervisor-child-task (lambda (sup id) #f))
+
 ;; Deep-equal helper for AST symbols and values
 (define (%sym-equal? a b)
   (cond

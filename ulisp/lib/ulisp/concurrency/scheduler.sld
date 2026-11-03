@@ -21,6 +21,7 @@
     worker-yields
     worker-rng-seed
     worker-next-random!
+    worker-futex-cell
 
     ;; Core scheduler operations
     scheduler-worker-count
@@ -61,7 +62,8 @@
     (ulisp concurrency channel)
     (ulisp concurrency links)
     (ulisp concurrency context)
-    (ulisp concurrency thread))
+    (ulisp concurrency thread)
+    (ulisp concurrency futex))
 
   (include "ulisp/runtime/concurrency/scheduler.scm"))
 

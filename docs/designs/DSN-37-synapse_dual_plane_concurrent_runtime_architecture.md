@@ -59,8 +59,8 @@
 
 | Issue ID | タイトル | 修正カテゴリ / 責務 | ステータス | 詳細リンク |
 | :---: | :--- | :--- | :---: | :--- |
-| **#675** | Linux sys_clone ネイティブスレッド生成と CPU コアピニング (sched_setaffinity) による物理マルチコア並列実行エンジンの実装 | 並列基盤: 1:1 OSスレッド・コアバインド (`thread.s`, `scheduler.scm`) | New | [Issue #675](../issues/675-implement-synapse-native-multithread-worker-pool.md) |
-| **#676** | Linux SYS_futex に基づくワーカー待機 (Park) およびチャネル起床 (Unpark) による省電力・低遅延同期機構の実装 | 同期基盤: 低遅延・省電力待機 (`futex.s`, `scheduler.scm`) | New | [Issue #676](../issues/676-implement-synapse-futex-park-unpark-primitives.md) |
+| **#675** | Linux sys_clone ネイティブスレッド生成と CPU コアピニング (sched_setaffinity) による物理マルチコア並列実行エンジンの実装 | 並列基盤: 1:1 OSスレッド・コアバインド (`thread.s`, `scheduler.scm`) | Closed (Resolved) | [Issue #675](../issues/closed/675-implement-synapse-native-multithread-worker-pool.md) |
+| **#676** | Linux SYS_futex に基づくワーカー待機 (Park) およびチャネル起床 (Unpark) による省電力・低遅延同期機構の実装 | 同期基盤: 低遅延・省電力待機 (`futex.s`, `scheduler.scm`) | Closed (Resolved) | [Issue #676](../issues/closed/676-implement-synapse-futex-park-unpark-primitives.md) |
 | **#677** | Linux io_uring 統合による非同期ゼロコピー I/O イベント駆動およびタスクサスペンド・リジューム機構の実装 | I/O基盤: ゼロsyscall非同期I/O (`io_uring.s`, `scheduler.scm`) | New | [Issue #677](../issues/677-integrate-synapse-io-uring-event-loop.md) |
 
 ---
@@ -1109,7 +1109,7 @@ mindmap
 
 ### Task 7.2: Linux SYS_futex によるワーカー待機 (Park) およびチャネル起床 (Unpark) (`ulisp/runtime/concurrency/futex.s`, `futex.scm`)
 - **目的**: ビジースピンによる無駄な CPU 消費とキャッシュコヒーレンシ（Snoop Traffic）圧迫の完全排除。
-- **関連 Issue**: [[Issue #676]](../issues/676-implement-synapse-futex-park-unpark-primitives.md)
+- **関連 Issue**: [[Issue #676]](../issues/closed/676-implement-synapse-futex-park-unpark-primitives.md)
 - **実装内容**:
   - `SYS_futex`（`FUTEX_WAIT_PRIVATE` / `FUTEX_WAKE_PRIVATE`）アセンブリシステムコールラッパー。
   - タスク枯渇ワーカーのカーネルレベル省電力休止（Park）と、チャネルメッセージ到着時の即時起床（Unpark）。

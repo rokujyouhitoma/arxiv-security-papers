@@ -12,8 +12,15 @@
 ;; Preemption execution hook (overridden when preempt.scm is loaded)
 (define budgeted-task-execute! (lambda (task) #f))
 
+;; Futex execution hooks (injected via futex.scm, Issue #676)
+(define *scheduler-futex-enabled-box* (vector #f))
+(define *scheduler-make-futex-cell-box* (vector (lambda () #f)))
+(define *scheduler-futex-park-box* (vector (lambda (cell timeout-ms) #t)))
+(define *scheduler-futex-unpark-box* (vector (lambda (cell) #t)))
+(define *scheduler-futex-unpark-all-box* (vector (lambda (cell) #t)))
+
 ;; -----------------------------------------------------------------------
-;; 1. <worker-context> Record Type (5 fields, fits in AMD64 registers)
+;; 1. <worker-context> Record Type (6 fields, fits in AMD64 registers)
 ;; -----------------------------------------------------------------------
 ;; Fields:
 ;;   id               : fixnum worker index (0 .. worker-count - 1)
@@ -25,15 +32,17 @@
 ;;                      [1] steals attempted
 ;;                      [2] steals succeeded
 ;;                      [3] yields count
+;;   futex-cell       : <futex-cell> or #f for parking idle workers (Issue #676)
 
 (define-record-type <worker-context>
-  (%make-worker-context id deque current-task-box rng-state-box stats)
+  (%make-worker-context id deque current-task-box rng-state-box stats futex-cell)
   worker-context?
   (id               worker-id)
   (deque            worker-deque)
   (current-task-box %worker-current-task-box)
   (rng-state-box    %worker-rng-state-box)
-  (stats            %worker-stats))
+  (stats            %worker-stats)
+  (futex-cell       worker-futex-cell           %worker-futex-cell-set!))
 
 (define (%make-worker-stats)
   (let ((s (make-vector 4)))
@@ -54,8 +63,9 @@
          (seed-clamped (if (= seed 0) 987654321 seed))
          (cur-box (%make-worker-box #f))
          (rng-box (%make-worker-box seed-clamped))
-         (stats (%make-worker-stats)))
-    (%make-worker-context id dq cur-box rng-box stats)))
+         (stats (%make-worker-stats))
+         (futex-cell ((vector-ref *scheduler-make-futex-cell-box* 0))))
+    (%make-worker-context id dq cur-box rng-box stats futex-cell)))
 
 (define (worker-current-task worker)
   (vector-ref (%worker-current-task-box worker) 0))
@@ -261,8 +271,16 @@
                                   (>= target-worker-id 0)
                                   (< target-worker-id (scheduler-worker-count sched)))
                              (let ((w (scheduler-get-worker sched target-worker-id)))
-                               (deque-push! (worker-deque w) task))
-                             (queue-enqueue! (scheduler-global-queue sched) task))
+                               (deque-push! (worker-deque w) task)
+                               (let ((cell (worker-futex-cell w)))
+                                 (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))))
+                             (begin
+                               (queue-enqueue! (scheduler-global-queue sched) task)
+                               ;; Wake a worker to consume from global queue
+                               (if (> (scheduler-worker-count sched) 1)
+                                   (let* ((w (scheduler-get-worker sched 1))
+                                          (cell (worker-futex-cell w)))
+                                     (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))))))
                          #t)))))))))
 
 ;; -----------------------------------------------------------------------
@@ -374,6 +392,15 @@
       (begin
         (atomic-set! (%scheduler-state-box sched) 'stopped)
         (%memory-fence)
+        ;; Wake all workers so they immediately exit their park loop (Issue #676)
+        (let ((n (scheduler-worker-count sched)))
+          (let wake-loop ((i 0))
+            (if (< i n)
+                (let* ((w (scheduler-get-worker sched i))
+                       (cell (worker-futex-cell w)))
+                  (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))
+                  (wake-loop (+ i 1)))
+                #t)))
         #t)))
 
 ;; -----------------------------------------------------------------------
@@ -430,14 +457,21 @@
     ;; 1:1 CPU core pinning
     (guard (exn (else #f))
       (set-thread-affinity! worker-id))
-    (let loop ()
-      (if (scheduler-running? sched)
-          (let ((executed? (scheduler-worker-step! sched worker-id)))
-            (if (not executed?)
-                (%scheduler-idle-backoff!)
-                #f)
-            (loop))
-          #t))))
+    (let ((worker (scheduler-get-worker sched worker-id)))
+      (let loop ()
+        (if (scheduler-running? sched)
+            (let ((executed? (scheduler-worker-step! sched worker-id)))
+              (if (not executed?)
+                  (begin
+                    (%scheduler-idle-backoff!)
+                    ;; If still no work, park via Linux futex to avoid CPU saturation (Issue #676)
+                    (let ((cell (worker-futex-cell worker)))
+                      (if (and cell (scheduler-running? sched))
+                          ((vector-ref *scheduler-futex-park-box* 0) cell 50)
+                          #f)))
+                  #f)
+              (loop))
+            #t)))))
 
 (define (scheduler-start-native-workers! sched)
   (if (not (work-stealing-scheduler? sched))
