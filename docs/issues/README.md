@@ -15,7 +15,6 @@
 | **663** | R7RS-large / SRFI 111 Boxes 単一要素可変セル API の実装 | Feature | Medium | New | [663-implement-srfi-111-boxes.md](663-implement-srfi-111-boxes.md) |
 | **664** | R7RS-large / SRFI 145 Assumptions 表明構文 (assume / assert) の実装 | Feature | Medium | New | [664-implement-srfi-145-assumptions.md](664-implement-srfi-145-assumptions.md) |
 | **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | High | New | [665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
-| **686** | 多値レジスタ渡しによるチャネルデキュー時のタプル (cons) 動的割り当てゼロ化 | Feature | High | In Progress | [686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md](686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md) |
 | **687** | 線形所有権特化型 SPSC ロックフリーリングによる LOCK プレフィックス命令ゼロ化 | Feature | High | New | [687-implement-synapse-spsc-linear-channel-lock-free-ring.md](687-implement-synapse-spsc-linear-channel-lock-free-ring.md) |
 | **688** | Nanopass AOT コンパイラによるチャネル送受信ホットパスのネイティブ直接インライン展開 | Feature | High | New | [688-implement-nanopass-aot-inlining-for-channel-hotpaths.md](688-implement-nanopass-aot-inlining-for-channel-hotpaths.md) |
 
@@ -25,6 +24,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **686** | 多値レジスタ渡しによるチャネルデキュー時のタプル (cons) 動的割り当てゼロ化 | Feature | 2026-11-03 | [closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md](closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md) |
 | **685** | フラット Unboxed メモリバッファの導入とスロット間接ポインタ参照の完全排除 | Feature | 2026-11-03 | [closed/685-implement-channel-flat-unboxed-memory-buffer.md](closed/685-implement-channel-flat-unboxed-memory-buffer.md) |
 | **684** | チャネル容量の Power-of-Two ビットマスク化と剰余除算 (idiv) の完全排除 | Feature | 2026-11-03 | [closed/684-implement-channel-power-of-two-bitmask-indexing.md](closed/684-implement-channel-power-of-two-bitmask-indexing.md) |
 | **683** | Linux io_uring カーネルポーリング (SQPOLL) と登録バッファによるゼロシステムコール I/O の統合 | Feature | 2026-11-03 | [closed/683-integrate-synapse-io-uring-sqpoll-and-registered-buffers.md](closed/683-integrate-synapse-io-uring-sqpoll-and-registered-buffers.md) |

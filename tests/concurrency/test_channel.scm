@@ -571,6 +571,52 @@
   (assert-true (eq? (vector-ref ring 0) *ring-empty*) "slot 0 reset to *ring-empty* after dequeue"))
 
 ;; -----------------------------------------------------------------------
+;; Group 10: Zero-Allocation Dequeue & Multiple Values API (Issue #686)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 10: Zero-Allocation Dequeue & Multiple Values (Issue #686) ---\n")
+(flush-output-port)
+
+(let* ((ch (make-channel 4)))
+  ;; 10a: channel-try-dequeue-val! returns *ring-empty* when empty
+  (assert-true (eq? (channel-try-dequeue-val! ch) *ring-empty*)
+               "channel-try-dequeue-val! returns *ring-empty* on empty channel")
+
+  ;; 10b: #f payload preservation (CWE-843 Type Confusion defense)
+  (assert-true (channel-try-send! ch #f) "send #f payload succeeds")
+  (let ((val (channel-try-dequeue-val! ch)))
+    (assert-true (eq? val #f) "channel-try-dequeue-val! returns exact #f payload")
+    (assert-true (not (eq? val *ring-empty*)) "#f payload is strictly distinct from *ring-empty*"))
+
+  ;; 10c: Direct channel-recv! zero-allocation hotpath
+  (assert-true (channel-send! ch 999) "send 999 succeeds")
+  (assert-equal (channel-recv! ch) 999 "channel-recv! returns 999 directly without cons allocation")
+  (assert-true (channel-empty? ch) "channel is empty after recv")
+
+  ;; 10d: R7RS Multiple Values API: channel-try-recv-values! on empty channel
+  (call-with-values
+    (lambda () (channel-try-recv-values! ch))
+    (lambda (ok val)
+      (assert-true (not ok) "channel-try-recv-values! returns ok=#f when empty")
+      (assert-true (not val) "channel-try-recv-values! returns val=#f when empty")))
+
+  ;; 10e: R7RS Multiple Values API: channel-try-recv-values! with data
+  (channel-send! ch 'multi-val-payload)
+  (call-with-values
+    (lambda () (channel-try-recv-values! ch))
+    (lambda (ok val)
+      (assert-true ok "channel-try-recv-values! returns ok=#t with payload")
+      (assert-true (eq? val 'multi-val-payload) "channel-try-recv-values! returns exact payload")))
+
+  ;; 10f: channel-recv-values! blocking form with data
+  (channel-send! ch 12345)
+  (call-with-values
+    (lambda () (channel-recv-values! ch))
+    (lambda (ok val)
+      (assert-true ok "channel-recv-values! returns ok=#t")
+      (assert-equal val 12345 "channel-recv-values! returns exact payload 12345")))
+  (assert-true (channel-empty? ch) "channel is empty after all multi-value tests"))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

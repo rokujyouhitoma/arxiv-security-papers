@@ -98,6 +98,9 @@
     channel-recv!
     channel-try-recv!
     channel-try-recv-with-status!
+    channel-try-dequeue-val!
+    channel-recv-values!
+    channel-try-recv-values!
     channel-ring-buffer
     channel-ring-mask
     channel-unboxed?
