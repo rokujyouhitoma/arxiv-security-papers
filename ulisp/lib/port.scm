@@ -112,11 +112,20 @@
 
 (define (port-open? p)
   (cond
+    ((string-input-port? p) (or (null? (cddddr p)) (car (cddddr p))))
+    ((string-output-port? p) (or (null? (cddddr p)) (car (cddddr p))))
     ((bytevector-input-port? p) (>= (car (cadr p)) 0))
     ((bytevector-output-port? p) (>= (car (cadr p)) 0))
     ((file-input-port? p) (>= (cadr p) 0))
     ((file-output-port? p) (>= (cadr p) 0))
     (else (port? p))))
+
+;; §6.13.1 Input and output port open predicates (R7RS-small)
+(define (input-port-open? p)
+  (if (input-port? p) (port-open? p) #f))
+
+(define (output-port-open? p)
+  (if (output-port? p) (port-open? p) #f))
 
 (define (port-flush-output p)
   (cond
@@ -137,6 +146,12 @@
 
 (define (close-port p)
   (cond
+    ((string-input-port? p)
+     (set-cdr! (cdddr p) (cons #f '()))
+     #t)
+    ((string-output-port? p)
+     (set-cdr! (cdddr p) (cons #f '()))
+     #t)
     ((bytevector-input-port? p)
      (set-car! (cadr p) -1)
      #t)

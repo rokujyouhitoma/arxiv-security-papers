@@ -37,7 +37,8 @@ ULISP_RUNTIME_LIBS = runtime/gc.scm runtime/io.scm runtime/printer.scm runtime/e
 ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm \
                  lib/reader.scm lib/equality.scm lib/predicates.scm lib/math.scm lib/bytevector.scm \
                  lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
-                 lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
+                 lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/comparator.scm lib/set.scm \
+                 lib/stream.scm lib/generator.scm lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
                  $(ULISP_RUNTIME_LIBS)
 
 COMPILER_BASE = compiler/helpers.scm \
@@ -840,6 +841,38 @@ test_srfi_145_assume: $(COMPILER_DEP)
 	$(AS) $(ASFLAGS) build/test_srfi_145_assume.s -o build/test_srfi_145_assume.o
 	$(LD) $(LDFLAGS) build/test_srfi_145_assume.o -o build/test_srfi_145_assume
 	./build/test_srfi_145_assume
+
+test_comparator: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_comparator.scm > build/test_comparator_input.scm
+	$(ULISP_COMPILER) build/test_comparator_input.scm > build/test_comparator.s
+	$(AS) $(ASFLAGS) build/test_comparator.s -o build/test_comparator.o
+	$(LD) $(LDFLAGS) build/test_comparator.o -o build/test_comparator
+	./build/test_comparator
+
+test_set: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_set.scm > build/test_set_input.scm
+	$(ULISP_COMPILER) build/test_set_input.scm > build/test_set.s
+	$(AS) $(ASFLAGS) build/test_set.s -o build/test_set.o
+	$(LD) $(LDFLAGS) build/test_set.o -o build/test_set
+	./build/test_set
+
+test_srfi_41_streams: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_srfi_41_streams.scm > build/test_srfi_41_streams_input.scm
+	$(ULISP_COMPILER) build/test_srfi_41_streams_input.scm > build/test_srfi_41_streams.s
+	$(AS) $(ASFLAGS) build/test_srfi_41_streams.s -o build/test_srfi_41_streams.o
+	$(LD) $(LDFLAGS) build/test_srfi_41_streams.o -o build/test_srfi_41_streams
+	./build/test_srfi_41_streams
+
+test_generator: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_generator.scm > build/test_generator_input.scm
+	$(ULISP_COMPILER) build/test_generator_input.scm > build/test_generator.s
+	$(AS) $(ASFLAGS) build/test_generator.s -o build/test_generator.o
+	$(LD) $(LDFLAGS) build/test_generator.o -o build/test_generator
+	./build/test_generator
 
 test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build

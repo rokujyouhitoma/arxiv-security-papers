@@ -59,8 +59,14 @@
   (test "textual-port? on out-p" #t (textual-port? out-p))
   (test "binary-port? on in-p" #f (binary-port? in-p))
   (test "port-open? on in-p" #t (port-open? in-p))
+  (test "input-port-open? on open in-p" #t (input-port-open? in-p))
+  (test "input-port-open? on open out-p" #f (input-port-open? out-p))
+  (test "output-port-open? on open out-p" #t (output-port-open? out-p))
+  (test "output-port-open? on open in-p" #f (output-port-open? in-p))
   (test "close-port on in-p" #t (close-port in-p))
-  (test "close-output-port on out-p" #t (close-output-port out-p)))
+  (test "input-port-open? on closed in-p" #f (input-port-open? in-p))
+  (test "close-output-port on out-p" #t (close-output-port out-p))
+  (test "output-port-open? on closed out-p" #f (output-port-open? out-p)))
 
 ;;; --- Test 2: Basic String Input Port Characters ---
 (write-string "--- Test 2: Character-level Input Port ---\n")

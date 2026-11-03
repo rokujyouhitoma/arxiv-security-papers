@@ -120,4 +120,13 @@
     (else "unknown-platform")))
 (test "cond-expand inside function body" "posix-platform" (get-platform-tag))
 
+;;; --- Test 6: R7RS §6.14 (features) Procedure (Issue #705) ---
+(write-string "--- Test 6: (features) Procedure ---\n")
+(let ((feats (features)))
+  (test "features returns a non-empty pair" #t (pair? feats))
+  (test "features contains r7rs" #t (if (memq 'r7rs feats) #t #f))
+  (test "features contains ulisp" #t (if (memq 'ulisp feats) #t #f))
+  (test "features contains exact-closed" #t (if (memq 'exact-closed feats) #t #f))
+  (test "features contains little-endian" #t (if (memq 'little-endian feats) #t #f)))
+
 (write-string "=== All cond-expand Tests Passed Successfully! ===\n")

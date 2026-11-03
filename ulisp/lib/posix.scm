@@ -312,3 +312,8 @@
 (define (sys-getenv name)
   (get-environment-variable name))
 
+;; §6.14 System interface - features (R7RS-small, Issue #705)
+(define (features)
+  '(r7rs ulisp exact-closed ieee-float full-unicode little-endian x86-64 lp64 posix linux unix gnu-linux))
+
+

@@ -1118,9 +1118,9 @@
 (define (builtin-library-name? name)
   (and (pair? name)
        (or (and (eq? (car name) 'scheme)
-                (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load list hash-table sort division box)))
+                (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load list hash-table sort division box comparator set stream generator)))
            (and (eq? (car name) 'srfi)
-                (memq (cadr name) '(1 28 69 95 111 125 132 141 145)))
+                (memq (cadr name) '(1 28 41 69 95 111 113 121 125 128 132 141 145 158)))
            (and (eq? (car name) 'ulisp)
                 (memq (cadr name) '(base core native))))))
 

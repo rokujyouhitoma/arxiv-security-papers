@@ -223,6 +223,8 @@
     textual-port?
     binary-port?
     port-open?
+    input-port-open?
+    output-port-open?
     open-input-string
     open-output-string
     get-output-string
@@ -248,7 +250,10 @@
     write-u8
     write-string
     write-bytevector
-    flush-output-port)
+    flush-output-port
+
+    ;; §6.14 System interface
+    features)
 
   (include "../list.scm"
            "../equality.scm"
@@ -260,4 +265,5 @@
            "../parameter.scm"
            "../exception.scm"
            "../continuation.scm"
-           "../port.scm"))
+           "../port.scm"
+           "../posix.scm"))
