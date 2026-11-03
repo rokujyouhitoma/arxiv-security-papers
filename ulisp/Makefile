@@ -38,7 +38,7 @@ ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port
                  lib/reader.scm lib/equality.scm lib/predicates.scm lib/math.scm lib/bytevector.scm \
                  lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
                  lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/comparator.scm lib/set.scm \
-                 lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
+                 lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/charset.scm lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
                  $(ULISP_RUNTIME_LIBS)
 
 COMPILER_BASE = compiler/helpers.scm \
@@ -881,6 +881,14 @@ test_list_queue_lseq: $(COMPILER_DEP)
 	$(AS) $(ASFLAGS) build/test_list_queue_lseq.s -o build/test_list_queue_lseq.o
 	$(LD) $(LDFLAGS) build/test_list_queue_lseq.o -o build/test_list_queue_lseq
 	./build/test_list_queue_lseq
+
+test_charset: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_charset.scm > build/test_charset_input.scm
+	$(ULISP_COMPILER) build/test_charset_input.scm > build/test_charset.s
+	$(AS) $(ASFLAGS) build/test_charset.s -o build/test_charset.o
+	$(LD) $(LDFLAGS) build/test_charset.o -o build/test_charset
+	./build/test_charset
 
 test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build
