@@ -283,6 +283,45 @@
                 "futex-unpark! rejects use-after-free on freed cell (CWE-416)"))
 
 ;; -----------------------------------------------------------------------
+;; Group 8: Adaptive Spinning & Bounded PAUSE Guards (Issue #679)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Adaptive Spinning & Bounded PAUSE Guards ---\n")
+(flush-output-port)
+
+;; Test 8.1: futex-spin-pause! execution
+(assert-true (futex-spin-pause!) "futex-spin-pause! with default cycles returns #t")
+(assert-true (futex-spin-pause! 16) "futex-spin-pause! with 16 cycles returns #t")
+(assert-true (futex-spin-pause! 64) "futex-spin-pause! with 64 cycles returns #t")
+(assert-error (lambda () (futex-spin-pause! "not-number"))
+              "futex-spin-pause! rejects non-integer argument (CWE-843)")
+
+;; Test 8.2: futex-park-adaptive! pre-notified bypass
+(let ((cell (make-futex-cell 0)))
+  (futex-unpark! cell) ;; Set state to NOTIFIED (2)
+  (assert-equal (futex-cell-ref cell) 2 "cell is NOTIFIED before park-adaptive")
+  (assert-true (futex-park-adaptive! cell 128 100)
+               "futex-park-adaptive! immediately consumes token without sleeping")
+  (assert-equal (futex-cell-ref cell) 0 "cell state reset to EMPTY (0)")
+  (free-futex-cell! cell))
+
+;; Test 8.3: futex-park-adaptive! timeout fallback
+(let ((cell (make-futex-cell 0)))
+  (assert-true (not (futex-park-adaptive! cell 16 10))
+               "futex-park-adaptive! times out and returns #f when no token provided")
+  (assert-equal (futex-cell-ref cell) 0 "cell state returned to EMPTY (0) after timeout")
+  (free-futex-cell! cell))
+
+;; Test 8.4: futex-park-adaptive! type and UAF guards
+(let ((cell (make-futex-cell 0)))
+  (free-futex-cell! cell)
+  (assert-error (lambda () (futex-park-adaptive! cell 64 10))
+                "futex-park-adaptive! rejects use-after-free (CWE-416)")
+  (assert-error (lambda () (futex-park-adaptive! "invalid-cell" 64 10))
+                "futex-park-adaptive! rejects invalid cell type (CWE-843)")
+  (assert-error (lambda () (futex-park-adaptive! (make-futex-cell 0) "bad-spins" 10))
+                "futex-park-adaptive! rejects non-integer max-spins (CWE-843)"))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

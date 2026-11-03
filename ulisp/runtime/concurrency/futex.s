@@ -300,4 +300,37 @@ ulisp_fn___lib_ulisp_concurrency_futex___pctsys_futex_wake:
     pop rbp
     ret
 
+# -----------------------------------------------------------------------
+# 8. CPU Pause Loop Primitive (rep nop / PAUSE)
+#    ulisp_fn__pctsys_cpu_pause(cycles) -> #t
+#    Executes x86-64 PAUSE instruction to yield SMT resources and
+#    mitigate memory ordering stalls during adaptive spin-waiting.
+# -----------------------------------------------------------------------
+    .globl ulisp_fn__pctsys_cpu_pause
+    .globl ulisp_fn___lib_ulisp_concurrency_futex___pctsys_cpu_pause
+    .type ulisp_fn__pctsys_cpu_pause, @function
+    .p2align 4
+ulisp_fn__pctsys_cpu_pause:
+ulisp_fn___lib_ulisp_concurrency_futex___pctsys_cpu_pause:
+    push rbp
+    mov rbp, rsp
+
+    sar rdi, 2                  # raw cycles
+    cmp rdi, 0
+    jle .L_pause_single
+
+.L_pause_loop:
+    pause
+    dec rdi
+    jnz .L_pause_loop
+    jmp .L_pause_ret
+
+.L_pause_single:
+    pause
+
+.L_pause_ret:
+    mov rax, SCHEME_TRUE        # #t (0x6F)
+    pop rbp
+    ret
+
     .section .note.GNU-stack,"",@progbits
