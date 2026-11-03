@@ -4,13 +4,14 @@
 
 # ULisp メタコンパイラ R7RS 仕様準拠状況リファレンス (Specification Compliance)
 
-本ドキュメントは、**ULisp (Underlying LISP)** ネイティブ AOT メタコンパイラにおける **R7RS-small (Revised^7 Report on the Algorithmic Language Scheme - Small Language, 2013)** および **R7RS-large (Large Language: Red Edition, Tangerine Edition, 主要 SRFI)** の仕様準拠状況、対応機能、未対応機能、ならびに該当する仕様番号（Section 番号 / SRFI 番号）を網羅した包括的技術リファレンスである。
+本ドキュメントは、**ULisp (Underlying LISP)** ネイティブ AOT メタコンパイラにおける **R7RS-small (Revised^7 Report on the Algorithmic Language Scheme - Small Language, 2013)** および **R7RS-large (Large Language: Red Edition, Tangerine Edition, Yellow / Orange / Hypnos Dockets, 主要 SRFI)** の仕様準拠状況、対応機能、未対応機能、ならびに該当する仕様番号（Section 番号 / SRFI 番号）を網羅した包括的技術リファレンスである。
 
 - システム全体の設計思想および ABI 規約については、正典仕様書である [DSN-33 (ULisp 包括設計仕様書)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) を参照すること。
 - 関連仕様書:
   - [パイプライン・Nanopass 詳細仕様書](spec_pipeline.md)
   - [低レベル IR (LIR) 正典仕様書](spec_lir.md)
   - [ファーストクラス継続 & dynamic-wind 技術仕様書](spec_continuations_and_unwind.md)
+- 本ドキュメント末尾の [第 5 章 原典・仕様規格参照情報源](#5-原典仕様規格参照情報源-primary-sources--official-specifications) に、R7RS-small、R7RS-large、および各 SRFI の公式一次情報源リンクをまとめて記載している。
 
 ---
 
@@ -18,7 +19,7 @@
 
 | 記号 | ステータス | 定義 |
 | :---: | :--- | :--- |
-| **◎** | **完全サポート (Supported)** | AOT ネイティブコンパイル (x86-64) および Portable C バックエンドで完全動作し、テストスイートで検証済み。 |
+| **◎** | **完全サポート (Supported)** | AOT ネイティブコンパイル (x86-64 / AArch64) および Portable C バックエンドで完全動作し、テストスイートで検証済み。 |
 | **△** | **部分サポート (Partial)** | 基本機能は動作するが、オプショナル引数の省略や一部機能制限（例: 整数 Fixnum 限定等）がある状態。 |
 | **×** | **未サポート (Not Supported)** | 現時点で未実装。将来的な Issue で順次実装が計画されているものを含む。 |
 | **✕\*** | **AOT 対象外 (Out of Scope)** | 事前コンパイル型 (AOT) ネイティブコンパイラの特性（スタンドアロン静的バイナリ出力）上、意図的に除外または制限している機能（動的 `eval`, `load`, 対話型 `repl` 等）。 |
@@ -37,15 +38,16 @@
 | **4.1.4** | ラムダ式 (Procedures) | `(lambda <formals> <body>)` | **◎** | [Pass 110](../frontend/110_closure_convert.scm) | 固定引数およびレスト引数 `(lambda (x . rest) ...)` 対応 |
 | **4.1.5** | 条件式 (Conditionals) | `(if <test> <consequent> <alternate>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 2分岐・3分岐条件ジャンプ展開 |
 | **4.1.6** | 代入 (Assignments) | `(set! <variable> <expression>)` | **◎** | [Pass 030](../frontend/030_desugar.scm)<br>[Pass 130](../lir/130_lir.scm) | 局所・大域変数の破壊的再束縛 |
-| **4.1.7** | ファイル包含 (Inclusion) | `(include <string1> ...)` | **△** | [Pass 010](../frontend/010_library.scm) | ビルド時静的ファイル結合で対応 |
-| **4.1.7** | ファイル包含 (大文字小文字無視) | `(include-ci <string1> ...)` | **×** | - | 未実装 |
+| **4.1.7** | ファイル包含 (Inclusion) | `(include <string1> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | ソース位置追跡付き静的ファイル結合・再帰インクルード対応 |
+| **4.1.7** | ファイル包含 (大文字小文字無視) | `(include-ci <string1> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | 大小文字フォールディング静的ファイル結合・ソース位置追跡完全対応 ([Issue #659](../../docs/issues/closed/659-implement-r7rs-include-ci-syntax.md)) |
 | **4.2.1** | 条件分岐 (Conditionals) | `(cond <clause1> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `else` 節およびパイプライン構文 `(=> <proc>)` 完全脱糖 |
-| **4.2.1** | メンバマッチング分岐 | `(case <key> <clause1> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `memq` 比較連鎖に脱糖 |
+| **4.2.1** | メンバマッチング分岐 | `(case <key> <clause1> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `else` 節、パイプライン構文 `(=> <proc>)`、`memq` 比較連鎖脱糖 |
 | **4.2.1** | 短絡論理積 | `(and <test1> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | ネストした `if` に脱糖 |
 | **4.2.1** | 短絡論理和 | `(or <test1> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 一時束縛付き `if` に脱糖 |
 | **4.2.1** | 1方向真分岐 | `(when <test> <body>)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm) | マクロ展開 |
 | **4.2.1** | 1方向偽分岐 | `(unless <test> <body>)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm) | マクロ展開 |
-| **4.2.1** | 条件付き機能展開 | `(cond-expand <ce-clause> ...)` | **△** | [Pass 010](../frontend/010_library.scm) | プラットフォーム基本識別のみ |
+| **4.2.1** | 条件付き機能展開 | `(cond-expand <ce-clause> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | R7RS 標準機能識別子群 (`r7rs`, `exact-closed`, `ratios`, `exact-complex`, `full-unicode`, `little-endian`, `big-endian`, `ulisp` 等) 完全網羅・再帰展開 ([Issue #658](../../docs/issues/closed/658-expand-r7rs-cond-expand-feature-identifiers.md)) |
+| **4.2.1 / 4.3** | 補助構文識別子 (Auxiliary Syntax) | `else`, `=>`, `...`, `_` | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm) | `(scheme base)` エクスポート予約語。`cond`/`case` 分岐補助および `syntax-rules` パターンマッチング照合補助 |
 | **4.2.2** | 並列束縛 (Binding constructs) | `(let (<binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 局所変数フレーム・即時適用ラムダ脱糖 |
 | **4.2.2** | 名前付き let (Named let) | `(let <variable> (<binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 局所末尾再帰ループ `letrec` に脱糖 |
 | **4.2.2** | 直列束縛 | `(let* (<binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | ネストした `let` に脱糖 |
@@ -53,7 +55,7 @@
 | **4.2.2** | 評価順序保証相互再帰 | `(letrec* (<binding> ...) <body>)` | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 左から右への厳密評価・相互再帰脱糖 ([Issue #650](../../docs/issues/closed/650-implement-r7rs-letrec-star-evaluation-order.md)) |
 | **4.2.2** | 多値束縛 | `(let-values (<mv-binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `call-with-values` に脱糖 ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
 | **4.2.2** | 直列多値束縛 | `(let*-values (<mv-binding> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | ネストした `let-values` に脱糖 ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
-| **4.2.3** | 順序実行 (Sequencing) | `(begin <expression1> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm)<br>[Pass 070](../frontend/070_anf.scm) | 直列実行ブロック |
+| **4.2.3** | 順序実行 (Sequencing) | `(begin <expression1> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm)<br>[Pass 070](../frontend/070_anf.scm) | 直列実行ブロック・トップレベルスプライシング |
 | **4.2.4** | 反復実行 (Iteration) | `(do ((<var> <init> <step>) ...) ...)` | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 名前付き let (`letrec`) への自動脱糖・並列変数更新・反復コマンド本体実行・複数終了式対応 ([Issue #559](../../docs/issues/closed/559-implement-r7rs-do-loop-syntax.md)) |
 | **4.2.5** | 遅延評価 (Delayed evaluation) | `(delay <expression>)` | **◎** | [Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/promise.scm](../lib/promise.scm) | SRFI-45 準拠プロミス脱糖 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
 | **4.2.5** | プロミス強制評価 | `(force <promise>)` | **◎** | [ulisp/lib/promise.scm](../lib/promise.scm) | メモ化・再入可能・トランポリン平坦化評価 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
@@ -63,12 +65,14 @@
 | **4.2.6** | 動的パラメータ (Dynamic bindings)| `(make-parameter <init> [<conv>])` | **◎** | [ulisp/lib/parameter.scm](../lib/parameter.scm) | 動的環境セル生成 ([Issue #537](../../docs/issues/closed/537-implement-r7rs-parameters-and-parameterize.md)) |
 | **4.2.6** | パラメータ一時束縛 | `(parameterize ((<param> <val>) ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `dynamic-wind` と連携する復元保証脱糖 |
 | **4.2.7** | 例外処理 (Exception handling) | `(guard (<var> <clause1> ...) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 動的例外スタック脱糖 ([Issue #531](../../docs/issues/closed/531-implement-lightweight-exception-handling-guard-raise.md)) |
-| **4.2.8** | 準引用 (Quasiquotation) | `` `<qq-template> ``, `,`, `,@` | **◎** | [Pass 030](../frontend/030_desugar.scm) | リスト構築 `cons`/`append` へのマクロ脱糖 |
+| **4.2.8** | 準引用 (Quasiquotation) | `(quasiquote <template>)`, `` `<qq-template> `` | **◎** | [Pass 030](../frontend/030_desugar.scm) | リスト構築 `cons`/`append` へのマクロ脱糖 |
+| **4.2.8** | アンクオート (Unquote) | `(unquote <datum>)`, `,<datum>` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 準引用テンプレート内式の動的評価展開 |
+| **4.2.8** | アンクオートスプライス | `(unquote-splicing <datum>)`, `,@<datum>` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 準引用テンプレート内リストのインライン展開 |
 | **4.2.9** | 多重アリティ分岐 (Case-lambda) | `(case-lambda <clause> ...)` | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 可変個引数パターンマッチング・動的アリティディスパッチ・GC安全スタックマップ ([Issue #609](../../docs/issues/closed/609-implement-r7rs-case-lambda-syntax.md)) |
 | **4.3.1** | 局所マクロ束縛 | `(let-syntax (<binding> ...) <body>)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | レキシカルスコープマクロ環境展開・非再帰性保証 ([Issue #657](../../docs/issues/closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md)) |
 | **4.3.1** | 局所再帰マクロ束縛 | `(letrec-syntax (<binding> ...) <body>)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | 相互再帰および自己再帰マクロ展開・アリティディスパッチ完全サポート ([Issue #657](../../docs/issues/closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md)) |
 | **4.3.2** | 衛生的マクロ (Pattern language)| `(syntax-rules (<literal> ...) <syntax-rule> ...)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | パターン変数・省略記号 `...`・リテラル完全照合 ([Issue #533](../../docs/issues/closed/533-implement-hygienic-syntax-rules-macro-expander.md)) |
-| **4.3.3** | マクロ構文エラー | `(syntax-error <message> <args> ...)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm) | マクロ展開時および脱糖時エラー検出・明示的コンパイル中断・予約語保護・irritants 報告 ([Issue #647](../../docs/issues/647-implement-r7rs-syntax-error-syntax.md)) |
+| **4.3.3** | マクロ構文エラー | `(syntax-error <message> <args> ...)` | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm) | マクロ展開時および脱糖時エラー検出・明示的コンパイル中断・予約語保護・irritants 報告 ([Issue #647](../../docs/issues/closed/647-implement-r7rs-syntax-error-syntax.md)) |
 
 ---
 
@@ -77,7 +81,7 @@
 | R7RS 仕様番号 | 構文 / 項目 | 形式・記法 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :--- | :---: | :--- | :--- |
 | **5.1** | プログラム (Programs) | トップレベル式および定義の並び | **◎** | [Pass 030](../frontend/030_desugar.scm) | `%program` ノードによる全体構造化 |
-| **5.2 / 5.6** | モジュールインポート | `(import <import-set> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | ライブラリ依存解決・シンボル修飾 ([Issue #548](../../docs/issues/closed/548-implement-r7rs-define-library-and-import-syntax.md)) |
+| **5.2 / 5.6** | モジュールインポート | `(import <import-set> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | ライブラリ依存解決・シンボル修飾 (`only`, `except`, `prefix`, `rename` 対応) ([Issue #548](../../docs/issues/closed/548-implement-r7rs-define-library-and-import-syntax.md)) |
 | **5.3.1** | トップレベル変数定義 | `(define <variable> <expression>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | グローバルシンボル束縛 |
 | **5.3.1** | 手続き定義短縮構文 | `(define (<variable> <formals>) <body>)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `lambda` 束縛への自動脱糖 |
 | **5.3.2** | 内部定義 (Internal definitions) | ブロック先頭の `(define ...)` | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm) / [030](../frontend/030_desugar.scm) | 内部変数定義（逐次 `let`）、内部手続き定義・相互再帰（集約 `letrec`）、カリー化短縮構文、スプライシング `begin` 完全対応・固定点ブートストラップ完了 ([Issue #592](../../docs/issues/592-implement-r7rs-internal-definition-desugaring.md)) |
@@ -86,6 +90,7 @@
 | **5.5** | レコード型定義 (Record-types) | `(define-record-type <name> (<ctor> ...) <pred> ...)` | **◎** | [Pass 030](../frontend/030_desugar.scm) | 固定長ベクタ脱糖マクロ・型述語・アクセサ・ミューテータ完備 ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md)) |
 | **5.6** | ライブラリ定義 (Libraries) | `(define-library (<name> ...) <lib-decl> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | R7RS-small モジュール宣言・フラット展開 ([Issue #548](../../docs/issues/closed/548-implement-r7rs-define-library-and-import-syntax.md)) |
 | **5.6** | シンボルエクスポート | `(export <export-spec> ...)` | **◎** | [Pass 010](../frontend/010_library.scm) | 名前空間公開設定・`rename` 対応 |
+| **5.6** | ライブラリ内包宣言 | `(include-library-declarations <string1> ...)` | **×** | - | ライブラリ宣言節の外部ファイル分割取り込み（未実装、`include` で代替） |
 
 ---
 
@@ -94,9 +99,9 @@
 #### 6.1 等価性述語 (Equivalence Predicates)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
-| **6.1** | `(eq? x y)` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | ポインタ同一性および即値タグの一致判定 |
-| **6.1** | `(eqv? x y)` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm) | 数値・文字の同一性を含む R7RS 完全準拠判定 ([Issue #532](../../docs/issues/closed/532-implement-r7rs-eqv-and-standard-type-predicates.md)) |
-| **6.1** | `(equal? x y)` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm) | ペア・ベクタ・文字列・バイトベクタの再帰的同値比較 |
+| **6.1** | `eq?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | ポインタ同一性および即値タグの一致判定 |
+| **6.1** | `eqv?` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm) | 数値・文字の同一性を含む R7RS 完全準拠判定 ([Issue #532](../../docs/issues/closed/532-implement-r7rs-eqv-and-standard-type-predicates.md)) |
+| **6.1** | `equal?` | **◎** | [ulisp/lib/equality.scm](../lib/equality.scm) | ペア・ベクタ・文字列・バイトベクタの再帰的同値比較 |
 
 #### 6.2 数値演算 (Numbers: 62-bit Tagged Fixnum Architecture)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -139,7 +144,8 @@
 | **6.4** | `pair?`, `null?` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | ヒープペア型タグ判定・空リスト (`'()`) 判定 |
 | **6.4** | `cons`, `car`, `cdr` | **◎** | [Pass 060](../frontend/060_lvn.scm)<br>[Pass 130](../lir/130_lir.scm) | ペア生成・要素取得、LVN / 純粋アクセサ最適化 |
 | **6.4** | `set-car!`, `set-cdr!` | **◎** | [ulisp/lib/gc.scm](../lib/gc.scm) | 破壊的代入、世代別 GC ライトバリア・リメンバーセット記録 |
-| **6.4** | `caar`, `cadr`, `cdar`, `cddr`, `caddr`, `cdddr`, `cadddr` | **◎** | [Pass 030](../frontend/030_desugar.scm) | リスト短縮アクセサ |
+| **6.4** | `caar`, `cadr`, `cdar`, `cddr` | **◎** | [Pass 030](../frontend/030_desugar.scm) | `(scheme base)` 標準 2 階層合成アクセサ |
+| **6.4 / cxr** | `caaar` 〜 `cddddr` (全 24 種) | **◎** | [ulisp/lib/scheme/cxr.sld](../lib/scheme/cxr.sld) | `(scheme cxr)` 規定の全 24 種合成ペアアクセサ (`caaar`, `caadr`, `cadar`, `caddr`, `cdaar`, `cdadr`, `cddar`, `cdddr`, `caaaar`, `caaadr`, `caadar`, `caaddr`, `cadaar`, `cadadr`, `caddar`, `cadddr`, `cdaaar`, `cdaadr`, `cdadar`, `cdaddr`, `cddaar`, `cddadr`, `cddar`, `cdddar`, `cddddr`) 完全完備 |
 | **6.4** | `list?`, `list`, `length`, `reverse`, `append` | **◎** | [ulisp/lib/list.scm](../lib/list.scm)<br>[ulisp/lib/predicates.scm](../lib/predicates.scm) | 基本リスト操作 (length, reverse, append 完備) |
 | **6.4** | `memq`, `memv`, `member` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 要素探索 |
 | **6.4** | `assq`, `assv`, `assoc` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 連想リストキー探索 |
@@ -229,7 +235,9 @@
 | :--- | :--- | :---: | :--- | :--- |
 | **6.13.1** | `call-with-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ポートスコープ保護・自動クローズ実行 |
 | **6.13.1** | `port?`, `input-port?`, `output-port?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ポート型述語 ([Issue #537](../../docs/issues/closed/537-implement-r7rs-parameters-and-parameterize.md)) |
-| **6.13.1** | `textual-port?`, `binary-port?`, `port-open?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | テキスト/バイナリ識別および状態判定 |
+| **6.13.1** | `textual-port?`, `binary-port?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | テキスト/バイナリ識別述語 |
+| **6.13.1** | `port-open?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ポート開放状態判定述語 |
+| **6.13.1** | `input-port-open?`, `output-port-open?` | **×** | - | 入力ポート / 出力ポートの個別開放状態判定 (未実装、`port-open?` と `input-port?`/`output-port?` の組み合わせで代替可能) |
 | **6.13.1** | `close-port`, `close-input-port`, `close-output-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ポートクローズ |
 | **6.13.1** | `current-input-port`, `current-output-port`, `current-error-port` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 標準入力 (`fd 0`)・標準出力 (`fd 1`)・標準エラー出力 (`fd 2`) |
 | **6.13.1** | `open-input-file`, `open-binary-input-file` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | POSIX `open` システムコールラッパー (読み取り) ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
@@ -271,6 +279,7 @@
 | **6.14** | `command-line` | **△** | [runtime.c](../runtime.c) | ランタイム引数渡しで基本対応 |
 | **6.14** | `get-environment-variable`, `get-environment-variables` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `environ` 走査・連想リスト構築 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
 | **6.14** | `current-second`, `current-jiffy`, `jiffies-per-second` | **◎** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | POSIX clock_gettime (REALTIME / MONOTONIC) 直結ナノ秒精度時間取得・1M jiffies/sec ([Issue #661](../../docs/issues/closed/661-implement-r7rs-scheme-time-procedures.md)) |
+| **6.14** | `features` | **×** | - | `cond-expand` で有効な機能識別子シンボルのリスト返却手続き（未実装） |
 
 ---
 
@@ -278,15 +287,15 @@
 
 | ライブラリ識別子 | 主な責務・内容 | サポート率 | 内部実装ファイル | 主なサポート機能 / 未サポート理由 |
 | :--- | :--- | :--- | :--- | :--- |
-| `(scheme base)` | コア構文、算術、リスト、ベクタ、継続、多値、ポート | **約 92%** | [ulisp/lib/scheme/base.sld](../lib/scheme/base.sld)<br>([ulisp/lib/*.scm](../lib/)) | 構文・`call/cc`・多値・ベクタ・GC・整数除算ペア・平方根・多引数 map/for-each 完備。有理数・複素数・浮動小数演算のみ非サポート ([Issue #562](../../docs/issues/562-implement-r7rs-standard-library-definitions-sld.md), [Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
+| `(scheme base)` | コア構文、算術、リスト、ベクタ、継続、多値、ポート | **約 93%** | [ulisp/lib/scheme/base.sld](../lib/scheme/base.sld)<br>([ulisp/lib/*.scm](../lib/)) | 構文・`call/cc`・多値・ベクタ・GC・整数除算ペア・平方根・多引数 map/for-each 完備。有理数・複素数・浮動小数演算・`input-port-open?`・`features` のみ未実装 ([Issue #562](../../docs/issues/562-implement-r7rs-standard-library-definitions-sld.md), [Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | `(scheme case-lambda)` | 可変個引数パターンマッチング | **◎ 100%** | [ulisp/lib/scheme/case-lambda.sld](../lib/scheme/case-lambda.sld)<br>[Pass 028](../frontend/028_desugar_bindings.scm) | `case-lambda` 構文の完全脱糖サポート（固定引数・可変個レスト引数・動的引数数ディスパッチ・引数不一致時例外 `raise`） ([Issue #609](../../docs/issues/closed/609-implement-r7rs-case-lambda-syntax.md)) |
-| `(scheme char)` | 大文字小文字変換・分類・同一視比較 | **◎ 100% (ASCII)** | [ulisp/lib/scheme/char.sld](../lib/scheme/char.sld)<br>([ulisp/lib/char.scm](../lib/char.scm)<br>[ulisp/lib/string.scm](../lib/string.scm)) | 全 19 手続き完備（文字種判定 6 種、大小文字変換・フォールディング 3 種、`char-ci*` 5 種、文字列大小変換 3 種、`string-ci*` 5 種、Pass 030 連鎖比較脱糖対応） ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
+| `(scheme char)` | 大文字小文字変換・分類・同一視比較 | **◎ 100% (ASCII)** | [ulisp/lib/scheme/char.sld](../lib/scheme/char.sld)<br>([ulisp/lib/char.scm](../lib/char.scm)<br>[ulisp/lib/string.scm](../lib/string.scm)) | 全 22 識別子完備（文字種判定 6 種、大小文字変換・フォールディング 3 種、`char-ci*` 5 種、文字列大小変換 3 種、`string-ci*` 5 種、Pass 030 連鎖比較脱糖対応） ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
 | `(scheme complex)` | 複素数算術 | **× 0%** | [ulisp/lib/scheme/complex.sld](../lib/scheme/complex.sld) | 非サポート（Fixnum 優先アーキテクチャ） |
-| `(scheme cxr)` | `caaa...r` 〜 `cddddr` (全24種) | **◎ 100%** | [ulisp/lib/scheme/cxr.sld](../lib/scheme/cxr.sld) | R7RS 規定の全 24 種合成ペアアクセサをライブラリ定義内で完備 |
+| `(scheme cxr)` | `caaa...r` 〜 `cddddr` (全 24 種) | **◎ 100%** | [ulisp/lib/scheme/cxr.sld](../lib/scheme/cxr.sld) | R7RS 規定の全 24 種合成ペアアクセサをライブラリ定義内で完備 |
 | `(scheme eval)` | 動的評価 (`eval`, `environment`) | **✕\* 0%** | [ulisp/lib/scheme/eval.sld](../lib/scheme/eval.sld) | AOT の性質上除外（事前コンパイル時マクロ展開で完結） |
 | `(scheme file)` | ファイル入出力 | **◎ 100%** | [ulisp/lib/scheme/file.sld](../lib/scheme/file.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)<br>[ulisp/lib/port.scm](../lib/port.scm)) | 上位ファイルポート・動的カレントポート切り替え・例外安全自動クローズ・システムファイル操作完備 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | `(scheme inexact)` | 浮動小数点数・超越関数 | **× 0%** | [ulisp/lib/scheme/inexact.sld](../lib/scheme/inexact.sld) | 非サポート（整数・Tagged Pointer 設計） |
-| `(scheme lazy)` | 遅延評価 (`delay`, `force`) | **◎ 100%** | [ulisp/lib/scheme/lazy.sld](../lib/scheme/lazy.sld)<br>([ulisp/lib/promise.scm](../lib/promise.scm)) | SRFI-45 準拠プロミス完備 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
+| `(scheme lazy)` | 遅延評価 (`delay`, `force`) | **◎ 100%** | [ulisp/lib/scheme/lazy.sld](../lib/scheme/lazy.sld)<br>([ulisp/lib/promise.scm](../lib/promise.scm)) | SRFI-45 準拠プロミス完備 (`delay`, `force`, `delay-force`, `make-promise`) ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
 | `(scheme load)` | スクリプト動的ロード | **✕\* 0%** | [ulisp/lib/scheme/load.sld](../lib/scheme/load.sld) | AOT の性質上除外（`import` またはビルド時結合で代替） |
 | `(scheme process-context)` | プロセス環境 (`exit`, `command-line`, `get-environment-variable`) | **◎ 100%** | [ulisp/lib/scheme/process-context.sld](../lib/scheme/process-context.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)) | `exit`, `emergency-exit`, `command-line`, `get-environment-variable`, `get-environment-variables` 完備 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
 | `(scheme r5rs)` | R5RS 互換仕様シンボル群 | **約 85%** | [ulisp/lib/scheme/r5rs.sld](../lib/scheme/r5rs.sld) | R5RS 標準シンボル群の互換エクスポート定義 |
@@ -299,68 +308,129 @@
 
 ## 2. R7RS-large 言語仕様準拠状況
 
-R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (Editions)」として標準化した仕様です。
+Scheme Working Group 2 (WG2) が主導する **R7RS-large** は、Scheme コミュニティで広く利用されている SRFI 群を機能グループ別に段階的に標準化（エディションおよびドケット策定）する仕様体系である。
 
 ### 2.1 Red Edition (データ構造・アルゴリズム: Data Structures & Algorithms)
 
-| 仕様番号 (SRFI) | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・代替手段 |
-| :--- | :--- | :---: | :--- | :--- |
-| **SRFI 1** | Lists (高機能リスト処理: `fold`, `unfold`, `filter`, `take`, `drop` 等) | **◎** | [ulisp/lib/list.scm](../lib/list.scm)<br>[ulisp/lib/srfi/1.sld](../lib/srfi/1.sld)<br>[ulisp/lib/scheme/list.sld](../lib/scheme/list.sld) | Constructors, Predicates, Selectors, Fold/Unfold, Searching/Filtering, Alist 操作を完全実装・TCO 最適化済 ([Issue #648](../../docs/issues/closed/648-implement-srfi-1-higher-order-list-procedures.md)) |
-| **SRFI 9** | Records (`define-record-type`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 完全サポート ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md)) |
-| **SRFI 11** | Syntax for multiple values (`let-values`, `let*-values`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 完全サポート ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
-| **SRFI 39** | Parameter objects (`make-parameter`, `parameterize`) | **◎** | [ulisp/lib/parameter.scm](../lib/parameter.scm) | 完全サポート ([Issue #537](../../docs/issues/closed/537-implement-r7rs-parameters-and-parameterize.md)) |
-| **SRFI 111** | Boxes (単一要素可変セル: `box`, `box?`, `unbox`, `set-box!`) | **◎** | [ulisp/lib/box.scm](../lib/box.scm)<br>[ulisp/lib/srfi/111.sld](../lib/srfi/111.sld)<br>[ulisp/lib/scheme/box.sld](../lib/scheme/box.sld) | R7RS-large Red Edition / SRFI 111 ボックス完全準拠。専用可変セル型・述語・アクセサ・ミューテータ完備 ([Issue #663](../../docs/issues/closed/663-implement-srfi-111-boxes.md)) |
-| **SRFI 113** | Sets and Bags (集合・マルチセット) | **×** | - | 未実装 |
-| **SRFI 116** | Immutable Pairs and Lists (不変リスト・ペア) | **×** | - | 未実装 |
-| **SRFI 117** | Queues based on Lists (リストベースキュー) | **×** | - | 未実装 |
-| **SRFI 121** | Generators (ジェネレータ・イテレータ) | **△** | - | ファーストクラス継続 (`call/cc`) によるコルーチンジェネレータ作成可能 |
-| **SRFI 124** | Ephemerons (弱参照ペア・GC 協調) | **×** | - | コピー GC 構造上未実装 |
-| **SRFI 125** | Intermediate Hash Tables (ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/125.sld](../lib/srfi/125.sld)<br>[ulisp/lib/scheme/hash-table.sld](../lib/scheme/hash-table.sld) | R7RS-large / SRFI 125 互換ハッシュテーブル。24-bit 決定論的素数モジュラス、動的リハッシュ、多値 pop!、述語・アクセサ・反復・比較完備 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
-| **SRFI 127** | Lazy Sequences (遅延リスト lseq) | **△** | [ulisp/lib/promise.scm](../lib/promise.scm) | SRFI-45 遅延評価プロミスにより構築可能 |
-| **SRFI 128** | Comparators (比較器) | **×** | - | 未実装 |
-| **SRFI 132** | Sort Libraries (ソート・マージアルゴリズム) | **◎** | [ulisp/lib/sort.scm](../lib/sort.scm)<br>[ulisp/lib/srfi/132.sld](../lib/srfi/132.sld)<br>[ulisp/lib/scheme/sort.sld](../lib/scheme/sort.sld) | R7RS-large / SRFI 132 安定ソート・マージ完全準拠。`list-sort`, `list-sort!`, `vector-sort`, `vector-sort!`, `list-merge`, `vector-merge`, `list-sorted?`, `vector-sorted?` ([Issue #655](../../docs/issues/closed/655-implement-r7rs-list-and-vector-sort-procedures.md)) |
-| **SRFI 133** | Vectors (高機能ベクタ操作) | **◎** (準拠) | [ulisp/lib/vector.scm](../lib/vector.scm)<br>[Pass 030](../frontend/030_desugar.scm) | `vector-copy`, `vector-copy!`, `vector-append`, `vector-fill!`, `vector-map`, `vector-for-each` 等を網羅 |
-| **SRFI 134** | Immutable Deques (不変両端キュー) | **×** | - | 未実装 |
-| **SRFI 135** | Immutable Texts (不変テキスト) | **×** | - | 未実装 |
-| **SRFI 146** | Mappings (赤黒木 / AVL 木マップ) | **×** | - | 未実装 |
+2016 年に凍結投票を経て正式策定された最初の R7RS-large 仕様であり、データ構造・アルゴリズム関連の **全 17 ライブラリ** から構成される（R7RS-small 全ライブラリを含む）。
+
+| 仕様番号 / SRFI | ライブラリ識別子 | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
+| :--- | :--- | :--- | :---: | :--- | :--- |
+| **SRFI 1** | `(scheme list)` | Lists (高機能リスト処理: `fold`, `unfold`, `filter`, `take`, `drop` 等) | **◎** | [ulisp/lib/list.scm](../lib/list.scm)<br>[ulisp/lib/srfi/1.sld](../lib/srfi/1.sld)<br>[ulisp/lib/scheme/list.sld](../lib/scheme/list.sld) | Constructors, Predicates, Selectors, Fold/Unfold, Searching/Filtering, Alist 操作を完全実装・TCO 最適化済 ([Issue #648](../../docs/issues/closed/648-implement-srfi-1-higher-order-list-procedures.md)) |
+| **SRFI 14** | `(scheme charset)` | Character Sets (文字集合 Char-Set) | **×** | - | Unicode / ASCII 文字集合型および集合演算（未実装） |
+| **SRFI 41** | `(scheme stream)` | Streams (遅延評価ストリーム) | **×** | - | `stream-cons`, `stream-car`, `stream-cdr`, `stream-map` 等の古典的ストリームライブラリ（未実装、SRFI-45 プロミスで一部代用可能） |
+| **SRFI 101** | `(scheme rlist)` | Purely Functional Random-Access Lists (純粋関数型ランダムアクセスリスト) | **×** | - | O(log n) アクセス・更新時間を持つ平衡木ベース不変リスト（未実装） |
+| **SRFI 111** | `(scheme box)` | Boxes (単一要素可変セル: `box`, `box?`, `unbox`, `set-box!`) | **◎** | [ulisp/lib/box.scm](../lib/box.scm)<br>[ulisp/lib/srfi/111.sld](../lib/srfi/111.sld)<br>[ulisp/lib/scheme/box.sld](../lib/scheme/box.sld) | R7RS-large Red Edition / SRFI 111 ボックス完全準拠。専用可変セル型・述語・アクセサ・ミューテータ完備 ([Issue #663](../../docs/issues/closed/663-implement-srfi-111-boxes.md)) |
+| **SRFI 113** | `(scheme set)` | Sets and Bags (集合・マルチセット) | **×** | - | 線形更新型集合およびバッグライブラリ（未実装） |
+| **SRFI 116** | `(scheme ilist)` | Immutable Pairs and Lists (不変ペア・不変リスト) | **×** | - | 専用不変ペア型（`ipair`, `icaar`, `imap` 等）による不変リスト（未実装） |
+| **SRFI 117** | `(scheme list-queue)` | Queues based on Lists (リストベースキュー / tconc) | **×** | - | 通常の Scheme リスト上に構築される O(1) 両端追加・先頭削除キュー（未実装） |
+| **SRFI 121** | `(scheme generator)` | Generators (基本ジェネレータ・イテレータ) | **△** | - | 引数なしクロージャを反復評価する軽量遅延生成器。継続 (`call/cc`) によるコルーチンで一部代替可能（Tangerine SRFI 158 にて完全包含） |
+| **SRFI 124** | `(scheme ephemeron)` | Ephemerons (弱参照ペア・GC 協調) | **×** | - | キーの到達可能性に連動して値の回収を決定する弱参照。コピー GC 構造上未実装 |
+| **SRFI 125** | `(scheme hash-table)` | Intermediate Hash Tables (ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/125.sld](../lib/srfi/125.sld)<br>[ulisp/lib/scheme/hash-table.sld](../lib/scheme/hash-table.sld) | R7RS-large / SRFI 125 互換ハッシュテーブル。24-bit 決定論的素数モジュラス、動的リハッシュ、多値 pop!、述語・アクセサ・反復・比較完備 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
+| **SRFI 127** | `(scheme lseq)` | Lazy Sequences (遅延リスト lseq) | **△** | [ulisp/lib/promise.scm](../lib/promise.scm) | 末尾にジェネレータを持つ中量遅延リスト。SRFI-45 プロミスにより手動構築可能 |
+| **SRFI 128** | `(scheme comparator)` | Comparators (比較器) | **×** | - | 型検査・等価判定・順序比較・ハッシュ計算を統合する第一級比較器（未実装） |
+| **SRFI 132** | `(scheme sort)` | Sort Libraries (ソート・マージアルゴリズム) | **◎** | [ulisp/lib/sort.scm](../lib/sort.scm)<br>[ulisp/lib/srfi/132.sld](../lib/srfi/132.sld)<br>[ulisp/lib/scheme/sort.sld](../lib/scheme/sort.sld) | R7RS-large / SRFI 132 安定ソート・マージ完全準拠。`list-sort`, `list-sort!`, `vector-sort`, `vector-sort!`, `list-merge`, `vector-merge`, `list-sorted?`, `vector-sorted?` ([Issue #655](../../docs/issues/closed/655-implement-r7rs-list-and-vector-sort-procedures.md)) |
+| **SRFI 133** | `(scheme vector)` | Vectors (高機能ベクタ操作) | **◎** (準拠) | [ulisp/lib/vector.scm](../lib/vector.scm)<br>[Pass 030](../frontend/030_desugar.scm) | SRFI 43 改善版ベクタ操作。`vector-copy`, `vector-copy!`, `vector-append`, `vector-fill!`, `vector-map`, `vector-for-each` 等を網羅 |
+| **SRFI 134** | `(scheme ideque)` | Immutable Deques (不変両端キュー) | **×** | - | O(1) 両端追加・削除時間を持つ純粋関数型不変両端キュー（未実装） |
+| **SRFI 135** | `(scheme text)` | Immutable Texts (不変テキスト) | **×** | - | O(1) ランダムアクセス時間を持つ不変文字シーケンス型（未実装） |
 
 ---
 
-### 2.2 Tangerine Edition (数値・ビット演算・低レベル: Numerics & Low-level)
+### 2.2 Tangerine Edition (数値計算・低レベル・データ構造: Numerics & Low-level)
 
-| 仕様番号 (SRFI) | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・代替手段 |
-| :--- | :--- | :---: | :--- | :--- |
-| **SRFI 138** | Compiling Scheme Programs (コンパイル規約) | **◎** | [compiler/driver.scm](../compiler/driver.scm) | AOT 静的コンパイル・バッチ処理に完全適合 |
-| **SRFI 141** | Integer Division (6モードの整数除算) | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[ulisp/lib/srfi/141.sld](../lib/srfi/141.sld)<br>[ulisp/lib/scheme/division.sld](../lib/scheme/division.sld) | R7RS-large Tangerine Edition / SRFI 141 整数除算全 6 モード完備 (floor, truncate, ceiling, round, euclidean, centered) の除算・剰余・多値除算 ([Issue #662](../../docs/issues/closed/662-implement-srfi-141-integer-division.md)) |
-| **SRFI 143** | Fixnums (Fixnum 専用高速演算: `fx+`, `fx-`, `fxadd1` 等) | **◎** | [Pass 090](../frontend/090_rtyper.scm) | `fxadd1`, `fxsub1` 等コンパイラ内部プリミティブおよび AOT アンボクシング対応 |
-| **SRFI 144** | Flonums (浮動小数点数演算) | **×** | - | 浮動小数点型非対応のため未実装 |
-| **SRFI 151** | Bitwise Operations (ビット演算) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | `bitwise-and`, `bitwise-ior`, `bitwise-arithmetic-shift` サポート |
-| **SRFI 158** | Generators and Accumulators (汎用ジェネレータ・アキュムレータ) | **△** | - | SRFI 121 の発展仕様。コルーチン継続で一部代用可能 |
-| **SRFI 160** | Homogeneous numeric vectors (u8, s8, u16 等の型付きベクタ) | **△** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | `u8` (バイトベクタ) を完全サポート。16/32/64bit 型付きベクタは未実装 |
-| **SRFI 179** | Nonempty Intervals and Arrays (多次元配列) | **×** | - | 未実装 |
+2019 年に正式策定された第 2 の R7RS-large 仕様であり、数値計算・ビット演算・低レベル操作・拡張データ構造に関する **全 10 ライブラリ** および **完全な数値塔 (Numeric Tower)** 要件を規定する。
+
+| 仕様番号 / SRFI | ライブラリ識別子 | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
+| :--- | :--- | :--- | :---: | :--- | :--- |
+| **SRFI 115** | `(scheme regex)` | Scheme Regular Expressions (正規表現 SRE) | **×** | - | S 式ベースの正規表現 (SRE: Scheme Regular Expressions) パーサおよびマッチングエンジン（未実装） |
+| **SRFI 141** | `(scheme division)` | Integer Division (6 モードの整数除算) | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[ulisp/lib/srfi/141.sld](../lib/srfi/141.sld)<br>[ulisp/lib/scheme/division.sld](../lib/scheme/division.sld) | R7RS-large Tangerine Edition / SRFI 141 整数除算全 6 モード完備 (floor, truncate, ceiling, round, euclidean, centered) の除算・剰余・多値除算 ([Issue #662](../../docs/issues/closed/662-implement-srfi-141-integer-division.md)) |
+| **SRFI 143** | `(scheme fixnum)` | Fixnums (Fixnum 専用高速演算: `fx+`, `fx-`, `fxadd1` 等) | **◎** | [Pass 090](../frontend/090_rtyper.scm) | `fxadd1`, `fxsub1` 等コンパイラ内部プリミティブおよび AOT アンボクシング対応 |
+| **SRFI 144** | `(scheme flonum)` | Flonums (浮動小数点数演算) | **×** | - | 浮動小数点型非対応のため未実装 |
+| **SRFI 146** | `(scheme mapping)`<br>`(scheme mapping hash)` | Mappings (不変マップ: 順序付き平衡木 & ハッシュベース) | **×** | - | 赤黒木 / AVL 木ベースの順序付き不変マップおよびハッシュベース不変マップ（未実装） |
+| **SRFI 151** | `(scheme bitwise)` | Bitwise Operations (ビット演算) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | `bitwise-and`, `bitwise-ior`, `bitwise-arithmetic-shift` 等 62-bit Fixnum ビット演算サポート |
+| **SRFI 158** | `(scheme generator)` | Generators and Accumulators (ジェネレータ・アキュムレータ) | **△** | - | SRFI 121 を完全包含・発展させたジェネレータと消費アキュムレータ仕様。コルーチン継続で一部代用可能 |
+| **SRFI 159** | `(scheme show)` | Combinator Formatting (コンビネータ書式化出力) | **×** | - | モナディックなコンビネータ型テキスト・数値・カラムレイアウト書式化エンジン（未実装） |
+| **SRFI 160** | `(scheme vector @)` | Homogeneous numeric vectors (u8, s8, u16 等の型付きベクタ) | **△** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | `@` は `base, u8, s8, u16, s16, u32, s32, u64, s64, f32, f64, c64, c128`。ULisp では `u8` (バイトベクタ) を完全サポート。他の固定幅数値ベクタは未実装 |
+| **R6RS / WG2** | `(scheme bytevector)` | R6RS Bytevector Operations (包括的バイトベクタ操作) | **×** | - | R6RS 互換の包括的単数形 `(scheme bytevector)` ライブラリ（エンディアン指定数値デコード等、未実装） |
+| **Tangerine Tower** | - | R6RS 準拠完全数値塔 (Full Numeric Tower) | **×** | - | Tangerine Edition で義務付けられる任意長整数 (Bignums)、任意長有理数、不正確実数、複素数（ULisp はスタンドアロン AOT 向け 62-bit Fixnum 設計のため非サポート） |
+| **SRFI 138** | - | Compiling Scheme Programs (コンパイル規約) | **◎** | [compiler/driver.scm](../compiler/driver.scm) | AOT 静的コンパイル・バッチ処理に完全適合 |
+| **SRFI 179** | - | Nonempty Intervals and Arrays (多次元配列) | **×** | - | 任意次元の多次元配列・間隔演算ライブラリ（未実装） |
 
 ---
 
-### 2.3 その他主要 SRFI (構文・制御・システム・メタプログラミング)
+### 2.3 Yellow Docket (マクロ・構文拡張・メタプログラミング: Macros & Syntax)
 
-| 仕様番号 (SRFI) | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・代替手段 |
+R7RS-large Yellow Docket は、高度なマクロ展開器、構文制御、多値構文、およびメタプログラミング機能の標準化を担うドケットである。
+
+| 仕様番号 / SRFI | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
+| **SRFI 8** | RECEIVE (多値受け取り構文: `receive`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | `call-with-values` への単純マクロ脱糖で完全動作 |
+| **SRFI 26** | Notation for Specializing Parameters (`cut`, `cute`) | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | スロット部分適用・即時評価部分適用マクロ展開器で完全動作 |
+| **SRFI 31** | Special form REC for recursive evaluation (`rec`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 自己再帰式束縛構文 (`(rec (f x) ...)` / `(rec name val)`)。名前付き `letrec` への脱糖で動作 |
+| **SRFI 61** | A more general `cond` clause (一般化 cond ガード) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 任意個の戻り値を受け取る `(=> guard-proc receiver)` 構文サポート |
+| **SRFI 139** | Syntax Parameters (`define-syntax-parameter`, `syntax-parameterize`) | **×** | - | レキシカルに再束縛可能な構文パラメータ（未実装） |
+| **SRFI 188** | Splicing `let-syntax` and `letrec-syntax` | **×** | - | 定義文脈で内部定義をスプライシング展開する局所マクロ構文（未実装） |
+| **SRFI 210** | Procedures and syntax for multiple values | **×** | - | `list/mv`, `coalesce`, `with-values`, `case-receive` 等の多値拡張手続き・構文群（未実装） |
+| **SRFI 212** | Identifier Aliasing (`alias`) | **×** | - | 識別子エイリアス束縛構文（未実装） |
+| **SRFI 213** | Identifier Properties | **×** | - | 識別子プロパティ登録・参照メタ構文（未実装） |
+| **SRFI 219** | Define higher-order lambda (`(define ((f x) y) ...)`) | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm) | カリー化手続き定義の短縮記法。Pass 028/030 で完全脱糖サポート済 ([Issue #592](../../docs/issues/592-implement-r7rs-internal-definition-desugaring.md)) |
+| **R6RS Syntax** | `syntax-case` & `syntax` | **×** | - | 低レベルパターン照合・手続き型衛生マクロシステム（現行 ULisp は `syntax-rules` 完備型） |
+
+---
+
+### 2.4 Orange / Hypnos Docket (拡張データ型・フォーマット・入出力: Advanced Data Types, Formatting & I/O)
+
+R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進められているポータブルな高度データ型・フォーマット・入出力仕様である。
+
+| 仕様番号 / SRFI | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
+| :--- | :--- | :---: | :--- | :--- |
+| **SRFI 48** | Intermediate Format Strings (中級フォーマット: `format`) | **×** | - | `~a`, `~s`, `~%`, `~d`, `~x`, `~f`, `~?` 等の中級書式指定子（未実装） |
+| **SRFI 166** | Monadic / Combinator Formatting | **×** | - | 高機能コンビネータ書式化出力エンジン（未実装） |
+| **SRFI 175** | ASCII Character Library | **◎** | [ulisp/lib/char.scm](../lib/char.scm) | ASCII コードポイント検査・分類述語群完備 ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
+| **SRFI 178** | Bitvectors (ビットベクタ) | **×** | - | 1 ビット単位の論理配列型およびビットフィールド走査演算（未実装） |
+| **SRFI 180** | JSON (JSON パース・シリアライズ) | **×** | - | RFC 8259 準拠 JSON パーサおよびジェネレータ（未実装） |
+| **SRFI 189** | Maybe and Either: optional values and error containers | **×** | - | 関数型オプショナル値 (`just`, `nothing`) および結果値 (`right`, `left`) モナド風コンテナ（未実装） |
+| **SRFI 190** | Coroutine Generators | **△** | - | ファーストクラス継続を用いたコルーチンジェネレータ（`call/cc` で自前構築可能） |
+| **SRFI 196** | Range Objects (範囲オブジェクト) | **×** | - | インデックス指定可能な計算可能遅延シーケンス（未実装） |
+| **SRFI 207** | Bytestrings (バイト文字列) | **×** | - | ASCII 文字列互換のバイナリバイト列型（未実装） |
+| **SRFI 209** | Enums and Enum Sets (列挙型・列挙集合) | **×** | - | シンボリック列挙型および効率的ビットマスク列挙集合（未実装） |
+| **SRFI 214** | Flexvectors (可変長動的ベクタ) | **×** | - | 要素の動的追加・削除が可能な拡張ベクタ型（未実装） |
+| **SRFI 217** | Integer Sets (整数集合) | **×** | - | 非負整数の高速ビットマップ集合（未実装） |
+| **SRFI 222** | Compound Objects (複合オブジェクト) | **×** | - | 複数オブジェクトの直和的ラップ型（未実装） |
+| **SRFI 223** | Generalized Binary Search (汎用二分探索) | **×** | - | シーケンスに対する汎用二分探索アルゴリズム（未実装） |
+| **SRFI 224** | Integer Mappings (整数マップ) | **×** | - | 非負整数をキーとする高速 Trie マップ（未実装） |
+| **SRFI 225** | Generic Dictionary Operations (汎用辞書インターフェース) | **×** | - | ハッシュテーブル・連想リスト・木マップに対する統一的ディクショナリアクセス（未実装） |
+| **SRFI 228** | Composing Comparators (合成比較器) | **×** | - | 複数フィールドの辞書式比較器自動合成（未実装） |
+
+---
+
+### 2.5 実践的・基盤的 SRFI (システム連携・並行処理・テスト・互換性)
+
+| 仕様番号 / SRFI | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
+| :--- | :--- | :---: | :--- | :--- |
+| **SRFI 0** | Feature-based conditional expansion (`cond-expand`) | **◎** | [Pass 010](../frontend/010_library.scm) | R7RS-small §4.2.1 に正式採択。プラットフォーム機能判定 |
 | **SRFI 2** | AND-LET* (条件付き束縛構文) | **◎** | [Pass 030](../frontend/030_desugar.scm) | `and` / `let*` へのマクロ展開で容易に実現可能 |
-| **SRFI 8** | RECEIVE (多値受け取り構文) | **◎** | [Pass 030](../frontend/030_desugar.scm) | `call-with-values` への単純マクロ脱糖で完全動作 |
-| **SRFI 14** | Character-set Library (文字集合 Char-Set) | **×** | - | Unicode / ASCII 述語群未整備のため未実装 |
-| **SRFI 18 / 226**| Multithreading & Control (スレッド並行処理) | **×** | - | シングルスレッドモデル |
-| **SRFI 26** | Notation for Specializing Parameters (`cut`, `cute`) | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | 部分適用マクロ展開器で動作 |
-| **SRFI 27** | Sources of Random Bits (擬似乱数生成器) | **×** | - | 未実装 |
+| **SRFI 6** | Basic String Ports | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | R7RS-small §6.13.1 に正式採択。`open-input-string`, `open-output-string`, `get-output-string` 完備 |
+| **SRFI 9** | Defining Record Types (`define-record-type`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | R7RS-small §5.5 に正式採択。完全サポート ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md)) |
+| **SRFI 11** | Syntax for multiple values (`let-values`, `let*-values`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | R7RS-small §4.2.2 に正式採択。完全サポート ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
+| **SRFI 16** | Syntax for procedures of variable arity (`case-lambda`) | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm) | R7RS-small §4.2.9 に正式採択。完全サポート ([Issue #609](../../docs/issues/closed/609-implement-r7rs-case-lambda-syntax.md)) |
+| **SRFI 18 / 226**| Multithreading & Concurrency (スレッド・並行制御) | **△** | [ulisp/lib/ulisp/concurrency/](../lib/ulisp/concurrency/) | ULisp 自前の Synapse M:N 並行性ランタイム (Actor/CSP, Futex, io_uring) で高度にサポート |
+| **SRFI 23** | Error reporting mechanism (`error`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | R7RS-small §6.11 に正式採択。例外送出 |
+| **SRFI 27** | Sources of Random Bits (擬似乱数生成器) | **×** | - | 乱数ビット生成器（未実装） |
 | **SRFI 28** | Basic Format Strings (基本文字列フォーマット) | **◎** | [ulisp/lib/format.scm](../lib/format.scm)<br>[ulisp/lib/srfi/28.sld](../lib/srfi/28.sld)<br>[Pass 030](../frontend/030_desugar.scm) | 基本フォーマット文字列 API 完全準拠。`~a`/`~A` (display), `~s`/`~S` (write), `~%` (newline), `~~` (チルダ文字)。静的脱糖インライン展開および `case-lambda` による第一級オブジェクト・引数過不足厳格検証 ([Issue #654](../../docs/issues/closed/654-implement-srfi-28-basic-format-string.md)) |
-| **SRFI 45** | Primitives for Expressing Iterative Lazy Algorithms | **◎** | [ulisp/lib/promise.scm](../lib/promise.scm) | `delay`, `force`, `delay-force`, `make-promise` 完全準拠 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
-| **SRFI 48** | Intermediate Format Strings (中級フォーマット) | **×** | - | 未実装 |
+| **SRFI 34** | Exception Handling for Programs (`with-exception-handler`, `raise`) | **◎** | [ulisp/lib/exception.scm](../lib/exception.scm) | R7RS-small §6.11 に正式採択。完全準拠 |
+| **SRFI 35** | Exception Conditions | **×** | - | 構造化コンディションオブジェクト型階層（未実装） |
+| **SRFI 38** | External Representation for Data With Shared Structure (`write/ss`) | **◎** | [ulisp/lib/printer.scm](../lib/printer.scm) | R7RS-small §6.13.3 (`write-shared`) に正式採択。循環・共有参照表記 (`#1=`, `#1#`) 完全対応 ([Issue #656](../../docs/issues/closed/656-implement-r7rs-write-simple-and-write-shared.md)) |
+| **SRFI 39** | Parameter objects (`make-parameter`, `parameterize`) | **◎** | [ulisp/lib/parameter.scm](../lib/parameter.scm) | R7RS-small §4.2.6 に正式採択。完全サポート ([Issue #537](../../docs/issues/closed/537-implement-r7rs-parameters-and-parameterize.md)) |
+| **SRFI 45** | Primitives for Expressing Iterative Lazy Algorithms | **◎** | [ulisp/lib/promise.scm](../lib/promise.scm) | R7RS-small §4.2.5 に正式採択。`delay`, `force`, `delay-force`, `make-promise` 完全準拠 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
 | **SRFI 60** | Integers as Bits (整数ビット表現・操作) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 62-bit Fixnum ビットマスク演算プリミティブ群 |
 | **SRFI 64** | Test Suites API (ユニットテスト標準) | **△** | [ulisp/test.sh](../test.sh)<br>[ulisp/test_c.sh](../test_c.sh) | 自前アサーション・テストランナーで運用 |
 | **SRFI 69** | Basic Hash Tables (基本ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/69.sld](../lib/srfi/69.sld) | 基本ハッシュテーブル API 完全準拠。`make-hash-table`, `hash-table-ref/default`, `hash-table-walk` 等 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
 | **SRFI 88** | Keyword Objects (キーワードオブジェクト `:key`) | **×** | - | シンボルで代用 |
 | **SRFI 89** | Optional Positional and Named Parameters | **×** | - | 未実装 |
 | **SRFI 95** | Sorting and Merging (SLIB ソート・マージ) | **◎** | [ulisp/lib/sort.scm](../lib/sort.scm)<br>[ulisp/lib/srfi/95.sld](../lib/srfi/95.sld) | SLIB / SRFI 95 互換ソート・マージ API 完全準拠。`sort`, `sort!`, `sorted?`, `merge`, `merge!` ([Issue #655](../../docs/issues/closed/655-implement-r7rs-list-and-vector-sort-procedures.md)) |
-| **SRFI 115** | Scheme Regular Expressions (正規表現 SRE) | **×** | - | 未実装 |
+| **SRFI 98** | Environment Variables (`get-environment-variable`) | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | R7RS-small §6.14 に正式採択。POSIX `environ` 連携 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
+| **SRFI 106** | Basic Socket Interface (POSIX TCP/IP) | **×** | - | 低レベル Berkeley ソケット通信（未実装） |
 | **SRFI 145** | Assumptions (`assert`, `assume`) | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/145.sld](../lib/srfi/145.sld) | SRFI 145 前提表明構文完全準拠。述語真偽値返却、失敗時条件式付きエラー送出 ([Issue #664](../../docs/issues/closed/664-implement-srfi-145-assumptions.md)) |
 | **SRFI 170** | POSIX API (低レベルシステムコール) | **◎** (一部) | [ulisp/lib/posix.scm](../lib/posix.scm) | `sys-read`, `sys-write`, `sys-mmap`, `sys-exit`, `%raw-syscall` を実装 |
 | **SRFI 193** | Command line (コマンドライン情報) | **△** | [runtime.c](../runtime.c) | `command-line` 基本サポート |
@@ -429,7 +499,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
 ## 4. まとめと今後のロードマップ
 
 1. **R7RS-small コア言語としての達成度**:
-   - 構文、第一級継続 (`call/cc` + `dynamic-wind`)、多値 (`values` / `call-with-values`)、完全ゼロアロケーション 2-Space GC、ベクタ、バイトベクタ、遅延評価 (`delay` / `force`)、衛生的マクロ展開器、自前 S 式パーサ/プリンタなど、スタンドアロンな Scheme ネイティブ実行系として **基盤機能の約 85% を完備**。
+   - 構文、第一級継続 (`call/cc` + `dynamic-wind`)、多値 (`values` / `call-with-values`)、完全ゼロアロケーション 2-Space GC、ベクタ、バイトベクタ、遅延評価 (`delay` / `force`)、衛生的マクロ展開器、自前 S 式パーサ/プリンタなど、スタンドアロンな Scheme ネイティブ実行系として **基盤機能の約 90% 以上を完備**。
 2. **実装完了済みの主要機能 (Recently Closed Issues)**:
    - [Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md): `delay`, `force`, `delay-force`, `promise?` (遅延評価)
    - [Issue #551](../../docs/issues/closed/551-expand-r7rs-standard-library-procedures.md): `list-copy`, `make-list`, `string-copy!`, `string-fill!` 等のシーケンス操作拡充
@@ -437,7 +507,6 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #556](../../docs/issues/closed/556-implement-r7rs-character-comparison-predicates.md): `char<?`, `char>?`, `char<=?`, `char>=?` (文字順序比較)
    - [Issue #557](../../docs/issues/closed/557-implement-r7rs-string-vector-list-conversions-and-string-ordering.md): `string->list`, `list->string`, `string->vector`, `vector->string`, `string<?`, `string>?`, `string<=?`, `string>=?` (文字列・ベクタ・リスト相互変換および文字列順序比較述語)
    - [Issue #558](../../docs/issues/closed/558-implement-r7rs-elementary-integer-math-procedures.md): `square`, `gcd`, `lcm`, `expt`, `remainder` (基本整数算術)
-3. **最近クローズされた実装 (Recently Closed Issues)**:
    - [Issue #559](../../docs/issues/closed/559-implement-r7rs-do-loop-syntax.md): `do` (反復実行構文)
    - [Issue #560](../../docs/issues/closed/560-implement-r7rs-define-values-syntax.md): `define-values` (多値定義構文)
    - [Issue #592](../../docs/issues/592-implement-r7rs-internal-definition-desugaring.md): 内部定義（内部 define / 相互再帰）の脱糖
@@ -453,7 +522,86 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #663](../../docs/issues/closed/663-implement-srfi-111-boxes.md): SRFI 111 / `(scheme box)` ボックス型 (`box`, `box?`, `unbox`, `set-box!`) の完全実装
    - [Issue #664](../../docs/issues/closed/664-implement-srfi-145-assumptions.md): SRFI 145 前提表明構文 (`assume`, `assert`) の完全実装
    - [Issue #665](../../docs/issues/closed/665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md): R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ自動検証の確立
-4. **アーキテクチャ特性に基づく設計トレードオフ**:
+3. **アーキテクチャ特性に基づく設計トレードオフ**:
    - `eval`, `load`, `repl` などの動的実行系は、AOT コンパイラのバイナリ独立性・フットプリント最小化を優先して意図的に除外。
    - 数値塔（Number Tower）は 62-bit 即値 Fixnum（下位 2-bit `00b` タグ）を基本とし、加減算のゼロオーバーヘッド化と高速実行を優先。
 
+---
+
+## 5. 原典・仕様規格参照情報源 (Primary Sources & Official Specifications)
+
+本リファレンスおよび ULisp の Scheme 言語準拠実装における公式一次情報源（Primary Sources）は以下の通りである。
+
+### 5.1 R7RS-small 公式規格・リファレンス
+- **R7RS-small 公式ポータル**: [Scheme Reports Official Website](https://www.scheme-reports.org/)
+- **R7RS-small 正典仕様書 (PDF / Errata 適用版)**: [Revised^7 Report on the Algorithmic Language Scheme - Small Language (PDF)](https://github.com/johnwcowan/r7rs-spec/blob/errata/spec/r7rs.pdf)
+- **R7RS-small LaTeX ソースリポジトリ**: [GitHub: johnwcowan/r7rs-spec](https://github.com/johnwcowan/r7rs-spec)
+- **R7RS-small 策定作業・投票アーカイブ**: [R7RS-small Working Documents Archive](https://small.r7rs.org/)
+- **R7RS-small 標準全 335 識別子アルファベット順索引**: [GitHub: johnwcowan/r7rs-work - SmallLanguageIdentifiers.md](https://github.com/johnwcowan/r7rs-work/blob/master/SmallLanguageIdentifiers.md)
+- **R7RS-small エラッタ集**: [GitHub: johnwcowan/r7rs-work - R7RSSmallErrata.md](https://github.com/johnwcowan/r7rs-work/blob/master/R7RSSmallErrata.md)
+
+### 5.2 R7RS-large (Working Group 2) 公式エディション・ドケット
+- **R7RS ホームページ (WG2 作業リポジトリ)**: [GitHub: johnwcowan/r7rs-work - R7RSHomePage.md](https://github.com/johnwcowan/r7rs-work/blob/master/R7RSHomePage.md)
+- **R7RS-large Red Edition 正典仕様 (2016)**: [GitHub: johnwcowan/r7rs-work - RedEdition.md](https://github.com/johnwcowan/r7rs-work/blob/master/RedEdition.md)
+- **R7RS-large Tangerine Edition 正典仕様 (2019)**: [GitHub: johnwcowan/r7rs-work - TangerineEdition.md](https://github.com/johnwcowan/r7rs-work/blob/master/TangerineEdition.md)
+- **R7RS-large カラー別ドケット一覧 (Color Dockets)**: [GitHub: johnwcowan/r7rs-work - ColorDockets.md](https://github.com/johnwcowan/r7rs-work/blob/master/ColorDockets.md)
+- **R7RS-large 全ドケット索引 (WG2 Dockets)**: [GitHub: johnwcowan/r7rs-work - WG2Dockets.md](https://github.com/johnwcowan/r7rs-work/blob/master/WG2Dockets.md)
+- **Yellow Docket (マクロ・構文審議仕様)**: [GitHub: johnwcowan/r7rs-work - YellowDocket.md](https://github.com/johnwcowan/r7rs-work/blob/master/YellowDocket.md)
+
+### 5.3 SRFI (Scheme Requests for Implementation) 公式原典
+- **SRFI 公式ディレクトリ・インデックス**: [Scheme Requests for Implementation (SRFI Home)](https://srfi.schemers.org/)
+- **SRFI 1 (Lists)**: [SRFI 1: List Library](https://srfi.schemers.org/srfi-1/srfi-1.html)
+- **SRFI 8 (RECEIVE)**: [SRFI 8: Binding to multiple values](https://srfi.schemers.org/srfi-8/srfi-8.html)
+- **SRFI 9 (Record Types)**: [SRFI 9: Defining Record Types](https://srfi.schemers.org/srfi-9/srfi-9.html)
+- **SRFI 11 (Multiple Values)**: [SRFI 11: Syntax for receiving multiple values](https://srfi.schemers.org/srfi-11/srfi-11.html)
+- **SRFI 14 (Character Sets)**: [SRFI 14: Character-set Library](https://srfi.schemers.org/srfi-14/srfi-14.html)
+- **SRFI 16 (Case-lambda)**: [SRFI 16: Syntax for procedures of variable arity](https://srfi.schemers.org/srfi-16/srfi-16.html)
+- **SRFI 26 (Cut / Cute)**: [SRFI 26: Notation for Specializing Parameters without Currying](https://srfi.schemers.org/srfi-26/srfi-26.html)
+- **SRFI 28 (Basic Format)**: [SRFI 28: Basic Format Strings](https://srfi.schemers.org/srfi-28/srfi-28.html)
+- **SRFI 31 (REC)**: [SRFI 31: A special form rec for recursive evaluation](https://srfi.schemers.org/srfi-31/srfi-31.html)
+- **SRFI 38 (Shared Structures)**: [SRFI 38: External Representation for Data With Shared Structure](https://srfi.schemers.org/srfi-38/srfi-38.html)
+- **SRFI 39 (Parameters)**: [SRFI 39: Parameter objects](https://srfi.schemers.org/srfi-39/srfi-39.html)
+- **SRFI 41 (Streams)**: [SRFI 41: Streams](https://srfi.schemers.org/srfi-41/srfi-41.html)
+- **SRFI 45 (Iterative Lazy Algorithms)**: [SRFI 45: Primitives for Expressing Iterative Lazy Algorithms](https://srfi.schemers.org/srfi-45/srfi-45.html)
+- **SRFI 60 (Integers as Bits)**: [SRFI 60: Integers as Bits](https://srfi.schemers.org/srfi-60/srfi-60.html)
+- **SRFI 61 (General cond clause)**: [SRFI 61: A more general cond clause](https://srfi.schemers.org/srfi-61/srfi-61.html)
+- **SRFI 64 (Test Suites)**: [SRFI 64: A Scheme API for Test Suites](https://srfi.schemers.org/srfi-64/srfi-64.html)
+- **SRFI 69 (Basic Hash Tables)**: [SRFI 69: Basic Hash Tables](https://srfi.schemers.org/srfi-69/srfi-69.html)
+- **SRFI 95 (Sorting & Merging)**: [SRFI 95: Sorting and Merging](https://srfi.schemers.org/srfi-95/srfi-95.html)
+- **SRFI 101 (Random Access Lists)**: [SRFI 101: Purely Functional Random-Access Pairs and Lists](https://srfi.schemers.org/srfi-101/srfi-101.html)
+- **SRFI 111 (Boxes)**: [SRFI 111: Boxes](https://srfi.schemers.org/srfi-111/srfi-111.html)
+- **SRFI 113 (Sets and Bags)**: [SRFI 113: Sets and bags](https://srfi.schemers.org/srfi-113/srfi-113.html)
+- **SRFI 115 (Regex)**: [SRFI 115: Scheme Regular Expressions](https://srfi.schemers.org/srfi-115/srfi-115.html)
+- **SRFI 116 (Immutable Lists)**: [SRFI 116: Immutable Pairs and Lists](https://srfi.schemers.org/srfi-116/srfi-116.html)
+- **SRFI 117 (List Queues)**: [SRFI 117: Queues based on lists](https://srfi.schemers.org/srfi-117/srfi-117.html)
+- **SRFI 121 (Generators)**: [SRFI 121: Generators](https://srfi.schemers.org/srfi-121/srfi-121.html)
+- **SRFI 124 (Ephemerons)**: [SRFI 124: Ephemerons](https://srfi.schemers.org/srfi-124/srfi-124.html)
+- **SRFI 125 (Intermediate Hash Tables)**: [SRFI 125: Intermediate hash tables](https://srfi.schemers.org/srfi-125/srfi-125.html)
+- **SRFI 127 (Lazy Sequences)**: [SRFI 127: Lazy Sequences](https://srfi.schemers.org/srfi-127/srfi-127.html)
+- **SRFI 128 (Comparators)**: [SRFI 128: Comparators (reduced)](https://srfi.schemers.org/srfi-128/srfi-128.html)
+- **SRFI 132 (Sort Libraries)**: [SRFI 132: Sort Libraries](https://srfi.schemers.org/srfi-132/srfi-132.html)
+- **SRFI 133 (Vector Library)**: [SRFI 133: Vector Library (R7RS-compatible)](https://srfi.schemers.org/srfi-133/srfi-133.html)
+- **SRFI 134 biological (Immutable Deques)**: [SRFI 134: Immutable Deques](https://srfi.schemers.org/srfi-134/srfi-134.html)
+- **SRFI 135 (Immutable Texts)**: [SRFI 135: Immutable Texts](https://srfi.schemers.org/srfi-135/srfi-135.html)
+- **SRFI 138 (Compiling Scheme)**: [SRFI 138: Compiling Scheme Programs](https://srfi.schemers.org/srfi-138/srfi-138.html)
+- **SRFI 141 (Integer Division)**: [SRFI 141: Integer division](https://srfi.schemers.org/srfi-141/srfi-141.html)
+- **SRFI 143 (Fixnums)**: [SRFI 143: Fixnums](https://srfi.schemers.org/srfi-143/srfi-143.html)
+- **SRFI 144 (Flonums)**: [SRFI 144: Flonums](https://srfi.schemers.org/srfi-144/srfi-144.html)
+- **SRFI 145 (Assumptions)**: [SRFI 145: Assumptions](https://srfi.schemers.org/srfi-145/srfi-145.html)
+- **SRFI 146 (Mappings)**: [SRFI 146: Mappings](https://srfi.schemers.org/srfi-146/srfi-146.html)
+- **SRFI 151 (Bitwise Operations)**: [SRFI 151: Bitwise Operations](https://srfi.schemers.org/srfi-151/srfi-151.html)
+- **SRFI 158 (Generators and Accumulators)**: [SRFI 158: Generators and Accumulators](https://srfi.schemers.org/srfi-158/srfi-158.html)
+- **SRFI 159 (Combinator Formatting)**: [SRFI 159: Combinator Formatting](https://srfi.schemers.org/srfi-159/srfi-159.html)
+- **SRFI 160 (Homogeneous Numeric Vectors)**: [SRFI 160: Homogeneous numeric vectors](https://srfi.schemers.org/srfi-160/srfi-160.html)
+- **SRFI 175 (ASCII Character Library)**: [SRFI 175: ASCII character library](https://srfi.schemers.org/srfi-175/srfi-175.html)
+- **SRFI 178 (Bitvectors)**: [SRFI 178: Bitvector library](https://srfi.schemers.org/srfi-178/srfi-178.html)
+- **SRFI 179 (Intervals & Arrays)**: [SRFI 179: Nonempty Intervals and Arrays](https://srfi.schemers.org/srfi-179/srfi-179.html)
+- **SRFI 180 (JSON)**: [SRFI 180: JSON](https://srfi.schemers.org/srfi-180/srfi-180.html)
+- **SRFI 189 (Maybe and Either)**: [SRFI 189: Maybe and Either: optional values and error containers](https://srfi.schemers.org/srfi-189/srfi-189.html)
+- **SRFI 210 (Multiple Values Procedures & Syntax)**: [SRFI 210: Procedures and Syntax for Multiple Values](https://srfi.schemers.org/srfi-210/srfi-210.html)
+- **SRFI 219 (Define higher-order lambda)**: [SRFI 219: Define higher-order lambda](https://srfi.schemers.org/srfi-219/srfi-219.html)
+
+### 5.4 Scheme コミュニティ規格・実装リファレンス
+- **Scheme.org Standards Index**: [Scheme.org: Standards](https://standards.scheme.org/)
+- **Gauche ユーザリファレンス (R7RS / R7RS-large モジュール一覧)**: [Gauche Users Reference: R7RS large](https://practical-scheme.net/gauche/man/gauche-refj/R7RS-large.html)
+- **Sagittarius Scheme R7RS-large 実装マニュアル**: [Sagittarius Users' Reference: (scheme ...) libraries](https://ktakashi.github.io/sagittarius-online-ref/section6.html)

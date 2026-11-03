@@ -23,6 +23,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **700** | R7RS-small/large および SRFI 原典調査に基づく言語仕様準拠状況リファレンス網羅表の厳格拡充・欠落完全補完 | Feature | 2026-11-03 | [closed/700-audit-and-complete-r7rs-compliance-matrix.md](closed/700-audit-and-complete-r7rs-compliance-matrix.md) |
 | **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | 2026-11-03 | [closed/665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](closed/665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
 | **664** | R7RS-large / SRFI 145 Assumptions 表明構文 (assume / assert) の実装 | Feature | 2026-11-03 | [closed/664-implement-srfi-145-assumptions.md](closed/664-implement-srfi-145-assumptions.md) |
 | **663** | R7RS-large / SRFI 111 Boxes 単一要素可変セル API の実装 | Feature | 2026-11-03 | [closed/663-implement-srfi-111-boxes.md](closed/663-implement-srfi-111-boxes.md) |
