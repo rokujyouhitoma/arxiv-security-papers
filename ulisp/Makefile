@@ -265,12 +265,12 @@ test_queue: $(COMPILER_DEP)
 	$(LD) $(LDFLAGS) build/test_queue.o -o build/test_queue
 	./build/test_queue < /dev/null
 
-test_channel: $(COMPILER_DEP)
+test_channel: $(COMPILER_DEP) build/futex.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_channel.scm > build/test_channel_input.scm
 	$(ULISP_COMPILER) build/test_channel_input.scm > build/test_channel.s
 	$(AS) $(ASFLAGS) build/test_channel.s -o build/test_channel.o
-	$(LD) $(LDFLAGS) build/test_channel.o -o build/test_channel
+	$(LD) $(LDFLAGS) build/test_channel.o build/futex.o -o build/test_channel
 	./build/test_channel < /dev/null
 
 test_boundary: $(COMPILER_DEP)

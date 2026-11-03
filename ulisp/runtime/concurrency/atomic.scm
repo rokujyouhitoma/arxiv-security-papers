@@ -32,74 +32,148 @@
     box))
 
 (define (atomic-ref box)
-  (if (not (atomic-box? box))
-      (error "atomic-ref: expected <atomic-box>" box)
-      (%atomic-box-val box)))
+  (cond
+    ((atomic-box? box) (%atomic-box-val box))
+    ((padded-atomic-box? box) (%padded-atomic-box-val box))
+    (else (error "atomic-ref: expected <atomic-box> or <padded-atomic-box>" box))))
 
 (define (atomic-box-ref box)
-  (if (not (atomic-box? box))
-      (error "atomic-box-ref: expected <atomic-box>" box)
-      (%atomic-box-val box)))
+  (atomic-ref box))
 
 (define (atomic-set! box new-val)
-  (if (not (atomic-box? box))
-      (error "atomic-set!: expected <atomic-box>" box)
-      (begin
-        (%atomic-box-val-set! box new-val)
-        (%memory-fence)
-        new-val)))
+  (cond
+    ((atomic-box? box)
+     (%atomic-box-val-set! box new-val)
+     (%memory-fence)
+     new-val)
+    ((padded-atomic-box? box)
+     (%padded-atomic-box-val-set! box new-val)
+     (%memory-fence)
+     new-val)
+    (else (error "atomic-set!: expected <atomic-box> or <padded-atomic-box>" box))))
 
 (define (atomic-box-set! box new-val)
-  (if (not (atomic-box? box))
-      (error "atomic-box-set!: expected <atomic-box>" box)
+  (atomic-set! box new-val))
+
+(define (atomic-cas! box expected new-val)
+  (cond
+    ((or (atomic-box? box) (padded-atomic-box? box))
+     (%atomic-cas! box expected new-val))
+    (else (error "atomic-cas!: expected <atomic-box> or <padded-atomic-box>" box))))
+
+;; -----------------------------------------------------------------------
+;; 2b. Cache-Line Padded Atomic Box (<padded-atomic-box>) (Issue #680)
+;; -----------------------------------------------------------------------
+;; Guarantees at least 64-byte physical memory footprint (72 bytes on AMD64)
+;; to eliminate cache-line bouncing (False Sharing) between concurrent cores.
+;; Slot 1 holds `val`, matching the exact offset of <atomic-box> so native
+;; %atomic-cas! can operate directly without translation.
+
+(define-record-type <padded-atomic-box>
+  (%make-padded-atomic-box val _p1 _p2 _p3 _p4 _p5 _p6 _p7)
+  padded-atomic-box?
+  (val %padded-atomic-box-val %padded-atomic-box-val-set!))
+
+(define (make-padded-atomic-box initial-val)
+  (let ((box (%make-padded-atomic-box initial-val 0 0 0 0 0 0 0)))
+    (%memory-fence)
+    box))
+
+(define (padded-atomic-ref box)
+  (if (not (padded-atomic-box? box))
+      (error "padded-atomic-ref: expected <padded-atomic-box>" box)
+      (%padded-atomic-box-val box)))
+
+(define (padded-atomic-set! box new-val)
+  (if (not (padded-atomic-box? box))
+      (error "padded-atomic-set!: expected <padded-atomic-box>" box)
       (begin
-        (%atomic-box-val-set! box new-val)
+        (%padded-atomic-box-val-set! box new-val)
         (%memory-fence)
         new-val)))
 
-(define (atomic-cas! box expected new-val)
-  (if (not (atomic-box? box))
-      (error "atomic-cas!: expected <atomic-box>" box)
+(define (padded-atomic-cas! box expected new-val)
+  (if (not (padded-atomic-box? box))
+      (error "padded-atomic-cas!: expected <padded-atomic-box>" box)
       (%atomic-cas! box expected new-val)))
+
+(define (padded-atomic-swap! box new-val)
+  (if (not (padded-atomic-box? box))
+      (error "padded-atomic-swap!: expected <padded-atomic-box>" box)
+      (let retry ()
+        (let ((old (%padded-atomic-box-val box)))
+          (if (%atomic-cas! box old new-val)
+              old
+              (retry))))))
+
+(define (padded-atomic-fetch-add! box delta)
+  (if (not (padded-atomic-box? box))
+      (error "padded-atomic-fetch-add!: expected <padded-atomic-box>" box)
+      (if (not (integer? delta))
+          (error "padded-atomic-fetch-add!: delta must be an integer" delta)
+          (let retry ()
+            (let ((old (%padded-atomic-box-val box)))
+              (if (not (integer? old))
+                  (error "padded-atomic-fetch-add!: current box value is not an integer" old)
+                  (let ((next (+ old delta)))
+                    (if (%atomic-cas! box old next)
+                        old
+                        (retry)))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 3. High-Level Lock-Free Derived Operations
 ;; -----------------------------------------------------------------------
 
 (define (atomic-swap! box new-val)
-  (if (not (atomic-box? box))
-      (error "atomic-swap!: expected <atomic-box>" box)
-      (let retry ()
-        (let ((old (%atomic-box-val box)))
-          (if (%atomic-cas! box old new-val)
-              old
-              (retry))))))
+  (cond
+    ((atomic-box? box)
+     (let retry ()
+       (let ((old (%atomic-box-val box)))
+         (if (%atomic-cas! box old new-val)
+             old
+             (retry)))))
+    ((padded-atomic-box? box)
+     (padded-atomic-swap! box new-val))
+    (else (error "atomic-swap!: expected <atomic-box> or <padded-atomic-box>" box))))
 
 (define (atomic-fetch-add! box delta)
-  (if (not (atomic-box? box))
-      (error "atomic-fetch-add!: expected <atomic-box>" box)
-      (if (not (integer? delta))
-          (error "atomic-fetch-add!: delta must be an integer" delta)
-          (let retry ()
-            (let ((old (%atomic-box-val box)))
-              (if (not (integer? old))
-                  (error "atomic-fetch-add!: current box value is not an integer" old)
-                  (let ((next (+ old delta)))
-                    (if (%atomic-cas! box old next)
-                        old
-                        (retry)))))))))
+  (cond
+    ((atomic-box? box)
+     (if (not (integer? delta))
+         (error "atomic-fetch-add!: delta must be an integer" delta)
+         (let retry ()
+           (let ((old (%atomic-box-val box)))
+             (if (not (integer? old))
+                 (error "atomic-fetch-add!: current box value is not an integer" old)
+                 (let ((next (+ old delta)))
+                   (if (%atomic-cas! box old next)
+                       old
+                       (retry))))))))
+    ((padded-atomic-box? box)
+     (padded-atomic-fetch-add! box delta))
+    (else (error "atomic-fetch-add!: expected <atomic-box> or <padded-atomic-box>" box))))
 
 (define (atomic-update! box proc)
-  (if (not (atomic-box? box))
-      (error "atomic-update!: expected <atomic-box>" box)
-      (if (not (procedure? proc))
-          (error "atomic-update!: expected procedure" proc)
-          (let retry ()
-            (let* ((old (%atomic-box-val box))
-                   (next (proc old)))
-              (if (%atomic-cas! box old next)
-                  next
-                  (retry)))))))
+  (cond
+    ((atomic-box? box)
+     (if (not (procedure? proc))
+         (error "atomic-update!: expected procedure" proc)
+         (let retry ()
+           (let* ((old (%atomic-box-val box))
+                  (next (proc old)))
+             (if (%atomic-cas! box old next)
+                 next
+                 (retry))))))
+    ((padded-atomic-box? box)
+     (if (not (procedure? proc))
+         (error "atomic-update!: expected procedure" proc)
+         (let retry ()
+           (let* ((old (%padded-atomic-box-val box))
+                  (next (proc old)))
+             (if (%atomic-cas! box old next)
+                 next
+                 (retry))))))
+    (else (error "atomic-update!: expected <atomic-box> or <padded-atomic-box>" box))))
 
 ;; -----------------------------------------------------------------------
 ;; 4. ABA-Safe Version-Stamped Atomic Box (<atomic-stamped-box>)

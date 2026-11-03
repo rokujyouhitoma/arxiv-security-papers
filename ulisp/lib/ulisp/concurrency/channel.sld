@@ -98,6 +98,12 @@
     channel-recv!
     channel-try-recv!
     channel-try-recv-with-status!
+    channel-ring-buffer
+    channel-unboxed?
+    channel-send-unboxed!
+    channel-recv-unboxed!
+    channel-try-send-unboxed!
+    channel-try-recv-unboxed!
     channel-close!
     channel-poison!
     channel-deep-copy

@@ -399,6 +399,104 @@
   (assert-true caught-closed-send "channel-send! rejects sending on a closed channel"))
 
 ;; -----------------------------------------------------------------------
+;; Group 7: Cache-Line Padded Ring Buffer & Unboxed Fast-Path (Issue #680)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 7: Cache-Line Padded Ring Buffer & Unboxed Fast-Path (#680) ---\n")
+(flush-output-port)
+
+;; 7a: <padded-atomic-box> Primitives & Polymorphism
+(let ((pbox (make-padded-atomic-box 42)))
+  (assert-true (padded-atomic-box? pbox) "make-padded-atomic-box creates valid <padded-atomic-box>")
+  (assert-true (not (atomic-box? pbox)) "<padded-atomic-box> is distinct from <atomic-box>")
+  (assert-equal (padded-atomic-ref pbox) 42 "padded-atomic-ref returns initial value 42")
+  (assert-equal (atomic-ref pbox) 42 "polymorphic atomic-ref works on <padded-atomic-box>")
+  (assert-equal (padded-atomic-set! pbox 100) 100 "padded-atomic-set! updates value to 100")
+  (assert-equal (atomic-ref pbox) 100 "atomic-ref reflects updated value 100")
+  (assert-true (padded-atomic-cas! pbox 100 200) "padded-atomic-cas! succeeds on expected match")
+  (assert-equal (atomic-ref pbox) 200 "value is 200 after CAS")
+  (assert-true (not (padded-atomic-cas! pbox 999 300)) "padded-atomic-cas! fails on mismatch")
+  (assert-equal (atomic-ref pbox) 200 "value remains 200 after failed CAS")
+  (assert-equal (padded-atomic-swap! pbox 500) 200 "padded-atomic-swap! returns old value 200")
+  (assert-equal (atomic-ref pbox) 500 "value is 500 after swap")
+  (assert-equal (padded-atomic-fetch-add! pbox 15) 500 "padded-atomic-fetch-add! returns old value 500")
+  (assert-equal (atomic-ref pbox) 515 "value is 515 after fetch-add"))
+
+;; 7b: Channel Unboxed Predicates & Ring Buffer Access
+(let ((ch0 (make-channel 0))
+      (ch8 (make-channel 8)))
+  (assert-true (not (channel-unboxed? ch0)) "capacity=0 channel is not unboxed")
+  (assert-true (not (channel-ring-buffer ch0)) "capacity=0 channel ring buffer is #f")
+  (assert-true (channel-unboxed? ch8) "capacity=8 channel is unboxed")
+  (assert-true (vector? (channel-ring-buffer ch8)) "channel-ring-buffer returns vector for capacity=8")
+  (assert-equal (vector-length (channel-ring-buffer ch8)) 8 "ring buffer vector length matches capacity 8")
+  (let ((stats (channel-stats ch8)))
+    (assert-true (cdr (assq 'unboxed? stats)) "channel-stats includes unboxed? = #t")))
+
+;; 7c: Unboxed Send/Recv Fast-Path Operations
+(let ((ch (make-channel 4)))
+  (assert-true (channel-empty? ch) "channel is initially empty")
+  (assert-true (channel-send-unboxed! ch 111) "channel-send-unboxed! #1 succeeds")
+  (assert-true (channel-send-unboxed! ch 222) "channel-send-unboxed! #2 succeeds")
+  (assert-true (channel-try-send-unboxed! ch 333) "channel-try-send-unboxed! #3 succeeds")
+  (assert-true (channel-try-send-unboxed! ch 444) "channel-try-send-unboxed! #4 succeeds")
+  (assert-equal (channel-count ch) 4 "channel count is 4 (full)")
+  (assert-true (channel-full? ch) "channel-full? is #t")
+  (assert-true (not (channel-try-send-unboxed! ch 555)) "channel-try-send-unboxed! returns #f when ring buffer is full")
+  (assert-equal (channel-recv-unboxed! ch) 111 "channel-recv-unboxed! #1 returns 111")
+  (assert-equal (channel-try-recv-unboxed! ch) 222 "channel-try-recv-unboxed! #2 returns 222")
+  (assert-equal (channel-recv-unboxed! ch) 333 "channel-recv-unboxed! #3 returns 333")
+  (assert-equal (channel-recv-unboxed! ch) 444 "channel-recv-unboxed! #4 returns 444")
+  (assert-true (channel-empty? ch) "channel is empty after draining")
+  (assert-equal (channel-try-recv-unboxed! ch 'empty-sentinel) 'empty-sentinel "channel-try-recv-unboxed! on empty channel returns default sentinel"))
+
+;; 7d: Ring Buffer Multi-Cycle Wraparound & Strict FIFO Ordering
+(let ((ch (make-channel 3)))
+  (let cycle-loop ((cycle 0) (val 1))
+    (if (< cycle 20)
+        (begin
+          (channel-send-unboxed! ch val)
+          (channel-send-unboxed! ch (+ val 1))
+          (assert-equal (channel-recv-unboxed! ch) val "wraparound FIFO preserve #1")
+          (channel-send-unboxed! ch (+ val 2))
+          (assert-equal (channel-recv-unboxed! ch) (+ val 1) "wraparound FIFO preserve #2")
+          (assert-equal (channel-recv-unboxed! ch) (+ val 2) "wraparound FIFO preserve #3")
+          (cycle-loop (+ cycle 1) (+ val 3)))
+        #t))
+  (assert-true (channel-empty? ch) "channel is empty after 20 wraparound cycles")
+  (assert-equal (channel-count ch) 0 "channel count is 0 after wraparound cycles"))
+
+;; 7e: Unboxed Channel 10,000 Messages Endurance & Backpressure Relief
+(let ((ch (make-channel 32))
+      (prod-task (make-task-context 701)))
+  (let ((res
+         (let batch-loop ((b 0) (next-val 1) (total-sum 0) (order-ok #t))
+           (if (>= b 100)
+               (cons total-sum order-ok)
+               (begin
+                 ;; Push 100 items into capacity-32 channel (32 buffered, 68 suspended)
+                 (let send-loop ((k 0) (v next-val))
+                   (if (< k 100)
+                       (begin
+                         (channel-send-unboxed! ch v prod-task)
+                         (send-loop (+ k 1) (+ v 1)))))
+                 ;; Receive 100 items
+                 (let recv-loop ((k 0) (expected next-val) (s total-sum) (ok order-ok))
+                   (if (>= k 100)
+                       (batch-loop (+ b 1) (+ next-val 100) s ok)
+                       (let ((got (channel-recv-unboxed! ch)))
+                         (recv-loop (+ k 1)
+                                    (+ expected 1)
+                                    (+ s got)
+                                    (and ok (= got expected)))))))))))
+    (assert-equal (car res) 50005000 "sum of 10,000 unboxed messages 1..10000 is 50005000")
+    (assert-true (cdr res) "all 10,000 unboxed messages preserved strict FIFO ordering across backpressure")
+    (let ((stats (channel-stats ch)))
+      (assert-equal (cdr (assq 'sent stats)) 10000 "unboxed channel-stats sent = 10,000")
+      (assert-equal (cdr (assq 'received stats)) 10000 "unboxed channel-stats received = 10,000")
+      (assert-equal (cdr (assq 'backpressure-suspends stats)) 6800 "unboxed channel-stats recorded 6,800 suspensions")
+      (assert-equal (cdr (assq 'buffered stats)) 0 "unboxed channel-stats buffered = 0 after completion"))))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")
