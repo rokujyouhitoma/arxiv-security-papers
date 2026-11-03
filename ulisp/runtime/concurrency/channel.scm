@@ -938,10 +938,26 @@
                                    (atomic-fetch-add! (%channel-backpressure-count-box ch) 1)
                                    'suspended))))))))))))
 
+;; Direct SPSC 2-argument fast-path (bypasses case-lambda / sender-task checks)
+(define (%channel-send-fast-2! ch val)
+  (if (not (channel? ch))
+      (error "channel-send!: expected <channel>" ch)
+      (if (and (%channel-spsc? ch) (> (%channel-capacity ch) 0))
+          (if (%channel-spsc-try-enqueue! ch val)
+              (begin
+                (if (> (queue-size (%channel-recv-wait-queue ch)) 0)
+                    (let ((recv-waiter (%pop-live-waiter! (%channel-recv-wait-queue ch))))
+                      (if recv-waiter
+                          (let ((recv-task (%waiter-task recv-waiter)))
+                            (%wake-task! recv-task #f)))))
+                #t)
+              (%channel-send-core! ch val #f #f #t))
+          (%channel-send-core! ch val #f #f #t))))
+
 (define channel-send!
   (case-lambda
     ((ch val)
-     (%channel-send-core! ch val #f #f #t))
+     (%channel-send-fast-2! ch val))
     ((ch val sender-task)
      (%channel-send-core! ch val sender-task #f #t))
     ((ch val sender-task wake-hook)
@@ -953,7 +969,7 @@
 (define channel-send-unboxed!
   (case-lambda
     ((ch val)
-     (%channel-send-core! ch val #f #f #t))
+     (%channel-send-fast-2! ch val))
     ((ch val sender-task)
      (%channel-send-core! ch val sender-task #f #t))
     ((ch val sender-task wake-hook)
@@ -1072,10 +1088,29 @@
                       msg)
                     (cdr (%channel-recv-core! ch receiver-task wake-hook allow-suspend? empty-default))))))))
 
+;; Direct SPSC 1-argument fast-path (bypasses case-lambda / receiver-task checks)
+(define (%channel-recv-fast-1! ch)
+  (if (not (channel? ch))
+      (error "channel-recv!: expected <channel>" ch)
+      (if (and (%channel-spsc? ch) (> (%channel-capacity ch) 0))
+          (let ((msg (%channel-spsc-try-dequeue-val! ch)))
+            (if (not (eq? msg *ring-empty*))
+                (begin
+                  (if (> (queue-size (%channel-send-wait-queue ch)) 0)
+                      (let ((send-waiter (%pop-live-waiter! (%channel-send-wait-queue ch))))
+                        (if send-waiter
+                            (let ((promoted-val (atomic-swap! (%waiter-payload-box send-waiter) #f))
+                                  (sender-task (%waiter-task send-waiter)))
+                              (%channel-spsc-try-enqueue! ch promoted-val)
+                              (%wake-task! sender-task #f)))))
+                  msg)
+                (cdr (%channel-recv-core! ch #f #f #t 'suspended))))
+          (%channel-recv-val! ch #f #f #t 'suspended))))
+
 (define channel-recv!
   (case-lambda
     ((ch)
-     (%channel-recv-val! ch #f #f #t 'suspended))
+     (%channel-recv-fast-1! ch))
     ((ch receiver-task)
      (%channel-recv-val! ch receiver-task #f #t 'suspended))
     ((ch receiver-task wake-hook)

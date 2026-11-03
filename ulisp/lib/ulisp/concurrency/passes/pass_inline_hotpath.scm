@@ -64,6 +64,13 @@
             (%str-ends-with? "-res" s)
             (%str-ends-with? "-buf" s)))))
 
+(define (spsc-channel-var-name? sym)
+  (if (not (symbol? sym))
+      #f
+      (let ((s (symbol->string sym)))
+        (or (%str-starts-with? "spsc" s)
+            (%str-ends-with? "-spsc" s)))))
+
 (define (arena-var-name? sym)
   (if (not (symbol? sym))
       #f
@@ -130,6 +137,8 @@
       ;; Compatible atomic types
       ((and (eq? expected-type 'atomic-box) (eq? actual 'padded-atomic-box)) #t)
       ((and (eq? expected-type 'padded-atomic-box) (eq? actual 'atomic-box)) #t)
+      ;; Compatible channel types: 'spsc-channel is a subtype of 'channel
+      ((and (eq? expected-type 'channel) (eq? actual 'spsc-channel)) #t)
       (else #f))))
 
 (define (infer-init-type rhs env)
@@ -138,7 +147,9 @@
      (if (symbol? rhs)
          (type-env-lookup env rhs)
          #f))
-    ((memq (car rhs) '(make-channel make-spsc-channel make-channel-internal make-bounded-channel))
+    ((eq? (car rhs) 'make-spsc-channel)
+     'spsc-channel)
+    ((memq (car rhs) '(make-channel make-channel-internal make-bounded-channel))
      'channel)
     ((memq (car rhs) '(make-task-arena make-ephemeral-arena make-arena %init-task-arena))
      'ephemeral-arena)
@@ -158,6 +169,8 @@
   (cond
     ((memq op '(channel? linear-channel? %channel?))
      (if (statically-typed? env v 'channel) 'always-true 'unknown))
+    ((memq op '(channel-spsc? %channel-spsc?))
+     (if (statically-typed? env v 'spsc-channel) 'always-true 'unknown))
     ((memq op '(task-arena? ephemeral-arena? arena? %task-arena?))
      (if (statically-typed? env v 'ephemeral-arena) 'always-true 'unknown))
     ((memq op '(atomic-box? padded-atomic-box? %atomic-box?))
@@ -249,6 +262,134 @@
 (define (inline-atomic-cas-expr box-expr exp-expr new-expr)
   ;; Direct hardware LOCK CMPXCHG primitive
   (list '%atomic-cas! box-expr exp-expr new-expr))
+
+(define (inline-channel-send-expr ch-expr val-expr is-spsc?)
+  ;; Direct SPSC Ring Buffer inline enqueue with CWE-833 backpressure fallback
+  (let ((spsc-branch
+          '(let* ((%%ring (%channel-ring-buffer %%ch))
+                  (%%cap (%channel-capacity %%ch))
+                  (%%mask (%channel-ring-mask %%ch))
+                  (%%head-box (%channel-ring-head-box %%ch))
+                  (%%tail-box (%channel-ring-tail-box %%ch))
+                  (%%head (padded-atomic-ref %%head-box))
+                  (%%tail (padded-atomic-ref %%tail-box)))
+             (if (< (- %%head %%tail) %%cap)
+                 (begin
+                   (vector-set! %%ring (bitwise-and %%head %%mask) %%v)
+                   (%memory-fence)
+                   (padded-atomic-set! %%head-box (+ %%head 1))
+                   (if (> (queue-size (%channel-recv-wait-queue %%ch)) 0)
+                       (let ((%%w (%pop-live-waiter! (%channel-recv-wait-queue %%ch))))
+                         (if %%w (%wake-task! (%waiter-task %%w) #f))))
+                   #t)
+                 (%channel-send-core! %%ch %%v #f #f #t)))))
+    (if is-spsc?
+        (list 'let (list (list '%%ch ch-expr) (list '%%v val-expr))
+              (list 'if '(> (%channel-capacity %%ch) 0)
+                    spsc-branch
+                    '(%channel-send-core! %%ch %%v #f #f #t)))
+        (list 'let (list (list '%%ch ch-expr) (list '%%v val-expr))
+              (list 'if '(and (%channel-spsc? %%ch) (> (%channel-capacity %%ch) 0))
+                    spsc-branch
+                    '(%channel-send-core! %%ch %%v #f #f #t))))))
+
+(define (inline-channel-recv-expr ch-expr is-spsc?)
+  ;; Direct SPSC Ring Buffer inline dequeue with CWE-833 backpressure relief
+  (let ((spsc-branch
+          '(let* ((%%ring (%channel-ring-buffer %%ch))
+                  (%%mask (%channel-ring-mask %%ch))
+                  (%%head-box (%channel-ring-head-box %%ch))
+                  (%%tail-box (%channel-ring-tail-box %%ch))
+                  (%%tail (padded-atomic-ref %%tail-box))
+                  (%%head (padded-atomic-ref %%head-box)))
+             (if (< %%tail %%head)
+                 (let* ((%%slot (bitwise-and %%tail %%mask))
+                        (%%val (vector-ref %%ring %%slot)))
+                   (vector-set! %%ring %%slot *ring-empty*)
+                   (%memory-fence)
+                   (padded-atomic-set! %%tail-box (+ %%tail 1))
+                   (if (> (queue-size (%channel-send-wait-queue %%ch)) 0)
+                       (let ((%%w (%pop-live-waiter! (%channel-send-wait-queue %%ch))))
+                         (if %%w
+                             (let ((%%pval (atomic-swap! (%waiter-payload-box %%w) #f))
+                                   (%%stask (%waiter-task %%w)))
+                               (%channel-spsc-try-enqueue! %%ch %%pval)
+                               (%wake-task! %%stask #f)))))
+                   %%val)
+                 (%channel-recv-val! %%ch #f #f #t 'suspended)))))
+    (if is-spsc?
+        (list 'let (list (list '%%ch ch-expr))
+              (list 'if '(> (%channel-capacity %%ch) 0)
+                    spsc-branch
+                    '(%channel-recv-val! %%ch #f #f #t 'suspended)))
+        (list 'let (list (list '%%ch ch-expr))
+              (list 'if '(and (%channel-spsc? %%ch) (> (%channel-capacity %%ch) 0))
+                    spsc-branch
+                    '(%channel-recv-val! %%ch #f #f #t 'suspended))))))
+
+(define (inline-channel-try-send-expr ch-expr val-expr is-spsc?)
+  (let ((spsc-branch
+          '(let* ((%%ring (%channel-ring-buffer %%ch))
+                  (%%cap (%channel-capacity %%ch))
+                  (%%mask (%channel-ring-mask %%ch))
+                  (%%head-box (%channel-ring-head-box %%ch))
+                  (%%tail-box (%channel-ring-tail-box %%ch))
+                  (%%head (padded-atomic-ref %%head-box))
+                  (%%tail (padded-atomic-ref %%tail-box)))
+             (if (< (- %%head %%tail) %%cap)
+                 (begin
+                   (vector-set! %%ring (bitwise-and %%head %%mask) %%v)
+                   (%memory-fence)
+                   (padded-atomic-set! %%head-box (+ %%head 1))
+                   (if (> (queue-size (%channel-recv-wait-queue %%ch)) 0)
+                       (let ((%%w (%pop-live-waiter! (%channel-recv-wait-queue %%ch))))
+                         (if %%w (%wake-task! (%waiter-task %%w) #f))))
+                   #t)
+                 #f))))
+    (if is-spsc?
+        (list 'let (list (list '%%ch ch-expr) (list '%%v val-expr))
+              (list 'if '(> (%channel-capacity %%ch) 0)
+                    spsc-branch
+                    '(%channel-send-core! %%ch %%v #f #f #f)))
+        (list 'let (list (list '%%ch ch-expr) (list '%%v val-expr))
+              (list 'if '(and (%channel-spsc? %%ch) (> (%channel-capacity %%ch) 0))
+                    spsc-branch
+                    '(%channel-send-core! %%ch %%v #f #f #f))))))
+
+(define (inline-channel-try-recv-expr ch-expr is-spsc?)
+  (let ((spsc-branch
+          '(let* ((%%ring (%channel-ring-buffer %%ch))
+                  (%%mask (%channel-ring-mask %%ch))
+                  (%%head-box (%channel-ring-head-box %%ch))
+                  (%%tail-box (%channel-ring-tail-box %%ch))
+                  (%%tail (padded-atomic-ref %%tail-box))
+                  (%%head (padded-atomic-ref %%head-box)))
+             (if (< %%tail %%head)
+                 (let* ((%%slot (bitwise-and %%tail %%mask))
+                        (%%val (vector-ref %%ring %%slot)))
+                   (vector-set! %%ring %%slot *ring-empty*)
+                   (%memory-fence)
+                   (padded-atomic-set! %%tail-box (+ %%tail 1))
+                   (if (> (queue-size (%channel-send-wait-queue %%ch)) 0)
+                       (let ((%%w (%pop-live-waiter! (%channel-send-wait-queue %%ch))))
+                         (if %%w
+                             (let ((%%pval (atomic-swap! (%waiter-payload-box %%w) #f))
+                                   (%%stask (%waiter-task %%w)))
+                               (%channel-spsc-try-enqueue! %%ch %%pval)
+                               (%wake-task! %%stask #f)))))
+                   %%val)
+                 #f))))
+    (if is-spsc?
+        (list 'let (list (list '%%ch ch-expr))
+              (list 'if '(> (%channel-capacity %%ch) 0)
+                    spsc-branch
+                    '(let ((%%res (%channel-recv-core! %%ch #f #f #f #f)))
+                       (if (car %%res) (cdr %%res) #f))))
+        (list 'let (list (list '%%ch ch-expr))
+              (list 'if '(and (%channel-spsc? %%ch) (> (%channel-capacity %%ch) 0))
+                    spsc-branch
+                    '(let ((%%res (%channel-recv-core! %%ch #f #f #f #f)))
+                       (if (car %%res) (cdr %%res) #f)))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Recursive AST Rewriter & Pass Engine
@@ -454,6 +595,79 @@
                                   (inline-hotpath-expr new-arg env))
            (map (lambda (e) (inline-hotpath-expr e env)) expr))))
 
+    ;; f) channel-send! & channel-send-unboxed!
+    ((and (memq (car expr) '(channel-send! channel-send-unboxed!))
+          (pair? (cdr expr))
+          (pair? (cddr expr))
+          (null? (cdddr expr)))
+     (let ((chan-arg (cadr expr))
+           (val-arg (caddr expr)))
+       (if (and (symbol? chan-arg) (statically-typed? env chan-arg 'channel))
+           (let ((is-spsc (statically-typed? env chan-arg 'spsc-channel)))
+             (inline-channel-send-expr (inline-hotpath-expr chan-arg env)
+                                       (inline-hotpath-expr val-arg env)
+                                       is-spsc))
+           (map (lambda (e) (inline-hotpath-expr e env)) expr))))
+
+    ;; g) channel-recv! & channel-recv-unboxed!
+    ((and (memq (car expr) '(channel-recv! channel-recv-unboxed!))
+          (pair? (cdr expr))
+          (null? (cddr expr)))
+     (let ((chan-arg (cadr expr)))
+       (if (and (symbol? chan-arg) (statically-typed? env chan-arg 'channel))
+           (let ((is-spsc (statically-typed? env chan-arg 'spsc-channel)))
+             (inline-channel-recv-expr (inline-hotpath-expr chan-arg env)
+                                       is-spsc))
+           (map (lambda (e) (inline-hotpath-expr e env)) expr))))
+
+    ;; h) channel-try-send! & channel-try-send-unboxed!
+    ((and (memq (car expr) '(channel-try-send! channel-try-send-unboxed!))
+          (pair? (cdr expr))
+          (pair? (cddr expr))
+          (null? (cdddr expr)))
+     (let ((chan-arg (cadr expr))
+           (val-arg (caddr expr)))
+       (if (and (symbol? chan-arg) (statically-typed? env chan-arg 'channel))
+           (let ((is-spsc (statically-typed? env chan-arg 'spsc-channel)))
+             (inline-channel-try-send-expr (inline-hotpath-expr chan-arg env)
+                                           (inline-hotpath-expr val-arg env)
+                                           is-spsc))
+           (map (lambda (e) (inline-hotpath-expr e env)) expr))))
+
+    ;; i) channel-try-recv! & channel-try-recv-unboxed!
+    ((and (memq (car expr) '(channel-try-recv! channel-try-recv-unboxed!))
+          (pair? (cdr expr))
+          (null? (cddr expr)))
+     (let ((chan-arg (cadr expr)))
+       (if (and (symbol? chan-arg) (statically-typed? env chan-arg 'channel))
+           (let ((is-spsc (statically-typed? env chan-arg 'spsc-channel)))
+             (inline-channel-try-recv-expr (inline-hotpath-expr chan-arg env)
+                                           is-spsc))
+           (map (lambda (e) (inline-hotpath-expr e env)) expr))))
+
+    ;; j) channel-spsc-try-enqueue!
+    ((and (eq? (car expr) 'channel-spsc-try-enqueue!)
+          (pair? (cdr expr))
+          (pair? (cddr expr))
+          (null? (cdddr expr)))
+     (let ((chan-arg (cadr expr))
+           (val-arg (caddr expr)))
+       (if (and (symbol? chan-arg) (statically-typed? env chan-arg 'channel))
+           (list '%channel-spsc-try-enqueue!
+                 (inline-hotpath-expr chan-arg env)
+                 (inline-hotpath-expr val-arg env))
+           (map (lambda (e) (inline-hotpath-expr e env)) expr))))
+
+    ;; k) channel-spsc-try-dequeue-val!
+    ((and (eq? (car expr) 'channel-spsc-try-dequeue-val!)
+          (pair? (cdr expr))
+          (null? (cddr expr)))
+     (let ((chan-arg (cadr expr)))
+       (if (and (symbol? chan-arg) (statically-typed? env chan-arg 'channel))
+           (list '%channel-spsc-try-dequeue-val!
+                 (inline-hotpath-expr chan-arg env))
+           (map (lambda (e) (inline-hotpath-expr e env)) expr))))
+
     ;; General application / recursive walk
     (else
      (map (lambda (e) (inline-hotpath-expr e env)) expr))))
@@ -474,6 +688,7 @@
                              cur-env
                              (let* ((p (car ps))
                                     (type (cond
+                                            ((spsc-channel-var-name? p) 'spsc-channel)
                                             ((linear-var-name? p) 'channel)
                                             ((arena-var-name? p) 'ephemeral-arena)
                                             ((atomic-box-var-name? p) 'atomic-box)

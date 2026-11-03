@@ -20,10 +20,17 @@
 
     ;; AST & Predicate Helpers
     linear-var-name?
+    spsc-channel-var-name?
     arena-var-name?
     atomic-box-var-name?
     task-var-name?
     eliminated-assertion?
+
+    ;; Channel Inlining Primitives
+    inline-channel-send-expr
+    inline-channel-recv-expr
+    inline-channel-try-send-expr
+    inline-channel-try-recv-expr
 
     ;; Injection API
     synapse-inline-hotpath-descriptor

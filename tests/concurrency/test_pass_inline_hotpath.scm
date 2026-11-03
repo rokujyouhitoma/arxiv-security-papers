@@ -105,26 +105,34 @@
 (define env2 (type-env-extend env1 'tx 'channel))
 (define env3 (type-env-extend env2 'local-arena 'ephemeral-arena))
 (define env4 (type-env-extend env3 'state-box 'atomic-box))
+(define env5 (type-env-extend env4 'spsc-tx 'spsc-channel))
 
 (assert-equal "1.8 type-env-lookup finds mapped type"
               'channel
-              (type-env-lookup env4 'tx))
+              (type-env-lookup env5 'tx))
 
 (assert-equal "1.9 type-env-lookup finds mapped arena"
               'ephemeral-arena
-              (type-env-lookup env4 'local-arena))
+              (type-env-lookup env5 'local-arena))
 
 (assert-false "1.10 type-env-lookup returns #f for unmapped symbol"
-              (type-env-lookup env4 'unknown-var))
+              (type-env-lookup env5 'unknown-var))
 
 (assert-true "1.11 statically-typed? returns #t on matching type"
-             (statically-typed? env4 'tx 'channel))
+             (statically-typed? env5 'tx 'channel))
 
 (assert-false "1.12 statically-typed? returns #f on mismatched type"
-              (statically-typed? env4 'tx 'ephemeral-arena))
+              (statically-typed? env5 'tx 'ephemeral-arena))
 
 (assert-false "1.13 statically-typed? returns #f on unknown symbol"
-              (statically-typed? env4 'not-in-env 'channel))
+              (statically-typed? env5 'not-in-env 'channel))
+
+(assert-true "1.14 statically-typed? treats spsc-channel as subtype of channel"
+             (and (statically-typed? env5 'spsc-tx 'spsc-channel)
+                  (statically-typed? env5 'spsc-tx 'channel)))
+
+(assert-false "1.15 generic channel is not recognized as spsc-channel"
+              (statically-typed? env5 'tx 'spsc-channel))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 2: Redundant Type Assertion Elimination
@@ -132,18 +140,31 @@
 (newline)
 (display "--- Group 2: Redundant Type Assertion Elimination ---\n")
 
-;; 2.1 Positive check with proven variable: (if (channel? tx) (channel-send! tx 42) (error ...))
+;; 2.1 Positive check with proven variable: (if (channel? tx) (send-msg tx 42) (error ...))
 (define if-positive-check
   '(if (channel? tx)
-       (channel-send! tx 42)
+       (send-msg tx 42)
        (error "expected channel")))
 
 (define eliminated-pos
-  (inline-hotpath-expr if-positive-check env4))
+  (inline-hotpath-expr if-positive-check env5))
 
 (assert-equal "2.1 (if (channel? tx) ...) simplifies directly to then-branch"
-              '(channel-send! tx 42)
+              '(send-msg tx 42)
               eliminated-pos)
+
+;; 2.1b SPSC Positive check with proven spsc-channel
+(define if-spsc-check
+  '(if (channel-spsc? spsc-tx)
+       (send-msg spsc-tx 42)
+       (error "expected spsc channel")))
+
+(define eliminated-spsc
+  (inline-hotpath-expr if-spsc-check env5))
+
+(assert-equal "2.1b (if (channel-spsc? spsc-tx) ...) simplifies directly to then-branch"
+              '(send-msg spsc-tx 42)
+              eliminated-spsc)
 
 ;; 2.2 Negative assertion guard: (if (not (channel? tx)) (error "not a channel"))
 (define if-negative-guard
@@ -151,7 +172,7 @@
        (error "expected channel")))
 
 (define eliminated-neg
-  (inline-hotpath-expr if-negative-guard env4))
+  (inline-hotpath-expr if-negative-guard env5))
 
 (assert-true "2.2 (if (not (channel? tx)) ...) produces %eliminated-assertion%"
              (eliminated-assertion? eliminated-neg))
@@ -161,13 +182,13 @@
   '(begin
      (if (not (channel? tx))
          (error "expected channel"))
-     (channel-send! tx 42)))
+     (send-msg tx 42)))
 
 (define cleaned-seq
-  (inline-hotpath-expr seq-with-assertion env4))
+  (inline-hotpath-expr seq-with-assertion env5))
 
 (assert-equal "2.3 eliminated assertion is stripped from begin sequence"
-              '(channel-send! tx 42)
+              '(send-msg tx 42)
               cleaned-seq)
 
 ;; 2.4 Arena positive type check: (if (task-arena? local-arena) (arena-reset! local-arena) #f)
@@ -289,6 +310,90 @@
               inlined-cas)
 
 ;;; -----------------------------------------------------------------------
+;;; Group 3b: Channel Hotpath Inlining Transformations (#688)
+;;; -----------------------------------------------------------------------
+(newline)
+(display "--- Group 3b: Channel Hotpath Inlining Transformations (#688) ---\n")
+
+;; 3b.1 channel-send! on proven spsc-channel
+(define spsc-send-expr '(channel-send! spsc-tx 42))
+(define inlined-spsc-send (inline-hotpath-expr spsc-send-expr env5))
+
+(assert-true "3b.1 inlined spsc channel-send! uses let form binding %%ch and %%v"
+             (and (pair? inlined-spsc-send)
+                  (eq? (car inlined-spsc-send) 'let)
+                  (equal? (cadr inlined-spsc-send) '((%%ch spsc-tx) (%%v 42)))))
+
+(assert-true "3b.2 inlined spsc channel-send! checks capacity and directly updates ring buffer"
+             (let ((body (caddr inlined-spsc-send)))
+               (and (eq? (car body) 'if)
+                    (equal? (cadr body) '(> (%channel-capacity %%ch) 0))
+                    (equal? (cadddr body) '(%channel-send-core! %%ch %%v #f #f #t)))))
+
+;; 3b.3 channel-send! on generic channel includes runtime spsc check
+(define gen-send-expr '(channel-send! tx 42))
+(define inlined-gen-send (inline-hotpath-expr gen-send-expr env5))
+
+(assert-true "3b.3 inlined generic channel-send! includes runtime SPSC check"
+             (let ((body (caddr inlined-gen-send)))
+               (and (eq? (car body) 'if)
+                    (equal? (cadr body) '(and (%channel-spsc? %%ch) (> (%channel-capacity %%ch) 0))))))
+
+;; 3b.4 channel-recv! on proven spsc-channel
+(define spsc-recv-expr '(channel-recv! spsc-tx))
+(define inlined-spsc-recv (inline-hotpath-expr spsc-recv-expr env5))
+
+(assert-true "3b.4 inlined spsc channel-recv! uses let form binding %%ch"
+             (and (pair? inlined-spsc-recv)
+                  (eq? (car inlined-spsc-recv) 'let)
+                  (equal? (cadr inlined-spsc-recv) '((%%ch spsc-tx)))))
+
+(assert-true "3b.5 inlined spsc channel-recv! directly dequeues from ring with wait-queue check"
+             (let ((body (caddr inlined-spsc-recv)))
+               (and (eq? (car body) 'if)
+                    (equal? (cadr body) '(> (%channel-capacity %%ch) 0))
+                    (equal? (cadddr body) '(%channel-recv-val! %%ch #f #f #t 'suspended)))))
+
+;; 3b.6 channel-recv! on generic channel
+(define gen-recv-expr '(channel-recv! tx))
+(define inlined-gen-recv (inline-hotpath-expr gen-recv-expr env5))
+
+(assert-true "3b.6 inlined generic channel-recv! includes runtime SPSC check"
+             (let ((body (caddr inlined-gen-recv)))
+               (and (eq? (car body) 'if)
+                    (equal? (cadr body) '(and (%channel-spsc? %%ch) (> (%channel-capacity %%ch) 0))))))
+
+;; 3b.7 channel-try-send! and channel-try-recv!
+(define try-send-expr '(channel-try-send! spsc-tx 99))
+(define inlined-try-send (inline-hotpath-expr try-send-expr env5))
+(assert-true "3b.7 inlined channel-try-send! binds %%ch and %%v with non-blocking branch"
+             (and (pair? inlined-try-send)
+                  (eq? (car inlined-try-send) 'let)
+                  (equal? (cadr inlined-try-send) '((%%ch spsc-tx) (%%v 99)))))
+
+(define try-recv-expr '(channel-try-recv! spsc-tx))
+(define inlined-try-recv (inline-hotpath-expr try-recv-expr env5))
+(assert-true "3b.8 inlined channel-try-recv! binds %%ch with non-blocking branch"
+             (and (pair? inlined-try-recv)
+                  (eq? (car inlined-try-recv) 'let)
+                  (equal? (cadr inlined-try-recv) '((%%ch spsc-tx)))))
+
+;; 3b.9 channel-spsc-try-enqueue! and channel-spsc-try-dequeue-val!
+(assert-equal "3b.9 inlined channel-spsc-try-enqueue! converts to %channel-spsc-try-enqueue!"
+              '(%channel-spsc-try-enqueue! spsc-tx 123)
+              (inline-hotpath-expr '(channel-spsc-try-enqueue! spsc-tx 123) env5))
+
+(assert-equal "3b.10 inlined channel-spsc-try-dequeue-val! converts to %channel-spsc-try-dequeue-val!"
+              '(%channel-spsc-try-dequeue-val! spsc-tx)
+              (inline-hotpath-expr '(channel-spsc-try-dequeue-val! spsc-tx) env5))
+
+;; 3b.11 CWE-843: Unproven dynamic variable is NOT inlined
+(define unproven-chan-send '(channel-send! dynamic-chan 42))
+(assert-equal "3b.11 unproven dynamic variable is not inlined (CWE-843)"
+              unproven-chan-send
+              (inline-hotpath-expr unproven-chan-send env5))
+
+;;; -----------------------------------------------------------------------
 ;;; Group 4: Let & Let* Type Propagation
 ;;; -----------------------------------------------------------------------
 (newline)
@@ -304,10 +409,31 @@
 (define transformed-let-chan
   (inline-hotpath-expr let-chan-expr env1))
 
-(assert-equal "4.1 let binding with make-channel propagates type and eliminates assertion"
-              '(let ((ch (make-channel 4)))
-                 (channel-send! ch 100))
-              transformed-let-chan)
+(assert-true "4.1 let binding with make-channel propagates type, eliminates assertion, and inlines channel-send!"
+             (and (pair? transformed-let-chan)
+                  (eq? (car transformed-let-chan) 'let)
+                  (equal? (caadr transformed-let-chan) '(ch (make-channel 4)))
+                  (= (length (cddr transformed-let-chan)) 1)
+                  (let ((b (caddr transformed-let-chan)))
+                    (and (eq? (car b) 'let)
+                         (equal? (cadr b) '((%%ch ch) (%%v 100)))))))
+
+;; 4.1b Type inference from make-spsc-channel inside let
+(define let-spsc-expr
+  '(let ((ch (make-spsc-channel 1024)))
+     (if (not (channel? ch))
+         (error "expected channel"))
+     (channel-send! ch 200)))
+
+(define transformed-let-spsc
+  (inline-hotpath-expr let-spsc-expr env1))
+
+(assert-true "4.1b let binding with make-spsc-channel propagates spsc-channel type and inlines without runtime spsc check"
+             (and (pair? transformed-let-spsc)
+                  (eq? (car transformed-let-spsc) 'let)
+                  (let* ((inlined-send (caddr transformed-let-spsc))
+                         (send-if (caddr inlined-send)))
+                    (equal? (cadr send-if) '(> (%channel-capacity %%ch) 0)))))
 
 ;; 4.2 Type inference from constructor (make-task-arena) inside let*
 (define let-arena-expr
@@ -355,7 +481,7 @@
 (define kernel-body (cddr transformed-kernel))
 
 ;; The kernel body should have eliminated both (if (not ...)) assertions
-;; leaving atomic-set! (inlined) and let (with inlined arena-allocate!)
+;; leaving atomic-set! (inlined) and let (with inlined arena-allocate! and inlined channel-send!)
 (assert-equal "5.2 kernel body length is 2 (both defensive assertions eliminated)"
               2
               (length kernel-body))
@@ -372,6 +498,13 @@
                     (and (eq? (car b) 'buf)
                          (pair? (cadr b))
                          (eq? (caadr b) 'let*)))))
+
+(assert-true "5.5 channel-send! inside kernel let-body is inlined"
+             (let* ((let-stmt (cadr kernel-body))
+                    (let-inner-body (caddr let-stmt)))
+               (and (pair? let-inner-body)
+                    (eq? (car let-inner-body) 'let)
+                    (equal? (cadr let-inner-body) '((%%ch tx-chan) (%%v buf))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 5b: CWE-843 Fail-Safe (Name Heuristics & Shadowing)
