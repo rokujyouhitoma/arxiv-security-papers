@@ -9,6 +9,7 @@
 ;;; =======================================================================
 
 (include "ulisp/runtime/concurrency/queue.scm")
+(include "ulisp/runtime/concurrency/futex.scm")
 
 ;; -----------------------------------------------------------------------
 ;; 1. Constants & Global Scheduler / Epoch Integration Hooks
@@ -443,14 +444,17 @@
       (atomic-ref (%waiter-state-box w))))
 
 ;; -----------------------------------------------------------------------
-;; 4. <channel> Record Type & Construction (DSN-37 Section 6.1)
+;; 4. <channel> Record Type & Construction (DSN-37 Section 6.1, Issue #680)
 ;; -----------------------------------------------------------------------
+
+(define *ring-empty* (list '%%ring-empty%%))
 
 (define-record-type <channel>
   (%make-channel message-queue recv-wait-queue send-wait-queue
                  capacity current-count closed-box
                  sent-count-box received-count-box
-                 backpressure-count-box handoff-count-box)
+                 backpressure-count-box handoff-count-box
+                 ring-buffer ring-head-box ring-tail-box)
   channel?
   (message-queue          %channel-message-queue)
   (recv-wait-queue        %channel-recv-wait-queue)
@@ -461,7 +465,10 @@
   (sent-count-box         %channel-sent-count-box)
   (received-count-box     %channel-received-count-box)
   (backpressure-count-box %channel-backpressure-count-box)
-  (handoff-count-box      %channel-handoff-count-box))
+  (handoff-count-box      %channel-handoff-count-box)
+  (ring-buffer            %channel-ring-buffer)
+  (ring-head-box          %channel-ring-head-box)
+  (ring-tail-box          %channel-ring-tail-box))
 
 (define make-channel
   (case-lambda
@@ -472,16 +479,30 @@
              (< capacity 0)
              (> capacity *channel-max-capacity*))
          (error "make-channel: capacity must be an integer in [0, *channel-max-capacity*]" capacity)
-         (let ((ch (%make-channel (make-lock-free-queue)
-                                  (make-lock-free-queue)
-                                  (make-lock-free-queue)
-                                  capacity
-                                  (make-atomic-box 0)
-                                  (make-atomic-box #f)
-                                  (make-atomic-box 0)
-                                  (make-atomic-box 0)
-                                  (make-atomic-box 0)
-                                  (make-atomic-box 0))))
+         (let* ((ring (if (> capacity 0)
+                          (let ((vec (make-vector capacity #f)))
+                            (let init-loop ((i 0))
+                              (if (>= i capacity)
+                                  vec
+                                  (begin
+                                    (vector-set! vec i (make-atomic-box *ring-empty*))
+                                    (init-loop (+ i 1))))))
+                          #f))
+                (head-box (if (> capacity 0) (make-padded-atomic-box 0) #f))
+                (tail-box (if (> capacity 0) (make-padded-atomic-box 0) #f))
+                (ch (%make-channel (make-lock-free-queue)
+                                   (make-lock-free-queue)
+                                   (make-lock-free-queue)
+                                   capacity
+                                   (make-padded-atomic-box 0)
+                                   (make-atomic-box #f)
+                                   (make-padded-atomic-box 0)
+                                   (make-padded-atomic-box 0)
+                                   (make-padded-atomic-box 0)
+                                   (make-padded-atomic-box 0)
+                                   ring
+                                   head-box
+                                   tail-box)))
            (%memory-fence)
            ch)))))
 
@@ -493,19 +514,36 @@
       (error "make-channel-internal: queues must be <lock-free-queue>" message-queue)
       (if (or (not (integer? capacity)) (< capacity 0) (> capacity *channel-max-capacity*))
           (error "make-channel-internal: invalid capacity" capacity)
-          (let ((cnt-box (if (atomic-box? current-count)
-                             current-count
-                             (make-atomic-box current-count))))
+          (let* ((cnt-box (cond
+                            ((or (atomic-box? current-count) (padded-atomic-box? current-count))
+                             current-count)
+                            ((integer? current-count)
+                             (make-padded-atomic-box current-count))
+                            (else (make-padded-atomic-box 0))))
+                 (ring (if (> capacity 0)
+                           (let ((vec (make-vector capacity #f)))
+                             (let init-loop ((i 0))
+                               (if (>= i capacity)
+                                   vec
+                                   (begin
+                                     (vector-set! vec i (make-atomic-box *ring-empty*))
+                                     (init-loop (+ i 1))))))
+                           #f))
+                 (head-box (if (> capacity 0) (make-padded-atomic-box 0) #f))
+                 (tail-box (if (> capacity 0) (make-padded-atomic-box 0) #f)))
             (%make-channel message-queue
                            recv-wait-queue
                            send-wait-queue
                            capacity
                            cnt-box
                            (make-atomic-box #f)
-                           (make-atomic-box 0)
-                           (make-atomic-box 0)
-                           (make-atomic-box 0)
-                           (make-atomic-box 0))))))
+                           (make-padded-atomic-box 0)
+                           (make-padded-atomic-box 0)
+                           (make-padded-atomic-box 0)
+                           (make-padded-atomic-box 0)
+                           ring
+                           head-box
+                           tail-box)))))
 
 (define (channel-message-queue ch)
   (if (not (channel? ch))
@@ -532,6 +570,17 @@
       (error "channel-current-count: expected <channel>" ch)
       (%channel-current-count ch)))
 
+(define (channel-ring-buffer ch)
+  (if (not (channel? ch))
+      (error "channel-ring-buffer: expected <channel>" ch)
+      (%channel-ring-buffer ch)))
+
+(define (channel-unboxed? ch)
+  (if (not (channel? ch))
+      (error "channel-unboxed?: expected <channel>" ch)
+      (and (> (%channel-capacity ch) 0)
+           (vector? (%channel-ring-buffer ch)))))
+
 (define (channel-count ch)
   (if (not (channel? ch))
       (error "channel-count: expected <channel>" ch)
@@ -552,7 +601,9 @@
   (if (not (channel? ch))
       (error "channel-empty?: expected <channel>" ch)
       (and (= (atomic-ref (%channel-current-count ch)) 0)
-           (queue-empty? (%channel-message-queue ch)))))
+           (if (%channel-ring-buffer ch)
+               #t
+               (queue-empty? (%channel-message-queue ch))))))
 
 (define (channel-full? ch)
   (if (not (channel? ch))
@@ -561,6 +612,61 @@
         (if (= cap 0)
             (queue-empty? (%channel-recv-wait-queue ch))
             (>= (atomic-ref (%channel-current-count ch)) cap)))))
+
+;; -----------------------------------------------------------------------
+;; 4b. Ring Buffer Operations (Issue #680 Unboxed Fast-Path)
+;; -----------------------------------------------------------------------
+
+(define (%channel-ring-try-enqueue! ch val)
+  (let ((ring (%channel-ring-buffer ch)))
+    (if (not ring)
+        #f
+        (let ((cap (%channel-capacity ch))
+              (head-box (%channel-ring-head-box ch))
+              (tail-box (%channel-ring-tail-box ch)))
+          (let retry ()
+            (let ((cur-head (atomic-ref head-box))
+                  (cur-tail (atomic-ref tail-box)))
+              (if (>= (- cur-head cur-tail) cap)
+                  #f
+                  (if (atomic-cas! head-box cur-head (+ cur-head 1))
+                      (let* ((slot-idx (modulo cur-head cap))
+                             (slot-box (vector-ref ring slot-idx)))
+                        (let spin ()
+                          (let ((old (atomic-ref slot-box)))
+                            (if (not (eq? old *ring-empty*))
+                                (begin
+                                  (futex-spin-pause! 4)
+                                  (spin))
+                                (if (atomic-cas! slot-box *ring-empty* val)
+                                    #t
+                                    (spin)))))
+                        #t)
+                      (retry)))))))))
+
+(define (%channel-ring-try-dequeue! ch)
+  (let ((ring (%channel-ring-buffer ch)))
+    (if (not ring)
+        #f
+        (let ((cap (%channel-capacity ch))
+              (head-box (%channel-ring-head-box ch))
+              (tail-box (%channel-ring-tail-box ch)))
+          (let retry ()
+            (let ((cur-tail (atomic-ref tail-box))
+                  (cur-head (atomic-ref head-box)))
+              (if (>= cur-tail cur-head)
+                  #f
+                  (if (atomic-cas! tail-box cur-tail (+ cur-tail 1))
+                      (let* ((slot-idx (modulo cur-tail cap))
+                             (slot-box (vector-ref ring slot-idx)))
+                        (let spin ()
+                          (let ((val (atomic-swap! slot-box *ring-empty*)))
+                            (if (eq? val *ring-empty*)
+                                (begin
+                                  (futex-spin-pause! 4)
+                                  (spin))
+                                (cons #t val)))))
+                      (retry)))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 5. Internal Waiter Claiming, Epoch Validation & Task Wakeup Helpers
@@ -649,35 +755,36 @@
                (error "channel-send!: cannot send on closed channel" ch))
               (else
                ;; Fast Path 1: Direct zero-copy handoff to a waiting receiver
-              (let ((recv-waiter (%pop-live-waiter! (%channel-recv-wait-queue ch))))
-                (if recv-waiter
-                    (let ((recv-task (%waiter-task recv-waiter)))
-                      (if recv-task
-                          (atomic-set! (%task-handoff-box recv-task) (cons #t val))
-                          (atomic-set! (%waiter-payload-box recv-waiter) val))
-                      (atomic-fetch-add! (%channel-sent-count-box ch) 1)
-                      (atomic-fetch-add! (%channel-received-count-box ch) 1)
-                      (atomic-fetch-add! (%channel-handoff-count-box ch) 1)
-                      (%wake-task! recv-task wake-hook)
-                      #t)
-                    ;; Fast Path 2: Enqueue into bounded buffer if space is available
-                    (if (%try-reserve-buffer-slot! ch)
-                        (begin
-                          (enqueue-lockfree! (%channel-message-queue ch) val)
-                          (atomic-fetch-add! (%channel-sent-count-box ch) 1)
-                          #t)
-                        ;; Slow Path: Buffer full (or capacity = 0) -> Backpressure suspend
-                        (if (not allow-suspend?)
-                            #f
-                            (let ((waiter (make-channel-waiter sender-task val)))
-                              (if sender-task
-                                  (begin
-                                    (%task-blocked-on-set! sender-task ch)
-                                    (%task-state-set! sender-task 'waiting-channel)
-                                    (%memory-fence)))
-                              (enqueue-lockfree! (%channel-send-wait-queue ch) waiter)
-                              (atomic-fetch-add! (%channel-backpressure-count-box ch) 1)
-                              'suspended)))))))))))
+               (let ((recv-waiter (%pop-live-waiter! (%channel-recv-wait-queue ch))))
+                 (if recv-waiter
+                     (let ((recv-task (%waiter-task recv-waiter)))
+                       (if recv-task
+                           (atomic-set! (%task-handoff-box recv-task) (cons #t val))
+                           (atomic-set! (%waiter-payload-box recv-waiter) val))
+                       (atomic-fetch-add! (%channel-sent-count-box ch) 1)
+                       (atomic-fetch-add! (%channel-received-count-box ch) 1)
+                       (atomic-fetch-add! (%channel-handoff-count-box ch) 1)
+                       (%wake-task! recv-task wake-hook)
+                       #t)
+                     ;; Fast Path 2: Enqueue into bounded ring buffer if space is available
+                     (if (and (> (%channel-capacity ch) 0)
+                              (%channel-ring-try-enqueue! ch val))
+                         (begin
+                           (atomic-fetch-add! (%channel-current-count ch) 1)
+                           (atomic-fetch-add! (%channel-sent-count-box ch) 1)
+                           #t)
+                         ;; Slow Path: Buffer full (or capacity = 0) -> Backpressure suspend
+                         (if (not allow-suspend?)
+                             #f
+                             (let ((waiter (make-channel-waiter sender-task val)))
+                               (if sender-task
+                                   (begin
+                                     (%task-blocked-on-set! sender-task ch)
+                                     (%task-state-set! sender-task 'waiting-channel)
+                                     (%memory-fence)))
+                               (enqueue-lockfree! (%channel-send-wait-queue ch) waiter)
+                               (atomic-fetch-add! (%channel-backpressure-count-box ch) 1)
+                               'suspended)))))))))))
 
 (define channel-send!
   (case-lambda
@@ -691,6 +798,18 @@
 (define (channel-try-send! ch val)
   (%channel-send-core! ch val #f #f #f))
 
+(define channel-send-unboxed!
+  (case-lambda
+    ((ch val)
+     (%channel-send-core! ch val #f #f #t))
+    ((ch val sender-task)
+     (%channel-send-core! ch val sender-task #f #t))
+    ((ch val sender-task wake-hook)
+     (%channel-send-core! ch val sender-task wake-hook #t))))
+
+(define (channel-try-send-unboxed! ch val)
+  (%channel-send-core! ch val #f #f #f))
+
 ;; -----------------------------------------------------------------------
 ;; 7. Linear Ownership Transfer Receive & Backpressure Relief (DSN-37 4.3.1)
 ;; -----------------------------------------------------------------------
@@ -700,53 +819,67 @@
       (error "channel-recv!: expected <channel>" ch)
       (if (and receiver-task (not (task-context? receiver-task)))
           (error "channel-recv!: expected <task-context> or #f" receiver-task)
-          ;; Fast Path 1: Buffered message available in message-queue
-          (let ((deq (dequeue-lockfree-with-status! (%channel-message-queue ch))))
-            (if (car deq)
-                (let ((msg (cdr deq))
+          ;; Fast Path 1: Buffered message in ring buffer (when capacity > 0)
+          (let ((ring-deq (if (> (%channel-capacity ch) 0)
+                              (%channel-ring-try-dequeue! ch)
+                              #f)))
+            (if ring-deq
+                (let ((msg (cdr ring-deq))
                       (send-waiter (%pop-live-waiter! (%channel-send-wait-queue ch))))
                   (if send-waiter
-                      ;; Backpressure relief: promote waiting sender's payload into
-                      ;; message-queue (keeping current-count constant) and wake sender!
+                      ;; Backpressure relief: promote waiting sender's payload into ring buffer!
                       (let ((promoted-val (atomic-swap! (%waiter-payload-box send-waiter) #f))
                             (sender-task (%waiter-task send-waiter)))
-                        (enqueue-lockfree! (%channel-message-queue ch) promoted-val)
+                        (%channel-ring-try-enqueue! ch promoted-val)
                         (atomic-fetch-add! (%channel-sent-count-box ch) 1)
                         (%wake-task! sender-task wake-hook))
                       ;; No waiting sender; decrement buffered message count
                       (atomic-fetch-add! (%channel-current-count ch) -1))
                   (atomic-fetch-add! (%channel-received-count-box ch) 1)
                   (cons #t msg))
-                ;; Fast Path 2: Direct rendezvous handoff from a waiting sender
-                (let ((send-waiter (%pop-live-waiter! (%channel-send-wait-queue ch))))
-                  (if send-waiter
-                      ;; CWE-401 mitigation: clear waiter payload reference via atomic-swap!
-                      (let ((val (atomic-swap! (%waiter-payload-box send-waiter) #f))
-                            (sender-task (%waiter-task send-waiter)))
-                        (atomic-fetch-add! (%channel-sent-count-box ch) 1)
+                ;; Fallback to legacy queue (if capacity was 0 or populated via internal queue)
+                (let ((deq (dequeue-lockfree-with-status! (%channel-message-queue ch))))
+                  (if (car deq)
+                      (let ((msg (cdr deq))
+                            (send-waiter (%pop-live-waiter! (%channel-send-wait-queue ch))))
+                        (if send-waiter
+                            (let ((promoted-val (atomic-swap! (%waiter-payload-box send-waiter) #f))
+                                  (sender-task (%waiter-task send-waiter)))
+                              (enqueue-lockfree! (%channel-message-queue ch) promoted-val)
+                              (atomic-fetch-add! (%channel-sent-count-box ch) 1)
+                              (%wake-task! sender-task wake-hook))
+                            (atomic-fetch-add! (%channel-current-count ch) -1))
                         (atomic-fetch-add! (%channel-received-count-box ch) 1)
-                        (atomic-fetch-add! (%channel-handoff-count-box ch) 1)
-                        (%wake-task! sender-task wake-hook)
-                        (cons #t val))
-                      ;; Slow Path: No buffered message and no waiting sender
-                      (let ((closed-state (atomic-ref (%channel-closed-box ch))))
-                        (cond
-                          ((eq? closed-state 'poisoned)
-                           (cons #f 'poisoned))
-                          (closed-state
-                           (cons #f 'closed))
-                          (else
-                           (if (not allow-suspend?)
-                               (cons #f empty-default)
-                               (let ((waiter (make-channel-waiter receiver-task #f)))
-                                 (if receiver-task
-                                     (begin
-                                       (atomic-set! (%task-handoff-box receiver-task) #f)
-                                       (%task-blocked-on-set! receiver-task ch)
-                                       (%task-state-set! receiver-task 'waiting-channel)
-                                       (%memory-fence)))
-                                 (enqueue-lockfree! (%channel-recv-wait-queue ch) waiter)
-                                 (cons #f 'suspended)))))))))))))
+                        (cons #t msg))
+                      ;; Fast Path 2: Direct rendezvous handoff from a waiting sender
+                      (let ((send-waiter (%pop-live-waiter! (%channel-send-wait-queue ch))))
+                        (if send-waiter
+                            (let ((val (atomic-swap! (%waiter-payload-box send-waiter) #f))
+                                  (sender-task (%waiter-task send-waiter)))
+                              (atomic-fetch-add! (%channel-sent-count-box ch) 1)
+                              (atomic-fetch-add! (%channel-received-count-box ch) 1)
+                              (atomic-fetch-add! (%channel-handoff-count-box ch) 1)
+                              (%wake-task! sender-task wake-hook)
+                              (cons #t val))
+                            ;; Slow Path: No buffered message and no waiting sender
+                            (let ((closed-state (atomic-ref (%channel-closed-box ch))))
+                              (cond
+                                ((eq? closed-state 'poisoned)
+                                 (cons #f 'poisoned))
+                                (closed-state
+                                 (cons #f 'closed))
+                                (else
+                                 (if (not allow-suspend?)
+                                     (cons #f empty-default)
+                                     (let ((waiter (make-channel-waiter receiver-task #f)))
+                                       (if receiver-task
+                                           (begin
+                                             (atomic-set! (%task-handoff-box receiver-task) #f)
+                                             (%task-blocked-on-set! receiver-task ch)
+                                             (%task-state-set! receiver-task 'waiting-channel)
+                                             (%memory-fence)))
+                                       (enqueue-lockfree! (%channel-recv-wait-queue ch) waiter)
+                                       (cons #f 'suspended)))))))))))))))
 
 (define channel-recv!
   (case-lambda
@@ -766,6 +899,22 @@
 
 (define (channel-try-recv-with-status! ch)
   (%channel-recv-core! ch #f #f #f #f))
+
+(define channel-recv-unboxed!
+  (case-lambda
+    ((ch)
+     (cdr (%channel-recv-core! ch #f #f #t 'suspended)))
+    ((ch receiver-task)
+     (cdr (%channel-recv-core! ch receiver-task #f #t 'suspended)))
+    ((ch receiver-task wake-hook)
+     (cdr (%channel-recv-core! ch receiver-task wake-hook #t 'suspended)))))
+
+(define channel-try-recv-unboxed!
+  (case-lambda
+    ((ch)
+     (cdr (%channel-recv-core! ch #f #f #f #f)))
+    ((ch empty-default)
+     (cdr (%channel-recv-core! ch #f #f #f empty-default)))))
 
 ;; -----------------------------------------------------------------------
 ;; 8. Channel Close & Fan-Out Deep-Copy Broadcast (DSN-37 Section 4.2)
@@ -894,5 +1043,6 @@
             (cons 'received (atomic-ref (%channel-received-count-box ch)))
             (cons 'backpressure-suspends (atomic-ref (%channel-backpressure-count-box ch)))
             (cons 'rendezvous-handoffs (atomic-ref (%channel-handoff-count-box ch)))
-            (cons 'closed? (atomic-ref (%channel-closed-box ch))))))
+            (cons 'closed? (atomic-ref (%channel-closed-box ch)))
+            (cons 'unboxed? (if (%channel-ring-buffer ch) #t #f)))))
 

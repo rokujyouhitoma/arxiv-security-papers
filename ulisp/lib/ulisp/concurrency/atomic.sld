@@ -24,6 +24,16 @@
     atomic-fetch-add!
     atomic-update!
 
+    ;; Cache-Line Padded Atomic Box (#680)
+    <padded-atomic-box>
+    make-padded-atomic-box
+    padded-atomic-box?
+    padded-atomic-ref
+    padded-atomic-set!
+    padded-atomic-cas!
+    padded-atomic-swap!
+    padded-atomic-fetch-add!
+
     ;; ABA-Safe <atomic-stamped-box> Primitives
     <atomic-stamped-box>
     make-atomic-stamped-box

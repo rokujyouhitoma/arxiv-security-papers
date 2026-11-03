@@ -198,11 +198,12 @@
        (%memory-fence)
        q))
     ((head-box tail-box)
-     (if (or (not (atomic-box? head-box)) (not (atomic-box? tail-box)))
-         (error "make-lock-free-queue: head and tail must be <atomic-box>" (cons head-box tail-box))
+     (if (or (not (or (atomic-box? head-box) (padded-atomic-box? head-box)))
+             (not (or (atomic-box? tail-box) (padded-atomic-box? tail-box))))
+         (error "make-lock-free-queue: head and tail must be <atomic-box> or <padded-atomic-box>" (cons head-box tail-box))
          (let ((q (%make-lock-free-queue head-box
                                          tail-box
-                                         (make-atomic-box 0)
+                                         (make-padded-atomic-box 0)
                                          #f
                                          (make-atomic-box 0)
                                          (make-atomic-box 0))))
@@ -217,8 +218,8 @@
 (define (lock-free-queue-head-set! q head-box)
   (if (not (lock-free-queue? q))
       (error "lock-free-queue-head-set!: expected <lock-free-queue>" q)
-      (if (not (atomic-box? head-box))
-          (error "lock-free-queue-head-set!: expected <atomic-box>" head-box)
+      (if (not (or (atomic-box? head-box) (padded-atomic-box? head-box)))
+          (error "lock-free-queue-head-set!: expected <atomic-box> or <padded-atomic-box>" head-box)
           (begin
             (%queue-head-set! q head-box)
             (%memory-fence)
@@ -232,8 +233,8 @@
 (define (lock-free-queue-tail-set! q tail-box)
   (if (not (lock-free-queue? q))
       (error "lock-free-queue-tail-set!: expected <lock-free-queue>" q)
-      (if (not (atomic-box? tail-box))
-          (error "lock-free-queue-tail-set!: expected <atomic-box>" tail-box)
+      (if (not (or (atomic-box? tail-box) (padded-atomic-box? tail-box)))
+          (error "lock-free-queue-tail-set!: expected <atomic-box> or <padded-atomic-box>" tail-box)
           (begin
             (%queue-tail-set! q tail-box)
             (%memory-fence)
