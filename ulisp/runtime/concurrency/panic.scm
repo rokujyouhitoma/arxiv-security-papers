@@ -40,16 +40,20 @@
      (%make-synapse-panic-record reason details source-loc (allocate-panic-timestamp!)))))
 
 ;; -----------------------------------------------------------------------
-;; 2. Active Current Task Tracking
+;; 2. Active Current Task Tracking & Crash Logger Hook
 ;; -----------------------------------------------------------------------
 
 (define *active-current-task-box* (make-atomic-box #f))
+(define *synapse-crash-logger-hook-box* (make-atomic-box #f))
 
 (define (current-synapse-task)
   (atomic-ref *active-current-task-box*))
 
 (define (%set-current-synapse-task! task)
   (atomic-set! *active-current-task-box* task))
+
+(define (synapse-set-crash-logger-hook! hook)
+  (atomic-set! *synapse-crash-logger-hook-box* hook))
 
 ;; -----------------------------------------------------------------------
 ;; 3. Task Resource Zero-Leak Cleanup (Arena O(1) Reset & Channel Drop)
@@ -84,10 +88,15 @@
   (let* ((task (current-synapse-task))
          (panic-rec (%make-synapse-panic-record reason details #f (allocate-panic-timestamp!))))
     (if (and task (task-context? task))
-        (let ((k (task-escape-continuation task)))
-          ;; Step A: Instant O(1) clean-up of arena, owned channels & link cascades
+        (let ((k (task-escape-continuation task))
+              (hook (atomic-ref *synapse-crash-logger-hook-box*)))
+          ;; Step A: Invoke crash logger hook if registered
+          (if (procedure? hook)
+              (hook task reason details)
+              #f)
+          ;; Step B: Instant O(1) clean-up of arena, owned channels & link cascades
           (synapse-cleanup-task-resources! task reason secure? #f)
-          ;; Step B: Escape via continuation if boundary established
+          ;; Step C: Escape via continuation if boundary established
           (if (procedure? k)
               (k (cons 'panic panic-rec))
               (error "synapse-panic!: unhandled panic within task boundary" reason details)))

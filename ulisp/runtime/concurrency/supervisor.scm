@@ -15,6 +15,12 @@
 ;; Optional registry rebind hook (injected via registry.scm, Issue #669)
 (define *supervisor-registry-rebind-box* (vector (lambda (id target) #f)))
 
+;; Optional crash logger hook (injected via crash_logger.scm, Issue #670)
+(define *supervisor-crash-logger-hook-box* (vector (lambda (target-tid reason id) #f)))
+
+(define (synapse-set-supervisor-crash-hook! hook)
+  (vector-set! *supervisor-crash-logger-hook-box* 0 hook))
+
 ;; -----------------------------------------------------------------------
 ;; 1. Global Timestamp Clock for Supervisor Time Window
 ;; -----------------------------------------------------------------------
@@ -337,6 +343,12 @@
                          ((eq? rtype 'transient) is-abnormal)
                          ((eq? rtype 'temporary) #f)
                          (else #f))))
+                 (if is-abnormal
+                     (let ((hook (vector-ref *supervisor-crash-logger-hook-box* 0)))
+                       (if (procedure? hook)
+                           (hook target-tid reason (child-spec-id cspec))
+                           #f))
+                     #f)
                  (if (not should-restart)
                      ;; For non-restarted child, remove from active children list
                      (let ((sup-task (supervisor-task sup)))
