@@ -7,14 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **658** | R7RS §4.2.1 cond-expand 機能識別子および library 判定構文の拡充 | Feature | High | New | [658-expand-r7rs-cond-expand-feature-identifiers.md](658-expand-r7rs-cond-expand-feature-identifiers.md) |
-| **659** | R7RS §4.1.7 大文字小文字無視ファイル包含構文 (include-ci) の実装 | Feature | Medium | New | [659-implement-r7rs-include-ci-syntax.md](659-implement-r7rs-include-ci-syntax.md) |
-| **660** | R7RS §6.13 バイトベクタポートおよびノンブロッキング入力述語 (char-ready? / u8-ready?) の完全実装 | Feature | High | New | [660-implement-r7rs-bytevector-ports-and-ready-predicates.md](660-implement-r7rs-bytevector-ports-and-ready-predicates.md) |
-| **661** | R7RS §6.14 (scheme time) 高精度時間計測手続き群の完全準拠実装 | Feature | High | New | [661-implement-r7rs-scheme-time-procedures.md](661-implement-r7rs-scheme-time-procedures.md) |
-| **662** | R7RS-large / SRFI 141 6モード整数除算手続き群の実装 | Feature | Medium | New | [662-implement-srfi-141-integer-division.md](662-implement-srfi-141-integer-division.md) |
-| **663** | R7RS-large / SRFI 111 Boxes 単一要素可変セル API の実装 | Feature | Medium | New | [663-implement-srfi-111-boxes.md](663-implement-srfi-111-boxes.md) |
-| **664** | R7RS-large / SRFI 145 Assumptions 表明構文 (assume / assert) の実装 | Feature | Medium | New | [664-implement-srfi-145-assumptions.md](664-implement-srfi-145-assumptions.md) |
-| **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | High | New | [665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
 | **689** | QEMU ユーザーエミュレーションおよび AArch64 クロスツールチェーン検証環境の構築 | Feature | High | New | [689-setup-qemu-user-and-cross-toolchain-verification-environment.md](689-setup-qemu-user-and-cross-toolchain-verification-environment.md) |
 | **690** | ULisp POSIX システムコール層のマルチアーキテクチャ抽象化と AArch64 Linux 対応 | Feature | High | New | [690-abstract-posix-syscall-layer-for-multi-architecture-support.md](690-abstract-posix-syscall-layer-for-multi-architecture-support.md) |
 | **691** | ULisp AArch64 AOT コンパイラ出力の結合検証および QEMU エミュレーション実行の確立 | Feature | High | New | [691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md](691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md) |
@@ -31,6 +23,14 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | 2026-11-03 | [closed/665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](closed/665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
+| **664** | R7RS-large / SRFI 145 Assumptions 表明構文 (assume / assert) の実装 | Feature | 2026-11-03 | [closed/664-implement-srfi-145-assumptions.md](closed/664-implement-srfi-145-assumptions.md) |
+| **663** | R7RS-large / SRFI 111 Boxes 単一要素可変セル API の実装 | Feature | 2026-11-03 | [closed/663-implement-srfi-111-boxes.md](closed/663-implement-srfi-111-boxes.md) |
+| **662** | R7RS-large / SRFI 141 6モード整数除算手続き群の実装 | Feature | 2026-11-03 | [closed/662-implement-srfi-141-integer-division.md](closed/662-implement-srfi-141-integer-division.md) |
+| **661** | R7RS §6.14 (scheme time) 高精度時間計測手続き群の完全準拠実装 | Feature | 2026-11-03 | [closed/661-implement-r7rs-scheme-time-procedures.md](closed/661-implement-r7rs-scheme-time-procedures.md) |
+| **660** | R7RS §6.13 バイトベクタポートおよびノンブロッキング入力述語 (char-ready? / u8-ready?) の完全実装 | Feature | 2026-11-03 | [closed/660-implement-r7rs-bytevector-ports-and-ready-predicates.md](closed/660-implement-r7rs-bytevector-ports-and-ready-predicates.md) |
+| **659** | R7RS §4.1.7 大文字小文字無視ファイル包含構文 (include-ci) の実装 | Feature | 2026-11-03 | [closed/659-implement-r7rs-include-ci-syntax.md](closed/659-implement-r7rs-include-ci-syntax.md) |
+| **658** | R7RS §4.2.1 cond-expand 機能識別子および library 判定構文の拡充 | Feature | 2026-11-03 | [closed/658-expand-r7rs-cond-expand-feature-identifiers.md](closed/658-expand-r7rs-cond-expand-feature-identifiers.md) |
 | **699** | GitHub Actions CI 新規チェックアウト時における VDB 欠落エラーおよび Bare-Metal テスト遅延の根本改修 | Bug | 2026-11-03 | [closed/699-fix-ci-pipeline-fresh-checkout-and-bare-metal-test-hangs.md](closed/699-fix-ci-pipeline-fresh-checkout-and-bare-metal-test-hangs.md) |
 | **698** | GitHub Actions CI パイプライン 60分タイムアウト停止および uLisp AOT テスト失敗の根本改修 | Bug | 2026-11-03 | [closed/698-fix-ci-pipeline-timeout-and-ulisp-aot-test-failures.md](closed/698-fix-ci-pipeline-timeout-and-ulisp-aot-test-failures.md) |
 | **688** | Nanopass AOT コンパイラによるチャネル送受信ホットパスのネイティブ直接インライン展開 | Feature | 2026-11-03 | [closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md](closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md) |

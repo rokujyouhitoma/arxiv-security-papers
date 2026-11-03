@@ -2,6 +2,7 @@
 ;;; Library: (ulisp concurrency supervisor)
 ;;; Specification: DSN-37 Section 8.4.3 & 14.8 Task 6.2 (Issue #667)
 ;;; Description: Erlang/OTP Supervision Tree, Restart Strategies, and Flapping Limits
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency supervisor)

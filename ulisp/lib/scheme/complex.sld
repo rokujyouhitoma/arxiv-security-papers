@@ -2,6 +2,7 @@
 ;;; Library: (scheme complex)
 ;;; Specification: R7RS-small Section 7.1.4 (Complex Numbers Library)
 ;;; Description: Rectangular and polar complex number arithmetic
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (scheme complex)

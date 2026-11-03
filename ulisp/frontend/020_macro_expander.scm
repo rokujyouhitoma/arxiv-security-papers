@@ -24,7 +24,7 @@
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
   (memq sym '(if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
-              let-syntax letrec-syntax
+              let-syntax letrec-syntax cond-expand include include-ci assume assert
               cond case and or when unless delay delay-force do case-lambda
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
@@ -292,7 +292,7 @@
         (rules (macro-rules m)))
     (let loop ((rls rules))
       (if (null? rls)
-          (error "apply-syntax-rules-macro: no matching syntax-rules pattern for" input)
+          (error "apply-syntax-rules-macro [R7RS §4.3.2]: no matching syntax-rules pattern for" input)
           (let* ((rule (car rls))
                  (pat (car rule))
                  (tmpl (cadr rule))
@@ -325,7 +325,7 @@
              (literals (cadr sr-spec))
              (rules (cddr sr-spec)))
         (list 'syntax-rules-macro name literals rules))
-      (error "parse-syntax-rules-def: invalid define-syntax syntax" form)))
+      (error "parse-syntax-rules-def [R7RS §5.4]: invalid define-syntax syntax" form)))
 
 (define (rename-symbol-in-tree tree old-sym new-sym)
   (cond
@@ -492,7 +492,7 @@
              (irritants (if (and (pair? (cdr expanded)) (string? (cadr expanded)))
                             (cddr expanded)
                             (cdr expanded))))
-         (error (string-append "syntax-error: " msg) irritants)))
+         (error (string-append "syntax-error [R7RS §4.3.1]: " msg) irritants)))
       ((eq? (car expanded) (quote case))
        (if (and (pair? (cdr expanded)) (pair? (cddr expanded)))
            (cons (quote case)
@@ -525,6 +525,8 @@
        (expand-let-syntax expanded macro-table #f))
       ((eq? (car expanded) (quote letrec-syntax))
        (expand-let-syntax expanded macro-table #t))
+      ((eq? (car expanded) (quote cond-expand))
+       (macro-expand-all (desugar-cond-expand (cdr expanded)) macro-table))
       ((or (eq? (car expanded) (quote let))
            (eq? (car expanded) (quote let*))
            (eq? (car expanded) (quote letrec))

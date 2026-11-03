@@ -1,6 +1,7 @@
 ;;; =======================================================================
 ;;; (ulisp concurrency crash-logger) - Structured Crash Reporting (R7RS)
 ;;; Conforms to DSN-37 Section 8.4.6 & Section 14.8 Task 6.5 (Issue #670)
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency crash-logger)

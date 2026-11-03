@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_r7rs_cond_expand test_r7rs_include_ci test_r7rs_bytevector_ports test_r7rs_time test_srfi_141_division test_srfi_111_boxes test_srfi_145_assume test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints
 
 AS ?= as
@@ -37,7 +37,7 @@ ULISP_RUNTIME_LIBS = runtime/gc.scm runtime/io.scm runtime/printer.scm runtime/e
 ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm \
                  lib/reader.scm lib/equality.scm lib/predicates.scm lib/math.scm lib/bytevector.scm \
                  lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
-                 lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/format.scm lib/sort.scm lib/gc.scm \
+                 lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
                  $(ULISP_RUNTIME_LIBS)
 
 COMPILER_BASE = compiler/helpers.scm \
@@ -116,6 +116,9 @@ lint_sexpr:
 
 test_lint_sexpr:
 	@$(PYTHON) tests/test_lint_sexpr.py
+
+test_r7rs_traceability:
+	@$(PYTHON) $(ROOT_DIR)/scripts/verify_r7rs_traceability.py
 
 # --- AOT Nanopass Tests ---
 test_nanopass: build/compiler_passes.scm
@@ -782,6 +785,62 @@ test_process_context: $(COMPILER_DEP)
 	$(LD) $(LDFLAGS) build/test_process_context.o -o build/test_process_context
 	./build/test_process_context
 
+test_r7rs_cond_expand: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_r7rs_cond_expand.scm > build/test_r7rs_cond_expand_input.scm
+	$(ULISP_COMPILER) build/test_r7rs_cond_expand_input.scm > build/test_r7rs_cond_expand.s
+	$(AS) $(ASFLAGS) build/test_r7rs_cond_expand.s -o build/test_r7rs_cond_expand.o
+	$(LD) $(LDFLAGS) build/test_r7rs_cond_expand.o -o build/test_r7rs_cond_expand
+	./build/test_r7rs_cond_expand
+
+test_r7rs_include_ci: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_r7rs_include_ci.scm > build/test_r7rs_include_ci_input.scm
+	$(ULISP_COMPILER) build/test_r7rs_include_ci_input.scm > build/test_r7rs_include_ci.s
+	$(AS) $(ASFLAGS) build/test_r7rs_include_ci.s -o build/test_r7rs_include_ci.o
+	$(LD) $(LDFLAGS) build/test_r7rs_include_ci.o -o build/test_r7rs_include_ci
+	./build/test_r7rs_include_ci
+
+test_r7rs_bytevector_ports: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_r7rs_bytevector_ports.scm > build/test_r7rs_bytevector_ports_input.scm
+	$(ULISP_COMPILER) build/test_r7rs_bytevector_ports_input.scm > build/test_r7rs_bytevector_ports.s
+	$(AS) $(ASFLAGS) build/test_r7rs_bytevector_ports.s -o build/test_r7rs_bytevector_ports.o
+	$(LD) $(LDFLAGS) build/test_r7rs_bytevector_ports.o -o build/test_r7rs_bytevector_ports
+	./build/test_r7rs_bytevector_ports
+
+test_r7rs_time: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_r7rs_time.scm > build/test_r7rs_time_input.scm
+	$(ULISP_COMPILER) build/test_r7rs_time_input.scm > build/test_r7rs_time.s
+	$(AS) $(ASFLAGS) build/test_r7rs_time.s -o build/test_r7rs_time.o
+	$(LD) $(LDFLAGS) build/test_r7rs_time.o -o build/test_r7rs_time
+	./build/test_r7rs_time
+
+test_srfi_141_division: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_srfi_141_division.scm > build/test_srfi_141_division_input.scm
+	$(ULISP_COMPILER) build/test_srfi_141_division_input.scm > build/test_srfi_141_division.s
+	$(AS) $(ASFLAGS) build/test_srfi_141_division.s -o build/test_srfi_141_division.o
+	$(LD) $(LDFLAGS) build/test_srfi_141_division.o -o build/test_srfi_141_division
+	./build/test_srfi_141_division
+
+test_srfi_111_boxes: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_srfi_111_boxes.scm > build/test_srfi_111_boxes_input.scm
+	$(ULISP_COMPILER) build/test_srfi_111_boxes_input.scm > build/test_srfi_111_boxes.s
+	$(AS) $(ASFLAGS) build/test_srfi_111_boxes.s -o build/test_srfi_111_boxes.o
+	$(LD) $(LDFLAGS) build/test_srfi_111_boxes.o -o build/test_srfi_111_boxes
+	./build/test_srfi_111_boxes
+
+test_srfi_145_assume: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_srfi_145_assume.scm > build/test_srfi_145_assume_input.scm
+	$(ULISP_COMPILER) build/test_srfi_145_assume_input.scm > build/test_srfi_145_assume.s
+	$(AS) $(ASFLAGS) build/test_srfi_145_assume.s -o build/test_srfi_145_assume.o
+	$(LD) $(LDFLAGS) build/test_srfi_145_assume.o -o build/test_srfi_145_assume
+	./build/test_srfi_145_assume
+
 test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_gc_growth.scm > build/test_gc_growth_input.scm
@@ -1206,7 +1265,7 @@ test_gc_stats: compiler
 	@echo "=== Running Runtime GC Statistics Tests (Issue #622) ==="
 	bash tests/test_gc_stats.sh
 
-test: test_lint_sexpr test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
+test: test_lint_sexpr test_r7rs_traceability test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log

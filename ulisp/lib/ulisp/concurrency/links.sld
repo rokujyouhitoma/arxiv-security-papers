@@ -2,6 +2,7 @@
 ;;; Library: (ulisp concurrency links)
 ;;; Specification: DSN-37 Section 8.4.1 & 8.4.2 (Issue #666)
 ;;; Description: Task Links, Monitors, and Auto-Poisoning Fault Tolerance
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency links)

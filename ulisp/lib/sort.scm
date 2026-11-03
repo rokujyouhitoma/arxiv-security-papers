@@ -5,7 +5,7 @@
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
-;;; 1. Sorted Predicates
+;;; §SRFI-132 1. Sorted Predicates: list-sorted?, vector-sorted?
 ;;; -----------------------------------------------------------------------
 
 (define (list-sorted? less? lst)
@@ -44,7 +44,7 @@
      (%vector-sorted? less? vec start end))))
 
 ;;; -----------------------------------------------------------------------
-;;; 2. Merge Procedures
+;;; §SRFI-132 2. Merge Procedures: list-merge, vector-merge
 ;;; -----------------------------------------------------------------------
 
 (define (list-merge less? l1 l2)
@@ -85,7 +85,7 @@
                  (loop (+ i 1) j (+ k 1))))))))))
 
 ;;; -----------------------------------------------------------------------
-;;; 3. List Sorting (Stable Merge Sort)
+;;; §SRFI-132 3. List Sorting (Stable Merge Sort): list-sort, list-sort!
 ;;; -----------------------------------------------------------------------
 
 (define (list-sort less? lst)
@@ -162,7 +162,7 @@
 (define list-stable-sort list-sort)
 
 ;;; -----------------------------------------------------------------------
-;;; 4. Vector Sorting (Stable Merge Sort)
+;;; §SRFI-132 4. Vector Sorting (Stable Merge Sort): vector-sort, vector-sort!
 ;;; -----------------------------------------------------------------------
 
 (define (%vector-sort! less? vec start end)
@@ -234,7 +234,7 @@
 (define vector-stable-sort vector-sort)
 
 ;;; -----------------------------------------------------------------------
-;;; 5. SRFI 95 / SLIB Compatibility Procedures
+;;; §SRFI-95 5. SRFI 95 / SLIB Compatibility Procedures: sort, sort!, sorted?, merge, merge!
 ;;; -----------------------------------------------------------------------
 
 (define (sorted? seq less?)

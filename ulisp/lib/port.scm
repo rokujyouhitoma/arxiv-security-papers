@@ -5,7 +5,7 @@
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
-;;; 1. Standard Port Constants and Current Port Procedures
+;;; §6.13.1 Standard Port Constants and Current Port Procedures
 ;;; -----------------------------------------------------------------------
 
 (define *stdin-port* (list '%standard-input-port 0))
@@ -38,7 +38,7 @@
         arg)))
 
 ;;; -----------------------------------------------------------------------
-;;; 2. Port Predicates (R7RS Section 6.13.1)
+;;; §6.13.1 Port Predicates
 ;;; -----------------------------------------------------------------------
 
 (define (string-input-port? p)
@@ -53,6 +53,12 @@
 (define (file-output-port? p)
   (and (pair? p) (eq? (car p) '%file-output-port)))
 
+(define (bytevector-input-port? p)
+  (and (pair? p) (eq? (car p) '%bytevector-input-port)))
+
+(define (bytevector-output-port? p)
+  (and (pair? p) (eq? (car p) '%bytevector-output-port)))
+
 (define (standard-input-port? p)
   (and (pair? p) (eq? (car p) '%standard-input-port)))
 
@@ -62,20 +68,24 @@
 (define (port? p)
   (or (string-input-port? p)
       (or (string-output-port? p)
-          (or (file-input-port? p)
-              (or (file-output-port? p)
-                  (or (standard-input-port? p)
-                      (standard-output-port? p)))))))
+          (or (bytevector-input-port? p)
+              (or (bytevector-output-port? p)
+                  (or (file-input-port? p)
+                      (or (file-output-port? p)
+                          (or (standard-input-port? p)
+                              (standard-output-port? p)))))))))
 
 (define (input-port? p)
   (or (string-input-port? p)
-      (or (file-input-port? p)
-          (standard-input-port? p))))
+      (or (bytevector-input-port? p)
+          (or (file-input-port? p)
+              (standard-input-port? p)))))
 
 (define (output-port? p)
   (or (string-output-port? p)
-      (or (file-output-port? p)
-          (standard-output-port? p))))
+      (or (bytevector-output-port? p)
+          (or (file-output-port? p)
+              (standard-output-port? p)))))
 
 (define (file-input-binary? p)
   (let ((tail (cddddr (cddddr p))))
@@ -91,6 +101,8 @@
 
 (define (binary-port? p)
   (cond
+    ((bytevector-input-port? p) #t)
+    ((bytevector-output-port? p) #t)
     ((file-input-port? p) (file-input-binary? p))
     ((file-output-port? p) (file-output-binary? p))
     (else #f)))
@@ -100,6 +112,8 @@
 
 (define (port-open? p)
   (cond
+    ((bytevector-input-port? p) (>= (car (cadr p)) 0))
+    ((bytevector-output-port? p) (>= (car (cadr p)) 0))
     ((file-input-port? p) (>= (cadr p) 0))
     ((file-output-port? p) (>= (cadr p) 0))
     (else (port? p))))
@@ -123,6 +137,12 @@
 
 (define (close-port p)
   (cond
+    ((bytevector-input-port? p)
+     (set-car! (cadr p) -1)
+     #t)
+    ((bytevector-output-port? p)
+     (set-car! (cadr p) -1)
+     #t)
     ((file-input-port? p)
      (let ((fd (cadr p)))
        (if (>= fd 0)
@@ -149,11 +169,14 @@
   (close-port p))
 
 ;;; -----------------------------------------------------------------------
-;;; 3. String Port Constructors and Extractors (R7RS Section 6.13.1)
+;;; §6.13.1 String and Bytevector Port Constructors and Extractors
 ;;; -----------------------------------------------------------------------
 
 (define (open-input-string str)
   (list '%string-input-port str (cons 0 '()) (string-length str)))
+
+(define (open-input-bytevector bv)
+  (list '%bytevector-input-port (cons 1 '()) bv (cons 0 '()) (bytevector-length bv)))
 
 (define (open-input-file filename)
   (let ((fd (sys-open filename 0 0)))
@@ -242,8 +265,35 @@
         (substring buf 0 len))
       ""))
 
+(define (%port-bytevector-copy! dest dest-start src src-start count)
+  (let loop ((i 0))
+    (if (< i count)
+        (begin
+          (bytevector-u8-set! dest (+ dest-start i) (bytevector-u8-ref src (+ src-start i)))
+          (loop (+ i 1)))
+        63)))
+
+(define (open-output-bytevector)
+  (let ((init-cap 64))
+    (list '%bytevector-output-port
+          (cons 1 '())
+          (cons (%make-bytevector init-cap) '())
+          (cons 0 '())
+          (cons init-cap '()))))
+
+(define (get-output-bytevector p)
+  (if (bytevector-output-port? p)
+      (let* ((buf-cell (caddr p))
+             (len-cell (cadddr p))
+             (buf (car buf-cell))
+             (len (car len-cell))
+             (res (%make-bytevector len)))
+        (%port-bytevector-copy! res 0 buf 0 len)
+        res)
+      (%make-bytevector 0)))
+
 ;;; -----------------------------------------------------------------------
-;;; 4. Port I/O Low-level Operations
+;;; §6.13.2 Port Input/Output Procedures
 ;;; -----------------------------------------------------------------------
 
 (define (port-read-char p)
@@ -290,6 +340,16 @@
                    (set-car! col-cell 1))
                  (set-car! col-cell (+ (car col-cell) 1)))
              ch))))
+    ((bytevector-input-port? p)
+     (let* ((bv (caddr p))
+            (pos-cell (cadddr p))
+            (len (car (cddddr p)))
+            (pos (car pos-cell)))
+       (if (>= pos len)
+           (eof-object)
+           (let ((b (bytevector-u8-ref bv pos)))
+             (set-car! pos-cell (+ pos 1))
+             (integer->char b)))))
     (else
      (%read-char))))
 
@@ -320,6 +380,14 @@
                    (set-car! len-cell ret)
                    (string-ref buf 0))))
            (string-ref buf pos))))
+    ((bytevector-input-port? p)
+     (let* ((bv (caddr p))
+            (pos-cell (cadddr p))
+            (len (car (cddddr p)))
+            (pos (car pos-cell)))
+       (if (>= pos len)
+           (eof-object)
+           (integer->char (bytevector-u8-ref bv pos)))))
     (else
      (%peek-char))))
 
@@ -347,6 +415,8 @@
          (string-set! buf len ch)
          (set-car! len-cell (+ len 1))
          #t)))
+    ((bytevector-output-port? p)
+     (port-write-u8 (char->integer ch) p))
     ((file-output-port? p)
      (let* ((fd (cadr p))
             (buf-cell (caddr p))
@@ -403,7 +473,7 @@
      (%write-string str))))
 
 ;;; -----------------------------------------------------------------------
-;;; 5. High-Level Port Control & File Port Procedures (R7RS Section 6.13.1)
+;;; §6.13.1 High-Level Port Control & File Port Procedures
 ;;; -----------------------------------------------------------------------
 
 (define (call-with-port port proc)
@@ -450,19 +520,63 @@
           ans)))))
 
 (define (port-read-u8 p)
-  (let ((ch (port-read-char p)))
-    (if (eof-object? ch)
-        ch
-        (char->integer ch))))
+  (cond
+    ((bytevector-input-port? p)
+     (let* ((bv (caddr p))
+            (pos-cell (cadddr p))
+            (len (car (cddddr p)))
+            (pos (car pos-cell)))
+       (if (>= pos len)
+           (eof-object)
+           (let ((b (bytevector-u8-ref bv pos)))
+             (set-car! pos-cell (+ pos 1))
+             b))))
+    (else
+     (let ((ch (port-read-char p)))
+       (if (eof-object? ch)
+           ch
+           (char->integer ch))))))
 
 (define (port-peek-u8 p)
-  (let ((ch (port-peek-char p)))
-    (if (eof-object? ch)
-        ch
-        (char->integer ch))))
+  (cond
+    ((bytevector-input-port? p)
+     (let* ((bv (caddr p))
+            (pos-cell (cadddr p))
+            (len (car (cddddr p)))
+            (pos (car pos-cell)))
+       (if (>= pos len)
+           (eof-object)
+           (bytevector-u8-ref bv pos))))
+    (else
+     (let ((ch (port-peek-char p)))
+       (if (eof-object? ch)
+           ch
+           (char->integer ch))))))
 
 (define (port-write-u8 b p)
-  (port-write-char (integer->char b) p))
+  (cond
+    ((bytevector-output-port? p)
+     (let* ((buf-cell (caddr p))
+            (len-cell (cadddr p))
+            (cap-cell (car (cddddr p)))
+            (buf (car buf-cell))
+            (len (car len-cell))
+            (cap (car cap-cell)))
+       (if (>= len cap)
+           (let* ((new-cap (* cap 2))
+                  (new-buf (%make-bytevector new-cap)))
+             (%port-bytevector-copy! new-buf 0 buf 0 len)
+             (bytevector-u8-set! new-buf len b)
+             (set-car! buf-cell new-buf)
+             (set-car! cap-cell new-cap)
+             (set-car! len-cell (+ len 1))
+             #t)
+           (begin
+             (bytevector-u8-set! buf len b)
+             (set-car! len-cell (+ len 1))
+             #t))))
+    (else
+     (port-write-char (integer->char b) p))))
 
 (define (port-read-line p)
   (let ((ch (port-read-char p)))
@@ -488,7 +602,7 @@
                (loop (cons next acc)))))))))
 
 ;;; -----------------------------------------------------------------------
-;;; 6. R7RS Polymorphic Macros for Standard Port Operations
+;;; §6.13 R7RS Polymorphic Macros for Standard Port Operations
 ;;; -----------------------------------------------------------------------
 
 (define-syntax flush-output-port
@@ -535,4 +649,25 @@
   (syntax-rules ()
     ((write-string s) (port-write-string s (current-output-port)))
     ((write-string s p) (port-write-string s p))))
+
+(define (port-char-ready? p)
+  (cond
+    ((string-input-port? p) #t)
+    ((bytevector-input-port? p) #t)
+    ((file-input-port? p) #t)
+    ((standard-input-port? p) #t)
+    (else #t)))
+
+(define (port-u8-ready? p)
+  (port-char-ready? p))
+
+(define-syntax char-ready?
+  (syntax-rules ()
+    ((char-ready?) (port-char-ready? (current-input-port)))
+    ((char-ready? p) (port-char-ready? p))))
+
+(define-syntax u8-ready?
+  (syntax-rules ()
+    ((u8-ready?) (port-u8-ready? (current-input-port)))
+    ((u8-ready? p) (port-u8-ready? p))))
 

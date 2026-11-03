@@ -1,6 +1,7 @@
 ;;; =======================================================================
 ;;; (ulisp concurrency io-uring) - Linux io_uring Event Loop (R7RS)
 ;;; Conforms to DSN-37 Section 7.4.3 & Section 14.9 Task 7.3 (Issue #677, #683)
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency io-uring)

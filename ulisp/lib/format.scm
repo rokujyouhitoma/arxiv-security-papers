@@ -4,6 +4,7 @@
 ;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
+;; §SRFI-28 Basic Format Strings: %format and format
 (define (%format fmt objects)
   (if (not (string? fmt))
       (error "format: format-string must be a string" fmt)

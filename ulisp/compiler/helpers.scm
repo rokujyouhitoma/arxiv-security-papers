@@ -1106,6 +1106,100 @@
 (define (jiffies-per-second)
   1000000000)
 
+;;; -----------------------------------------------------------------------
+;;; R7RS Section 4.2.1 / 5.5.1 Feature Identifiers & cond-expand Helpers
+;;; -----------------------------------------------------------------------
+
+(define (ulisp-supported-feature? feat)
+  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix))
+      #t
+      #f))
+
+(define (builtin-library-name? name)
+  (and (pair? name)
+       (or (and (eq? (car name) 'scheme)
+                (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load list hash-table sort division box)))
+           (and (eq? (car name) 'srfi)
+                (memq (cadr name) '(1 28 69 95 111 125 132 141 145)))
+           (and (eq? (car name) 'ulisp)
+                (memq (cadr name) '(base core native))))))
+
+(define (library-name->sld-path lib-name)
+  (let loop ((rest lib-name) (acc "lib"))
+    (if (null? rest)
+        (string-append acc ".sld")
+        (let* ((elem (car rest))
+               (part (cond
+                       ((symbol? elem) (symbol->string elem))
+                       ((number? elem) (number->string elem))
+                       (else "sub"))))
+          (loop (cdr rest) (string-append acc "/" part))))))
+
+(define (find-included-file path)
+  (let ((p (open-input-file path)))
+    (if p
+        (begin (close-input-port p) path)
+        (let* ((prefixed (string-append "ulisp/" path))
+               (p2 (open-input-file prefixed)))
+          (if p2
+              (begin (close-input-port p2) prefixed)
+              (if (string-starts-with? path "ulisp/")
+                  (let* ((stripped (substring path 6 (string-length path)))
+                         (p3 (open-input-file stripped)))
+                    (if p3
+                        (begin (close-input-port p3) stripped)
+                        path))
+                  path))))))
+
+(define (ulisp-library-available? name)
+  (or (builtin-library-name? name)
+      (let* ((sld-rel (library-name->sld-path name))
+             (resolved (find-included-file sld-rel))
+             (p (open-input-file resolved)))
+        (if p
+            (begin (close-input-port p) #t)
+            #f))))
+
+(define (eval-feature-requirement req)
+  (cond
+    ((symbol? req)
+     (ulisp-supported-feature? req))
+    ((and (pair? req) (eq? (car req) 'library) (pair? (cdr req)))
+     (ulisp-library-available? (cadr req)))
+    ((and (pair? req) (eq? (car req) 'and))
+     (let loop ((rest (cdr req)))
+       (if (null? rest)
+           #t
+           (if (eval-feature-requirement (car rest))
+               (loop (cdr rest))
+               #f))))
+    ((and (pair? req) (eq? (car req) 'or))
+     (let loop ((rest (cdr req)))
+       (if (null? rest)
+           #f
+           (if (eval-feature-requirement (car rest))
+               #t
+               (loop (cdr rest))))))
+    ((and (pair? req) (eq? (car req) 'not) (pair? (cdr req)))
+     (not (eval-feature-requirement (cadr req))))
+    (else #f)))
+
+(define (expand-cond-expand clauses)
+  (let loop ((cls clauses))
+    (if (or (null? cls) (not (pair? cls)))
+        (error "syntax-error [R7RS §4.2.1]: cond-expand no matching clause" clauses)
+        (let ((c (car cls)))
+          (cond
+            ((not (pair? c))
+             (loop (cdr cls)))
+            ((eq? (car c) 'else)
+             (cdr c))
+            ((eval-feature-requirement (car c))
+             (cdr c))
+            (else
+             (loop (cdr cls))))))))
+
+
 
 
 

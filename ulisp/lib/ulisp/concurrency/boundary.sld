@@ -2,6 +2,7 @@
 ;;; Library: (ulisp concurrency boundary)
 ;;; Specification: DSN-37 Section 8.1, 9.1 & Phase 4 Task 4.1 (Issue #641)
 ;;; Description: Host-Kernel Boundary Sanitizer & Shared-Nothing Isolation
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency boundary)

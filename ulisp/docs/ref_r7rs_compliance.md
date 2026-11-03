@@ -237,7 +237,7 @@
 | **6.13.1** | `call-with-input-file`, `call-with-output-file` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | ファイルオープン・手続き実行・例外安全自動クローズ ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | **6.13.1** | `with-input-from-file`, `with-output-to-file` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | カレントポート動的パラメータ一時付け替え実行 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | **6.13.1** | `open-input-string`, `open-output-string`, `get-output-string` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | メモリ上文字列ポート ([Issue #534](../../docs/issues/closed/534-implement-r7rs-string-ports.md)) |
-| **6.13.1** | `open-input-bytevector`, `open-output-bytevector`, `get-output-bytevector` | **△** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | メモリ上バイナリバイトベクタポート |
+| **6.13.1** | `open-input-bytevector`, `open-output-bytevector`, `get-output-bytevector` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | メモリ上バイナリバイトベクタポート完全実装 ([Issue #660](../../docs/issues/closed/660-implement-r7rs-bytevector-ports-and-ready-predicates.md)) |
 
 ##### 6.13.2 入力手続き (Input Procedures)
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
@@ -245,10 +245,10 @@
 | **6.13.2** | `read` | **◎** | [ulisp/lib/reader.scm](../lib/reader.scm) | 自前完全再帰下降 S 式パーサ |
 | **6.13.2** | `read-char`, `peek-char` | **◎** | [ulisp/lib/port.scm](../lib/port.scm)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | 1文字先読み・消費 |
 | **6.13.2** | `read-line` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 行末改行までの 1 行文字列読み取り |
-| **6.13.2** | `char-ready?` | **△** | [ulisp/lib/port.scm](../lib/port.scm) | ノンブロッキング文字入力可能性検査 |
+| **6.13.2** | `char-ready?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | R7RS §6.13.2 準拠文字入力準備状態判定 ([Issue #660](../../docs/issues/closed/660-implement-r7rs-bytevector-ports-and-ready-predicates.md)) |
 | **6.13.2** | `read-string` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 指定文字数の文字列一括読み取り |
 | **6.13.2** | `read-u8`, `peek-u8` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | 1 バイト先読み・消費 |
-| **6.13.2** | `u8-ready?` | **△** | [ulisp/lib/port.scm](../lib/port.scm) | ノンブロッキングバイト入力可能性検査 |
+| **6.13.2** | `u8-ready?` | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | R7RS §6.13.2 準拠バイト入力準備状態判定 ([Issue #660](../../docs/issues/closed/660-implement-r7rs-bytevector-ports-and-ready-predicates.md)) |
 | **6.13.2** | `read-bytevector`, `read-bytevector!` | **◎** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | バイナリデータの一括・バッファ直接読み出し |
 | **6.13.2** | `eof-object?`, `eof-object` | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | EOF 即値タグ判定 (`0x4F`) |
 
@@ -270,7 +270,7 @@
 | **6.14** | `file-exists?`, `delete-file` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `sys-access`(21) および `sys-unlink`(87) システムコール連携 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | **6.14** | `command-line` | **△** | [runtime.c](../runtime.c) | ランタイム引数渡しで基本対応 |
 | **6.14** | `get-environment-variable`, `get-environment-variables` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `environ` 走査・連想リスト構築 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
-| **6.14** | `current-second`, `current-jiffy`, `jiffies-per-second` | **△** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld) | 高精度タイマー・POSIX `gettimeofday` ラッパー |
+| **6.14** | `current-second`, `current-jiffy`, `jiffies-per-second` | **◎** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | POSIX clock_gettime (REALTIME / MONOTONIC) 直結ナノ秒精度時間取得・1M jiffies/sec ([Issue #661](../../docs/issues/closed/661-implement-r7rs-scheme-time-procedures.md)) |
 
 ---
 
@@ -292,7 +292,7 @@
 | `(scheme r5rs)` | R5RS 互換仕様シンボル群 | **約 85%** | [ulisp/lib/scheme/r5rs.sld](../lib/scheme/r5rs.sld) | R5RS 標準シンボル群の互換エクスポート定義 |
 | `(scheme read)` | S 式リーダー (`read`) | **◎ 100%** | [ulisp/lib/scheme/read.sld](../lib/scheme/read.sld)<br>([ulisp/lib/reader.scm](../lib/reader.scm)) | 自前完全再帰下降パーサ完備 |
 | `(scheme repl)` | 対話型 REPL | **✕\* 0%** | [ulisp/lib/scheme/repl.sld](../lib/scheme/repl.sld) | AOT コンパイラのため静的バイナリ出力が正典 |
-| `(scheme time)` | 時間計測 (`current-second`) | **△ 約 30%** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld) | `current-second`, `current-jiffy`, `jiffies-per-second` 基本ラッパー定義 |
+| `(scheme time)` | 時間計測 (`current-second`, `current-jiffy`, `jiffies-per-second`) | **◎ 100%** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | POSIX clock_gettime システムコール直結、R7RS-small (scheme time) 全 3 手続き完全実装 ([Issue #661](../../docs/issues/closed/661-implement-r7rs-scheme-time-procedures.md)) |
 | `(scheme write)` | S 式ライター (`write`, `display`, `write-shared`, `write-simple`) | **◎ 100%** | [ulisp/lib/scheme/write.sld](../lib/scheme/write.sld)<br>([ulisp/lib/printer.scm](../lib/printer.scm)) | `write`, `display`, `write-shared`, `write-simple` 完備。SRFI 38 / R7RS datum label 循環・共有表記対応 ([Issue #656](../../docs/issues/closed/656-implement-r7rs-write-simple-and-write-shared.md)) |
 
 ---
@@ -309,7 +309,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | **SRFI 9** | Records (`define-record-type`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 完全サポート ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md)) |
 | **SRFI 11** | Syntax for multiple values (`let-values`, `let*-values`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 完全サポート ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |
 | **SRFI 39** | Parameter objects (`make-parameter`, `parameterize`) | **◎** | [ulisp/lib/parameter.scm](../lib/parameter.scm) | 完全サポート ([Issue #537](../../docs/issues/closed/537-implement-r7rs-parameters-and-parameterize.md)) |
-| **SRFI 111** | Boxes (単一要素可変セル: `box`, `unbox`, `set-box!`) | **△** | - | 1要素ベクタまたはペア `(cons val '())` で代用可能（専用関数は未提供） |
+| **SRFI 111** | Boxes (単一要素可変セル: `box`, `box?`, `unbox`, `set-box!`) | **◎** | [ulisp/lib/box.scm](../lib/box.scm)<br>[ulisp/lib/srfi/111.sld](../lib/srfi/111.sld)<br>[ulisp/lib/scheme/box.sld](../lib/scheme/box.sld) | R7RS-large Red Edition / SRFI 111 ボックス完全準拠。専用可変セル型・述語・アクセサ・ミューテータ完備 ([Issue #663](../../docs/issues/closed/663-implement-srfi-111-boxes.md)) |
 | **SRFI 113** | Sets and Bags (集合・マルチセット) | **×** | - | 未実装 |
 | **SRFI 116** | Immutable Pairs and Lists (不変リスト・ペア) | **×** | - | 未実装 |
 | **SRFI 117** | Queues based on Lists (リストベースキュー) | **×** | - | 未実装 |
@@ -331,7 +331,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | 仕様番号 (SRFI) | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・代替手段 |
 | :--- | :--- | :---: | :--- | :--- |
 | **SRFI 138** | Compiling Scheme Programs (コンパイル規約) | **◎** | [compiler/driver.scm](../compiler/driver.scm) | AOT 静的コンパイル・バッチ処理に完全適合 |
-| **SRFI 141** | Integer Division (6モードの整数除算) | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | `quotient`, `modulo`, `/` のみサポート |
+| **SRFI 141** | Integer Division (6モードの整数除算) | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[ulisp/lib/srfi/141.sld](../lib/srfi/141.sld)<br>[ulisp/lib/scheme/division.sld](../lib/scheme/division.sld) | R7RS-large Tangerine Edition / SRFI 141 整数除算全 6 モード完備 (floor, truncate, ceiling, round, euclidean, centered) の除算・剰余・多値除算 ([Issue #662](../../docs/issues/closed/662-implement-srfi-141-integer-division.md)) |
 | **SRFI 143** | Fixnums (Fixnum 専用高速演算: `fx+`, `fx-`, `fxadd1` 等) | **◎** | [Pass 090](../frontend/090_rtyper.scm) | `fxadd1`, `fxsub1` 等コンパイラ内部プリミティブおよび AOT アンボクシング対応 |
 | **SRFI 144** | Flonums (浮動小数点数演算) | **×** | - | 浮動小数点型非対応のため未実装 |
 | **SRFI 151** | Bitwise Operations (ビット演算) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | `bitwise-and`, `bitwise-ior`, `bitwise-arithmetic-shift` サポート |
@@ -361,7 +361,7 @@ R7RS-large は、Scheme コミュニティの SRFI 群を「エディション (
 | **SRFI 89** | Optional Positional and Named Parameters | **×** | - | 未実装 |
 | **SRFI 95** | Sorting and Merging (SLIB ソート・マージ) | **◎** | [ulisp/lib/sort.scm](../lib/sort.scm)<br>[ulisp/lib/srfi/95.sld](../lib/srfi/95.sld) | SLIB / SRFI 95 互換ソート・マージ API 完全準拠。`sort`, `sort!`, `sorted?`, `merge`, `merge!` ([Issue #655](../../docs/issues/closed/655-implement-r7rs-list-and-vector-sort-procedures.md)) |
 | **SRFI 115** | Scheme Regular Expressions (正規表現 SRE) | **×** | - | 未実装 |
-| **SRFI 145** | Assumptions (`assert`, `assume`) | **△** | [Pass 030](../frontend/030_desugar.scm) | `guard` / `raise` / `error` で代用可能 |
+| **SRFI 145** | Assumptions (`assert`, `assume`) | **◎** | [Pass 020](../frontend/020_macro_expander.scm)<br>[Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/145.sld](../lib/srfi/145.sld) | SRFI 145 前提表明構文完全準拠。述語真偽値返却、失敗時条件式付きエラー送出 ([Issue #664](../../docs/issues/closed/664-implement-srfi-145-assumptions.md)) |
 | **SRFI 170** | POSIX API (低レベルシステムコール) | **◎** (一部) | [ulisp/lib/posix.scm](../lib/posix.scm) | `sys-read`, `sys-write`, `sys-mmap`, `sys-exit`, `%raw-syscall` を実装 |
 | **SRFI 193** | Command line (コマンドライン情報) | **△** | [runtime.c](../runtime.c) | `command-line` 基本サポート |
 | **SRFI 194** | Random data generators (乱数ジェネレータ) | **×** | - | 未実装 |
@@ -445,6 +445,14 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #648](../../docs/issues/closed/648-implement-srfi-1-higher-order-list-procedures.md): SRFI 1 高階リスト操作手続き群 (`fold`, `filter`, `iota`, `partition`, `any`, `every` 等) の完全実装
    - [Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md): SRFI 69 / SRFI 125 / `(scheme hash-table)` 汎用ハッシュテーブル API の完全実装
    - [Issue #657](../../docs/issues/closed/657-implement-r7rs-let-syntax-and-letrec-syntax.md): `let-syntax` / `letrec-syntax` (局所マクロ束縛および局所相互再帰マクロ構文) の完全実装
+   - [Issue #658](../../docs/issues/closed/658-expand-r7rs-cond-expand-feature-identifiers.md): `cond-expand` R7RS 標準機能識別子群の網羅的拡充
+   - [Issue #659](../../docs/issues/closed/659-implement-r7rs-include-ci-syntax.md): `include-ci` 大小文字非区別ソース取り込み構文の完全実装
+   - [Issue #660](../../docs/issues/closed/660-implement-r7rs-bytevector-ports-and-ready-predicates.md): `open-input-bytevector`, `open-output-bytevector`, `get-output-bytevector`, `char-ready?`, `u8-ready?` の完全実装
+   - [Issue #661](../../docs/issues/closed/661-implement-r7rs-scheme-time-procedures.md): `(scheme time)` 時間計測手続き (`current-second`, `current-jiffy`, `jiffies-per-second`) の完全実装
+   - [Issue #662](../../docs/issues/closed/662-implement-srfi-141-integer-division.md): SRFI 141 整数除算全 6 モード (`floor`, `truncate`, `ceiling`, `round`, `euclidean`, `centered`) の完全実装
+   - [Issue #663](../../docs/issues/closed/663-implement-srfi-111-boxes.md): SRFI 111 / `(scheme box)` ボックス型 (`box`, `box?`, `unbox`, `set-box!`) の完全実装
+   - [Issue #664](../../docs/issues/closed/664-implement-srfi-145-assumptions.md): SRFI 145 前提表明構文 (`assume`, `assert`) の完全実装
+   - [Issue #665](../../docs/issues/closed/665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md): R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ自動検証の確立
 4. **アーキテクチャ特性に基づく設計トレードオフ**:
    - `eval`, `load`, `repl` などの動的実行系は、AOT コンパイラのバイナリ独立性・フットプリント最小化を優先して意図的に除外。
    - 数値塔（Number Tower）は 62-bit 即値 Fixnum（下位 2-bit `00b` タグ）を基本とし、加減算のゼロオーバーヘッド化と高速実行を優先。

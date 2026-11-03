@@ -2,6 +2,7 @@
 ;;; Library: (scheme cxr)
 ;;; Specification: R7RS-small Section 7.1.5 (CXR Library)
 ;;; Description: Extended composite pair accessors (caar to cddddr)
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (scheme cxr)

@@ -3,6 +3,7 @@
 ;;; Specification: SRFI 1 (List Library)
 ;;; Description: Comprehensive list processing, constructors, predicates,
 ;;;              selectors, folds, unfolds, searching, filtering, and alists
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (srfi 1)

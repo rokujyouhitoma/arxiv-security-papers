@@ -2,6 +2,7 @@
 ;;; Library: (scheme r5rs)
 ;;; Specification: R7RS-small Section 7.1.16 (R5RS Compatibility Library)
 ;;; Description: Compatibility exports conforming to Revised^5 Report
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (scheme r5rs)

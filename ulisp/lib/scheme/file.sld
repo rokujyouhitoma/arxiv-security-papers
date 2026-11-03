@@ -2,6 +2,7 @@
 ;;; Library: (scheme file)
 ;;; Specification: R7RS-small Section 7.1.7 (File Library)
 ;;; Description: File-system based textual and binary stream operations
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (scheme file)

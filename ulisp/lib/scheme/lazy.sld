@@ -2,6 +2,7 @@
 ;;; Library: (scheme lazy)
 ;;; Specification: R7RS-small Section 7.1.9 (Lazy Evaluation Library)
 ;;; Description: SRFI-45 compliant promises and iterative lazy algorithms
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (scheme lazy)

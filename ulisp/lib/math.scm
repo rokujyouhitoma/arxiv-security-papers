@@ -120,6 +120,82 @@
         (values q r)
         (values (- q 1) (+ r n2)))))
 
+;; §6.2.6 Ceiling Integer Division (SRFI 141)
+(define (ceiling/ n1 n2)
+  (let* ((q (quotient n1 n2))
+         (r (- n1 (* q n2))))
+    (if (or (= r 0)
+            (if (> n1 0)
+                (<= n2 0)
+                (>= n2 0)))
+        (values q r)
+        (values (+ q 1) (- r n2)))))
+
+(define (ceiling-quotient n1 n2)
+  (call-with-values (lambda () (ceiling/ n1 n2)) (lambda (q r) q)))
+
+(define (ceiling-remainder n1 n2)
+  (call-with-values (lambda () (ceiling/ n1 n2)) (lambda (q r) r)))
+
+;; §6.2.6 Round Integer Division (SRFI 141)
+(define (round/ n1 n2)
+  (let* ((q-t (quotient n1 n2))
+         (r-t (- n1 (* q-t n2)))
+         (r-abs (if (< r-t 0) (- 0 r-t) r-t))
+         (d-abs (if (< n2 0) (- 0 n2) n2))
+         (same-sign? (or (and (> n1 0) (> n2 0)) (and (< n1 0) (< n2 0)))))
+    (cond
+      ((= r-t 0)
+       (values q-t 0))
+      ((< (* 2 r-abs) d-abs)
+       (values q-t r-t))
+      ((> (* 2 r-abs) d-abs)
+       (if same-sign?
+           (values (+ q-t 1) (- r-t n2))
+           (values (- q-t 1) (+ r-t n2))))
+      (else
+       ;; Half-way tie: round to nearest even quotient
+       (if (= (modulo q-t 2) 0)
+           (values q-t r-t)
+           (if same-sign?
+               (values (+ q-t 1) (- r-t n2))
+               (values (- q-t 1) (+ r-t n2))))))))
+
+(define (round-quotient n1 n2)
+  (call-with-values (lambda () (round/ n1 n2)) (lambda (q r) q)))
+
+(define (round-remainder n1 n2)
+  (call-with-values (lambda () (round/ n1 n2)) (lambda (q r) r)))
+
+;; §6.2.6 Euclidean Integer Division (SRFI 141)
+(define (euclidean/ n1 n2)
+  (if (> n2 0)
+      (floor/ n1 n2)
+      (ceiling/ n1 n2)))
+
+(define (euclidean-quotient n1 n2)
+  (call-with-values (lambda () (euclidean/ n1 n2)) (lambda (q r) q)))
+
+(define (euclidean-remainder n1 n2)
+  (call-with-values (lambda () (euclidean/ n1 n2)) (lambda (q r) r)))
+
+;; §6.2.6 Centered Integer Division (SRFI 141)
+(define (centered/ n1 n2)
+  (call-with-values (lambda () (euclidean/ n1 n2))
+    (lambda (q r)
+      (let ((d-abs (if (< n2 0) (- 0 n2) n2)))
+        (if (>= (* 2 r) d-abs)
+            (if (> n2 0)
+                (values (+ q 1) (- r d-abs))
+                (values (- q 1) (+ r d-abs)))
+            (values q r))))))
+
+(define (centered-quotient n1 n2)
+  (call-with-values (lambda () (centered/ n1 n2)) (lambda (q r) q)))
+
+(define (centered-remainder n1 n2)
+  (call-with-values (lambda () (centered/ n1 n2)) (lambda (q r) r)))
+
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 exact-integer-sqrt (R7RS Section 6.2.6)
 ;; ---------------------------------------------------------------------

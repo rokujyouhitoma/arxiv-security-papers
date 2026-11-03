@@ -2,6 +2,7 @@
 ;;; Library: (ulisp concurrency atomic)
 ;;; Specification: DSN-37 Section 6 & Section 13.4 (Issue #631)
 ;;; Description: Low-Level Hardware Atomic Primitives & <atomic-box>
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency atomic)

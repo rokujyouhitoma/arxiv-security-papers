@@ -6,7 +6,7 @@
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
-;;; Primitive Helpers
+;;; §6.13.3 Primitive Output Helpers
 ;;; -----------------------------------------------------------------------
 
 (define (%printer-assq item ls)
@@ -57,7 +57,7 @@
   (port-write-char #\" p))
 
 ;;; -----------------------------------------------------------------------
-;;; port-display: Human-readable output (no quotes on strings/chars)
+;;; §6.13.3 port-display: Human-readable output (no quotes on strings/chars)
 ;;; -----------------------------------------------------------------------
 
 (define (port-display val p)
@@ -324,7 +324,7 @@
   (port-write-shared val p))
 
 ;;; -----------------------------------------------------------------------
-;;; First-class Procedural Wrappers (R7RS Standard case-lambda Procedures)
+;;; §6.13.3 First-class Procedural Wrappers (R7RS Standard case-lambda Procedures)
 ;;; -----------------------------------------------------------------------
 
 (define write-simple

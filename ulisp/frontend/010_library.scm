@@ -106,12 +106,21 @@
 
               ;; (include "path" ...) or (include-ci "path" ...)
               ((and (pair? d) (or (eq? (car d) 'include) (eq? (car d) 'include-ci)))
-               (let* ((included-forms (slurp-included-files (cdr d)))
+               (let* ((case-fold? (eq? (car d) 'include-ci))
+                      (included-forms (slurp-included-files-mode (cdr d) case-fold?))
                       (clean-included (map strip-source-loc included-forms)))
                  (loop (cdr rest)
                        exports
                        imports
                        (append (reverse clean-included) body-forms))))
+
+              ;; (cond-expand <ce-clause> ...)
+              ((and (pair? d) (eq? (car d) 'cond-expand))
+               (let ((matched-decls (expand-cond-expand (cdr d))))
+                 (loop (append matched-decls (cdr rest))
+                       exports
+                       imports
+                       body-forms)))
 
               (else
                ;; Skip unrecognized or unsupported declaration silently
@@ -187,6 +196,42 @@
                   (find-included-file path)))
             (find-included-file path)))))
 
+;;; Case-Folding helper for include-ci (R7RS Section 4.1.7)
+(define (char-downcase-ascii c)
+  (let ((n (char->integer c)))
+    (if (and (>= n 65) (<= n 90))
+        (integer->char (+ n 32))
+        c)))
+
+(define (string-downcase-ascii s)
+  (let* ((len (string-length s))
+         (res (make-string len)))
+    (let loop ((i 0))
+      (if (= i len)
+          res
+          (begin
+            (string-set! res i (char-downcase-ascii (string-ref s i)))
+            (loop (+ i 1)))))))
+
+(define (fold-case-datum x)
+  (cond
+    ((symbol? x)
+     (string->symbol (string-downcase-ascii (symbol->string x))))
+    ((pair? x)
+     (if (eq? (car x) '%source-loc)
+         (list '%source-loc (cadr x) (caddr x) (cadddr x) (fold-case-datum (car (cddddr x))))
+         (cons (fold-case-datum (car x)) (fold-case-datum (cdr x)))))
+    ((vector? x)
+     (let* ((len (vector-length x))
+            (v (make-vector len)))
+       (let loop ((i 0))
+         (if (= i len)
+             v
+             (begin
+               (vector-set! v i (fold-case-datum (vector-ref x i)))
+               (loop (+ i 1)))))))
+    (else x)))
+
 (define (expand-includes-in-forms forms)
   (let loop ((fs forms) (acc '()))
     (if (null? fs)
@@ -194,20 +239,41 @@
         (let ((f (car fs)))
           (cond
             ((include-form? f)
-             (let ((included (slurp-included-files (cdr f))))
+             (let* ((case-fold? (eq? (car f) 'include-ci))
+                    (included (slurp-included-files-mode (cdr f) case-fold?)))
                (loop (append included (cdr fs)) acc)))
             ((and (source-loc? f) (include-form? (source-loc-form f)))
-             (let ((included (slurp-included-files (cdr (source-loc-form f)))))
+             (let* ((inner (source-loc-form f))
+                    (case-fold? (eq? (car inner) 'include-ci))
+                    (included (slurp-included-files-mode (cdr inner) case-fold?)))
                (loop (append included (cdr fs)) acc)))
+            (else
+             (loop (cdr fs) (cons f acc))))))))
+
+(define (expand-cond-expands-in-forms forms)
+  (let loop ((fs forms) (acc '()))
+    (if (null? fs)
+        (reverse acc)
+        (let ((f (car fs)))
+          (cond
+            ((and (pair? f) (eq? (car f) 'cond-expand))
+             (let ((matched (expand-cond-expand (cdr f))))
+               (loop (append matched (cdr fs)) acc)))
+            ((and (source-loc? f) (pair? (source-loc-form f)) (eq? (car (source-loc-form f)) 'cond-expand))
+             (let ((matched (expand-cond-expand (cdr (source-loc-form f)))))
+               (loop (append matched (cdr fs)) acc)))
             (else
              (loop (cdr fs) (cons f acc))))))))
 
 ;;; File inclusion helper: safely read forms from given files
 (define (slurp-included-files paths)
+  (slurp-included-files-mode paths #f))
+
+(define (slurp-included-files-mode paths case-fold?)
   (let loop ((ps paths) (acc '()))
     (if (null? ps)
         (reverse acc)
-        (let ((forms (slurp-single-file (car ps))))
+        (let ((forms (slurp-single-file-mode (car ps) case-fold?)))
           (loop (cdr ps) (append (reverse forms) acc))))))
 
 (define (read-datum-or-source-loc p path line)
@@ -219,6 +285,9 @@
         (list '%source-loc path cur-line cur-col expr))))
 
 (define (slurp-single-file raw-path)
+  (slurp-single-file-mode raw-path #f))
+
+(define (slurp-single-file-mode raw-path case-fold?)
   (let ((path (resolve-include-path raw-path)))
     (if (member-string? path (car *include-path-stack*))
         (error "include: circular dependency detected" path)
@@ -233,7 +302,10 @@
                         (begin
                           (close-input-port p)
                           (set-car! *include-path-stack* (cdr (car *include-path-stack*)))
-                          (expand-includes-in-forms (reverse acc)))
+                          (let ((expanded (expand-includes-in-forms (reverse acc))))
+                            (if case-fold?
+                                (map fold-case-datum expanded)
+                                expanded)))
                         (loop (cons expr acc) (+ line 1)))))))))))
 
 ;;; -----------------------------------------------------------------------
@@ -487,8 +559,8 @@
 ;;; 3. Emits namespaced definitions and local binding aliases
 ;;; Returns a flat list of Scheme forms ready for macro expansion (Pass 00b).
 (define (desugar-libraries-and-imports forms)
-  ;; Pre-Step: Expand all top-level (include ...) forms recursively
-  (let ((all-forms (expand-includes-in-forms forms)))
+  ;; Pre-Step: Expand all top-level (cond-expand ...) and (include ...) forms recursively
+  (let ((all-forms (expand-includes-in-forms (expand-cond-expands-in-forms forms))))
     ;; Step 1: Extract all library definitions into an alist: ((name . lib-rec) ...)
     (let loop-collect ((rest all-forms) (registry '()) (non-lib-forms '()))
       (if (not (null? rest))

@@ -2,6 +2,7 @@
 ;;; Library: (ulisp concurrency arena)
 ;;; Specification: DSN-37 Section 5 & Section 13.4 (Issue #630)
 ;;; Description: Process-Local Ephemeral Bump Arena & O(1) Instant Reset
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency arena)

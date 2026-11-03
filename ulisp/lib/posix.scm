@@ -5,7 +5,7 @@
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
-;;; 1. Raw Linux x86-64 System Calls
+;;; §6.14 / SRFI 170 Raw Linux x86-64 System Calls
 ;;; -----------------------------------------------------------------------
 
 ;; sys-exit: sys_exit(status) -> syscall 60
@@ -89,10 +89,33 @@
           (cons sec nsec))
         (cons 0 0))))
 
+;; sys-clock-gettime-realtime: sys_clock_gettime(CLOCK_REALTIME=0, &timespec) -> syscall 228
+(define (sys-clock-gettime-realtime)
+  (let* ((ptr (%ptr-untag *posix-timespec-cell*))
+         (ret (%to-fixnum (%raw-syscall (%to-raw 228) 0 ptr 0 0 0 0))))
+    (if (= ret 0)
+        (let ((sec (%to-fixnum (%raw-load ptr 0)))
+              (nsec (%to-fixnum (%raw-load ptr 8))))
+          (cons sec nsec))
+        (cons 0 0))))
+
+;; R7RS §6.14 System interface: Time procedures
+(define (current-second)
+  (car (sys-clock-gettime-realtime)))
+
+(define (jiffies-per-second)
+  1000000)
+
+(define (current-jiffy)
+  (let* ((ts (sys-clock-gettime-monotonic))
+         (sec (car ts))
+         (nsec (cdr ts)))
+    (+ (* sec 1000000) (quotient nsec 1000))))
+
 
 
 ;;; -----------------------------------------------------------------------
-;;; 2. Pure Scheme Heap Management (Direct Kernel MMap)
+;;; §6.14 Pure Scheme Heap Management (Direct Kernel MMap)
 ;;; -----------------------------------------------------------------------
 
 (define (ulisp-init-heap! size-bytes)
@@ -101,7 +124,7 @@
     heap-ptr))
 
 ;;; -----------------------------------------------------------------------
-;;; 3. Zero-libc I/O Primitives
+;;; §6.13 / §6.14 Zero-libc I/O Primitives
 ;;; -----------------------------------------------------------------------
 
 ;; 16-byte raw buffer for single character I/O and integer formatting
@@ -135,7 +158,7 @@
   (sys-write-char #\newline))
 
 ;;; -----------------------------------------------------------------------
-;;; 4. Pure Scheme Number Printer (Output Formatters)
+;;; §6.13.3 Pure Scheme Number Printer (Output Formatters)
 ;;; -----------------------------------------------------------------------
 
 (define (sys-write-fixnum n)

@@ -3,6 +3,7 @@
 ;;; Specification: DSN-37 Section 8.4.4 & 14.8 Task 6.3 (Issue #668)
 ;;; Description: Fail-Fast "Let It Crash" Semantics, Arena O(1) Instant Reset,
 ;;;              Channel Drop, and Assertion Guards
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency panic)

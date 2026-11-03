@@ -1,6 +1,7 @@
 ;;; =======================================================================
 ;;; R7RS Library: (ulisp concurrency registry)
 ;;; Conforms to DSN-37 Section 8.4.5 & Section 14.8 Task 6.4 (Issue #669)
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency registry)

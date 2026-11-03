@@ -212,7 +212,19 @@
         (irritants (if (and (pair? (cdr expr)) (string? (cadr expr)))
                        (cddr expr)
                        (cdr expr))))
-    (error (string-append "syntax-error: " msg) irritants)))
+    (error (string-append "syntax-error [R7RS §4.3.1]: " msg) irritants)))
+
+(define (desugar-assume expr)
+  (let ((condition (cadr expr))
+        (rest (cddr expr)))
+    (let ((tmp (unique-symbol "assume_tmp_")))
+      (let* ((msg (if (pair? rest) (car rest) "invalid assumption [SRFI 145]"))
+             (objs (if (pair? rest) (cdr rest) '()))
+             (err-call (cons 'error (cons msg (cons (list 'quote condition) objs)))))
+        (list 'let (list (list tmp condition))
+              (list 'if tmp
+                    tmp
+                    err-call))))))
 
 (define (desugar-gcd args)
   (cond
@@ -240,7 +252,7 @@
 
 (define (desugar-max args)
   (cond
-    ((null? args) (error "max: requires at least one argument"))
+    ((null? args) (error "max [R7RS §6.2.6]: requires at least one argument"))
     ((null? (cdr args)) (car args))
     ((null? (cddr args)) (list 'max-2 (car args) (cadr args)))
     (else
@@ -252,7 +264,7 @@
 
 (define (desugar-min args)
   (cond
-    ((null? args) (error "min: requires at least one argument"))
+    ((null? args) (error "min [R7RS §6.2.6]: requires at least one argument"))
     ((null? (cdr args)) (car args))
     ((null? (cddr args)) (list 'min-2 (car args) (cadr args)))
     (else
@@ -264,7 +276,7 @@
 
 (define (desugar-format args)
   (if (null? args)
-      (error "format: too few arguments (requires format-string)")
+      (error "format [SRFI 28]: too few arguments (requires format-string)")
       (list '%format (car args) (cons 'list (cdr args)))))
 
 ;;; =======================================================================
@@ -274,6 +286,8 @@
 (define-pass desugar-all : L_src (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
     ;; 1. Conditionals (Pass 027)
+    ((cond-expand ,clauses ...) (Expr (desugar-cond-expand clauses)))
+    ((cond-expand . ,clauses) (Expr (desugar-cond-expand clauses)))
     ((cond ,clauses ...) (Expr (desugar-cond clauses)))
     ((cond . ,clauses) (Expr (desugar-cond clauses)))
     ((case ,key ,clauses ...) (Expr (desugar-case key clauses)))
@@ -441,6 +455,8 @@
     ((%call-with-values ,p1 ,p2) (list '%call-with-values (Expr p1) (Expr p2)))
     ((error ,args ...) (Expr (desugar-error (cons 'error args))))
     ((error . ,args) (Expr (desugar-error (cons 'error args))))
+    ((assume . ,rest) (Expr (desugar-assume (cons 'assume rest))))
+    ((assert . ,rest) (Expr (desugar-assume (cons 'assert rest))))
     ((syntax-error ,args ...) (Expr (desugar-syntax-error (cons 'syntax-error args))))
     ((syntax-error . ,args) (Expr (desugar-syntax-error (cons 'syntax-error args))))
     ((let-syntax ,args ...) (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))

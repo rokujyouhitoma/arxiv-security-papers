@@ -13,7 +13,7 @@
 ;;;   [32]: mature_size, [40]: mature_free, [48]: stack_bottom, [56]: minor_count
 ;;;   [64]: major_count, [72]: remset_ptr, [80]: remset_count, [88]: gen_mode
 
-;; Dual-space accessors (backward compatibility)
+;; §DSN-33 Section 8.5 Dual-space accessors (backward compatibility)
 (define (gc-from) (%raw-load (%get-gc-state-ptr) 0))
 (define (gc-to) (%raw-load (%get-gc-state-ptr) 8))
 (define (gc-size) (%raw-load (%get-gc-state-ptr) 16))

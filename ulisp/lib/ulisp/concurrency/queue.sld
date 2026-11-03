@@ -2,6 +2,7 @@
 ;;; Library: (ulisp concurrency queue)
 ;;; Specification: DSN-37 Section 6 & Section 13.4 (Issue #632)
 ;;; Description: Michael-Scott Non-Blocking Lock-Free MPMC Queue & ABA-Safe Node Pool
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency queue)

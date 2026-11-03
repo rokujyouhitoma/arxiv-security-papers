@@ -1106,6 +1106,100 @@
 (define (jiffies-per-second)
   1000000000)
 
+;;; -----------------------------------------------------------------------
+;;; R7RS Section 4.2.1 / 5.5.1 Feature Identifiers & cond-expand Helpers
+;;; -----------------------------------------------------------------------
+
+(define (ulisp-supported-feature? feat)
+  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix))
+      #t
+      #f))
+
+(define (builtin-library-name? name)
+  (and (pair? name)
+       (or (and (eq? (car name) 'scheme)
+                (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load list hash-table sort division box)))
+           (and (eq? (car name) 'srfi)
+                (memq (cadr name) '(1 28 69 95 111 125 132 141 145)))
+           (and (eq? (car name) 'ulisp)
+                (memq (cadr name) '(base core native))))))
+
+(define (library-name->sld-path lib-name)
+  (let loop ((rest lib-name) (acc "lib"))
+    (if (null? rest)
+        (string-append acc ".sld")
+        (let* ((elem (car rest))
+               (part (cond
+                       ((symbol? elem) (symbol->string elem))
+                       ((number? elem) (number->string elem))
+                       (else "sub"))))
+          (loop (cdr rest) (string-append acc "/" part))))))
+
+(define (find-included-file path)
+  (let ((p (open-input-file path)))
+    (if p
+        (begin (close-input-port p) path)
+        (let* ((prefixed (string-append "ulisp/" path))
+               (p2 (open-input-file prefixed)))
+          (if p2
+              (begin (close-input-port p2) prefixed)
+              (if (string-starts-with? path "ulisp/")
+                  (let* ((stripped (substring path 6 (string-length path)))
+                         (p3 (open-input-file stripped)))
+                    (if p3
+                        (begin (close-input-port p3) stripped)
+                        path))
+                  path))))))
+
+(define (ulisp-library-available? name)
+  (or (builtin-library-name? name)
+      (let* ((sld-rel (library-name->sld-path name))
+             (resolved (find-included-file sld-rel))
+             (p (open-input-file resolved)))
+        (if p
+            (begin (close-input-port p) #t)
+            #f))))
+
+(define (eval-feature-requirement req)
+  (cond
+    ((symbol? req)
+     (ulisp-supported-feature? req))
+    ((and (pair? req) (eq? (car req) 'library) (pair? (cdr req)))
+     (ulisp-library-available? (cadr req)))
+    ((and (pair? req) (eq? (car req) 'and))
+     (let loop ((rest (cdr req)))
+       (if (null? rest)
+           #t
+           (if (eval-feature-requirement (car rest))
+               (loop (cdr rest))
+               #f))))
+    ((and (pair? req) (eq? (car req) 'or))
+     (let loop ((rest (cdr req)))
+       (if (null? rest)
+           #f
+           (if (eval-feature-requirement (car rest))
+               #t
+               (loop (cdr rest))))))
+    ((and (pair? req) (eq? (car req) 'not) (pair? (cdr req)))
+     (not (eval-feature-requirement (cadr req))))
+    (else #f)))
+
+(define (expand-cond-expand clauses)
+  (let loop ((cls clauses))
+    (if (or (null? cls) (not (pair? cls)))
+        (error "syntax-error [R7RS §4.2.1]: cond-expand no matching clause" clauses)
+        (let ((c (car cls)))
+          (cond
+            ((not (pair? c))
+             (loop (cdr cls)))
+            ((eq? (car c) 'else)
+             (cdr c))
+            ((eval-feature-requirement (car c))
+             (cdr c))
+            (else
+             (loop (cdr cls))))))))
+
+
 
 
 
@@ -4672,12 +4766,21 @@
 
               ;; (include "path" ...) or (include-ci "path" ...)
               ((and (pair? d) (or (eq? (car d) 'include) (eq? (car d) 'include-ci)))
-               (let* ((included-forms (slurp-included-files (cdr d)))
+               (let* ((case-fold? (eq? (car d) 'include-ci))
+                      (included-forms (slurp-included-files-mode (cdr d) case-fold?))
                       (clean-included (map strip-source-loc included-forms)))
                  (loop (cdr rest)
                        exports
                        imports
                        (append (reverse clean-included) body-forms))))
+
+              ;; (cond-expand <ce-clause> ...)
+              ((and (pair? d) (eq? (car d) 'cond-expand))
+               (let ((matched-decls (expand-cond-expand (cdr d))))
+                 (loop (append matched-decls (cdr rest))
+                       exports
+                       imports
+                       body-forms)))
 
               (else
                ;; Skip unrecognized or unsupported declaration silently
@@ -4753,6 +4856,42 @@
                   (find-included-file path)))
             (find-included-file path)))))
 
+;;; Case-Folding helper for include-ci (R7RS Section 4.1.7)
+(define (char-downcase-ascii c)
+  (let ((n (char->integer c)))
+    (if (and (>= n 65) (<= n 90))
+        (integer->char (+ n 32))
+        c)))
+
+(define (string-downcase-ascii s)
+  (let* ((len (string-length s))
+         (res (make-string len)))
+    (let loop ((i 0))
+      (if (= i len)
+          res
+          (begin
+            (string-set! res i (char-downcase-ascii (string-ref s i)))
+            (loop (+ i 1)))))))
+
+(define (fold-case-datum x)
+  (cond
+    ((symbol? x)
+     (string->symbol (string-downcase-ascii (symbol->string x))))
+    ((pair? x)
+     (if (eq? (car x) '%source-loc)
+         (list '%source-loc (cadr x) (caddr x) (cadddr x) (fold-case-datum (car (cddddr x))))
+         (cons (fold-case-datum (car x)) (fold-case-datum (cdr x)))))
+    ((vector? x)
+     (let* ((len (vector-length x))
+            (v (make-vector len)))
+       (let loop ((i 0))
+         (if (= i len)
+             v
+             (begin
+               (vector-set! v i (fold-case-datum (vector-ref x i)))
+               (loop (+ i 1)))))))
+    (else x)))
+
 (define (expand-includes-in-forms forms)
   (let loop ((fs forms) (acc '()))
     (if (null? fs)
@@ -4760,20 +4899,41 @@
         (let ((f (car fs)))
           (cond
             ((include-form? f)
-             (let ((included (slurp-included-files (cdr f))))
+             (let* ((case-fold? (eq? (car f) 'include-ci))
+                    (included (slurp-included-files-mode (cdr f) case-fold?)))
                (loop (append included (cdr fs)) acc)))
             ((and (source-loc? f) (include-form? (source-loc-form f)))
-             (let ((included (slurp-included-files (cdr (source-loc-form f)))))
+             (let* ((inner (source-loc-form f))
+                    (case-fold? (eq? (car inner) 'include-ci))
+                    (included (slurp-included-files-mode (cdr inner) case-fold?)))
                (loop (append included (cdr fs)) acc)))
+            (else
+             (loop (cdr fs) (cons f acc))))))))
+
+(define (expand-cond-expands-in-forms forms)
+  (let loop ((fs forms) (acc '()))
+    (if (null? fs)
+        (reverse acc)
+        (let ((f (car fs)))
+          (cond
+            ((and (pair? f) (eq? (car f) 'cond-expand))
+             (let ((matched (expand-cond-expand (cdr f))))
+               (loop (append matched (cdr fs)) acc)))
+            ((and (source-loc? f) (pair? (source-loc-form f)) (eq? (car (source-loc-form f)) 'cond-expand))
+             (let ((matched (expand-cond-expand (cdr (source-loc-form f)))))
+               (loop (append matched (cdr fs)) acc)))
             (else
              (loop (cdr fs) (cons f acc))))))))
 
 ;;; File inclusion helper: safely read forms from given files
 (define (slurp-included-files paths)
+  (slurp-included-files-mode paths #f))
+
+(define (slurp-included-files-mode paths case-fold?)
   (let loop ((ps paths) (acc '()))
     (if (null? ps)
         (reverse acc)
-        (let ((forms (slurp-single-file (car ps))))
+        (let ((forms (slurp-single-file-mode (car ps) case-fold?)))
           (loop (cdr ps) (append (reverse forms) acc))))))
 
 (define (read-datum-or-source-loc p path line)
@@ -4785,6 +4945,9 @@
         (list '%source-loc path cur-line cur-col expr))))
 
 (define (slurp-single-file raw-path)
+  (slurp-single-file-mode raw-path #f))
+
+(define (slurp-single-file-mode raw-path case-fold?)
   (let ((path (resolve-include-path raw-path)))
     (if (member-string? path (car *include-path-stack*))
         (error "include: circular dependency detected" path)
@@ -4799,7 +4962,10 @@
                         (begin
                           (close-input-port p)
                           (set-car! *include-path-stack* (cdr (car *include-path-stack*)))
-                          (expand-includes-in-forms (reverse acc)))
+                          (let ((expanded (expand-includes-in-forms (reverse acc))))
+                            (if case-fold?
+                                (map fold-case-datum expanded)
+                                expanded)))
                         (loop (cons expr acc) (+ line 1)))))))))))
 
 ;;; -----------------------------------------------------------------------
@@ -5053,8 +5219,8 @@
 ;;; 3. Emits namespaced definitions and local binding aliases
 ;;; Returns a flat list of Scheme forms ready for macro expansion (Pass 00b).
 (define (desugar-libraries-and-imports forms)
-  ;; Pre-Step: Expand all top-level (include ...) forms recursively
-  (let ((all-forms (expand-includes-in-forms forms)))
+  ;; Pre-Step: Expand all top-level (cond-expand ...) and (include ...) forms recursively
+  (let ((all-forms (expand-includes-in-forms (expand-cond-expands-in-forms forms))))
     ;; Step 1: Extract all library definitions into an alist: ((name . lib-rec) ...)
     (let loop-collect ((rest all-forms) (registry '()) (non-lib-forms '()))
       (if (not (null? rest))
@@ -5219,7 +5385,7 @@
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
   (memq sym '(if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
-              let-syntax letrec-syntax
+              let-syntax letrec-syntax cond-expand include include-ci assume assert
               cond case and or when unless delay delay-force do case-lambda
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
@@ -5720,6 +5886,8 @@
        (expand-let-syntax expanded macro-table #f))
       ((eq? (car expanded) (quote letrec-syntax))
        (expand-let-syntax expanded macro-table #t))
+      ((eq? (car expanded) (quote cond-expand))
+       (macro-expand-all (desugar-cond-expand (cdr expanded)) macro-table))
       ((or (eq? (car expanded) (quote let))
            (eq? (car expanded) (quote let*))
            (eq? (car expanded) (quote letrec))
@@ -6129,11 +6297,20 @@
         (list 'let bindings
               (cons 'and pairs))))))
 
+(define (desugar-cond-expand clauses)
+  (let ((matched (expand-cond-expand clauses)))
+    (cond
+      ((null? matched) #f)
+      ((null? (cdr matched)) (car matched))
+      (else (cons 'begin matched)))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Conditionals
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-conditionals : L_src (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
+    ((cond-expand ,clauses ...) (Expr (desugar-cond-expand clauses)))
+    ((cond-expand . ,clauses) (Expr (desugar-cond-expand clauses)))
     ((cond ,clauses ...) (Expr (desugar-cond clauses)))
     ((cond . ,clauses) (Expr (desugar-cond clauses)))
     ((case ,key ,clauses ...) (Expr (desugar-case key clauses)))
@@ -6708,6 +6885,18 @@
                        (cdr expr))))
     (error (string-append "syntax-error: " msg) irritants)))
 
+(define (desugar-assume expr)
+  (let ((condition (cadr expr))
+        (rest (cddr expr)))
+    (let ((tmp (unique-symbol "assume_tmp_")))
+      (let* ((msg (if (pair? rest) (car rest) "invalid assumption [SRFI 145]"))
+             (objs (if (pair? rest) (cdr rest) '()))
+             (err-call (cons 'error (cons msg (cons (list 'quote condition) objs)))))
+        (list 'let (list (list tmp condition))
+              (list 'if tmp
+                    tmp
+                    err-call))))))
+
 (define (desugar-gcd args)
   (cond
     ((null? args) 0)
@@ -6768,6 +6957,8 @@
 (define-pass desugar-all : L_src (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
     ;; 1. Conditionals (Pass 027)
+    ((cond-expand ,clauses ...) (Expr (desugar-cond-expand clauses)))
+    ((cond-expand . ,clauses) (Expr (desugar-cond-expand clauses)))
     ((cond ,clauses ...) (Expr (desugar-cond clauses)))
     ((cond . ,clauses) (Expr (desugar-cond clauses)))
     ((case ,key ,clauses ...) (Expr (desugar-case key clauses)))
@@ -6935,6 +7126,8 @@
     ((%call-with-values ,p1 ,p2) (list '%call-with-values (Expr p1) (Expr p2)))
     ((error ,args ...) (Expr (desugar-error (cons 'error args))))
     ((error . ,args) (Expr (desugar-error (cons 'error args))))
+    ((assume . ,rest) (Expr (desugar-assume (cons 'assume rest))))
+    ((assert . ,rest) (Expr (desugar-assume (cons 'assert rest))))
     ((syntax-error ,args ...) (Expr (desugar-syntax-error (cons 'syntax-error args))))
     ((syntax-error . ,args) (Expr (desugar-syntax-error (cons 'syntax-error args))))
     ((let-syntax ,args ...) (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))

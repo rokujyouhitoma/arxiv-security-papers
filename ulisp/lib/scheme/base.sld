@@ -2,6 +2,7 @@
 ;;; Library: (scheme base)
 ;;; Specification: R7RS-small Section 7.1.1 (Base Library)
 ;;; Description: Core Scheme syntax, primitives, pairs, lists, strings, vectors, control
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (scheme base)
@@ -15,12 +16,14 @@
     include-ci
 
     ;; §4.2 Derived expression types
+    cond-expand
     cond
     case
     and
     or
     when
     unless
+    assume
     let
     let*
     letrec
@@ -223,6 +226,9 @@
     open-input-string
     open-output-string
     get-output-string
+    open-input-bytevector
+    open-output-bytevector
+    get-output-bytevector
     close-port
     close-input-port
     close-output-port

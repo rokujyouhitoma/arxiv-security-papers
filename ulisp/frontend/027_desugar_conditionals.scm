@@ -89,11 +89,20 @@
         (list 'let bindings
               (cons 'and pairs))))))
 
+(define (desugar-cond-expand clauses)
+  (let ((matched (expand-cond-expand clauses)))
+    (cond
+      ((null? matched) #f)
+      ((null? (cdr matched)) (car matched))
+      (else (cons 'begin matched)))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Conditionals
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-conditionals : L_src (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
+    ((cond-expand ,clauses ...) (Expr (desugar-cond-expand clauses)))
+    ((cond-expand . ,clauses) (Expr (desugar-cond-expand clauses)))
     ((cond ,clauses ...) (Expr (desugar-cond clauses)))
     ((cond . ,clauses) (Expr (desugar-cond clauses)))
     ((case ,key ,clauses ...) (Expr (desugar-case key clauses)))

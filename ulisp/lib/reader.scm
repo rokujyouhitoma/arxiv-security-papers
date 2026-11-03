@@ -4,6 +4,8 @@
 ;;; Extended with R7RS Port Specification & Issue #534
 ;;; =======================================================================
 
+;; §6.13.2 Input procedures: Lexical and character classification helpers
+
 (define (ulisp-char=? c expected)
   (and (not (eof-object? c))
        (char=? c expected)))
@@ -406,7 +408,7 @@
                  (read-token (cons next acc))))))))))
 
 ;;; -----------------------------------------------------------------------
-;;; R7RS Standard Macros and Compatibility Wrappers
+;;; §6.13.2 R7RS Standard Macros and Compatibility Wrappers: read
 ;;; -----------------------------------------------------------------------
 
 (define (read-from-port p)

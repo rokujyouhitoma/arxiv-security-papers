@@ -2,6 +2,7 @@
 ;;; Library: (ulisp concurrency channel)
 ;;; Specification: DSN-37 Section 4, 6.1 & 13.4 (Issue #633)
 ;;; Description: Linear Ownership Transfer Channel & Bounded Backpressure
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (ulisp concurrency channel)

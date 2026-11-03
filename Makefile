@@ -162,6 +162,10 @@ test: build_js pytest ## pytest
 test_concurrency_ci: ## Run 100-iteration multicore concurrency CI harness in uLisp
 	$(MAKE) -C ulisp test_concurrency_ci
 
+.PHONY: verify_r7rs_traceability
+verify_r7rs_traceability: activate ## Verify R7RS specification traceability and diagnostic tags (Issue #665)
+	${VENV_PYTHON} scripts/verify_r7rs_traceability.py
+
 .PHONY: test_stream
 test_stream: activate ## Run Unix stream CLI pipeline unit and integration tests
 	PYTHONPATH=src ${VENV_BIN}/pytest tests/cli/ -v

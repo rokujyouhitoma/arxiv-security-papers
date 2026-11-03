@@ -2,6 +2,7 @@
 ;;; Library: (scheme char)
 ;;; Specification: R7RS-small Section 7.1.3 (Character Library)
 ;;; Description: Case-insensitive character and string operations, classifications
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
 (define-library (scheme char)
