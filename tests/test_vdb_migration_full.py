@@ -84,9 +84,12 @@ def test_migrated_analytics_vdb_integrity() -> None:
 def test_cti_catalog_storage_operations_on_vdb() -> None:
     """Tests that CTICatalogStorage operates seamlessly on cti_catalog.vdb."""
     vdb_path = "outputs/database/catalog/cti_catalog.vdb"
-    if not os.path.exists(vdb_path):
+    if (
+        not os.path.exists(vdb_path)
+        or get_sqlite_table_counts(vdb_path).get("cti_tactics", 0) < 15
+    ):
         pytest.skip(
-            f"Live database container {vdb_path} is not present in clean checkout"
+            f"Live database container {vdb_path} is not populated with production catalog on clean checkout"
         )
     from domain.security.cti.storage import CTICatalogStorage
 
@@ -117,9 +120,12 @@ def test_cti_catalog_storage_operations_on_vdb() -> None:
 def test_analytics_storage_operations_on_vdb() -> None:
     """Tests that AnalyticsStorage operates seamlessly on analytics.vdb."""
     vdb_path = "outputs/database/analytics/analytics.vdb"
-    if not os.path.exists(vdb_path):
+    if (
+        not os.path.exists(vdb_path)
+        or get_sqlite_table_counts(vdb_path).get("threat_trends", 0) < 6
+    ):
         pytest.skip(
-            f"Live database container {vdb_path} is not present in clean checkout"
+            f"Live database container {vdb_path} is not populated with production analytics on clean checkout"
         )
     from analytics.storage import AnalyticsStorage
 

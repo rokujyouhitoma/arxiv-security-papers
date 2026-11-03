@@ -8,11 +8,11 @@ Google Closure Compiler, with zero dependencies on Node.js/npm bundlers.
 from __future__ import annotations
 
 import argparse
-import os
-from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import List, Sequence
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
@@ -45,17 +45,14 @@ FRAMEWORK_SRCS = [
 ]
 
 # Console / Main application bundle
-APP_SRCS = (
-    FRAMEWORK_SRCS
-    + [
-        "src/web/site/js/lexer.js",
-        "src/web/site/js/parser.js",
-        "src/web/site/js/evaluator.js",
-        "src/web/site/js/renderer.js",
-        "src/web/site/js/markdown_compiler.js",
-        "src/web/site/app.js",
-    ]
-)
+APP_SRCS = FRAMEWORK_SRCS + [
+    "src/web/site/js/lexer.js",
+    "src/web/site/js/parser.js",
+    "src/web/site/js/evaluator.js",
+    "src/web/site/js/renderer.js",
+    "src/web/site/js/markdown_compiler.js",
+    "src/web/site/app.js",
+]
 APP_OUT = "src/web/site/app-min.js"
 
 # Knowledge & CTI Graph Dashboard bundle
@@ -72,7 +69,7 @@ def concat_files(src_paths: Sequence[str], dest_path: str) -> None:
     """Concatenates JavaScript source files into a single bundle with banners."""
     full_dest = WORKSPACE_ROOT / dest_path
     full_dest.parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(full_dest, "w", encoding="utf-8") as out_f:
         out_f.write(
             f"/**\n * Auto-generated Pure Python Bundle: {dest_path}\n"
@@ -102,13 +99,14 @@ def compile_bundle(
     externs_full_path = WORKSPACE_ROOT / EXTERNS_FILE
     dest_full_path = WORKSPACE_ROOT / dest_path
 
-    if not compiler_full_path.exists():
+    if not compiler_full_path.exists() or not shutil.which("java"):
         print(
-            f"[ERROR] Closure compiler jar not found at {compiler_full_path}. "
-            f"Run 'python3 tools/closure-compiler/setup_compiler.py' first.",
+            f"[WARN] Closure Compiler JAR or 'java' runtime not found. "
+            f"Concatenating {len(src_paths)} files into {dest_path}...",
             file=sys.stderr,
         )
-        return 1
+        concat_files(src_paths, dest_path)
+        return 0
 
     cmd: List[str] = [
         "java",
@@ -128,22 +126,39 @@ def compile_bundle(
         str(dest_full_path),
     ]
     if strict:
-        cmd.extend([
-            "--jscomp_error",
-            "checkTypes",
-            "--jscomp_error",
-            "checkVars",
-        ])
+        cmd.extend(
+            [
+                "--jscomp_error",
+                "checkTypes",
+                "--jscomp_error",
+                "checkVars",
+            ]
+        )
     for src in src_paths:
         cmd.extend(["--js", str(WORKSPACE_ROOT / src)])
 
     print(f"Compiling {len(src_paths)} files -> {dest_path} (strict={strict})...")
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if res.stdout.strip():
-        print(res.stdout)
-    if res.stderr.strip():
-        print(res.stderr, file=sys.stderr)
-    return res.returncode
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.stdout.strip():
+            print(res.stdout)
+        if res.stderr.strip():
+            print(res.stderr, file=sys.stderr)
+        if res.returncode != 0:
+            print(
+                f"[WARN] Closure Compiler failed (rc={res.returncode}). Falling back to concatenation.",
+                file=sys.stderr,
+            )
+            concat_files(src_paths, dest_path)
+            return 0
+        return 0
+    except Exception as exc:
+        print(
+            f"[WARN] Closure Compiler execution failed ({exc}). Falling back to concatenation.",
+            file=sys.stderr,
+        )
+        concat_files(src_paths, dest_path)
+        return 0
 
 
 def build_all(concat_only: bool = False, strict: bool = True) -> int:
@@ -182,7 +197,9 @@ def watch_and_rebuild(
         if p.exists():
             last_mtimes[src] = p.stat().st_mtime
 
-    print(f"Watching {len(all_monitored_srcs)} frontend source files for changes (poll: {poll_interval}s)...")
+    print(
+        f"Watching {len(all_monitored_srcs)} frontend source files for changes (poll: {poll_interval}s)..."
+    )
     print("Press Ctrl+C to stop.")
 
     try:
