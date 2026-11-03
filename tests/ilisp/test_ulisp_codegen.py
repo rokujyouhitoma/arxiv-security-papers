@@ -161,6 +161,7 @@ class TestUlispELFExecution:
             assert proc.returncode == 0
             assert proc.stdout.strip() == "30"
 
+    @pytest.mark.slow
     def test_compile_and_run_display_output(self) -> None:
         with tempfile.TemporaryDirectory(prefix="test_elf_") as tmpdir:
             bin_path = Path(tmpdir) / "bin_display"
