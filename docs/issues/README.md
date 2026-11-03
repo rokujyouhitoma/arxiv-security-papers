@@ -15,6 +15,15 @@
 | **663** | R7RS-large / SRFI 111 Boxes 単一要素可変セル API の実装 | Feature | Medium | New | [663-implement-srfi-111-boxes.md](663-implement-srfi-111-boxes.md) |
 | **664** | R7RS-large / SRFI 145 Assumptions 表明構文 (assume / assert) の実装 | Feature | Medium | New | [664-implement-srfi-145-assumptions.md](664-implement-srfi-145-assumptions.md) |
 | **665** | R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ検証の確立 | Feature | High | New | [665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md](665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md) |
+| **689** | QEMU ユーザーエミュレーションおよび AArch64 クロスツールチェーン検証環境の構築 | Feature | High | New | [689-setup-qemu-user-and-cross-toolchain-verification-environment.md](689-setup-qemu-user-and-cross-toolchain-verification-environment.md) |
+| **690** | ULisp POSIX システムコール層のマルチアーキテクチャ抽象化と AArch64 Linux 対応 | Feature | High | New | [690-abstract-posix-syscall-layer-for-multi-architecture-support.md](690-abstract-posix-syscall-layer-for-multi-architecture-support.md) |
+| **691** | ULisp AArch64 AOT コンパイラ出力の結合検証および QEMU エミュレーション実行の確立 | Feature | High | New | [691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md](691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md) |
+| **692** | Synapse 並行性ランタイム向け AArch64 ネイティブコンテキストスイッチ (context_aarch64.s) の実装 | Feature | High | New | [692-implement-aarch64-native-context-switch-for-concurrency-runtime.md](692-implement-aarch64-native-context-switch-for-concurrency-runtime.md) |
+| **693** | ULisp Makefile への QEMU AArch64 全自動回帰テストスイートの統合 | Feature | Medium | New | [693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md](693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md) |
+| **694** | MinGW-w64 および Wine を用いた Windows 向けクロスコンパイル・ローカル検証環境の構築 | Feature | High | New | [694-setup-mingw-and-wine-verification-environment.md](694-setup-mingw-and-wine-verification-environment.md) |
+| **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
+| **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
+| **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
 
 ---
 
