@@ -16,8 +16,10 @@
     futex-wait!
     futex-wake!
     futex-park!
+    futex-park-adaptive!
     futex-unpark!
     futex-unpark-all!
+    futex-spin-pause!
     scheduler-enable-futex!
     FUTEX_STATE_EMPTY
     FUTEX_STATE_PARKED
@@ -28,7 +30,8 @@
     %sys-futex-set!
     %sys-futex-cas!
     %sys-futex-wait
-    %sys-futex-wake)
+    %sys-futex-wake
+    %sys-cpu-pause)
 
   (import
     (scheme base))

@@ -32,12 +32,16 @@
 (define (%sys-futex-wake addr count)
   0)
 
+(define (%sys-cpu-pause cycles)
+  #t)
+
 ;; -----------------------------------------------------------------------
-;; Scheduler Integration Hook Forward Declarations (Issue #676)
+;; Scheduler Integration Hook Forward Declarations (Issue #676, #679)
 ;; -----------------------------------------------------------------------
 (define *scheduler-futex-enabled-box* (vector #f))
 (define *scheduler-make-futex-cell-box* (vector (lambda () #f)))
 (define *scheduler-futex-park-box* (vector (lambda (cell timeout-ms) #t)))
+(define *scheduler-futex-park-adaptive-box* (vector (lambda (cell spins timeout-ms) #t)))
 (define *scheduler-futex-unpark-box* (vector (lambda (cell) #t)))
 (define *scheduler-futex-unpark-all-box* (vector (lambda (cell) #t)))
 (define work-stealing-scheduler? (lambda (x) #f))
@@ -233,7 +237,61 @@
               #t)))))
 
 ;; -----------------------------------------------------------------------
-;; Scheduler Integration Hook (DSN-37 Section 7.4.2 & Issue #676)
+;; Adaptive Spinning Primitives (Issue #679)
+;; -----------------------------------------------------------------------
+
+;; (futex-spin-pause! [cycles]) -> #t
+(define futex-spin-pause!
+  (case-lambda
+    (()
+     (futex-spin-pause! 1))
+    ((cycles)
+     (if (not (integer? cycles))
+         (error "futex-spin-pause!: cycles must be an integer (CWE-843)" cycles)
+         (let ((c (cond ((< cycles 1) 1)
+                        ((> cycles 4096) 4096)
+                        (else cycles))))
+           (%sys-cpu-pause c))))))
+
+;; (futex-park-adaptive! cell [max-spins] [timeout-ms]) -> #t (woken or bypass) / #f (timed out)
+(define futex-park-adaptive!
+  (case-lambda
+    ((cell)
+     (futex-park-adaptive! cell 256 -1))
+    ((cell max-spins)
+     (futex-park-adaptive! cell max-spins -1))
+    ((cell max-spins timeout-ms)
+     (if (not (futex-cell? cell))
+         (error "futex-park-adaptive!: expected <futex-cell> (CWE-843)" cell)
+         (let ((spins (cond ((not max-spins) 256)
+                            ((integer? max-spins)
+                             (cond ((< max-spins 0) 0)
+                                   ((> max-spins 4096) 4096)
+                                   (else max-spins)))
+                            (else (error "futex-park-adaptive!: max-spins must be integer or #f (CWE-843)" max-spins))))
+               (t (cond ((not timeout-ms) -1)
+                        ((integer? timeout-ms) timeout-ms)
+                        (else (error "futex-park-adaptive!: timeout-ms must be integer or #f" timeout-ms))))
+               (addr (futex-cell-addr cell)))
+           (if (= addr 0)
+               (error "futex-park-adaptive!: use-after-free on futex cell (CWE-416)" cell)
+               ;; 1. Check if unpark already provided a wakeup token (NOTIFIED = 2)
+               (if (%sys-futex-cas! addr 2 0)
+                   #t ;; Token consumed immediately, bypass sleep!
+                   ;; 2. Adaptive Spinning Phase: Bounded spin with PAUSE
+                   (let spin-loop ((i 0))
+                     (if (< i spins)
+                         (begin
+                           (%sys-cpu-pause 1)
+                           ;; Check if token arrived during spin
+                           (if (%sys-futex-cas! addr 2 0)
+                               #t ;; Token arrived and consumed during spin!
+                               (spin-loop (+ i 1))))
+                         ;; 3. Spin budget exhausted: Fall back to kernel futex sleep
+                         (futex-park! cell t))))))))))
+
+;; -----------------------------------------------------------------------
+;; Scheduler Integration Hook (DSN-37 Section 7.4.2 & Issue #676, #679)
 ;; -----------------------------------------------------------------------
 (define scheduler-enable-futex!
   (case-lambda
@@ -241,6 +299,7 @@
      (vector-set! *scheduler-futex-enabled-box* 0 #t)
      (vector-set! *scheduler-make-futex-cell-box* 0 (lambda () (make-futex-cell 0)))
      (vector-set! *scheduler-futex-park-box* 0 (lambda (cell timeout-ms) (futex-park! cell timeout-ms)))
+     (vector-set! *scheduler-futex-park-adaptive-box* 0 (lambda (cell spins timeout-ms) (futex-park-adaptive! cell spins timeout-ms)))
      (vector-set! *scheduler-futex-unpark-box* 0 (lambda (cell) (futex-unpark! cell)))
      (vector-set! *scheduler-futex-unpark-all-box* 0 (lambda (cell) (futex-unpark-all! cell)))
      #t)

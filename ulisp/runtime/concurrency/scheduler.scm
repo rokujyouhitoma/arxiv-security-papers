@@ -12,10 +12,12 @@
 ;; Preemption execution hook (overridden when preempt.scm is loaded)
 (define budgeted-task-execute! (lambda (task) #f))
 
-;; Futex execution hooks (injected via futex.scm, Issue #676)
+;; Futex execution hooks (injected via futex.scm, Issue #676, #679)
+(define (%sys-cpu-pause cycles) #t)
 (define *scheduler-futex-enabled-box* (vector #f))
 (define *scheduler-make-futex-cell-box* (vector (lambda () #f)))
 (define *scheduler-futex-park-box* (vector (lambda (cell timeout-ms) #t)))
+(define *scheduler-futex-park-adaptive-box* (vector (lambda (cell spins timeout-ms) #t)))
 (define *scheduler-futex-unpark-box* (vector (lambda (cell) #t)))
 (define *scheduler-futex-unpark-all-box* (vector (lambda (cell) #t)))
 
@@ -347,11 +349,13 @@
 ;; -----------------------------------------------------------------------
 
 (define (%scheduler-idle-backoff!)
-  ;; Bounded spin pause to relieve bus/CPU contention during quiescent periods
-  (let spin ((i 0))
-    (if (< i 64)
-        (spin (+ i 1))
-        #f)))
+  ;; Bounded spin pause to relieve bus/CPU contention during quiescent periods (Issue #679)
+  (if (vector-ref *scheduler-futex-enabled-box* 0)
+      (%sys-cpu-pause 16)
+      (let spin ((i 0))
+        (if (< i 64)
+            (spin (+ i 1))
+            #f))))
 
 (define (%scheduler-step-all! sched num-workers i progress-made)
   (if (< i num-workers)
@@ -464,10 +468,10 @@
               (if (not executed?)
                   (begin
                     (%scheduler-idle-backoff!)
-                    ;; If still no work, park via Linux futex to avoid CPU saturation (Issue #676)
+                    ;; If still no work, park via Linux futex with adaptive spin (Issue #676, #679)
                     (let ((cell (worker-futex-cell worker)))
                       (if (and cell (scheduler-running? sched))
-                          ((vector-ref *scheduler-futex-park-box* 0) cell 50)
+                          ((vector-ref *scheduler-futex-park-adaptive-box* 0) cell 256 50)
                           #f)))
                   #f)
               (loop))
