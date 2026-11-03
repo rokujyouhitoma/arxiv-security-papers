@@ -12,6 +12,7 @@
 (load "ulisp/runtime/concurrency/channel.scm")
 (load "ulisp/runtime/concurrency/context.scm")
 (load "ulisp/runtime/concurrency/deque.scm")
+(load "ulisp/runtime/concurrency/thread.scm")
 (load "ulisp/runtime/concurrency/scheduler.scm")
 
 ;; Helper: Nanosecond Monotonic Timer
@@ -59,7 +60,7 @@
           (vector-sort-range! vec low (- i 1))
           (vector-sort-range! vec (+ i 1) high)))))
 
-(define (vector-sort! vec)
+(define (bench-vector-sort! vec)
   (if (> (vector-length vec) 1)
       (vector-sort-range! vec 0 (- (vector-length vec) 1))))
 
@@ -120,7 +121,7 @@
            (delta-major-gc (- gc-major-end gc-major-start)))
 
       ;; Sort latency samples vector to calculate percentiles
-      (vector-sort! samples)
+      (bench-vector-sort! samples)
 
       (let* ((idx-p50 (quotient (* sample-count 50) 100))
              (idx-p90 (quotient (* sample-count 90) 100))

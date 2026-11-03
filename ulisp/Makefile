@@ -411,20 +411,20 @@ test_concurrency_harness: $(COMPILER_DEP) build/context.o build/thread.o build/f
 
 test_concurrency_ci: test_concurrency_harness
 
-bench_microtasks: $(COMPILER_DEP) build/context.o
+bench_microtasks: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm > build/bench_microtasks_input.scm
 	$(ULISP_COMPILER) build/bench_microtasks_input.scm > build/bench_microtasks.s
 	$(AS) $(ASFLAGS) build/bench_microtasks.s -o build/bench_microtasks.o
-	$(LD) $(LDFLAGS) build/bench_microtasks.o build/context.o -o build/bench_microtasks
+	$(LD) $(LDFLAGS) build/bench_microtasks.o build/context.o build/thread.o build/futex.o -o build/bench_microtasks
 	./build/bench_microtasks < /dev/null
 
-bench_latency_under_gc: $(COMPILER_DEP) build/context.o
+bench_latency_under_gc: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm > build/bench_latency_under_gc_input.scm
 	$(ULISP_COMPILER) build/bench_latency_under_gc_input.scm > build/bench_latency_under_gc.s
 	$(AS) $(ASFLAGS) build/bench_latency_under_gc.s -o build/bench_latency_under_gc.o
-	$(LD) $(LDFLAGS) build/bench_latency_under_gc.o build/context.o -o build/bench_latency_under_gc
+	$(LD) $(LDFLAGS) build/bench_latency_under_gc.o build/context.o build/thread.o build/futex.o -o build/bench_latency_under_gc
 	./build/bench_latency_under_gc < /dev/null
 
 bench_concurrency: bench_microtasks bench_latency_under_gc
