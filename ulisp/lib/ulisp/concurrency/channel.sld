@@ -99,6 +99,7 @@
     channel-try-recv!
     channel-try-recv-with-status!
     channel-ring-buffer
+    channel-ring-mask
     channel-unboxed?
     channel-send-unboxed!
     channel-recv-unboxed!

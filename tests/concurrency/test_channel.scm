@@ -497,6 +497,52 @@
       (assert-equal (cdr (assq 'buffered stats)) 0 "unboxed channel-stats buffered = 0 after completion"))))
 
 ;; -----------------------------------------------------------------------
+;; Group 8: Power-of-Two Bitmask Indexing & Non-Power-of-Two Logical Capacity (#684)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Power-of-Two Bitmask Indexing & Logical Capacity (#684) ---\n")
+(flush-output-port)
+
+;; 8a: Pure utility %round-to-power-of-two verification
+(assert-equal (%round-to-power-of-two 0) 1 "%round-to-power-of-two 0 is 1")
+(assert-equal (%round-to-power-of-two 1) 1 "%round-to-power-of-two 1 is 1")
+(assert-equal (%round-to-power-of-two 2) 2 "%round-to-power-of-two 2 is 2")
+(assert-equal (%round-to-power-of-two 3) 4 "%round-to-power-of-two 3 is 4")
+(assert-equal (%round-to-power-of-two 4) 4 "%round-to-power-of-two 4 is 4")
+(assert-equal (%round-to-power-of-two 5) 8 "%round-to-power-of-two 5 is 8")
+(assert-equal (%round-to-power-of-two 7) 8 "%round-to-power-of-two 7 is 8")
+(assert-equal (%round-to-power-of-two 8) 8 "%round-to-power-of-two 8 is 8")
+(assert-equal (%round-to-power-of-two 9) 16 "%round-to-power-of-two 9 is 16")
+(assert-equal (%round-to-power-of-two 1000) 1024 "%round-to-power-of-two 1000 is 1024")
+(assert-equal (%round-to-power-of-two 1024) 1024 "%round-to-power-of-two 1024 is 1024")
+
+;; 8b: Channel Ring Mask and Vector Length Verification
+(let ((ch0 (make-channel 0))
+      (ch8 (make-channel 8))
+      (ch3 (make-channel 3)))
+  (assert-true (not (channel-ring-mask ch0)) "channel-ring-mask is #f for capacity=0")
+  (assert-equal (channel-ring-mask ch8) 7 "channel-ring-mask is 7 for capacity=8")
+  (assert-equal (vector-length (channel-ring-buffer ch8)) 8 "ring buffer vector length is 8 for capacity=8")
+  (assert-equal (channel-capacity ch3) 3 "logical capacity is 3 for ch3")
+  (assert-equal (channel-ring-mask ch3) 3 "channel-ring-mask is 3 (2^2 - 1) for capacity=3")
+  (assert-equal (vector-length (channel-ring-buffer ch3)) 4 "physical ring length is rounded up to 4 for capacity=3")
+
+  ;; 8c: Logical Capacity Guarding & Wraparound on Non-Power-of-Two Channel
+  (assert-true (channel-try-send! ch3 10) "ch3 send 1 succeeds")
+  (assert-true (channel-try-send! ch3 20) "ch3 send 2 succeeds")
+  (assert-true (channel-try-send! ch3 30) "ch3 send 3 succeeds")
+  (assert-equal (channel-count ch3) 3 "ch3 count is 3 at logical capacity")
+  (assert-true (channel-full? ch3) "ch3 is full at logical capacity 3")
+  (assert-true (not (channel-try-send! ch3 40)) "ch3 send 4 rejected when count reaches logical capacity 3")
+  (assert-equal (channel-recv! ch3) 10 "ch3 recv 1 is 10")
+  (assert-true (not (channel-full? ch3)) "ch3 is not full after 1 recv")
+  (assert-true (channel-try-send! ch3 40) "ch3 send 4 now succeeds into wrapped slot")
+  (assert-equal (channel-recv! ch3) 20 "ch3 recv 2 is 20")
+  (assert-equal (channel-recv! ch3) 30 "ch3 recv 3 is 30")
+  (assert-equal (channel-recv! ch3) 40 "ch3 recv 4 is 40")
+  (assert-true (channel-empty? ch3) "ch3 is empty after draining")
+  (assert-equal (channel-count ch3) 0 "ch3 count is 0"))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

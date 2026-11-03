@@ -449,12 +449,21 @@
 
 (define *ring-empty* (list '%%ring-empty%%))
 
+;; Fast pure utility to round up capacity to the nearest power of two (Issue #684)
+(define (%round-to-power-of-two n)
+  (if (<= n 1)
+      1
+      (let loop ((p 1))
+        (if (>= p n)
+            p
+            (loop (* p 2))))))
+
 (define-record-type <channel>
   (%make-channel message-queue recv-wait-queue send-wait-queue
                  capacity current-count closed-box
                  sent-count-box received-count-box
                  backpressure-count-box handoff-count-box
-                 ring-buffer ring-head-box ring-tail-box)
+                 ring-buffer ring-head-box ring-tail-box ring-mask)
   channel?
   (message-queue          %channel-message-queue)
   (recv-wait-queue        %channel-recv-wait-queue)
@@ -468,7 +477,8 @@
   (handoff-count-box      %channel-handoff-count-box)
   (ring-buffer            %channel-ring-buffer)
   (ring-head-box          %channel-ring-head-box)
-  (ring-tail-box          %channel-ring-tail-box))
+  (ring-tail-box          %channel-ring-tail-box)
+  (ring-mask              %channel-ring-mask))
 
 (define make-channel
   (case-lambda
@@ -479,17 +489,19 @@
              (< capacity 0)
              (> capacity *channel-max-capacity*))
          (error "make-channel: capacity must be an integer in [0, *channel-max-capacity*]" capacity)
-         (let* ((ring (if (> capacity 0)
-                          (let ((vec (make-vector capacity #f)))
+         (let* ((ring-cap (if (> capacity 0) (%round-to-power-of-two capacity) 0))
+                (ring-mask (if (> ring-cap 0) (- ring-cap 1) #f))
+                (ring (if (> ring-cap 0)
+                          (let ((vec (make-vector ring-cap #f)))
                             (let init-loop ((i 0))
-                              (if (>= i capacity)
+                              (if (>= i ring-cap)
                                   vec
                                   (begin
                                     (vector-set! vec i (make-atomic-box *ring-empty*))
                                     (init-loop (+ i 1))))))
                           #f))
-                (head-box (if (> capacity 0) (make-padded-atomic-box 0) #f))
-                (tail-box (if (> capacity 0) (make-padded-atomic-box 0) #f))
+                (head-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f))
+                (tail-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f))
                 (ch (%make-channel (make-lock-free-queue)
                                    (make-lock-free-queue)
                                    (make-lock-free-queue)
@@ -502,7 +514,8 @@
                                    (make-padded-atomic-box 0)
                                    ring
                                    head-box
-                                   tail-box)))
+                                   tail-box
+                                   ring-mask)))
            (%memory-fence)
            ch)))))
 
@@ -520,17 +533,19 @@
                             ((integer? current-count)
                              (make-padded-atomic-box current-count))
                             (else (make-padded-atomic-box 0))))
-                 (ring (if (> capacity 0)
-                           (let ((vec (make-vector capacity #f)))
+                 (ring-cap (if (> capacity 0) (%round-to-power-of-two capacity) 0))
+                 (ring-mask (if (> ring-cap 0) (- ring-cap 1) #f))
+                 (ring (if (> ring-cap 0)
+                           (let ((vec (make-vector ring-cap #f)))
                              (let init-loop ((i 0))
-                               (if (>= i capacity)
+                               (if (>= i ring-cap)
                                    vec
                                    (begin
                                      (vector-set! vec i (make-atomic-box *ring-empty*))
                                      (init-loop (+ i 1))))))
                            #f))
-                 (head-box (if (> capacity 0) (make-padded-atomic-box 0) #f))
-                 (tail-box (if (> capacity 0) (make-padded-atomic-box 0) #f)))
+                 (head-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f))
+                 (tail-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f)))
             (%make-channel message-queue
                            recv-wait-queue
                            send-wait-queue
@@ -543,7 +558,8 @@
                            (make-padded-atomic-box 0)
                            ring
                            head-box
-                           tail-box)))))
+                           tail-box
+                           ring-mask)))))
 
 (define (channel-message-queue ch)
   (if (not (channel? ch))
@@ -574,6 +590,11 @@
   (if (not (channel? ch))
       (error "channel-ring-buffer: expected <channel>" ch)
       (%channel-ring-buffer ch)))
+
+(define (channel-ring-mask ch)
+  (if (not (channel? ch))
+      (error "channel-ring-mask: expected <channel>" ch)
+      (%channel-ring-mask ch)))
 
 (define (channel-unboxed? ch)
   (if (not (channel? ch))
@@ -614,7 +635,7 @@
             (>= (atomic-ref (%channel-current-count ch)) cap)))))
 
 ;; -----------------------------------------------------------------------
-;; 4b. Ring Buffer Operations (Issue #680 Unboxed Fast-Path)
+;; 4b. Ring Buffer Operations (Issue #680 Unboxed Fast-Path & Issue #684 Bitmask)
 ;; -----------------------------------------------------------------------
 
 (define (%channel-ring-try-enqueue! ch val)
@@ -622,6 +643,7 @@
     (if (not ring)
         #f
         (let ((cap (%channel-capacity ch))
+              (mask (%channel-ring-mask ch))
               (head-box (%channel-ring-head-box ch))
               (tail-box (%channel-ring-tail-box ch)))
           (let retry ()
@@ -630,7 +652,7 @@
               (if (>= (- cur-head cur-tail) cap)
                   #f
                   (if (atomic-cas! head-box cur-head (+ cur-head 1))
-                      (let* ((slot-idx (modulo cur-head cap))
+                      (let* ((slot-idx (bitwise-and cur-head mask))
                              (slot-box (vector-ref ring slot-idx)))
                         (let spin ()
                           (let ((old (atomic-ref slot-box)))
@@ -649,6 +671,7 @@
     (if (not ring)
         #f
         (let ((cap (%channel-capacity ch))
+              (mask (%channel-ring-mask ch))
               (head-box (%channel-ring-head-box ch))
               (tail-box (%channel-ring-tail-box ch)))
           (let retry ()
@@ -657,7 +680,7 @@
               (if (>= cur-tail cur-head)
                   #f
                   (if (atomic-cas! tail-box cur-tail (+ cur-tail 1))
-                      (let* ((slot-idx (modulo cur-tail cap))
+                      (let* ((slot-idx (bitwise-and cur-tail mask))
                              (slot-box (vector-ref ring slot-idx)))
                         (let spin ()
                           (let ((val (atomic-swap! slot-box *ring-empty*)))

@@ -7,7 +7,7 @@ Phase 6〜Phase 7（スーパービジョンツリー、クラッシュロガー
 - **ハードウェア環境**: Linux x86-64 (SMP 4+ Cores)
 - **コンパイラ**: uLisp Native AOT (`bin/ulisp-boot`)
 - **実行ターゲット**: `make -C ulisp bench_concurrency`
-- **評価 Issue**: [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md), [Issue #678](../issues/closed/678-update-concurrency-benchmark-evaluation-after-synapse-runtimes-enhancements.md)
+- **評価 Issue**: [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md), [Issue #678](../issues/closed/678-update-concurrency-benchmark-evaluation-after-synapse-runtimes-enhancements.md), [Issue #684](../issues/closed/684-implement-channel-power-of-two-bitmask-indexing.md)
 
 ---
 
@@ -15,22 +15,22 @@ Phase 6〜Phase 7（スーパービジョンツリー、クラッシュロガー
 
 | 評価項目 | 測定メトリクス | 測定値 (実測値) | 目標値 (DoD基準) | 判定 |
 | :--- | :--- | :---: | :---: | :---: |
-| **10 万並行マイクロタスク耐久** | スループット | **4,095,856 tasks/sec** | > 1,000,000 tasks/sec | **PASS (4.1x 達成)** |
-| | 10 万タスク実行時間 | **24 ms** (合計 59 ms) | < 2,000 ms | **PASS** |
-| | 平均コンテキスト遅延 | **244 ns/task** | < 1,000 ns | **PASS** |
+| **10 万並行マイクロタスク耐久** | スループット | **4,501,019 tasks/sec** | > 1,000,000 tasks/sec | **PASS (4.5x 達成)** |
+| | 10 万タスク実行時間 | **22 ms** (Spawn 27ms, 合計 49 ms) | < 2,000 ms | **PASS** |
+| | 平均コンテキスト遅延 | **222 ns/task** | < 1,000 ns | **PASS** |
 | | タスク完了率 | **100% (100,000 / 100,000)** | 100% | **PASS** |
-| **線形チャネル P2P メッセージング** | スループット | **828,457 msgs/sec** | > 500,000 msgs/sec | **PASS (1.66x 達成)** |
-| | 送受信ペア遅延 | **1,207 ns/op** | < 2,000 ns | **PASS** |
+| **線形チャネル P2P メッセージング** | スループット | **1,637,159 msgs/sec** | > 500,000 msgs/sec | **PASS (3.27x 達成)** |
+| | 送受信ペア遅延 | **610 ns/op** | < 2,000 ns | **PASS** |
 | | メッセージ損失率 | **0% (ゼロロス)** | 0% | **PASS** |
-| **エフェメラルアリーナ即時回収** | アロケーション・リセット率 | **3,096,862 cycles/sec** | > 1,000,000 cycles/sec | **PASS (3.1x 達成)** |
-| | 1 サイクルあたりコスト | **322 ns/cycle** | < 500 ns | **PASS** |
+| **エフェメラルアリーナ即時回収** | アロケーション・リセット率 | **4,482,369 cycles/sec** | > 1,000,000 cycles/sec | **PASS (4.48x 達成)** |
+| | 1 サイクルあたりコスト | **223 ns/cycle** | < 500 ns | **PASS** |
 | | メモリリーク | **0 bytes** | 0 bytes | **PASS** |
 | **STW-GC ゼロ実時間決定論性** | ホスト STW-GC 発生回数 | **100 collections** | > 10 collections | **PASS** |
-| | Layer 2 Min レイテンシ | **278 ns (0.28 us)** | - | **INFO** |
-| | Layer 2 P50 レイテンシ | **299 ns (0.30 us)** | < 10 us | **PASS** |
-| | Layer 2 P90 レイテンシ | **426 ns (0.43 us)** | < 50 us | **PASS** |
-| | Layer 2 P99 レイテンシ | **1,638 ns (1.64 us)** | < 100 us | **PASS (61x 超過達成)** |
-| | Layer 2 Max レイテンシ | **30,896 ns (30.9 us)** | < 500 us | **PASS (16x 超過達成)** |
+| | Layer 2 Min レイテンシ | **283 ns (0.28 us)** | - | **INFO** |
+| | Layer 2 P50 レイテンシ | **319 ns (0.32 us)** | < 10 us | **PASS** |
+| | Layer 2 P90 レイテンシ | **460 ns (0.46 us)** | < 50 us | **PASS** |
+| | Layer 2 P99 レイテンシ | **1,707 ns (1.71 us)** | < 100 us | **PASS (58x 超過達成)** |
+| | Layer 2 Max レイテンシ | **7,738 ns (7.74 us)** | < 500 us | **PASS (64x 超過達成)** |
 
 ---
 
@@ -45,7 +45,7 @@ Phase 6〜Phase 7（スーパービジョンツリー、クラッシュロガー
 | **Erlang / OTP 25** | BEAM VM (`bench_erlang.erl`) | **146 ms** | **684,081 tasks/sec** | **1,461 ns** | **709 ns** | プロセス独立ヒープ (309 words), STW-GC なし, メッセージディープコピー |
 | **Rust Tokio** | 1.75.0 Release (`rust_bench`) | **45 ms** | **2,211,503 tasks/sec** | **452 ns** | **74 ns** | 非同期ステートマシン, `tokio::spawn` (Box ヒープ確保), GC なし |
 | **Go 1.22.2** | Native M:N (`bench_go.go`) | **24 ms** | **4,010,579 tasks/sec** | **249 ns** | **34 ns** | 2KB 動的伸長スタック (`mcache` 割り当て), 並行三色 Mark-Sweep GC |
-| **Synapse (uLisp)** | Native AOT (`bench_microtasks.scm`) | **24 ms** | **4,095,856 tasks/sec** | **244 ns** | **1,207 ns** | **プロセスローカルアリーナ (8B バンプ), $O(1)$ 即時リセット, STW-GC ゼロ** |
+| **Synapse (uLisp)** | Native AOT (`bench_microtasks.scm`) | **22 ms** | **4,501,019 tasks/sec** | **222 ns** | **610 ns** | **プロセスローカルアリーナ (8B バンプ), $O(1)$ 即時リセット, STW-GC ゼロ** |
 
 > **測定コードの再現性**:
 > - Go 測定コード: `benchmarks/baseline_comparisons/bench_go.go` (`go run`)
