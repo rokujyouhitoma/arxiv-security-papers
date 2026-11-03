@@ -37,9 +37,11 @@ ULISP_RUNTIME_LIBS = runtime/gc.scm runtime/io.scm runtime/printer.scm runtime/e
 ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm \
                  lib/reader.scm lib/equality.scm lib/predicates.scm lib/math.scm lib/bytevector.scm \
                  lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
-                 lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/comparator.scm lib/set.scm \
-                 lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/charset.scm lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
+                 lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/comparator.scm \
+                 lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
                  $(ULISP_RUNTIME_LIBS)
+
+ULISP_LARGE_LIBS = lib/set.scm lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/charset.scm lib/mapping.scm
 
 COMPILER_BASE = compiler/helpers.scm \
                 compiler/primitives.scm \
@@ -113,7 +115,7 @@ build/compiler_passes.scm: $(PASSES_LIB)
 	cat $^ > $@
 
 lint_sexpr:
-	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) lib/srfi/1.sld lib/scheme/list.sld tests/test_srfi1.scm lib/srfi/69.sld lib/srfi/125.sld lib/scheme/hash-table.sld tests/test_hashtable.scm lib/scheme/file.sld tests/test_file_port.scm tests/test_string_to_number.scm tests/test_max_min.scm lib/srfi/28.sld tests/test_format.scm lib/srfi/132.sld lib/srfi/95.sld lib/scheme/sort.sld tests/test_sort.scm lib/scheme/write.sld tests/test_printer.scm runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/futex.scm lib/ulisp/concurrency/futex.sld $(ROOT_DIR)/tests/concurrency/test_futex.scm runtime/concurrency/registry.scm lib/ulisp/concurrency/registry.sld $(ROOT_DIR)/tests/concurrency/test_registry.scm runtime/concurrency/crash_logger.scm lib/ulisp/concurrency/crash_logger.sld $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm runtime/concurrency/io_uring.scm lib/ulisp/concurrency/io_uring.sld $(ROOT_DIR)/tests/concurrency/test_io_uring.scm runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm runtime/concurrency/eval_adapter.scm lib/ulisp/concurrency/eval_adapter.sld $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/inline_hotpath.sld $(ROOT_DIR)/tests/concurrency/test_pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
+	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) $(ULISP_LARGE_LIBS) lib/srfi/1.sld lib/scheme/list.sld tests/test_srfi1.scm lib/srfi/69.sld lib/srfi/125.sld lib/scheme/hash-table.sld tests/test_hashtable.scm lib/scheme/file.sld tests/test_file_port.scm tests/test_string_to_number.scm tests/test_max_min.scm lib/srfi/28.sld tests/test_format.scm lib/srfi/132.sld lib/srfi/95.sld lib/scheme/sort.sld tests/test_sort.scm lib/scheme/write.sld tests/test_printer.scm runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/futex.scm lib/ulisp/concurrency/futex.sld $(ROOT_DIR)/tests/concurrency/test_futex.scm runtime/concurrency/registry.scm lib/ulisp/concurrency/registry.sld $(ROOT_DIR)/tests/concurrency/test_registry.scm runtime/concurrency/crash_logger.scm lib/ulisp/concurrency/crash_logger.sld $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm runtime/concurrency/io_uring.scm lib/ulisp/concurrency/io_uring.sld $(ROOT_DIR)/tests/concurrency/test_io_uring.scm runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm runtime/concurrency/eval_adapter.scm lib/ulisp/concurrency/eval_adapter.sld $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/inline_hotpath.sld $(ROOT_DIR)/tests/concurrency/test_pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
 
 test_lint_sexpr:
 	@$(PYTHON) tests/test_lint_sexpr.py
@@ -852,7 +854,7 @@ test_comparator: $(COMPILER_DEP)
 
 test_set: $(COMPILER_DEP)
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) tests/test_set.scm > build/test_set_input.scm
+	cat $(ULISP_STD_LIBS) lib/set.scm tests/test_set.scm > build/test_set_input.scm
 	$(ULISP_COMPILER) build/test_set_input.scm > build/test_set.s
 	$(AS) $(ASFLAGS) build/test_set.s -o build/test_set.o
 	$(LD) $(LDFLAGS) build/test_set.o -o build/test_set
@@ -860,7 +862,7 @@ test_set: $(COMPILER_DEP)
 
 test_srfi_41_streams: $(COMPILER_DEP)
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) tests/test_srfi_41_streams.scm > build/test_srfi_41_streams_input.scm
+	cat $(ULISP_STD_LIBS) lib/stream.scm tests/test_srfi_41_streams.scm > build/test_srfi_41_streams_input.scm
 	$(ULISP_COMPILER) build/test_srfi_41_streams_input.scm > build/test_srfi_41_streams.s
 	$(AS) $(ASFLAGS) build/test_srfi_41_streams.s -o build/test_srfi_41_streams.o
 	$(LD) $(LDFLAGS) build/test_srfi_41_streams.o -o build/test_srfi_41_streams
@@ -868,7 +870,7 @@ test_srfi_41_streams: $(COMPILER_DEP)
 
 test_generator: $(COMPILER_DEP)
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) tests/test_generator.scm > build/test_generator_input.scm
+	cat $(ULISP_STD_LIBS) lib/generator.scm tests/test_generator.scm > build/test_generator_input.scm
 	$(ULISP_COMPILER) build/test_generator_input.scm > build/test_generator.s
 	$(AS) $(ASFLAGS) build/test_generator.s -o build/test_generator.o
 	$(LD) $(LDFLAGS) build/test_generator.o -o build/test_generator
@@ -876,7 +878,7 @@ test_generator: $(COMPILER_DEP)
 
 test_list_queue_lseq: $(COMPILER_DEP)
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) tests/test_list_queue_lseq.scm > build/test_list_queue_lseq_input.scm
+	cat $(ULISP_STD_LIBS) lib/generator.scm lib/list-queue.scm lib/lseq.scm tests/test_list_queue_lseq.scm > build/test_list_queue_lseq_input.scm
 	$(ULISP_COMPILER) build/test_list_queue_lseq_input.scm > build/test_list_queue_lseq.s
 	$(AS) $(ASFLAGS) build/test_list_queue_lseq.s -o build/test_list_queue_lseq.o
 	$(LD) $(LDFLAGS) build/test_list_queue_lseq.o -o build/test_list_queue_lseq
@@ -884,11 +886,19 @@ test_list_queue_lseq: $(COMPILER_DEP)
 
 test_charset: $(COMPILER_DEP)
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) tests/test_charset.scm > build/test_charset_input.scm
+	cat $(ULISP_STD_LIBS) lib/charset.scm tests/test_charset.scm > build/test_charset_input.scm
 	$(ULISP_COMPILER) build/test_charset_input.scm > build/test_charset.s
 	$(AS) $(ASFLAGS) build/test_charset.s -o build/test_charset.o
 	$(LD) $(LDFLAGS) build/test_charset.o -o build/test_charset
 	./build/test_charset
+
+test_mapping: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) lib/mapping.scm tests/test_mapping.scm > build/test_mapping_input.scm
+	$(ULISP_COMPILER) build/test_mapping_input.scm > build/test_mapping.s
+	$(AS) $(ASFLAGS) build/test_mapping.s -o build/test_mapping.o
+	$(LD) $(LDFLAGS) build/test_mapping.o -o build/test_mapping
+	./build/test_mapping
 
 test_gc_growth: $(COMPILER_DEP)
 	@mkdir -p build
