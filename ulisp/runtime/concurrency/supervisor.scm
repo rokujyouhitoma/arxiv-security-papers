@@ -12,6 +12,9 @@
 ;;;   7. CWE-400 (Loop DoS), CWE-662 (Sync/State), CWE-833 (Deadlock), CWE-843 (Type) mitigations
 ;;; =======================================================================
 
+;; Optional registry rebind hook (injected via registry.scm, Issue #669)
+(define *supervisor-registry-rebind-box* (vector (lambda (id target) #f)))
+
 ;; -----------------------------------------------------------------------
 ;; 1. Global Timestamp Clock for Supervisor Time Window
 ;; -----------------------------------------------------------------------
@@ -126,6 +129,12 @@
               (task-set-arena! child-task (make-task-arena 4096)))
           ;; Establish unidirectional monitor from supervisor to child
           (let ((mref (task-monitor sup-task child-task)))
+            ;; Rebind child-spec id in registry if registry hook is available (Issue #669)
+            (guard (exn (else #f))
+              (let ((id (child-spec-id cspec)))
+                (if (symbol? id)
+                    ((vector-ref *supervisor-registry-rebind-box* 0) id child-task)
+                    #f)))
             (list cspec child-task mref))))))
 
 (define (%stop-child-instance! sup-task child-entry)

@@ -35,6 +35,12 @@
 (define supervisor-stop! (lambda (sup) #f))
 (define supervisor-handle-child-down! (lambda (sup ref tid reason) #f))
 (define supervisor-child-task (lambda (sup id) #f))
+;; Process Registry stubs (#669)
+(define synapse-register! (case-lambda ((n t) #f) ((r n t) #f)))
+(define synapse-unregister! (case-lambda ((n) #f) ((r n) #f)))
+(define synapse-whereis (case-lambda ((n) #f) ((r n) #f)))
+(define synapse-rebind! (case-lambda ((n t) #f) ((r n t) #f)))
+(define synapse-send-named! (case-lambda ((n m) #f) ((r n m) #f)))
 
 ;; Deep-equal helper for AST symbols and values
 (define (%sym-equal? a b)
@@ -524,5 +530,11 @@
       (eval-env-bind! env 'supervisor-stop! supervisor-stop!)
       (eval-env-bind! env 'supervisor-handle-child-down! supervisor-handle-child-down!)
       (eval-env-bind! env 'supervisor-child-task supervisor-child-task)
+      ;; Process Registry (#669)
+      (eval-env-bind! env 'synapse-register! synapse-register!)
+      (eval-env-bind! env 'synapse-unregister! synapse-unregister!)
+      (eval-env-bind! env 'synapse-whereis synapse-whereis)
+      (eval-env-bind! env 'synapse-rebind! synapse-rebind!)
+      (eval-env-bind! env 'synapse-send-named! synapse-send-named!)
       env)))
 
