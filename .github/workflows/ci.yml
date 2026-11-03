@@ -19,6 +19,11 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      - name: Install System Dependencies (gauche, gcc, poppler-utils)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gauche gcc poppler-utils
+
       - name: Set up Python 3.14
         uses: actions/setup-python@v5
         with:

@@ -31,6 +31,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **698** | GitHub Actions CI パイプライン 60分タイムアウト停止および uLisp AOT テスト失敗の根本改修 | Bug | 2026-11-03 | [closed/698-fix-ci-pipeline-timeout-and-ulisp-aot-test-failures.md](closed/698-fix-ci-pipeline-timeout-and-ulisp-aot-test-failures.md) |
 | **688** | Nanopass AOT コンパイラによるチャネル送受信ホットパスのネイティブ直接インライン展開 | Feature | 2026-11-03 | [closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md](closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md) |
 | **687** | 線形所有権特化型 SPSC ロックフリーリングによる LOCK プレフィックス命令ゼロ化 | Feature | 2026-11-03 | [closed/687-implement-synapse-spsc-linear-channel-lock-free-ring.md](closed/687-implement-synapse-spsc-linear-channel-lock-free-ring.md) |
 | **686** | 多値レジスタ渡しによるチャネルデキュー時のタプル (cons) 動的割り当てゼロ化 | Feature | 2026-11-03 | [closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md](closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md) |

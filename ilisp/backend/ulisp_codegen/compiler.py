@@ -50,6 +50,7 @@ def _ensure_ulisp_core(ulisp_dir: Path) -> Path:
     core_path = build_dir / "ulisp_core.scm"
 
     lib_files = [
+        ulisp_dir / "lib" / "char.scm",
         ulisp_dir / "lib" / "string.scm",
         ulisp_dir / "lib" / "printer.scm",
         ulisp_dir / "lib" / "reader.scm",
@@ -92,7 +93,8 @@ def _resolve_compiler_input(scheme_code: str, target_ulisp_dir: Path) -> str:
         or "string->symbol" in scheme_code
         or "symbol->string" in scheme_code
         or "number->string" in scheme_code
-        or "'" in scheme_code
+        or "string-" in scheme_code
+        or "make-string" in scheme_code
     )
 
     if needs_printer_lib:
@@ -104,6 +106,9 @@ def _resolve_compiler_input(scheme_code: str, target_ulisp_dir: Path) -> str:
             prepend_parts.append(list_scm.read_text(encoding="utf-8"))
 
     if needs_string_lib:
+        char_scm = target_ulisp_dir / "lib" / "char.scm"
+        if char_scm.is_file():
+            prepend_parts.append(char_scm.read_text(encoding="utf-8"))
         str_scm = target_ulisp_dir / "lib" / "string.scm"
         if str_scm.is_file():
             prepend_parts.append(str_scm.read_text(encoding="utf-8"))
@@ -143,7 +148,13 @@ def compile_to_assembly(
     env = os.environ.copy()
     env["PYTHONPATH"] = str(repo_root)
 
-    cmd = [sys.executable, "-m", "ilisp", str(compiler_path)]
+    import shutil
+
+    gosh_bin = shutil.which("gosh")
+    if gosh_bin:
+        cmd = [gosh_bin, str(compiler_path)]
+    else:
+        cmd = [sys.executable, "-m", "ilisp", str(compiler_path)]
     try:
         proc = subprocess.run(
             cmd,
@@ -228,11 +239,15 @@ def run_elf(
     stdin_data: str = "",
     *,
     timeout: float = 10.0,
+    env: Optional[dict[str, str]] = None,
 ) -> subprocess.CompletedProcess[str]:
     """Execute a compiled ELF binary safely and return CompletedProcess."""
     bpath = Path(binary_path).resolve()
     if not bpath.is_file():
         raise UlispCodegenError(f"Binary file not found: {bpath}")
+
+    run_env = os.environ.copy() if env is None else env.copy()
+    run_env.setdefault("ULISP_PRINT_RESULT", "1")
 
     return subprocess.run(
         [str(bpath)],
@@ -241,4 +256,5 @@ def run_elf(
         text=True,
         timeout=timeout,
         check=False,
+        env=run_env,
     )

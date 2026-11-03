@@ -201,8 +201,17 @@ class TestCLIAndReplIntegration:
             assert proc.returncode == 0, f"CLI compile failed: {proc.stderr}"
             assert bin_path.is_file()
 
-            # Execute compiled binary
-            res = subprocess.run([str(bin_path)], capture_output=True, text=True)
+            # Execute compiled binary (quiet by default adhering to Rule of Silence)
+            res_quiet = subprocess.run([str(bin_path)], capture_output=True, text=True)
+            assert res_quiet.returncode == 0
+            assert res_quiet.stdout == ""
+
+            # Execute compiled binary with ULISP_PRINT_RESULT=1
+            run_env = os.environ.copy()
+            run_env["ULISP_PRINT_RESULT"] = "1"
+            res = subprocess.run(
+                [str(bin_path)], capture_output=True, text=True, env=run_env
+            )
             assert res.returncode == 0
             assert res.stdout.strip() == "42"
 
