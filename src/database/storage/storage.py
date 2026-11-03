@@ -10,6 +10,7 @@ import json
 import mmap
 import os
 import struct
+import uuid
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
@@ -339,7 +340,7 @@ class VectorStorage:
     ) -> None:
         self.close()
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
-        tmp_path = self.file_path + ".tmp"
+        tmp_path = f"{self.file_path}.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}"
         self._write_tmp_file(tmp_path, valid_vecs, meta_list, count)
         os.replace(tmp_path, self.file_path)
         self._rebuild_index_mapping(count, meta_list)

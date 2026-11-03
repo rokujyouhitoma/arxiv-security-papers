@@ -13,6 +13,7 @@ import json
 import math
 import os
 import re
+import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 
@@ -117,7 +118,7 @@ class Fts5StorageEngine:
         if not self.file_path:
             return
         self._ensure_parent_dir()
-        tmp_file = f"{self.file_path}.tmp"
+        tmp_file = f"{self.file_path}.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}"
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(self.records, f, ensure_ascii=False, indent=2)
         os.replace(tmp_file, self.file_path)

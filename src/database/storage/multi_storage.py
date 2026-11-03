@@ -12,6 +12,7 @@ import logging
 import os
 import struct
 import time
+import uuid
 import zlib
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -214,7 +215,7 @@ class MultiTableVectorStorage:
             self._memory_buffer = io.BytesIO(data)
             return
         os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
-        tmp_file = dest + ".tmp"
+        tmp_file = f"{dest}.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}"
         with open(tmp_file, "wb") as f:
             f.write(data)
         os.replace(tmp_file, dest)

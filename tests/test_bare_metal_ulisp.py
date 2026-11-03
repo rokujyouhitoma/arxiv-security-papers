@@ -8,20 +8,39 @@ Verifies that ULisp can generate standalone static ELF binaries with:
 """
 
 import os
+import shutil
 import subprocess
 import tempfile
+
+import pytest
 
 WORKSPACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 ULISP_DIR = os.path.join(WORKSPACE_DIR, "ulisp")
 COMPILER_SCM = os.path.join(ULISP_DIR, "compiler.scm")
-ULISP_BOOT = os.path.join(ULISP_DIR, "bin/ulisp-boot")
+ULISP_BOOT = os.environ.get(
+    "ULISP_BOOT_OVERRIDE", os.path.join(ULISP_DIR, "bin/ulisp-boot")
+)
 POSIX_SCM = os.path.join(ULISP_DIR, "lib/posix.scm")
 GC_SCM = os.path.join(ULISP_DIR, "lib/gc.scm")
+
+
+@pytest.fixture(autouse=True)
+def require_native_compiler() -> None:
+    """Skips heavy bare-metal compilation tests if native bootstrap binary or gosh is unavailable."""
+    has_boot = os.path.exists(ULISP_BOOT) and os.access(ULISP_BOOT, os.X_OK)
+    has_gosh = bool(shutil.which("gosh"))
+    if not has_boot and not has_gosh:
+        pytest.skip(
+            "uLisp bootstrap binary (bin/ulisp-boot) or native host scheme (gosh) not available"
+        )
 
 
 def get_compiler_cmd():
     if os.path.exists(ULISP_BOOT) and os.access(ULISP_BOOT, os.X_OK):
         return [ULISP_BOOT]
+    gosh = shutil.which("gosh")
+    if gosh:
+        return [gosh, COMPILER_SCM]
     return ["python3", "-m", "ilisp", COMPILER_SCM]
 
 
