@@ -16,6 +16,19 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
+| **706** | R7RS-small 残余構文 (include-library-declarations) および SRFI 193 (command-line) の完全実装 | Feature | High | New | [706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md](706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md) |
+| **707** | R7RS-large Red Edition / SRFI 117 (scheme list-queue) および SRFI 127 (scheme lseq) の実装 | Feature | High | New | [707-implement-srfi-117-list-queues-and-srfi-127-lazy-sequences.md](707-implement-srfi-117-list-queues-and-srfi-127-lazy-sequences.md) |
+| **708** | R7RS-large Red Edition / SRFI 14 (scheme charset) 文字集合ライブラリの実装 | Feature | High | New | [708-implement-srfi-14-character-sets.md](708-implement-srfi-14-character-sets.md) |
+| **709** | R7RS-large Tangerine Edition / SRFI 146 (scheme mapping) 不変マッピングライブラリの実装 | Feature | High | New | [709-implement-srfi-146-immutable-mappings.md](709-implement-srfi-146-immutable-mappings.md) |
+| **710** | R7RS-large Red Edition / SRFI 116 (scheme ilist) 不変リストおよび SRFI 134 (scheme ideque) 不変両端キューの実装 | Feature | High | New | [710-implement-srfi-116-immutable-lists-and-srfi-134-immutable-deques.md](710-implement-srfi-116-immutable-lists-and-srfi-134-immutable-deques.md) |
+| **711** | R7RS §6.2 正確有理数 (Exact Rationals) と丸め手続き・rationalize の実装 | Feature | High | New | [711-implement-r7rs-exact-rationals-rounding-and-rationalize.md](711-implement-r7rs-exact-rationals-rounding-and-rationalize.md) |
+| **712** | R7RS §6.2 不正確実数 (Flonum) と正確性変換 (exact / inexact)・IEEE 特殊値述語の実装 | Feature | High | New | [712-implement-r7rs-inexact-flonums-exactness-conversions-and-ieee-predicates.md](712-implement-r7rs-inexact-flonums-exactness-conversions-and-ieee-predicates.md) |
+| **713** | R7RS-small (scheme inexact) 初等超越関数・平方根ライブラリの完全実装 | Feature | High | New | [713-implement-r7rs-scheme-inexact-transcendental-math-library.md](713-implement-r7rs-scheme-inexact-transcendental-math-library.md) |
+| **714** | R7RS-small (scheme complex) 複素数算術ライブラリの完全実装 | Feature | High | New | [714-implement-r7rs-scheme-complex-arithmetic-library.md](714-implement-r7rs-scheme-complex-arithmetic-library.md) |
+| **715** | R7RS §6.2.6 数値塔リテラル入出力 (number->string 基数対応・string->number / read / write 拡張) の実装 | Feature | High | New | [715-implement-r7rs-numeric-tower-reader-printer-and-radix-formatting.md](715-implement-r7rs-numeric-tower-reader-printer-and-radix-formatting.md) |
+| **716** | R7RS §6.12 環境指定子オブジェクト (environment, null-environment, scheme-report-environment, interaction-environment) の実装 | Feature | High | New | [716-implement-r7rs-environment-specifiers-and-library-import-environments.md](716-implement-r7rs-environment-specifiers-and-library-import-environments.md) |
+| **717** | R7RS-small (scheme eval) オンデマンド埋め込み型メタ循環評価器 (eval) の実装 | Feature | High | New | [717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md](717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md) |
+| **718** | R7RS-small (scheme load), (scheme repl), (scheme r5rs) 完全準拠化と動的ロードの実装 | Feature | High | New | [718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md](718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md) |
 
 ---
 
