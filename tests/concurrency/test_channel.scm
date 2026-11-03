@@ -617,6 +617,92 @@
   (assert-true (channel-empty? ch) "channel is empty after all multi-value tests"))
 
 ;; -----------------------------------------------------------------------
+;; Group 11: SPSC Lamport Lock-Free Ring Buffer (Issue #687)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 11: SPSC Lamport Lock-Free Ring (Issue #687) ---\n")
+(flush-output-port)
+
+(let* ((ch-spsc (make-spsc-channel 4))
+       (ch-mpmc (make-channel 4)))
+  ;; 11a: Type and Predicate Verification
+  (assert-true (channel? ch-spsc) "make-spsc-channel creates valid <channel>")
+  (assert-true (channel-spsc? ch-spsc) "channel-spsc? is #t for make-spsc-channel")
+  (assert-true (not (channel-spsc? ch-mpmc)) "channel-spsc? is #f for default make-channel")
+  (assert-equal (channel-capacity ch-spsc) 4 "ch-spsc has capacity 4")
+  (assert-equal (channel-count ch-spsc) 0 "ch-spsc initial count is 0")
+  (assert-true (channel-empty? ch-spsc) "ch-spsc is initially empty")
+  (assert-true (not (channel-full? ch-spsc)) "ch-spsc is not full initially")
+
+  ;; 11b: Raw SPSC Low-Level Operations (%channel-spsc-try-enqueue!, %channel-spsc-try-dequeue-val!)
+  (assert-true (channel-spsc-try-enqueue! ch-spsc 111) "channel-spsc-try-enqueue! 111 succeeds")
+  (assert-equal (channel-count ch-spsc) 1 "channel-count is 1 after 1 enqueue")
+  (assert-true (not (channel-empty? ch-spsc)) "channel is not empty after 1 enqueue")
+  (assert-equal (channel-spsc-try-dequeue-val! ch-spsc) 111 "channel-spsc-try-dequeue-val! returns 111")
+  (assert-equal (channel-count ch-spsc) 0 "channel-count is 0 after dequeue")
+  (assert-true (channel-empty? ch-spsc) "channel is empty again")
+  (assert-true (eq? (channel-spsc-try-dequeue-val! ch-spsc) *ring-empty*)
+               "channel-spsc-try-dequeue-val! returns *ring-empty* when empty")
+
+  ;; 11c: Normal channel-send! and channel-recv! zero-LOCK dispatch on SPSC channel
+  (assert-true (channel-send! ch-spsc 222) "channel-send! on SPSC channel succeeds")
+  (assert-equal (channel-recv! ch-spsc) 222 "channel-recv! on SPSC channel returns 222")
+  (assert-true (channel-empty? ch-spsc) "ch-spsc empty after recv")
+
+  ;; 11d: #f payload preservation on SPSC channel (CWE-843 defense)
+  (assert-true (channel-try-send! ch-spsc #f) "send #f payload on SPSC channel succeeds")
+  (let ((val (channel-recv! ch-spsc)))
+    (assert-true (eq? val #f) "recv returns exact #f payload on SPSC channel")
+    (assert-true (not (eq? val *ring-empty*)) "#f payload is strictly distinct from *ring-empty*"))
+
+  ;; 11e: Capacity boundary & backpressure on SPSC channel
+  (assert-true (channel-send! ch-spsc 10) "spsc fill 1")
+  (assert-true (channel-send! ch-spsc 20) "spsc fill 2")
+  (assert-true (channel-send! ch-spsc 30) "spsc fill 3")
+  (assert-true (channel-send! ch-spsc 40) "spsc fill 4")
+  (assert-true (channel-full? ch-spsc) "ch-spsc is full at capacity 4")
+  (assert-true (not (channel-try-send! ch-spsc 50)) "try-send rejected when spsc is full")
+
+  (let ((prod (make-task-context 701)))
+    (assert-true (eq? (channel-send! ch-spsc 50 prod) 'suspended)
+                 "send! suspends prod when spsc is full (backpressure)")
+    (assert-true (eq? (task-state prod) 'waiting-channel) "prod transitions to waiting-channel")
+    (assert-equal (channel-recv! ch-spsc) 10 "recv frees 1 slot (10)")
+    (assert-true (eq? (task-state prod) 'ready) "prod woken to ready on slot freed")
+    (assert-equal (channel-recv! ch-spsc) 20 "recv 20")
+    (assert-equal (channel-recv! ch-spsc) 30 "recv 30")
+    (assert-equal (channel-recv! ch-spsc) 40 "recv 40")
+    (assert-equal (channel-recv! ch-spsc) 50 "recv promoted 50 from prod")
+    (assert-true (channel-empty? ch-spsc) "ch-spsc empty after draining backpressure queue"))
+
+  ;; 11f: Multiple values API on SPSC channel
+  (channel-send! ch-spsc 'spsc-multi)
+  (call-with-values
+    (lambda () (channel-try-recv-values! ch-spsc))
+    (lambda (ok val)
+      (assert-true ok "channel-try-recv-values! ok=#t on SPSC")
+      (assert-true (eq? val 'spsc-multi) "channel-try-recv-values! payload match on SPSC")))
+
+  ;; 11g: SPSC High-Throughput Burst: 10,000 unboxed messages FIFO verification
+  (let ((burst-ch (make-spsc-channel 128))
+        (n 10000))
+    (let loop ((i 1) (sum-sent 0) (sum-recvd 0))
+      (if (<= i n)
+          (begin
+            (channel-send! burst-ch i)
+            (let ((v (channel-recv! burst-ch)))
+              (if (not (= v i))
+                  (error "SPSC FIFO mismatch" v i))
+              (loop (+ i 1) (+ sum-sent i) (+ sum-recvd v))))
+          (begin
+            (assert-equal sum-sent sum-recvd "10,000 SPSC messages sum matches exactly (Zero Loss)")
+            (assert-true (channel-empty? burst-ch) "burst-ch empty after 10,000 messages")
+            (let ((st (channel-stats burst-ch)))
+              (assert-true (assq 'spsc? st) "channel-stats has spsc? key")
+              (assert-true (cdr (assq 'spsc? st)) "channel-stats spsc? is #t")
+              (assert-equal (cdr (assq 'sent st)) n "channel-stats sent = 10,000")
+              (assert-equal (cdr (assq 'received st)) n "channel-stats received = 10,000")))))))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

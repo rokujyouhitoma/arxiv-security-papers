@@ -81,8 +81,10 @@
     ;; <channel> Record & Core CSP Operations
     <channel>
     make-channel
+    make-spsc-channel
     make-channel-internal
     channel?
+    channel-spsc?
     channel-message-queue
     channel-recv-wait-queue
     channel-send-wait-queue
@@ -98,6 +100,8 @@
     channel-recv!
     channel-try-recv!
     channel-try-recv-with-status!
+    channel-spsc-try-enqueue!
+    channel-spsc-try-dequeue-val!
     channel-try-dequeue-val!
     channel-recv-values!
     channel-try-recv-values!
