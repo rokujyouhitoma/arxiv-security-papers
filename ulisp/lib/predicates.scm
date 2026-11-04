@@ -123,6 +123,43 @@
   (syntax-rules ()
     ((_ x) (%inexact? x))))
 
+;; ---------------------------------------------------------------------
+;; §6.2.6 IEEE 754 Special Value Predicates (finite?, infinite?, nan?)
+;;   Conforms to R7RS §6.2.6 & Issue #712
+;; ---------------------------------------------------------------------
+
+(define (nan? z)
+  (cond
+    ((fixnum? z) #f)
+    ((ratnum? z) #f)
+    ((flonum? z) (eq? (vector-ref z 1) 'nan))
+    ((compnum? z)
+     (or (nan? (vector-ref z 1))
+         (nan? (vector-ref z 2))))
+    (else (error "nan?: expected number" z))))
+
+(define (infinite? z)
+  (cond
+    ((fixnum? z) #f)
+    ((ratnum? z) #f)
+    ((flonum? z)
+     (let ((v (vector-ref z 1)))
+       (or (eq? v 'pos-inf) (eq? v 'neg-inf))))
+    ((compnum? z)
+     (or (infinite? (vector-ref z 1))
+         (infinite? (vector-ref z 2))))
+    (else (error "infinite?: expected number" z))))
+
+(define (finite? z)
+  (cond
+    ((fixnum? z) #t)
+    ((ratnum? z) #t)
+    ((flonum? z) (fixnum? (vector-ref z 1)))
+    ((compnum? z)
+     (and (finite? (vector-ref z 1))
+          (finite? (vector-ref z 2))))
+    (else (error "finite?: expected number" z))))
+
 ;; §6.4 Pairs and lists: list?
 (define (list? x)
   (let loop ((cur x))

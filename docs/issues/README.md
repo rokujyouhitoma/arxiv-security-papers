@@ -16,7 +16,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **712** | R7RS §6.2 不正確実数 (Flonum) と正確性変換 (exact / inexact)・IEEE 特殊値述語の実装 | Feature | High | New | [712-implement-r7rs-inexact-flonums-exactness-conversions-and-ieee-predicates.md](712-implement-r7rs-inexact-flonums-exactness-conversions-and-ieee-predicates.md) |
 | **713** | R7RS-small (scheme inexact) 初等超越関数・平方根ライブラリの完全実装 | Feature | High | New | [713-implement-r7rs-scheme-inexact-transcendental-math-library.md](713-implement-r7rs-scheme-inexact-transcendental-math-library.md) |
 | **714** | R7RS-small (scheme complex) 複素数算術ライブラリの完全実装 | Feature | High | New | [714-implement-r7rs-scheme-complex-arithmetic-library.md](714-implement-r7rs-scheme-complex-arithmetic-library.md) |
 | **715** | R7RS §6.2.6 数値塔リテラル入出力 (number->string 基数対応・string->number / read / write 拡張) の実装 | Feature | High | New | [715-implement-r7rs-numeric-tower-reader-printer-and-radix-formatting.md](715-implement-r7rs-numeric-tower-reader-printer-and-radix-formatting.md) |
@@ -30,6 +29,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **712** | R7RS §6.2 不正確実数 (Flonum) と正確性変換 (exact / inexact)・IEEE 特殊値述語の実装 | Feature | 2026-11-04 | [closed/712-implement-r7rs-inexact-flonums-exactness-conversions-and-ieee-predicates.md](closed/712-implement-r7rs-inexact-flonums-exactness-conversions-and-ieee-predicates.md) |
 | **711** | R7RS §6.2 正確有理数 (Exact Rationals) と丸め手続き・rationalize の実装 | Feature | 2026-11-04 | [closed/711-implement-r7rs-exact-rationals-rounding-and-rationalize.md](closed/711-implement-r7rs-exact-rationals-rounding-and-rationalize.md) |
 | **710** | R7RS-large Red Edition / SRFI 116 (scheme ilist) 不変リストおよび SRFI 134 (scheme ideque) 不変両端キューの実装 | Feature | 2026-11-04 | [closed/710-implement-srfi-116-immutable-lists-and-srfi-134-immutable-deques.md](closed/710-implement-srfi-116-immutable-lists-and-srfi-134-immutable-deques.md) |
 | **709** | R7RS-large Tangerine Edition / SRFI 146 (scheme mapping) 不変マッピングライブラリの実装 | Feature | 2026-11-04 | [closed/709-implement-srfi-146-immutable-mappings.md](closed/709-implement-srfi-146-immutable-mappings.md) |

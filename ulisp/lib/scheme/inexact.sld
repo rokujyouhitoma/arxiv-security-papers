@@ -19,4 +19,6 @@
     sqrt
     finite?
     infinite?
-    nan?))
+    nan?)
+  (include "../predicates.scm"
+           "../math.scm"))

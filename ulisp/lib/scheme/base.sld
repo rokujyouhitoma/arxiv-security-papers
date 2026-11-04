@@ -94,6 +94,10 @@
     round
     rationalize
     exact-integer-sqrt
+    inexact
+    exact
+    exact->inexact
+    inexact->exact
     square
     expt
     make-rational
@@ -107,6 +111,31 @@
     rat<=
     rat>
     rat>=
+    flonum?
+    make-flonum
+    make-flonum-micros
+    +inf.0
+    -inf.0
+    +nan.0
+    -nan.0
+    flo+
+    flo-
+    flo*
+    flo/
+    flo=
+    flo<
+    flo<=
+    flo>
+    flo>=
+    num+
+    num-
+    num*
+    num/
+    num=
+    num<
+    num<=
+    num>
+    num>=
     =
     <
     >

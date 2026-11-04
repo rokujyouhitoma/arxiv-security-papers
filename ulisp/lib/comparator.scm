@@ -156,14 +156,10 @@
    (lambda (n) (number-hash n %ht-hash-modulus))))
 
 (define (%comp-num= a b)
-  (if (and (fixnum? a) (fixnum? b))
-      (= a b)
-      (rat= a b)))
+  (num= a b))
 
 (define (%comp-num< a b)
-  (if (and (fixnum? a) (fixnum? b))
-      (< a b)
-      (rat< a b)))
+  (num< a b))
 
 (define number-comparator
   (make-comparator

@@ -395,7 +395,7 @@
      (let ((v (vector-ref x 1)))
        (if (fixnum? v)
            (vector 'ulisp-flonum-tag (* (floor-quotient v 1000000) 1000000))
-           (error "floor: non-finite flonum" x))))
+           x)))
     (else (error "floor: expected real number" x))))
 
 (define (ceiling x)
@@ -407,7 +407,7 @@
      (let ((v (vector-ref x 1)))
        (if (fixnum? v)
            (vector 'ulisp-flonum-tag (* (ceiling-quotient v 1000000) 1000000))
-           (error "ceiling: non-finite flonum" x))))
+           x)))
     (else (error "ceiling: expected real number" x))))
 
 (define (truncate x)
@@ -419,7 +419,7 @@
      (let ((v (vector-ref x 1)))
        (if (fixnum? v)
            (vector 'ulisp-flonum-tag (* (truncate-quotient v 1000000) 1000000))
-           (error "truncate: non-finite flonum" x))))
+           x)))
     (else (error "truncate: expected real number" x))))
 
 (define (round x)
@@ -431,7 +431,7 @@
      (let ((v (vector-ref x 1)))
        (if (fixnum? v)
            (vector 'ulisp-flonum-tag (* (round-quotient v 1000000) 1000000))
-           (error "round: non-finite flonum" x))))
+           x)))
     (else (error "round: expected real number" x))))
 
 ;; Continued-fraction / Stern-Brocot simplest rational in [n1/d1, n2/d2]
@@ -479,3 +479,223 @@
               (rd (%exact-rat-den exact-res)))
           (vector 'ulisp-flonum-tag (round-quotient (* rn 1000000) rd)))
         exact-res)))
+
+;; ---------------------------------------------------------------------
+;; §6.2.6 Inexact Reals (<flonum>), IEEE Special Values, and Exactness
+;;   Conforms to R7RS §6.2.2, §6.2.6 & Issue #712
+;; ---------------------------------------------------------------------
+
+(define (make-flonum-micros micros-or-sym)
+  (vector 'ulisp-flonum-tag micros-or-sym))
+
+(define (make-flonum int-part micro-frac)
+  (vector 'ulisp-flonum-tag (+ (* int-part 1000000) micro-frac)))
+
+(define +inf.0 (vector 'ulisp-flonum-tag 'pos-inf))
+(define -inf.0 (vector 'ulisp-flonum-tag 'neg-inf))
+(define +nan.0 (vector 'ulisp-flonum-tag 'nan))
+(define -nan.0 +nan.0)
+
+(define (inexact z)
+  (cond
+    ((fixnum? z)
+     (vector 'ulisp-flonum-tag (* z 1000000)))
+    ((ratnum? z)
+     (vector 'ulisp-flonum-tag
+             (round-quotient (* (vector-ref z 1) 1000000) (vector-ref z 2))))
+    ((flonum? z)
+     z)
+    ((compnum? z)
+     (vector 'ulisp-complex-tag
+             (inexact (vector-ref z 1))
+             (inexact (vector-ref z 2))))
+    (else
+     (error "inexact: expected number" z))))
+
+(define (exact z)
+  (cond
+    ((fixnum? z) z)
+    ((ratnum? z) z)
+    ((flonum? z)
+     (let ((v (vector-ref z 1)))
+       (if (fixnum? v)
+           (make-rational v 1000000)
+           (error "exact: cannot convert non-finite flonum to exact" z))))
+    ((compnum? z)
+     (let ((re (exact (vector-ref z 1)))
+           (im (exact (vector-ref z 2))))
+       (if (and (fixnum? im) (= im 0))
+           re
+           (vector 'ulisp-complex-tag re im))))
+    (else
+     (error "exact: expected number" z))))
+
+(define (exact->inexact z) (inexact z))
+(define (inexact->exact z) (exact z))
+
+(define (%to-flonum-val x)
+  (cond
+    ((flonum? x) (vector-ref x 1))
+    ((fixnum? x) (* x 1000000))
+    ((ratnum? x) (round-quotient (* (vector-ref x 1) 1000000) (vector-ref x 2)))
+    (else (error "flonum operation: expected real number" x))))
+
+(define (flo+ a b)
+  (let ((va (%to-flonum-val a))
+        (vb (%to-flonum-val b)))
+    (cond
+      ((or (eq? va 'nan) (eq? vb 'nan)) +nan.0)
+      ((and (eq? va 'pos-inf) (eq? vb 'neg-inf)) +nan.0)
+      ((and (eq? va 'neg-inf) (eq? vb 'pos-inf)) +nan.0)
+      ((or (eq? va 'pos-inf) (eq? vb 'pos-inf)) +inf.0)
+      ((or (eq? va 'neg-inf) (eq? vb 'neg-inf)) -inf.0)
+      (else (make-flonum-micros (+ va vb))))))
+
+(define flo-
+  (case-lambda
+    ((a)
+     (let ((va (%to-flonum-val a)))
+       (cond
+         ((eq? va 'nan) +nan.0)
+         ((eq? va 'pos-inf) -inf.0)
+         ((eq? va 'neg-inf) +inf.0)
+         (else (make-flonum-micros (- 0 va))))))
+    ((a b)
+     (flo+ a (flo- b)))))
+
+(define (flo* a b)
+  (let ((va (%to-flonum-val a))
+        (vb (%to-flonum-val b)))
+    (cond
+      ((or (eq? va 'nan) (eq? vb 'nan)) +nan.0)
+      ((or (and (or (eq? va 'pos-inf) (eq? va 'neg-inf)) (and (fixnum? vb) (= vb 0)))
+           (and (or (eq? vb 'pos-inf) (eq? vb 'neg-inf)) (and (fixnum? va) (= va 0))))
+       +nan.0)
+      ((or (eq? va 'pos-inf) (eq? vb 'pos-inf))
+       (let ((neg? (or (and (eq? va 'pos-inf) (or (eq? vb 'neg-inf) (and (fixnum? vb) (< vb 0))))
+                       (and (eq? vb 'pos-inf) (or (eq? va 'neg-inf) (and (fixnum? va) (< va 0)))))))
+         (if neg? -inf.0 +inf.0)))
+      ((or (eq? va 'neg-inf) (eq? vb 'neg-inf))
+       (let ((pos? (or (and (eq? va 'neg-inf) (or (eq? vb 'neg-inf) (and (fixnum? vb) (< vb 0))))
+                       (and (eq? vb 'neg-inf) (or (eq? va 'neg-inf) (and (fixnum? va) (< va 0)))))))
+         (if pos? +inf.0 -inf.0)))
+      (else
+       (make-flonum-micros (round-quotient (* va vb) 1000000))))))
+
+(define flo/
+  (case-lambda
+    ((a)
+     (flo/ (make-flonum-micros 1000000) a))
+    ((a b)
+     (let ((va (%to-flonum-val a))
+           (vb (%to-flonum-val b)))
+       (cond
+         ((or (eq? va 'nan) (eq? vb 'nan)) +nan.0)
+         ((and (or (eq? va 'pos-inf) (eq? va 'neg-inf))
+               (or (eq? vb 'pos-inf) (eq? vb 'neg-inf)))
+          +nan.0)
+         ((or (eq? vb 'pos-inf) (eq? vb 'neg-inf))
+          (make-flonum-micros 0))
+         ((and (fixnum? vb) (= vb 0))
+          (cond
+            ((and (fixnum? va) (= va 0)) +nan.0)
+            ((or (eq? va 'pos-inf) (and (fixnum? va) (> va 0))) +inf.0)
+            (else -inf.0)))
+         ((eq? va 'pos-inf)
+          (if (< vb 0) -inf.0 +inf.0))
+         ((eq? va 'neg-inf)
+          (if (< vb 0) +inf.0 -inf.0))
+         (else
+          (make-flonum-micros (round-quotient (* va 1000000) vb))))))))
+
+(define (flo= a b)
+  (let ((va (%to-flonum-val a))
+        (vb (%to-flonum-val b)))
+    (if (or (eq? va 'nan) (eq? vb 'nan))
+        #f
+        (eq? va vb))))
+
+(define (flo< a b)
+  (let ((va (%to-flonum-val a))
+        (vb (%to-flonum-val b)))
+    (cond
+      ((or (eq? va 'nan) (eq? vb 'nan)) #f)
+      ((eq? va vb) #f)
+      ((eq? va 'neg-inf) #t)
+      ((eq? vb 'pos-inf) #t)
+      ((or (eq? va 'pos-inf) (eq? vb 'neg-inf)) #f)
+      (else (< va vb)))))
+
+(define (flo<= a b)
+  (or (flo= a b) (flo< a b)))
+
+(define (flo> a b)
+  (flo< b a))
+
+(define (flo>= a b)
+  (or (flo= a b) (flo< b a)))
+
+;; Mixed-exactness real arithmetic with R7RS Inexactness Contagion
+(define (num+ a b)
+  (cond
+    ((and (fixnum? a) (fixnum? b)) (+ a b))
+    ((or (inexact? a) (inexact? b)) (flo+ a b))
+    (else (rat+ a b))))
+
+(define num-
+  (case-lambda
+    ((a)
+     (cond
+       ((fixnum? a) (- 0 a))
+       ((inexact? a) (flo- a))
+       (else (rat- a))))
+    ((a b)
+     (cond
+       ((and (fixnum? a) (fixnum? b)) (- a b))
+       ((or (inexact? a) (inexact? b)) (flo- a b))
+       (else (rat- a b))))))
+
+(define (num* a b)
+  (cond
+    ((and (fixnum? a) (fixnum? b)) (* a b))
+    ((or (inexact? a) (inexact? b)) (flo* a b))
+    (else (rat* a b))))
+
+(define num/
+  (case-lambda
+    ((a)
+     (if (inexact? a) (flo/ a) (rat/ a)))
+    ((a b)
+     (if (or (inexact? a) (inexact? b))
+         (flo/ a b)
+         (rat/ a b)))))
+
+(define (num= a b)
+  (cond
+    ((and (fixnum? a) (fixnum? b)) (= a b))
+    ((or (inexact? a) (inexact? b)) (flo= a b))
+    (else (rat= a b))))
+
+(define (num< a b)
+  (cond
+    ((and (fixnum? a) (fixnum? b)) (< a b))
+    ((or (inexact? a) (inexact? b)) (flo< a b))
+    (else (rat< a b))))
+
+(define (num<= a b)
+  (cond
+    ((and (fixnum? a) (fixnum? b)) (<= a b))
+    ((or (inexact? a) (inexact? b)) (flo<= a b))
+    (else (rat<= a b))))
+
+(define (num> a b)
+  (cond
+    ((and (fixnum? a) (fixnum? b)) (> a b))
+    ((or (inexact? a) (inexact? b)) (flo> a b))
+    (else (rat> a b))))
+
+(define (num>= a b)
+  (cond
+    ((and (fixnum? a) (fixnum? b)) (>= a b))
+    ((or (inexact? a) (inexact? b)) (flo>= a b))
+    (else (rat>= a b))))
