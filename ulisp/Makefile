@@ -415,7 +415,7 @@ test_concurrency_harness: $(COMPILER_DEP) build/context.o build/thread.o build/f
 	$(LD) $(LDFLAGS) build/test_concurrency_harness.o build/context.o build/thread.o build/futex.o -o build/test_concurrency_harness
 	./build/test_concurrency_harness < /dev/null
 
-test_concurrency_ci: test_concurrency_harness
+test_concurrency_ci: test_let_it_crash test_supervisor test_concurrency_harness
 
 bench_microtasks: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
 	@mkdir -p build

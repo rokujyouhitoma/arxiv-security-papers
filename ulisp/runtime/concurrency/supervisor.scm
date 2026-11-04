@@ -400,3 +400,16 @@
                  (if (eq? (child-spec-id (caar xs)) child-id)
                      (cadar xs)
                      (find-loop (cdr xs))))))))))
+
+(define supervisor-poll-down-signals!
+  (case-lambda
+    ((sup)
+     (if (not (supervisor-context? sup))
+         (error "supervisor-poll-down-signals!: expected <supervisor-context> (CWE-843)" sup)
+         (let* ((sup-task (supervisor-task sup))
+                (msg (task-take-handoff! sup-task)))
+           (if (and (pair? msg) (eq? (car msg) 'DOWN) (>= (length msg) 5))
+               (let ((target-tid (list-ref msg 3))
+                     (reason (list-ref msg 4)))
+                 (supervisor-handle-child-down! sup target-tid reason))
+               #f))))))

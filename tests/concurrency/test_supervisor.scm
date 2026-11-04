@@ -261,6 +261,68 @@
              "supervisor-handle-child-down! rejects non-supervisor (CWE-843)")
 
 ;; -----------------------------------------------------------------------
+;; Group 7: x86-64 Linux CI End-to-End Integration Test (#722)
+;;   Child under supervisor runs (car '()) and crashes;
+;;   unrelated concurrent tasks complete normally;
+;;   supervisor automatically restarts crashed child.
+;; -----------------------------------------------------------------------
+(write-string "--- Group 7: Supervisor Fault Isolation & Auto-Restart CI Integration (#722) ---\n")
+(flush-output-port)
+
+(let* ((sched (make-work-stealing-scheduler 2 32))
+       (child-boot-count (make-atomic-box 0))
+       (child-recovered-box (make-atomic-box 0))
+       (unrelated-sum-box (make-atomic-box 0))
+       (crashy-spec
+        (make-child-spec
+         'crashy_worker
+         (lambda ()
+           (let ((t (make-task-context))
+                 (attempt (+ (atomic-fetch-add! child-boot-count 1) 1)))
+             (task-next-run-set!
+              t
+              (lambda ()
+                (if (= attempt 1)
+                    ;; 1st boot: trigger fatal (car '()) pair-tag fault
+                    (car '())
+                    ;; 2nd boot (restarted): succeed normally
+                    (atomic-set! child-recovered-box 777))))
+             t))))
+       (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list crashy-spec)))
+       (sup (make-supervisor sup-spec)))
+  (supervisor-start! sup)
+  (let* ((t-child-1 (supervisor-child-task sup 'crashy_worker))
+         (tid-1 (task-tid t-child-1))
+         (unrelated-1 (make-task-context))
+         (unrelated-2 (make-task-context)))
+    (task-next-run-set! unrelated-1 (lambda () (atomic-fetch-add! unrelated-sum-box 100)))
+    (task-next-run-set! unrelated-2 (lambda () (atomic-fetch-add! unrelated-sum-box 200)))
+
+    ;; Spawn initial crashing child and two unrelated tasks on scheduler
+    (scheduler-spawn! sched unrelated-1 0)
+    (scheduler-spawn! sched t-child-1 0)
+    (scheduler-spawn! sched unrelated-2 1)
+    (scheduler-run! sched)
+
+    ;; 1. Unrelated concurrent tasks must complete without being affected by (car '())
+    (assert-equal (atomic-ref unrelated-sum-box) 300 "unrelated concurrent tasks completed normally (100+200=300)")
+    ;; 2. Crashed child task transitioned to 'terminated
+    (assert-eq (task-state t-child-1) 'terminated "1st child instance running (car '()) terminated cleanly")
+    ;; 3. Supervisor received DOWN signal and automatically restarts child
+    (supervisor-poll-down-signals! sup)
+    (let* ((t-child-2 (supervisor-child-task sup 'crashy_worker))
+           (tid-2 (task-tid t-child-2)))
+      (assert-true (task-context? t-child-2) "restarted child task context exists")
+      (assert-true (not (= tid-1 tid-2)) "restarted child assigned a fresh TID")
+      ;; Schedule the restarted child and verify it completes
+      (scheduler-spawn! sched t-child-2 0)
+      (scheduler-run! sched)
+      (assert-equal (atomic-ref child-boot-count) 2 "child booted exactly twice (initial crash + 1 restart)")
+      (assert-equal (atomic-ref child-recovered-box) 777 "restarted child executed and completed normally"))
+    (supervisor-stop! sup)
+    (scheduler-stop! sched)))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 

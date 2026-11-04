@@ -21,12 +21,12 @@
 (load "ulisp/runtime/concurrency/deque.scm")
 (load "ulisp/runtime/concurrency/thread.scm")
 (load "ulisp/runtime/concurrency/futex.scm")
+(load "ulisp/runtime/concurrency/eval_adapter.scm")
 (load "ulisp/runtime/concurrency/links.scm")
 (load "ulisp/runtime/concurrency/panic.scm")
 (load "ulisp/runtime/concurrency/supervisor.scm")
 (load "ulisp/runtime/concurrency/scheduler.scm")
 (load "ulisp/runtime/concurrency/preempt.scm")
-(load "ulisp/runtime/concurrency/eval_adapter.scm")
 
 ;; -----------------------------------------------------------------------
 ;; 1. PRNG & Chaos Jitter Utilities (Deterministic Knuth LCG)
@@ -426,6 +426,57 @@
         (scheduler-stop! sched)))))
 
 ;; -----------------------------------------------------------------------
+;; 6e. Scenario 4e: Supervisor Fault Isolation & Child Auto-Restart (#722)
+;; -----------------------------------------------------------------------
+
+(define (run-scenario-supervisor-fault-isolation! iter prng)
+  (begin
+    (vector-set! *harness-current-scenario* 0 "Scenario 4e: Supervisor Fault Isolation (#722)")
+    (let* ((sched (make-work-stealing-scheduler 2 32))
+           (child-boot-count (make-atomic-box 0))
+           (child-recovered-box (make-atomic-box 0))
+           (unrelated-sum-box (make-atomic-box 0))
+           (crashy-spec
+            (make-child-spec
+             'ci_crashy_worker
+             (lambda ()
+               (let ((t (make-task-context))
+                     (attempt (+ (atomic-fetch-add! child-boot-count 1) 1)))
+                 (task-next-run-set!
+                  t
+                  (lambda ()
+                    (inject-jitter! prng 5)
+                    (if (= attempt 1)
+                        (car '())
+                        (atomic-set! child-recovered-box 999))))
+                 t))))
+           (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list crashy-spec)))
+           (sup (make-supervisor sup-spec)))
+      (supervisor-start! sup)
+      (let* ((t-child-1 (supervisor-child-task sup 'ci_crashy_worker))
+             (tid-1 (task-tid t-child-1))
+             (u1 (make-task-context))
+             (u2 (make-task-context)))
+        (task-next-run-set! u1 (lambda () (inject-jitter! prng 4) (atomic-fetch-add! unrelated-sum-box 10)))
+        (task-next-run-set! u2 (lambda () (inject-jitter! prng 4) (atomic-fetch-add! unrelated-sum-box 20)))
+        (scheduler-spawn! sched u1 0)
+        (scheduler-spawn! sched t-child-1 0)
+        (scheduler-spawn! sched u2 1)
+        (scheduler-run! sched)
+        (harness-assert-equal (atomic-ref unrelated-sum-box) 30 "Unrelated tasks must complete despite child (car '())")
+        (harness-assert-equal (task-state t-child-1) 'terminated "Crashing child must transition to 'terminated")
+        (supervisor-poll-down-signals! sup)
+        (let* ((t-child-2 (supervisor-child-task sup 'ci_crashy_worker))
+               (tid-2 (task-tid t-child-2)))
+          (harness-assert-false (= tid-1 tid-2) "Restarted child must receive fresh TID")
+          (scheduler-spawn! sched t-child-2 0)
+          (scheduler-run! sched)
+          (harness-assert-equal (atomic-ref child-boot-count) 2 "Child must boot twice")
+          (harness-assert-equal (atomic-ref child-recovered-box) 999 "Restarted child must complete"))
+        (supervisor-stop! sup)
+        (scheduler-stop! sched)))))
+
+;; -----------------------------------------------------------------------
 ;; 7. Scenario 5: 100-Iteration Flakiness Elimination & CI Reporting Controller
 ;; -----------------------------------------------------------------------
 
@@ -451,7 +502,8 @@
                 (run-scenario-arena-no-leak! iter iter-prng)
                 (run-scenario-coroutine-id-atomic! iter iter-prng)
                 (run-scenario-task-id-atomic! iter iter-prng)
-                (run-scenario-scheduler-stats-atomic! iter iter-prng)))
+                (run-scenario-scheduler-stats-atomic! iter iter-prng)
+                (run-scenario-supervisor-fault-isolation! iter iter-prng)))
 
             ;; Print periodic progress tick every 10 iterations
             (if (= (modulo iter 10) 0)
