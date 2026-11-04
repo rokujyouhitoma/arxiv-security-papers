@@ -18,6 +18,48 @@
 (define *task-default-reductions* 4096)
 (define *channel-max-capacity* 1048576)
 
+(define (%asm-get-trampoline-addr which)
+  (if (not (integer? which)) 0 0))
+
+(define (%asm-set-handler-chain! chain-addr)
+  (if (integer? chain-addr) #t #f))
+
+(define (%asm-get-handler-chain)
+  (%asm-get-trampoline-addr 6))
+
+(define (%asm-current-worker-slot)
+  (%asm-get-trampoline-addr 5))
+
+;; Per-Worker Current Task TLS Table (64 worker slots, Issue #719)
+(define *active-current-task-box* (make-atomic-box #f))
+(define *worker-current-task-tls* (make-vector 64 #f))
+(define *worker-slot-override-tls* (make-vector 64 #f))
+
+(define (%current-worker-tls-index)
+  (let ((hw-slot (%asm-current-worker-slot)))
+    (if (and (integer? hw-slot) (>= hw-slot 0) (< hw-slot 64))
+        (let ((logical (vector-ref *worker-slot-override-tls* hw-slot)))
+          (if (and (integer? logical) (>= logical 0) (< logical 64))
+              logical
+              hw-slot))
+        0)))
+
+(define (%set-current-worker-tls-override! wid)
+  (let ((hw-slot (%asm-current-worker-slot)))
+    (if (and (integer? hw-slot) (>= hw-slot 0) (< hw-slot 64))
+        (vector-set! *worker-slot-override-tls* hw-slot wid)
+        #f)))
+
+(define (current-synapse-task)
+  (let ((idx (%current-worker-tls-index)))
+    (vector-ref *worker-current-task-tls* idx)))
+
+(define (%set-current-synapse-task! task)
+  (let ((idx (%current-worker-tls-index)))
+    (vector-set! *worker-current-task-tls* idx task)
+    (atomic-set! *active-current-task-box* task)
+    task))
+
 ;; Optional callback `(lambda (task) ...)` invoked when a suspended task
 ;; transitions from 'waiting-channel to 'ready.
 (define *channel-wake-hook-box* (make-atomic-box #f))
@@ -52,7 +94,7 @@
                       blocked-on epoch next-run
                       reduction-exhaustions steals-count handoff-box
                       links-box monitors-box monitored-by-box trap-exit-box owned-channels-box
-                      arena-box escape-k-box)
+                      arena-box escape-k-box handler-chain-box)
   task-context?
   (tid                   %task-tid)
   (state                 %task-state                 %task-state-set!)
@@ -74,7 +116,8 @@
   (trap-exit-box         %task-trap-exit-box)
   (owned-channels-box    %task-owned-channels-box)
   (arena-box             %task-arena-box)
-  (escape-k-box          %task-escape-k-box))
+  (escape-k-box          %task-escape-k-box)
+  (handler-chain-box     %task-handler-chain-box))
 
 ;; -----------------------------------------------------------------------
 ;; Global Monotonically Increasing Atomic Task ID Allocator (#673)
@@ -102,21 +145,21 @@
                            (make-atomic-box '()) (make-atomic-box '())
                            (make-atomic-box '()) (make-atomic-box #f)
                            (make-atomic-box '())
-                           (make-atomic-box #f) (make-atomic-box #f))))
+                           (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0))))
     ((tid)
      (%make-task-context tid 'ready *task-default-reductions* 0 0
                          0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
                          (make-atomic-box '()) (make-atomic-box '())
                          (make-atomic-box '()) (make-atomic-box #f)
                          (make-atomic-box '())
-                         (make-atomic-box #f) (make-atomic-box #f)))
+                         (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))
     ((tid epoch)
      (%make-task-context tid 'ready *task-default-reductions* 0 0
                          0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)
                          (make-atomic-box '()) (make-atomic-box '())
                          (make-atomic-box '()) (make-atomic-box #f)
                          (make-atomic-box '())
-                         (make-atomic-box #f) (make-atomic-box #f)))
+                         (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))
     ((tid state reductions continuation-pc stack-pointer
       arena-base arena-offset arena-capacity
       blocked-on epoch next-run
@@ -129,7 +172,7 @@
                          (make-atomic-box '()) (make-atomic-box '())
                          (make-atomic-box '()) (make-atomic-box #f)
                          (make-atomic-box '())
-                         (make-atomic-box #f) (make-atomic-box #f)))))
+                         (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))))
 
 (define (task-tid t)
   (if (not (task-context? t))
@@ -367,6 +410,21 @@
       (begin
         (atomic-set! (task-escape-k-box t) k)
         k)))
+
+(define (task-handler-chain-box t)
+  (if (not (task-context? t))
+      (error "task-handler-chain-box: expected <task-context>" t)
+      (%task-handler-chain-box t)))
+
+(define (task-handler-chain t)
+  (atomic-ref (task-handler-chain-box t)))
+
+(define (task-set-handler-chain! t hc)
+  (if (not (task-context? t))
+      (error "task-set-handler-chain!: expected <task-context>" t)
+      (begin
+        (atomic-set! (task-handler-chain-box t) hc)
+        hc)))
 
 (define (task-register-channel! t ch)
   (if (not (task-context? t))

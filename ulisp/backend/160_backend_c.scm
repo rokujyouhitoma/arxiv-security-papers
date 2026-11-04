@@ -956,7 +956,7 @@
     (emit "static uint64_t cmp_s1 ULISP_UNUSED;")
     (emit "static uint64_t cmp_s2 ULISP_UNUSED;")
     (emit "static char stack_mem[64 * 1024 * 1024] ULISP_UNUSED;")
-    (emit "static void *ulisp_handler_chain ULISP_UNUSED = NULL;")
+    (emit "static __thread void *ulisp_handler_chain ULISP_UNUSED = NULL;")
     (emit "static uint64_t ulisp_values_count ULISP_UNUSED = 1;")
     (emit "static uint64_t ulisp_values_buf[64] ULISP_UNUSED = {0};")
     (let loop ((gvs (car *top-level-vars*)))

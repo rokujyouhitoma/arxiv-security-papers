@@ -793,7 +793,7 @@
     (emit "    .align 3")
     (emit "    .globl ulisp_handler_chain")
     (emit "ulisp_handler_chain:")
-    (emit "    .xword 0")
+    (emit "    .zero 512")
     (emit "    .align 3")
     (emit "    .globl ulisp_values_count")
     (emit "ulisp_values_count:")

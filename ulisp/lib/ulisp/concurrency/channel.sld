@@ -71,6 +71,16 @@
     task-escape-k-box
     task-escape-continuation
     task-set-escape-continuation!
+    task-handler-chain-box
+    task-handler-chain
+    task-set-handler-chain!
+    *active-current-task-box*
+    *worker-current-task-tls*
+    *worker-slot-override-tls*
+    %current-worker-tls-index
+    %set-current-worker-tls-override!
+    current-synapse-task
+    %set-current-synapse-task!
 
     ;; <channel-waiter> Record
     <channel-waiter>

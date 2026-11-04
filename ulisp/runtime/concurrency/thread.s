@@ -131,13 +131,25 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_spawn_thread:
     and rbx, -16                # Ensure 16-byte alignment
 
     # Allocate unique thread spawn index atomically
+    mov qword ptr [rip + ulisp_thread_idx_mask], 63
     mov rax, 1
     lock xadd [rip + ulisp_thread_spawn_counter], rax
     # rax now holds unique thread index (0, 1, 2, ...)
-    # Compute isolated per-thread heap arena: child_r12 = parent_r12 + (rax + 1) * 32MB
+    # Compute isolated per-thread heap arena: child_r12 = nursery_base + (rax + 1) * 32MB
     inc rax
     shl rax, 25                         # rax = (idx + 1) * 32MB (0x02000000)
-    lea rcx, [r12 + rax]                # rcx = isolated child_r12
+    lea rdx, [rip + ulisp_gc_state]
+    mov rcx, [rdx]
+    test rcx, rcx
+    cmovz rcx, r12
+    add rcx, rax                        # rcx = isolated child_r12
+    # Ensure ulisp_heap_limit covers child_r12's 32MB arena [rcx, rcx + 32MB)
+    mov rdx, rcx
+    add rdx, 0x02000000
+    cmp [rip + ulisp_heap_limit], rdx
+    jae .L_spawn_limit_ok
+    mov [rip + ulisp_heap_limit], rdx
+.L_spawn_limit_ok:
 
     # Prepare child stack frame (32 bytes, maintains 16-byte alignment):
     #   [rbx - 8]  = stack_base (for cleanup)
@@ -427,6 +439,14 @@ ulisp_cached_online_cpus:
     .quad 0
     .globl ulisp_thread_spawn_counter
 ulisp_thread_spawn_counter:
+    .quad 0
+    .globl ulisp_thread_idx_mask
+    .weak ulisp_thread_idx_mask
+ulisp_thread_idx_mask:
+    .quad 0
+    .globl ulisp_heap_limit
+    .weak ulisp_heap_limit
+ulisp_heap_limit:
     .quad 0
 
     .section .note.GNU-stack,"",@progbits

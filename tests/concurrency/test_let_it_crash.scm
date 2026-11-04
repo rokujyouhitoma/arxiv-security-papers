@@ -245,6 +245,44 @@
                "synapse-cleanup-task-resources! rejects non-task (CWE-843)"))
 
 ;; -----------------------------------------------------------------------
+;; Group 7: Per-Worker TLS Isolation of Handler Chain & Current Task (#719)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 7: Per-Worker TLS Isolation (#719) ---\n")
+(flush-output-port)
+
+(let* ((t-w0 (make-task-context))
+       (t-w1 (make-task-context))
+       (w1-done (make-atomic-box #f))
+       (w1-tid-seen (make-atomic-box #f))
+       (w1-caught (make-atomic-box #f))
+       (w0-tid-seen (make-atomic-box #f))
+       (w0-caught (make-atomic-box #f)))
+  (with-synapse-task-boundary t-w0
+    (lambda ()
+      (guard (ex0 (#t (atomic-set! w0-caught ex0)))
+        (spawn-native-thread
+         (lambda (arg)
+           (with-synapse-task-boundary t-w1
+             (lambda ()
+               (guard (ex1 (#t (atomic-set! w1-caught ex1)))
+                 (atomic-set! w1-tid-seen (task-tid (current-synapse-task)))
+                 (raise 'worker1-exn)))
+             #f)
+           (atomic-set! w1-done #t))
+         0)
+        (let wait-loop ((spins 0))
+          (if (and (not (atomic-ref w1-done)) (< spins 5000000))
+              (wait-loop (+ spins 1))
+              #t))
+        (atomic-set! w0-tid-seen (task-tid (current-synapse-task)))
+        (raise 'worker0-exn)))
+    #f)
+  (assert-eq (atomic-ref w1-tid-seen) (task-tid t-w1) "worker 1 TLS current-synapse-task is t-w1")
+  (assert-eq (atomic-ref w0-tid-seen) (task-tid t-w0) "worker 0 TLS current-synapse-task remained t-w0 without interference")
+  (assert-eq (atomic-ref w1-caught) 'worker1-exn "worker 1 TLS handler chain caught 'worker1-exn")
+  (assert-eq (atomic-ref w0-caught) 'worker0-exn "worker 0 TLS handler chain caught 'worker0-exn"))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 

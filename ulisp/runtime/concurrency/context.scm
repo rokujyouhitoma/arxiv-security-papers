@@ -27,6 +27,15 @@
 (define (%asm-get-trampoline-addr which)
   (if (not (integer? which)) 0 0))
 
+(define (%asm-set-handler-chain! chain-addr)
+  (if (integer? chain-addr) #t #f))
+
+(define (%asm-get-handler-chain)
+  (%asm-get-trampoline-addr 6))
+
+(define (%asm-current-worker-slot)
+  (%asm-get-trampoline-addr 5))
+
 (define (%asm-swap-context! old-sp-ptr new-sp)
   (and (integer? old-sp-ptr) (integer? new-sp)))
 
@@ -111,7 +120,7 @@
                  (%context-raw-u64-set! top -56 0)   ; switch_count = 0
                  (%context-raw-u64-set! top -48 0)   ; prev_task_top = 0
                  (%context-raw-obj-set! top -40 #f)  ; task_value_slot = #f
-                 (%context-raw-obj-set! top -32 #f)  ; task_closure_slot = #f
+                 (%context-raw-u64-set! top -32 0)   ; task_handler_chain_slot = 0
                  (%context-raw-u64-set! top -24 0)   ; task_state = 0 ('ready)
                  (%context-raw-u64-set! top -16 init-sp) ; task_sp_slot
                  (%context-raw-u64-set! top -8 0)    ; parent_sp_slot = 0
@@ -179,9 +188,7 @@
                 (%context-raw-u64-set! top -56 0)
                 (%context-raw-u64-set! top -48 0)
                 (%context-raw-obj-set! top -40 #f)
-                (if (procedure? entry-fn)
-                    (%context-raw-obj-set! top -32 entry-fn)
-                    (%context-raw-u64-set! top -32 entry-fn))
+                (%context-raw-u64-set! top -32 0)   ; task_handler_chain_slot = 0
                 (%context-raw-u64-set! top -24 0)
                 (%context-raw-u64-set! top -16 init-sp)
                 (%context-raw-u64-set! top -8 0)

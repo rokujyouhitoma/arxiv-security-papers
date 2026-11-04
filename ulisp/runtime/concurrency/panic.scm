@@ -40,17 +40,10 @@
      (%make-synapse-panic-record reason details source-loc (allocate-panic-timestamp!)))))
 
 ;; -----------------------------------------------------------------------
-;; 2. Active Current Task Tracking & Crash Logger Hook
+;; 2. Active Current Task Tracking & Crash Logger Hook (Per-Worker TLS, #719)
 ;; -----------------------------------------------------------------------
 
-(define *active-current-task-box* (make-atomic-box #f))
 (define *synapse-crash-logger-hook-box* (make-atomic-box #f))
-
-(define (current-synapse-task)
-  (atomic-ref *active-current-task-box*))
-
-(define (%set-current-synapse-task! task)
-  (atomic-set! *active-current-task-box* task))
 
 (define (synapse-set-crash-logger-hook! hook)
   (atomic-set! *synapse-crash-logger-hook-box* hook))
@@ -128,6 +121,8 @@
 ;; 5. Task Boundary Protection Wrapper (Zero-State Contamination)
 ;; -----------------------------------------------------------------------
 
+(define *synapse-boundary-escape-tag* (list 'synapse-boundary-escape))
+
 (define with-synapse-task-boundary
   (case-lambda
     ((task thunk)
@@ -137,20 +132,30 @@
          (error "with-synapse-task-boundary: expected <task-context> (CWE-843)" task)
          (if (not (procedure? thunk))
              (error "with-synapse-task-boundary: expected procedure (CWE-843)" thunk)
-             (call/cc
-               (lambda (escape-k)
-                 (let ((prev-task (current-synapse-task))
-                       (prev-k (task-escape-continuation task)))
-                   (dynamic-wind
-                     (lambda ()
-                       (task-set-escape-continuation! task escape-k)
-                       (%set-current-synapse-task! task))
-                     (lambda ()
-                       (let ((res (thunk)))
-                         (cons 'ok res)))
-                     (lambda ()
-                       (task-set-escape-continuation! task prev-k)
-                       (%set-current-synapse-task! prev-task)))))))))))
+             (let ((prev-task (current-synapse-task))
+                   (prev-k (task-escape-continuation task))
+                   (prev-hc (%asm-get-handler-chain))
+                   (task-hc (task-handler-chain task)))
+               (let ((result
+                      (guard (exn
+                              ((and (pair? exn) (eq? (car exn) *synapse-boundary-escape-tag*))
+                               (cdr exn)))
+                        (let* ((boundary-hc (%asm-get-handler-chain))
+                               (escape-k (lambda (val)
+                                           (%asm-set-handler-chain! boundary-hc)
+                                           (raise (cons *synapse-boundary-escape-tag* val)))))
+                          (task-set-escape-continuation! task escape-k)
+                          (%set-current-synapse-task! task)
+                          (if (and (integer? task-hc) (> task-hc 0))
+                              (%asm-set-handler-chain! task-hc)
+                              #f)
+                          (let ((res (thunk)))
+                            (task-set-handler-chain! task (%asm-get-handler-chain))
+                            (cons 'ok res))))))
+                 (%asm-set-handler-chain! prev-hc)
+                 (task-set-escape-continuation! task prev-k)
+                 (%set-current-synapse-task! prev-task)
+                 result)))))))
 
 ;; -----------------------------------------------------------------------
 ;; 6. Fast Assertion Guard

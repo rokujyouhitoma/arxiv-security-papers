@@ -50,6 +50,9 @@
     context-yield!
     context-switch!
     swap-context!
+    %asm-set-handler-chain!
+    %asm-get-handler-chain
+    %asm-current-worker-slot
 
     ;; ABI Verification, 10M Endurance & Telemetry
     verify-swap-context-abi!

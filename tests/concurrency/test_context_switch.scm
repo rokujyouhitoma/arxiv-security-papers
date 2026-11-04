@@ -309,6 +309,37 @@
                 "context-resume! aborts when stack canary is corrupted (CWE-787)")
   (free-coroutine-context! co-tampered))
 
+;; -----------------------------------------------------------------------
+;; Group 7: Per-Task Exception Handler Chain Isolation Across Switches (#719)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 7: Per-Task Exception Handler Chain Isolation (#719) ---\n")
+(flush-output-port)
+
+(let* ((caught-a (vector #f))
+       (caught-b (vector #f))
+       (caught-host (vector #f))
+       (co-a (make-coroutine-context
+              (lambda ()
+                (guard (exn (#t (vector-set! caught-a 0 exn) 'handled-a))
+                  (context-yield! 'a-ready)
+                  (raise 'boom-a)))))
+       (co-b (make-coroutine-context
+              (lambda ()
+                (guard (exn (#t (vector-set! caught-b 0 exn) 'handled-b))
+                  (context-yield! 'b-ready)
+                  (raise 'boom-b))))))
+  (guard (host-exn (#t (vector-set! caught-host 0 host-exn)))
+    (assert-equal (eq? (context-resume! co-a) 'a-ready) #t "co-a installs guard and yields 'a-ready")
+    (assert-equal (eq? (context-resume! co-b) 'b-ready) #t "co-b installs guard and yields 'b-ready without clobbering co-a")
+    (assert-equal (eq? (context-resume! co-a) 'handled-a) #t "co-a resumes with its own handler chain and catches 'boom-a")
+    (assert-equal (eq? (context-resume! co-b) 'handled-b) #t "co-b resumes with its own handler chain and catches 'boom-b")
+    (raise 'boom-host))
+  (assert-equal (eq? (vector-ref caught-a 0) 'boom-a) #t "co-a caught 'boom-a exclusively")
+  (assert-equal (eq? (vector-ref caught-b 0) 'boom-b) #t "co-b caught 'boom-b exclusively")
+  (assert-equal (eq? (vector-ref caught-host 0) 'boom-host) #t "host handler chain remained intact after coroutine switches")
+  (free-coroutine-context! co-a)
+  (free-coroutine-context! co-b))
+
 (write-string "=======================================================\n")
 (write-string " Native Context Switch Test Summary: ")
 (write-string (number->string (vector-ref *test-context-passes* 0)))

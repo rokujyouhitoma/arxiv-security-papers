@@ -61,16 +61,16 @@ ulisp_task_entry_trampoline:
     mov r10, r13
     xor rax, rax
     mov r11, [r10 - 1]
-    sub rsp, 8
+    push rbx
     call r11
-    add rsp, 8
+    pop rbx
     mov [rbx - 40], rax
     ret
 .L_task_entry_raw_fn:
     mov rdi, rbx
-    sub rsp, 8
+    push rbx
     call r13
-    add rsp, 8
+    pop rbx
     mov [rbx - 40], rax
     ret
 
@@ -79,9 +79,15 @@ ulisp_task_entry_trampoline:
     .p2align 4
 ulisp_task_exit_trampoline:
     mov qword ptr [rbx - 24], 3
+    mov qword ptr [rbx - 32], 0
     mov rax, [rbx - 48]
+    lea rdx, [rip + ulisp_gc_state]
+    mov r8, r12
+    sub r8, [rdx]
+    shr r8, 25
+    and r8, [rip + ulisp_thread_idx_mask]
     lea rdx, [rip + ulisp_current_task_top]
-    mov [rdx], rax
+    mov [rdx + r8*8], rax
     inc qword ptr [rip + ulisp_total_context_switches]
     mov r11, r12
     lea rdi, [rbx - 16]
@@ -99,7 +105,9 @@ ulisp_task_exit_trampoline:
 #   which = 1 -> address of ulisp_task_exit_trampoline  (tagged fixnum)
 #   which = 2 -> address of swap_context                (tagged fixnum)
 #   which = 3 -> ulisp_total_context_switches           (tagged fixnum)
-#   which = 4 -> ulisp_current_task_top                 (tagged fixnum)
+#   which = 4 -> ulisp_current_task_top[worker]         (tagged fixnum)
+#   which = 5 -> current worker TLS slot index (0..63)  (tagged fixnum)
+#   which = 6 -> ulisp_handler_chain[worker]            (tagged fixnum)
     .globl ulisp_fn__pctasm_get_trampoline_addr
     .globl ulisp_fn___lib_ulisp_concurrency_context___pctasm_get_trampoline_addr
     .type ulisp_fn__pctasm_get_trampoline_addr, @function
@@ -115,8 +123,35 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_get_trampoline_addr:
     je .L_get_addr_swap
     cmp rdi, 3
     je .L_get_total_switches
+    cmp rdi, 5
+    je .L_get_worker_slot
+    cmp rdi, 6
+    je .L_get_handler_chain
+    lea rdx, [rip + ulisp_gc_state]
+    mov r8, r12
+    sub r8, [rdx]
+    shr r8, 25
+    and r8, [rip + ulisp_thread_idx_mask]
     lea rax, [rip + ulisp_current_task_top]
-    mov rax, [rax]
+    mov rax, [rax + r8*8]
+    shl rax, 2
+    ret
+.L_get_worker_slot:
+    lea rdx, [rip + ulisp_gc_state]
+    mov rax, r12
+    sub rax, [rdx]
+    shr rax, 25
+    and rax, [rip + ulisp_thread_idx_mask]
+    shl rax, 2
+    ret
+.L_get_handler_chain:
+    lea rdx, [rip + ulisp_gc_state]
+    mov r8, r12
+    sub r8, [rdx]
+    shr r8, 25
+    and r8, [rip + ulisp_thread_idx_mask]
+    lea rax, [rip + ulisp_handler_chain]
+    mov rax, [rax + r8*8]
     shl rax, 2
     ret
 .L_get_addr_entry:
@@ -135,6 +170,24 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_get_trampoline_addr:
     lea rax, [rip + ulisp_total_context_switches]
     mov rax, [rax]
     shl rax, 2
+    ret
+
+# (%asm-set-handler-chain! chain-addr)
+    .globl ulisp_fn__pctasm_set_handler_chain_excl
+    .globl ulisp_fn___lib_ulisp_concurrency_context___pctasm_set_handler_chain_excl
+    .type ulisp_fn__pctasm_set_handler_chain_excl, @function
+    .p2align 4
+ulisp_fn__pctasm_set_handler_chain_excl:
+ulisp_fn___lib_ulisp_concurrency_context___pctasm_set_handler_chain_excl:
+    sar rdi, 2
+    lea rdx, [rip + ulisp_gc_state]
+    mov r8, r12
+    sub r8, [rdx]
+    shr r8, 25
+    and r8, [rip + ulisp_thread_idx_mask]
+    lea r9, [rip + ulisp_handler_chain]
+    mov [r9 + r8*8], rdi
+    mov rax, 111
     ret
 
 # (%asm-swap-context! old-sp-ptr new-sp)
@@ -167,10 +220,21 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
     mov qword ptr [rdi - 24], 1
     inc qword ptr [rdi - 56]
     inc qword ptr [rip + ulisp_total_context_switches]
+    lea rdx, [rip + ulisp_gc_state]
+    mov r8, r12
+    sub r8, [rdx]
+    shr r8, 25
+    and r8, [rip + ulisp_thread_idx_mask]
     lea rdx, [rip + ulisp_current_task_top]
-    mov rax, [rdx]
+    mov rax, [rdx + r8*8]
     mov [rdi - 48], rax
-    mov [rdx], rdi
+    mov [rdx + r8*8], rdi
+    lea r9, [rip + ulisp_handler_chain]
+    lea r9, [r9 + r8*8]
+    push qword ptr [r9]
+    push r9
+    mov rax, [rdi - 32]
+    mov [r9], rax
     lea rcx, [rip + ulisp_gc_state]
     push qword ptr [rcx + 24]
     push qword ptr [rcx + 48]
@@ -186,6 +250,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
     lea rcx, [rip + ulisp_gc_state]
     pop qword ptr [rcx + 48]
     pop qword ptr [rcx + 24]
+    pop r9
+    pop qword ptr [r9]
     mov rax, [rdi - 40]
     ret
 
@@ -196,15 +262,23 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
     .p2align 4
 ulisp_fn__pctasm_yield_task_excl:
 ulisp_fn___lib_ulisp_concurrency_context___pctasm_yield_task_excl:
+    lea rdx, [rip + ulisp_gc_state]
+    mov r8, r12
+    sub r8, [rdx]
+    shr r8, 25
+    and r8, [rip + ulisp_thread_idx_mask]
     lea rdx, [rip + ulisp_current_task_top]
-    mov rcx, [rdx]
+    mov rcx, [rdx + r8*8]
     test rcx, rcx
     jz .L_yield_no_active_task
     mov [rcx - 40], rdi
     mov qword ptr [rcx - 24], 2
     inc qword ptr [rip + ulisp_total_context_switches]
     mov rax, [rcx - 48]
-    mov [rdx], rax
+    mov [rdx + r8*8], rax
+    lea r9, [rip + ulisp_handler_chain]
+    mov rax, [r9 + r8*8]
+    mov [rcx - 32], rax
     push rcx
     mov r11, r12
     lea rdi, [rcx - 16]
@@ -240,8 +314,18 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov rax, [rdi - 48]
     mov [rsi - 48], rax
 .L_switch_parent_ready:
+    lea rdx, [rip + ulisp_gc_state]
+    mov r8, r12
+    sub r8, [rdx]
+    shr r8, 25
+    and r8, [rip + ulisp_thread_idx_mask]
     lea rcx, [rip + ulisp_current_task_top]
-    mov [rcx], rsi
+    mov [rcx + r8*8], rsi
+    lea r9, [rip + ulisp_handler_chain]
+    mov rax, [r9 + r8*8]
+    mov [rdi - 32], rax
+    mov rax, [rsi - 32]
+    mov [r9 + r8*8], rax
     lea rcx, [rip + ulisp_gc_state]
     mov [rcx + 24], rsi
     mov [rcx + 48], rsi
@@ -252,8 +336,16 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     call swap_context
     mov r12, r11
     pop rdi
+    lea rdx, [rip + ulisp_gc_state]
+    mov r8, r12
+    sub r8, [rdx]
+    shr r8, 25
+    and r8, [rip + ulisp_thread_idx_mask]
     lea rcx, [rip + ulisp_current_task_top]
-    mov [rcx], rdi
+    mov [rcx + r8*8], rdi
+    lea r9, [rip + ulisp_handler_chain]
+    mov rax, [rdi - 32]
+    mov [r9 + r8*8], rax
     lea rcx, [rip + ulisp_gc_state]
     mov [rcx + 24], rdi
     mov [rcx + 48], rdi
@@ -640,8 +732,15 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_bench_swap_context_excl:
 # -----------------------------------------------------------------------
     .bss
     .p2align 3
+    .globl ulisp_handler_chain
+ulisp_handler_chain:
+    .zero 512
     .globl ulisp_current_task_top
 ulisp_current_task_top:
+    .zero 512
+    .globl ulisp_thread_idx_mask
+    .weak ulisp_thread_idx_mask
+ulisp_thread_idx_mask:
     .quad 0
     .globl ulisp_total_context_switches
 ulisp_total_context_switches:
