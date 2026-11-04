@@ -8,4 +8,8 @@
 (define-library (scheme load)
   (export
     ;; §6.14 System interface (Dynamic load)
-    load))
+    load)
+  (import (scheme base)
+          (scheme eval)
+          (scheme file)
+          (scheme read)))

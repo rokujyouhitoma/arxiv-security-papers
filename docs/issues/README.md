@@ -16,9 +16,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **716** | R7RS §6.12 環境指定子オブジェクト (environment, null-environment, scheme-report-environment, interaction-environment) の実装 | Feature | High | Closed | [716-implement-r7rs-environment-specifiers-and-library-import-environments.md](closed/716-implement-r7rs-environment-specifiers-and-library-import-environments.md) |
-| **717** | R7RS-small (scheme eval) オンデマンド埋め込み型メタ循環評価器 (eval) の実装 | Feature | High | Closed | [717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md](closed/717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md) |
-| **718** | R7RS-small (scheme load), (scheme repl), (scheme r5rs) 完全準拠化と動的ロードの実装 | Feature | High | New | [718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md](718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md) |
 
 ---
 
@@ -26,6 +23,9 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **718** | R7RS-small (scheme load), (scheme repl), (scheme r5rs) 完全準拠化と動的ロードの実装 | Feature | 2026-11-04 | [closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md](closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md) |
+| **717** | R7RS-small (scheme eval) オンデマンド埋め込み型メタ循環評価器 (eval) の実装 | Feature | 2026-11-04 | [closed/717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md](closed/717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md) |
+| **716** | R7RS §6.12 環境指定子オブジェクト (environment, null-environment, scheme-report-environment, interaction-environment) の実装 | Feature | 2026-11-04 | [closed/716-implement-r7rs-environment-specifiers-and-library-import-environments.md](closed/716-implement-r7rs-environment-specifiers-and-library-import-environments.md) |
 | **715** | R7RS §6.2.6 数値塔リテラル入出力 (number->string 基数対応・string->number / read / write 拡張) の実装 | Feature | 2026-11-04 | [closed/715-implement-r7rs-numeric-tower-reader-printer-and-radix-formatting.md](closed/715-implement-r7rs-numeric-tower-reader-printer-and-radix-formatting.md) |
 | **714** | R7RS-small (scheme complex) 複素数算術ライブラリの完全実装 | Feature | 2026-11-04 | [closed/714-implement-r7rs-scheme-complex-arithmetic-library.md](closed/714-implement-r7rs-scheme-complex-arithmetic-library.md) |
 | **713** | R7RS-small (scheme inexact) 初等超越関数・平方根ライブラリの完全実装 | Feature | 2026-11-04 | [closed/713-implement-r7rs-scheme-inexact-transcendental-math-library.md](closed/713-implement-r7rs-scheme-inexact-transcendental-math-library.md) |

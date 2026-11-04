@@ -277,7 +277,7 @@
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
 | **6.14** | `exit`, `emergency-exit` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `sys-exit` 終了コード返却 |
-| **6.14** | `load` | **✕\*** | - | 動的コードロード (AOT のためビルド時静的リンクで代替) |
+| **6.14** | `load` | **◎** | [ulisp/lib/eval.scm](../lib/eval.scm) | ソースファイル動的読み込み・評価手続き `(load <filename> [<environment-specifier>])` 完全実装 ([Issue #718](../../docs/issues/closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md)) |
 | **6.14** | `file-exists?`, `delete-file` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `sys-access`(21) および `sys-unlink`(87) システムコール連携 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | **6.14** | `command-line` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm)<br>[ulisp/lib/srfi/193.sld](../lib/srfi/193.sld) | POSIX `argc`/`argv` 直接取得および SRFI 193 パラメータ更新完全対応 ([Issue #706](../../docs/issues/closed/706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md)) |
 | **6.14** | `get-environment-variable`, `get-environment-variables` | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm) | POSIX `environ` 走査・連想リスト構築 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
@@ -299,11 +299,11 @@
 | `(scheme file)` | ファイル入出力 | **◎ 100%** | [ulisp/lib/scheme/file.sld](../lib/scheme/file.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)<br>[ulisp/lib/port.scm](../lib/port.scm)) | 上位ファイルポート・動的カレントポート切り替え・例外安全自動クローズ・システムファイル操作完備 ([Issue #651](../../docs/issues/closed/651-implement-r7rs-scheme-file-high-level-ports-and-file-ops.md)) |
 | `(scheme inexact)` | 浮動小数点数・超越関数 | **◎ 100%** | [ulisp/lib/scheme/inexact.sld](../lib/scheme/inexact.sld)<br>([ulisp/lib/math.scm](../lib/math.scm)<br>[ulisp/lib/predicates.scm](../lib/predicates.scm)) | 全 12 識別子完備 (`acos`, `asin`, `atan`, `cos`, `sin`, `tan`, `exp`, `log`, `sqrt`, `finite?`, `infinite?`, `nan?`) ([Issue #712](../../docs/issues/closed/712-implement-r7rs-inexact-flonums-exactness-conversions-and-ieee-predicates.md), [Issue #713](../../docs/issues/closed/713-implement-r7rs-scheme-inexact-transcendental-math-library.md)) |
 | `(scheme lazy)` | 遅延評価 (`delay`, `force`) | **◎ 100%** | [ulisp/lib/scheme/lazy.sld](../lib/scheme/lazy.sld)<br>([ulisp/lib/promise.scm](../lib/promise.scm)) | SRFI-45 準拠プロミス完備 (`delay`, `force`, `delay-force`, `make-promise`) ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
-| `(scheme load)` | スクリプト動的ロード | **✕\* 0%** | [ulisp/lib/scheme/load.sld](../lib/scheme/load.sld) | AOT の性質上除外（`import` またはビルド時結合で代替） |
+| `(scheme load)` | スクリプト動的ロード | **◎ 100%** | [ulisp/lib/scheme/load.sld](../lib/scheme/load.sld)<br>([ulisp/lib/eval.scm](../lib/eval.scm)) | 全 1 識別子完備 (`load`) ([Issue #718](../../docs/issues/closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md)) |
 | `(scheme process-context)` | プロセス環境 (`exit`, `command-line`, `get-environment-variable`) | **◎ 100%** | [ulisp/lib/scheme/process-context.sld](../lib/scheme/process-context.sld)<br>([ulisp/lib/posix.scm](../lib/posix.scm)) | `exit`, `emergency-exit`, `command-line`, `get-environment-variable`, `get-environment-variables` 完備 ([Issue #611](../../docs/issues/closed/611-implement-r7rs-process-context-environment-variables.md)) |
-| `(scheme r5rs)` | R5RS 互換仕様シンボル群 | **約 85%** | [ulisp/lib/scheme/r5rs.sld](../lib/scheme/r5rs.sld) | R5RS 標準シンボル群の互換エクスポート定義 |
+| `(scheme r5rs)` | R5RS 互換仕様シンボル群 | **◎ 100%** | [ulisp/lib/scheme/r5rs.sld](../lib/scheme/r5rs.sld)<br>([ulisp/lib/eval.scm](../lib/eval.scm)) | R5RS 標準全シンボル（動的評価・ロード・環境指定子・数値塔相互変換含む）の互換エクスポート完備 ([Issue #718](../../docs/issues/closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md)) |
 | `(scheme read)` | S 式リーダー (`read`) | **◎ 100%** | [ulisp/lib/scheme/read.sld](../lib/scheme/read.sld)<br>([ulisp/lib/reader.scm](../lib/reader.scm)) | 自前完全再帰下降パーサ完備 |
-| `(scheme repl)` | 対話型 REPL | **✕\* 0%** | [ulisp/lib/scheme/repl.sld](../lib/scheme/repl.sld) | AOT コンパイラのため静的バイナリ出力が正典 |
+| `(scheme repl)` | 対話型 REPL | **◎ 100%** | [ulisp/lib/scheme/repl.sld](../lib/scheme/repl.sld)<br>([ulisp/lib/eval.scm](../lib/eval.scm)) | 全 1 識別子完備 (`interaction-environment`) ([Issue #716](../../docs/issues/closed/716-implement-r7rs-environment-specifiers-and-library-import-environments.md), [Issue #718](../../docs/issues/closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md)) |
 | `(scheme time)` | 時間計測 (`current-second`, `current-jiffy`, `jiffies-per-second`) | **◎ 100%** | [ulisp/lib/scheme/time.sld](../lib/scheme/time.sld)<br>[ulisp/lib/posix.scm](../lib/posix.scm) | POSIX clock_gettime システムコール直結、R7RS-small (scheme time) 全 3 手続き完全実装 ([Issue #661](../../docs/issues/closed/661-implement-r7rs-scheme-time-procedures.md)) |
 | `(scheme write)` | S 式ライター (`write`, `display`, `write-shared`, `write-simple`) | **◎ 100%** | [ulisp/lib/scheme/write.sld](../lib/scheme/write.sld)<br>([ulisp/lib/printer.scm](../lib/printer.scm)) | `write`, `display`, `write-shared`, `write-simple` 完備。SRFI 38 / R7RS datum label 循環・共有表記対応 ([Issue #656](../../docs/issues/closed/656-implement-r7rs-write-simple-and-write-shared.md)) |
 
@@ -525,9 +525,27 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #663](../../docs/issues/closed/663-implement-srfi-111-boxes.md): SRFI 111 / `(scheme box)` ボックス型 (`box`, `box?`, `unbox`, `set-box!`) の完全実装
    - [Issue #664](../../docs/issues/closed/664-implement-srfi-145-assumptions.md): SRFI 145 前提表明構文 (`assume`, `assert`) の完全実装
    - [Issue #665](../../docs/issues/closed/665-enforce-r7rs-specification-traceability-and-diagnostic-tags.md): R7RS 仕様トレーサビリティ管理規約の全ライブラリ適用および診断タグ自動検証の確立
-3. **アーキテクチャ特性に基づく設計トレードオフ**:
-   - `eval`, `load`, `repl` などの動的実行系は、AOT コンパイラのバイナリ独立性・フットプリント最小化を優先して意図的に除外。
-   - 数値塔（Number Tower）は 62-bit 即値 Fixnum（下位 2-bit `00b` タグ）を基本とし、加減算のゼロオーバーヘッド化と高速実行を優先。
+   - [Issue #701](../../docs/issues/closed/701-implement-srfi-128-comparators.md): SRFI 128 / `(scheme comparator)` 第一級コンパレータ・ハッシュ関数の完全実装
+   - [Issue #702](../../docs/issues/closed/702-implement-srfi-113-sets-and-bags.md): SRFI 113 / `(scheme set)` 集合 (Sets) および多重集合 (Bags) の完全実装
+   - [Issue #703](../../docs/issues/closed/703-implement-srfi-41-streams.md): SRFI 41 / `(scheme stream)` 偶数型遅延ストリームおよび内包表記の完全実装
+   - [Issue #704](../../docs/issues/closed/704-implement-srfi-158-generators-and-accumulators.md): SRFI 158 / `(scheme generator)` ジェネレータおよびアキュムレータの完全実装
+   - [Issue #705](../../docs/issues/closed/705-implement-r7rs-base-remaining-procedures-and-features.md): R7RS-small `(scheme base)` 残余手続き群 (`features`, ポートオープン述語, 複数引数 map/for-each 等) の完全実装
+   - [Issue #706](../../docs/issues/closed/706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md): R7RS-small `include` / `include-ci` ライブラリ宣言および SRFI 193 コマンドライン引数の完全実装
+   - [Issue #707](../../docs/issues/closed/707-implement-srfi-117-list-queues-and-srfi-127-lazy-sequences.md): SRFI 117 / `(scheme list-queue)` および SRFI 127 / `(scheme lseq)` の完全実装
+   - [Issue #708](../../docs/issues/closed/708-implement-srfi-14-character-sets.md): SRFI 14 / `(scheme charset)` 文字集合および集合代数演算の完全実装
+   - [Issue #709](../../docs/issues/closed/709-implement-srfi-146-immutable-mappings.md): SRFI 146 / `(scheme mapping)` 永続的イミュータブル連想マッピングの完全実装
+   - [Issue #710](../../docs/issues/closed/710-implement-srfi-116-immutable-lists-and-srfi-134-immutable-deques.md): SRFI 116 / `(scheme ilist)` および SRFI 134 / `(scheme ideque)` の完全実装
+   - [Issue #711](../../docs/issues/closed/711-implement-r7rs-exact-rationals-rounding-and-rationalize.md): R7RS-small 完全数値塔 正確有理数 `<ratnum>`、丸め関数、`rationalize` の完全実装
+   - [Issue #712](../../docs/issues/closed/712-implement-r7rs-inexact-flonums-exactness-conversions-and-ieee-predicates.md): R7RS-small 不正確浮動小数点数 `<flonum>`、正確性変換、IEEE 述語群の完全実装
+   - [Issue #713](../../docs/issues/closed/713-implement-r7rs-scheme-inexact-transcendental-math-library.md): R7RS-small `(scheme inexact)` 超越関数数学ライブラリの完全実装
+   - [Issue #714](../../docs/issues/closed/714-implement-r7rs-scheme-complex-arithmetic-library.md): R7RS-small `(scheme complex)` 複素数算術ライブラリの完全実装
+   - [Issue #715](../../docs/issues/closed/715-implement-r7rs-numeric-tower-reader-printer-and-radix-formatting.md): R7RS-small 数値塔 S 式リーダー・プリンタ・基数フォーマットの完全実装
+   - [Issue #716](../../docs/issues/closed/716-implement-r7rs-environment-specifiers-and-library-import-environments.md): R7RS-small §6.12 環境指定子およびライブラリインポート環境の完全実装
+   - [Issue #717](../../docs/issues/closed/717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md): R7RS-small `(scheme eval)` 組み込みメタサーキュラー評価器の完全実装
+   - [Issue #718](../../docs/issues/closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md): R7RS-small `(scheme load)`, `(scheme repl)`, `(scheme r5rs)` 完全準拠化と動的ロードの完全実装（**R7RS-small 全 16 標準ライブラリ 100% 完全準拠達成**）
+3. **アーキテクチャ特性に基づく設計の進化**:
+   - `eval`, `load`, `repl` などの動的実行系は、メタサーキュラー評価器および `open-input-file` / `port-read` 動的ロード機構により、Issue #716-#718 にて **R7RS-small 全 16 標準ライブラリの 100% 完全準拠 (◎)** を達成。
+   - 数値塔（Number Tower）は、62-bit 即値 Fixnum、ヒープ有理数 (`<ratnum>`)、倍精度浮動小数点数 (`<flonum>`)、および直交・極形式複素数 (`<compnum>`) を完備し、Issue #711-#715 にて完全準拠を達成。
 
 ---
 

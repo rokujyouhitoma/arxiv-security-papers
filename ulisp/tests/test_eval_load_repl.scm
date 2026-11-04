@@ -222,6 +222,81 @@
                  (eval '(define forbidden 1) base-env)
                  #f)))
 
+;; -----------------------------------------------------------------------
+;; 8. R7RS §6.14 (scheme load) and (scheme repl) Dynamic File Loading (Issue #718)
+;; -----------------------------------------------------------------------
+(write-string "=== Running R7RS §6.14 (scheme load) and (scheme repl) Tests (Issue #718) ===\n")
+(flush-output-port)
+
+(let ((test-filename "build/test_tmp_load_script.scm"))
+  (if (file-exists? test-filename)
+      (delete-file test-filename))
+  ;; Create temporary script
+  (let ((out (open-output-file test-filename)))
+    (write-string ";; Dynamic load test script\n" out)
+    (write-string "(define loaded-const 888)\n" out)
+    (write-string "(define (loaded-adder a b) (+ a b (* loaded-const 2)))\n" out)
+    (close-port out))
+
+  (assert-true "test script file exists" (file-exists? test-filename))
+
+  ;; 8.1 Load into default interaction-environment
+  (load test-filename)
+  (assert-equal "eval loaded variable from interaction-environment" 888 (eval 'loaded-const (interaction-environment)))
+  (assert-equal "eval loaded function from interaction-environment" 1806 (eval '(loaded-adder 10 20) (interaction-environment)))
+
+  ;; 8.2 Load with explicit environment specifier
+  (load test-filename (interaction-environment))
+  (assert-equal "eval loaded variable after explicit env load" 888 (eval 'loaded-const (interaction-environment)))
+
+  ;; 8.3 Error handling on non-existent file
+  (assert-true "load non-existent file raises error"
+               (guard (ex ((error-object? ex) #t))
+                 (load "build/non_existent_file_path_12345.scm")
+                 #f))
+
+  ;; 8.4 Error handling on invalid filename type
+  (assert-true "load with non-string filename raises error"
+               (guard (ex ((error-object? ex) #t))
+                 (load 99999)
+                 #f))
+
+  ;; 8.5 Error handling on invalid environment specifier
+  (assert-true "load with invalid environment specifier raises error"
+               (guard (ex ((error-object? ex) #t))
+                 (load test-filename 'invalid-env)
+                 #f))
+
+  ;; Cleanup
+  (if (file-exists? test-filename)
+      (delete-file test-filename)))
+
+;; -----------------------------------------------------------------------
+;; 9. R7RS §7.1.16 (scheme r5rs) Full Compatibility Library (Issue #718)
+;; -----------------------------------------------------------------------
+(write-string "=== Running R7RS §7.1.16 (scheme r5rs) Compatibility Tests (Issue #718) ===\n")
+(flush-output-port)
+
+(let ((r5rs-env (environment '(scheme r5rs))))
+  (assert-true "r5rs-env is valid environment" (environment? r5rs-env))
+  (assert-true "+ is bound in (scheme r5rs)" (%r7rs-env-bound? r5rs-env '+))
+  (assert-true "eval is bound in (scheme r5rs)" (%r7rs-env-bound? r5rs-env 'eval))
+  (assert-true "load is bound in (scheme r5rs)" (%r7rs-env-bound? r5rs-env 'load))
+  (assert-true "interaction-environment is bound in (scheme r5rs)" (%r7rs-env-bound? r5rs-env 'interaction-environment))
+  (assert-true "null-environment is bound in (scheme r5rs)" (%r7rs-env-bound? r5rs-env 'null-environment))
+  (assert-true "scheme-report-environment is bound in (scheme r5rs)" (%r7rs-env-bound? r5rs-env 'scheme-report-environment))
+  (assert-true "exact->inexact is bound in (scheme r5rs)" (%r7rs-env-bound? r5rs-env 'exact->inexact))
+  (assert-true "inexact->exact is bound in (scheme r5rs)" (%r7rs-env-bound? r5rs-env 'inexact->exact))
+
+  ;; R5RS exactness conversions via eval
+  (let ((flo-42 (exact->inexact 42)))
+    (assert-equal "eval exact->inexact in r5rs-env" flo-42 (eval '(exact->inexact 42) r5rs-env))
+    (assert-equal "eval inexact->exact in r5rs-env" 42 (eval (list 'inexact->exact flo-42) r5rs-env)))
+
+  ;; R5RS math and list operations via eval
+  (assert-equal "eval (* (+ 2 3) (- 10 4)) in r5rs-env" 30 (eval '(* (+ 2 3) (- 10 4)) r5rs-env))
+  (assert-equal "eval (list 'a 'b 'c) in r5rs-env" '(a b c) (eval '(list 'a 'b 'c) r5rs-env)))
+
 (display "Passed: ")
 (display (car *pass-count*))
 (display ", Failed: ")

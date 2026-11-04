@@ -39,4 +39,12 @@
 
   (import (scheme base)
           (scheme inexact)
-          (scheme complex)))
+          (scheme complex)
+          (scheme eval)
+          (scheme repl)
+          (scheme load)
+          (scheme read)
+          (scheme write)
+          (scheme file)
+          (scheme cxr)
+          (scheme lazy)))

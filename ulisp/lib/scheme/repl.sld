@@ -9,4 +9,5 @@
   (export
     ;; §6.12 Environments and evaluation
     interaction-environment)
-  (import (scheme base)))
+  (import (scheme base)
+          (scheme eval)))
