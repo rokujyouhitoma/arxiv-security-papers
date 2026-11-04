@@ -943,7 +943,435 @@
           (vector-set! *global-interaction-env-box* 0 fresh)
           fresh))))
 
-;; Forward declarations for eval and load (implemented in Issues #717 and #718)
+;; -----------------------------------------------------------------------
+;; R7RS §6.12 Metacircular Core Evaluator
+;; -----------------------------------------------------------------------
+
+(define (%eval-bind-formals formals actuals lex-env)
+  (cond
+    ((null? formals)
+     (if (null? actuals)
+         lex-env
+         (error "eval: too many arguments supplied to procedure" actuals)))
+    ((symbol? formals)
+     (cons (cons formals actuals) lex-env))
+    ((pair? formals)
+     (if (null? actuals)
+         (error "eval: too few arguments supplied to procedure" formals)
+         (%eval-bind-formals (cdr formals) (cdr actuals) (cons (cons (car formals) (car actuals)) lex-env))))
+    (else
+     (error "eval: invalid formals list" formals))))
+
+(define (%eval-match-formals? formals actuals)
+  (cond
+    ((null? formals) (null? actuals))
+    ((symbol? formals) #t)
+    ((pair? formals)
+     (if (null? actuals)
+         #f
+         (%eval-match-formals? (cdr formals) (cdr actuals))))
+    (else #f)))
+
+(define (%make-eval-lambda formals body lex-env dyn-env)
+  (case-lambda
+    (args
+     (let ((extended-env (%eval-bind-formals formals args lex-env)))
+       (%eval-sequence body extended-env dyn-env)))))
+
+(define (%make-eval-case-lambda clauses lex-env dyn-env)
+  (case-lambda
+    (args
+     (let loop ((cs clauses))
+       (if (null? cs)
+           (error "eval: no matching clause in case-lambda for arguments" args)
+           (let* ((c (car cs))
+                  (formals (car c))
+                  (body (cdr c)))
+             (if (%eval-match-formals? formals args)
+                 (let ((extended-env (%eval-bind-formals formals args lex-env)))
+                   (%eval-sequence body extended-env dyn-env))
+                 (loop (cdr cs)))))))))
+
+(define (%eval-sequence exprs lex-env dyn-env)
+  (if (null? exprs)
+      (if #f #f)
+      (let loop ((es exprs))
+        (if (null? (cdr es))
+            (%eval-core (car es) lex-env dyn-env)
+            (begin
+              (%eval-core (car es) lex-env dyn-env)
+              (loop (cdr es)))))))
+
+(define (%eval-cond clauses lex-env dyn-env)
+  (if (null? clauses)
+      (if #f #f)
+      (let* ((clause (car clauses))
+             (rest (cdr clauses)))
+        (if (not (pair? clause))
+            (error "eval: malformed cond clause" clause)
+            (let ((test (car clause)))
+              (cond
+                ((eq? test 'else)
+                 (%eval-sequence (cdr clause) lex-env dyn-env))
+                ((and (pair? (cdr clause)) (eq? (cadr clause) '=>))
+                 (let ((test-val (%eval-core test lex-env dyn-env)))
+                   (if test-val
+                       (let ((proc (%eval-core (caddr clause) lex-env dyn-env)))
+                         (proc test-val))
+                       (%eval-cond rest lex-env dyn-env))))
+                (else
+                 (let ((test-val (%eval-core test lex-env dyn-env)))
+                   (if test-val
+                       (if (null? (cdr clause))
+                           test-val
+                           (%eval-sequence (cdr clause) lex-env dyn-env))
+                       (%eval-cond rest lex-env dyn-env))))))))))
+
+(define (%eval-case key clauses lex-env dyn-env)
+  (if (null? clauses)
+      (if #f #f)
+      (let* ((clause (car clauses))
+             (rest (cdr clauses)))
+        (if (not (pair? clause))
+            (error "eval: malformed case clause" clause)
+            (let ((datums (car clause)))
+              (cond
+                ((eq? datums 'else)
+                 (if (and (pair? (cdr clause)) (eq? (cadr clause) '=>))
+                     (let ((proc (%eval-core (caddr clause) lex-env dyn-env)))
+                       (proc key))
+                     (%eval-sequence (cdr clause) lex-env dyn-env)))
+                ((and (list? datums) (%eval-memv key datums))
+                 (if (and (pair? (cdr clause)) (eq? (cadr clause) '=>))
+                     (let ((proc (%eval-core (caddr clause) lex-env dyn-env)))
+                       (proc key))
+                     (%eval-sequence (cdr clause) lex-env dyn-env)))
+                (else
+                 (%eval-case key rest lex-env dyn-env))))))))
+
+(define (%eval-quasiquote datum depth lex-env dyn-env)
+  (cond
+    ((pair? datum)
+     (let ((head (car datum)))
+       (cond
+         ((eq? head 'quasiquote)
+          (cons 'quasiquote (%eval-quasiquote (cdr datum) (+ depth 1) lex-env dyn-env)))
+         ((eq? head 'unquote)
+          (if (= depth 0)
+              (%eval-core (cadr datum) lex-env dyn-env)
+              (cons 'unquote (%eval-quasiquote (cdr datum) (- depth 1) lex-env dyn-env))))
+         ((and (pair? head) (eq? (car head) 'unquote-splicing))
+          (if (= depth 0)
+              (let ((spliced (%eval-core (cadr head) lex-env dyn-env))
+                    (rest-tail (%eval-quasiquote (cdr datum) depth lex-env dyn-env)))
+                (append spliced rest-tail))
+              (cons (cons 'unquote-splicing (%eval-quasiquote (cdr head) (- depth 1) lex-env dyn-env))
+                    (%eval-quasiquote (cdr datum) depth lex-env dyn-env))))
+         (else
+          (let ((car-val (%eval-quasiquote head depth lex-env dyn-env))
+                (cdr-val (%eval-quasiquote (cdr datum) depth lex-env dyn-env)))
+            (cons car-val cdr-val))))))
+    ((vector? datum)
+     (let* ((lst (vector->list datum))
+            (expanded (let expand-vec ((items lst))
+                        (cond
+                          ((null? items) '())
+                          ((and (pair? (car items)) (eq? (caar items) 'unquote-splicing) (= depth 0))
+                           (append (%eval-core (cadar items) lex-env dyn-env) (expand-vec (cdr items))))
+                          (else
+                           (cons (%eval-quasiquote (car items) depth lex-env dyn-env)
+                                 (expand-vec (cdr items))))))))
+       (list->vector expanded)))
+    (else datum)))
+
+(define (%eval-core expr lex-env dyn-env)
+  (cond
+    ;; 1. Self-evaluating literals
+    ((or (number? expr) (boolean? expr) (char? expr) (string? expr) (bytevector? expr) (vector? expr) (null? expr))
+     expr)
+    ;; 2. Identifiers (Variable reference)
+    ((symbol? expr)
+     (let ((cell (assq expr lex-env)))
+       (if cell
+           (cdr cell)
+           (%r7rs-env-lookup dyn-env expr))))
+    ;; 3. Compound forms (Pairs)
+    ((pair? expr)
+     (let ((head (car expr)))
+       (cond
+         ;; (quote datum)
+         ((eq? head 'quote)
+          (cadr expr))
+
+         ;; (quasiquote datum)
+         ((eq? head 'quasiquote)
+          (%eval-quasiquote (cadr expr) 0 lex-env dyn-env))
+
+         ;; (if test then [else])
+         ((eq? head 'if)
+          (let ((test-val (%eval-core (cadr expr) lex-env dyn-env)))
+            (if test-val
+                (%eval-core (caddr expr) lex-env dyn-env)
+                (if (null? (cdddr expr))
+                    (if #f #f)
+                    (%eval-core (cadddr expr) lex-env dyn-env)))))
+
+         ;; (set! var val)
+         ((eq? head 'set!)
+          (let* ((var (cadr expr))
+                 (val (%eval-core (caddr expr) lex-env dyn-env))
+                 (cell (assq var lex-env)))
+            (if cell
+                (begin (set-cdr! cell val) val)
+                (%r7rs-env-set! dyn-env var val))))
+
+         ;; (define var val) or (define (f . args) body ...)
+         ((eq? head 'define)
+          (let ((target (cadr expr)))
+            (if (pair? target)
+                (let* ((name (car target))
+                       (formals (cdr target))
+                       (body (cddr expr))
+                       (fn (%make-eval-lambda formals body lex-env dyn-env)))
+                  (%r7rs-env-define! dyn-env name fn)
+                  name)
+                (let* ((var target)
+                       (val (%eval-core (caddr expr) lex-env dyn-env)))
+                  (%r7rs-env-define! dyn-env var val)
+                  var))))
+
+         ;; (define-values (var ...) expr)
+         ((eq? head 'define-values)
+          (let* ((vars (cadr expr))
+                 (prod (caddr expr)))
+            (call-with-values
+              (lambda () (%eval-core prod lex-env dyn-env))
+              (case-lambda
+                (vals
+                 (let loop ((vs vars) (vls vals))
+                   (cond
+                     ((null? vs)
+                      (if (null? vls)
+                          (if #f #f)
+                          (error "eval: define-values: too many values" vls)))
+                     ((symbol? vs)
+                      (%r7rs-env-define! dyn-env vs vls))
+                     ((pair? vs)
+                      (if (null? vls)
+                          (error "eval: define-values: too few values" vs)
+                          (begin
+                            (%r7rs-env-define! dyn-env (car vs) (car vls))
+                            (loop (cdr vs) (cdr vls))))))))))))
+
+         ;; (lambda formals body ...)
+         ((eq? head 'lambda)
+          (%make-eval-lambda (cadr expr) (cddr expr) lex-env dyn-env))
+
+         ;; (case-lambda (formals body ...) ...)
+         ((eq? head 'case-lambda)
+          (%make-eval-case-lambda (cdr expr) lex-env dyn-env))
+
+         ;; (begin expr ...)
+         ((eq? head 'begin)
+          (%eval-sequence (cdr expr) lex-env dyn-env))
+
+         ;; (cond clause ...)
+         ((eq? head 'cond)
+          (%eval-cond (cdr expr) lex-env dyn-env))
+
+         ;; (case key clause ...)
+         ((eq? head 'case)
+          (let ((key (%eval-core (cadr expr) lex-env dyn-env)))
+            (%eval-case key (cddr expr) lex-env dyn-env)))
+
+         ;; (and expr ...)
+         ((eq? head 'and)
+          (let loop ((es (cdr expr)) (last-val #t))
+            (if (null? es)
+                last-val
+                (let ((val (%eval-core (car es) lex-env dyn-env)))
+                  (if (not val)
+                      #f
+                      (loop (cdr es) val))))))
+
+         ;; (or expr ...)
+         ((eq? head 'or)
+          (let loop ((es (cdr expr)))
+            (if (null? es)
+                #f
+                (let ((val (%eval-core (car es) lex-env dyn-env)))
+                  (if val
+                      val
+                      (loop (cdr es)))))))
+
+         ;; (when test expr ...)
+         ((eq? head 'when)
+          (let ((test-val (%eval-core (cadr expr) lex-env dyn-env)))
+            (if test-val
+                (%eval-sequence (cddr expr) lex-env dyn-env)
+                (if #f #f))))
+
+         ;; (unless test expr ...)
+         ((eq? head 'unless)
+          (let ((test-val (%eval-core (cadr expr) lex-env dyn-env)))
+            (if (not test-val)
+                (%eval-sequence (cddr expr) lex-env dyn-env)
+                (if #f #f))))
+
+         ;; (let ((var val) ...) body ...) or (let name ((var val) ...) body ...)
+         ((eq? head 'let)
+          (if (symbol? (cadr expr))
+              ;; Named let
+              (let* ((name (cadr expr))
+                     (bindings (caddr expr))
+                     (body (cdddr expr))
+                     (vars (map (lambda (x) (car x)) bindings))
+                     (inits (map (lambda (x) (cadr x)) bindings))
+                     (init-vals (map (lambda (init) (%eval-core init lex-env dyn-env)) inits)))
+                (let do-loop ((cur-vals init-vals))
+                  (let* ((extended-env (%eval-bind-formals vars cur-vals
+                                         (cons (cons name
+                                                     (case-lambda
+                                                       (new-args
+                                                        (do-loop new-args))))
+                                               lex-env))))
+                    (%eval-sequence body extended-env dyn-env))))
+              ;; Standard let
+              (let* ((bindings (cadr expr))
+                     (body (cddr expr))
+                     (vals (map (lambda (b) (%eval-core (cadr b) lex-env dyn-env)) bindings))
+                     (new-pairs (let loop ((bs bindings) (vs vals))
+                                  (if (null? bs) '()
+                                      (cons (cons (caar bs) (car vs)) (loop (cdr bs) (cdr vs))))))
+                     (new-lex-env (append new-pairs lex-env)))
+                (%eval-sequence body new-lex-env dyn-env))))
+
+         ;; (let* ((var val) ...) body ...)
+         ((eq? head 'let*)
+          (let* ((bindings (cadr expr))
+                 (body (cddr expr)))
+            (let loop ((bs bindings) (cur-lex-env lex-env))
+              (if (null? bs)
+                  (%eval-sequence body cur-lex-env dyn-env)
+                  (let* ((b (car bs))
+                         (var (car b))
+                         (val (%eval-core (cadr b) cur-lex-env dyn-env)))
+                    (loop (cdr bs) (cons (cons var val) cur-lex-env)))))))
+
+         ;; (letrec ((var val) ...) body ...) or (letrec* ...)
+         ((or (eq? head 'letrec) (eq? head 'letrec*))
+          (let* ((bindings (cadr expr))
+                 (body (cddr expr))
+                 (cells (map (lambda (b) (cons (car b) #f)) bindings))
+                 (new-lex-env (append cells lex-env)))
+            (for-each (lambda (b cell)
+                        (set-cdr! cell (%eval-core (cadr b) new-lex-env dyn-env)))
+                      bindings cells)
+            (%eval-sequence body new-lex-env dyn-env)))
+
+         ;; (let-values (((var ...) expr) ...) body ...)
+         ((eq? head 'let-values)
+          (let* ((clauses (cadr expr))
+                 (body (cddr expr)))
+            (let loop-clauses ((cs clauses) (all-new-bindings '()))
+              (if (null? cs)
+                  (%eval-sequence body (append all-new-bindings lex-env) dyn-env)
+                  (let* ((c (car cs))
+                         (formals (car c))
+                         (prod-expr (cadr c)))
+                    (call-with-values
+                      (lambda () (%eval-core prod-expr lex-env dyn-env))
+                      (case-lambda
+                        (vals
+                         (let ((bound (%eval-bind-formals formals vals '())))
+                           (loop-clauses (cdr cs) (append bound all-new-bindings)))))))))))
+
+         ;; (let*-values (((var ...) expr) ...) body ...)
+         ((eq? head 'let*-values)
+          (let* ((clauses (cadr expr))
+                 (body (cddr expr)))
+            (let loop-clauses ((cs clauses) (cur-lex-env lex-env))
+              (if (null? cs)
+                  (%eval-sequence body cur-lex-env dyn-env)
+                  (let* ((c (car cs))
+                         (formals (car c))
+                         (prod-expr (cadr c)))
+                    (call-with-values
+                      (lambda () (%eval-core prod-expr cur-lex-env dyn-env))
+                      (case-lambda
+                        (vals
+                         (let ((bound (%eval-bind-formals formals vals '())))
+                           (loop-clauses (cdr cs) (append bound cur-lex-env)))))))))))
+
+         ;; (do ((var init [step]) ...) (test expr ...) body ...)
+         ((eq? head 'do)
+          (let* ((specs (cadr expr))
+                 (test-clause (caddr expr))
+                 (body (cdddr expr))
+                 (vars (map (lambda (x) (car x)) specs))
+                 (inits (map (lambda (x) (cadr x)) specs))
+                 (steps (map (lambda (s) (if (null? (cddr s)) (car s) (caddr s))) specs))
+                 (init-vals (map (lambda (init) (%eval-core init lex-env dyn-env)) inits)))
+            (let do-loop ((cur-vals init-vals))
+              (let* ((loop-env (let bind ((vs vars) (vals cur-vals))
+                                 (if (null? vs) lex-env
+                                     (cons (cons (car vs) (car vals)) (bind (cdr vs) (cdr vals))))))
+                     (test-val (%eval-core (car test-clause) loop-env dyn-env)))
+                (if test-val
+                    (if (null? (cdr test-clause))
+                        test-val
+                        (%eval-sequence (cdr test-clause) loop-env dyn-env))
+                    (begin
+                      (if (not (null? body))
+                          (%eval-sequence body loop-env dyn-env)
+                          (if #f #f))
+                      (let ((next-vals (map (lambda (step) (%eval-core step loop-env dyn-env)) steps)))
+                        (do-loop next-vals))))))))
+
+         ;; (parameterize ((param val) ...) body ...)
+         ((eq? head 'parameterize)
+          (let* ((bindings (cadr expr))
+                 (body (cddr expr)))
+            (let loop ((bs bindings) (params '()) (old-vals '()))
+              (if (pair? bs)
+                  (let* ((b (car bs))
+                         (param (%eval-core (car b) lex-env dyn-env))
+                         (new-val (%eval-core (cadr b) lex-env dyn-env))
+                         (old-val (param)))
+                    (param new-val)
+                    (loop (cdr bs) (cons param params) (cons old-val old-vals)))
+                  (dynamic-wind
+                    (lambda () (if #f #f))
+                    (lambda () (%eval-sequence body lex-env dyn-env))
+                    (lambda ()
+                      (for-each (lambda (p v) (p v)) params old-vals)))))))
+
+         ;; (guard (var cond-clause ...) body ...)
+         ((eq? head 'guard)
+          (let* ((clause-spec (cadr expr))
+                 (var (car clause-spec))
+                 (cond-clauses (cdr clause-spec))
+                 (body (cddr expr)))
+            (call/cc
+              (lambda (k)
+                (with-exception-handler
+                  (lambda (exn)
+                    (let ((handler-env (cons (cons var exn) lex-env)))
+                      (k (%eval-cond cond-clauses handler-env dyn-env))))
+                  (lambda ()
+                    (%eval-sequence body lex-env dyn-env)))))))
+
+         ;; Procedure Application (or Macro)
+         (else
+          (let ((macro-trans (if (symbol? head) (%r7rs-env-find-macro dyn-env head) #f)))
+            (if macro-trans
+                (%eval-core (macro-trans expr) lex-env dyn-env)
+                (let* ((proc (%eval-core head lex-env dyn-env))
+                       (args (map (lambda (arg) (%eval-core arg lex-env dyn-env)) (cdr expr))))
+                  (apply proc args))))))))
+    (else
+     (error "eval: cannot evaluate expression" expr))))
+
 (define eval
   (case-lambda
     ((expr)
@@ -954,9 +1382,7 @@
 (define (%r7rs-eval expr env)
   (if (not (environment? env))
       (error "eval: expected environment specifier" env)
-      (if (symbol? expr)
-          (%r7rs-env-lookup env expr)
-          expr)))
+      (%eval-core expr '() env)))
 
 (define load
   (case-lambda
