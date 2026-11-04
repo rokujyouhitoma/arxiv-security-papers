@@ -155,11 +155,21 @@
    (lambda (a b) (< a b))
    (lambda (n) (number-hash n %ht-hash-modulus))))
 
+(define (%comp-num= a b)
+  (if (and (fixnum? a) (fixnum? b))
+      (= a b)
+      (rat= a b)))
+
+(define (%comp-num< a b)
+  (if (and (fixnum? a) (fixnum? b))
+      (< a b)
+      (rat< a b)))
+
 (define number-comparator
   (make-comparator
    number?
-   (lambda (a b) (= a b))
-   (lambda (a b) (< a b))
+   (lambda (a b) (%comp-num= a b))
+   (lambda (a b) (%comp-num< a b))
    (lambda (n) (number-hash n %ht-hash-modulus))))
 
 ;; ---------------------------------------------------------------------
@@ -366,7 +376,7 @@
           ((= ra 3) (char=? a b))
           ((= ra 4) (string=? a b))
           ((= ra 5) (symbol=? a b))
-          ((= ra 6) (= a b))
+          ((= ra 6) (%comp-num= a b))
           ((= ra 7)
            (let ((la (vector-length a))
                  (lb (vector-length b)))
@@ -402,7 +412,7 @@
       ((= ra 3) (char<? a b))
       ((= ra 4) (string<? a b))
       ((= ra 5) (string<? (symbol->string a) (symbol->string b)))
-      ((= ra 6) (< a b))
+      ((= ra 6) (%comp-num< a b))
       ((= ra 7)
        (let ((la (vector-length a))
              (lb (vector-length b)))

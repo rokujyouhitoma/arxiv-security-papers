@@ -107,7 +107,8 @@
 | R7RS 仕様番号 | 手続き名 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
 | **6.2.6** | `number?`, `integer?`, `exact?`, `exact-integer?` | **◎** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 最下位 2-bit タグ (`00b`) による Fixnum 判定 (`(val & 3) == 0`) |
-| **6.2.6** | `real?`, `rational?`, `complex?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 整数塔のみサポートのため `integer?` のエイリアスとして実装 |
+| **6.2.6** | `real?`, `complex?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 数値塔述語 (`ratnum?` / `flonum?` / `compnum?` 統合判定) |
+| **6.2.6** | `rational?` | **◎** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | Fixnum・正確有理数 (`<ratnum>`)・有限浮動小数点数に対する有理数判定完全準拠 ([Issue #711](../../docs/issues/closed/711-implement-r7rs-exact-rationals-rounding-and-rationalize.md)) |
 | **6.2.6** | `inexact?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 常に `#f` を返却 (浮動小数点数非サポート) |
 | **6.2.6** | `finite?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 整数のみのため `number?` と同等 (常に `#t`) |
 | **6.2.6** | `infinite?`, `nan?` | **△** | [ulisp/lib/predicates.scm](../lib/predicates.scm) | 浮動小数点数非サポートのため常に `#f` を返却 |
@@ -120,9 +121,9 @@
 | **6.2.6** | `abs` | **◎** | [compiler/helpers.scm](../compiler/helpers.scm)<br>[ulisp/lib/math.scm](../lib/math.scm) | 絶対値計算プリミティブ |
 | **6.2.6** | `floor/`, `floor-quotient`, `floor-remainder` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 床除算・剰余ペア (多値および単値) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.2.6** | `truncate/`, `truncate-quotient`, `truncate-remainder` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 切り捨て除算・剰余ペア (多値および単値) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
-| **6.2.6** | `floor`, `ceiling`, `truncate`, `round` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数塔のため引数をそのまま返却（恒等写像） |
-| **6.2.6** | `rationalize` | **×** | - | 最適有理数近似 (未実装) |
-| **6.2.6** | `numerator`, `denominator` | **△** | [compiler/primitives.scm](../compiler/primitives.scm) | 整数のみのため `numerator` は引数自身、`denominator` は 1 を返却 |
+| **6.2.6** | `floor`, `ceiling`, `truncate`, `round` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 整数・有理数 (`<ratnum>`)・浮動小数点数に対する床・天井・ゼロ方向切り捨て・偶数丸め (round-to-even) 完全準拠 ([Issue #711](../../docs/issues/closed/711-implement-r7rs-exact-rationals-rounding-and-rationalize.md)) |
+| **6.2.6** | `rationalize` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 連分数展開 / Stern-Brocot 木探索による許容誤差 `|y|` 内の最簡有理数算出 ([Issue #711](../../docs/issues/closed/711-implement-r7rs-exact-rationals-rounding-and-rationalize.md)) |
+| **6.2.6** | `numerator`, `denominator` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | GCD 既約正規化・正分母不変条件 (`d > 0`) に基づく分子・分母抽出 ([Issue #711](../../docs/issues/closed/711-implement-r7rs-exact-rationals-rounding-and-rationalize.md)) |
 | **6.2.6** | `remainder`, `gcd`, `lcm`, `square`, `expt` | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[Pass 030](../frontend/030_desugar.scm) | 切り捨て剰余、ユークリッド互除法 (可変長引数は `gcd-2`/`lcm-2` 左畳み込みへ脱糖)、繰り返し二乗法 O(log n) ([Issue #558](../../docs/issues/closed/558-implement-r7rs-elementary-integer-math-procedures.md)) |
 | **6.2.6** | `exact-integer-sqrt` | **◎** | [ulisp/lib/math.scm](../lib/math.scm) | 平方根整数部と剰余の多値返却 (二分探索法) ([Issue #610](../../docs/issues/610-implement-r7rs-base-core-procedures.md)) |
 | **6.2.6** | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `sqrt` | **×** | - | 超越関数 (浮動小数点非サポートのため未実装) |

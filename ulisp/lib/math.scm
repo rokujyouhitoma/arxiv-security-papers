@@ -57,26 +57,154 @@
           (* (quotient (%math-abs a) (gcd-2 a b)) (%math-abs b)))))
 
 ;; ---------------------------------------------------------------------
-;; §6.2.6 expt (exact integer exponent, binary exponentiation O(log n))
+;; §6.2.6 Exact Rationals (<ratnum>), numerator, denominator (Issue #711)
+;;   Canonical invariants:
+;;   - Denominator d > 0
+;;   - gcd(|n|, d) = 1
+;;   - If d = 1, automatically demotes to immediate Fixnum n.
+;;   - Otherwise boxed as #(ulisp-ratnum-tag n d)
+;; ---------------------------------------------------------------------
+(define (make-rational n d)
+  (if (= d 0)
+      (error "make-rational: division by zero" n d)
+      (let* ((num0 (if (< d 0) (- 0 n) n))
+             (den0 (if (< d 0) (- 0 d) d))
+             (g (gcd-2 num0 den0))
+             (num (quotient num0 g))
+             (den (quotient den0 g)))
+        (if (= den 1)
+            num
+            (vector 'ulisp-ratnum-tag num den)))))
+
+(define (numerator q)
+  (cond
+    ((fixnum? q) q)
+    ((ratnum? q) (vector-ref q 1))
+    ((flonum? q)
+     (let ((v (vector-ref q 1)))
+       (if (fixnum? v)
+           (let ((r (make-rational v 1000000)))
+             (vector 'ulisp-flonum-tag
+                     (* (if (fixnum? r) r (vector-ref r 1)) 1000000)))
+           (error "numerator: non-rational flonum" q))))
+    (else (error "numerator: expected rational number" q))))
+
+(define (denominator q)
+  (cond
+    ((fixnum? q) 1)
+    ((ratnum? q) (vector-ref q 2))
+    ((flonum? q)
+     (let ((v (vector-ref q 1)))
+       (if (fixnum? v)
+           (let ((r (make-rational v 1000000)))
+             (vector 'ulisp-flonum-tag
+                     (* (if (fixnum? r) 1 (vector-ref r 2)) 1000000)))
+           (error "denominator: non-rational flonum" q))))
+    (else (error "denominator: expected rational number" q))))
+
+(define (%exact-rat-num x)
+  (cond
+    ((fixnum? x) x)
+    ((ratnum? x) (vector-ref x 1))
+    ((and (flonum? x) (fixnum? (vector-ref x 1)))
+     (let ((r (make-rational (vector-ref x 1) 1000000)))
+       (if (fixnum? r) r (vector-ref r 1))))
+    (else (error "rational operation: expected rational number" x))))
+
+(define (%exact-rat-den x)
+  (cond
+    ((fixnum? x) 1)
+    ((ratnum? x) (vector-ref x 2))
+    ((and (flonum? x) (fixnum? (vector-ref x 1)))
+     (let ((r (make-rational (vector-ref x 1) 1000000)))
+       (if (fixnum? r) 1 (vector-ref r 2))))
+    (else (error "rational operation: expected rational number" x))))
+
+(define (rat+ a b)
+  (let ((na (%exact-rat-num a))
+        (da (%exact-rat-den a))
+        (nb (%exact-rat-num b))
+        (db (%exact-rat-den b)))
+    (make-rational (+ (* na db) (* nb da)) (* da db))))
+
+(define rat-
+  (case-lambda
+    ((a)
+     (make-rational (- 0 (%exact-rat-num a)) (%exact-rat-den a)))
+    ((a b)
+     (let ((na (%exact-rat-num a))
+           (da (%exact-rat-den a))
+           (nb (%exact-rat-num b))
+           (db (%exact-rat-den b)))
+       (make-rational (- (* na db) (* nb da)) (* da db))))))
+
+(define (rat* a b)
+  (let ((na (%exact-rat-num a))
+        (da (%exact-rat-den a))
+        (nb (%exact-rat-num b))
+        (db (%exact-rat-den b)))
+    (make-rational (* na nb) (* da db))))
+
+(define rat/
+  (case-lambda
+    ((a)
+     (make-rational (%exact-rat-den a) (%exact-rat-num a)))
+    ((a b)
+     (let ((na (%exact-rat-num a))
+           (da (%exact-rat-den a))
+           (nb (%exact-rat-num b))
+           (db (%exact-rat-den b)))
+       (make-rational (* na db) (* da nb))))))
+
+(define (rat= a b)
+  (and (= (%exact-rat-num a) (%exact-rat-num b))
+       (= (%exact-rat-den a) (%exact-rat-den b))))
+
+(define (rat< a b)
+  (< (* (%exact-rat-num a) (%exact-rat-den b))
+     (* (%exact-rat-num b) (%exact-rat-den a))))
+
+(define (rat<= a b)
+  (<= (* (%exact-rat-num a) (%exact-rat-den b))
+      (* (%exact-rat-num b) (%exact-rat-den a))))
+
+(define (rat> a b)
+  (> (* (%exact-rat-num a) (%exact-rat-den b))
+     (* (%exact-rat-num b) (%exact-rat-den a))))
+
+(define (rat>= a b)
+  (>= (* (%exact-rat-num a) (%exact-rat-den b))
+      (* (%exact-rat-num b) (%exact-rat-den a))))
+
+(define (%int-expt base exp)
+  (let loop ((b base) (e exp) (acc 1))
+    (if (= e 0)
+        acc
+        (loop (* b b)
+              (quotient e 2)
+              (if (= (remainder e 2) 0) acc (* acc b))))))
+
+;; ---------------------------------------------------------------------
+;; §6.2.6 expt (exact integer/rational exponentiation, O(log n))
 ;;   z2 = 0  -> 1 (including 0^0 = 1 per R7RS)
-;;   z2 < 0  -> exact results only for |z1| = 1; 0^(-k) is an error;
-;;              other bases return 0 (no rationals in ULisp fixnum tower).
+;;   z2 < 0  -> exact rational 1 / z1^|z2|; 0^(-k) raises an error.
 ;; ---------------------------------------------------------------------
 (define (expt z1 z2)
-  (if (< z2 0)
-      (if (= z1 1)
-          1
-          (if (= z1 -1)
-              (if (= (remainder z2 2) 0) 1 -1)
-              (if (= z1 0)
-                  (error "expt: zero base with negative exponent" z2)
-                  0)))
-      (let loop ((b z1) (e z2) (acc 1))
-        (if (= e 0)
-            acc
-            (loop (* b b)
-                  (quotient e 2)
-                  (if (= (remainder e 2) 0) acc (* acc b)))))))
+  (cond
+    ((= z2 0) 1)
+    ((ratnum? z1)
+     (let ((n (vector-ref z1 1))
+           (d (vector-ref z1 2)))
+       (if (< z2 0)
+           (let ((pos-e (- 0 z2)))
+             (make-rational (%int-expt d pos-e) (%int-expt n pos-e)))
+           (make-rational (%int-expt n z2) (%int-expt d z2)))))
+    ((< z2 0)
+     (if (= z1 0)
+         (error "expt: zero base with negative exponent" z2)
+         (make-rational 1 (%int-expt z1 (- 0 z2)))))
+    (else
+     (%int-expt z1 z2))))
 
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 Truncated & Floored Integer Division (SRFI 141)
@@ -252,3 +380,102 @@
        (if (null? r)
            m
            (loop (min-2 m (car r)) (cdr r)))))))
+
+;; ---------------------------------------------------------------------
+;; §6.2.6 Rounding & Simplest Rational (floor, ceiling, truncate, round, rationalize)
+;;   Conforms to R7RS §6.2.6 & Issue #711
+;; ---------------------------------------------------------------------
+
+(define (floor x)
+  (cond
+    ((fixnum? x) x)
+    ((ratnum? x)
+     (floor-quotient (vector-ref x 1) (vector-ref x 2)))
+    ((flonum? x)
+     (let ((v (vector-ref x 1)))
+       (if (fixnum? v)
+           (vector 'ulisp-flonum-tag (* (floor-quotient v 1000000) 1000000))
+           (error "floor: non-finite flonum" x))))
+    (else (error "floor: expected real number" x))))
+
+(define (ceiling x)
+  (cond
+    ((fixnum? x) x)
+    ((ratnum? x)
+     (ceiling-quotient (vector-ref x 1) (vector-ref x 2)))
+    ((flonum? x)
+     (let ((v (vector-ref x 1)))
+       (if (fixnum? v)
+           (vector 'ulisp-flonum-tag (* (ceiling-quotient v 1000000) 1000000))
+           (error "ceiling: non-finite flonum" x))))
+    (else (error "ceiling: expected real number" x))))
+
+(define (truncate x)
+  (cond
+    ((fixnum? x) x)
+    ((ratnum? x)
+     (truncate-quotient (vector-ref x 1) (vector-ref x 2)))
+    ((flonum? x)
+     (let ((v (vector-ref x 1)))
+       (if (fixnum? v)
+           (vector 'ulisp-flonum-tag (* (truncate-quotient v 1000000) 1000000))
+           (error "truncate: non-finite flonum" x))))
+    (else (error "truncate: expected real number" x))))
+
+(define (round x)
+  (cond
+    ((fixnum? x) x)
+    ((ratnum? x)
+     (round-quotient (vector-ref x 1) (vector-ref x 2)))
+    ((flonum? x)
+     (let ((v (vector-ref x 1)))
+       (if (fixnum? v)
+           (vector 'ulisp-flonum-tag (* (round-quotient v 1000000) 1000000))
+           (error "round: non-finite flonum" x))))
+    (else (error "round: expected real number" x))))
+
+;; Continued-fraction / Stern-Brocot simplest rational in [n1/d1, n2/d2]
+;; Preconditions: 0 < n1/d1 <= n2/d2, d1 > 0, d2 > 0
+(define (%simplest-pos-rational n1 d1 n2 d2)
+  (let ((q1 (quotient n1 d1))
+        (r1 (remainder n1 d1))
+        (q2 (quotient n2 d2))
+        (r2 (remainder n2 d2)))
+    (cond
+      ((= r1 0)
+       (cons q1 1))
+      ((< q1 q2)
+       (cons (+ q1 1) 1))
+      (else
+       (let ((sub (%simplest-pos-rational d2 r2 d1 r1)))
+         (cons (+ (* q1 (car sub)) (cdr sub))
+               (car sub)))))))
+
+(define (rationalize x y)
+  (let* ((inex? (or (flonum? x) (flonum? y)))
+         (nx (%exact-rat-num x))
+         (dx (%exact-rat-den x))
+         (ny0 (%exact-rat-num y))
+         (dy (%exact-rat-den y))
+         (ny (if (< ny0 0) (- 0 ny0) ny0))
+         (lo (rat- (make-rational nx dx) (make-rational ny dy)))
+         (hi (rat+ (make-rational nx dx) (make-rational ny dy)))
+         (n1 (%exact-rat-num lo))
+         (d1 (%exact-rat-den lo))
+         (n2 (%exact-rat-num hi))
+         (d2 (%exact-rat-den hi))
+         (exact-res
+          (cond
+            ((and (<= n1 0) (>= n2 0))
+             0)
+            ((< n2 0)
+             (let ((pq (%simplest-pos-rational (- 0 n2) d2 (- 0 n1) d1)))
+               (make-rational (- 0 (car pq)) (cdr pq))))
+            (else
+             (let ((pq (%simplest-pos-rational n1 d1 n2 d2)))
+               (make-rational (car pq) (cdr pq)))))))
+    (if inex?
+        (let ((rn (%exact-rat-num exact-res))
+              (rd (%exact-rat-den exact-res)))
+          (vector 'ulisp-flonum-tag (round-quotient (* rn 1000000) rd)))
+        exact-res)))

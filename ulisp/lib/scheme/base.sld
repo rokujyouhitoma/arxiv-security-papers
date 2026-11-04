@@ -56,7 +56,13 @@
 
     ;; §6.2 Numbers
     number?
+    complex?
+    real?
+    rational?
     integer?
+    exact?
+    inexact?
+    exact-integer?
     zero?
     positive?
     negative?
@@ -78,11 +84,29 @@
     truncate/
     truncate-quotient
     truncate-remainder
-    exact-integer-sqrt
     gcd
     lcm
+    numerator
+    denominator
+    floor
+    ceiling
+    truncate
+    round
+    rationalize
+    exact-integer-sqrt
     square
     expt
+    make-rational
+    ratnum?
+    rat+
+    rat-
+    rat*
+    rat/
+    rat=
+    rat<
+    rat<=
+    rat>
+    rat>=
     =
     <
     >
@@ -256,6 +280,7 @@
     features)
 
   (include "../list.scm"
+           "../predicates.scm"
            "../equality.scm"
            "../math.scm"
            "../vector.scm"

@@ -7,12 +7,25 @@
 ;; ---------------------------------------------------------------------
 ;; §6.1 Equivalence predicates: eqv?
 ;; ---------------------------------------------------------------------
-;; In ULisp, all numbers (fixnums), characters, booleans, empty list,
-;; and eof objects are immediate tagged values. Heap objects (pairs,
-;; vectors, strings, symbols, closures, continuations) are uniquely
-;; addressed. Therefore, pointer identity (eq?) satisfies R7RS eqv?.
+(define (%eqv? a b)
+  (cond
+    ((eq? a b) #t)
+    ((and (ratnum? a) (ratnum? b))
+     (and (= (vector-ref a 1) (vector-ref b 1))
+          (= (vector-ref a 2) (vector-ref b 2))))
+    ((and (flonum? a) (flonum? b))
+     (eq? (vector-ref a 1) (vector-ref b 1)))
+    ((and (compnum? a) (compnum? b))
+     (and (%eqv? (vector-ref a 1) (vector-ref b 1))
+          (%eqv? (vector-ref a 2) (vector-ref b 2))))
+    (else #f)))
+
 (define (eqv? a b)
-  (eq? a b))
+  (%eqv? a b))
+
+(define-syntax eqv?
+  (syntax-rules ()
+    ((_ a b) (%eqv? a b))))
 
 ;; ---------------------------------------------------------------------
 ;; §6.1 Equivalence predicates: equal?
@@ -20,7 +33,7 @@
 (define (equal? a b)
   (cond
     ((eq? a b) #t)
-    ((and (number? a) (number? b)) (= a b))
+    ((and (%number? a) (%number? b)) (%eqv? a b))
     ((and (string? a) (string? b)) (string=? a b))
     ((and (char? a) (char? b)) (char=? a b))
     ((and (bytevector? a) (bytevector? b)) (bytevector=? a b))

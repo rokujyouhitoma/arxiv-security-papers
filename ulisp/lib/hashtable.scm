@@ -59,14 +59,34 @@
     ((sym bound)
      (string-hash (symbol->string sym) bound))))
 
+(define (%fixnum-hash num bound)
+  (let* ((n (if (< num 0) (- 0 num) num))
+         (h (modulo (+ (* (modulo n %ht-hash-modulus) 265443) 13) %ht-hash-modulus)))
+    (modulo h bound)))
+
 (define number-hash
   (case-lambda
     ((num)
      (number-hash num %ht-hash-modulus))
     ((num bound)
-     (let* ((n (if (< num 0) (- 0 num) num))
-            (h (modulo (+ (* (modulo n %ht-hash-modulus) 265443) 13) %ht-hash-modulus)))
-       (modulo h bound)))))
+     (cond
+       ((fixnum? num)
+        (%fixnum-hash num bound))
+       ((ratnum? num)
+        (let ((h1 (%fixnum-hash (vector-ref num 1) %ht-hash-modulus))
+              (h2 (%fixnum-hash (vector-ref num 2) %ht-hash-modulus)))
+          (modulo (+ (* (modulo h1 450000) 37) h2) bound)))
+       ((flonum? num)
+        (let ((v (vector-ref num 1)))
+          (if (fixnum? v)
+              (%fixnum-hash v bound)
+              (symbol-hash v bound))))
+       ((compnum? num)
+        (let ((h1 (number-hash (vector-ref num 1) %ht-hash-modulus))
+              (h2 (number-hash (vector-ref num 2) %ht-hash-modulus)))
+          (modulo (+ (* (modulo h1 450000) 41) h2) bound)))
+       (else
+        (modulo 997 bound))))))
 
 (define hash-by-identity
   (case-lambda
