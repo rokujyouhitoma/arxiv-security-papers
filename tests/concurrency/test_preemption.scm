@@ -11,9 +11,12 @@
 ;;; =======================================================================
 
 (load "ulisp/runtime/concurrency/channel.scm")
+(load "ulisp/runtime/concurrency/arena.scm")
 (load "ulisp/runtime/concurrency/context.scm")
 (load "ulisp/runtime/concurrency/deque.scm")
 (load "ulisp/runtime/concurrency/thread.scm")
+(load "ulisp/runtime/concurrency/links.scm")
+(load "ulisp/runtime/concurrency/panic.scm")
 (load "ulisp/runtime/concurrency/scheduler.scm")
 (load "ulisp/runtime/concurrency/preempt.scm")
 
@@ -368,6 +371,40 @@
 
 (assert-error (lambda () (budgeted-task-stats 12345))
               "budgeted-task-stats rejects non-budgeted-task (CWE-843)")
+
+;; -----------------------------------------------------------------------
+;; Group 8: Link Cascade Termination Safepoint Exit & Cleanup (#723)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Link Cascade Safepoint Exit & Ordered Resource Cleanup (#723) ---\n")
+
+(let* ((t-leader (make-task-context))
+       (t-peer (make-task-context))
+       (peer-arena (make-task-arena 2048))
+       (peer-iters (vector 0)))
+  (task-set-arena! t-peer peer-arena)
+  (task-link! t-leader t-peer)
+
+  ;; Run t-peer inside task boundary; on iteration 3, t-leader crashes and cascade-kills t-peer
+  (let ((res (with-synapse-task-boundary t-peer
+               (lambda ()
+                 (arena-allocate! peer-arena 128)
+                 (let loop ((i 0))
+                   (if (< i 100)
+                       (begin
+                         (vector-set! peer-iters 0 (+ (vector-ref peer-iters 0) 1))
+                         (if (= i 2)
+                             ;; Simulate linked peer t-leader crashing on another worker
+                             (task-handle-termination! t-leader 'peer_crash)
+                             #f)
+                         ;; Safepoint must immediately exit when t-peer is marked 'terminated with reductions 0
+                         (check-safepoint! t-peer)
+                         (loop (+ i 1)))
+                       'completed-100))))))
+    (assert-equal (task-state t-peer) 'terminated "linked peer task state is 'terminated")
+    (assert-equal (task-reductions t-peer) 0 "linked peer reductions remained 0 without replenishment")
+    (assert-equal (vector-ref peer-iters 0) 3 "linked peer stopped immediately at safepoint on iteration 3 (not 100)")
+    (assert-equal (car res) 'terminated "task boundary returned 'terminated from safepoint escape")
+    (assert-equal (arena-used-bytes peer-arena) 0 "peer arena reclaimed to 0 bytes after execution stopped at safepoint")))
 
 ;; -----------------------------------------------------------------------
 ;; Summary

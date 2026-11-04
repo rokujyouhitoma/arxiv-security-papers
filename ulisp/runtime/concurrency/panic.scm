@@ -52,6 +52,16 @@
 ;; 3. Task Resource Zero-Leak Cleanup (Arena O(1) Reset & Channel Drop)
 ;; -----------------------------------------------------------------------
 
+(define (%reclaim-terminated-task-arena! task secure-scrub?)
+  (if (and (task-context? task) (eq? (task-state task) 'terminated))
+      (let ((arena (task-arena task)))
+        (if (and arena (task-arena? arena) (> (arena-used-bytes arena) 0))
+            (if secure-scrub?
+                (arena-secure-reset! arena)
+                (arena-reset! arena))
+            #f))
+      #f))
+
 (define synapse-cleanup-task-resources!
   (case-lambda
     ((task panic-reason)
@@ -62,15 +72,17 @@
      (if (not (task-context? task))
          (error "synapse-cleanup-task-resources!: expected <task-context> (CWE-843)" task)
          (begin
-           ;; 1. O(1) Instant Arena Reset (CWE-212 & CWE-400 Zero-Leak)
-           (let ((arena (task-arena task)))
-             (if (and arena (task-arena? arena))
-                 (if secure-scrub?
-                     (arena-secure-reset! arena)
-                     (arena-reset! arena))
-                 #f))
-           ;; 2. Poison channels & dispatch link cascade / monitor notifications (CWE-833 Deadlock Prevention)
+           ;; 1. Mark terminated, zero reductions, poison channels & dispatch link/monitor notifications FIRST (Issue #723, Item B6 & A4)
            (task-handle-termination! task (cons 'panic panic-reason) wake-hook)
+           ;; 2. After confirming task state is 'terminated and reductions are 0, reclaim Ephemeral Arena in O(1) (CWE-212 & CWE-400)
+           (if (and (eq? (task-state task) 'terminated) (<= (task-reductions task) 0))
+               (let ((arena (task-arena task)))
+                 (if (and arena (task-arena? arena))
+                     (if secure-scrub?
+                         (arena-secure-reset! arena)
+                         (arena-reset! arena))
+                     #f))
+               #f)
            #t)))))
 
 ;; -----------------------------------------------------------------------
@@ -188,6 +200,8 @@
               (%asm-set-handler-chain! prev-hc)
               (task-set-escape-continuation! task prev-k)
               (%set-current-synapse-task! prev-task)
+              ;; Ensure arena is reclaimed after execution stops if task was terminated via link cascade at safepoint (#723, Item A4)
+              (%reclaim-terminated-task-arena! task secure-scrub?)
               result)))))
 
 (atomic-set! *synapse-task-boundary-hook-box* %panic-with-synapse-task-boundary)

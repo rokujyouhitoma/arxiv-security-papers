@@ -151,20 +151,53 @@
 ;; -----------------------------------------------------------------------
 
 (define (%check-safepoint-impl! btask on-exhaust-thunk)
-  (if (not (budgeted-task? btask))
-      (error "check-safepoint!: expected <budgeted-task> (CWE-843)" btask)
-      (let* ((box (%task-reductions-box btask))
-             (cur (vector-ref box 0))
-             (rem (- cur 1)))
-        (if (<= rem 0)
-            (begin
-              (task-replenish! btask)
-              (if on-exhaust-thunk
-                  (on-exhaust-thunk)
-                  #f))
-            (begin
-              (vector-set! box 0 rem)
-              #t)))))
+  (cond
+    ((budgeted-task? btask)
+     (let ((tgt (task-target-obj btask)))
+       (if (or (eq? (task-state btask) 'terminated)
+               (and (task-context? tgt) (eq? (task-state tgt) 'terminated)))
+           (begin
+             (vector-set! (%task-reductions-box btask) 0 0)
+             (if (and (task-context? tgt) (procedure? (task-escape-continuation tgt)))
+                 ((task-escape-continuation tgt) (cons 'terminated 'link-killed))
+                 (if on-exhaust-thunk
+                     (on-exhaust-thunk)
+                     'terminated)))
+           (let* ((box (%task-reductions-box btask))
+                  (cur (vector-ref box 0))
+                  (rem (- cur 1)))
+             (if (<= rem 0)
+                 (begin
+                   (task-replenish! btask)
+                   (if on-exhaust-thunk
+                       (on-exhaust-thunk)
+                       #f))
+                 (begin
+                   (vector-set! box 0 rem)
+                   #t))))))
+    ((task-context? btask)
+     (if (eq? (task-state btask) 'terminated)
+         (begin
+           (%task-reductions-set! btask 0)
+           (if (procedure? (task-escape-continuation btask))
+               ((task-escape-continuation btask) (cons 'terminated 'link-killed))
+               (if on-exhaust-thunk
+                   (on-exhaust-thunk)
+                   'terminated)))
+         (let* ((cur (%task-reductions btask))
+                (rem (- cur 1)))
+           (if (<= rem 0)
+               (begin
+                 (%task-reduction-exhaustions-set! btask (+ (%task-reduction-exhaustions btask) 1))
+                 (%task-reductions-set! btask *default-reduction-budget*)
+                 (if on-exhaust-thunk
+                     (on-exhaust-thunk)
+                     #f))
+               (begin
+                 (%task-reductions-set! btask rem)
+                 #t)))))
+    (else
+     (error "check-safepoint!: expected <budgeted-task> or <task-context> (CWE-843)" btask))))
 
 (define check-safepoint!
   (case-lambda

@@ -16,7 +16,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **723** | Link 強制終了時の Reduction ゼロ化・Safepoint 脱出と実行停止確認後の安全な資源後始末 (B6・A4) | Bug | High | New | [723-enforce-link-termination-at-safepoint-and-ordered-resource-cleanup.md](723-enforce-link-termination-at-safepoint-and-ordered-resource-cleanup.md) |
 | **724** | タスク終了理由のディープコピー退避と Arena リセット順序の是正 (B5) | Bug | High | New | [724-deep-copy-exit-reason-before-ephemeral-arena-reset.md](724-deep-copy-exit-reason-before-ephemeral-arena-reset.md) |
 | **725** | タスク監視 (Monitor/Link) 登録と終了処理の CAS アトミック化・受付締め切り機構の実装 (B4) | Bug | High | New | [725-make-monitor-and-link-registration-atomic-with-task-termination.md](725-make-monitor-and-link-registration-atomic-with-task-termination.md) |
 | **726** | タスク通知受け取り口のメールボックス (FIFO キュー) 化による DOWN/EXIT 通知と io_uring 完了結果の上書き消失防止 | Bug | High | New | [726-replace-single-handoff-slot-with-task-mailbox-queue.md](726-replace-single-handoff-slot-with-task-mailbox-queue.md) |
@@ -39,6 +38,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **723** | Link 強制終了時の Reduction ゼロ化・Safepoint 脱出と実行停止確認後の安全な資源後始末 (B6・A4) | Bug | 2026-11-05 | [closed/723-enforce-link-termination-at-safepoint-and-ordered-resource-cleanup.md](closed/723-enforce-link-termination-at-safepoint-and-ordered-resource-cleanup.md) |
 | **722** | x86-64 Linux における Supervisor 配下の子タスク異常終了隔離と自動再起動の CI 結合テスト追加 | Feature | 2026-11-05 | [closed/722-add-x86-64-linux-ci-integration-test-for-supervisor-fault-isolation.md](closed/722-add-x86-64-linux-ci-integration-test-for-supervisor-fault-isolation.md) |
 | **721** | エフェメラルアリーナ溢れ時の error をタスク局所 synapse-panic! へ分離 (A3) | Bug | 2026-11-05 | [closed/721-separate-arena-overflow-error-into-task-local-synapse-panic.md](closed/721-separate-arena-overflow-error-into-task-local-synapse-panic.md) |
 | **720** | タスク境界への with-exception-handler 統合およびスケジューラ・Worker ループ例外防壁の接続 (A2) | Bug | 2026-11-05 | [closed/720-connect-task-exception-boundary-to-scheduler-and-worker-loop.md](closed/720-connect-task-exception-boundary-to-scheduler-and-worker-loop.md) |

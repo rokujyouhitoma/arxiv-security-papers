@@ -106,8 +106,11 @@
   ;; t1 crashes with abnormal reason
   (task-handle-termination! t1 'kernel_panic)
   (assert-equal (task-state t1) 'terminated "t1 terminated by panic")
+  (assert-equal (task-reductions t1) 0 "t1 reductions zeroed on termination (#723)")
   (assert-equal (task-state t2) 'terminated "t2 cascade killed by t1 (no zombie)")
-  (assert-equal (task-state t3) 'terminated "t3 cascade killed by t2 (no zombie)"))
+  (assert-equal (task-reductions t2) 0 "t2 reductions zeroed on link cascade kill (#723)")
+  (assert-equal (task-state t3) 'terminated "t3 cascade killed by t2 (no zombie)")
+  (assert-equal (task-reductions t3) 0 "t3 reductions zeroed on link cascade kill (#723)"))
 
 ;; -----------------------------------------------------------------------
 ;; Group 3: trap-exit Catch & Signal Message Delivery

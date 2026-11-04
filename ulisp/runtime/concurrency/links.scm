@@ -183,8 +183,9 @@
      (if (not (task-context? task))
          (error "task-handle-termination!: expected <task-context>" task)
          (begin
-           ;; Mark task state as terminated
+           ;; Mark task state as terminated and zero out reductions so it exits at next safepoint (Issue #723, Item B6)
            (task-state-set! task 'terminated)
+           (task-reductions-set! task 0)
 
            ;; Step 1: Poison all owned channels (CWE-833 Deadlock Prevention)
            (task-poison-owned-channels! task reason wake-hook)
