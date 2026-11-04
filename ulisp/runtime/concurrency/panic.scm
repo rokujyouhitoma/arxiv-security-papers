@@ -123,39 +123,72 @@
 
 (define *synapse-boundary-escape-tag* (list 'synapse-boundary-escape))
 
+(define (%panic-with-synapse-task-boundary task thunk secure-scrub?)
+  (if (not (task-context? task))
+      (error "with-synapse-task-boundary: expected <task-context> (CWE-843)" task)
+      (if (not (procedure? thunk))
+          (error "with-synapse-task-boundary: expected procedure (CWE-843)" thunk)
+          (let ((prev-task (current-synapse-task))
+                (prev-k (task-escape-continuation task))
+                (prev-hc (%asm-get-handler-chain))
+                (task-hc (task-handler-chain task)))
+            (let ((result
+                   (guard (exn
+                           ((and (pair? exn) (eq? (car exn) *synapse-boundary-escape-tag*))
+                            (cdr exn))
+                           (else
+                            (let ((panic-rec (%make-synapse-panic-record
+                                              (if (error-object? exn) 'error 'unhandled-exception)
+                                              (if (error-object? exn)
+                                                  (cons (error-object-message exn) (error-object-irritants exn))
+                                                  (list exn))
+                                              #f
+                                              (allocate-panic-timestamp!)))
+                                  (hook (atomic-ref *synapse-crash-logger-hook-box*)))
+                              (if (procedure? hook)
+                                  (hook task (synapse-panic-reason panic-rec) (synapse-panic-details panic-rec))
+                                  #f)
+                              (synapse-cleanup-task-resources! task (synapse-panic-reason panic-rec) secure-scrub? #f)
+                              (cons 'panic panic-rec))))
+                     (let* ((boundary-hc (%asm-get-handler-chain))
+                            (escape-k (lambda (val)
+                                        (%asm-set-handler-chain! boundary-hc)
+                                        (raise (cons *synapse-boundary-escape-tag* val)))))
+                       (task-set-escape-continuation! task escape-k)
+                       (%set-current-synapse-task! task)
+                       (if (and (integer? task-hc) (> task-hc 0))
+                           (%asm-set-handler-chain! task-hc)
+                           #f)
+                       (with-exception-handler
+                        (lambda (unhandled-exn)
+                          (if (and (pair? unhandled-exn) (eq? (car unhandled-exn) *synapse-boundary-escape-tag*))
+                              (begin
+                                (%asm-set-handler-chain! boundary-hc)
+                                (raise unhandled-exn))
+                              (%execute-task-panic!
+                               (if (error-object? unhandled-exn) 'error 'unhandled-exception)
+                               (if (error-object? unhandled-exn)
+                                   (cons (error-object-message unhandled-exn)
+                                         (error-object-irritants unhandled-exn))
+                                   (list unhandled-exn))
+                               secure-scrub?)))
+                        (lambda ()
+                          (let ((res (thunk)))
+                            (task-set-handler-chain! task (%asm-get-handler-chain))
+                            (cons 'ok res))))))))
+              (%asm-set-handler-chain! prev-hc)
+              (task-set-escape-continuation! task prev-k)
+              (%set-current-synapse-task! prev-task)
+              result)))))
+
+(atomic-set! *synapse-task-boundary-hook-box* %panic-with-synapse-task-boundary)
+
 (define with-synapse-task-boundary
   (case-lambda
     ((task thunk)
-     (with-synapse-task-boundary task thunk #f))
+     (%panic-with-synapse-task-boundary task thunk #f))
     ((task thunk secure-scrub?)
-     (if (not (task-context? task))
-         (error "with-synapse-task-boundary: expected <task-context> (CWE-843)" task)
-         (if (not (procedure? thunk))
-             (error "with-synapse-task-boundary: expected procedure (CWE-843)" thunk)
-             (let ((prev-task (current-synapse-task))
-                   (prev-k (task-escape-continuation task))
-                   (prev-hc (%asm-get-handler-chain))
-                   (task-hc (task-handler-chain task)))
-               (let ((result
-                      (guard (exn
-                              ((and (pair? exn) (eq? (car exn) *synapse-boundary-escape-tag*))
-                               (cdr exn)))
-                        (let* ((boundary-hc (%asm-get-handler-chain))
-                               (escape-k (lambda (val)
-                                           (%asm-set-handler-chain! boundary-hc)
-                                           (raise (cons *synapse-boundary-escape-tag* val)))))
-                          (task-set-escape-continuation! task escape-k)
-                          (%set-current-synapse-task! task)
-                          (if (and (integer? task-hc) (> task-hc 0))
-                              (%asm-set-handler-chain! task-hc)
-                              #f)
-                          (let ((res (thunk)))
-                            (task-set-handler-chain! task (%asm-get-handler-chain))
-                            (cons 'ok res))))))
-                 (%asm-set-handler-chain! prev-hc)
-                 (task-set-escape-continuation! task prev-k)
-                 (%set-current-synapse-task! prev-task)
-                 result)))))))
+     (%panic-with-synapse-task-boundary task thunk secure-scrub?))))
 
 ;; -----------------------------------------------------------------------
 ;; 6. Fast Assertion Guard

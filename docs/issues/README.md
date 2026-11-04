@@ -16,7 +16,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **720** | タスク境界への with-exception-handler 統合およびスケジューラ・Worker ループ例外防壁の接続 (A2) | Bug | High | New | [720-connect-task-exception-boundary-to-scheduler-and-worker-loop.md](720-connect-task-exception-boundary-to-scheduler-and-worker-loop.md) |
 | **721** | エフェメラルアリーナ溢れ時の error をタスク局所 synapse-panic! へ分離 (A3) | Bug | High | New | [721-separate-arena-overflow-error-into-task-local-synapse-panic.md](721-separate-arena-overflow-error-into-task-local-synapse-panic.md) |
 | **722** | x86-64 Linux における Supervisor 配下の子タスク異常終了隔離と自動再起動の CI 結合テスト追加 | Feature | High | New | [722-add-x86-64-linux-ci-integration-test-for-supervisor-fault-isolation.md](722-add-x86-64-linux-ci-integration-test-for-supervisor-fault-isolation.md) |
 | **723** | Link 強制終了時の Reduction ゼロ化・Safepoint 脱出と実行停止確認後の安全な資源後始末 (B6・A4) | Bug | High | New | [723-enforce-link-termination-at-safepoint-and-ordered-resource-cleanup.md](723-enforce-link-termination-at-safepoint-and-ordered-resource-cleanup.md) |
@@ -42,6 +41,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **720** | タスク境界への with-exception-handler 統合およびスケジューラ・Worker ループ例外防壁の接続 (A2) | Bug | 2026-11-05 | [closed/720-connect-task-exception-boundary-to-scheduler-and-worker-loop.md](closed/720-connect-task-exception-boundary-to-scheduler-and-worker-loop.md) |
 | **719** | Synapse ハンドラ連鎖 (ulisp_handler_chain) と実行中タスク記録の Worker TLS・タスク単位隔離 (A1) | Bug | 2026-11-05 | [closed/719-isolate-handler-chain-and-current-task-per-worker-and-task.md](closed/719-isolate-handler-chain-and-current-task-per-worker-and-task.md) |
 | **718** | R7RS-small (scheme load), (scheme repl), (scheme r5rs) 完全準拠化と動的ロードの実装 | Feature | 2026-11-04 | [closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md](closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md) |
 | **717** | R7RS-small (scheme eval) オンデマンド埋め込み型メタ循環評価器 (eval) の実装 | Feature | 2026-11-04 | [closed/717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md](closed/717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md) |

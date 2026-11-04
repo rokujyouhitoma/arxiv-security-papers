@@ -324,24 +324,40 @@
 
 (define (scheduler-execute-task! task)
   (cond
-    ;; DSN-37 task-context (Issue #633)
+    ;; DSN-37 task-context (Issue #633, #720)
     ((task-context? task)
-     (if (eq? (task-state task) 'ready)
+     (if (eq? (task-state task) 'terminated)
+         #f
          (begin
-           (task-state-set! task 'running)
-           #t)
-         #t))
-    ;; DSN-37 budgeted-task with reductions (Issue #636)
+           (if (eq? (task-state task) 'ready)
+               (task-state-set! task 'running)
+               #t)
+           (let ((nxt (task-next-run task)))
+             (if (and (not (vector? nxt)) (procedure? nxt))
+                 (with-synapse-task-boundary task nxt)
+                 (cons 'ok #t))))))
+    ;; DSN-37 budgeted-task with reductions (Issue #636, #720)
     ((%is-budgeted-task? task)
-     (budgeted-task-execute! task))
-    ;; Scheme native coroutine context (Issue #634)
+     (let ((fb-task (%current-worker-fallback-task)))
+       (task-state-set! fb-task 'running)
+       (task-set-handler-chain! fb-task 0)
+       (with-synapse-task-boundary fb-task
+         (lambda () (budgeted-task-execute! task)))))
+    ;; Scheme native coroutine context (Issue #634, #720)
     ((coroutine-context? task)
      (if (not (coroutine-terminated? task))
-         (context-resume! task)
+         (let ((fb-task (%current-worker-fallback-task)))
+           (task-state-set! fb-task 'running)
+           (task-set-handler-chain! fb-task 0)
+           (with-synapse-task-boundary fb-task
+             (lambda () (context-resume! task))))
          #f))
     ;; Thunk: zero-argument procedure (verify not a vector record due to low-tag overlap)
     ((and (not (vector? task)) (procedure? task))
-     (task))
+     (let ((fb-task (%current-worker-fallback-task)))
+       (task-state-set! fb-task 'running)
+       (task-set-handler-chain! fb-task 0)
+       (with-synapse-task-boundary fb-task task)))
     (else
      (error "scheduler-execute-task!: invalid task object (CWE-843)" task))))
 
@@ -528,7 +544,8 @@
 
 (define (%scheduler-step-all! sched num-workers i progress-made)
   (if (< i num-workers)
-      (let ((executed? (scheduler-worker-step! sched i)))
+      (let ((executed? (guard (exn (else #f))
+                         (scheduler-worker-step! sched i))))
         (%scheduler-step-all! sched num-workers (+ i 1) (if executed? #t progress-made)))
       progress-made))
 
@@ -640,7 +657,8 @@
     (let ((worker (scheduler-get-worker sched worker-id)))
       (let loop ()
         (if (scheduler-running? sched)
-            (let ((executed? (scheduler-worker-step! sched worker-id)))
+            (let ((executed? (guard (exn (else #f))
+                               (scheduler-worker-step! sched worker-id))))
               (if (not executed?)
                   (begin
                     (%scheduler-idle-backoff!)
@@ -693,5 +711,6 @@
                                (scheduler-stop! sched)
                                completed)
                              (begin
-                               (scheduler-worker-step! sched 0)
+                               (guard (exn (else #f))
+                                 (scheduler-worker-step! sched 0))
                                (main-loop)))))))))))))

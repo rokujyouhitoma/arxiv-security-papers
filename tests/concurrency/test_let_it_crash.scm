@@ -283,6 +283,65 @@
   (assert-eq (atomic-ref w0-caught) 'worker0-exn "worker 0 TLS handler chain caught 'worker0-exn"))
 
 ;; -----------------------------------------------------------------------
+;; Group 8: Task Exception Boundary with-exception-handler & Scheduler Integration (#720)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Task Exception Boundary & Scheduler Connection (#720) ---\n")
+(flush-output-port)
+
+;; 8.1 error caught inside with-synapse-task-boundary
+(let* ((t-err (make-task-context))
+       (res (with-synapse-task-boundary t-err
+              (lambda ()
+                (error "boom-error" 123)))))
+  (assert-eq (car res) 'panic "R7RS (error ...) caught as task panic")
+  (assert-true (synapse-panic-record? (cdr res)) "error produces <synapse-panic-record>")
+  (assert-eq (synapse-panic-reason (cdr res)) 'error "error panic reason is 'error")
+  (assert-eq (task-state t-err) 'terminated "task state is 'terminated after error"))
+
+;; 8.2 raise caught inside with-synapse-task-boundary
+(let* ((t-raise (make-task-context))
+       (res (with-synapse-task-boundary t-raise
+              (lambda ()
+                (raise 'custom-exception-payload)))))
+  (assert-eq (car res) 'panic "R7RS (raise ...) caught as task panic")
+  (assert-true (synapse-panic-record? (cdr res)) "raise produces <synapse-panic-record>")
+  (assert-eq (synapse-panic-reason (cdr res)) 'unhandled-exception "raise panic reason is 'unhandled-exception")
+  (assert-equal (synapse-panic-details (cdr res)) '(custom-exception-payload) "raise panic details preserved")
+  (assert-eq (task-state t-raise) 'terminated "task state is 'terminated after raise"))
+
+;; 8.3 (car '()) and (cdr '()) caught inside with-synapse-task-boundary
+(let* ((t-car (make-task-context))
+       (empty-ls '())
+       (res-car (with-synapse-task-boundary t-car
+                  (lambda ()
+                    (car empty-ls))))
+       (t-cdr (make-task-context))
+       (res-cdr (with-synapse-task-boundary t-cdr
+                  (lambda ()
+                    (cdr empty-ls)))))
+  (assert-eq (car res-car) 'panic "(car '()) caught as task panic without SIGSEGV")
+  (assert-eq (task-state t-car) 'terminated "t-car state is 'terminated")
+  (assert-eq (car res-cdr) 'panic "(cdr '()) caught as task panic without SIGSEGV")
+  (assert-eq (task-state t-cdr) 'terminated "t-cdr state is 'terminated"))
+
+;; 8.4 scheduler-execute-task! and scheduler-run! isolate crashing tasks
+(let* ((sched (make-work-stealing-scheduler 2 64))
+       (survivor-box (make-atomic-box 0))
+       (bad-task (make-task-context))
+       (good-task (make-task-context)))
+  (task-next-run-set! bad-task (lambda () (car '())))
+  (task-next-run-set! good-task (lambda () (atomic-fetch-add! survivor-box 10)))
+  (scheduler-spawn! sched bad-task 0)
+  (scheduler-spawn! sched (lambda () (error "thunk-boom")) 0)
+  (scheduler-spawn! sched (lambda () (raise 'raw-raise)) 1)
+  (scheduler-spawn! sched good-task 1)
+  (scheduler-spawn! sched (lambda () (atomic-fetch-add! survivor-box 32)) 0)
+  (scheduler-run! sched 5)
+  (assert-eq (task-state bad-task) 'terminated "bad-task running (car '()) terminated cleanly in scheduler")
+  (assert-eq (atomic-ref survivor-box) 42 "unrelated tasks completed normally despite sibling crashes")
+  (scheduler-stop! sched))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 

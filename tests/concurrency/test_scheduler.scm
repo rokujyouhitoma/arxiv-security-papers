@@ -512,6 +512,17 @@
                 "scheduler-node-workers rejects non-scheduler (CWE-843)")
   (scheduler-stop! s))
 
+;; 7f. Task Exception Boundary Isolation in Scheduler (#720)
+(let ((s (make-work-stealing-scheduler 2 32))
+      (ok-count (make-atomic-box 0)))
+  (scheduler-spawn! s (lambda () (error "task-error-isolated")) 0)
+  (scheduler-spawn! s (lambda () (raise 'task-raise-isolated)) 1)
+  (scheduler-spawn! s (lambda () (car '())) 0)
+  (scheduler-spawn! s (lambda () (atomic-fetch-add! ok-count 1)) 1)
+  (scheduler-run! s 4)
+  (assert-equal (atomic-ref ok-count) 1 "valid task completes after preceding tasks raise/error/(car '()) (#720)")
+  (scheduler-stop! s))
+
 ;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------

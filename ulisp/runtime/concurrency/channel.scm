@@ -426,6 +426,77 @@
         (atomic-set! (task-handler-chain-box t) hc)
         hc)))
 
+;; -----------------------------------------------------------------------
+;; Per-Worker Fallback Task Contexts & Default Task Boundary Hook (Issue #720)
+;; -----------------------------------------------------------------------
+
+(define *worker-fallback-task-tls*
+  (let ((vec (make-vector 64 #f)))
+    (let loop ((i 0))
+      (if (< i 64)
+          (begin
+            (vector-set! vec i (%make-task-context (- -1000 i) 'ready *task-default-reductions* 0 0
+                                                   0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
+                                                   (make-atomic-box '()) (make-atomic-box '())
+                                                   (make-atomic-box '()) (make-atomic-box #f)
+                                                   (make-atomic-box '())
+                                                   (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))
+            (loop (+ i 1)))
+          vec))))
+
+(define (%current-worker-fallback-task)
+  (vector-ref *worker-fallback-task-tls* (%current-worker-tls-index)))
+
+(define *synapse-boundary-escape-tag* (list 'synapse-boundary-escape))
+
+(define (%default-with-synapse-task-boundary task thunk secure-scrub?)
+  (if (not (task-context? task))
+      (error "with-synapse-task-boundary: expected <task-context> (CWE-843)" task)
+      (if (not (procedure? thunk))
+          (error "with-synapse-task-boundary: expected procedure (CWE-843)" thunk)
+          (let ((prev-task (current-synapse-task))
+                (prev-k (task-escape-continuation task))
+                (prev-hc (%asm-get-handler-chain))
+                (task-hc (task-handler-chain task)))
+            (let ((result
+                   (guard (exn
+                           ((and (pair? exn) (eq? (car exn) *synapse-boundary-escape-tag*))
+                            (cdr exn))
+                           (else
+                            (task-state-set! task 'terminated)
+                            (cons 'panic exn)))
+                     (let* ((boundary-hc (%asm-get-handler-chain))
+                            (escape-k (lambda (val)
+                                        (%asm-set-handler-chain! boundary-hc)
+                                        (raise (cons *synapse-boundary-escape-tag* val)))))
+                       (task-set-escape-continuation! task escape-k)
+                       (%set-current-synapse-task! task)
+                       (if (and (integer? task-hc) (> task-hc 0))
+                           (%asm-set-handler-chain! task-hc)
+                           #f)
+                       (with-exception-handler
+                        (lambda (unhandled-exn)
+                          (task-state-set! task 'terminated)
+                          (escape-k (cons 'panic unhandled-exn)))
+                        (lambda ()
+                          (let ((res (thunk)))
+                            (task-set-handler-chain! task (%asm-get-handler-chain))
+                            (cons 'ok res))))))))
+              (%asm-set-handler-chain! prev-hc)
+              (task-set-escape-continuation! task prev-k)
+              (%set-current-synapse-task! prev-task)
+              result)))))
+
+(define *synapse-task-boundary-hook-box*
+  (make-atomic-box %default-with-synapse-task-boundary))
+
+(define with-synapse-task-boundary
+  (case-lambda
+    ((task thunk)
+     ((atomic-ref *synapse-task-boundary-hook-box*) task thunk #f))
+    ((task thunk secure-scrub?)
+     ((atomic-ref *synapse-task-boundary-hook-box*) task thunk secure-scrub?))))
+
 (define (task-register-channel! t ch)
   (if (not (task-context? t))
       (error "task-register-channel!: expected <task-context>" t)
