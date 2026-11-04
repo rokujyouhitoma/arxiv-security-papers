@@ -117,6 +117,15 @@
     ((reason d1 d2 d3)
      (%execute-task-panic! reason (list d1 d2 d3) #t))))
 
+;; Connect Ephemeral Arena overflow to task-local synapse-panic! (Issue #721, Item A3)
+(guard (exn (else #f))
+  (set-arena-overflow-panic-hook!
+   (lambda (reason msg irritant)
+     (let ((task (current-synapse-task)))
+       (if (and task (task-context? task) (procedure? (task-escape-continuation task)))
+           (synapse-panic! reason msg irritant)
+           (error msg irritant))))))
+
 ;; -----------------------------------------------------------------------
 ;; 5. Task Boundary Protection Wrapper (Zero-State Contamination)
 ;; -----------------------------------------------------------------------

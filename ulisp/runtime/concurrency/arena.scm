@@ -94,15 +94,29 @@
      (%init-task-arena base offset capacity))))
 
 ;; -----------------------------------------------------------------------
-;; 4. Overflow Chunk Chaining Fallback (DSN-37 Section 5.3)
+;; 4. Overflow Chunk Chaining Fallback & Task-Local Panic Hook (DSN-37 Section 5.3, #721)
 ;; -----------------------------------------------------------------------
+
+(define *arena-overflow-panic-hook-box*
+  (vector (lambda (reason msg irritant)
+            (error msg irritant))))
+
+(define (set-arena-overflow-panic-hook! proc)
+  (if (not (procedure? proc))
+      (error "set-arena-overflow-panic-hook!: expected procedure (CWE-843)" proc)
+      (begin
+        (vector-set! *arena-overflow-panic-hook-box* 0 proc)
+        #t)))
+
+(define (arena-overflow-panic! reason msg irritant)
+  ((vector-ref *arena-overflow-panic-hook-box* 0) reason msg irritant))
 
 (define (%arena-allocate-new-chunk! arena aligned-size align)
   (let ((chunks (arena-chunks arena))
         (count  (arena-chunk-count arena))
         (max-c  (arena-max-chunks arena)))
     (if (>= count max-c)
-        (error "arena-overflow-fallback!: maximum overflow chunks exceeded (CWE-400 guard)" max-c)
+        (arena-overflow-panic! 'arena-overflow "arena-overflow-fallback!: maximum overflow chunks exceeded (CWE-400 guard)" max-c)
         (let* ((chunk-cap (if (> aligned-size *arena-overflow-chunk-size*)
                               (arena-align-up aligned-size align)
                               *arena-overflow-chunk-size*))

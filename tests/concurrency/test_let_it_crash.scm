@@ -342,6 +342,40 @@
   (scheduler-stop! sched))
 
 ;; -----------------------------------------------------------------------
+;; Group 9: Arena Overflow Separation into Task-Local synapse-panic! (#721)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 9: Arena Overflow Task-Local synapse-panic! (#721) ---\n")
+(flush-output-port)
+
+(let* ((overflow-task (make-task-context))
+       (arena (make-task-arena 2048))
+       (survivor-task (make-task-context))
+       (survivor-ran (make-atomic-box #f)))
+  (arena-max-chunks-set! arena 2)
+  (task-set-arena! overflow-task arena)
+  (let ((res (with-synapse-task-boundary overflow-task
+               (lambda ()
+                 (arena-allocate! arena 2048) ; fills primary
+                 (arena-allocate! arena 8192) ; chunk 1
+                 (arena-allocate! arena 8192) ; chunk 2
+                 ;; Next allocation exceeds max-chunks=2 -> triggers task-local synapse-panic! 'arena-overflow
+                 (arena-allocate! arena 64)
+                 'unreachable))))
+    (assert-eq (car res) 'panic "arena overflow triggers task panic")
+    (assert-true (synapse-panic-record? (cdr res)) "arena overflow returns <synapse-panic-record>")
+    (assert-eq (synapse-panic-reason (cdr res)) 'arena-overflow "arena overflow panic reason is 'arena-overflow (not generic 'error)")
+    (assert-eq (task-state overflow-task) 'terminated "overflow-task transitioned to 'terminated")
+    (assert-eq (arena-offset arena) 0 "overflowing task's arena was O(1) reset to offset 0")
+    (assert-eq (arena-chunk-count arena) 0 "overflowing task's arena chunks were reclaimed to 0"))
+  ;; Verify sibling task runs unaffected
+  (let ((res2 (with-synapse-task-boundary survivor-task
+                (lambda ()
+                  (atomic-set! survivor-ran #t)
+                  'survived))))
+    (assert-eq (car res2) 'ok "sibling task after arena-overflow panic succeeds")
+    (assert-eq (atomic-ref survivor-ran) #t "sibling task body executed normally")))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 
