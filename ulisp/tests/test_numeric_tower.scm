@@ -209,6 +209,68 @@
   (assert-equal "exact (numerator 3.5) -> 7" 7 (exact (numerator f-3-5)))
   (assert-equal "exact (denominator 3.5) -> 2" 2 (exact (denominator f-3-5))))
 
+;; ---------------------------------------------------------------------
+;; 7. (scheme inexact) Transcendental Functions & sqrt (Issue #713)
+;; ---------------------------------------------------------------------
+(define (assert-approx msg expected-micros actual-flonum tol)
+  (let* ((v (if (flonum? actual-flonum)
+                (vector-ref actual-flonum 1)
+                (* actual-flonum 1000000)))
+         (diff (let ((d (- v expected-micros))) (if (< d 0) (- 0 d) d))))
+    (assert-true msg (<= diff tol))))
+
+;; sqrt
+(assert-equal "sqrt 0 -> 0" 0 (sqrt 0))
+(assert-equal "sqrt 9 -> 3 (exact)" 3 (sqrt 9))
+(assert-equal "sqrt 144 -> 12 (exact)" 12 (sqrt 144))
+(assert-equal "sqrt 9/16 -> 3/4 (exact)" (make-rational 3 4) (sqrt (make-rational 9 16)))
+(assert-approx "sqrt 2 -> 1.414214" 1414214 (sqrt 2) 2)
+(assert-approx "sqrt 2.25 -> 1.5" 1500000 (sqrt (make-flonum 2 250000)) 2)
+(assert-true "sqrt -4 is complex" (compnum? (sqrt -4)))
+
+;; exp and log
+(assert-equal "exp 0 -> 1 (exact)" 1 (exp 0))
+(assert-approx "exp 1.0 -> 2.718282" 2718282 (exp (inexact 1)) 5)
+(assert-approx "exp -1.0 -> 0.367879" 367879 (exp (inexact -1)) 5)
+(assert-equal "log 1 -> 0 (exact)" 0 (log 1))
+(assert-approx "log(e) -> 1.0" 1000000 (log (exp (inexact 1))) 5)
+(assert-approx "log 2.0 -> 0.693147" 693147 (log (inexact 2)) 5)
+(assert-approx "log 8 2 -> 3.0" 3000000 (log 8 2) 5)
+(assert-approx "log 100 10 -> 2.0" 2000000 (log 100 10) 5)
+
+;; sin, cos, tan
+(assert-equal "sin 0 -> 0 (exact)" 0 (sin 0))
+(assert-equal "cos 0 -> 1 (exact)" 1 (cos 0))
+(assert-equal "tan 0 -> 0 (exact)" 0 (tan 0))
+(let ((pi-fl (make-flonum-micros 3141593))
+      (half-pi (make-flonum-micros 1570796))
+      (quarter-pi (make-flonum-micros 785398)))
+  (assert-approx "sin(pi/2) -> 1.0" 1000000 (sin half-pi) 5)
+  (assert-approx "cos(pi/2) -> 0.0" 0 (cos half-pi) 5)
+  (assert-approx "sin(pi) -> 0.0" 0 (sin pi-fl) 5)
+  (assert-approx "cos(pi) -> -1.0" -1000000 (cos pi-fl) 5)
+  (assert-approx "tan(pi/4) -> 1.0" 1000000 (tan quarter-pi) 5)
+  ;;sin^2(x) + cos^2(x) = 1
+  (let* ((s (sin (inexact 1)))
+         (c (cos (inexact 1)))
+         (sum (flo+ (flo* s s) (flo* c c))))
+    (assert-approx "sin^2(1) + cos^2(1) = 1.0" 1000000 sum 5)))
+
+;; atan (1 and 2 args), asin, acos
+(assert-equal "atan 0 -> 0 (exact)" 0 (atan 0))
+(assert-approx "atan 1.0 -> pi/4 (785398)" 785398 (atan (inexact 1)) 5)
+(assert-approx "atan -1.0 -> -pi/4 (-785398)" -785398 (atan (inexact -1)) 5)
+(assert-approx "atan2(1, 1) -> pi/4" 785398 (atan 1 1) 5)
+(assert-approx "atan2(1, -1) -> 3*pi/4 (2356195)" 2356195 (atan 1 -1) 5)
+(assert-approx "atan2(-1, -1) -> -3*pi/4 (-2356195)" -2356195 (atan -1 -1) 5)
+(assert-approx "atan2(1, 0) -> pi/2 (1570796)" 1570796 (atan 1 0) 5)
+(assert-equal "asin 0 -> 0 (exact)" 0 (asin 0))
+(assert-approx "asin 0.5 -> pi/6 (523599)" 523599 (asin (make-flonum 0 500000)) 5)
+(assert-approx "asin 1.0 -> pi/2 (1570796)" 1570796 (asin (inexact 1)) 5)
+(assert-equal "acos 1 -> 0 (exact)" 0 (acos 1))
+(assert-approx "acos 0.5 -> pi/3 (1047198)" 1047198 (acos (make-flonum 0 500000)) 5)
+(assert-approx "acos 0.0 -> pi/2 (1570796)" 1570796 (acos (inexact 0)) 5)
+
 (display "Passed: ")
 (display (car *pass-count*))
 (display ", Failed: ")

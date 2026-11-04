@@ -699,3 +699,270 @@
     ((and (fixnum? a) (fixnum? b)) (>= a b))
     ((or (inexact? a) (inexact? b)) (flo>= a b))
     (else (rat>= a b))))
+
+;; ---------------------------------------------------------------------
+;; §6.2.6 Transcendental Functions & Square Root ((scheme inexact), Issue #713)
+;;   Pure Scheme fixed-point micro-unit (10^6) algorithms:
+;;   sqrt, exp, log, sin, cos, tan, asin, acos, atan
+;; ---------------------------------------------------------------------
+
+(define (%micro-isqrt n)
+  (if (<= n 0)
+      0
+      (call-with-values
+        (lambda () (exact-integer-sqrt n))
+        (lambda (s r)
+          (if (> r s) (+ s 1) s)))))
+
+(define (sqrt z)
+  (cond
+    ((fixnum? z)
+     (if (< z 0)
+         (let ((im (sqrt (- 0 z))))
+           (vector 'ulisp-complex-tag 0 im))
+         (call-with-values
+           (lambda () (exact-integer-sqrt z))
+           (lambda (s r)
+             (if (= r 0)
+                 s
+                 (make-flonum-micros (%micro-isqrt (* z 1000000000000))))))))
+    ((ratnum? z)
+     (let ((n (vector-ref z 1))
+           (d (vector-ref z 2)))
+       (if (< n 0)
+           (vector 'ulisp-complex-tag 0 (sqrt (make-rational (- 0 n) d)))
+           (call-with-values
+             (lambda () (exact-integer-sqrt n))
+             (lambda (sn rn)
+               (call-with-values
+                 (lambda () (exact-integer-sqrt d))
+                 (lambda (sd rd)
+                   (if (and (= rn 0) (= rd 0))
+                       (make-rational sn sd)
+                       (let ((v (round-quotient (* n 1000000) d)))
+                         (make-flonum-micros (%micro-isqrt (* v 1000000))))))))))))
+    ((flonum? z)
+     (let ((v (vector-ref z 1)))
+       (cond
+         ((eq? v 'nan) +nan.0)
+         ((eq? v 'pos-inf) +inf.0)
+         ((eq? v 'neg-inf) (vector 'ulisp-complex-tag (make-flonum-micros 0) +inf.0))
+         ((< v 0)
+          (vector 'ulisp-complex-tag
+                  (make-flonum-micros 0)
+                  (make-flonum-micros (%micro-isqrt (* (- 0 v) 1000000)))))
+         (else
+          (make-flonum-micros (%micro-isqrt (* v 1000000)))))))
+    (else
+     (error "sqrt: expected number" z))))
+
+(define (exp z)
+  (let ((v (%to-flonum-val z)))
+    (cond
+      ((eq? v 'nan) +nan.0)
+      ((eq? v 'pos-inf) +inf.0)
+      ((eq? v 'neg-inf) (make-flonum-micros 0))
+      ((= v 0) (if (exact? z) 1 (make-flonum-micros 1000000)))
+      (else
+       (let* ((k (round-quotient v 693147))
+              (r (- (- v (* k 693147)) (round-quotient (* k 181) 1000)))
+              (t1 r)
+              (t2 (round-quotient (* t1 r) 2000000))
+              (t3 (round-quotient (* t2 r) 3000000))
+              (t4 (round-quotient (* t3 r) 4000000))
+              (t5 (round-quotient (* t4 r) 5000000))
+              (t6 (round-quotient (* t5 r) 6000000))
+              (t7 (round-quotient (* t6 r) 7000000))
+              (er (+ 1000000 (+ t1 (+ t2 (+ t3 (+ t4 (+ t5 (+ t6 t7)))))))))
+         (cond
+           ((= k 0) (make-flonum-micros er))
+           ((> k 0) (make-flonum-micros (* er (%int-expt 2 k))))
+           ((< k -30) (make-flonum-micros 0))
+           (else (make-flonum-micros (round-quotient er (%int-expt 2 (- 0 k)))))))))))
+
+(define (%log-natural z)
+  (let ((v (%to-flonum-val z)))
+    (cond
+      ((eq? v 'nan) +nan.0)
+      ((eq? v 'pos-inf) +inf.0)
+      ((eq? v 'neg-inf) +nan.0)
+      ((= v 0) (error "log: undefined for zero" z))
+      ((< v 0)
+       (vector 'ulisp-complex-tag
+               (%log-natural (make-flonum-micros (- 0 v)))
+               (make-flonum-micros 3141593)))
+      ((= v 1000000)
+       (if (exact? z) 0 (make-flonum-micros 0)))
+      (else
+       (let loop ((m v) (k 0))
+         (cond
+           ((< m 707107)
+            (loop (* m 2) (- k 1)))
+           ((> m 1414214)
+            (loop (round-quotient m 2) (+ k 1)))
+           (else
+            (let* ((u (round-quotient (* (- m 1000000) 1000000) (+ m 1000000)))
+                   (u2 (round-quotient (* u u) 1000000))
+                   (u3 (round-quotient (* u u2) 1000000))
+                   (u5 (round-quotient (* u3 u2) 1000000))
+                   (u7 (round-quotient (* u5 u2) 1000000))
+                   (u9 (round-quotient (* u7 u2) 1000000))
+                   (ln-m (* 2 (+ u (+ (round-quotient u3 3)
+                                      (+ (round-quotient u5 5)
+                                         (+ (round-quotient u7 7)
+                                            (round-quotient u9 9)))))))
+                   (k-ln2 (+ (* k 693147) (round-quotient (* k 181) 1000))))
+              (make-flonum-micros (+ k-ln2 ln-m))))))))))
+
+(define log
+  (case-lambda
+    ((z) (%log-natural z))
+    ((z base) (flo/ (%log-natural z) (%log-natural base)))))
+
+(define (%sin-quarter r)
+  (let* ((r2 (round-quotient (* r r) 1000000))
+         (r3 (round-quotient (* r r2) 1000000))
+         (r5 (round-quotient (* r3 r2) 1000000))
+         (r7 (round-quotient (* r5 r2) 1000000)))
+    (+ (- r (round-quotient r3 6))
+       (- (round-quotient r5 120)
+          (round-quotient r7 5040)))))
+
+(define (%cos-quarter r)
+  (let* ((r2 (round-quotient (* r r) 1000000))
+         (r4 (round-quotient (* r2 r2) 1000000))
+         (r6 (round-quotient (* r4 r2) 1000000))
+         (r8 (round-quotient (* r6 r2) 1000000)))
+    (+ (- 1000000 (round-quotient r2 2))
+       (- (round-quotient r4 24)
+          (- (round-quotient r6 720)
+             (round-quotient r8 40320))))))
+
+(define (%sin-half-pi r)
+  (cond
+    ((< r 0) (- 0 (%sin-half-pi (- 0 r))))
+    ((> r 785398) (%cos-quarter (- 1570796 r)))
+    (else (%sin-quarter r))))
+
+(define (%cos-half-pi r)
+  (let ((ar (if (< r 0) (- 0 r) r)))
+    (if (> ar 785398)
+        (%sin-quarter (- 1570796 ar))
+        (%cos-quarter ar))))
+
+(define (%reduce-angle-pi8 v)
+  (let* ((two-pi8 628318531)
+         (v8 (* v 100))
+         (k (round-quotient v8 two-pi8)))
+    (- v8 (* k two-pi8))))
+
+(define (sin z)
+  (let ((v (%to-flonum-val z)))
+    (cond
+      ((or (eq? v 'nan) (eq? v 'pos-inf) (eq? v 'neg-inf)) +nan.0)
+      ((= v 0) (if (exact? z) 0 (make-flonum-micros 0)))
+      (else
+       (let* ((pi8 314159265)
+              (half-pi8 157079633)
+              (r8 (%reduce-angle-pi8 v))
+              (adj8 (cond
+                      ((> r8 half-pi8) (- pi8 r8))
+                      ((< r8 (- 0 half-pi8)) (- (- 0 pi8) r8))
+                      (else r8)))
+              (r (round-quotient adj8 100)))
+         (make-flonum-micros (%sin-half-pi r)))))))
+
+(define (cos z)
+  (let ((v (%to-flonum-val z)))
+    (cond
+      ((or (eq? v 'nan) (eq? v 'pos-inf) (eq? v 'neg-inf)) +nan.0)
+      ((= v 0) (if (exact? z) 1 (make-flonum-micros 1000000)))
+      (else
+       (let* ((pi8 314159265)
+              (half-pi8 157079633)
+              (r8-raw (%reduce-angle-pi8 v))
+              (r8 (if (< r8-raw 0) (- 0 r8-raw) r8-raw)))
+         (if (> r8 half-pi8)
+             (let ((r (round-quotient (- pi8 r8) 100)))
+               (make-flonum-micros (- 0 (%cos-half-pi r))))
+             (let ((r (round-quotient r8 100)))
+               (make-flonum-micros (%cos-half-pi r)))))))))
+
+(define (tan z)
+  (let ((v (%to-flonum-val z)))
+    (cond
+      ((or (eq? v 'nan) (eq? v 'pos-inf) (eq? v 'neg-inf)) +nan.0)
+      ((= v 0) (if (exact? z) 0 (make-flonum-micros 0)))
+      (else (flo/ (sin z) (cos z))))))
+
+(define (%atan-unit u)
+  ;; u in [0, 1000000]; apply half-angle reduction twice so u2 <= 198912
+  (let* ((s1 (%micro-isqrt (+ 1000000000000 (* u u))))
+         (u1 (round-quotient (* u 1000000) (+ 1000000 s1)))
+         (s2 (%micro-isqrt (+ 1000000000000 (* u1 u1))))
+         (u2 (round-quotient (* u1 1000000) (+ 1000000 s2)))
+         (u2-sq (round-quotient (* u2 u2) 1000000))
+         (u2-3 (round-quotient (* u2 u2-sq) 1000000))
+         (u2-5 (round-quotient (* u2-3 u2-sq) 1000000))
+         (u2-7 (round-quotient (* u2-5 u2-sq) 1000000))
+         (at2 (+ (- u2 (round-quotient u2-3 3))
+                 (- (round-quotient u2-5 5)
+                    (round-quotient u2-7 7)))))
+    (* 4 at2)))
+
+(define (%atan-micros v)
+  (cond
+    ((= v 0) 0)
+    ((< v 0) (- 0 (%atan-micros (- 0 v))))
+    ((= v 1000000) 785398)
+    ((> v 1000000)
+     (- 1570796 (%atan-unit (round-quotient 1000000000000 v))))
+    (else
+     (%atan-unit v))))
+
+(define atan
+  (case-lambda
+    ((z)
+     (let ((v (%to-flonum-val z)))
+       (cond
+         ((eq? v 'nan) +nan.0)
+         ((eq? v 'pos-inf) (make-flonum-micros 1570796))
+         ((eq? v 'neg-inf) (make-flonum-micros -1570796))
+         ((and (= v 0) (exact? z)) 0)
+         (else (make-flonum-micros (%atan-micros v))))))
+    ((y x)
+     (let ((vy (%to-flonum-val y))
+           (vx (%to-flonum-val x)))
+       (cond
+         ((or (eq? vy 'nan) (eq? vx 'nan)) +nan.0)
+         ((= vx 0)
+          (cond
+            ((> vy 0) (make-flonum-micros 1570796))
+            ((< vy 0) (make-flonum-micros -1570796))
+            (else (make-flonum-micros 0))))
+         ((> vx 0)
+          (make-flonum-micros (%atan-micros (round-quotient (* vy 1000000) vx))))
+         ((>= vy 0)
+          (make-flonum-micros (+ (%atan-micros (round-quotient (* vy 1000000) vx)) 3141593)))
+         (else
+          (make-flonum-micros (- (%atan-micros (round-quotient (* vy 1000000) vx)) 3141593))))))))
+
+(define (asin z)
+  (let ((v (%to-flonum-val z)))
+    (cond
+      ((eq? v 'nan) +nan.0)
+      ((and (= v 0) (exact? z)) 0)
+      ((or (> v 1000000) (< v -1000000)) +nan.0)
+      (else
+       (let ((c (%micro-isqrt (- 1000000000000 (* v v)))))
+         (atan (make-flonum-micros v) (make-flonum-micros c)))))))
+
+(define (acos z)
+  (let ((v (%to-flonum-val z)))
+    (cond
+      ((eq? v 'nan) +nan.0)
+      ((and (= v 1000000) (exact? z)) 0)
+      ((or (> v 1000000) (< v -1000000)) +nan.0)
+      (else
+       (let ((c (%micro-isqrt (- 1000000000000 (* v v)))))
+         (atan (make-flonum-micros c) (make-flonum-micros v)))))))
