@@ -38,4 +38,5 @@
     write-char zero?)
 
   (import (scheme base)
-          (scheme inexact)))
+          (scheme inexact)
+          (scheme complex)))

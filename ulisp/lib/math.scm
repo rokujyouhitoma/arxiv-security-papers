@@ -635,14 +635,14 @@
 (define (flo>= a b)
   (or (flo= a b) (flo< b a)))
 
-;; Mixed-exactness real arithmetic with R7RS Inexactness Contagion
-(define (num+ a b)
+;; Mixed-exactness real & complex arithmetic with R7RS Inexactness Contagion
+(define (%real-num+ a b)
   (cond
     ((and (fixnum? a) (fixnum? b)) (+ a b))
     ((or (inexact? a) (inexact? b)) (flo+ a b))
     (else (rat+ a b))))
 
-(define num-
+(define %real-num-
   (case-lambda
     ((a)
      (cond
@@ -655,13 +655,13 @@
        ((or (inexact? a) (inexact? b)) (flo- a b))
        (else (rat- a b))))))
 
-(define (num* a b)
+(define (%real-num* a b)
   (cond
     ((and (fixnum? a) (fixnum? b)) (* a b))
     ((or (inexact? a) (inexact? b)) (flo* a b))
     (else (rat* a b))))
 
-(define num/
+(define %real-num/
   (case-lambda
     ((a)
      (if (inexact? a) (flo/ a) (rat/ a)))
@@ -670,11 +670,104 @@
          (flo/ a b)
          (rat/ a b)))))
 
-(define (num= a b)
+(define (%real-num= a b)
   (cond
     ((and (fixnum? a) (fixnum? b)) (= a b))
     ((or (inexact? a) (inexact? b)) (flo= a b))
     (else (rat= a b))))
+
+;; ---------------------------------------------------------------------
+;; §6.2.6 Complex Numbers ((scheme complex), Issue #714)
+;;   make-rectangular, make-polar, real-part, imag-part, magnitude, angle
+;; ---------------------------------------------------------------------
+
+(define (make-rectangular x1 x2)
+  (if (and (fixnum? x2) (= x2 0))
+      x1
+      (vector 'ulisp-complex-tag x1 x2)))
+
+(define (real-part z)
+  (cond
+    ((compnum? z) (vector-ref z 1))
+    ((%real? z) z)
+    (else (error "real-part: expected complex number" z))))
+
+(define (imag-part z)
+  (cond
+    ((compnum? z) (vector-ref z 2))
+    ((%real? z) 0)
+    (else (error "imag-part: expected complex number" z))))
+
+(define (comp+ z1 z2)
+  (make-rectangular (%real-num+ (real-part z1) (real-part z2))
+                    (%real-num+ (imag-part z1) (imag-part z2))))
+
+(define comp-
+  (case-lambda
+    ((z1)
+     (make-rectangular (%real-num- (real-part z1))
+                       (%real-num- (imag-part z1))))
+    ((z1 z2)
+     (make-rectangular (%real-num- (real-part z1) (real-part z2))
+                       (%real-num- (imag-part z1) (imag-part z2))))))
+
+(define (comp* z1 z2)
+  (let ((a (real-part z1))
+        (b (imag-part z1))
+        (c (real-part z2))
+        (d (imag-part z2)))
+    (make-rectangular (%real-num- (%real-num* a c) (%real-num* b d))
+                      (%real-num+ (%real-num* a d) (%real-num* b c)))))
+
+(define comp/
+  (case-lambda
+    ((z1)
+     (comp/ 1 z1))
+    ((z1 z2)
+     (let* ((a (real-part z1))
+            (b (imag-part z1))
+            (c (real-part z2))
+            (d (imag-part z2))
+            (denom (%real-num+ (%real-num* c c) (%real-num* d d))))
+       (make-rectangular (%real-num/ (%real-num+ (%real-num* a c) (%real-num* b d)) denom)
+                         (%real-num/ (%real-num- (%real-num* b c) (%real-num* a d)) denom))))))
+
+(define (comp= z1 z2)
+  (and (%real-num= (real-part z1) (real-part z2))
+       (%real-num= (imag-part z1) (imag-part z2))))
+
+(define (num+ a b)
+  (if (or (compnum? a) (compnum? b))
+      (comp+ a b)
+      (%real-num+ a b)))
+
+(define num-
+  (case-lambda
+    ((a)
+     (if (compnum? a) (comp- a) (%real-num- a)))
+    ((a b)
+     (if (or (compnum? a) (compnum? b))
+         (comp- a b)
+         (%real-num- a b)))))
+
+(define (num* a b)
+  (if (or (compnum? a) (compnum? b))
+      (comp* a b)
+      (%real-num* a b)))
+
+(define num/
+  (case-lambda
+    ((a)
+     (if (compnum? a) (comp/ a) (%real-num/ a)))
+    ((a b)
+     (if (or (compnum? a) (compnum? b))
+         (comp/ a b)
+         (%real-num/ a b)))))
+
+(define (num= a b)
+  (if (or (compnum? a) (compnum? b))
+      (comp= a b)
+      (%real-num= a b)))
 
 (define (num< a b)
   (cond
@@ -966,3 +1059,45 @@
       (else
        (let ((c (%micro-isqrt (- 1000000000000 (* v v)))))
          (atan (make-flonum-micros c) (make-flonum-micros v)))))))
+
+;; §6.2.6 make-polar, magnitude, angle ((scheme complex), Issue #714)
+
+(define (make-polar r theta)
+  (cond
+    ((and (fixnum? theta) (= theta 0)) r)
+    ((and (fixnum? r) (= r 0)) 0)
+    (else
+     (make-rectangular (%real-num* r (cos theta))
+                       (%real-num* r (sin theta))))))
+
+(define (magnitude z)
+  (cond
+    ((fixnum? z) (if (< z 0) (- 0 z) z))
+    ((ratnum? z)
+     (let ((n (vector-ref z 1))
+           (d (vector-ref z 2)))
+       (make-rational (if (< n 0) (- 0 n) n) d)))
+    ((flonum? z)
+     (let ((v (vector-ref z 1)))
+       (cond
+         ((eq? v 'nan) +nan.0)
+         ((or (eq? v 'pos-inf) (eq? v 'neg-inf)) +inf.0)
+         ((< v 0) (make-flonum-micros (- 0 v)))
+         (else z))))
+    ((compnum? z)
+     (let ((re (vector-ref z 1))
+           (im (vector-ref z 2)))
+       (cond
+         ((or (infinite? re) (infinite? im)) +inf.0)
+         ((or (nan? re) (nan? im)) +nan.0)
+         (else
+          (sqrt (%real-num+ (%real-num* re re) (%real-num* im im)))))))
+    (else
+     (error "magnitude: expected complex number" z))))
+
+(define (angle z)
+  (let ((re (real-part z))
+        (im (imag-part z)))
+    (if (and (%real-num= re 0) (%real-num= im 0))
+        (error "angle: undefined for zero" z)
+        (atan im re))))

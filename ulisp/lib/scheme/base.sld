@@ -136,6 +136,12 @@
     num<=
     num>
     num>=
+    compnum?
+    comp+
+    comp-
+    comp*
+    comp/
+    comp=
     =
     <
     >

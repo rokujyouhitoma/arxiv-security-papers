@@ -13,4 +13,12 @@
     real-part
     imag-part
     magnitude
-    angle))
+    angle
+    compnum?
+    comp+
+    comp-
+    comp*
+    comp/
+    comp=)
+  (include "../predicates.scm"
+           "../math.scm"))
