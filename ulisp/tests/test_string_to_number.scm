@@ -152,7 +152,7 @@
 (assert-false "invalid digit for base 8" (string->number "88" 8))
 (assert-false "invalid digit for base 16" (string->number "12g" 16))
 (assert-false "pure symbol string" (string->number "abc"))
-(assert-false "unsupported inexact prefix #i" (string->number "#i123"))
+(assert-equal "inexact prefix #i" (string->number "#i123") (inexact 123))
 (assert-false "non-string argument" (string->number 123))
 (assert-false "unsupported radix 3" (string->number "10" 3))
 (assert-false "unsupported radix 36" (string->number "10" 36))

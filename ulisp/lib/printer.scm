@@ -187,6 +187,7 @@
   (let ((table (car state))
         (order (cdr state)))
     (cond
+      ((number? val) state)
       ((or (pair? val) (vector? val))
        (let ((entry (%printer-assq val table)))
          (if entry

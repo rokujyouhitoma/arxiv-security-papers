@@ -57,93 +57,281 @@
                #f))
           (else #f)))))
 
+(define (%char-downcase-ascii c)
+  (let ((code (char->integer c)))
+    (if (and (>= code 65) (<= code 90))
+        (integer->char (+ code 32))
+        c)))
+
+(define (%str-ci-eq-range? str start end target)
+  (let ((tlen (string-length target)))
+    (if (not (= (- end start) tlen))
+        #f
+        (let loop ((i 0))
+          (if (= i tlen)
+              #t
+              (if (char=? (%char-downcase-ascii (string-ref str (+ start i)))
+                          (string-ref target i))
+                  (loop (+ i 1))
+                  #f))))))
+
+(define (%find-char-in-range str start end ch)
+  (let loop ((i start))
+    (cond
+      ((>= i end) #f)
+      ((char=? (string-ref str i) ch) i)
+      (else (loop (+ i 1))))))
+
+(define (%find-exp-in-range str start end)
+  (let loop ((i start))
+    (if (>= i end)
+        #f
+        (let ((c (%char-downcase-ascii (string-ref str i))))
+          (if (or (char=? c #\e) (char=? c #\s) (char=? c #\f)
+                  (char=? c #\d) (char=? c #\l))
+              i
+              (loop (+ i 1)))))))
+
+(define (%parse-uint-range str start end radix limit)
+  (if (>= start end)
+      #f
+      (let loop ((pos start) (acc 0) (count 0))
+        (if (>= pos end)
+            (if (= count 0) #f acc)
+            (let ((d (ulisp-digit-value (string-ref str pos) radix)))
+              (if (not d)
+                  #f
+                  (let ((q (quotient limit radix))
+                        (r (modulo limit radix)))
+                    (if (or (> acc q) (and (= acc q) (> d r)))
+                        #f
+                        (loop (+ pos 1)
+                              (+ (* acc radix) d)
+                              (+ count 1))))))))))
+
+(define (%parse-signed-int-range str start end radix)
+  (if (>= start end)
+      #f
+      (let* ((c0 (string-ref str start))
+             (has-sign? (or (char=? c0 #\+) (char=? c0 #\-)))
+             (neg? (char=? c0 #\-))
+             (dstart (if has-sign? (+ start 1) start))
+             (limit (if neg? *ulisp-fixnum-min-abs* *ulisp-fixnum-max*))
+             (uval (%parse-uint-range str dstart end radix limit)))
+        (if (not uval)
+            #f
+            (if neg? (- 0 uval) uval)))))
+
+(define (%parse-decimal-or-exp-range str start end)
+  (if (>= start end)
+      #f
+      (let* ((c0 (string-ref str start))
+             (has-sign? (or (char=? c0 #\+) (char=? c0 #\-)))
+             (neg? (char=? c0 #\-))
+             (mstart (if has-sign? (+ start 1) start))
+             (exp-idx (%find-exp-in-range str mstart end))
+             (mend (if exp-idx exp-idx end))
+             (exp-val (if exp-idx
+                          (%parse-signed-int-range str (+ exp-idx 1) end 10)
+                          0)))
+        (if (or (not exp-val) (>= mstart mend) (> exp-val 15) (< exp-val -15))
+            #f
+            (let ((dot-idx (%find-char-in-range str mstart mend #\.)))
+              (if dot-idx
+                  (let* ((ilen (- dot-idx mstart))
+                         (flen (- mend (+ dot-idx 1)))
+                         (ipart (if (= ilen 0)
+                                    0
+                                    (%parse-uint-range str mstart dot-idx 10 *ulisp-fixnum-max*)))
+                         (fpart (if (= flen 0)
+                                    0
+                                    (%parse-uint-range str (+ dot-idx 1) mend 10 *ulisp-fixnum-max*))))
+                    (if (or (and (= ilen 0) (= flen 0))
+                            (not ipart)
+                            (not fpart)
+                            (> flen 12))
+                        #f
+                        (let* ((fscale (%int-expt 10 flen))
+                               (base-rat (make-rational (+ (* ipart fscale) fpart) fscale))
+                               (scaled-rat
+                                (cond
+                                  ((= exp-val 0) base-rat)
+                                  ((> exp-val 0) (rat* base-rat (%int-expt 10 exp-val)))
+                                  (else (rat/ base-rat (%int-expt 10 (- 0 exp-val))))))
+                               (signed-rat (if neg? (rat- scaled-rat) scaled-rat)))
+                          (cons 'inexact-real signed-rat))))
+                  ;; No dot, must have exp-idx
+                  (let ((ipart (%parse-uint-range str mstart mend 10 *ulisp-fixnum-max*)))
+                    (if (not ipart)
+                        #f
+                        (let* ((scaled-rat
+                                (cond
+                                  ((= exp-val 0) ipart)
+                                  ((> exp-val 0) (* ipart (%int-expt 10 exp-val)))
+                                  (else (make-rational ipart (%int-expt 10 (- 0 exp-val))))))
+                               (signed-rat (if neg? (rat- scaled-rat) scaled-rat)))
+                          (cons 'inexact-real signed-rat))))))))))
+
+(define (%parse-real-token str start end radix exactness-pref)
+  (cond
+    ((>= start end) #f)
+    ((%str-ci-eq-range? str start end "+inf.0")
+     (if (eq? exactness-pref 'exact) #f +inf.0))
+    ((%str-ci-eq-range? str start end "-inf.0")
+     (if (eq? exactness-pref 'exact) #f -inf.0))
+    ((or (%str-ci-eq-range? str start end "+nan.0")
+         (%str-ci-eq-range? str start end "-nan.0"))
+     (if (eq? exactness-pref 'exact) #f +nan.0))
+    (else
+     (let ((slash-idx (%find-char-in-range str start end #\/)))
+       (if slash-idx
+           (let ((n (%parse-signed-int-range str start slash-idx radix))
+                 (d (%parse-uint-range str (+ slash-idx 1) end radix *ulisp-fixnum-max*)))
+             (if (and n d (> d 0))
+                 (let ((r (make-rational n d)))
+                   (if (eq? exactness-pref 'inexact)
+                       (inexact r)
+                       r))
+                 #f))
+           (if (and (= radix 10)
+                    (or (%find-char-in-range str start end #\.)
+                        (%find-exp-in-range str start end)))
+               (let ((dec-res (%parse-decimal-or-exp-range str start end)))
+                 (if (not dec-res)
+                     #f
+                     (let ((exact-rat (cdr dec-res)))
+                       (if (eq? exactness-pref 'exact)
+                           exact-rat
+                           (inexact exact-rat)))))
+               (let ((ival (%parse-signed-int-range str start end radix)))
+                 (if (not ival)
+                     #f
+                     (if (eq? exactness-pref 'inexact)
+                         (inexact ival)
+                         ival)))))))))
+
+(define (%find-complex-split-sign str start end)
+  (let loop ((i (- end 2)))
+    (if (<= i start)
+        #f
+        (let ((c (string-ref str i))
+              (prev (%char-downcase-ascii (string-ref str (- i 1)))))
+          (if (and (or (char=? c #\+) (char=? c #\-))
+                   (not (or (char=? prev #\e) (char=? prev #\s)
+                            (char=? prev #\f) (char=? prev #\d)
+                            (char=? prev #\l))))
+              i
+              (loop (- i 1)))))))
+
+(define (%parse-complex-or-real str start end radix exactness-pref)
+  (if (>= start end)
+      #f
+      (let ((at-idx (%find-char-in-range str start end #\@)))
+        (if at-idx
+            (let ((r (%parse-real-token str start at-idx radix exactness-pref))
+                  (theta (%parse-real-token str (+ at-idx 1) end radix exactness-pref)))
+              (if (and r theta)
+                  (let ((z (make-polar r theta)))
+                    (cond
+                      ((eq? exactness-pref 'exact) (exact z))
+                      ((eq? exactness-pref 'inexact) (inexact z))
+                      (else z)))
+                  #f))
+            (let ((last-ch (%char-downcase-ascii (string-ref str (- end 1)))))
+              (if (and (char=? last-ch #\i)
+                       (not (%str-ci-eq-range? str start end "+inf.0"))
+                       (not (%str-ci-eq-range? str start end "-inf.0")))
+                  (cond
+                    ((%str-ci-eq-range? str start end "+i")
+                     (let ((one (if (eq? exactness-pref 'inexact) (inexact 1) 1))
+                           (zero (if (eq? exactness-pref 'inexact) (inexact 0) 0)))
+                       (make-rectangular zero one)))
+                    ((%str-ci-eq-range? str start end "-i")
+                     (let ((neg-one (if (eq? exactness-pref 'inexact) (inexact -1) -1))
+                           (zero (if (eq? exactness-pref 'inexact) (inexact 0) 0)))
+                       (make-rectangular zero neg-one)))
+                    (else
+                     (let ((split-idx (%find-complex-split-sign str start end)))
+                       (if split-idx
+                           (let* ((re (%parse-real-token str start split-idx radix exactness-pref))
+                                  (im (cond
+                                        ((= (+ split-idx 1) (- end 1))
+                                         (let ((s (if (char=? (string-ref str split-idx) #\-) -1 1)))
+                                           (if (eq? exactness-pref 'inexact) (inexact s) s)))
+                                        (else
+                                         (%parse-real-token str split-idx (- end 1) radix exactness-pref)))))
+                             (if (and re im)
+                                 (let ((re2 (if (and (inexact? im) (exact? re) (not (eq? exactness-pref 'exact)))
+                                                (inexact re)
+                                                re))
+                                       (im2 (if (and (inexact? re) (exact? im) (not (eq? exactness-pref 'exact)))
+                                                (inexact im)
+                                                im)))
+                                   (make-rectangular re2 im2))
+                                 #f))
+                           ;; Pure imaginary with sign at start: +4i, -2.5i
+                           (let ((c0 (string-ref str start)))
+                             (if (or (char=? c0 #\+) (char=? c0 #\-))
+                                 (let ((im (%parse-real-token str start (- end 1) radix exactness-pref)))
+                                   (if im
+                                       (let ((zero (if (inexact? im) (inexact 0) 0)))
+                                         (make-rectangular zero im))
+                                       #f))
+                                 #f))))))
+                  (%parse-real-token str start end radix exactness-pref)))))))
+
 (define (string->number-core str radix explicit-radix?)
   (if (not (string? str))
       #f
       (let ((len (string-length str)))
         (if (= len 0)
             #f
-            (let parse-prefix ((i 0)
-                               (radix-found #f)
-                               (exactness-found #f)
-                               (neg? #f)
-                               (sign-found? #f))
-              (cond
-                ;; Check prefix: '#' followed by prefix char
-                ((and (< (+ i 1) len)
-                      (char=? (string-ref str i) #\#))
-                 (let ((c (string-ref str (+ i 1))))
-                   (cond
-                     ;; #b / #B
-                     ((or (char=? c #\b) (char=? c #\B))
-                      (if radix-found
-                          #f ; duplicate radix
-                          (parse-prefix (+ i 2) 2 exactness-found neg? sign-found?)))
-                     ;; #o / #O
-                     ((or (char=? c #\o) (char=? c #\O))
-                      (if radix-found
+            (let* ((lead-sign? (and (>= len 3)
+                                    (or (char=? (string-ref str 0) #\+)
+                                        (char=? (string-ref str 0) #\-))
+                                    (char=? (string-ref str 1) #\#)))
+                   (start-idx (if lead-sign? 1 0)))
+              (let parse-prefix ((i start-idx)
+                                 (radix-found #f)
+                                 (exactness-found #f))
+                (if (and (< (+ i 1) len)
+                         (char=? (string-ref str i) #\#))
+                    (let ((c (%char-downcase-ascii (string-ref str (+ i 1)))))
+                      (cond
+                        ((char=? c #\b)
+                         (if radix-found #f (parse-prefix (+ i 2) 2 exactness-found)))
+                        ((char=? c #\o)
+                         (if radix-found #f (parse-prefix (+ i 2) 8 exactness-found)))
+                        ((char=? c #\d)
+                         (if radix-found #f (parse-prefix (+ i 2) 10 exactness-found)))
+                        ((char=? c #\x)
+                         (if radix-found #f (parse-prefix (+ i 2) 16 exactness-found)))
+                        ((char=? c #\e)
+                         (if exactness-found #f (parse-prefix (+ i 2) radix-found 'exact)))
+                        ((char=? c #\i)
+                         (if exactness-found #f (parse-prefix (+ i 2) radix-found 'inexact)))
+                        (else #f)))
+                    (let ((effective-radix
+                           (cond
+                             ((and radix-found explicit-radix?)
+                              (if (= radix-found radix) radix #f))
+                             (radix-found radix-found)
+                             (else radix))))
+                      (if (or (not effective-radix)
+                              (not (or (= effective-radix 2)
+                                       (= effective-radix 8)
+                                       (= effective-radix 10)
+                                       (= effective-radix 16))))
                           #f
-                          (parse-prefix (+ i 2) 8 exactness-found neg? sign-found?)))
-                     ;; #d / #D
-                     ((or (char=? c #\d) (char=? c #\D))
-                      (if radix-found
-                          #f
-                          (parse-prefix (+ i 2) 10 exactness-found neg? sign-found?)))
-                     ;; #x / #X
-                     ((or (char=? c #\x) (char=? c #\X))
-                      (if radix-found
-                          #f
-                          (parse-prefix (+ i 2) 16 exactness-found neg? sign-found?)))
-                     ;; #e / #E (exact)
-                     ((or (char=? c #\e) (char=? c #\E))
-                      (if exactness-found
-                          #f
-                          (parse-prefix (+ i 2) radix-found 'exact neg? sign-found?)))
-                     ;; #i / #I (inexact: unsupported in integer-only ulisp)
-                     ((or (char=? c #\i) (char=? c #\I))
-                      #f)
-                     (else #f))))
-                ;; Check sign '+' or '-'
-                ((and (< i len)
-                      (not sign-found?)
-                      (or (char=? (string-ref str i) #\+)
-                          (char=? (string-ref str i) #\-)))
-                 (let ((is-minus (char=? (string-ref str i) #\-)))
-                   (parse-prefix (+ i 1) radix-found exactness-found is-minus #t)))
-                ;; Finished prefixes and signs: validate and parse digits
-                (else
-                 (let* ((effective-radix
-                         (cond
-                           ((and radix-found explicit-radix?)
-                            (if (= radix-found radix) radix #f))
-                           (radix-found radix-found)
-                           (else radix))))
-                   (if (or (not effective-radix)
-                           (not (or (= effective-radix 2)
-                                    (or (= effective-radix 8)
-                                        (or (= effective-radix 10)
-                                            (= effective-radix 16))))))
-                       #f
-                       (if (>= i len)
-                           #f ; no digits present
-                           (let ((limit (if neg? *ulisp-fixnum-min-abs* *ulisp-fixnum-max*)))
-                             (let parse-digits ((pos i)
-                                                (acc 0)
-                                                (count 0))
-                               (if (>= pos len)
-                                   (if (= count 0)
-                                       #f
-                                       (if neg? (- 0 acc) acc))
-                                   (let ((d (ulisp-digit-value (string-ref str pos) effective-radix)))
-                                     (if (not d)
-                                         #f ; invalid digit
-                                         (let ((q (quotient limit effective-radix))
-                                               (r (modulo limit effective-radix)))
-                                           (if (or (> acc q) (and (= acc q) (> d r)))
-                                               #f ; overflow
-                                               (parse-digits (+ pos 1)
-                                                             (+ (* acc effective-radix) d)
-                                                             (+ count 1)))))))))))))))))))
+                          (if lead-sign?
+                              (if (or (>= i len)
+                                      (char=? (string-ref str i) #\+)
+                                      (char=? (string-ref str i) #\-))
+                                  #f
+                                  (let ((s2 (string-append (string (string-ref str 0))
+                                                           (substring str i len))))
+                                    (%parse-complex-or-real s2 0 (string-length s2) effective-radix exactness-found)))
+                              (%parse-complex-or-real str i len effective-radix exactness-found)))))))))))
 
 (define (string->number-radix s r)
   (string->number-core s r #t))
@@ -293,12 +481,13 @@
                       (read-kw (cons next acc)))))))
            ((ulisp-char=? c2 #\t) #t)
            ((ulisp-char=? c2 #\f) #f)
-           ;; R7RS Radix & Exactness Prefixes for numbers: #b, #o, #d, #x, #e
+           ;; R7RS Radix & Exactness Prefixes for numbers: #b, #o, #d, #x, #e, #i
            ((or (ulisp-char=? c2 #\b) (ulisp-char=? c2 #\B)
                 (ulisp-char=? c2 #\o) (ulisp-char=? c2 #\O)
                 (ulisp-char=? c2 #\d) (ulisp-char=? c2 #\D)
                 (ulisp-char=? c2 #\x) (ulisp-char=? c2 #\X)
-                (ulisp-char=? c2 #\e) (ulisp-char=? c2 #\E))
+                (ulisp-char=? c2 #\e) (ulisp-char=? c2 #\E)
+                (ulisp-char=? c2 #\i) (ulisp-char=? c2 #\I))
             (let read-num-token ((acc (list c2 #\#)))
               (let ((next (port-peek-char p)))
                 (if (or (ulisp-is-delimiter? next) (eof-object? next))
