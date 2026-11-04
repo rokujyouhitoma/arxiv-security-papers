@@ -1111,16 +1111,16 @@
 ;;; -----------------------------------------------------------------------
 
 (define (ulisp-supported-feature? feat)
-  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix))
+  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
       #t
       #f))
 
 (define (builtin-library-name? name)
   (and (pair? name)
        (or (and (eq? (car name) 'scheme)
-                (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load list hash-table sort division box)))
+                (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load list hash-table sort division box comparator set stream generator list-queue lseq charset)))
            (and (eq? (car name) 'srfi)
-                (memq (cadr name) '(1 28 69 95 111 125 132 141 145)))
+                (memq (cadr name) '(1 14 28 41 69 95 111 113 117 121 125 127 128 132 141 145 158 193)))
            (and (eq? (car name) 'ulisp)
                 (memq (cadr name) '(base core native))))))
 
@@ -4774,6 +4774,15 @@
                        imports
                        (append (reverse clean-included) body-forms))))
 
+              ;; (include-library-declarations "path" ...) (R7RS §5.6.1, Issue #706)
+              ((and (pair? d) (eq? (car d) 'include-library-declarations))
+               (let* ((included-decls (slurp-included-files-mode (cdr d) #f))
+                      (clean-decls (map strip-source-loc included-decls)))
+                 (loop (append clean-decls (cdr rest))
+                       exports
+                       imports
+                       body-forms)))
+
               ;; (cond-expand <ce-clause> ...)
               ((and (pair? d) (eq? (car d) 'cond-expand))
                (let ((matched-decls (expand-cond-expand (cdr d))))
@@ -5653,7 +5662,7 @@
         (rules (macro-rules m)))
     (let loop ((rls rules))
       (if (null? rls)
-          (error "apply-syntax-rules-macro: no matching syntax-rules pattern for" input)
+          (error "apply-syntax-rules-macro [R7RS §4.3.2]: no matching syntax-rules pattern for" input)
           (let* ((rule (car rls))
                  (pat (car rule))
                  (tmpl (cadr rule))
@@ -5686,7 +5695,7 @@
              (literals (cadr sr-spec))
              (rules (cddr sr-spec)))
         (list 'syntax-rules-macro name literals rules))
-      (error "parse-syntax-rules-def: invalid define-syntax syntax" form)))
+      (error "parse-syntax-rules-def [R7RS §5.4]: invalid define-syntax syntax" form)))
 
 (define (rename-symbol-in-tree tree old-sym new-sym)
   (cond
@@ -5853,7 +5862,7 @@
              (irritants (if (and (pair? (cdr expanded)) (string? (cadr expanded)))
                             (cddr expanded)
                             (cdr expanded))))
-         (error (string-append "syntax-error: " msg) irritants)))
+         (error (string-append "syntax-error [R7RS §4.3.1]: " msg) irritants)))
       ((eq? (car expanded) (quote case))
        (if (and (pair? (cdr expanded)) (pair? (cddr expanded)))
            (cons (quote case)
@@ -6883,7 +6892,7 @@
         (irritants (if (and (pair? (cdr expr)) (string? (cadr expr)))
                        (cddr expr)
                        (cdr expr))))
-    (error (string-append "syntax-error: " msg) irritants)))
+    (error (string-append "syntax-error [R7RS §4.3.1]: " msg) irritants)))
 
 (define (desugar-assume expr)
   (let ((condition (cadr expr))
@@ -6923,7 +6932,7 @@
 
 (define (desugar-max args)
   (cond
-    ((null? args) (error "max: requires at least one argument"))
+    ((null? args) (error "max [R7RS §6.2.6]: requires at least one argument"))
     ((null? (cdr args)) (car args))
     ((null? (cddr args)) (list 'max-2 (car args) (cadr args)))
     (else
@@ -6935,7 +6944,7 @@
 
 (define (desugar-min args)
   (cond
-    ((null? args) (error "min: requires at least one argument"))
+    ((null? args) (error "min [R7RS §6.2.6]: requires at least one argument"))
     ((null? (cdr args)) (car args))
     ((null? (cddr args)) (list 'min-2 (car args) (cadr args)))
     (else
@@ -6947,7 +6956,7 @@
 
 (define (desugar-format args)
   (if (null? args)
-      (error "format: too few arguments (requires format-string)")
+      (error "format [SRFI 28]: too few arguments (requires format-string)")
       (list '%format (car args) (cons 'list (cdr args)))))
 
 ;;; =======================================================================

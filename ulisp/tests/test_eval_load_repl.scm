@@ -1,0 +1,121 @@
+;;; =======================================================================
+;;; ULisp Test Suite: R7RS §6.12 Environment Specifiers (Issue #716)
+;;; =======================================================================
+
+(define *pass-count* (cons 0 '()))
+(define *fail-count* (cons 0 '()))
+
+(define (assert-true name cond)
+  (if cond
+      (begin
+        (set-car! *pass-count* (+ (car *pass-count*) 1))
+        (display "  [PASS] ")
+        (display name)
+        (newline))
+      (begin
+        (set-car! *fail-count* (+ (car *fail-count*) 1))
+        (display "  [FAIL] ")
+        (display name)
+        (newline))))
+
+(define (assert-equal name expected actual)
+  (if (equal? expected actual)
+      (begin
+        (set-car! *pass-count* (+ (car *pass-count*) 1))
+        (display "  [PASS] ")
+        (display name)
+        (newline))
+      (begin
+        (set-car! *fail-count* (+ (car *fail-count*) 1))
+        (display "  [FAIL] ")
+        (display name)
+        (display " (expected ")
+        (write expected)
+        (display ", got ")
+        (write actual)
+        (display ")")
+        (newline))))
+
+(display "=== Running R7RS §6.12 Environment Specifier Tests (Issue #716) ===")
+(newline)
+
+;; 1. environment? Predicate and Constructors
+(let ((env-base (environment '(scheme base)))
+      (env-inex (environment '(scheme inexact)))
+      (env-comp (environment '(scheme complex)))
+      (null-env (null-environment 5))
+      (rep-env  (scheme-report-environment 5))
+      (inter-env (interaction-environment)))
+  (assert-true "environment? on (environment '(scheme base))" (environment? env-base))
+  (assert-true "environment? on (environment '(scheme inexact))" (environment? env-inex))
+  (assert-true "environment? on (environment '(scheme complex))" (environment? env-comp))
+  (assert-true "environment? on (null-environment 5)" (environment? null-env))
+  (assert-true "environment? on (scheme-report-environment 5)" (environment? rep-env))
+  (assert-true "environment? on (interaction-environment)" (environment? inter-env))
+  (assert-true "not environment? on #t" (not (environment? #t)))
+  (assert-true "not environment? on vector #(1 2 3)" (not (environment? #(1 2 3))))
+
+  ;; 2. Bound variable inspection
+  (assert-true "+ is bound in (scheme base)" (%r7rs-env-bound? env-base '+))
+  (assert-true "car is bound in (scheme base)" (%r7rs-env-bound? env-base 'car))
+  (assert-true "not sin bound in (scheme base)" (not (%r7rs-env-bound? env-base 'sin)))
+  (assert-true "sin is bound in (scheme inexact)" (%r7rs-env-bound? env-inex 'sin))
+  (assert-true "make-rectangular is bound in (scheme complex)" (%r7rs-env-bound? env-comp 'make-rectangular))
+
+  ;; 3. null-environment & scheme-report-environment
+  (assert-true "lambda is in null-env" (%r7rs-env-bound? null-env 'lambda))
+  (assert-true "+ is not in null-env" (not (%r7rs-env-bound? null-env '+)))
+  (assert-true "+ is in scheme-report-environment" (%r7rs-env-bound? rep-env '+))
+  (assert-true "sin is in scheme-report-environment" (%r7rs-env-bound? rep-env 'sin))
+
+  ;; 4. interaction-environment mutability
+  (assert-true "interaction-environment is mutable" (%r7rs-env-mutable? inter-env))
+  (assert-true "environment '(scheme base) is immutable" (not (%r7rs-env-mutable? env-base)))
+  (assert-true "null-environment is immutable" (not (%r7rs-env-mutable? null-env)))
+
+  (%r7rs-env-define! inter-env 'my-test-var 42)
+  (assert-true "my-test-var bound in interaction-env" (%r7rs-env-bound? inter-env 'my-test-var))
+  (assert-equal "my-test-var value lookup" 42 (%r7rs-env-lookup inter-env 'my-test-var))
+  (%r7rs-env-set! inter-env 'my-test-var 100)
+  (assert-equal "my-test-var value set!" 100 (%r7rs-env-lookup inter-env 'my-test-var)))
+
+;; 5. Import Set Modifiers: only, except, prefix, rename
+(let ((env-only (environment '(only (scheme base) + - *)))
+      (env-except (environment '(except (scheme base) + -)))
+      (env-pref (environment '(prefix (scheme base) base:)))
+      (env-ren  (environment '(rename (scheme base) (+ plus) (* times)))))
+  (assert-true "+ is in env-only" (%r7rs-env-bound? env-only '+))
+  (assert-true "- is in env-only" (%r7rs-env-bound? env-only '-))
+  (assert-true "* is in env-only" (%r7rs-env-bound? env-only '*))
+  (assert-true "car is NOT in env-only" (not (%r7rs-env-bound? env-only 'car)))
+
+  (assert-true "+ is NOT in env-except" (not (%r7rs-env-bound? env-except '+)))
+  (assert-true "- is NOT in env-except" (not (%r7rs-env-bound? env-except '-)))
+  (assert-true "* is in env-except" (%r7rs-env-bound? env-except '*))
+  (assert-true "car is in env-except" (%r7rs-env-bound? env-except 'car))
+
+  (assert-true "base:+ is in env-pref" (%r7rs-env-bound? env-pref 'base:+))
+  (assert-true "base:car is in env-pref" (%r7rs-env-bound? env-pref 'base:car))
+  (assert-true "+ is NOT in env-pref" (not (%r7rs-env-bound? env-pref '+)))
+
+  (assert-true "plus is in env-ren" (%r7rs-env-bound? env-ren 'plus))
+  (assert-true "times is in env-ren" (%r7rs-env-bound? env-ren 'times))
+  (assert-true "+ is NOT in env-ren" (not (%r7rs-env-bound? env-ren '+)))
+  (assert-true "- is in env-ren" (%r7rs-env-bound? env-ren '-)))
+
+;; 6. Invocation of looked-up procedures
+(let* ((env (environment '(scheme base)))
+       (plus-fn (%r7rs-env-lookup env '+))
+       (cons-fn (%r7rs-env-lookup env 'cons)))
+  (assert-equal "(+ 10 20 30) via lookup" 60 (plus-fn 10 20 30))
+  (assert-equal "(cons 1 2) via lookup" '(1 . 2) (cons-fn 1 2)))
+
+(display "Passed: ")
+(display (car *pass-count*))
+(display ", Failed: ")
+(display (car *fail-count*))
+(newline)
+(if (> (car *fail-count*) 0)
+    (exit 1)
+    (exit 0))
+

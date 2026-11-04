@@ -38,7 +38,7 @@ ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/predicates.scm lib/math.scm lib/
                  lib/reader.scm lib/equality.scm lib/bytevector.scm \
                  lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
                  lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/comparator.scm \
-                 lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm \
+                 lib/format.scm lib/sort.scm lib/box.scm lib/gc.scm lib/eval.scm \
                  $(ULISP_RUNTIME_LIBS)
 
 ULISP_LARGE_LIBS = lib/set.scm lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/charset.scm lib/mapping.scm lib/ilist.scm lib/ideque.scm
@@ -787,6 +787,14 @@ test_process_context: $(COMPILER_DEP)
 	$(AS) $(ASFLAGS) build/test_process_context.s -o build/test_process_context.o
 	$(LD) $(LDFLAGS) build/test_process_context.o -o build/test_process_context
 	./build/test_process_context
+
+test_eval_load_repl: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_eval_load_repl.scm > build/test_eval_load_repl_input.scm
+	$(ULISP_COMPILER) build/test_eval_load_repl_input.scm > build/test_eval_load_repl.s
+	$(AS) $(ASFLAGS) build/test_eval_load_repl.s -o build/test_eval_load_repl.o
+	$(LD) $(LDFLAGS) build/test_eval_load_repl.o -o build/test_eval_load_repl
+	./build/test_eval_load_repl
 
 test_r7rs_cond_expand: $(COMPILER_DEP)
 	@mkdir -p build

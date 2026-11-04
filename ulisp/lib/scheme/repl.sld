@@ -8,4 +8,5 @@
 (define-library (scheme repl)
   (export
     ;; §6.12 Environments and evaluation
-    interaction-environment))
+    interaction-environment)
+  (import (scheme base)))

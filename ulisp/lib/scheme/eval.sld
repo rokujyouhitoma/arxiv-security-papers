@@ -9,4 +9,5 @@
   (export
     ;; §6.12 Environments and evaluation
     eval
-    environment))
+    environment)
+  (import (scheme base)))
