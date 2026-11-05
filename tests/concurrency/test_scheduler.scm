@@ -216,8 +216,10 @@
 (let ((sched (make-work-stealing-scheduler 2 64)))
   (assert-equal (scheduler-tasks-spawned sched) 0 "initial tasks-spawned is 0")
   (assert-equal (scheduler-tasks-completed sched) 0 "initial tasks-completed is 0")
+  (assert-equal (scheduler-tasks-failed sched) 0 "initial tasks-failed is 0")
   (assert-equal (scheduler-total-spawned sched) 0 "scheduler-total-spawned matches tasks-spawned (0)")
   (assert-equal (scheduler-total-completed sched) 0 "scheduler-total-completed matches tasks-completed (0)")
+  (assert-equal (scheduler-total-failed sched) 0 "scheduler-total-failed matches tasks-failed (0)")
 
   ;; Verify atomic increment operations
   (%scheduler-tasks-spawned-inc! sched)
@@ -228,26 +230,49 @@
   (assert-equal (scheduler-tasks-completed sched) 1 "tasks-completed is 1 after inc")
   (assert-equal (scheduler-total-completed sched) 1 "total-completed reflects 1")
 
+  (%scheduler-tasks-failed-inc! sched)
+  (assert-equal (scheduler-tasks-failed sched) 1 "tasks-failed is 1 after inc")
+  (assert-equal (scheduler-total-failed sched) 1 "total-failed reflects 1")
+
   ;; Perform rapid 100 increments
   (let loop ((k 0))
     (if (< k 100)
         (begin
           (%scheduler-tasks-spawned-inc! sched)
           (%scheduler-tasks-completed-inc! sched)
+          (%scheduler-tasks-failed-inc! sched)
           (loop (+ k 1)))
         #t))
 
   (assert-equal (scheduler-tasks-spawned sched) 101 "tasks-spawned reached 101")
   (assert-equal (scheduler-tasks-completed sched) 101 "tasks-completed reached 101")
+  (assert-equal (scheduler-tasks-failed sched) 101 "tasks-failed reached 101")
+
+  ;; Check scheduler-stats alist
+  (let ((st (scheduler-stats sched)))
+    (assert-equal (cdr (assq 'tasks-spawned st)) 101 "stats tasks-spawned is 101")
+    (assert-equal (cdr (assq 'tasks-completed st)) 101 "stats tasks-completed is 101")
+    (assert-equal (cdr (assq 'tasks-failed st)) 101 "stats tasks-failed is 101"))
 
   ;; Reset stats
   (assert-true (%scheduler-stats-reset! sched) "%scheduler-stats-reset! returns #t")
   (assert-equal (scheduler-tasks-spawned sched) 0 "tasks-spawned is 0 after reset")
   (assert-equal (scheduler-tasks-completed sched) 0 "tasks-completed is 0 after reset")
+  (assert-equal (scheduler-tasks-failed sched) 0 "tasks-failed is 0 after reset")
+
+  ;; Test real execution differentiation: spawn 2 successful tasks, 1 failing task
+  (scheduler-spawn! sched (lambda () 42))
+  (scheduler-spawn! sched (lambda () (error "simulated task panic")))
+  (scheduler-spawn! sched (lambda () 100))
+  (scheduler-run! sched 3)
+  (assert-equal (scheduler-tasks-spawned sched) 3 "spawned 3 tasks")
+  (assert-equal (scheduler-tasks-completed sched) 2 "2 tasks completed successfully")
+  (assert-equal (scheduler-tasks-failed sched) 1 "1 task recorded as failed")
 
   ;; Guard against non-scheduler object (CWE-843)
   (assert-error (lambda () (scheduler-tasks-spawned "invalid")) "scheduler-tasks-spawned rejects non-scheduler (CWE-843)")
   (assert-error (lambda () (scheduler-tasks-completed 12345)) "scheduler-tasks-completed rejects non-scheduler (CWE-843)")
+  (assert-error (lambda () (scheduler-tasks-failed 'bad)) "scheduler-tasks-failed rejects non-scheduler (CWE-843)")
   (assert-error (lambda () (%scheduler-stats-reset! #f)) "%scheduler-stats-reset! rejects non-scheduler (CWE-843)")
 
   (scheduler-stop! sched))

@@ -2,7 +2,7 @@
 ID: 732
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] スケジューラ統計における正常完了タスク数と異常終了 (パニック) タスク数の分離計上 (ID: 732)
@@ -18,9 +18,9 @@ ID: 732
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm)
-- [ ] [panic.scm](../../ulisp/runtime/concurrency/panic.scm)
-- [ ] [test_scheduler.scm](../../tests/concurrency/test_scheduler.scm)
+- [x] [scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm)
+- [x] [panic.scm](../../ulisp/runtime/concurrency/panic.scm)
+- [x] [test_scheduler.scm](../../tests/concurrency/test_scheduler.scm)
 
 ---
 
@@ -34,6 +34,6 @@ Target Branch: `feat/732-separate-completed-and-failed-scheduler-stats`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] 正常完了したタスクと異常終了したタスクが `scheduler-tasks-completed` と `scheduler-tasks-failed` に分けて正確に数えられること。
-- [ ] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
+- [x] 正常完了したタスクと異常終了したタスクが `scheduler-tasks-completed` と `scheduler-tasks-failed` に分けて正確に数えられること。
+- [x] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
 

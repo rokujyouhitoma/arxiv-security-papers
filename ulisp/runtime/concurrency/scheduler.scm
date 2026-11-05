@@ -193,9 +193,10 @@
               (vector-ref (%scheduler-node-workers sched) node-id)))))
 
 (define (%make-scheduler-stats)
-  (let ((s (make-vector 2)))
+  (let ((s (make-vector 3)))
     (vector-set! s 0 (make-atomic-box 0))
     (vector-set! s 1 (make-atomic-box 0))
+    (vector-set! s 2 (make-atomic-box 0))
     s))
 
 (define (%make-scheduler-internal worker-count node-count workers node-workers)
@@ -293,11 +294,19 @@
       (error "scheduler-tasks-completed: expected <work-stealing-scheduler>" sched)
       (atomic-ref (vector-ref (%scheduler-stats sched) 1))))
 
+(define (scheduler-tasks-failed sched)
+  (if (not (work-stealing-scheduler? sched))
+      (error "scheduler-tasks-failed: expected <work-stealing-scheduler>" sched)
+      (atomic-ref (vector-ref (%scheduler-stats sched) 2))))
+
 (define (scheduler-total-spawned sched)
   (scheduler-tasks-spawned sched))
 
 (define (scheduler-total-completed sched)
   (scheduler-tasks-completed sched))
+
+(define (scheduler-total-failed sched)
+  (scheduler-tasks-failed sched))
 
 (define (%scheduler-tasks-spawned-inc! sched)
   (atomic-fetch-add! (vector-ref (%scheduler-stats sched) 0) 1))
@@ -305,12 +314,16 @@
 (define (%scheduler-tasks-completed-inc! sched)
   (atomic-fetch-add! (vector-ref (%scheduler-stats sched) 1) 1))
 
+(define (%scheduler-tasks-failed-inc! sched)
+  (atomic-fetch-add! (vector-ref (%scheduler-stats sched) 2) 1))
+
 (define (%scheduler-stats-reset! sched)
   (if (not (work-stealing-scheduler? sched))
       (error "%scheduler-stats-reset!: expected <work-stealing-scheduler>" sched)
       (let ((s (%scheduler-stats sched)))
         (atomic-set! (vector-ref s 0) 0)
         (atomic-set! (vector-ref s 1) 0)
+        (atomic-set! (vector-ref s 2) 0)
         #t)))
 
 ;; -----------------------------------------------------------------------
@@ -526,7 +539,13 @@
       (%set-current-synapse-task! prev-task)
       (%set-current-worker-tls-override! prev-override)
       (%worker-tasks-exec-inc! worker)
-      (%scheduler-tasks-completed-inc! sched)
+      ;; Separate completed (normal) vs failed (panic / exception) counters (Issue #732, Item A8)
+      (if (or (and (pair? result) (eq? (car result) 'panic))
+              (and (task-context? task)
+                   (let ((st (%task-state task)))
+                     (or (eq? st 'panicked) (eq? st 'failed)))))
+          (%scheduler-tasks-failed-inc! sched)
+          (%scheduler-tasks-completed-inc! sched))
       #t)))
 
 ;; -----------------------------------------------------------------------
@@ -553,18 +572,23 @@
   (if (not (scheduler-running? sched))
       (scheduler-tasks-completed sched)
       (let* ((spawned (scheduler-tasks-spawned sched))
-             (completed (scheduler-tasks-completed sched)))
-        (if (or (>= completed max-tasks)
-                (and (>= completed spawned) (> spawned 0)))
-            completed
+             (completed (scheduler-tasks-completed sched))
+             (failed (scheduler-tasks-failed sched))
+             (total-done (+ completed failed)))
+        (if (or (>= total-done max-tasks)
+                (and (>= total-done spawned) (> spawned 0)))
+            total-done
             (let ((progress-made (%scheduler-step-all! sched num-workers 0 #f)))
               (if (not progress-made)
-                  (if (and (>= (scheduler-tasks-completed sched) (scheduler-tasks-spawned sched))
-                           (> (scheduler-tasks-spawned sched) 0))
-                      (scheduler-tasks-completed sched)
-                      (begin
-                        (%scheduler-idle-backoff!)
-                        (%scheduler-run-loop sched max-tasks num-workers)))
+                  (let* ((c2 (scheduler-tasks-completed sched))
+                         (f2 (scheduler-tasks-failed sched))
+                         (tot2 (+ c2 f2))
+                         (sp2 (scheduler-tasks-spawned sched)))
+                    (if (and (>= tot2 sp2) (> sp2 0))
+                        tot2
+                        (begin
+                          (%scheduler-idle-backoff!)
+                          (%scheduler-run-loop sched max-tasks num-workers))))
                   (%scheduler-run-loop sched max-tasks num-workers)))))))
 
 (define scheduler-run!
@@ -642,6 +666,7 @@
               (cons 'state (scheduler-state sched))
               (cons 'tasks-spawned (scheduler-tasks-spawned sched))
               (cons 'tasks-completed (scheduler-tasks-completed sched))
+              (cons 'tasks-failed (scheduler-tasks-failed sched))
               (cons 'global-queue-size (queue-size (scheduler-global-queue sched)))
               (cons 'workers worker-stats-list)))))
 
@@ -704,12 +729,14 @@
                    (if (not (scheduler-running? sched))
                        (scheduler-tasks-completed sched)
                        (let* ((spawned (scheduler-tasks-spawned sched))
-                              (completed (scheduler-tasks-completed sched)))
-                         (if (or (>= completed max-tasks)
-                                 (and (>= completed spawned) (> spawned 0)))
+                              (completed (scheduler-tasks-completed sched))
+                              (failed (scheduler-tasks-failed sched))
+                              (total-done (+ completed failed)))
+                         (if (or (>= total-done max-tasks)
+                                 (and (>= total-done spawned) (> spawned 0)))
                              (begin
                                (scheduler-stop! sched)
-                               completed)
+                               total-done)
                              (begin
                                (guard (exn (else #f))
                                  (scheduler-worker-step! sched 0))

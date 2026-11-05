@@ -41,8 +41,10 @@
     scheduler-stop!
     scheduler-tasks-spawned
     scheduler-tasks-completed
+    scheduler-tasks-failed
     scheduler-total-spawned
     scheduler-total-completed
+    scheduler-total-failed
     %scheduler-stats-reset!
 
     ;; Execution and work-stealing
