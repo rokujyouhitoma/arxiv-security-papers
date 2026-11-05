@@ -342,7 +342,8 @@
       (%task-links-box t)))
 
 (define (task-links t)
-  (atomic-ref (task-links-box t)))
+  (let ((v (atomic-ref (task-links-box t))))
+    (if (list? v) v '())))
 
 (define (task-monitors-box t)
   (if (not (task-context? t))
@@ -350,7 +351,8 @@
       (%task-monitors-box t)))
 
 (define (task-monitors t)
-  (atomic-ref (task-monitors-box t)))
+  (let ((v (atomic-ref (task-monitors-box t))))
+    (if (list? v) v '())))
 
 (define (task-monitored-by-box t)
   (if (not (task-context? t))
@@ -358,7 +360,8 @@
       (%task-monitored-by-box t)))
 
 (define (task-monitored-by t)
-  (atomic-ref (task-monitored-by-box t)))
+  (let ((v (atomic-ref (task-monitored-by-box t))))
+    (if (list? v) v '())))
 
 (define (task-trap-exit? t)
   (if (not (task-context? t))

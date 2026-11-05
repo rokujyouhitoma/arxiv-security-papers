@@ -37,18 +37,20 @@
 (define (%add-to-atomic-list! box item max-limit err-msg)
   (let retry ()
     (let ((cur (atomic-ref box)))
-      (if (memq item cur)
-          #t
-          (if (>= (length cur) max-limit)
-              (error err-msg (length cur))
-              (if (atomic-cas! box cur (cons item cur))
-                  #t
-                  (retry)))))))
+      (if (eq? cur 'closed)
+          'closed
+          (if (memq item cur)
+              #t
+              (if (>= (length cur) max-limit)
+                  (error err-msg (length cur))
+                  (if (atomic-cas! box cur (cons item cur))
+                      #t
+                      (retry))))))))
 
 (define (%remove-from-atomic-list! box item)
   (let retry ()
     (let ((cur (atomic-ref box)))
-      (if (not (memq item cur))
+      (if (or (eq? cur 'closed) (not (list? cur)) (not (memq item cur)))
           #t
           (let ((new-list (let remove-item ((xs cur))
                             (cond ((null? xs) '())
@@ -66,26 +68,44 @@
           (let ((links (task-links task-a)))
             (if (memq task-b links) #t #f)))))
 
+(define (%try-register-link-atomic! target-task peer-task)
+  (let ((box (task-links-box target-task)))
+    (let retry ()
+      (let ((cur (atomic-ref box)))
+        (if (or (eq? cur 'closed) (eq? (task-state target-task) 'terminated))
+            'closed
+            (if (memq peer-task cur)
+                #t
+                (if (>= (length cur) *max-task-links*)
+                    (error "task-link!: maximum task links limit exceeded (CWE-400)" (length cur))
+                    (if (atomic-cas! box cur (cons peer-task cur))
+                        #t
+                        (retry)))))))))
+
+(define (%notify-link-noproc! live-task dead-task)
+  (if (task-trap-exit? live-task)
+      (begin
+        (task-set-handoff! live-task (list 'EXIT (task-tid dead-task) 'noproc))
+        (task-wake! live-task #f))
+      (task-handle-termination! live-task 'noproc #f)))
+
 (define (task-link! task-a task-b)
   (if (or (not (task-context? task-a)) (not (task-context? task-b)))
       (error "task-link!: expected <task-context> (CWE-843)" (list task-a task-b))
       (if (eq? task-a task-b)
           #t
-          (begin
-            ;; Check if either task is already terminated
-            (if (eq? (task-state task-b) 'terminated)
+          ;; Atomic check-and-register on task-b, then task-a (Issue #725, Item B4)
+          (let ((res-b (%try-register-link-atomic! task-b task-a)))
+            (if (eq? res-b 'closed)
                 (begin
-                  (task-handle-termination! task-b 'noproc #f)
+                  (%notify-link-noproc! task-a task-b)
                   #t)
-                (if (eq? (task-state task-a) 'terminated)
-                    (begin
-                      (task-handle-termination! task-a 'noproc #f)
-                      #t)
-                    (begin
-                      (%add-to-atomic-list! (task-links-box task-a) task-b *max-task-links*
-                                            "task-link!: maximum task links limit exceeded (CWE-400)")
-                      (%add-to-atomic-list! (task-links-box task-b) task-a *max-task-links*
-                                            "task-link!: maximum task links limit exceeded (CWE-400)")
+                (let ((res-a (%try-register-link-atomic! task-a task-b)))
+                  (if (eq? res-a 'closed)
+                      (begin
+                        (%remove-from-atomic-list! (task-links-box task-b) task-a)
+                        (%notify-link-noproc! task-b task-a)
+                        #t)
                       #t)))))))
 
 (define (task-unlink! task-a task-b)
@@ -102,6 +122,15 @@
 ;; 3. Unidirectional Monitors (DSN-37 Section 8.4.1)
 ;; -----------------------------------------------------------------------
 
+(define (%deliver-monitor-down! observer-task notify-channel ref target-tid reason wake-hook)
+  (let ((down-msg (list 'DOWN ref 'process target-tid (channel-deep-copy reason))))
+    (if (channel? notify-channel)
+        (channel-try-send! notify-channel down-msg)
+        (if (task-context? observer-task)
+            (task-set-handoff! observer-task down-msg)))
+    (if (and observer-task (task-context? observer-task))
+        (task-wake! observer-task wake-hook))))
+
 (define task-monitor
   (case-lambda
     ((observer-task target-task)
@@ -114,28 +143,33 @@
              (let ((ref (allocate-monitor-ref!))
                    (obs-box (task-monitors-box observer-task))
                    (target-box (task-monitored-by-box target-task)))
-               ;; Check if target is already dead
-               (if (eq? (task-state target-task) 'terminated)
-                   (begin
-                     (if notify-channel
-                         (channel-try-send! notify-channel (list 'DOWN ref 'process (task-tid target-task) 'noproc)))
-                     ref)
-                   (begin
-                     ;; Register on observer: (cons ref target-task)
-                     (let retry-obs ()
-                       (let ((cur (atomic-ref obs-box)))
-                         (if (>= (length cur) *max-task-monitors*)
-                             (error "task-monitor: maximum monitors limit exceeded (CWE-400)" (length cur))
-                             (if (atomic-cas! obs-box cur (cons (cons ref target-task) cur))
-                                 #t
-                                 (retry-obs)))))
-                     ;; Register on target: (list ref (task-tid observer-task) notify-channel observer-task)
-                     (let retry-target ()
-                       (let ((cur (atomic-ref target-box)))
-                         (if (atomic-cas! target-box cur (cons (list ref (task-tid observer-task) notify-channel observer-task) cur))
-                             #t
-                             (retry-target))))
-                     ref))))))))
+               ;; Step 1: Atomically check target liveness & register on target in a single CAS (Issue #725, Item B4)
+               (let ((reg-status
+                      (let retry-target ()
+                        (let ((cur (atomic-ref target-box)))
+                          (if (or (eq? cur 'closed) (eq? (task-state target-task) 'terminated))
+                              'closed
+                              (if (atomic-cas! target-box cur
+                                               (cons (list ref (task-tid observer-task) notify-channel observer-task) cur))
+                                  'registered
+                                  (retry-target)))))))
+                 (if (eq? reg-status 'closed)
+                     ;; Target already terminated or closed registration: deliver 'noproc immediately
+                     (begin
+                       (%deliver-monitor-down! observer-task notify-channel ref (task-tid target-task) 'noproc #f)
+                       ref)
+                     (begin
+                       ;; Step 2: Record monitor ref on observer for demonitor lookup
+                       (let retry-obs ()
+                         (let ((cur (atomic-ref obs-box)))
+                           (if (not (list? cur))
+                               #t
+                               (if (>= (length cur) *max-task-monitors*)
+                                   (error "task-monitor: maximum monitors limit exceeded (CWE-400)" (length cur))
+                                   (if (atomic-cas! obs-box cur (cons (cons ref target-task) cur))
+                                       #t
+                                       (retry-obs))))))
+                       ref)))))))))
 
 (define (task-demonitor observer-task ref)
   (if (not (task-context? observer-task))
@@ -146,28 +180,32 @@
                  (found-target
                   (let retry ()
                     (let ((cur (atomic-ref obs-box)))
-                      (let ((entry (assq ref cur)))
-                        (if (not entry)
-                            #f
-                            (let ((new-list (let remove-ref ((xs cur))
-                                              (cond ((null? xs) '())
-                                                    ((eqv? (car (car xs)) ref) (cdr xs))
-                                                    (else (cons (car xs) (remove-ref (cdr xs))))))))
-                              (if (atomic-cas! obs-box cur new-list)
-                                  (cdr entry)
-                                  (retry)))))))))
+                      (if (not (list? cur))
+                          #f
+                          (let ((entry (assq ref cur)))
+                            (if (not entry)
+                                #f
+                                (let ((new-list (let remove-ref ((xs cur))
+                                                  (cond ((null? xs) '())
+                                                        ((eqv? (car (car xs)) ref) (cdr xs))
+                                                        (else (cons (car xs) (remove-ref (cdr xs))))))))
+                                  (if (atomic-cas! obs-box cur new-list)
+                                      (cdr entry)
+                                      (retry))))))))))
             (if (and found-target (task-context? found-target))
-                ;; Also clean up on target
+                ;; Also clean up on target if not yet closed
                 (let* ((target-box (task-monitored-by-box found-target)))
                   (let retry-target ()
                     (let ((cur (atomic-ref target-box)))
-                      (let ((new-list (let remove-target-ref ((xs cur))
-                                        (cond ((null? xs) '())
-                                              ((eqv? (car (car xs)) ref) (cdr xs))
-                                              (else (cons (car xs) (remove-target-ref (cdr xs))))))))
-                        (if (atomic-cas! target-box cur new-list)
-                            #t
-                            (retry-target))))))
+                      (if (not (list? cur))
+                          #t
+                          (let ((new-list (let remove-target-ref ((xs cur))
+                                            (cond ((null? xs) '())
+                                                  ((eqv? (car (car xs)) ref) (cdr xs))
+                                                  (else (cons (car xs) (remove-target-ref (cdr xs))))))))
+                            (if (atomic-cas! target-box cur new-list)
+                                #t
+                                (retry-target)))))))
                 #t)
             #t))))
 
@@ -191,46 +229,44 @@
            ;; Step 1: Poison all owned channels (CWE-833 Deadlock Prevention)
            (task-poison-owned-channels! task safe-reason wake-hook)
 
-           ;; Step 2: Notify all unidirectional monitors with 'DOWN message (isolated copy per observer)
-           (let ((monitors (atomic-swap! (task-monitored-by-box task) '())))
-             (let notify-loop ((ms monitors))
-               (if (null? ms)
-                   #t
-                   (let* ((entry (car ms))
-                          (ref (car entry))
-                          (target-tid (task-tid task))
-                          (ch (caddr entry))
-                          (obs-task (cadddr entry))
-                          (down-msg (list 'DOWN ref 'process target-tid (channel-deep-copy safe-reason))))
-                     (if (channel? ch)
-                         (channel-try-send! ch down-msg)
-                         (if (task-context? obs-task)
-                             (task-set-handoff! obs-task down-msg)))
-                     (if (and obs-task (task-context? obs-task))
-                         (task-wake! obs-task wake-hook))
-                     (notify-loop (cdr ms))))))
+           ;; Step 2: Atomically close monitor registration ('closed) before dispatching 'DOWN (Issue #725, Item B4)
+           (let ((monitors (atomic-swap! (task-monitored-by-box task) 'closed)))
+             (if (list? monitors)
+                 (let notify-loop ((ms monitors))
+                   (if (null? ms)
+                       #t
+                       (let* ((entry (car ms))
+                              (ref (car entry))
+                              (target-tid (task-tid task))
+                              (ch (caddr entry))
+                              (obs-task (cadddr entry)))
+                         (%deliver-monitor-down! obs-task ch ref target-tid safe-reason wake-hook)
+                         (notify-loop (cdr ms)))))
+                 #t))
 
-           ;; Step 3: Propagate EXIT signals across bi-directional links
-           (let ((links (atomic-swap! (task-links-box task) '())))
-             (let propagate-loop ((ls links))
-               (if (null? ls)
-                   #t
-                   (let ((linked (car ls)))
-                     ;; Unlink the other direction to break cycles
-                     (%remove-from-atomic-list! (task-links-box linked) task)
+           ;; Step 3: Atomically close link registration ('closed) before propagating EXIT signals (Issue #725, Item B4)
+           (let ((links (atomic-swap! (task-links-box task) 'closed)))
+             (if (list? links)
+                 (let propagate-loop ((ls links))
+                   (if (null? ls)
+                       #t
+                       (let ((linked (car ls)))
+                         ;; Unlink the other direction to break cycles
+                         (%remove-from-atomic-list! (task-links-box linked) task)
 
-                     (if (task-trap-exit? linked)
-                         ;; Trapped: deliver EXIT message with deep-copied reason without killing linked task
-                         (let ((exit-msg (list 'EXIT (task-tid task) (channel-deep-copy safe-reason))))
-                           (task-set-handoff! linked exit-msg)
-                           (task-wake! linked wake-hook))
-                         ;; Not trapped: check reason
-                         (if (eq? safe-reason 'normal)
-                             ;; Normal exit does not kill linked tasks
-                             #t
-                             ;; Abnormal exit: cascade kill linked task!
-                             (task-handle-termination! linked (channel-deep-copy safe-reason) wake-hook)))
-                     (propagate-loop (cdr ls))))))
+                         (if (task-trap-exit? linked)
+                             ;; Trapped: deliver EXIT message with deep-copied reason without killing linked task
+                             (let ((exit-msg (list 'EXIT (task-tid task) (channel-deep-copy safe-reason))))
+                               (task-set-handoff! linked exit-msg)
+                               (task-wake! linked wake-hook))
+                             ;; Not trapped: check reason
+                             (if (eq? safe-reason 'normal)
+                                 ;; Normal exit does not kill linked tasks
+                                 #t
+                                 ;; Abnormal exit: cascade kill linked task!
+                                 (task-handle-termination! linked (channel-deep-copy safe-reason) wake-hook)))
+                         (propagate-loop (cdr ls)))))
+                 #t))
            #t)))))
 
 (define task-exit!

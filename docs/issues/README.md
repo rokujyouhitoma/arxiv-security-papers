@@ -16,7 +16,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **725** | タスク監視 (Monitor/Link) 登録と終了処理の CAS アトミック化・受付締め切り機構の実装 (B4) | Bug | High | New | [725-make-monitor-and-link-registration-atomic-with-task-termination.md](725-make-monitor-and-link-registration-atomic-with-task-termination.md) |
 | **726** | タスク通知受け取り口のメールボックス (FIFO キュー) 化による DOWN/EXIT 通知と io_uring 完了結果の上書き消失防止 | Bug | High | New | [726-replace-single-handoff-slot-with-task-mailbox-queue.md](726-replace-single-handoff-slot-with-task-mailbox-queue.md) |
 | **727** | Supervisor のタスク駆動化と子タスク DOWN 通知からの supervisor-handle-child-down! 自動ディスパッチ接続 (C7) | Feature | High | New | [727-connect-child-down-notifications-to-supervisor-task-loop.md](727-connect-child-down-notifications-to-supervisor-task-loop.md) |
 | **728** | Supervisor 再起動頻度制限の時刻源を sys-clock-gettime-monotonic 単調増加クロックへ置換 (C4) | Bug | High | New | [728-replace-supervisor-restart-clock-with-monotonic-system-clock.md](728-replace-supervisor-restart-clock-with-monotonic-system-clock.md) |
@@ -37,6 +36,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **725** | タスク監視 (Monitor/Link) 登録と終了処理の CAS アトミック化・受付締め切り機構の実装 (B4) | Bug | 2026-11-05 | [closed/725-make-monitor-and-link-registration-atomic-with-task-termination.md](closed/725-make-monitor-and-link-registration-atomic-with-task-termination.md) |
 | **724** | タスク終了理由のディープコピー退避と Arena リセット順序の是正 (B5) | Bug | 2026-11-05 | [closed/724-deep-copy-exit-reason-before-ephemeral-arena-reset.md](closed/724-deep-copy-exit-reason-before-ephemeral-arena-reset.md) |
 | **723** | Link 強制終了時の Reduction ゼロ化・Safepoint 脱出と実行停止確認後の安全な資源後始末 (B6・A4) | Bug | 2026-11-05 | [closed/723-enforce-link-termination-at-safepoint-and-ordered-resource-cleanup.md](closed/723-enforce-link-termination-at-safepoint-and-ordered-resource-cleanup.md) |
 | **722** | x86-64 Linux における Supervisor 配下の子タスク異常終了隔離と自動再起動の CI 結合テスト追加 | Feature | 2026-11-05 | [closed/722-add-x86-64-linux-ci-integration-test-for-supervisor-fault-isolation.md](closed/722-add-x86-64-linux-ci-integration-test-for-supervisor-fault-isolation.md) |

@@ -236,6 +236,74 @@
                "task-register-channel! rejects non-channel (CWE-843)"))
 
 ;; -----------------------------------------------------------------------
+;; Group 7: Atomic Monitor/Link Registration vs Termination Seal (#725)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 7: Atomic Monitor/Link Registration & Closed Seal (#725) ---\n")
+(flush-output-port)
+
+;; 7.1 Termination seals monitored-by-box and links-box to 'closed
+(let* ((dying (make-task-context))
+       (obs-before (make-task-context))
+       (obs-after (make-task-context))
+       (link-after (make-task-context))
+       (ref-before (task-monitor obs-before dying)))
+  (task-handle-termination! dying 'crash_reason)
+  (assert-equal (atomic-ref (task-monitored-by-box dying)) 'closed "monitored-by-box sealed to 'closed on termination")
+  (assert-equal (atomic-ref (task-links-box dying)) 'closed "links-box sealed to 'closed on termination")
+  (assert-equal (task-monitored-by dying) '() "task-monitored-by accessor returns '() when sealed")
+  (assert-equal (task-links dying) '() "task-links accessor returns '() when sealed")
+
+  ;; Observer registered BEFORE seal receives actual crash_reason
+  (let ((msg-before (task-take-handoff! obs-before)))
+    (assert-equal (car msg-before) 'DOWN "pre-termination observer got DOWN")
+    (assert-equal (list-ref msg-before 4) 'crash_reason "pre-termination observer got 'crash_reason"))
+
+  ;; Observer registering AFTER seal (without notify-channel, via task handoff) immediately gets 'noproc
+  (let* ((ref-after (task-monitor obs-after dying))
+         (msg-after (task-take-handoff! obs-after)))
+    (assert-true (pair? msg-after) "post-seal monitor without channel receives immediate DOWN handoff")
+    (assert-equal (car msg-after) 'DOWN "post-seal handoff is 'DOWN")
+    (assert-equal (cadr msg-after) ref-after "post-seal DOWN ref matches")
+    (assert-equal (list-ref msg-after 4) 'noproc "post-seal DOWN reason is 'noproc"))
+
+  ;; Link registering AFTER seal on trapping task delivers immediate EXIT 'noproc
+  (task-trap-exit! link-after #t)
+  (task-link! link-after dying)
+  (let ((exit-after (task-take-handoff! link-after)))
+    (assert-true (pair? exit-after) "post-seal link on trap-exit task receives immediate EXIT")
+    (assert-equal (car exit-after) 'EXIT "post-seal link signal is 'EXIT")
+    (assert-equal (caddr exit-after) 'noproc "post-seal link reason is 'noproc")))
+
+;; 7.2 Concurrent race between task-monitor and task-handle-termination! across 2 native threads
+(let ((missed-downs (make-atomic-box 0)))
+  (let race-loop ((iter 0))
+    (if (< iter 25)
+        (let* ((target (make-task-context))
+               (obs (make-task-context))
+               (ch (make-channel 4))
+               (done-flag (make-atomic-box #f)))
+          (spawn-native-thread
+           (lambda (arg)
+             (task-handle-termination! target 'concurrent_death)
+             (atomic-set! done-flag #t))
+           0)
+          (task-monitor obs target ch)
+          (let wait-t ((s 0))
+            (if (and (not (atomic-ref done-flag)) (< s 2000000))
+                (wait-t (+ s 1))
+                #t))
+          (let ((msg (channel-try-recv! ch)))
+            (if (not (and (pair? msg)
+                          (eq? (car msg) 'DOWN)
+                          (or (eq? (list-ref msg 4) 'concurrent_death)
+                              (eq? (list-ref msg 4) 'noproc))))
+                (atomic-fetch-add! missed-downs 1)
+                #t))
+          (race-loop (+ iter 1)))
+        #t))
+  (assert-equal (atomic-ref missed-downs) 0 "0 missed DOWN notifications across 25 concurrent monitor/termination races"))
+
+;; -----------------------------------------------------------------------
 ;; Test Suite Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")
