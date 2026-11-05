@@ -438,6 +438,59 @@
     (assert-eq (supervisor-state sup) 'stopped "supervisor transitioned to 'stopped after graceful shutdown")))
 
 ;; -----------------------------------------------------------------------
+;; Group 11: Child Init Arguments Preservation & Deep-Copy on Restart (#735)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 11: Child Init Arguments Deep-Copy on Restart (#735) ---\n")
+(flush-output-port)
+
+(let* ((received-args-history (make-atomic-box (list)))
+       (worker-fn
+        (lambda (arg-vec)
+          (let ((t (make-task-context))
+                (val (vector-ref arg-vec 0)))
+            ;; Record received initial value
+            (let retry ()
+              (let ((cur (atomic-ref received-args-history)))
+                (if (not (atomic-cas! received-args-history cur (cons val cur)))
+                    (retry)
+                    #t)))
+            ;; Deliberately corrupt the passed vector in-place
+            (vector-set! arg-vec 0 9999)
+            t)))
+       (init-vec (vector 100 200))
+       (cspec (make-child-spec 'arg_worker worker-fn 'permanent 'brutal_kill 'worker (list init-vec)))
+       (sup-spec (make-supervisor-spec 'one_for_one 5 10 (list cspec)))
+       (sup (make-supervisor sup-spec)))
+
+  ;; Verify accessor
+  (assert-true (list? (child-spec-init-args cspec)) "child-spec-init-args returns list")
+  (assert-equal (vector-ref (car (child-spec-init-args cspec)) 0) 100 "stored init-args vector slot is 100")
+
+  (supervisor-start! sup)
+  (let* ((c1 (supervisor-child-task sup 'arg_worker))
+         (c1-tid (task-tid c1)))
+    ;; 1st run should have received 100
+    (assert-equal (car (atomic-ref received-args-history)) 100 "first boot received initial argument 100")
+
+    ;; Simulate child crash and trigger supervisor auto-restart
+    (supervisor-handle-child-down! sup c1-tid 'worker_crash)
+
+    ;; 2nd run after restart MUST receive fresh 100, NOT corrupted 9999
+    (let ((hist (atomic-ref received-args-history)))
+      (assert-equal (length hist) 2 "history contains 2 boots (initial + restart)")
+      (assert-equal (car hist) 100 "restarted child received pristine deep-copied argument 100")
+      (assert-equal (cadr hist) 100 "both boots received pristine 100"))
+
+    ;; Clean shutdown
+    (supervisor-stop! sup))
+
+  ;; Verification of error guard
+  (assert-true (guard (exn (else #t))
+                 (make-child-spec 'bad_args worker-fn 'permanent 'brutal_kill 'worker "not-a-list")
+                 #f)
+               "make-child-spec rejects non-list init-args (CWE-843)"))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 

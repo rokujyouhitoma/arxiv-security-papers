@@ -28,7 +28,7 @@
 (define task-demonitor (lambda (a b) #f))
 (define task-trap-exit! (lambda (t v) #f))
 (define task-trapping-exit? (lambda (t) #f))
-(define make-child-spec (case-lambda ((id thunk) #f) ((id thunk restart-type) #f) ((id thunk restart-type shutdown-strategy) #f) ((id thunk restart-type shutdown-strategy child-type) #f)))
+(define make-child-spec (case-lambda ((id thunk) #f) ((id thunk restart-type) #f) ((id thunk restart-type shutdown-strategy) #f) ((id thunk restart-type shutdown-strategy child-type) #f) ((id thunk restart-type shutdown-strategy child-type init-args) #f)))
 (define make-supervisor-spec (case-lambda ((strategy) #f) ((strategy max-restarts) #f) ((strategy max-restarts period-seconds) #f) ((strategy max-restarts period-seconds child-specs) #f)))
 (define make-supervisor (case-lambda ((spec) #f) ((spec parent) #f)))
 (define supervisor-start! (lambda (sup) #f))

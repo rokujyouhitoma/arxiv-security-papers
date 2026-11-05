@@ -52,30 +52,39 @@
 ;; -----------------------------------------------------------------------
 
 (define-record-type <child-spec>
-  (%make-child-spec id start-thunk restart-type shutdown-strategy child-type)
+  (%make-child-spec id start-thunk restart-type shutdown-strategy child-type init-args)
   child-spec?
   (id                child-spec-id)
   (start-thunk       child-spec-start-thunk)
   (restart-type      child-spec-restart-type)
   (shutdown-strategy child-spec-shutdown-strategy)
-  (child-type        child-spec-child-type))
+  (child-type        child-spec-child-type)
+  (init-args         child-spec-init-args))
 
 (define make-child-spec
   (case-lambda
     ((id start-thunk)
-     (make-child-spec id start-thunk 'permanent 'brutal_kill 'worker))
-    ((id start-thunk restart-type)
-     (make-child-spec id start-thunk restart-type 'brutal_kill 'worker))
+     (make-child-spec id start-thunk 'permanent 'brutal_kill 'worker '()))
+    ((id start-thunk restart-or-args)
+     (if (list? restart-or-args)
+         (make-child-spec id start-thunk 'permanent 'brutal_kill 'worker restart-or-args)
+         (make-child-spec id start-thunk restart-or-args 'brutal_kill 'worker '())))
     ((id start-thunk restart-type shutdown-strategy)
-     (make-child-spec id start-thunk restart-type shutdown-strategy 'worker))
-    ((id start-thunk restart-type shutdown-strategy child-type)
+     (make-child-spec id start-thunk restart-type shutdown-strategy 'worker '()))
+    ((id start-thunk restart-type shutdown-strategy child-type-or-args)
+     (if (list? child-type-or-args)
+         (make-child-spec id start-thunk restart-type shutdown-strategy 'worker child-type-or-args)
+         (make-child-spec id start-thunk restart-type shutdown-strategy child-type-or-args '())))
+    ((id start-thunk restart-type shutdown-strategy child-type init-args)
      (if (not (symbol? id))
          (error "make-child-spec: id must be a symbol (CWE-843)" id)
          (if (not (procedure? start-thunk))
              (error "make-child-spec: start-thunk must be a procedure (CWE-843)" start-thunk)
              (if (not (memq restart-type '(permanent transient temporary)))
                  (error "make-child-spec: invalid restart-type (CWE-843)" restart-type)
-                 (%make-child-spec id start-thunk restart-type shutdown-strategy child-type)))))))
+                 (if (not (list? init-args))
+                     (error "make-child-spec: init-args must be a list (CWE-843)" init-args)
+                     (%make-child-spec id start-thunk restart-type shutdown-strategy child-type (channel-deep-copy init-args)))))))))
 
 (define-record-type <supervisor-spec>
   (%make-supervisor-spec strategy max-restarts max-time child-specs)
@@ -134,8 +143,11 @@
 ;; -----------------------------------------------------------------------
 
 (define (%spawn-and-monitor-child! sup-task cspec)
-  (let* ((thunk (child-spec-start-thunk cspec))
-         (child-task (thunk)))
+  (let* ((proc (child-spec-start-thunk cspec))
+         (args (child-spec-init-args cspec))
+         (child-task (if (or (not (list? args)) (null? args))
+                         (proc)
+                         (apply proc (channel-deep-copy args)))))
     (if (not (task-context? child-task))
         (error "spawn-child: start-thunk must return <task-context> (CWE-843)" child-task)
         (begin

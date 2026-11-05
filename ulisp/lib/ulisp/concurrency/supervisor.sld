@@ -20,6 +20,7 @@
     child-spec-restart-type
     child-spec-shutdown-strategy
     child-spec-child-type
+    child-spec-init-args
     make-child-spec
 
     <supervisor-spec>
