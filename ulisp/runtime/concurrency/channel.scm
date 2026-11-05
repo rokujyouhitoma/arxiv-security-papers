@@ -1302,6 +1302,110 @@
 (define (channel-try-recv-with-status! ch)
   (%channel-recv-core! ch #f #f #f #f))
 
+;; -----------------------------------------------------------------------
+;; 7a. Monotonic Deadline Channel Receive with Timeout (Issue #729, Item C6)
+;; -----------------------------------------------------------------------
+
+(define (%channel-monotonic-ms)
+  (let ((ts (sys-clock-gettime-monotonic)))
+    (if (pair? ts)
+        (+ (* (car ts) 1000) (quotient (cdr ts) 1000000))
+        0)))
+
+(define (%prune-inactive-waiters! wait-q)
+  (let ((n (queue-size wait-q)))
+    (let loop ((i 0))
+      (if (< i n)
+          (let ((st (dequeue-lockfree-with-status! wait-q)))
+            (if (car st)
+                (let ((w (cdr st)))
+                  (if (and (channel-waiter? w)
+                           (eq? (atomic-ref (%waiter-state-box w)) 'waiting))
+                      (enqueue-lockfree! wait-q w))
+                  (loop (+ i 1)))))))))
+
+(define channel-recv-timeout!
+  (case-lambda
+    ((ch timeout-ms)
+     (channel-recv-timeout! ch timeout-ms #f))
+    ((ch timeout-ms receiver-task)
+     (if (not (channel? ch))
+         (error "channel-recv-timeout!: expected <channel> (CWE-843)" ch)
+         (if (or (not (integer? timeout-ms)) (< timeout-ms 0))
+             (error "channel-recv-timeout!: timeout-ms must be a non-negative integer (CWE-843)" timeout-ms)
+             (if (and receiver-task (not (task-context? receiver-task)))
+                 (error "channel-recv-timeout!: expected <task-context> or #f (CWE-843)" receiver-task)
+                 ;; Fast Path: try immediate non-blocking receive first
+                 (let ((fast (%channel-recv-core! ch #f #f #f 'empty)))
+                   (cond
+                     ((car fast)
+                      fast)
+                     ((or (eq? (cdr fast) 'closed) (eq? (cdr fast) 'poisoned))
+                      fast)
+                     ((= timeout-ms 0)
+                      (cons #f 'timeout))
+                     (else
+                      ;; Register a <channel-waiter> in recv-wait-queue and wait until monotonic deadline
+                      (let* ((start-ms (%channel-monotonic-ms))
+                             (deadline-ms (+ start-ms timeout-ms))
+                             (waiter (make-channel-waiter receiver-task #f)))
+                        (if receiver-task
+                            (begin
+                              (%task-blocked-on-set! receiver-task ch)
+                              (%task-state-set! receiver-task 'waiting-channel)
+                              (%memory-fence)))
+                        (enqueue-lockfree! (%channel-recv-wait-queue ch) waiter)
+                        (let wait-loop ()
+                          (let ((st (atomic-ref (%waiter-state-box waiter))))
+                            (if (eq? st 'claimed)
+                                ;; Direct handoff from sender into waiter or receiver-task
+                                (let ((val (if receiver-task
+                                               (task-take-handoff! receiver-task)
+                                               (atomic-swap! (%waiter-payload-box waiter) #f))))
+                                  (cons #t val))
+                                ;; Check if a buffered message arrived or channel closed/poisoned
+                                (let ((polled (%channel-recv-core! ch #f #f #f 'empty)))
+                                  (cond
+                                    ((car polled)
+                                     (if (not (atomic-cas! (%waiter-state-box waiter) 'waiting 'cancelled))
+                                         (let ((extra-val (if receiver-task
+                                                              (task-take-handoff! receiver-task)
+                                                              (atomic-swap! (%waiter-payload-box waiter) #f))))
+                                           (enqueue-lockfree! (%channel-message-queue ch) extra-val)
+                                           (atomic-fetch-add! (%channel-current-count ch) 1)))
+                                     (%prune-inactive-waiters! (%channel-recv-wait-queue ch))
+                                     (if receiver-task
+                                         (begin
+                                           (%task-blocked-on-set! receiver-task #f)
+                                           (%task-state-set! receiver-task 'ready)))
+                                     polled)
+                                    ((or (eq? (cdr polled) 'closed) (eq? (cdr polled) 'poisoned))
+                                     (atomic-cas! (%waiter-state-box waiter) 'waiting 'cancelled)
+                                     (%prune-inactive-waiters! (%channel-recv-wait-queue ch))
+                                     (if receiver-task
+                                         (begin
+                                           (%task-blocked-on-set! receiver-task #f)
+                                           (%task-state-set! receiver-task 'ready)))
+                                     polled)
+                                    ((>= (%channel-monotonic-ms) deadline-ms)
+                                     ;; Deadline reached: atomically transition waiter from 'waiting -> 'timed-out
+                                     (if (atomic-cas! (%waiter-state-box waiter) 'waiting 'timed-out)
+                                         (begin
+                                           (%prune-inactive-waiters! (%channel-recv-wait-queue ch))
+                                           (if receiver-task
+                                               (begin
+                                                 (%task-blocked-on-set! receiver-task #f)
+                                                 (%task-state-set! receiver-task 'ready)))
+                                           (cons #f 'timeout))
+                                         ;; Sender claimed waiter at the last instant before timeout
+                                         (let ((val (if receiver-task
+                                                        (task-take-handoff! receiver-task)
+                                                        (atomic-swap! (%waiter-payload-box waiter) #f))))
+                                           (cons #t val))))
+                                    (else
+                                     (%memory-fence)
+                                     (wait-loop)))))))))))))))))
+
 (define channel-recv-unboxed!
   (case-lambda
     ((ch)

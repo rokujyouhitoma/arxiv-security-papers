@@ -116,6 +116,7 @@
     channel-recv!
     channel-try-recv!
     channel-try-recv-with-status!
+    channel-recv-timeout!
     channel-spsc-try-enqueue!
     channel-spsc-try-dequeue-val!
     channel-try-dequeue-val!

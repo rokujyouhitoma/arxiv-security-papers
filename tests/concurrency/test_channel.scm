@@ -703,6 +703,39 @@
               (assert-equal (cdr (assq 'received st)) n "channel-stats received = 10,000")))))))
 
 ;; -----------------------------------------------------------------------
+;; Group 12: Monotonic Deadline channel-recv-timeout! (Issue #729, Item C6)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 12: channel-recv-timeout! & Waiter Cleanup (#729) ---\n")
+(flush-output-port)
+
+(let ((ch (make-channel 4))
+      (rx-task (make-task-context)))
+  ;; 12a: Immediate hit when message is already buffered
+  (channel-send! ch 'ready-now)
+  (let ((res (channel-recv-timeout! ch 50 rx-task)))
+    (assert-equal (car res) #t "channel-recv-timeout! immediate hit status is #t")
+    (assert-equal (cdr res) 'ready-now "channel-recv-timeout! returns 'ready-now immediately"))
+
+  ;; 12b: Zero-timeout returns (cons #f 'timeout) immediately
+  (let ((res0 (channel-recv-timeout! ch 0 rx-task)))
+    (assert-equal (car res0) #f "channel-recv-timeout! 0ms status is #f")
+    (assert-equal (cdr res0) 'timeout "channel-recv-timeout! with 0ms on empty channel returns 'timeout"))
+
+  ;; 12c: Positive timeout (15ms) expires cleanly and leaves 0 garbage waiters in recv-wait-queue
+  (let ((res-exp (channel-recv-timeout! ch 15 rx-task)))
+    (assert-equal (car res-exp) #f "channel-recv-timeout! 15ms status is #f")
+    (assert-equal (cdr res-exp) 'timeout "channel-recv-timeout! expires after 15ms with 'timeout")
+    (assert-equal (task-state rx-task) 'ready "rx-task restored to 'ready after timeout")
+    (assert-equal (task-blocked-on rx-task) #f "rx-task blocked-on cleared to #f after timeout")
+    (assert-equal (queue-size (channel-recv-wait-queue ch)) 0 "waiter queue pruned to 0 garbage entries after timeout"))
+
+  ;; 12d: Subsequent send after timeout goes to ring buffer (not swallowed by timed-out waiter)
+  (channel-send! ch 'post-timeout-msg)
+  (let ((res-after (channel-recv-timeout! ch 20 rx-task)))
+    (assert-equal (car res-after) #t "subsequent message after timeout status is #t")
+    (assert-equal (cdr res-after) 'post-timeout-msg "subsequent message after timeout received cleanly")))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

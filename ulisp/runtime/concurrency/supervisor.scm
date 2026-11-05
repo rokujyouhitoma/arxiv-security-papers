@@ -155,15 +155,40 @@
 (define (%stop-child-instance! sup-task child-entry)
   (let* ((cspec (car child-entry))
          (ctask (cadr child-entry))
-         (mref (caddr child-entry)))
+         (mref (caddr child-entry))
+         (shutdown-strat (child-spec-shutdown-strategy cspec)))
     (if (and ctask (task-context? ctask))
         (begin
           ;; Demonitor first to prevent duplicate down handling
           (if (and sup-task (task-context? sup-task))
               (task-demonitor sup-task mref))
-          ;; O(1) Ephemeral Arena Reset, channel drop & cascade cleanup
-          (synapse-cleanup-task-resources! ctask 'supervisor_shutdown #f #f)
-          #t)
+          (cond
+            ((or (eq? shutdown-strat 'brutal_kill)
+                 (eq? (task-state ctask) 'terminated))
+             ;; Immediate O(1) Ephemeral Arena Reset, channel drop & cascade cleanup
+             (synapse-cleanup-task-resources! ctask 'supervisor_shutdown #f #f)
+             #t)
+            ((and (integer? shutdown-strat) (> shutdown-strat 0))
+             ;; Graceful shutdown with timeout (Issue #729, Item C6):
+             ;; Deliver 'shutdown EXIT signal and wait up to shutdown-strat ms via channel-recv-timeout!
+             (let* ((ack-ch (make-channel 1))
+                    (obs-dummy (make-task-context))
+                    (sref (task-monitor obs-dummy ctask ack-ch)))
+               (task-set-handoff! ctask (list 'EXIT (if (task-context? sup-task) (task-tid sup-task) 0) 'shutdown))
+               (task-wake! ctask #f)
+               (if (and (eq? (task-state ctask) 'ready)
+                        (procedure? (task-next-run ctask)))
+                   (with-synapse-task-boundary ctask (task-next-run ctask))
+                   #f)
+               (let ((wait-res (channel-recv-timeout! ack-ch shutdown-strat)))
+                 (task-demonitor obs-dummy sref)
+                 (if (not (eq? (task-state ctask) 'terminated))
+                     (synapse-cleanup-task-resources! ctask 'killed_after_shutdown_timeout #f #f)
+                     (synapse-cleanup-task-resources! ctask 'shutdown #f #f))
+                 #t)))
+            (else
+             (synapse-cleanup-task-resources! ctask 'supervisor_shutdown #f #f)
+             #t)))
         #f)))
 
 ;; -----------------------------------------------------------------------

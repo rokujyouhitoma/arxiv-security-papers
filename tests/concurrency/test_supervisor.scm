@@ -397,6 +397,47 @@
   (supervisor-stop! sup))
 
 ;; -----------------------------------------------------------------------
+;; Group 10: Graceful Shutdown with channel-recv-timeout! (#729)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 10: Graceful Shutdown with channel-recv-timeout! (#729) ---\n")
+(flush-output-port)
+
+;; 10.1 Cooperative child that exits gracefully on 'shutdown signal within timeout
+(let* ((graceful-cleaned-up (make-atomic-box #f))
+       (coop-spec
+        (make-child-spec
+         'coop_worker
+         (lambda ()
+           (let ((t (make-task-context)))
+             (task-next-run-set!
+              t
+              (lambda ()
+                (let ((sig (task-take-handoff! t)))
+                  (if (and (pair? sig) (eq? (car sig) 'EXIT) (eq? (caddr sig) 'shutdown))
+                      (begin
+                        (atomic-set! graceful-cleaned-up #t)
+                        (task-exit! t 'shutdown))))))
+             t))
+         'permanent
+         50)) ; 50ms graceful shutdown timeout
+       ( unresponsive-spec
+         (make-child-spec
+          'hung_worker
+          (lambda () (make-task-context))
+          'permanent
+          15)) ; 15ms timeout before brutal kill
+       (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list coop-spec unresponsive-spec)))
+       (sup (make-supervisor sup-spec)))
+  (supervisor-start! sup)
+  (let ((coop-task (supervisor-child-task sup 'coop_worker))
+        (hung-task (supervisor-child-task sup 'hung_worker)))
+    (supervisor-stop! sup)
+    (assert-true (atomic-ref graceful-cleaned-up) "cooperative child ran graceful shutdown handler before exit")
+    (assert-eq (task-state coop-task) 'terminated "cooperative child state is 'terminated")
+    (assert-eq (task-state hung-task) 'terminated "unresponsive child forcefully terminated after 15ms timeout")
+    (assert-eq (supervisor-state sup) 'stopped "supervisor transitioned to 'stopped after graceful shutdown")))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 
