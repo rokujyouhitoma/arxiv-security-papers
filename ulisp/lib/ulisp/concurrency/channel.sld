@@ -51,6 +51,11 @@
     task-handoff
     task-set-handoff!
     task-take-handoff!
+    task-mailbox-empty?
+    task-mailbox-size
+    task-mailbox-enqueue!
+    task-mailbox-dequeue!
+    task-mailbox-peek
     task-links-box
     task-links
     task-monitors-box

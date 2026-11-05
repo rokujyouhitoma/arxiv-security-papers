@@ -311,18 +311,30 @@
 (define (task-handoff t)
   (if (not (task-context? t))
       (error "task-handoff: expected <task-context>" t)
-      (let ((cell (atomic-ref (%task-handoff-box t))))
-        (if (pair? cell)
-            (cdr cell)
-            #f))))
+      (let ((cur (atomic-ref (%task-handoff-box t))))
+        (cond
+          ((not (pair? cur)) #f)
+          ((boolean? (car cur)) (cdr cur))
+          ((pair? (car cur)) (cdar cur))
+          (else (car cur))))))
 
 (define (task-set-handoff! t val)
   (if (not (task-context? t))
       (error "task-set-handoff!: expected <task-context>" t)
-      (begin
-        (atomic-set! (%task-handoff-box t) (cons #t val))
-        (%memory-fence)
-        val)))
+      (let ((box (%task-handoff-box t))
+            (entry (cons #t val)))
+        (let retry ()
+          (let* ((cur (atomic-ref box))
+                 (cur-list (cond
+                             ((not (pair? cur)) '())
+                             ((boolean? (car cur)) (list cur))
+                             (else cur)))
+                 (next-list (append cur-list (list entry))))
+            (if (atomic-cas! box cur next-list)
+                (begin
+                  (%memory-fence)
+                  val)
+                (retry)))))))
 
 (define task-take-handoff!
   (case-lambda
@@ -330,10 +342,43 @@
     ((t empty-default)
      (if (not (task-context? t))
          (error "task-take-handoff!: expected <task-context>" t)
-         (let ((cell (atomic-swap! (%task-handoff-box t) #f)))
-           (if (pair? cell)
-               (cdr cell)
-               empty-default))))))
+         (let ((box (%task-handoff-box t)))
+           (let retry ()
+             (let ((cur (atomic-ref box)))
+               (cond
+                 ((not (pair? cur))
+                  empty-default)
+                 ((boolean? (car cur))
+                  (if (atomic-cas! box cur #f)
+                      (cdr cur)
+                      (retry)))
+                 (else
+                  (let ((next (if (null? (cdr cur)) #f (cdr cur)))
+                        (head (car cur)))
+                    (if (atomic-cas! box cur next)
+                        (if (pair? head) (cdr head) head)
+                        (retry))))))))))))
+
+;; Explicit Task Mailbox (FIFO Queue) API (Issue #726)
+(define (task-mailbox-empty? t)
+  (not (task-has-handoff? t)))
+
+(define (task-mailbox-size t)
+  (if (not (task-context? t))
+      (error "task-mailbox-size: expected <task-context>" t)
+      (let ((cur (atomic-ref (%task-handoff-box t))))
+        (cond
+          ((not (pair? cur)) 0)
+          ((boolean? (car cur)) 1)
+          (else (length cur))))))
+
+(define (task-mailbox-enqueue! t val)
+  (task-set-handoff! t val))
+
+(define task-mailbox-dequeue! task-take-handoff!)
+
+(define (task-mailbox-peek t)
+  (task-handoff t))
 
 ;; 耐障害性・リンク・モニタ・チャネル所有メタデータアクセサ
 (define (task-links-box t)
@@ -1043,7 +1088,7 @@
                      (if recv-waiter
                          (let ((recv-task (%waiter-task recv-waiter)))
                            (if recv-task
-                               (atomic-set! (%task-handoff-box recv-task) (cons #t val))
+                               (task-set-handoff! recv-task val)
                                (atomic-set! (%waiter-payload-box recv-waiter) val))
                            (atomic-fetch-add! (%channel-sent-count-box ch) 1)
                            (atomic-fetch-add! (%channel-received-count-box ch) 1)
@@ -1174,7 +1219,6 @@
                                      (let ((waiter (make-channel-waiter receiver-task #f)))
                                        (if receiver-task
                                            (begin
-                                             (atomic-set! (%task-handoff-box receiver-task) #f)
                                              (%task-blocked-on-set! receiver-task ch)
                                              (%task-state-set! receiver-task 'waiting-channel)
                                              (%memory-fence)))
@@ -1395,7 +1439,7 @@
                    (let ((t (%waiter-task w)))
                      (if t
                          (begin
-                           (atomic-set! (%task-handoff-box t) (cons #f (cons 'poisoned reason)))
+                           (task-set-handoff! t (cons 'poisoned reason))
                            (%task-blocked-on-set! t #f)
                            (%task-state-set! t 'ready)
                            (%wake-task! t wake-hook)))
@@ -1407,7 +1451,7 @@
                    (let ((t (%waiter-task w)))
                      (if t
                          (begin
-                           (atomic-set! (%task-handoff-box t) (cons #f (cons 'poisoned reason)))
+                           (task-set-handoff! t (cons 'poisoned reason))
                            (%task-blocked-on-set! t #f)
                            (%task-state-set! t 'ready)
                            (%wake-task! t wake-hook)))

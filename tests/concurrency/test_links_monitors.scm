@@ -304,6 +304,65 @@
   (assert-equal (atomic-ref missed-downs) 0 "0 missed DOWN notifications across 25 concurrent monitor/termination races"))
 
 ;; -----------------------------------------------------------------------
+;; Group 8: Task Mailbox FIFO Queue Prevents Overwriting Notifications (#726)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Task Mailbox FIFO Queue (#726) ---\n")
+(flush-output-port)
+
+(let* ((watcher (make-task-context))
+       (child-1 (make-task-context))
+       (child-2 (make-task-context))
+       (linked-peer (make-task-context))
+       (ref-1 (task-monitor watcher child-1))
+       (ref-2 (task-monitor watcher child-2)))
+  (task-trap-exit! watcher #t)
+  (task-link! watcher linked-peer)
+
+  (assert-true (task-mailbox-empty? watcher) "watcher mailbox initially empty")
+  (assert-equal (task-mailbox-size watcher) 0 "watcher mailbox initial size is 0")
+
+  ;; Deliver 4 distinct notifications to watcher without draining in between:
+  ;; 1) child-1 DOWN
+  ;; 2) io_uring completion result
+  ;; 3) child-2 DOWN
+  ;; 4) linked-peer EXIT
+  (task-handle-termination! child-1 'err_child_1)
+  (task-set-handoff! watcher (cons 'io_complete 4096))
+  (task-handle-termination! child-2 'err_child_2)
+  (task-handle-termination! linked-peer 'peer_crashed)
+
+  (assert-false (task-mailbox-empty? watcher) "watcher mailbox is non-empty")
+  (assert-equal (task-mailbox-size watcher) 4 "all 4 notifications preserved in FIFO mailbox without overwrite")
+
+  ;; Peek returns oldest notification (child-1 DOWN) without removing it
+  (let ((peeked (task-mailbox-peek watcher)))
+    (assert-equal (car peeked) 'DOWN "peeked oldest message is child-1 DOWN")
+    (assert-equal (cadr peeked) ref-1 "peeked DOWN ref is ref-1")
+    (assert-equal (task-mailbox-size watcher) 4 "mailbox size still 4 after peek"))
+
+  ;; Dequeue in strict FIFO order
+  (let ((m1 (task-take-handoff! watcher))
+        (m2 (task-take-handoff! watcher))
+        (m3 (task-take-handoff! watcher))
+        (m4 (task-take-handoff! watcher)))
+    (assert-equal (car m1) 'DOWN "1st message is DOWN")
+    (assert-equal (cadr m1) ref-1 "1st message is ref-1")
+    (assert-equal (list-ref m1 4) 'err_child_1 "1st message reason is 'err_child_1")
+
+    (assert-equal m2 (cons 'io_complete 4096) "2nd message is io_complete 4096")
+
+    (assert-equal (car m3) 'DOWN "3rd message is DOWN")
+    (assert-equal (cadr m3) ref-2 "3rd message is ref-2")
+    (assert-equal (list-ref m3 4) 'err_child_2 "3rd message reason is 'err_child_2")
+
+    (assert-equal (car m4) 'EXIT "4th message is EXIT")
+    (assert-equal (cadr m4) (task-tid linked-peer) "4th message tid is linked-peer")
+    (assert-equal (caddr m4) 'peer_crashed "4th message reason is 'peer_crashed")
+
+    (assert-true (task-mailbox-empty? watcher) "watcher mailbox is empty after draining all 4")
+    (assert-equal (task-mailbox-size watcher) 0 "watcher mailbox size is 0 after draining")))
+
+;; -----------------------------------------------------------------------
 ;; Test Suite Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")
