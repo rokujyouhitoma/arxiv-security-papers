@@ -16,7 +16,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **728** | Supervisor 再起動頻度制限の時刻源を sys-clock-gettime-monotonic 単調増加クロックへ置換 (C4) | Bug | High | New | [728-replace-supervisor-restart-clock-with-monotonic-system-clock.md](728-replace-supervisor-restart-clock-with-monotonic-system-clock.md) |
 | **729** | チャネル受信 (channel-recv!) へのタイムアウト機構の追加と Graceful Shutdown 待機への統合 (C6) | Feature | High | New | [729-implement-channel-recv-timeout-for-graceful-shutdown.md](729-implement-channel-recv-timeout-for-graceful-shutdown.md) |
 | **730** | プロセス名レジストリ synapse-send-named! のタスク宛て実配送・terminated 状態名統一・終了タスク自動登録解除 (C5) | Bug | Medium | New | [730-fix-registry-send-named-delivery-and-auto-unregister-terminated-tasks.md](730-fix-registry-send-named-delivery-and-auto-unregister-terminated-tasks.md) |
 | **731** | make-channel 実行時における現在タスク所有チャネル一覧への自動登録 (A6) | Feature | Medium | New | [731-auto-register-created-channels-to-current-task-owned-resources.md](731-auto-register-created-channels-to-current-task-owned-resources.md) |
@@ -34,6 +33,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **728** | Supervisor 再起動頻度制限の時刻源を sys-clock-gettime-monotonic 単調増加クロックへ置換 (C4) | Bug | 2026-11-05 | [closed/728-replace-supervisor-restart-clock-with-monotonic-system-clock.md](closed/728-replace-supervisor-restart-clock-with-monotonic-system-clock.md) |
 | **727** | Supervisor のタスク駆動化と子タスク DOWN 通知からの supervisor-handle-child-down! 自動ディスパッチ接続 (C7) | Feature | 2026-11-05 | [closed/727-connect-child-down-notifications-to-supervisor-task-loop.md](closed/727-connect-child-down-notifications-to-supervisor-task-loop.md) |
 | **726** | タスク通知受け取り口のメールボックス (FIFO キュー) 化による DOWN/EXIT 通知と io_uring 完了結果の上書き消失防止 | Bug | 2026-11-05 | [closed/726-replace-single-handoff-slot-with-task-mailbox-queue.md](closed/726-replace-single-handoff-slot-with-task-mailbox-queue.md) |
 | **725** | タスク監視 (Monitor/Link) 登録と終了処理の CAS アトミック化・受付締め切り機構の実装 (B4) | Bug | 2026-11-05 | [closed/725-make-monitor-and-link-registration-atomic-with-task-termination.md](closed/725-make-monitor-and-link-registration-atomic-with-task-termination.md) |

@@ -365,6 +365,38 @@
   (supervisor-stop! sup))
 
 ;; -----------------------------------------------------------------------
+;; Group 9: Monotonic System Clock for Restart Frequency Window (#728)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 9: Monotonic System Clock for Restart Frequency Window (#728) ---\n")
+(flush-output-port)
+
+(let* ((t0 (supervisor-clock-now))
+       (t1 (allocate-supervisor-timestamp!))
+       (t2 (allocate-supervisor-timestamp!)))
+  (assert-true (> t0 0) "supervisor-clock-now returns positive OS monotonic milliseconds")
+  (assert-true (<= (- t2 t1) 5) "allocate-supervisor-timestamp! uses real monotonic clock (not fake +10 counter)"))
+
+;; Verify sliding window expiry using monotonic clock + time advance
+(let* ((c-spec (make-child-spec 'window_worker (lambda () (make-task-context))))
+       ;; Max 2 restarts within 500ms window
+       (sup-spec (make-supervisor-spec 'one_for_one 2 500 (list c-spec)))
+       (sup (make-supervisor sup-spec)))
+  (supervisor-start! sup)
+  ;; 2 restarts within the current 500ms monotonic window
+  (supervisor-handle-child-down! sup (task-tid (supervisor-child-task sup 'window_worker)) '(panic . w_crash1))
+  (supervisor-handle-child-down! sup (task-tid (supervisor-child-task sup 'window_worker)) '(panic . w_crash2))
+  (assert-eq (supervisor-state sup) 'running "supervisor still running after 2 restarts in window")
+
+  ;; Advance monotonic clock offset by 600ms (past the 500ms window)
+  (supervisor-clock-advance! 600)
+
+  ;; 3rd restart is now outside the prior 500ms window and MUST succeed without escalation!
+  (supervisor-handle-child-down! sup (task-tid (supervisor-child-task sup 'window_worker)) '(panic . w_crash3))
+  (assert-eq (supervisor-state sup) 'running "3rd restart after 600ms window expiry succeeds without crash-loop escalation")
+  (assert-true (task-context? (supervisor-child-task sup 'window_worker)) "window_worker restarted and alive")
+  (supervisor-stop! sup))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 

@@ -22,21 +22,30 @@
   (vector-set! *supervisor-crash-logger-hook-box* 0 hook))
 
 ;; -----------------------------------------------------------------------
-;; 1. Global Timestamp Clock for Supervisor Time Window
+;; 1. Monotonic System Clock for Supervisor Time Window (Issue #728, Item C4)
 ;; -----------------------------------------------------------------------
 
-(define *supervisor-clock* (make-atomic-box 1000))
+(define *supervisor-clock-offset-ms* (make-atomic-box 0))
+(define *supervisor-clock* *supervisor-clock-offset-ms*)
 
-(define (allocate-supervisor-timestamp!)
-  (atomic-fetch-add! *supervisor-clock* 10))
+(define (%monotonic-clock-ms)
+  (let ((ts (sys-clock-gettime-monotonic)))
+    (if (pair? ts)
+        (+ (* (car ts) 1000) (quotient (cdr ts) 1000000))
+        0)))
 
 (define (supervisor-clock-now)
-  (atomic-ref *supervisor-clock*))
+  (+ (%monotonic-clock-ms) (atomic-ref *supervisor-clock-offset-ms*)))
+
+(define (allocate-supervisor-timestamp!)
+  (supervisor-clock-now))
 
 (define (supervisor-clock-advance! delta)
   (if (not (integer? delta))
       (error "supervisor-clock-advance!: delta must be an integer (CWE-843)" delta)
-      (atomic-fetch-add! *supervisor-clock* delta)))
+      (begin
+        (atomic-fetch-add! *supervisor-clock-offset-ms* delta)
+        (supervisor-clock-now))))
 
 ;; -----------------------------------------------------------------------
 ;; 2. Record Types: <child-spec>, <supervisor-spec>, <supervisor-context>

@@ -77,25 +77,29 @@
   (%raw-syscall (%to-raw 25) old-addr (%to-raw old-size) (%to-raw new-size) (%to-raw flags) 0 0))
 
 ;; sys-clock-gettime-monotonic: sys_clock_gettime(CLOCK_MONOTONIC=1, &timespec) -> syscall 228
-;; 16-byte raw buffer for timespec (tv_sec: 8 bytes, tv_nsec: 8 bytes)
-(define *posix-timespec-cell* (cons 0 (cons 0 '())))
-
+;; Uses per-call 16-byte pair buffer and restores tagged 0s for thread & GC safety (Issue #728)
 (define (sys-clock-gettime-monotonic)
-  (let* ((ptr (%ptr-untag *posix-timespec-cell*))
+  (let* ((cell (cons 0 0))
+         (ptr (%ptr-untag cell))
          (ret (%to-fixnum (%raw-syscall (%to-raw 228) (%to-raw 1) ptr 0 0 0 0))))
     (if (= ret 0)
         (let ((sec (%to-fixnum (%raw-load ptr 0)))
               (nsec (%to-fixnum (%raw-load ptr 8))))
+          (%raw-store! ptr 0 0)
+          (%raw-store! ptr 8 0)
           (cons sec nsec))
         (cons 0 0))))
 
 ;; sys-clock-gettime-realtime: sys_clock_gettime(CLOCK_REALTIME=0, &timespec) -> syscall 228
 (define (sys-clock-gettime-realtime)
-  (let* ((ptr (%ptr-untag *posix-timespec-cell*))
+  (let* ((cell (cons 0 0))
+         (ptr (%ptr-untag cell))
          (ret (%to-fixnum (%raw-syscall (%to-raw 228) 0 ptr 0 0 0 0))))
     (if (= ret 0)
         (let ((sec (%to-fixnum (%raw-load ptr 0)))
               (nsec (%to-fixnum (%raw-load ptr 8))))
+          (%raw-store! ptr 0 0)
+          (%raw-store! ptr 8 0)
           (cons sec nsec))
         (cons 0 0))))
 
