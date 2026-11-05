@@ -189,6 +189,39 @@
 ;; 5. Supervisor Factory & Initialization
 ;; -----------------------------------------------------------------------
 
+;; Active supervisor registry keyed by supervisor <task-context> for automatic
+;; DOWN signal -> supervisor-handle-child-down! dispatch (Issue #727, Item C7)
+(define *active-supervisors-by-task-box* (make-atomic-box '()))
+
+(define (%register-active-supervisor! sup-task sup)
+  (let retry ()
+    (let* ((cur (atomic-ref *active-supervisors-by-task-box*))
+           (filtered (let rem ((xs cur))
+                       (cond ((null? xs) '())
+                             ((eq? (caar xs) sup-task) (rem (cdr xs)))
+                             (else (cons (car xs) (rem (cdr xs))))))))
+      (if (atomic-cas! *active-supervisors-by-task-box* cur (cons (cons sup-task sup) filtered))
+          #t
+          (retry)))))
+
+(define (%unregister-active-supervisor! sup-task)
+  (let retry ()
+    (let* ((cur (atomic-ref *active-supervisors-by-task-box*))
+           (filtered (let rem ((xs cur))
+                       (cond ((null? xs) '())
+                             ((eq? (caar xs) sup-task) (rem (cdr xs)))
+                             (else (cons (car xs) (rem (cdr xs))))))))
+      (if (atomic-cas! *active-supervisors-by-task-box* cur filtered)
+          #t
+          (retry)))))
+
+(define (%lookup-active-supervisor-by-task obs-task)
+  (let loop ((xs (atomic-ref *active-supervisors-by-task-box*)))
+    (cond
+      ((null? xs) #f)
+      ((eq? (caar xs) obs-task) (cdar xs))
+      (else (loop (cdr xs))))))
+
 (define make-supervisor
   (case-lambda
     ((spec)
@@ -203,6 +236,14 @@
                                                (make-atomic-box (list))
                                                parent-sup
                                                (make-atomic-box 'stopped))))
+           ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7)
+           (task-next-run-set!
+            sup-task
+            (lambda ()
+              (let ((res (supervisor-poll-down-signals! sup)))
+                (if (eq? (supervisor-state sup) 'running)
+                    (task-state-set! sup-task 'ready))
+                res)))
            sup)))))
 
 (define supervisor-start!
@@ -212,15 +253,16 @@
          (error "supervisor-start!: expected <supervisor-context> (CWE-843)" sup)
          (let* ((spec (supervisor-spec sup))
                 (sup-task (supervisor-task sup))
-                (cspecs (supervisor-spec-child-specs spec))
-                (children (let loop ((specs cspecs) (acc (list)))
-                            (if (null? specs)
-                                acc
-                                (let ((child-inst (%spawn-and-monitor-child! sup-task (car specs))))
-                                  (loop (cdr specs) (cons child-inst acc)))))))
-           (atomic-set! (%supervisor-children-box sup) (reverse children))
+                (cspecs (supervisor-spec-child-specs spec)))
            (atomic-set! (%supervisor-state-box sup) 'running)
-           #t)))))
+           (%register-active-supervisor! sup-task sup)
+           (let ((children (let loop ((specs cspecs) (acc (list)))
+                             (if (null? specs)
+                                 acc
+                                 (let ((child-inst (%spawn-and-monitor-child! sup-task (car specs))))
+                                   (loop (cdr specs) (cons child-inst acc)))))))
+             (atomic-set! (%supervisor-children-box sup) (reverse children))
+             #t))))))
 
 (define supervisor-stop!
   (case-lambda
@@ -229,6 +271,7 @@
          (error "supervisor-stop!: expected <supervisor-context> (CWE-843)" sup)
          (let ((sup-task (supervisor-task sup)))
            (atomic-set! (%supervisor-state-box sup) 'stopping)
+           (%unregister-active-supervisor! sup-task)
            (let ((children (atomic-swap! (%supervisor-children-box sup) (list))))
              ;; Stop children in reverse order
              (let loop ((cs (reverse children)))
@@ -417,3 +460,16 @@
                               (res (supervisor-handle-child-down! sup target-tid reason)))
                          (drain res))
                        (drain last-res))))))))))
+
+;; Connect monitor DOWN notifications to active supervisor tasks automatically (Issue #727, Item C7)
+(guard (exn (else #f))
+  (if (procedure? set-monitor-down-dispatch-hook!)
+      (set-monitor-down-dispatch-hook!
+       (lambda (obs-task)
+         (let ((sup (%lookup-active-supervisor-by-task obs-task)))
+           (if (and sup (eq? (supervisor-state sup) 'running))
+               (let ((runner (task-next-run obs-task)))
+                 (if (procedure? runner)
+                     (runner)
+                     (supervisor-poll-down-signals! sup)))
+               #f))))))

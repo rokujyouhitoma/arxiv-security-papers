@@ -122,6 +122,11 @@
 ;; 3. Unidirectional Monitors (DSN-37 Section 8.4.1)
 ;; -----------------------------------------------------------------------
 
+(define *monitor-down-dispatch-hook-box* (make-atomic-box #f))
+
+(define (set-monitor-down-dispatch-hook! proc)
+  (atomic-set! *monitor-down-dispatch-hook-box* proc))
+
 (define (%deliver-monitor-down! observer-task notify-channel ref target-tid reason wake-hook)
   (let ((down-msg (list 'DOWN ref 'process target-tid (channel-deep-copy reason))))
     (if (channel? notify-channel)
@@ -129,7 +134,13 @@
         (if (task-context? observer-task)
             (task-set-handoff! observer-task down-msg)))
     (if (and observer-task (task-context? observer-task))
-        (task-wake! observer-task wake-hook))))
+        (begin
+          (task-wake! observer-task wake-hook)
+          (if (not (channel? notify-channel))
+              (let ((dispatch-hook (atomic-ref *monitor-down-dispatch-hook-box*)))
+                (if (procedure? dispatch-hook)
+                    (dispatch-hook observer-task)
+                    #f)))))))
 
 (define task-monitor
   (case-lambda

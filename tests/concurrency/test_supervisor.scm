@@ -308,8 +308,7 @@
     (assert-equal (atomic-ref unrelated-sum-box) 300 "unrelated concurrent tasks completed normally (100+200=300)")
     ;; 2. Crashed child task transitioned to 'terminated
     (assert-eq (task-state t-child-1) 'terminated "1st child instance running (car '()) terminated cleanly")
-    ;; 3. Supervisor received DOWN signal and automatically restarts child
-    (supervisor-poll-down-signals! sup)
+    ;; 3. Supervisor automatically received DOWN signal and restarted child without manual polling (#727)
     (let* ((t-child-2 (supervisor-child-task sup 'crashy_worker))
            (tid-2 (task-tid t-child-2)))
       (assert-true (task-context? t-child-2) "restarted child task context exists")
@@ -321,6 +320,49 @@
       (assert-equal (atomic-ref child-recovered-box) 777 "restarted child executed and completed normally"))
     (supervisor-stop! sup)
     (scheduler-stop! sched)))
+
+;; -----------------------------------------------------------------------
+;; Group 8: Automatic Child DOWN -> supervisor-handle-child-down! Dispatch (#727)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Automatic Child DOWN Dispatch (#727) ---\n")
+(flush-output-port)
+
+(let* ((w1-boots (make-atomic-box 0))
+       (w2-boots (make-atomic-box 0))
+       (w1-spec (make-child-spec 'auto_w1
+                                 (lambda ()
+                                   (atomic-fetch-add! w1-boots 1)
+                                   (make-task-context))))
+       (w2-spec (make-child-spec 'auto_w2
+                                 (lambda ()
+                                   (atomic-fetch-add! w2-boots 1)
+                                   (make-task-context))))
+       (sup-spec (make-supervisor-spec 'one_for_all 5 1000 (list w1-spec w2-spec)))
+       (sup (make-supervisor sup-spec)))
+  (assert-true (procedure? (task-next-run (supervisor-task sup)))
+               "supervisor task has runnable task-next-run loop (#727)")
+  (supervisor-start! sup)
+  (assert-equal (atomic-ref w1-boots) 1 "auto_w1 booted once on start")
+  (assert-equal (atomic-ref w2-boots) 1 "auto_w2 booted once on start")
+
+  (let* ((c1-before (supervisor-child-task sup 'auto_w1))
+         (c2-before (supervisor-child-task sup 'auto_w2))
+         (tid1-before (task-tid c1-before))
+         (tid2-before (task-tid c2-before)))
+    ;; Crash c1 inside task boundary WITHOUT calling supervisor-handle-child-down! or supervisor-poll-down-signals!
+    (with-synapse-task-boundary c1-before
+      (lambda ()
+        (synapse-panic! 'auto_child_crash "unhandled child failure")))
+
+    ;; Supervisor must have automatically received DOWN via monitor and restarted both children (one_for_all)
+    (let* ((c1-after (supervisor-child-task sup 'auto_w1))
+           (c2-after (supervisor-child-task sup 'auto_w2)))
+      (assert-equal (atomic-ref w1-boots) 2 "auto_w1 automatically restarted on DOWN")
+      (assert-equal (atomic-ref w2-boots) 2 "auto_w2 automatically restarted on DOWN (one_for_all)")
+      (assert-true (not (= tid1-before (task-tid c1-after))) "auto_w1 assigned new TID")
+      (assert-true (not (= tid2-before (task-tid c2-after))) "auto_w2 assigned new TID")
+      (assert-true (task-mailbox-empty? (supervisor-task sup)) "supervisor task mailbox drained after auto-dispatch")))
+  (supervisor-stop! sup))
 
 ;; -----------------------------------------------------------------------
 ;; Final Summary
