@@ -376,6 +376,45 @@
     (assert-eq (atomic-ref survivor-ran) #t "sibling task body executed normally")))
 
 ;; -----------------------------------------------------------------------
+;; Group 10: Deep-Copy Exit Reason Before Ephemeral Arena Reset (#724)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 10: Deep-Copy Exit Reason Before Arena Reset (#724) ---\n")
+(flush-output-port)
+
+(let* ((worker (make-task-context))
+       (observer (make-task-context))
+       (linked-sup (make-task-context))
+       (arena (make-task-arena 2048))
+       (mutable-pair (cons 'complex-fault (list 10 20)))
+       (mutable-vec (vector 'vec-payload 99)))
+  (task-set-arena! worker arena)
+  (task-monitor observer worker)
+  (task-trap-exit! linked-sup #t)
+  (task-link! linked-sup worker)
+  (let ((res (with-synapse-task-boundary worker
+               (lambda ()
+                 (arena-allocate! arena 256)
+                 ;; Panic with composite mutable reason & details
+                 (synapse-secure-panic! mutable-pair mutable-vec)))))
+    ;; Mutate original objects after panic to prove Monitor/Link received deep-copied independent structures
+    (set-car! mutable-pair 'clobbered-car)
+    (set-car! (cdr mutable-pair) 0)
+    (vector-set! mutable-vec 1 -1)
+
+    (assert-eq (car res) 'panic "composite reason panic caught")
+    (assert-equal (synapse-panic-reason (cdr res)) '(complex-fault 10 20) "panic record reason deep-copied and immune to post-mutation")
+    (assert-equal (synapse-panic-details (cdr res)) (list (vector 'vec-payload 99)) "panic record details deep-copied and immune to post-mutation")
+    (assert-eq (arena-used-bytes arena) 0 "arena securely reset to 0 after notifications")
+
+    (let* ((down-msg (task-take-handoff! observer))
+           (down-reason (list-ref down-msg 4))
+           (exit-msg (task-take-handoff! linked-sup))
+           (exit-reason (list-ref exit-msg 2)))
+      (assert-equal down-reason '(panic complex-fault 10 20) "Monitor DOWN received deep-copied composite reason")
+      (assert-equal exit-reason '(panic complex-fault 10 20) "Link EXIT received deep-copied composite reason")
+      (assert-true (not (eq? (cdr down-reason) (cdr exit-reason))) "Monitor and Link received independent deep-copied reason pairs"))))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 

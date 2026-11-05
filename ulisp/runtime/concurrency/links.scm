@@ -182,15 +182,16 @@
     ((task reason wake-hook)
      (if (not (task-context? task))
          (error "task-handle-termination!: expected <task-context>" task)
-         (begin
+         ;; Deep-copy exit reason before notifying monitors/links or resetting task arena (Issue #724, Item B5)
+         (let ((safe-reason (channel-deep-copy reason)))
            ;; Mark task state as terminated and zero out reductions so it exits at next safepoint (Issue #723, Item B6)
            (task-state-set! task 'terminated)
            (task-reductions-set! task 0)
 
            ;; Step 1: Poison all owned channels (CWE-833 Deadlock Prevention)
-           (task-poison-owned-channels! task reason wake-hook)
+           (task-poison-owned-channels! task safe-reason wake-hook)
 
-           ;; Step 2: Notify all unidirectional monitors with 'DOWN message
+           ;; Step 2: Notify all unidirectional monitors with 'DOWN message (isolated copy per observer)
            (let ((monitors (atomic-swap! (task-monitored-by-box task) '())))
              (let notify-loop ((ms monitors))
                (if (null? ms)
@@ -200,7 +201,7 @@
                           (target-tid (task-tid task))
                           (ch (caddr entry))
                           (obs-task (cadddr entry))
-                          (down-msg (list 'DOWN ref 'process target-tid reason)))
+                          (down-msg (list 'DOWN ref 'process target-tid (channel-deep-copy safe-reason))))
                      (if (channel? ch)
                          (channel-try-send! ch down-msg)
                          (if (task-context? obs-task)
@@ -219,16 +220,16 @@
                      (%remove-from-atomic-list! (task-links-box linked) task)
 
                      (if (task-trap-exit? linked)
-                         ;; Trapped: deliver EXIT message without killing linked task
-                         (let ((exit-msg (list 'EXIT (task-tid task) reason)))
+                         ;; Trapped: deliver EXIT message with deep-copied reason without killing linked task
+                         (let ((exit-msg (list 'EXIT (task-tid task) (channel-deep-copy safe-reason))))
                            (task-set-handoff! linked exit-msg)
                            (task-wake! linked wake-hook))
                          ;; Not trapped: check reason
-                         (if (eq? reason 'normal)
+                         (if (eq? safe-reason 'normal)
                              ;; Normal exit does not kill linked tasks
                              #t
                              ;; Abnormal exit: cascade kill linked task!
-                             (task-handle-termination! linked reason wake-hook)))
+                             (task-handle-termination! linked (channel-deep-copy safe-reason) wake-hook)))
                      (propagate-loop (cdr ls))))))
            #t)))))
 

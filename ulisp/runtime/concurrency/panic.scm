@@ -52,6 +52,9 @@
 ;; 3. Task Resource Zero-Leak Cleanup (Arena O(1) Reset & Channel Drop)
 ;; -----------------------------------------------------------------------
 
+(define (synapse-deep-copy-reason val)
+  (channel-deep-copy val))
+
 (define (%reclaim-terminated-task-arena! task secure-scrub?)
   (if (and (task-context? task) (eq? (task-state task) 'terminated))
       (let ((arena (task-arena task)))
@@ -71,10 +74,11 @@
     ((task panic-reason secure-scrub? wake-hook)
      (if (not (task-context? task))
          (error "synapse-cleanup-task-resources!: expected <task-context> (CWE-843)" task)
-         (begin
-           ;; 1. Mark terminated, zero reductions, poison channels & dispatch link/monitor notifications FIRST (Issue #723, Item B6 & A4)
-           (task-handle-termination! task (cons 'panic panic-reason) wake-hook)
-           ;; 2. After confirming task state is 'terminated and reductions are 0, reclaim Ephemeral Arena in O(1) (CWE-212 & CWE-400)
+         ;; 1. Deep-copy exit reason BEFORE arena reset (Issue #724, Item B5)
+         (let ((copied-reason (synapse-deep-copy-reason panic-reason)))
+           ;; 2. Mark terminated, zero reductions, poison channels & dispatch link/monitor notifications (Issue #723, Item B6 & A4)
+           (task-handle-termination! task (cons 'panic copied-reason) wake-hook)
+           ;; 3. After notifications are dispatched and task execution stopped, reset Ephemeral Arena LAST (Issue #724, Item B5)
            (if (and (eq? (task-state task) 'terminated) (<= (task-reductions task) 0))
                (let ((arena (task-arena task)))
                  (if (and arena (task-arena? arena))
@@ -91,21 +95,23 @@
 
 (define (%execute-task-panic! reason details secure?)
   (let* ((task (current-synapse-task))
-         (panic-rec (%make-synapse-panic-record reason details #f (allocate-panic-timestamp!))))
+         (safe-reason (synapse-deep-copy-reason reason))
+         (safe-details (synapse-deep-copy-reason details))
+         (panic-rec (%make-synapse-panic-record safe-reason safe-details #f (allocate-panic-timestamp!))))
     (if (and task (task-context? task))
         (let ((k (task-escape-continuation task))
               (hook (atomic-ref *synapse-crash-logger-hook-box*)))
-          ;; Step A: Invoke crash logger hook if registered
+          ;; Step A: Invoke crash logger hook if registered (with deep-copied reason & details)
           (if (procedure? hook)
-              (hook task reason details)
+              (hook task safe-reason safe-details)
               #f)
-          ;; Step B: Instant O(1) clean-up of arena, owned channels & link cascades
-          (synapse-cleanup-task-resources! task reason secure? #f)
+          ;; Step B: Notify monitors/links with deep-copied reason, then O(1) reset arena LAST
+          (synapse-cleanup-task-resources! task safe-reason secure? #f)
           ;; Step C: Escape via continuation if boundary established
           (if (procedure? k)
               (k (cons 'panic panic-rec))
-              (error "synapse-panic!: unhandled panic within task boundary" reason details)))
-        (error "synapse-panic!: called outside active task boundary" reason details))))
+              (error "synapse-panic!: unhandled panic within task boundary" safe-reason safe-details)))
+        (error "synapse-panic!: called outside active task boundary" safe-reason safe-details))))
 
 (define synapse-panic!
   (case-lambda
