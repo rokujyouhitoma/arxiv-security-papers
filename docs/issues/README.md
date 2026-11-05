@@ -7,7 +7,7 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **690** | ULisp POSIX システムコール層のマルチアーキテクチャ抽象化と AArch64 Linux 対応 | Feature | High | New | [690-abstract-posix-syscall-layer-for-multi-architecture-support.md](690-abstract-posix-syscall-layer-for-multi-architecture-support.md) |
+| **690** | ULisp POSIX システムコール層のマルチアーキテクチャ抽象化と AArch64 Linux 対応 | Feature | High | In Progress | [690-abstract-posix-syscall-layer-for-multi-architecture-support.md](690-abstract-posix-syscall-layer-for-multi-architecture-support.md) |
 | **691** | ULisp AArch64 AOT コンパイラ出力の結合検証および QEMU エミュレーション実行の確立 | Feature | High | New | [691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md](691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md) |
 | **692** | Synapse 並行性ランタイム向け AArch64 ネイティブコンテキストスイッチ (context_aarch64.s) の実装 | Feature | High | New | [692-implement-aarch64-native-context-switch-for-concurrency-runtime.md](692-implement-aarch64-native-context-switch-for-concurrency-runtime.md) |
 | **693** | ULisp Makefile への QEMU AArch64 全自動回帰テストスイートの統合 | Feature | Medium | New | [693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md](693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md) |
