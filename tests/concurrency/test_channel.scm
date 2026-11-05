@@ -764,6 +764,38 @@
   (%set-current-synapse-task! prev))
 
 ;; -----------------------------------------------------------------------
+;; Group 14: Global Lock-Free Task Table for TID Lookup (#733)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 14: Global Lock-Free Task Table for TID Lookup (#733) ---\n")
+(flush-output-port)
+
+(task-table-clear!)
+(assert-equal (task-table-count) 0 "task table initially cleared")
+
+(let ((t1 (make-task-context))
+      (t2 (make-task-context)))
+  (let ((tid1 (task-tid t1))
+        (tid2 (task-tid t2)))
+    ;; Check both tasks are registered
+    (assert-equal (task-table-count) 2 "task table count is 2 after creating 2 tasks")
+    (assert-equal (task-tid (lookup-task-by-tid tid1)) tid1 "lookup-task-by-tid finds t1")
+    (assert-equal (task-tid (task-by-id tid2)) tid2 "task-by-id finds t2")
+    (assert-true (not (lookup-task-by-tid 999999)) "lookup of non-existent tid returns #f")
+
+    ;; Terminated task lookup returns #f
+    (task-state-set! t1 'terminated)
+    (assert-true (not (lookup-task-by-tid tid1)) "lookup of terminated task returns #f")
+
+    ;; Explicit unregister by task object
+    (assert-true (task-table-unregister! t1) "task-table-unregister! by task succeeds")
+    (assert-equal (task-table-count) 1 "task table count is 1 after unregistering t1")
+
+    ;; Explicit unregister by integer TID
+    (assert-true (task-table-unregister! tid2) "task-table-unregister! by tid succeeds")
+    (assert-equal (task-table-count) 0 "task table count is 0 after unregistering t2")
+    (assert-true (not (task-table-unregister! tid2)) "unregistering non-existent task returns #f")))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

@@ -136,43 +136,153 @@
       (error "task-reset-next-id!: val must be an integer" val)
       (atomic-set! *task-next-id* val)))
 
+;; -----------------------------------------------------------------------
+;; Global Lock-Free Task Table for O(1) TID Resolution (Issue #733, Item B2)
+;; -----------------------------------------------------------------------
+
+(define *task-table-bucket-count* 64)
+
+(define *global-task-table-buckets*
+  (let ((vec (make-vector *task-table-bucket-count* #f)))
+    (let loop ((i 0))
+      (if (< i *task-table-bucket-count*)
+          (begin
+            (vector-set! vec i (make-atomic-box '()))
+            (loop (+ i 1)))
+          vec))))
+
+(define (%task-table-bucket-index tid)
+  (let ((h (if (integer? tid) tid 0)))
+    (modulo (if (< h 0) (- 0 h) h) *task-table-bucket-count*)))
+
+(define (%task-table-assv tid xs)
+  (let loop ((cur xs))
+    (cond
+      ((null? cur) #f)
+      ((and (pair? (car cur)) (eqv? (caar cur) tid)) (car cur))
+      (else (loop (cdr cur))))))
+
+(define (task-table-register! task)
+  (if (not (task-context? task))
+      (error "task-table-register!: expected <task-context>" task)
+      (let* ((tid (task-tid task))
+             (idx (%task-table-bucket-index tid))
+             (b-box (vector-ref *global-task-table-buckets* idx)))
+        (let retry ()
+          (let* ((cur (atomic-ref b-box))
+                 (existing (%task-table-assv tid cur)))
+            (if existing
+                (let ((new-list (cons (cons tid task)
+                                      (let remove-loop ((xs cur))
+                                        (cond ((null? xs) '())
+                                              ((eqv? (caar xs) tid) (cdr xs))
+                                              (else (cons (car xs) (remove-loop (cdr xs)))))))))
+                  (if (atomic-cas! b-box cur new-list)
+                      #t
+                      (retry)))
+                (let ((new-list (cons (cons tid task) cur)))
+                  (if (atomic-cas! b-box cur new-list)
+                      #t
+                      (retry)))))))))
+
+(define (task-table-unregister! tid-or-task)
+  (let ((tid (cond
+               ((integer? tid-or-task) tid-or-task)
+               ((task-context? tid-or-task) (task-tid tid-or-task))
+               (else (error "task-table-unregister!: expected integer TID or <task-context>" tid-or-task)))))
+    (let* ((idx (%task-table-bucket-index tid))
+           (b-box (vector-ref *global-task-table-buckets* idx)))
+      (let retry ()
+        (let* ((cur (atomic-ref b-box))
+               (existing (%task-table-assv tid cur)))
+          (if (not existing)
+              #f
+              (let ((new-list (let remove-loop ((xs cur))
+                                (cond ((null? xs) '())
+                                      ((eqv? (caar xs) tid) (cdr xs))
+                                      (else (cons (car xs) (remove-loop (cdr xs))))))))
+                (if (atomic-cas! b-box cur new-list)
+                    #t
+                    (retry)))))))))
+
+(define (lookup-task-by-tid tid)
+  (if (not (integer? tid))
+      #f
+      (let* ((idx (%task-table-bucket-index tid))
+             (b-box (vector-ref *global-task-table-buckets* idx))
+             (cur (atomic-ref b-box))
+             (pair (%task-table-assv tid cur)))
+        (if pair
+            (let ((task (cdr pair)))
+              (if (and (task-context? task)
+                       (not (eq? (%task-state task) 'terminated)))
+                  task
+                  #f))
+            #f))))
+
+(define task-by-id lookup-task-by-tid)
+
+(define (task-table-clear!)
+  (let loop ((i 0))
+    (if (< i *task-table-bucket-count*)
+        (begin
+          (atomic-set! (vector-ref *global-task-table-buckets* i) '())
+          (loop (+ i 1)))
+        #t)))
+
+(define (task-table-count)
+  (let loop ((i 0) (count 0))
+    (if (< i *task-table-bucket-count*)
+        (let ((b-box (vector-ref *global-task-table-buckets* i)))
+          (loop (+ i 1) (+ count (length (atomic-ref b-box)))))
+        count)))
+
+(define (%register-task-in-table! task)
+  (guard (exn (else #f))
+    (task-table-register! task))
+  task)
+
 (define make-task-context
   (case-lambda
     (()
      (let ((tid (allocate-task-id!)))
-       (%make-task-context tid 'ready *task-default-reductions* 0 0
-                           0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
-                           (make-atomic-box '()) (make-atomic-box '())
-                           (make-atomic-box '()) (make-atomic-box #f)
-                           (make-atomic-box '())
-                           (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0))))
+       (%register-task-in-table!
+        (%make-task-context tid 'ready *task-default-reductions* 0 0
+                            0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
+                            (make-atomic-box '()) (make-atomic-box '())
+                            (make-atomic-box '()) (make-atomic-box #f)
+                            (make-atomic-box '())
+                            (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))))
     ((tid)
-     (%make-task-context tid 'ready *task-default-reductions* 0 0
-                         0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
-                         (make-atomic-box '()) (make-atomic-box '())
-                         (make-atomic-box '()) (make-atomic-box #f)
-                         (make-atomic-box '())
-                         (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))
+     (%register-task-in-table!
+      (%make-task-context tid 'ready *task-default-reductions* 0 0
+                          0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
+                          (make-atomic-box '()) (make-atomic-box '())
+                          (make-atomic-box '()) (make-atomic-box #f)
+                          (make-atomic-box '())
+                          (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0))))
     ((tid epoch)
-     (%make-task-context tid 'ready *task-default-reductions* 0 0
-                         0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)
-                         (make-atomic-box '()) (make-atomic-box '())
-                         (make-atomic-box '()) (make-atomic-box #f)
-                         (make-atomic-box '())
-                         (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))
+     (%register-task-in-table!
+      (%make-task-context tid 'ready *task-default-reductions* 0 0
+                          0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)
+                          (make-atomic-box '()) (make-atomic-box '())
+                          (make-atomic-box '()) (make-atomic-box #f)
+                          (make-atomic-box '())
+                          (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0))))
     ((tid state reductions continuation-pc stack-pointer
       arena-base arena-offset arena-capacity
       blocked-on epoch next-run
       reduction-exhaustions steals-count)
-     (%make-task-context tid state reductions continuation-pc stack-pointer
-                         arena-base arena-offset arena-capacity
-                         blocked-on epoch next-run
-                         reduction-exhaustions steals-count
-                         (make-atomic-box #f)
-                         (make-atomic-box '()) (make-atomic-box '())
-                         (make-atomic-box '()) (make-atomic-box #f)
-                         (make-atomic-box '())
-                         (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))))
+     (%register-task-in-table!
+      (%make-task-context tid state reductions continuation-pc stack-pointer
+                          arena-base arena-offset arena-capacity
+                          blocked-on epoch next-run
+                          reduction-exhaustions steals-count
+                          (make-atomic-box #f)
+                          (make-atomic-box '()) (make-atomic-box '())
+                          (make-atomic-box '()) (make-atomic-box #f)
+                          (make-atomic-box '())
+                          (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0))))))
 
 (define (task-tid t)
   (if (not (task-context? t))

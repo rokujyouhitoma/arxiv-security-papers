@@ -87,6 +87,14 @@
     current-synapse-task
     %set-current-synapse-task!
 
+    ;; Global Task Table for O(1) TID Lookup (Issue #733)
+    task-table-register!
+    task-table-unregister!
+    lookup-task-by-tid
+    task-by-id
+    task-table-clear!
+    task-table-count
+
     ;; <channel-waiter> Record
     <channel-waiter>
     make-channel-waiter
