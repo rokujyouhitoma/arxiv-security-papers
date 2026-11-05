@@ -335,44 +335,68 @@
        (> (vector-length task) 1)
        (eq? (vector-ref task 0) '%%record-type-<budgeted-task>)))
 
-(define (scheduler-execute-task! task)
+(define (%budgeted-task-id-safe task)
+  (if (and (vector? task) (> (vector-length task) 1) (integer? (vector-ref task 1)))
+      (vector-ref task 1)
+      0))
+
+(define (%budgeted-task-reductions-safe task)
+  (if (and (vector? task) (> (vector-length task) 3) (vector? (vector-ref task 3)))
+      (vector-ref (vector-ref task 3) 0)
+      *task-default-reductions*))
+
+(define (%normalize-task-context task)
   (cond
-    ;; DSN-37 task-context (Issue #633, #720)
     ((task-context? task)
-     (if (eq? (task-state task) 'terminated)
-         #f
-         (begin
-           (if (eq? (task-state task) 'ready)
-               (task-state-set! task 'running)
-               #t)
-           (let ((nxt (task-next-run task)))
-             (if (and (not (vector? nxt)) (procedure? nxt))
-                 (with-synapse-task-boundary task nxt)
-                 (cons 'ok #t))))))
-    ;; DSN-37 budgeted-task with reductions (Issue #636, #720)
-    ((%is-budgeted-task? task)
-     (let ((fb-task (%current-worker-fallback-task)))
-       (task-state-set! fb-task 'running)
-       (task-set-handler-chain! fb-task 0)
-       (with-synapse-task-boundary fb-task
-         (lambda () (budgeted-task-execute! task)))))
-    ;; Scheme native coroutine context (Issue #634, #720)
+     task)
     ((coroutine-context? task)
-     (if (not (coroutine-terminated? task))
-         (let ((fb-task (%current-worker-fallback-task)))
-           (task-state-set! fb-task 'running)
-           (task-set-handler-chain! fb-task 0)
-           (with-synapse-task-boundary fb-task
-             (lambda () (context-resume! task))))
-         #f))
-    ;; Thunk: zero-argument procedure (verify not a vector record due to low-tag overlap)
+     (let ((ctx (make-task-context)))
+       (task-next-run-set! ctx task)
+       ctx))
+    ((%is-budgeted-task? task)
+     (let ((tid (%budgeted-task-id-safe task))
+           (reds (%budgeted-task-reductions-safe task)))
+       (let ((ctx (if (> tid 0) (make-task-context tid) (make-task-context))))
+         (task-reductions-set! ctx reds)
+         (task-next-run-set! ctx task)
+         ctx)))
     ((and (not (vector? task)) (procedure? task))
-     (let ((fb-task (%current-worker-fallback-task)))
-       (task-state-set! fb-task 'running)
-       (task-set-handler-chain! fb-task 0)
-       (with-synapse-task-boundary fb-task task)))
+     (let ((ctx (make-task-context)))
+       (task-next-run-set! ctx task)
+       ctx))
     (else
-     (error "scheduler-execute-task!: invalid task object (CWE-843)" task))))
+     (error "scheduler-spawn!: task must be procedure, coroutine, or task-context (CWE-843)" task))))
+
+(define (scheduler-execute-task! task)
+  (let ((ctx (cond
+               ((task-context? task) task)
+               ((or (coroutine-context? task) (%is-budgeted-task? task) (and (not (vector? task)) (procedure? task)))
+                (%normalize-task-context task))
+               (else
+                (error "scheduler-execute-task!: invalid task object (CWE-843)" task)))))
+    (if (eq? (task-state ctx) 'terminated)
+        #f
+        (begin
+          (if (eq? (task-state ctx) 'ready)
+              (task-state-set! ctx 'running)
+              #t)
+          (let ((nxt (task-next-run ctx)))
+            (cond
+              ;; Scheme native coroutine context (Issue #634, #720)
+              ((coroutine-context? nxt)
+               (if (not (coroutine-terminated? nxt))
+                   (with-synapse-task-boundary ctx
+                     (lambda () (context-resume! nxt)))
+                   #f))
+              ;; DSN-37 budgeted-task with reductions (Issue #636, #720)
+              ((%is-budgeted-task? nxt)
+               (with-synapse-task-boundary ctx
+                 (lambda () (budgeted-task-execute! nxt))))
+              ;; Thunk: zero-argument procedure
+              ((and (not (vector? nxt)) (procedure? nxt))
+               (with-synapse-task-boundary ctx nxt))
+              (else
+               (cons 'ok #t))))))))
 
 (define scheduler-spawn!
   (case-lambda
@@ -388,18 +412,18 @@
                  (let ((sp-cnt (scheduler-tasks-spawned sched)))
                    (if (>= sp-cnt *scheduler-max-tasks*)
                        (error "scheduler-spawn!: maximum spawned tasks limit exceeded (CWE-400)" sp-cnt)
-                       (begin
+                       (let ((normalized (%normalize-task-context task)))
                          (%scheduler-tasks-spawned-inc! sched)
                          (if (and target-worker-id
                                   (integer? target-worker-id)
                                   (>= target-worker-id 0)
                                   (< target-worker-id (scheduler-worker-count sched)))
                              (let ((w (scheduler-get-worker sched target-worker-id)))
-                               (deque-push! (worker-deque w) task)
+                               (deque-push! (worker-deque w) normalized)
                                (let ((cell (worker-futex-cell w)))
                                  (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))))
                              (begin
-                               (queue-enqueue! (scheduler-global-queue sched) task)
+                               (queue-enqueue! (scheduler-global-queue sched) normalized)
                                ;; Wake a worker to consume from global queue
                                (if (> (scheduler-worker-count sched) 1)
                                    (let* ((w (scheduler-get-worker sched 1))

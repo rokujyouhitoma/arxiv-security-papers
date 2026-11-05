@@ -22,11 +22,11 @@
 (define-record-type <budgeted-task>
   (%make-budgeted-task id state-box reductions-box initial-budget task-obj exhaustions-box)
   budgeted-task?
-  (id              task-id)
+  (id              %budgeted-task-id)
   (state-box       %task-state-box)
   (reductions-box  %task-reductions-box)
-  (initial-budget  task-initial-budget)
-  (task-obj        task-target-obj)
+  (initial-budget  %budgeted-task-initial-budget)
+  (task-obj        %budgeted-task-target)
   (exhaustions-box %task-exhaustions-box))
 
 (define (%make-task-box val)
@@ -83,10 +83,41 @@
     (else
      (error "task-reductions-set!: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
-(define (task-exhaustion-count btask)
-  (if (not (budgeted-task? btask))
-      (error "task-exhaustion-count: expected <budgeted-task> (CWE-843)" btask)
-      (vector-ref (%task-exhaustions-box btask) 0)))
+(define (task-id obj)
+  (cond
+    ((budgeted-task? obj)
+     (%budgeted-task-id obj))
+    ((task-context? obj)
+     (task-tid obj))
+    (else
+     (error "task-id: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
+
+(define (task-target-obj obj)
+  (cond
+    ((budgeted-task? obj)
+     (%budgeted-task-target obj))
+    ((task-context? obj)
+     (task-next-run obj))
+    (else
+     (error "task-target-obj: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
+
+(define (task-initial-budget obj)
+  (cond
+    ((budgeted-task? obj)
+     (%budgeted-task-initial-budget obj))
+    ((task-context? obj)
+     *default-reduction-budget*)
+    (else
+     (error "task-initial-budget: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
+
+(define (task-exhaustion-count obj)
+  (cond
+    ((budgeted-task? obj)
+     (vector-ref (%task-exhaustions-box obj) 0))
+    ((task-context? obj)
+     (task-reduction-exhaustions obj))
+    (else
+     (error "task-exhaustion-count: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-state obj)
   (cond
@@ -115,21 +146,36 @@
 ;; 3. Budget Consumption & Replenishment
 ;; -----------------------------------------------------------------------
 
-(define (%exhaustion-inc! btask)
-  (let ((b (%task-exhaustions-box btask)))
-    (vector-set! b 0 (+ (vector-ref b 0) 1))))
+(define (%exhaustion-inc! obj)
+  (cond
+    ((budgeted-task? obj)
+     (let ((b (%task-exhaustions-box obj)))
+       (vector-set! b 0 (+ (vector-ref b 0) 1))))
+    ((task-context? obj)
+     (task-reduction-exhaustions-set! obj (+ (task-reduction-exhaustions obj) 1)))
+    (else #f)))
 
 (define (%task-consume-impl! btask delta)
-  (if (not (budgeted-task? btask))
-      (error "task-consume-reductions!: expected <budgeted-task> (CWE-843)" btask)
-      (if (or (not (integer? delta)) (< delta 0))
-          (error "task-consume-reductions!: delta must be a non-negative integer (CWE-190)" delta)
-          (let* ((box (%task-reductions-box btask))
-                 (cur (vector-ref box 0))
-                 (rem (- cur delta))
-                 (clamped (if (< rem 0) 0 rem)))
-            (vector-set! box 0 clamped)
-            clamped))))
+  (cond
+    ((budgeted-task? btask)
+     (if (or (not (integer? delta)) (< delta 0))
+         (error "task-consume-reductions!: delta must be a non-negative integer (CWE-190)" delta)
+         (let* ((box (%task-reductions-box btask))
+                (cur (vector-ref box 0))
+                (rem (- cur delta))
+                (clamped (if (< rem 0) 0 rem)))
+           (vector-set! box 0 clamped)
+           clamped)))
+    ((task-context? btask)
+     (if (or (not (integer? delta)) (< delta 0))
+         (error "task-consume-reductions!: delta must be a non-negative integer (CWE-190)" delta)
+         (let* ((cur (%task-reductions btask))
+                (rem (- cur delta))
+                (clamped (if (< rem 0) 0 rem)))
+           (%task-reductions-set! btask clamped)
+           clamped)))
+    (else
+     (error "task-consume-reductions!: expected <budgeted-task> or <task-context> (CWE-843)" btask))))
 
 (define task-consume-reductions!
   (case-lambda
@@ -139,12 +185,19 @@
      (%task-consume-impl! btask delta))))
 
 (define (task-replenish! btask)
-  (if (not (budgeted-task? btask))
-      (error "task-replenish!: expected <budgeted-task> (CWE-843)" btask)
-      (let ((init-b (task-initial-budget btask)))
-        (%exhaustion-inc! btask)
-        (vector-set! (%task-reductions-box btask) 0 init-b)
-        init-b)))
+  (cond
+    ((budgeted-task? btask)
+     (let ((init-b (task-initial-budget btask)))
+       (%exhaustion-inc! btask)
+       (vector-set! (%task-reductions-box btask) 0 init-b)
+       init-b))
+    ((task-context? btask)
+     (let ((init-b *default-reduction-budget*))
+       (%exhaustion-inc! btask)
+       (%task-reductions-set! btask init-b)
+       init-b))
+    (else
+     (error "task-replenish!: expected <budgeted-task> or <task-context> (CWE-843)" btask))))
 
 ;; -----------------------------------------------------------------------
 ;; 4. Safepoint Polling & Preemptive Yield
@@ -210,21 +263,34 @@
   (%check-safepoint-impl! btask #f))
 
 (define (%scheduler-yield-impl! btask sched)
-  (if (not (budgeted-task? btask))
-      (error "scheduler-yield!: expected <budgeted-task> (CWE-843)" btask)
-      (begin
-        (task-state-set! btask 'yielded)
-        ;; Avoid double-replenishment if check-safepoint! already replenished
-        (if (not (= (task-reductions btask) (task-initial-budget btask)))
-            (task-replenish! btask)
-            #t)
-        (if (and sched (work-stealing-scheduler? sched))
-            (scheduler-spawn! sched btask)
-            #f)
-        (let ((target (task-target-obj btask)))
-          (if (coroutine-context? target)
-              (context-yield! 'yielded)
-              #t)))))
+  (cond
+    ((budgeted-task? btask)
+     (task-state-set! btask 'yielded)
+     ;; Avoid double-replenishment if check-safepoint! already replenished
+     (if (not (= (task-reductions btask) (task-initial-budget btask)))
+         (task-replenish! btask)
+         #t)
+     (if (and sched (work-stealing-scheduler? sched))
+         (scheduler-spawn! sched btask)
+         #f)
+     (let ((target (task-target-obj btask)))
+       (if (coroutine-context? target)
+           (context-yield! 'yielded)
+           #t)))
+    ((task-context? btask)
+     (task-state-set! btask 'yielded)
+     (if (not (= (task-reductions btask) *default-reduction-budget*))
+         (task-replenish! btask)
+         #t)
+     (if (and sched (work-stealing-scheduler? sched))
+         (scheduler-spawn! sched btask)
+         #f)
+     (let ((target (task-next-run btask)))
+       (if (coroutine-context? target)
+           (context-yield! 'yielded)
+           #t)))
+    (else
+     (error "scheduler-yield!: expected <budgeted-task> or <task-context> (CWE-843)" btask))))
 
 (define scheduler-yield!
   (case-lambda
@@ -277,15 +343,28 @@
 ;; -----------------------------------------------------------------------
 
 (define (budgeted-task-stats btask)
-  (if (not (budgeted-task? btask))
-      (error "budgeted-task-stats: expected <budgeted-task> (CWE-843)" btask)
-      (let ((tid (task-id btask))
-            (init-b (task-initial-budget btask))
-            (rem-r (task-reductions btask))
-            (exh (task-exhaustion-count btask))
-            (st (task-state btask)))
-        (list (cons 'id tid)
-              (cons 'initial-budget init-b)
-              (cons 'remaining rem-r)
-              (cons 'exhaustions exh)
-              (cons 'state st)))))
+  (cond
+    ((budgeted-task? btask)
+     (let ((tid (task-id btask))
+           (init-b (task-initial-budget btask))
+           (rem-r (task-reductions btask))
+           (exh (task-exhaustion-count btask))
+           (st (task-state btask)))
+       (list (cons 'id tid)
+             (cons 'initial-budget init-b)
+             (cons 'remaining rem-r)
+             (cons 'exhaustions exh)
+             (cons 'state st))))
+    ((task-context? btask)
+     (let ((tid (task-tid btask))
+           (init-b *default-reduction-budget*)
+           (rem-r (task-reductions btask))
+           (exh (task-reduction-exhaustions btask))
+           (st (task-state btask)))
+       (list (cons 'id tid)
+             (cons 'initial-budget init-b)
+             (cons 'remaining rem-r)
+             (cons 'exhaustions exh)
+             (cons 'state st))))
+    (else
+     (error "budgeted-task-stats: expected <budgeted-task> or <task-context> (CWE-843)" btask))))
