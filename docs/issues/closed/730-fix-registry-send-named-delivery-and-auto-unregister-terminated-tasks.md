@@ -2,7 +2,7 @@
 ID: 730
 種別: Bug
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [BUG/SEC] プロセス名レジストリ synapse-send-named! のタスク宛て実配送・terminated 状態名統一・終了タスク自動登録解除 (ID: 730)
@@ -22,9 +22,9 @@ ID: 730
 ---
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [registry.scm](../../ulisp/runtime/concurrency/registry.scm)
-- [ ] [links.scm](../../ulisp/runtime/concurrency/links.scm)
-- [ ] [test_registry.scm](../../tests/concurrency/test_registry.scm)
+- [x] [registry.scm](../../ulisp/runtime/concurrency/registry.scm)
+- [x] [links.scm](../../ulisp/runtime/concurrency/links.scm)
+- [x] [test_registry.scm](../../tests/concurrency/test_registry.scm)
 
 ---
 
@@ -49,7 +49,7 @@ Target Branch: `fix/730-registry-send-named-and-auto-unregister`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] タスク宛ての `synapse-send-named!` でメッセージが実際に配送されること。
-- [ ] `'terminated` 状態のタスクが死んだタスクとして扱われ、終了時にレジストリ登録が自動で外れること。
-- [ ] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
+- [x] タスク宛ての `synapse-send-named!` でメッセージが実際に配送されること。
+- [x] `'terminated` 状態のタスクが死んだタスクとして扱われ、終了時にレジストリ登録が自動で外れること。
+- [x] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
 

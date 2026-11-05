@@ -17,6 +17,8 @@
 (define *max-task-links* 1024)       ; CWE-400 mitigation: upper limit on linked tasks
 (define *max-task-monitors* 1024)    ; CWE-400 mitigation: upper limit on monitored tasks
 
+(define *task-termination-registry-unregister-hook* (vector #f))
+
 (define *monitor-next-id* (make-atomic-box 1))
 
 (define (allocate-monitor-ref!)
@@ -277,6 +279,12 @@
                                  ;; Abnormal exit: cascade kill linked task!
                                  (task-handle-termination! linked (channel-deep-copy safe-reason) wake-hook)))
                          (propagate-loop (cdr ls)))))
+                 #t))
+
+           ;; Step 4: Auto-unregister from process registry (Issue #730, Item C5)
+           (let ((unreg-hook (vector-ref *task-termination-registry-unregister-hook* 0)))
+             (if (procedure? unreg-hook)
+                 (unreg-hook task)
                  #t))
            #t)))))
 

@@ -183,7 +183,26 @@
   ;; Procedure target test
   (synapse-register! reg 'callback_service (lambda (msg) (vector-set! received-box 0 msg)))
   (assert-equal (synapse-send-named! reg 'callback_service 777) #t "send to procedure target succeeds")
-  (assert-equal (vector-ref received-box 0) 777 "procedure target received payload"))
+  (assert-equal (vector-ref received-box 0) 777 "procedure target received payload")
+
+  ;; Task target test (Issue #730, Item C5)
+  (let ((worker-task (make-task-context)))
+    (synapse-register! reg 'task_worker worker-task)
+    (assert-equal (synapse-send-named! reg 'task_worker 888) #t "synapse-send-named! to live task succeeds")
+    (assert-true (task-has-handoff? worker-task) "live task received message in mailbox")
+    (assert-equal (task-take-handoff! worker-task) 888 "live task handoff payload matches")
+
+    ;; When task terminates, it auto-unregisters from registry
+    (task-handle-termination! worker-task 'normal)
+    (assert-equal (synapse-whereis reg 'task_worker) #f "terminated task is auto-unregistered from registry")
+    (assert-equal (synapse-send-named! reg 'task_worker 999) 'not_found "sending to auto-unregistered task returns 'not_found"))
+
+  ;; Direct 'terminated state test for synapse-send-named!
+  (let ((dead-task (make-task-context)))
+    (task-state-set! dead-task 'terminated)
+    (synapse-register! reg 'dead_worker dead-task)
+    (assert-equal (synapse-send-named! reg 'dead_worker 123) 'dead_process "synapse-send-named! to 'terminated task returns 'dead_process")
+    (assert-equal (synapse-whereis reg 'dead_worker) #f "task in 'terminated state was unregistered upon send")))
 
 ;; -----------------------------------------------------------------------
 ;; Group 4: Supervisor Restart & Dynamic Rebind Integration

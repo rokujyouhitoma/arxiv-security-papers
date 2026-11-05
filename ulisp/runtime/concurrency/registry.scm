@@ -43,6 +43,9 @@
   (epoch-box    %process-registry-epoch-box)
   (max-capacity %process-registry-max-capacity))
 
+;; Global registry tracking for lifecycle hooks
+(define *active-synapse-registries-box* (make-atomic-box '()))
+
 ;; -----------------------------------------------------------------------
 ;; 2. Factory & Global Default Registry
 ;; -----------------------------------------------------------------------
@@ -60,10 +63,15 @@
                  (begin
                    (vector-set! buckets i (make-atomic-box '()))
                    (loop (+ i 1)))
-                 (%make-process-registry buckets
-                                         (make-atomic-box 0)
-                                         (make-atomic-box 0)
-                                         max-capacity))))))))
+                 (let ((reg (%make-process-registry buckets
+                                                    (make-atomic-box 0)
+                                                    (make-atomic-box 0)
+                                                    max-capacity)))
+                   (let retry ()
+                     (let ((cur (atomic-ref *active-synapse-registries-box*)))
+                       (if (not (atomic-cas! *active-synapse-registries-box* cur (cons reg cur)))
+                           (retry)
+                           reg)))))))))))
 
 (define *default-synapse-registry-box* (vector (make-process-registry)))
 
@@ -162,6 +170,55 @@
                                (atomic-fetch-add! (%process-registry-count-box reg) -1)
                                (atomic-fetch-add! (%process-registry-epoch-box reg) 1)
                                #t))))))))))))
+
+;; (synapse-unregister-target! [reg] target)
+;; Atomically removes any registration whose target matches `target` (or same task tid).
+;; Returns the number of removed entries.
+(define synapse-unregister-target!
+  (case-lambda
+    ((target)
+     (let loop ((regs (atomic-ref *active-synapse-registries-box*)) (total 0))
+       (if (null? regs)
+           total
+           (loop (cdr regs) (+ total (synapse-unregister-target! (car regs) target))))))
+    ((reg target)
+     (if (not (process-registry? reg))
+         (error "synapse-unregister-target!: expected <process-registry> (CWE-843)" reg)
+         (let* ((buckets (%process-registry-buckets reg))
+                (cnt-box (%process-registry-count-box reg)))
+           (let bucket-loop ((i 0) (total-removed 0))
+             (if (< i *registry-default-bucket-count*)
+                 (let ((bucket (vector-ref buckets i)))
+                   (let retry ()
+                     (let* ((cur (atomic-ref bucket))
+                            (to-remove
+                             (let find-loop ((xs cur) (acc '()))
+                               (if (null? xs)
+                                   (reverse acc)
+                                   (let* ((pair (car xs))
+                                          (entry (cdr pair))
+                                          (entry-tgt (registry-entry-target entry)))
+                                     (if (or (eq? entry-tgt target)
+                                             (and (task-context? target)
+                                                  (task-context? entry-tgt)
+                                                  (= (task-tid target) (task-tid entry-tgt))))
+                                         (find-loop (cdr xs) (cons (car pair) acc))
+                                         (find-loop (cdr xs) acc)))))))
+                       (if (null? to-remove)
+                           (bucket-loop (+ i 1) total-removed)
+                           (let* ((new-alist (let filter-loop ((xs cur) (acc '()))
+                                               (if (null? xs)
+                                                   (reverse acc)
+                                                   (if (memq (caar xs) to-remove)
+                                                       (filter-loop (cdr xs) acc)
+                                                       (filter-loop (cdr xs) (cons (car xs) acc)))))))
+                             (if (not (atomic-cas! bucket cur new-alist))
+                                 (retry)
+                                 (let ((num (length to-remove)))
+                                   (atomic-fetch-add! cnt-box (- 0 num))
+                                   (atomic-fetch-add! (%process-registry-epoch-box reg) 1)
+                                   (bucket-loop (+ i 1) (+ total-removed num)))))))))
+                 total-removed)))))))
 
 ;; (synapse-whereis [reg] name)
 ;; Resolves `name` to its current target.
@@ -308,9 +365,14 @@
              ;; Target is a Task Context (<task-context>)
              ((task-context? target)
               (let ((st (%task-state target)))
-                (if (or (eq? st 'dead) (eq? st 'panicked) (eq? st 'completed))
-                    'dead_process
-                    #t)))
+                (if (or (eq? st 'terminated) (eq? st 'dead) (eq? st 'panicked) (eq? st 'completed))
+                    (begin
+                      (synapse-unregister-target! reg target)
+                      'dead_process)
+                    (begin
+                      (task-set-handoff! target msg)
+                      (task-wake! target)
+                      #t))))
              ;; Target is a receiver callback procedure
              ((procedure? target)
               (target msg)
@@ -333,3 +395,19 @@
 ;; Attempt auto-injection if supervisor is loaded
 (guard (exn (else #f))
   (synapse-enable-supervisor-rebind!))
+
+;; -----------------------------------------------------------------------
+;; 7. Task Termination Auto-Unregister Hook (Issue #730, Item C5)
+;; -----------------------------------------------------------------------
+
+(define (synapse-enable-termination-unregister!)
+  (guard (exn (else #f))
+    (begin
+      (if (vector? *task-termination-registry-unregister-hook*)
+          (vector-set! *task-termination-registry-unregister-hook* 0
+                       (lambda (target) (synapse-unregister-target! target))))
+      #t)))
+
+;; Attempt auto-injection if links is loaded
+(guard (exn (else #f))
+  (synapse-enable-termination-unregister!))

@@ -18,6 +18,7 @@
     set-default-synapse-registry!
     synapse-register!
     synapse-unregister!
+    synapse-unregister-target!
     synapse-whereis
     synapse-rebind!
     synapse-send-named!
@@ -25,6 +26,7 @@
     synapse-registry-count
     synapse-registry-clear!
     synapse-enable-supervisor-rebind!
+    synapse-enable-termination-unregister!
     *registry-max-entries*)
 
   (import
