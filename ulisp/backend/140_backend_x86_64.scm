@@ -308,7 +308,18 @@
          (list (list 'pop (lower-lir-opnd dst)))))
 
       ((%syscall)
-       (list (list 'syscall)))
+       (if (pair? (cdr inst))
+           (let ((si (cadr inst)))
+             (list
+              (list 'mov (lower-lir-opnd '%rax) (list '%disp si (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%rdi) (list '%disp (- si 8) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%rsi) (list '%disp (- si 16) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%rdx) (list '%disp (- si 24) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%r10) (list '%disp (- si 32) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%r8) (list '%disp (- si 40) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%r9) (list '%disp (- si 48) (lower-lir-reg '%rsp)))
+              (list 'syscall)))
+           (list (list 'syscall))))
 
       ((%memory-fence)
        (list (list '%raw-asm "    mfence")))

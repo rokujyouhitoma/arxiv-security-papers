@@ -82,7 +82,7 @@
   (%raw-store! (%to-raw addr) offset obj))
 
 (define (%context-sys-munmap addr length)
-  (%to-fixnum (%raw-syscall (%to-raw 11) (%to-raw addr) (%to-raw length) 0 0 0 0)))
+  (sys-munmap addr length))
 
 ;; -----------------------------------------------------------------------
 ;; 4. <task-stack> Record & Stack Frame Setup

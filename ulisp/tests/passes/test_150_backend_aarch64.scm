@@ -88,6 +88,56 @@
 (let* ((lir-str (generate-lir (closure-convert (anf-all (cp0-optimize (desugar-all '(make-string 5))))))))
   (assert-true "lir generated for make-string" (pair? lir-str)))
 
+;;; Test 8: Raw Syscall LIR generation (Issue #690)
+(display "--- Step 8: Multi-Architecture System Calls LIR ---")
+(newline)
+(let* ((ast (desugar-all '(%raw-syscall (%to-raw 93) (%to-raw 42) 0 0 0 0 0)))
+       (lir (generate-lir (closure-convert (anf-all (cp0-optimize ast))))))
+  (assert-true "lir generated for %raw-syscall" (pair? lir))
+  (let* ((main-clause (assq '%lir-main (cdr lir)))
+         (body (cdr (assq 'body (cdr main-clause)))))
+    (assert-true "body contains %syscall"
+                 (let loop ((rest body))
+                   (and (pair? rest)
+                        (or (and (pair? (car rest)) (eq? (caar rest) '%syscall))
+                            (loop (cdr rest))))))))
+
+;;; Test 9: Platform Feature Identifiers & cond-expand resolution (Issue #690)
+(display "--- Step 9: Platform Features & Architecture Target Switching ---")
+(newline)
+(set-current-target-arch! 'aarch64)
+(assert-equal "aarch64 feature active when target is aarch64" #t (ulisp-supported-feature? 'aarch64))
+(assert-equal "arm64 feature active when target is aarch64" #t (ulisp-supported-feature? 'arm64))
+(assert-equal "x86-64 feature inactive when target is aarch64" #f (ulisp-supported-feature? 'x86-64))
+(assert-equal "posix feature active on aarch64" #t (ulisp-supported-feature? 'posix))
+(assert-equal "linux feature active on aarch64" #t (ulisp-supported-feature? 'linux))
+
+(set-current-target-arch! 'x86_64)
+(assert-equal "x86-64 feature active when target is x86_64" #t (ulisp-supported-feature? 'x86-64))
+(assert-equal "aarch64 feature inactive when target is x86_64" #f (ulisp-supported-feature? 'aarch64))
+(assert-equal "posix feature active on x86_64" #t (ulisp-supported-feature? 'posix))
+
+;;; Test 10: cond-expand Syscall Selection for AArch64 (Issue #690)
+(display "--- Step 10: cond-expand Syscall Table Validation ---")
+(newline)
+(set-current-target-arch! 'aarch64)
+(let* ((forms (expand-cond-expands-in-forms
+               '((cond-expand
+                   ((or aarch64 arm64)
+                    (define test-sys-exit 93)
+                    (define test-sys-read 63)
+                    (define test-sys-write 64)
+                    (define test-sys-openat 56))
+                   (else
+                    (define test-sys-exit 60)
+                    (define test-sys-read 0)
+                    (define test-sys-write 1)
+                    (define test-sys-open 2)))))))
+  (assert-equal "cond-expand expands aarch64 branch when target is aarch64"
+                '(define test-sys-exit 93)
+                (car forms)))
+(set-current-target-arch! 'x86_64)
+
 (display "=======================================================")
 (newline)
 (display " All ")

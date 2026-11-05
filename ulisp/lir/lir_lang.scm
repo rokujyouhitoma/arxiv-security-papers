@@ -95,6 +95,7 @@
     (%box-fixnum opnd1 opnd2)
     (%unbox-fixnum opnd1 opnd2)
     (%syscall)
+    (%syscall si)
     (%memory-fence)
     (%atomic-cas! reg1 reg2 reg3)
 

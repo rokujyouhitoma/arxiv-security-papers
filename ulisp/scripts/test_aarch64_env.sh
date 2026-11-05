@@ -89,6 +89,47 @@ if [ "${OUTPUT}" != "AArch64 QEMU OK" ]; then
 fi
 echo "    Stdout write and exit(0) verified: '${OUTPUT}'"
 
+echo "--> [3/3] Testing ULisp AArch64 backend compiled %raw-syscall binary in QEMU..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ULISP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${ULISP_DIR}/.." && pwd)"
+PYTHON="${PYTHON:-python3}"
+
+(
+    cd "${ULISP_DIR}"
+    PYTHONPATH="${ROOT_DIR}" "${PYTHON}" -m ilisp -e '
+(load "build/compiler_passes.scm")
+(set-current-target-arch! '\''aarch64)
+(let* ((ast (desugar-all '\''(%raw-syscall (%to-raw 93) (%to-raw 42) 0 0 0 0 0)))
+       (lir (generate-lir (closure-convert (anf-all (cp0-optimize ast))))))
+  (emit-aarch64 lir '\''none))
+'
+) > "${TMP_DIR}/ulisp_syscall.s"
+
+cat << 'EOF' > "${TMP_DIR}/start.s"
+.text
+.global _start
+_start:
+    bl scheme_entry
+    mov x8, #93
+    svc #0
+EOF
+
+"${CROSS_AS_AARCH64}" "${TMP_DIR}/ulisp_syscall.s" -o "${TMP_DIR}/ulisp_syscall.o"
+"${CROSS_AS_AARCH64}" "${TMP_DIR}/start.s" -o "${TMP_DIR}/start.o"
+"${CROSS_LD_AARCH64}" -static "${TMP_DIR}/start.o" "${TMP_DIR}/ulisp_syscall.o" -o "${TMP_DIR}/ulisp_syscall"
+
+set +e
+"${QEMU_AARCH64}" "${TMP_DIR}/ulisp_syscall"
+ULISP_EXIT=$?
+set -euo pipefail
+
+if [ "${ULISP_EXIT}" -ne 42 ]; then
+    echo "FAIL: Expected ULisp exit code 42, got ${ULISP_EXIT}" >&2
+    exit 1
+fi
+echo "    ULisp AArch64 backend %raw-syscall exit(42) verified in QEMU."
+
 echo "=== [AArch64 Toolchain & QEMU Verification: PASS] ==="
 exit 0
 

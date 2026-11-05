@@ -300,10 +300,16 @@
                #t
                (lir-report-error (string-append (symbol->string op) " shift count must be an integer") inst)))
 
-          ((%cqo %syscall %raise %memory-fence)
+          ((%cqo %raise %memory-fence)
            (if (= (length inst) 1)
                #t
                (lir-report-error (string-append (symbol->string op) " takes zero operands") inst)))
+
+          ((%syscall)
+           (if (or (= (length inst) 1)
+                   (and (= (length inst) 2) (integer? (cadr inst))))
+               #t
+               (lir-report-error "%syscall format must be (%syscall) or (%syscall <si>)" inst)))
 
           ((%atomic-cas!)
            (if (and (= (length inst) 4)

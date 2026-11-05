@@ -2,7 +2,7 @@
 ID: 690
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] ULisp POSIX システムコール層のマルチアーキテクチャ抽象化と AArch64 Linux 対応 (ID: 690)
@@ -31,12 +31,12 @@ ID: 690
   - §6.13: 入出力ポートプリミティブ（`open-input-file`, `open-output-file`）
   - §6.14: システムインターフェース（`file-exists?`, `delete-file`, `exit`, `current-second`, `current-jiffy`）
 - **関連 Issue**:
-  - [Issue #503: Implement AArch64 Backend via LIR](closed/503-implement-ulisp-aarch64-backend-via-lir.md)
-  - [Issue #516: Bare-Metal Linux Runtime without libc](closed/516-implement-zero-libc-pure-scheme-bare-metal-runtime.md)
-  - [Issue #689: Setup QEMU User and Cross Toolchain Verification Environment](closed/689-setup-qemu-user-and-cross-toolchain-verification-environment.md)
-  - [Issue #691: Verify ULisp AArch64 AOT Codegen and QEMU Execution](691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md)
-  - [Issue #692: Implement AArch64 Native Context Switch for Concurrency Runtime](692-implement-aarch64-native-context-switch-for-concurrency-runtime.md)
-  - [Issue #693: Integrate QEMU AArch64 Automated Regression Test Suite into Makefile](693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md)
+  - [Issue #503: Implement AArch64 Backend via LIR](503-implement-ulisp-aarch64-backend-via-lir.md)
+  - [Issue #516: Bare-Metal Linux Runtime without libc](516-implement-zero-libc-pure-scheme-bare-metal-runtime.md)
+  - [Issue #689: Setup QEMU User and Cross Toolchain Verification Environment](689-setup-qemu-user-and-cross-toolchain-verification-environment.md)
+  - [Issue #691: Verify ULisp AArch64 AOT Codegen and QEMU Execution](../691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md)
+  - [Issue #692: Implement AArch64 Native Context Switch for Concurrency Runtime](../692-implement-aarch64-native-context-switch-for-concurrency-runtime.md)
+  - [Issue #693: Integrate QEMU AArch64 Automated Regression Test Suite into Makefile](../693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md)
 
 ---
 
@@ -57,26 +57,26 @@ ID: 690
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/posix.scm](../../ulisp/lib/posix.scm):
+- [x] [ulisp/lib/posix.scm](../../../ulisp/lib/posix.scm):
   - x86-64 と AArch64 のシステムコール番号定数分離（`cond-expand` 対応）
   - `AT_FDCWD` (-100) 定数定義
   - AArch64 向け `openat`, `faccessat`, `unlinkat`, `dup3` を利用した `sys-open`, `sys-access`, `sys-unlink`, `sys-dup2` の統合実装
   - `sys-mmap`, `sys-mremap`, `sys-munmap`, `sys-clock-gettime` のマルチターゲット番号対応
-- [ ] [ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm):
+- [x] [ulisp/compiler/helpers.scm](../../../ulisp/compiler/helpers.scm):
   - `ulisp-supported-feature?` における現在ターゲット（`*current-target-arch*`）に基づく `x86-64` / `aarch64` / `arm64` 機能識別子の動的判定対応
-- [ ] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm):
+- [x] [ulisp/compiler/driver.scm](../../../ulisp/compiler/driver.scm):
   - コンパイルターゲット設定時に `*current-target-arch*` を同期更新するフックの配線
-- [ ] [ulisp/lir/129_lir_primitives.scm](../../ulisp/lir/129_lir_primitives.scm):
+- [x] [ulisp/lir/129_lir_primitives.scm](../../../ulisp/lir/129_lir_primitives.scm):
   - `lir-compile-raw-syscall` の改修（スタックフレームへの引数退避および `%syscall` 命令への `si` 渡し）
-- [ ] [ulisp/backend/140_backend_x86_64.scm](../../ulisp/backend/140_backend_x86_64.scm):
+- [x] [ulisp/backend/140_backend_x86_64.scm](../../../ulisp/backend/140_backend_x86_64.scm):
   - `%syscall` のスタックフレーム参照（`si` 指定時）および既存 `syscall` 命令との後方互換性担保
-- [ ] [ulisp/backend/150_backend_aarch64.scm](../../ulisp/backend/150_backend_aarch64.scm):
+- [x] [ulisp/backend/150_backend_aarch64.scm](../../../ulisp/backend/150_backend_aarch64.scm):
   - `emit-arm-lir-instruction` への `(%syscall ...)` 実装追加：
     - `si` から `x8`（システムコール番号）および `x0`〜`x5`（引数 1〜6）へのレジスタロード
     - `svc #0` 命令発行（戻り値 `x0`）
-- [ ] [ulisp/tests/test_backend_aarch64.scm](../../ulisp/tests/test_backend_aarch64.scm):
+- [x] [ulisp/tests/test_backend_aarch64.scm](../../../ulisp/tests/test_backend_aarch64.scm):
   - `%raw-syscall` の LIR 生成および AArch64 コード生成（`svc #0`, `x8` 等）のユニットテスト追加
-- [ ] [docs/issues/README.md](README.md):
+- [x] [docs/issues/README.md](../README.md):
   - Issue 台帳ステータス管理
 
 ---
@@ -172,9 +172,9 @@ Target Branch: `feat/690-abstract-posix-syscall-layer`
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
-- [ ] x86-64 と AArch64 の Linux システムコール番号定数が分離・抽象化され、`posix.scm` が両アーキテクチャで正しく展開されること。
-- [ ] AArch64 において、廃止されたレガシー API（`open`, `access`, `unlink`, `dup2`）の代替として `openat`, `faccessat`, `unlinkat`, `dup3` が `AT_FDCWD` 経由で正しく発行されること。
-- [ ] `ulisp/lir/129_lir_primitives.scm` および `ulisp/backend/150_backend_aarch64.scm` において、`%raw-syscall` から AArch64 ABI 規約通りの `x8` / `x0`〜`x5` ロードおよび `svc #0` が出力されること。
-- [ ] `make -C ulisp test_aarch64` が 100% PASS すること。
-- [ ] 既存の x86-64 ターゲットの全テストスイート（`make -C ulisp test` / `make check_format` / `make static_analysis`）に一切の後退（デグレ）が発生しないこと。
-- [ ] `docs/issues/README.md` のステータスが `In Progress` に更新されていること。
+- [x] x86-64 と AArch64 の Linux システムコール番号定数が分離・抽象化され、`posix.scm` が両アーキテクチャで正しく展開されること。
+- [x] AArch64 において、廃止されたレガシー API（`open`, `access`, `unlink`, `dup2`）の代替として `openat`, `faccessat`, `unlinkat`, `dup3` が `AT_FDCWD` 経由で正しく発行されること。
+- [x] `ulisp/lir/129_lir_primitives.scm` および `ulisp/backend/150_backend_aarch64.scm` において、`%raw-syscall` から AArch64 ABI 規約通りの `x8` / `x0`〜`x5` ロードおよび `svc #0` が出力されること。
+- [x] `make -C ulisp test_aarch64` が 100% PASS すること。
+- [x] 既存の x86-64 ターゲットの全テストスイート（`make -C ulisp test` / `make check_format` / `make static_analysis`）に一切の後退（デグレ）が発生しないこと。
+- [x] `docs/issues/README.md` のステータスが `Closed` に更新されていること。

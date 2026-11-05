@@ -259,6 +259,18 @@
       ((%memory-fence)
        (emit "    __sync_synchronize();"))
 
+      ((%syscall)
+       (if (pair? (cdr inst))
+           (let ((si (cadr inst)))
+             (emit (string-append "    reg_rax = syscall(*(int64_t*)(reg_rsp + (" (number->string si) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 8)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 16)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 24)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 32)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 40)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 48)) ")));")))
+           (emit "    reg_rax = syscall(reg_rax, reg_rdi, reg_rsi, reg_rdx, reg_r10, reg_r8, reg_r9);")))
+
       ((%atomic-cas!)
        (let ((dst (cadr inst))
              (box (caddr inst))

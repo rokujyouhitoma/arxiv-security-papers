@@ -5,13 +5,45 @@
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
-;;; §6.14 / SRFI 170 Raw Linux x86-64 System Calls
+;;; §6.14 / SRFI 170 Raw Linux System Calls (Multi-Architecture Abstracted)
+;;; Conforms to Issue #690 / DSN-33 §2.2
 ;;; -----------------------------------------------------------------------
 
-;; sys-exit: sys_exit(status) -> syscall 60
+(cond-expand
+  ((or aarch64 arm64)
+   (define *sys-read* 63)
+   (define *sys-write* 64)
+   (define *sys-close* 57)
+   (define *sys-exit* 93)
+   (define *sys-openat* 56)
+   (define *sys-faccessat* 48)
+   (define *sys-unlinkat* 35)
+   (define *sys-dup3* 24)
+   (define *sys-mmap* 222)
+   (define *sys-mremap* 216)
+   (define *sys-munmap* 215)
+   (define *sys-clock-gettime* 113)
+   (define *sys-at-fdcwd* -100))
+  (else
+   (define *sys-read* 0)
+   (define *sys-write* 1)
+   (define *sys-open* 2)
+   (define *sys-close* 3)
+   (define *sys-access* 21)
+   (define *sys-dup2* 33)
+   (define *sys-exit* 60)
+   (define *sys-unlink* 87)
+   (define *sys-mmap* 9)
+   (define *sys-munmap* 11)
+   (define *sys-mremap* 25)
+   (define *sys-clock-gettime* 228)
+   (define *sys-openat* 257)
+   (define *sys-at-fdcwd* -100)))
+
+;; sys-exit: sys_exit(status)
 (define (sys-exit code)
   (flush-output-port)
-  (%raw-syscall (%to-raw 60) (%to-raw code) 0 0 0 0 0))
+  (%raw-syscall (%to-raw *sys-exit*) (%to-raw code) 0 0 0 0 0))
 
 (define (exit code)
   (sys-exit code))
@@ -19,36 +51,59 @@
 (define (emergency-exit code)
   (sys-exit code))
 
-;; sys-write: sys_write(fd, buf_ptr, count) -> syscall 1
+;; sys-write: sys_write(fd, buf_ptr, count)
 (define (sys-write fd buf-ptr count)
-  (%to-fixnum (%raw-syscall (%to-raw 1) (%to-raw fd) buf-ptr (%to-raw count) 0 0 0)))
+  (%to-fixnum (%raw-syscall (%to-raw *sys-write*) (%to-raw fd) buf-ptr (%to-raw count) 0 0 0)))
 
-;; sys-read: sys_read(fd, buf_ptr, count) -> syscall 0
+;; sys-read: sys_read(fd, buf_ptr, count)
 (define (sys-read fd buf-ptr count)
-  (%to-fixnum (%raw-syscall (%to-raw 0) (%to-raw fd) buf-ptr (%to-raw count) 0 0 0)))
+  (%to-fixnum (%raw-syscall (%to-raw *sys-read*) (%to-raw fd) buf-ptr (%to-raw count) 0 0 0)))
 
-;; sys-open: sys_open(path, flags, mode) -> syscall 2
-(define (sys-open path flags mode)
-  (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
-    (%to-fixnum (%raw-syscall (%to-raw 2) path-ptr (%to-raw flags) (%to-raw mode) 0 0 0))))
+;; sys-open: sys_open(path, flags, mode)
+(cond-expand
+  ((or aarch64 arm64)
+   (define (sys-open path flags mode)
+     (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+       (%to-fixnum (%raw-syscall (%to-raw *sys-openat*) (%to-raw *sys-at-fdcwd*) path-ptr (%to-raw flags) (%to-raw mode) 0 0)))))
+  (else
+   (define (sys-open path flags mode)
+     (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+       (%to-fixnum (%raw-syscall (%to-raw *sys-open*) path-ptr (%to-raw flags) (%to-raw mode) 0 0 0))))))
 
-;; sys-close: sys_close(fd) -> syscall 3
+;; sys-close: sys_close(fd)
 (define (sys-close fd)
-  (%to-fixnum (%raw-syscall (%to-raw 3) (%to-raw fd) 0 0 0 0 0)))
+  (%to-fixnum (%raw-syscall (%to-raw *sys-close*) (%to-raw fd) 0 0 0 0 0)))
 
-;; sys-dup2: sys_dup2(oldfd, newfd) -> syscall 33
-(define (sys-dup2 oldfd newfd)
-  (%to-fixnum (%raw-syscall (%to-raw 33) (%to-raw oldfd) (%to-raw newfd) 0 0 0 0)))
+;; sys-dup2: sys_dup2(oldfd, newfd)
+(cond-expand
+  ((or aarch64 arm64)
+   (define (sys-dup2 oldfd newfd)
+     (%to-fixnum (%raw-syscall (%to-raw *sys-dup3*) (%to-raw oldfd) (%to-raw newfd) 0 0 0 0))))
+  (else
+   (define (sys-dup2 oldfd newfd)
+     (%to-fixnum (%raw-syscall (%to-raw *sys-dup2*) (%to-raw oldfd) (%to-raw newfd) 0 0 0 0)))))
 
-;; sys-access: sys_access(path, mode) -> syscall 21
-(define (sys-access path mode)
-  (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
-    (%to-fixnum (%raw-syscall (%to-raw 21) path-ptr (%to-raw mode) 0 0 0 0))))
+;; sys-access: sys_access(path, mode)
+(cond-expand
+  ((or aarch64 arm64)
+   (define (sys-access path mode)
+     (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+       (%to-fixnum (%raw-syscall (%to-raw *sys-faccessat*) (%to-raw *sys-at-fdcwd*) path-ptr (%to-raw mode) 0 0 0)))))
+  (else
+   (define (sys-access path mode)
+     (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+       (%to-fixnum (%raw-syscall (%to-raw *sys-access*) path-ptr (%to-raw mode) 0 0 0 0))))))
 
-;; sys-unlink: sys_unlink(path) -> syscall 87
-(define (sys-unlink path)
-  (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
-    (%to-fixnum (%raw-syscall (%to-raw 87) path-ptr 0 0 0 0 0))))
+;; sys-unlink: sys_unlink(path)
+(cond-expand
+  ((or aarch64 arm64)
+   (define (sys-unlink path)
+     (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+       (%to-fixnum (%raw-syscall (%to-raw *sys-unlinkat*) (%to-raw *sys-at-fdcwd*) path-ptr 0 0 0 0)))))
+  (else
+   (define (sys-unlink path)
+     (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+       (%to-fixnum (%raw-syscall (%to-raw *sys-unlink*) path-ptr 0 0 0 0 0))))))
 
 ;; R7RS §6.14 File management
 (define (file-exists? filename)
@@ -66,22 +121,26 @@
         (sys-write 2 (%ptr-untag str) len)
         0)))
 
-;; sys-mmap: sys_mmap(addr, len, prot, flags, fd, offset) -> syscall 9
+;; sys-mmap: sys_mmap(addr, len, prot, flags, fd, offset)
 ;; PROT_READ|PROT_WRITE = 3, MAP_PRIVATE|MAP_ANONYMOUS = 34, fd = -1, offset = 0
 (define (sys-mmap length)
-  (%raw-syscall (%to-raw 9) 0 (%to-raw length) (%to-raw 3) (%to-raw 34) (%to-raw -1) 0))
+  (%raw-syscall (%to-raw *sys-mmap*) 0 (%to-raw length) (%to-raw 3) (%to-raw 34) (%to-raw -1) 0))
 
-;; sys-mremap: sys_mremap(old_address, old_size, new_size, flags) -> syscall 25
+;; sys-munmap: sys_munmap(addr, length)
+(define (sys-munmap addr length)
+  (%to-fixnum (%raw-syscall (%to-raw *sys-munmap*) (%to-raw addr) (%to-raw length) 0 0 0 0)))
+
+;; sys-mremap: sys_mremap(old_address, old_size, new_size, flags)
 ;; MREMAP_MAYMOVE = 1
 (define (sys-mremap old-addr old-size new-size flags)
-  (%raw-syscall (%to-raw 25) old-addr (%to-raw old-size) (%to-raw new-size) (%to-raw flags) 0 0))
+  (%raw-syscall (%to-raw *sys-mremap*) old-addr (%to-raw old-size) (%to-raw new-size) (%to-raw flags) 0 0))
 
-;; sys-clock-gettime-monotonic: sys_clock_gettime(CLOCK_MONOTONIC=1, &timespec) -> syscall 228
+;; sys-clock-gettime-monotonic: sys_clock_gettime(CLOCK_MONOTONIC=1, &timespec)
 ;; Uses per-call 16-byte pair buffer and restores tagged 0s for thread & GC safety (Issue #728)
 (define (sys-clock-gettime-monotonic)
   (let* ((cell (cons 0 0))
          (ptr (%ptr-untag cell))
-         (ret (%to-fixnum (%raw-syscall (%to-raw 228) (%to-raw 1) ptr 0 0 0 0))))
+         (ret (%to-fixnum (%raw-syscall (%to-raw *sys-clock-gettime*) (%to-raw 1) ptr 0 0 0 0))))
     (if (= ret 0)
         (let ((sec (%to-fixnum (%raw-load ptr 0)))
               (nsec (%to-fixnum (%raw-load ptr 8))))
@@ -90,11 +149,11 @@
           (cons sec nsec))
         (cons 0 0))))
 
-;; sys-clock-gettime-realtime: sys_clock_gettime(CLOCK_REALTIME=0, &timespec) -> syscall 228
+;; sys-clock-gettime-realtime: sys_clock_gettime(CLOCK_REALTIME=0, &timespec)
 (define (sys-clock-gettime-realtime)
   (let* ((cell (cons 0 0))
          (ptr (%ptr-untag cell))
-         (ret (%to-fixnum (%raw-syscall (%to-raw 228) 0 ptr 0 0 0 0))))
+         (ret (%to-fixnum (%raw-syscall (%to-raw *sys-clock-gettime*) 0 ptr 0 0 0 0))))
     (if (= ret 0)
         (let ((sec (%to-fixnum (%raw-load ptr 0)))
               (nsec (%to-fixnum (%raw-load ptr 8))))
@@ -395,7 +454,12 @@
   (get-environment-variable name))
 
 ;; §6.14 System interface - features (R7RS-small, Issue #705, #706, #707, #708, #709, #710)
-(define (features)
-  '(r7rs ulisp exact-closed ieee-float full-unicode little-endian x86-64 lp64 posix linux unix gnu-linux srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
+(cond-expand
+  ((or aarch64 arm64)
+   (define (features)
+     '(r7rs ulisp exact-closed ieee-float full-unicode little-endian aarch64 arm64 lp64 posix linux unix gnu-linux srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193)))
+  (else
+   (define (features)
+     '(r7rs ulisp exact-closed ieee-float full-unicode little-endian x86-64 lp64 posix linux unix gnu-linux srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))))
 
 

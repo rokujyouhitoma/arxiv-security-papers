@@ -103,14 +103,18 @@
               ;; Target directives
               ((or (eq? first '--target-lir)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'lir)))
+               (set-current-target-arch! 'lir)
                (loop (cdr forms) 'lir gc-mode verify trace debug))
               ((or (eq? first '--target-elf)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'elf)))
+               (set-current-target-arch! 'elf)
                (loop (cdr forms) 'elf gc-mode verify trace debug))
               ((or (eq? first '--target-asm)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'asm)))
+               (set-current-target-arch! 'x86_64)
                (loop (cdr forms) 'x86_64 gc-mode verify trace debug))
               ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
+               (set-current-target-arch! (cadr first))
                (loop (cdr forms) (cadr first) gc-mode verify trace debug))
               ;; Extern symbol directives
               ((or (eq? first '--allow-extern)
@@ -587,6 +591,7 @@
                 (else (read-all-forms))))
          (directives (extract-directives-and-forms raw))
          (target (if cli-target cli-target (car directives)))
+         (dummy-target-set (set-current-target-arch! target))
          (gc-mode (cadr directives))
          (forms (if (and dbg? (not cli-inline-expr))
                     (begin

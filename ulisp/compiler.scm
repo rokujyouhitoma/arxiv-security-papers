@@ -1110,10 +1110,25 @@
 ;;; R7RS Section 4.2.1 / 5.5.1 Feature Identifiers & cond-expand Helpers
 ;;; -----------------------------------------------------------------------
 
+(define *current-target-arch* (cons 'x86_64 '()))
+
+(define (current-target-arch)
+  (car *current-target-arch*))
+
+(define (set-current-target-arch! arch)
+  (set-car! *current-target-arch* arch))
+
 (define (ulisp-supported-feature? feat)
-  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
-      #t
-      #f))
+  (cond
+    ((memq feat '(aarch64 arm64))
+     (let ((tgt (current-target-arch)))
+       (or (eq? tgt 'aarch64) (eq? tgt 'arm64))))
+    ((memq feat '(x86-64 x86_64))
+     (let ((tgt (current-target-arch)))
+       (or (eq? tgt 'x86_64) (eq? tgt 'x86-64) (eq? tgt 'elf) (eq? tgt 'asm))))
+    ((memq feat '(ulisp r7rs exact-closed little-endian posix linux unix srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
+     #t)
+    (else #f)))
 
 (define (builtin-library-name? name)
   (and (pair? name)
@@ -10865,6 +10880,7 @@
     (%box-fixnum opnd1 opnd2)
     (%unbox-fixnum opnd1 opnd2)
     (%syscall)
+    (%syscall si)
     (%memory-fence)
     (%atomic-cas! reg1 reg2 reg3)
 
@@ -11192,10 +11208,16 @@
                #t
                (lir-report-error (string-append (symbol->string op) " shift count must be an integer") inst)))
 
-          ((%cqo %syscall %raise %memory-fence)
+          ((%cqo %raise %memory-fence)
            (if (= (length inst) 1)
                #t
                (lir-report-error (string-append (symbol->string op) " takes zero operands") inst)))
+
+          ((%syscall)
+           (if (or (= (length inst) 1)
+                   (and (= (length inst) 2) (integer? (cadr inst))))
+               #t
+               (lir-report-error "%syscall format must be (%syscall) or (%syscall <si>)" inst)))
 
           ((%atomic-cas!)
            (if (and (= (length inst) 4)
@@ -13758,14 +13780,7 @@
     (track-lir-si! (- si 48))
     (lir-compile-expr a6 (- si 48) env #f)
     (emit-lir! (list '%store '%rsp (- si 48) '%rax))
-    (emit-lir! (list '%load '%rax '%rsp si))
-    (emit-lir! (list '%load '%rdi '%rsp (- si 8)))
-    (emit-lir! (list '%load '%rsi '%rsp (- si 16)))
-    (emit-lir! (list '%load '%rdx '%rsp (- si 24)))
-    (emit-lir! (list '%load '%r10 '%rsp (- si 32)))
-    (emit-lir! (list '%load '%r8 '%rsp (- si 40)))
-    (emit-lir! (list '%load '%r9 '%rsp (- si 48)))
-    (emit-lir! '(%syscall))))
+    (emit-lir! (list '%syscall si))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 130: Low-Level Intermediate Representation (LIR)
 ;;; Conforms to DSN-33 Architecture Specification & Issue #583
@@ -15169,7 +15184,18 @@
          (list (list 'pop (lower-lir-opnd dst)))))
 
       ((%syscall)
-       (list (list 'syscall)))
+       (if (pair? (cdr inst))
+           (let ((si (cadr inst)))
+             (list
+              (list 'mov (lower-lir-opnd '%rax) (list '%disp si (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%rdi) (list '%disp (- si 8) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%rsi) (list '%disp (- si 16) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%rdx) (list '%disp (- si 24) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%r10) (list '%disp (- si 32) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%r8) (list '%disp (- si 40) (lower-lir-reg '%rsp)))
+              (list 'mov (lower-lir-opnd '%r9) (list '%disp (- si 48) (lower-lir-reg '%rsp)))
+              (list 'syscall)))
+           (list (list 'syscall))))
 
       ((%memory-fence)
        (list (list '%raw-asm "    mfence")))
@@ -20831,6 +20857,19 @@
       ((%memory-fence)
        (emit "    dmb ish"))
 
+      ((%syscall)
+       (if (pair? (cdr inst))
+           (let ((si (cadr inst)))
+             (emit (string-append "    ldr x8, [sp, #" (number->string si) "]"))
+             (emit (string-append "    ldr x0, [sp, #" (number->string (- si 8)) "]"))
+             (emit (string-append "    ldr x1, [sp, #" (number->string (- si 16)) "]"))
+             (emit (string-append "    ldr x2, [sp, #" (number->string (- si 24)) "]"))
+             (emit (string-append "    ldr x3, [sp, #" (number->string (- si 32)) "]"))
+             (emit (string-append "    ldr x4, [sp, #" (number->string (- si 40)) "]"))
+             (emit (string-append "    ldr x5, [sp, #" (number->string (- si 48)) "]"))
+             (emit "    svc #0"))
+           (emit "    svc #0")))
+
       ((%atomic-cas!)
        (let ((dst (cadr inst))
              (box (caddr inst))
@@ -21667,6 +21706,18 @@
 
       ((%memory-fence)
        (emit "    __sync_synchronize();"))
+
+      ((%syscall)
+       (if (pair? (cdr inst))
+           (let ((si (cadr inst)))
+             (emit (string-append "    reg_rax = syscall(*(int64_t*)(reg_rsp + (" (number->string si) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 8)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 16)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 24)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 32)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 40)) ")), "
+                                  "*(int64_t*)(reg_rsp + (" (number->string (- si 48)) ")));")))
+           (emit "    reg_rax = syscall(reg_rax, reg_rdi, reg_rsi, reg_rdx, reg_r10, reg_r8, reg_r9);")))
 
       ((%atomic-cas!)
        (let ((dst (cadr inst))
@@ -22784,14 +22835,18 @@
               ;; Target directives
               ((or (eq? first '--target-lir)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'lir)))
+               (set-current-target-arch! 'lir)
                (loop (cdr forms) 'lir gc-mode verify trace debug))
               ((or (eq? first '--target-elf)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'elf)))
+               (set-current-target-arch! 'elf)
                (loop (cdr forms) 'elf gc-mode verify trace debug))
               ((or (eq? first '--target-asm)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'asm)))
+               (set-current-target-arch! 'x86_64)
                (loop (cdr forms) 'x86_64 gc-mode verify trace debug))
               ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
+               (set-current-target-arch! (cadr first))
                (loop (cdr forms) (cadr first) gc-mode verify trace debug))
               ;; Extern symbol directives
               ((or (eq? first '--allow-extern)
@@ -23268,6 +23323,7 @@
                 (else (read-all-forms))))
          (directives (extract-directives-and-forms raw))
          (target (if cli-target cli-target (car directives)))
+         (dummy-target-set (set-current-target-arch! target))
          (gc-mode (cadr directives))
          (forms (if (and dbg? (not cli-inline-expr))
                     (begin

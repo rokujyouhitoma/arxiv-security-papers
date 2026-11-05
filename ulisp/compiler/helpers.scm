@@ -1110,10 +1110,25 @@
 ;;; R7RS Section 4.2.1 / 5.5.1 Feature Identifiers & cond-expand Helpers
 ;;; -----------------------------------------------------------------------
 
+(define *current-target-arch* (cons 'x86_64 '()))
+
+(define (current-target-arch)
+  (car *current-target-arch*))
+
+(define (set-current-target-arch! arch)
+  (set-car! *current-target-arch* arch))
+
 (define (ulisp-supported-feature? feat)
-  (if (memq feat '(ulisp r7rs exact-closed little-endian x86-64 posix linux unix srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
-      #t
-      #f))
+  (cond
+    ((memq feat '(aarch64 arm64))
+     (let ((tgt (current-target-arch)))
+       (or (eq? tgt 'aarch64) (eq? tgt 'arm64))))
+    ((memq feat '(x86-64 x86_64))
+     (let ((tgt (current-target-arch)))
+       (or (eq? tgt 'x86_64) (eq? tgt 'x86-64) (eq? tgt 'elf) (eq? tgt 'asm))))
+    ((memq feat '(ulisp r7rs exact-closed little-endian posix linux unix srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
+     #t)
+    (else #f)))
 
 (define (builtin-library-name? name)
   (and (pair? name)

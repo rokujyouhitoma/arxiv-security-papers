@@ -350,7 +350,7 @@
                        target-size)))
     (if (> new-size old-size)
         ;; First try in-place expansion without moving (flags = 0)
-        (let ((in-place-ret (%raw-syscall (%to-raw 25) old-from (%to-raw old-size) (%to-raw new-size) 0 0 0)))
+        (let ((in-place-ret (sys-mremap old-from old-size new-size 0)))
           (if (and (> in-place-ret 0) (= in-place-ret old-from))
               ;; In-place expansion succeeded!
               (begin
@@ -365,7 +365,7 @@
                     (set-gc-growth-count! (+ (gc-growth-count) 1))
                     #t)
                   ;; Otherwise, try MREMAP_MAYMOVE = 1 (flags = 1)
-                  (let ((move-ret (%raw-syscall (%to-raw 25) old-from (%to-raw old-size) (%to-raw new-size) (%to-raw 1) 0 0)))
+                  (let ((move-ret (sys-mremap old-from old-size new-size 1)))
                     (if (or (<= move-ret 0) (< move-ret -4096))
                         ;; OS limit reached (mremap error)
                         #f
