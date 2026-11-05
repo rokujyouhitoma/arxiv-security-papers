@@ -278,44 +278,67 @@ flowchart TD
 
 ---
 
-# 5. メモリモデル：プロセスローカル・エフェメラルアリーナ（Process-Local Ephemeral Arena）
+# 5. メモリモデル：3層メモリ協調アーキテクチャ（Stack Promotion・Task Arena・GC Heap）
 
-## 5.1 ネイティブ LIFO スタックの維持
+## 5.1 ネイティブ LIFO スタックとエスケープ解析（Stack Promotion）
 
 `call/cc`（任意地点への巻き戻し・再突入）を排除したことにより、CPU ネイティブのハードウェアスタック規約（System V AMD64 ABI 等）を完全維持できる。Spaghetti Stack や Heap-allocated Stack Frame 等の退避オーバーヘッドが一切生じない。
 
-## 5.2 O(1) 瞬時解放アルゴリズム
+さらに、uLisp コンパイラのエスケープ解析パス（`120_alias_escape.scm`）との連携により、タスク内で生成され外部へエスケープしないローカルなペアやクロージャは、スタック割り当て（`%stack-cons`, `%make-stack-closure`）へ自動昇格（Stack Promotion）される。これにより、ヒープおよびアリーナの消費を抑え、L1 キャッシュ局所性を最大化する。
 
-各並列タスクは、初期 2KB〜8KB のプロセスローカル・エフェメラルアリーナ（Process-Local Ephemeral Arena）を割り当てられる。
-- タスク内でのメモリ確保は単一ポインタのインクリメント（`arena_offset += size`）のみで行われる。
-- タスク完了時は、アリーナの `arena_offset` を 0 にリセットするのみで全オブジェクトを一括破棄する。計算量は厳密に $O(1)$ である。
+## 5.2 プロセスローカル・エフェメラルアリーナ（Task Ephemeral Arena）
+
+各並列タスク（`TaskContext`）には、初期 2KB〜8KB のプロセスローカル・エフェメラルアリーナ（`arena.scm`）が割り当てられる。
+- **タスク境界転送・サニタイズ（`boundary.scm`）**: Layer 1（コントロールプレーン）と Layer 2（ASC 計算プレーン）の間で受け渡されるデータ構造のディープコピー（`sanitize-to-arena`）およびタスク間メッセージングの中継領域として使用される。
+- **バンプポインタ確保**: アリーナ内のメモリ割り当ては単一オフセットのインクリメント（`arena-allocate!`）で行われる。
+- **O(1) 瞬時解放アルゴリズム**: タスク終了時やエフェメラル処理完了時は、アリーナの `arena-reset!` を呼び出し、オフセットを 0 にリセットするのみで全確保領域を一括破棄する。計算量は厳密に $O(1)$ であり、GC を介在させない。
 
 ```scheme
 ;; プロセスローカル・エフェメラルアリーナ（領域ベースメモリ管理）の Scheme 実装
 (define-record-type <task-arena>
-  (make-task-arena base offset capacity)
+  (%make-task-arena base offset capacity buffer chunks chunk-count max-chunks total-allocated reset-count)
   task-arena?
-  (base     arena-base)
-  (offset   arena-offset   arena-offset-set!)
-  (capacity arena-capacity arena-capacity-set!))
+  (base            arena-base            arena-base-set!)
+  (offset          arena-offset          arena-offset-set!)
+  (capacity        arena-capacity        arena-capacity-set!)
+  (buffer          arena-buffer          arena-buffer-set!)
+  (chunks          arena-chunks          arena-chunks-set!)
+  (chunk-count     arena-chunk-count     arena-chunk-count-set!)
+  (max-chunks      arena-max-chunks      arena-max-chunks-set!)
+  (total-allocated arena-total-allocated arena-total-allocated-set!)
+  (reset-count     arena-reset-count     arena-reset-count-set!))
 
-(define (arena-allocate! arena size)
-  (let* ((aligned-size (bitwise-and (+ size 7) (bitwise-not 7)))
-         (current-off  (arena-offset arena))
-         (next-off     (+ current-off aligned-size)))
-    (if (> next-off (arena-capacity arena))
-        (arena-overflow-fallback! arena aligned-size)
+(define (arena-allocate! arena size align)
+  (let* ((aligned-sz (arena-align-up size align))
+         (cur-offset (arena-offset arena))
+         (aligned-off (arena-align-up cur-offset align))
+         (next-off (+ aligned-off aligned-sz)))
+    (if (<= next-off (arena-capacity arena))
         (begin
           (arena-offset-set! arena next-off)
-          (+ (arena-base arena) current-off)))))
+          (+ (arena-base arena) aligned-off))
+        (arena-allocate-chunk! arena aligned-sz align))))
 
 (define (arena-reset! arena)
-  (arena-offset-set! arena 0))
+  (arena-offset-set! arena 0)
+  (arena-chunks-set! arena '())
+  (arena-chunk-count-set! arena 0)
+  (arena-reset-count-set! arena (+ (arena-reset-count arena) 1)))
 ```
 
 ## 5.3 アリーナ枯渇時のフォールバック設計
 
-万一アリーナサイズを超過した場合、グローバルヒープへの漏出を防ぐため、リンクされた 8KB の拡張アリーナチャンク（Chained Chunk）を動的確保し、タスク完了時に連鎖チャンクごと $O(\text{chunks})$ で解放する。
+万一アリーナサイズを超過した場合、グローバルヒープへの無制御な漏出を防ぐため、リンクされた 8KB の拡張アリーナチャンク（Chained Chunk: `<arena-chunk>`）を動的確保し、タスク完了時に連鎖チャンクごと $O(\text{chunks})$ で一括回収・リセットする。
+
+## 5.4 3層メモリ階層の役割分担と実態整合性
+
+本アーキテクチャにおけるメモリ割り当て経路は、以下の3層によって最適化・多層防御されている：
+
+| メモリ層 | 管理機構 | 対象データ | 解放契機 |
+| :--- | :--- | :--- | :--- |
+| **第1層: LIFO Stack** | コンパイラエスケープ解析 (`120_alias_escape.scm`) | 非エスケープ局所セル (`%stack-cons`) | 関数スコープ脱出時 ($O(1)$) |
+| **第2層: Ephemeral Arena** | タスク局所アリーナ (`arena.scm`, `boundary.scm`) | 境界ディープコピー・タスク局所バッファ | タスク終了時 / `arena-reset!` ($O(1)$) |
+| **第3層: GC Heap** | R7RS 世代別 / マーク＆スイープ GC | 長寿命共有データ・大域オブジェクト | バックグラウンド GC サイクル |
 
 ---
 

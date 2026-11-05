@@ -2,7 +2,7 @@
 ID: 737
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] Task Ephemeral Arena の割り当て経路接続または DSN-37 設計書記述の実態整合化 (ID: 737)
@@ -18,10 +18,10 @@ ID: 737
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)
-- [ ] [arena.scm](../../ulisp/runtime/concurrency/arena.scm)
-- [ ] [boundary.scm](../../ulisp/runtime/concurrency/boundary.scm)
-- [ ] [120_alias_escape.scm](../../ulisp/frontend/120_alias_escape.scm)
+- [x] [DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)
+- [x] [arena.scm](../../ulisp/runtime/concurrency/arena.scm)
+- [x] [boundary.scm](../../ulisp/runtime/concurrency/boundary.scm)
+- [x] [120_alias_escape.scm](../../ulisp/frontend/120_alias_escape.scm)
 
 ---
 
@@ -34,6 +34,6 @@ Target Branch: `feat/737-align-task-arena-and-dsn37`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] Task Arena の割り当て経路と DSN-37 設計書の記述に乖離がないこと。
-- [ ] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
+- [x] Task Arena の割り当て経路と DSN-37 設計書の記述に乖離がないこと。
+- [x] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
 
