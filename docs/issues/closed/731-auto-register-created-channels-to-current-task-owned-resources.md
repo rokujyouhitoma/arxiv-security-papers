@@ -2,7 +2,7 @@
 ID: 731
 種別: Feature
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] make-channel 実行時における現在タスク所有チャネル一覧への自動登録 (ID: 731)
@@ -18,9 +18,9 @@ ID: 731
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [channel.scm](../../ulisp/runtime/concurrency/channel.scm)
-- [ ] [panic.scm](../../ulisp/runtime/concurrency/panic.scm)
-- [ ] [test_channel.scm](../../tests/concurrency/test_channel.scm)
+- [x] [channel.scm](../../ulisp/runtime/concurrency/channel.scm)
+- [x] [panic.scm](../../ulisp/runtime/concurrency/panic.scm)
+- [x] [test_channel.scm](../../tests/concurrency/test_channel.scm)
 
 ---
 
@@ -33,6 +33,6 @@ Target Branch: `feat/731-auto-register-channel-on-creation`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] タスク境界内で `make-channel` を呼ぶだけで、手動の `task-register-channel!` なしに現在タスクの `task-owned-channels` に自動登録されること。
-- [ ] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
+- [x] タスク境界内で `make-channel` を呼ぶだけで、手動の `task-register-channel!` なしに現在タスクの `task-owned-channels` に自動登録されること。
+- [x] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
 

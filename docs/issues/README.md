@@ -16,7 +16,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **731** | make-channel 実行時における現在タスク所有チャネル一覧への自動登録 (A6) | Feature | Medium | New | [731-auto-register-created-channels-to-current-task-owned-resources.md](731-auto-register-created-channels-to-current-task-owned-resources.md) |
 | **732** | スケジューラ統計における正常完了タスク数と異常終了 (パニック) タスク数の分離計上 (A8) | Feature | Medium | New | [732-separate-completed-and-failed-task-counters-in-scheduler-stats.md](732-separate-completed-and-failed-task-counters-in-scheduler-stats.md) |
 | **733** | Task ID (TID) からタスクコンテキストを O(1) 解決するロックフリータスク表の実装 (B2) | Feature | Medium | New | [733-implement-lock-free-task-table-for-tid-lookup.md](733-implement-lock-free-task-table-for-tid-lookup.md) |
 | **734** | 4種類のタスク表現の <task-context> への一元化 (A7) | Feature | Medium | New | [734-unify-four-task-representations-into-single-task-context.md](734-unify-four-task-representations-into-single-task-context.md) |
@@ -31,6 +30,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **731** | make-channel 実行時における現在タスク所有チャネル一覧への自動登録 (A6) | Feature | 2026-11-05 | [closed/731-auto-register-created-channels-to-current-task-owned-resources.md](closed/731-auto-register-created-channels-to-current-task-owned-resources.md) |
 | **730** | プロセス名レジストリ synapse-send-named! のタスク宛て実配送・terminated 状態名統一・終了タスク自動登録解除 (C5) | Bug | 2026-11-05 | [closed/730-fix-registry-send-named-delivery-and-auto-unregister-terminated-tasks.md](closed/730-fix-registry-send-named-delivery-and-auto-unregister-terminated-tasks.md) |
 | **739** | ULisp 標準ライブラリ依存順序の整合化および Makefile / テストスクリプトの未束縛識別子エラー修正 | Bug | 2026-11-05 | [closed/739-fix-ulisp-stdlib-dependency-order-and-makefile-test-targets.md](closed/739-fix-ulisp-stdlib-dependency-order-and-makefile-test-targets.md) |
 | **729** | チャネル受信 (channel-recv!) へのタイムアウト機構の追加と Graceful Shutdown 待機への統合 (C6) | Feature | 2026-11-05 | [closed/729-implement-channel-recv-timeout-for-graceful-shutdown.md](closed/729-implement-channel-recv-timeout-for-graceful-shutdown.md) |

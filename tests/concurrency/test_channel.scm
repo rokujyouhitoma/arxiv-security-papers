@@ -736,6 +736,34 @@
     (assert-equal (cdr res-after) 'post-timeout-msg "subsequent message after timeout received cleanly")))
 
 ;; -----------------------------------------------------------------------
+;; Group 13: Auto-Registration of Created Channels to Current Task (#731)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 13: Auto-Registration of Channels to Current Task (#731) ---\n")
+(flush-output-port)
+
+(let* ((task (make-task-context))
+       (prev (%set-current-synapse-task! task)))
+  (let ((ch1 (make-channel 2))
+        (ch2 (make-spsc-channel 4)))
+    ;; Check both channels automatically registered to task
+    (let ((owned (task-owned-channels task)))
+      (assert-true (memq ch1 owned) "ch1 auto-registered to current task")
+      (assert-true (memq ch2 owned) "ch2 auto-registered to current task"))
+
+    ;; Closing ch1 unregisters it from task
+    (channel-close! ch1)
+    (let ((owned-after-close (task-owned-channels task)))
+      (assert-true (not (memq ch1 owned-after-close)) "ch1 unregistered upon close")
+      (assert-true (memq ch2 owned-after-close) "ch2 still registered"))
+
+    ;; Poisoning owned channels marks ch2 poisoned
+    (task-poison-owned-channels! task 'task-failed #f)
+    (assert-true (channel-poisoned? ch2) "ch2 poisoned via task-poison-owned-channels!")
+    (assert-equal (length (task-owned-channels task)) 0 "task owned channels cleared after poisoning"))
+
+  (%set-current-synapse-task! prev))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

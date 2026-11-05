@@ -687,6 +687,12 @@
                                 ring-mask
                                 (if spsc? #t #f))))
         (%memory-fence)
+        ;; Auto-register created channel to currently running task (Issue #731, Item A6)
+        (guard (exn (else #f))
+          (let ((cur-task (current-synapse-task)))
+            (if (task-context? cur-task)
+                (task-register-channel! cur-task ch)
+                #f)))
         ch)))
 
 (define make-channel
@@ -1524,6 +1530,12 @@
                    (begin
                      (%wake-task! (%waiter-task w) wake-hook)
                      (wake-sends)))))
+           ;; Unregister closed channel from currently running task (Issue #731)
+           (guard (exn (else #f))
+             (let ((cur-task (current-synapse-task)))
+               (if (task-context? cur-task)
+                   (task-unregister-channel! cur-task ch)
+                   #f)))
            #t)))))
 
 (define channel-poison!
