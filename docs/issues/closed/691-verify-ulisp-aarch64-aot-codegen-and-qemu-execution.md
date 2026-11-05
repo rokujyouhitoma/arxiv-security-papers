@@ -2,13 +2,13 @@
 ID: 691
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] ULisp AArch64 AOT コンパイラ出力の結合検証および QEMU エミュレーション実行の確立 (ID: 691)
 
 ## 1. 概要 / Summary
-Pass 150（[`ulisp/backend/150_backend_aarch64.scm`](../../ulisp/backend/150_backend_aarch64.scm)）による AArch64 GNU アセンブリ出力と、抽象化された POSIX システムコール基盤（[`ulisp/lib/posix.scm`](../../ulisp/lib/posix.scm)）を結合し、クロスアセンブラ・リンカ（`aarch64-linux-gnu-as` / `ld`）を用いて完全静的実行バイナリ（ELF64 Zero-libc Freestanding Binary）をビルド・実行可能な環境を確立する。
+Pass 150（[`ulisp/backend/150_backend_aarch64.scm`](../../../ulisp/backend/150_backend_aarch64.scm)）による AArch64 GNU アセンブリ出力と、抽象化された POSIX システムコール基盤（[`ulisp/lib/posix.scm`](../../../ulisp/lib/posix.scm)）を結合し、クロスアセンブラ・リンカ（`aarch64-linux-gnu-as` / `ld`）を用いて完全静的実行バイナリ（ELF64 Zero-libc Freestanding Binary）をビルド・実行可能な環境を確立する。
 
 現在、Pass 150 は LIR から AArch64 GNU アセンブリの基本命令を出力可能であるものの、以下の重要課題が存在する：
 1. **ブランチフュージョン命令 `%jump-cond` の欠落**:
@@ -33,12 +33,12 @@ Pass 150（[`ulisp/backend/150_backend_aarch64.scm`](../../ulisp/backend/150_bac
   - §2.1: ベアメタル `_start` エントリポイントと `.bss` 初期ヒープ
   - §3.2: Raw Syscall 直結 I/O プリミティブ
 - **関連 Issue**:
-  - [Issue #503: Implement AArch64 Backend via LIR](closed/503-implement-ulisp-aarch64-backend-via-lir.md)
-  - [Issue #516: Bare-Metal Linux Runtime without libc](closed/516-implement-zero-libc-pure-scheme-bare-metal-runtime.md)
-  - [Issue #689: Setup QEMU User and Cross Toolchain Verification Environment](closed/689-setup-qemu-user-and-cross-toolchain-verification-environment.md)
-  - [Issue #690: Abstract POSIX Syscall Layer for Multi-Architecture Support](closed/690-abstract-posix-syscall-layer-for-multi-architecture-support.md)
-  - [Issue #692: Implement AArch64 Native Context Switch for Concurrency Runtime](692-implement-aarch64-native-context-switch-for-concurrency-runtime.md)
-  - [Issue #693: Integrate QEMU AArch64 Automated Regression Test Suite into Makefile](693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md)
+  - [Issue #503: Implement AArch64 Backend via LIR](503-implement-ulisp-aarch64-backend-via-lir.md)
+  - [Issue #516: Bare-Metal Linux Runtime without libc](516-implement-zero-libc-pure-scheme-bare-metal-runtime.md)
+  - [Issue #689: Setup QEMU User and Cross Toolchain Verification Environment](689-setup-qemu-user-and-cross-toolchain-verification-environment.md)
+  - [Issue #690: Abstract POSIX Syscall Layer for Multi-Architecture Support](690-abstract-posix-syscall-layer-for-multi-architecture-support.md)
+  - [Issue #692: Implement AArch64 Native Context Switch for Concurrency Runtime](../692-implement-aarch64-native-context-switch-for-concurrency-runtime.md)
+  - [Issue #693: Integrate QEMU AArch64 Automated Regression Test Suite into Makefile](../693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md)
 
 ---
 
@@ -59,19 +59,19 @@ Pass 150（[`ulisp/backend/150_backend_aarch64.scm`](../../ulisp/backend/150_bac
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/backend/150_backend_aarch64.scm](../../ulisp/backend/150_backend_aarch64.scm):
+- [x] [ulisp/backend/150_backend_aarch64.scm](../../../ulisp/backend/150_backend_aarch64.scm):
   - `%jump-cond` 分岐条件命令の実装（`b.eq`, `b.ne`, `b.lt`, `b.le`, `b.gt`, `b.ge`）
   - ベアメタル `_start:` エントリポイントおよび終了処理（`sys_exit`=93）の出力
   - `.bss` 内の初期ヒープ領域 `ulisp_initial_heap`（16MB）の定義
   - AAPCS64 準拠の 16 バイト SP アライメント調整（`total-shift` の 16 バイト整列）
   - 薄層 I/O ルーチン（`ulisp_write_char`, `ulisp_write_string`）の埋め込み
-- [ ] [ulisp/scripts/test_aarch64_qemu_smoke.sh](../../ulisp/scripts/test_aarch64_qemu_smoke.sh):
+- [x] [ulisp/scripts/test_aarch64_qemu_smoke.sh](../../../ulisp/scripts/test_aarch64_qemu_smoke.sh):
   - Scheme コードの AOT コンパイル、クロスアセンブル、静的リンク、QEMU 実行、標準出力・終了コード自動判定スクリプト
-- [ ] [ulisp/tests/test_aarch64_qemu_smoke.scm](../../ulisp/tests/test_aarch64_qemu_smoke.scm):
+- [x] [ulisp/tests/test_aarch64_qemu_smoke.scm](../../../ulisp/tests/test_aarch64_qemu_smoke.scm):
   - スモークテスト用 Scheme ソースコード群（算術計算、文字・文字列出力、Fibonacci、クロージャ、TCO ループ）
-- [ ] [ulisp/Makefile](../../ulisp/Makefile):
+- [x] [ulisp/Makefile](../../../ulisp/Makefile):
   - `test_aarch64_qemu` ターゲットの追加と自動テスト連携
-- [ ] [docs/issues/README.md](README.md):
+- [x] [docs/issues/README.md](../README.md):
   - Issue 台帳ステータス管理
 
 ---
@@ -178,11 +178,11 @@ Target Branch: `feat/691-verify-ulisp-aarch64-aot-codegen`
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
-- [ ] Pass 150（AArch64 バックエンド）に `%jump-cond` ハンドラが実装され、Pass 128（Branch Fusion）の出力が正常にアセンブリ変換されること。
-- [ ] `(not (module-mode?))` 時に独立実行可能な `_start` エントリポイントと `.bss` 初期ヒープ（16MB）が出力されること。
-- [ ] AAPCS64 に準拠し、関数呼出し時の SP が常に 16 バイト境界に整列され、SP Alignment Fault が一切発生しないこと。
-- [ ] 薄層 I/O ルーチン（`ulisp_write_char`, `ulisp_write_string`）が組み込まれ、`write-string` が AArch64 で正常動作すること。
-- [ ] スモークテスト（Case 1: 算術, Case 2: Fibonacci, Case 3: 文字列 I/O, Case 4: クロージャ, Case 5: TCO ループ）が `qemu-aarch64` 上で全件 PASS すること。
-- [ ] `make -C ulisp test_aarch64_qemu` が Makefile からワンコマンドで実行可能であること。
-- [ ] 既存の全テストスイート（`make -C ulisp test_all_passes`, `make check_format`, `make static_analysis`）にデグレがないこと。
-- [ ] `docs/issues/README.md` のステータスが `In Progress` に更新されていること。
+- [x] Pass 150（AArch64 バックエンド）に `%jump-cond` ハンドラが実装され、Pass 128（Branch Fusion）の出力が正常にアセンブリ変換されること。
+- [x] `(not (module-mode?))` 時に独立実行可能な `_start` エントリポイントと `.bss` 初期ヒープ（16MB）が出力されること。
+- [x] AAPCS64 に準拠し、関数呼出し時の SP が常に 16 バイト境界に整列され、SP Alignment Fault が一切発生しないこと。
+- [x] 薄層 I/O ルーチン（`ulisp_write_char`, `ulisp_write_string`）が組み込まれ、`write-string` が AArch64 で正常動作すること。
+- [x] スモークテスト（Case 1: 算術, Case 2: Fibonacci, Case 3: 文字列 I/O, Case 4: クロージャ, Case 5: TCO ループ）が `qemu-aarch64` 上で全件 PASS すること。
+- [x] `make -C ulisp test_aarch64_qemu` が Makefile からワンコマンドで実行可能であること。
+- [x] 既存の全テストスイート（`make -C ulisp test_all_passes`, `make check_format`, `make static_analysis`）にデグレがないこと。
+- [x] `docs/issues/README.md` のステータスが `Closed` に更新されていること。

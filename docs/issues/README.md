@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **691** | ULisp AArch64 AOT コンパイラ出力の結合検証および QEMU エミュレーション実行の確立 | Feature | High | In Progress | [691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md](691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md) |
 | **692** | Synapse 並行性ランタイム向け AArch64 ネイティブコンテキストスイッチ (context_aarch64.s) の実装 | Feature | High | New | [692-implement-aarch64-native-context-switch-for-concurrency-runtime.md](692-implement-aarch64-native-context-switch-for-concurrency-runtime.md) |
 | **693** | ULisp Makefile への QEMU AArch64 全自動回帰テストスイートの統合 | Feature | Medium | New | [693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md](693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md) |
 | **694** | MinGW-w64 および Wine を用いた Windows 向けクロスコンパイル・ローカル検証環境の構築 | Feature | High | New | [694-setup-mingw-and-wine-verification-environment.md](694-setup-mingw-and-wine-verification-environment.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **691** | ULisp AArch64 AOT コンパイラ出力の結合検証および QEMU エミュレーション実行の確立 | Feature | 2026-11-06 | [closed/691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md](closed/691-verify-ulisp-aarch64-aot-codegen-and-qemu-execution.md) |
 | **690** | ULisp POSIX システムコール層のマルチアーキテクチャ抽象化と AArch64 Linux 対応 | Feature | 2026-11-06 | [closed/690-abstract-posix-syscall-layer-for-multi-architecture-support.md](closed/690-abstract-posix-syscall-layer-for-multi-architecture-support.md) |
 | **689** | QEMU ユーザーエミュレーションおよび AArch64 クロスツールチェーン検証環境の構築 | Feature | 2026-11-05 | [closed/689-setup-qemu-user-and-cross-toolchain-verification-environment.md](closed/689-setup-qemu-user-and-cross-toolchain-verification-environment.md) |
 | **738** | ILisp / eval_adapter.scm における境界・Supervisor 無言スタブ (#f) の本実装統合および未対応機能の明示的エラー化 | Bug | 2026-11-05 | [closed/738-replace-silent-synapse-stubs-in-ilisp-eval-adapter.md](closed/738-replace-silent-synapse-stubs-in-ilisp-eval-adapter.md) |
