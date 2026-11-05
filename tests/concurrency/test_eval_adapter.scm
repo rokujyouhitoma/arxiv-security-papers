@@ -329,6 +329,71 @@
     (assert-true bad-task "with-task-arena rejects invalid task object (CWE-843 guard)")))
 
 ;; -----------------------------------------------------------------------
+;; Group 8: Fault-Tolerance, Boundary & Subsystem Fallback Guards (#738)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Fault-Tolerance, Boundary & Subsystem Fallback Guards (#738) ---\n")
+(flush-output-port)
+
+(let* ((env (make-default-eval-env))
+       (t (make-task-context 999 50)))
+  ;; 1. with-synapse-task-boundary executes closure and returns (ok . val)
+  (let ((res (eval-in-task '(with-synapse-task-boundary task (lambda () (+ 100 200)))
+                           (let ((e (make-eval-env env)))
+                             (begin (eval-env-bind! e 'task t) e))
+                           t)))
+    (assert-true (pair? res) "boundary returns pair")
+    (assert-equal (car res) 'ok "boundary status is ok")
+    (assert-equal (cdr res) 300 "boundary result is 300"))
+
+  ;; 2. with-synapse-task-boundary establishes current-synapse-task
+  (let* ((t2 (make-task-context 1000 50))
+         (e2 (make-eval-env env)))
+    (eval-env-bind! e2 'task t2)
+    (let ((res (eval-in-task '(with-synapse-task-boundary task (lambda () (task-id (current-synapse-task))))
+                             e2
+                             t2)))
+      (assert-equal (car res) 'ok "current task query inside boundary is ok")
+      (assert-equal (cdr res) 1000 "current task inside boundary matches task-id")))
+
+  ;; 3. synapse-panic! inside boundary escapes and returns panic
+  (let* ((t3 (make-task-context 1001 50))
+         (e3 (make-eval-env env)))
+    (eval-env-bind! e3 'task t3)
+    (let ((res (eval-in-task '(with-synapse-task-boundary task (lambda () (synapse-panic! 'test-crash)))
+                             e3
+                             t3)))
+      (assert-true (pair? res) "panic inside boundary returns pair")
+      (assert-equal (car res) 'panic "panic status is panic")
+      (assert-equal (task-state t3) 'terminated "task is marked terminated after panic")))
+
+  ;; 4. synapse-panic! outside task boundary raises error (not silent #f)
+  (let ((outside-err (guard (exn (#t #t)) (synapse-panic! 'outside-crash) #f)))
+    (assert-true outside-err "synapse-panic! outside boundary raises explicit error (not #f)"))
+
+  ;; 5. synapse-assert-true! returns #t on true, panics on false
+  (assert-true (synapse-assert-true! #t "should pass") "synapse-assert-true! returns #t on true")
+  (let* ((t4 (make-task-context 1002 50))
+         (e4 (make-eval-env env)))
+    (eval-env-bind! e4 'task t4)
+    (let ((res (eval-in-task '(with-synapse-task-boundary task (lambda () (synapse-assert-true! #f "must fail")))
+                             e4
+                             t4)))
+      (assert-equal (car res) 'panic "synapse-assert-true! failure inside boundary triggers panic")))
+
+  ;; 6. Subsystem stubs throw explicit error instead of silent #f
+  (let ((sup-err (guard (exn (#t #t)) (supervisor-handle-child-down! 'sup 1 'crash) #f)))
+    (assert-true sup-err "supervisor-handle-child-down! throws error without supervisor subsystem"))
+
+  (let ((link-err (guard (exn (#t #t)) (task-link! t t) #f)))
+    (assert-true link-err "task-link! throws error without links subsystem"))
+
+  (let ((reg-err (guard (exn (#t #t)) (synapse-register! 'svc t) #f)))
+    (assert-true reg-err "synapse-register! throws error without registry subsystem"))
+
+  (let ((io-err (guard (exn (#t #t)) (make-io-uring) #f)))
+    (assert-true io-err "make-io-uring throws error without native io_uring subsystem")))
+
+;; -----------------------------------------------------------------------
 ;; Test Suite Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

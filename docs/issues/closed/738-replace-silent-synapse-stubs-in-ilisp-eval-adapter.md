@@ -2,7 +2,7 @@
 ID: 738
 種別: Bug
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [BUG/SEC] ILisp / eval_adapter.scm における境界・Supervisor 無言スタブ (#f) の本実装統合および未対応機能の明示的エラー化 (ID: 738)
@@ -21,11 +21,11 @@ ID: 738
 ---
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [eval_adapter.scm](../../ulisp/runtime/concurrency/eval_adapter.scm)
-- [ ] [panic.scm](../../ulisp/runtime/concurrency/panic.scm)
-- [ ] [links.scm](../../ulisp/runtime/concurrency/links.scm)
-- [ ] [supervisor.scm](../../ulisp/runtime/concurrency/supervisor.scm)
-- [ ] [test_eval_adapter.scm](../../tests/concurrency/test_eval_adapter.scm)
+- [x] [eval_adapter.scm](../../ulisp/runtime/concurrency/eval_adapter.scm)
+- [x] [panic.scm](../../ulisp/runtime/concurrency/panic.scm)
+- [x] [links.scm](../../ulisp/runtime/concurrency/links.scm)
+- [x] [supervisor.scm](../../ulisp/runtime/concurrency/supervisor.scm)
+- [x] [test_eval_adapter.scm](../../tests/concurrency/test_eval_adapter.scm)
 
 ---
 
@@ -49,6 +49,6 @@ Target Branch: `fix/738-replace-eval-adapter-silent-stubs`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `eval_adapter.scm` / ILisp 実行時に `with-synapse-task-boundary` や `supervisor-handle-child-down!` が無言で `#f` を返すスタブになっておらず、本物の実装または明示的エラーとして動作すること。
-- [ ] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
+- [x] `eval_adapter.scm` / ILisp 実行時に `with-synapse-task-boundary` や `supervisor-handle-child-down!` が無言で `#f` を返すスタブになっておらず、本物の実装または明示的エラーとして動作すること。
+- [x] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
 

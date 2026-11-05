@@ -16,64 +16,346 @@
 ;; 1. AST Affine Syntax Linter (CWE-416 / Linearity Guard)
 ;; -----------------------------------------------------------------------
 
-;; Fault-tolerance and supervision stubs (overridden when panic.scm / links.scm / supervisor.scm are loaded)
-(define synapse-panic! (case-lambda (() #f) ((r) #f) ((r d) #f)))
-(define synapse-secure-panic! (case-lambda (() #f) ((r) #f) ((r d) #f)))
-(define synapse-assert-true! (case-lambda ((c) #f) ((c m) #f)))
-(define with-synapse-task-boundary (case-lambda ((t) #f) ((t thunk) #f)))
-(define current-synapse-task (lambda () #f))
-(define task-link! (lambda (a b) #f))
-(define task-unlink! (lambda (a b) #f))
-(define task-monitor (lambda (a b) -1))
-(define task-demonitor (lambda (a b) #f))
-(define task-trap-exit! (lambda (t v) #f))
-(define task-trapping-exit? (lambda (t) #f))
-(define make-child-spec (case-lambda ((id thunk) #f) ((id thunk restart-type) #f) ((id thunk restart-type shutdown-strategy) #f) ((id thunk restart-type shutdown-strategy child-type) #f) ((id thunk restart-type shutdown-strategy child-type init-args) #f)))
-(define make-supervisor-spec (case-lambda ((strategy) #f) ((strategy max-restarts) #f) ((strategy max-restarts period-seconds) #f) ((strategy max-restarts period-seconds child-specs) #f)))
-(define make-supervisor (case-lambda ((spec) #f) ((spec parent) #f)))
-(define supervisor-start! (lambda (sup) #f))
-(define supervisor-stop! (lambda (sup) #f))
-(define supervisor-handle-child-down! (case-lambda ((sup tid reason) #f) ((sup ref tid reason) #f)))
-(define supervisor-child-task (lambda (sup id) #f))
-(define supervisor-poll-down-signals! (lambda (sup) #f))
+;; Fault-tolerance and supervision stubs / fallbacks
+;; (Real implementations are provided by channel.scm, panic.scm, links.scm, supervisor.scm, registry.scm)
+
+(define (%default-interpreter-panic reason details)
+  (let ((task (current-synapse-task)))
+    (if (and task (task-context? task))
+        (let ((k (task-escape-continuation task)))
+          (task-state-set! task 'terminated)
+          (if (procedure? k)
+              (k (cons 'panic (cons reason details)))
+              (error "[SYNAPSE-PANIC] Interpreter task panic without continuation" reason details)))
+        (error "[SYNAPSE-PANIC] Interpreter task panic outside task boundary" reason details))))
+
+(define synapse-panic!
+  (case-lambda
+    (()
+     (%default-interpreter-panic 'unspecified-panic '()))
+    ((reason)
+     (%default-interpreter-panic reason '()))
+    ((reason d1)
+     (%default-interpreter-panic reason (list d1)))
+    ((reason d1 d2)
+     (%default-interpreter-panic reason (list d1 d2)))
+    ((reason d1 d2 d3)
+     (%default-interpreter-panic reason (list d1 d2 d3)))))
+
+(define synapse-secure-panic!
+  (case-lambda
+    (()
+     (let ((task (current-synapse-task)))
+       (if (and task (task-context? task))
+           (let ((a (task-arena task)))
+             (if (and a (task-arena? a)) (arena-secure-reset! a) #f))
+           #f))
+     (%default-interpreter-panic 'unspecified-secure-panic '()))
+    ((reason)
+     (let ((task (current-synapse-task)))
+       (if (and task (task-context? task))
+           (let ((a (task-arena task)))
+             (if (and a (task-arena? a)) (arena-secure-reset! a) #f))
+           #f))
+     (%default-interpreter-panic reason '()))
+    ((reason d1)
+     (let ((task (current-synapse-task)))
+       (if (and task (task-context? task))
+           (let ((a (task-arena task)))
+             (if (and a (task-arena? a)) (arena-secure-reset! a) #f))
+           #f))
+     (%default-interpreter-panic reason (list d1)))
+    ((reason d1 d2)
+     (let ((task (current-synapse-task)))
+       (if (and task (task-context? task))
+           (let ((a (task-arena task)))
+             (if (and a (task-arena? a)) (arena-secure-reset! a) #f))
+           #f))
+     (%default-interpreter-panic reason (list d1 d2)))))
+
+(define synapse-assert-true!
+  (case-lambda
+    ((cond-val)
+     (if (not cond-val)
+         (synapse-panic! 'assertion-violation "Assertion failed")
+         #t))
+    ((cond-val msg)
+     (if (not cond-val)
+         (synapse-panic! 'assertion-violation msg)
+         #t))
+    ((cond-val msg d1)
+     (if (not cond-val)
+         (synapse-panic! 'assertion-violation msg d1)
+         #t))))
+
+;; Note: with-synapse-task-boundary and current-synapse-task are provided by channel.scm
+
+(define task-link!
+  (lambda (a b)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-link! requires links runtime subsystem (links.scm)" a b)))
+
+(define task-unlink!
+  (lambda (a b)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-unlink! requires links runtime subsystem (links.scm)" a b)))
+
+(define task-monitor
+  (case-lambda
+    ((a b)
+     (error "[SYNAPSE-EVAL-ADAPTER] task-monitor requires links runtime subsystem (links.scm)" a b))
+    ((a b ch)
+     (error "[SYNAPSE-EVAL-ADAPTER] task-monitor requires links runtime subsystem (links.scm)" a b ch))))
+
+(define task-demonitor
+  (lambda (a b)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-demonitor requires links runtime subsystem (links.scm)" a b)))
+
+(define task-trap-exit!
+  (lambda (t v)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-trap-exit! requires links runtime subsystem (links.scm)" t v)))
+
+(define task-trapping-exit?
+  (lambda (t)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-trapping-exit? requires links runtime subsystem (links.scm)" t)))
+
+(define make-child-spec
+  (case-lambda
+    ((id thunk)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id))
+    ((id thunk restart-type)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id))
+    ((id thunk restart-type shutdown-strategy)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id))
+    ((id thunk restart-type shutdown-strategy child-type)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id))
+    ((id thunk restart-type shutdown-strategy child-type init-args)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id))))
+
+(define make-supervisor-spec
+  (case-lambda
+    ((strategy)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor-spec requires supervisor runtime subsystem (supervisor.scm)" strategy))
+    ((strategy max-restarts)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor-spec requires supervisor runtime subsystem (supervisor.scm)" strategy))
+    ((strategy max-restarts period-seconds)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor-spec requires supervisor runtime subsystem (supervisor.scm)" strategy))
+    ((strategy max-restarts period-seconds child-specs)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor-spec requires supervisor runtime subsystem (supervisor.scm)" strategy))))
+
+(define make-supervisor
+  (case-lambda
+    ((spec)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor requires supervisor runtime subsystem (supervisor.scm)" spec))
+    ((spec parent)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor requires supervisor runtime subsystem (supervisor.scm)" spec))))
+
+(define supervisor-start!
+  (lambda (sup)
+    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-start! requires supervisor runtime subsystem (supervisor.scm)" sup)))
+
+(define supervisor-stop!
+  (lambda (sup)
+    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-stop! requires supervisor runtime subsystem (supervisor.scm)" sup)))
+
+(define supervisor-handle-child-down!
+  (case-lambda
+    ((sup tid reason)
+     (error "[SYNAPSE-EVAL-ADAPTER] supervisor-handle-child-down! requires supervisor runtime subsystem (supervisor.scm)" sup tid reason))
+    ((sup ref tid reason)
+     (error "[SYNAPSE-EVAL-ADAPTER] supervisor-handle-child-down! requires supervisor runtime subsystem (supervisor.scm)" sup ref tid reason))))
+
+(define supervisor-child-task
+  (lambda (sup id)
+    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-child-task requires supervisor runtime subsystem (supervisor.scm)" sup id)))
+
+(define supervisor-poll-down-signals!
+  (lambda (sup)
+    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-poll-down-signals! requires supervisor runtime subsystem (supervisor.scm)" sup)))
+
 ;; Process Registry stubs (#669)
-(define synapse-register! (case-lambda ((n t) #f) ((r n t) #f)))
-(define synapse-unregister! (case-lambda ((n) #f) ((r n) #f)))
-(define synapse-whereis (case-lambda ((n) #f) ((r n) #f)))
-(define synapse-rebind! (case-lambda ((n t) #f) ((r n t) #f)))
-(define synapse-send-named! (case-lambda ((n m) #f) ((r n m) #f)))
+(define synapse-register!
+  (case-lambda
+    ((n t)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-register! requires registry runtime subsystem (registry.scm)" n t))
+    ((r n t)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-register! requires registry runtime subsystem (registry.scm)" r n t))))
+
+(define synapse-unregister!
+  (case-lambda
+    ((n)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-unregister! requires registry runtime subsystem (registry.scm)" n))
+    ((r n)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-unregister! requires registry runtime subsystem (registry.scm)" r n))))
+
+(define synapse-whereis
+  (case-lambda
+    ((n)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-whereis requires registry runtime subsystem (registry.scm)" n))
+    ((r n)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-whereis requires registry runtime subsystem (registry.scm)" r n))))
+
+(define synapse-rebind!
+  (case-lambda
+    ((n t)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-rebind! requires registry runtime subsystem (registry.scm)" n t))
+    ((r n t)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-rebind! requires registry runtime subsystem (registry.scm)" r n t))))
+
+(define synapse-send-named!
+  (case-lambda
+    ((n m)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-send-named! requires registry runtime subsystem (registry.scm)" n m))
+    ((r n m)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-send-named! requires registry runtime subsystem (registry.scm)" r n m))))
+
 ;; Crash Logger stubs (#670)
-(define make-crash-report (case-lambda ((t r) #f) ((t r d) #f) ((t r d s) #f) ((t r d s m) #f) ((t r d s m n) #f)))
-(define crash-report? (lambda (x) #f))
-(define make-crash-ring-buffer (case-lambda (() #f) ((c) #f)))
-(define crash-ring-buffer? (lambda (x) #f))
-(define crash-buffer-enqueue! (lambda (b r) #f))
-(define crash-buffer-dequeue! (lambda (b) #f))
-(define crash-buffer-drain! (lambda (b) '()))
-(define synapse-log-task-crash! (case-lambda ((t r) #f) ((t r d) #f) ((t r d s) #f) ((t r d s m) #f) ((t r d s m n) #f)))
-(define format-crash-report (lambda (r) ""))
-(define synapse-crash-metrics (lambda () '()))
+(define make-crash-report
+  (case-lambda
+    ((t r)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r))
+    ((t r d)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r d))
+    ((t r d s)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r d s))
+    ((t r d s m)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r d s m))
+    ((t r d s m n)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r d s m n))))
+
+(define crash-report?
+  (lambda (x) #f))
+
+(define make-crash-ring-buffer
+  (case-lambda
+    (()
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-ring-buffer requires crash logger subsystem (crash_logger.scm)"))
+    ((c)
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-ring-buffer requires crash logger subsystem (crash_logger.scm)" c))))
+
+(define crash-ring-buffer?
+  (lambda (x) #f))
+
+(define crash-buffer-enqueue!
+  (lambda (b r)
+    (error "[SYNAPSE-EVAL-ADAPTER] crash-buffer-enqueue! requires crash logger subsystem (crash_logger.scm)" b r)))
+
+(define crash-buffer-dequeue!
+  (lambda (b)
+    (error "[SYNAPSE-EVAL-ADAPTER] crash-buffer-dequeue! requires crash logger subsystem (crash_logger.scm)" b)))
+
+(define crash-buffer-drain!
+  (lambda (b)
+    (error "[SYNAPSE-EVAL-ADAPTER] crash-buffer-drain! requires crash logger subsystem (crash_logger.scm)" b)))
+
+(define synapse-log-task-crash!
+  (case-lambda
+    ((t r)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r))
+    ((t r d)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r d))
+    ((t r d s)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r d s))
+    ((t r d s m)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r d s m))
+    ((t r d s m n)
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r d s m n))))
+
+(define format-crash-report
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] format-crash-report requires crash logger subsystem (crash_logger.scm)" r)))
+
+(define synapse-crash-metrics
+  (lambda ()
+    (error "[SYNAPSE-EVAL-ADAPTER] synapse-crash-metrics requires crash logger subsystem (crash_logger.scm)")))
+
 ;; io_uring stubs (#677, #683)
-(define make-io-uring (case-lambda (() #f) ((e) #f) ((e s) #f) ((e s i) #f)))
-(define io-uring? (lambda (x) #f))
-(define io-uring-close! (lambda (r) #f))
-(define io-uring-sqpoll? (lambda (r) #f))
-(define io-uring-sq-idle-ms (lambda (r) 0))
-(define io-uring-registered-buffers (lambda (r) (vector)))
-(define io-uring-registered-buffer-count (lambda (r) 0))
-(define io-uring-enter-syscall-count (lambda (r) 0))
-(define io-uring-sqpoll-kick-count (lambda (r) 0))
-(define io-uring-register-buffers! (lambda (r b) #f))
-(define io-uring-unregister-buffers! (lambda (r) #f))
-(define io-uring-submit-nop! (case-lambda ((r u) #f) ((r u t) #f)))
-(define io-uring-submit-read! (lambda (r f b o l t) #f))
-(define io-uring-submit-write! (lambda (r f b o l t) #f))
-(define io-uring-submit-read-fixed! (lambda (r f b o l t) #f))
-(define io-uring-submit-write-fixed! (lambda (r f b o l t) #f))
-(define io-uring-sqpoll-wakeup! (lambda (r) #t))
-(define io-uring-poll-completions! (lambda (r) 0))
-(define io-uring-dequeue-completion! (lambda (r) #f))
-(define io-uring-stats (lambda (r) '()))
+(define make-io-uring
+  (case-lambda
+    (()
+     (error "[SYNAPSE-EVAL-ADAPTER] io_uring is not supported without native Linux io_uring runtime"))
+    ((e)
+     (error "[SYNAPSE-EVAL-ADAPTER] io_uring is not supported without native Linux io_uring runtime" e))
+    ((e s)
+     (error "[SYNAPSE-EVAL-ADAPTER] io_uring is not supported without native Linux io_uring runtime" e s))
+    ((e s i)
+     (error "[SYNAPSE-EVAL-ADAPTER] io_uring is not supported without native Linux io_uring runtime" e s i))))
+
+(define io-uring?
+  (lambda (x) #f))
+
+(define io-uring-close!
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-close! requires native io_uring" r)))
+
+(define io-uring-sqpoll?
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll? requires native io_uring" r)))
+
+(define io-uring-sq-idle-ms
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sq-idle-ms requires native io_uring" r)))
+
+(define io-uring-registered-buffers
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-registered-buffers requires native io_uring" r)))
+
+(define io-uring-registered-buffer-count
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-registered-buffer-count requires native io_uring" r)))
+
+(define io-uring-enter-syscall-count
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-enter-syscall-count requires native io_uring" r)))
+
+(define io-uring-sqpoll-kick-count
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll-kick-count requires native io_uring" r)))
+
+(define io-uring-register-buffers!
+  (lambda (r b)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-register-buffers! requires native io_uring" r b)))
+
+(define io-uring-unregister-buffers!
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-unregister-buffers! requires native io_uring" r)))
+
+(define io-uring-submit-nop!
+  (case-lambda
+    ((r u)
+     (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-nop! requires native io_uring" r u))
+    ((r u t)
+     (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-nop! requires native io_uring" r u t))))
+
+(define io-uring-submit-read!
+  (lambda (r f b o l t)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-read! requires native io_uring" r f b o l t)))
+
+(define io-uring-submit-write!
+  (lambda (r f b o l t)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-write! requires native io_uring" r f b o l t)))
+
+(define io-uring-submit-read-fixed!
+  (lambda (r f b o l t)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-read-fixed! requires native io_uring" r f b o l t)))
+
+(define io-uring-submit-write-fixed!
+  (lambda (r f b o l t)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-write-fixed! requires native io_uring" r f b o l t)))
+
+(define io-uring-sqpoll-wakeup!
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll-wakeup! requires native io_uring" r)))
+
+(define io-uring-poll-completions!
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-poll-completions! requires native io_uring" r)))
+
+(define io-uring-dequeue-completion!
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-dequeue-completion! requires native io_uring" r)))
+
+(define io-uring-stats
+  (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-stats requires native io_uring" r)))
 
 ;; Deep-equal helper for AST symbols and values
 (define (%sym-equal? a b)
@@ -474,6 +756,31 @@
 ;; 6. Default Evaluation Environment Factory
 ;; -----------------------------------------------------------------------
 
+(define (%eval-task-boundary-adapter task thunk secure-scrub?)
+  (let ((thunk-proc
+         (cond
+           ((procedure? thunk) thunk)
+           ((eval-closure? thunk)
+            (lambda ()
+              (let* ((params (eval-closure-params thunk))
+                     (body (eval-closure-body thunk))
+                     (env (eval-closure-env thunk)))
+                (if (not (null? params))
+                    (error "with-synapse-task-boundary: thunk must take 0 arguments" params)
+                    (%eval-step body env (current-synapse-task))))))
+           (else
+            (error "with-synapse-task-boundary: expected procedure or closure (CWE-843)" thunk)))))
+    (if secure-scrub?
+        (with-synapse-task-boundary task thunk-proc secure-scrub?)
+        (with-synapse-task-boundary task thunk-proc))))
+
+(define eval-with-synapse-task-boundary
+  (case-lambda
+    ((task thunk)
+     (%eval-task-boundary-adapter task thunk #f))
+    ((task thunk secure-scrub?)
+     (%eval-task-boundary-adapter task thunk secure-scrub?))))
+
 (define %prim-add
   (case-lambda
     (() 0)
@@ -544,12 +851,15 @@
       (eval-env-bind! env 'current-task-arena current-task-arena)
       (eval-env-bind! env 'task-reductions task-reductions)
       (eval-env-bind! env 'task-exhausted? task-exhausted?)
+      (eval-env-bind! env 'task-id task-id)
+      (eval-env-bind! env 'task-state task-state)
+      (eval-env-bind! env 'task-context? task-context?)
       (eval-env-bind! env 'scheduler-yield! scheduler-yield!)
       ;; Fault Tolerance & Let-It-Crash (#668)
       (eval-env-bind! env 'synapse-panic! synapse-panic!)
       (eval-env-bind! env 'synapse-secure-panic! synapse-secure-panic!)
       (eval-env-bind! env 'synapse-assert-true! synapse-assert-true!)
-      (eval-env-bind! env 'with-synapse-task-boundary with-synapse-task-boundary)
+      (eval-env-bind! env 'with-synapse-task-boundary eval-with-synapse-task-boundary)
       (eval-env-bind! env 'current-synapse-task current-synapse-task)
       (eval-env-bind! env 'task-link! task-link!)
       (eval-env-bind! env 'task-unlink! task-unlink!)
