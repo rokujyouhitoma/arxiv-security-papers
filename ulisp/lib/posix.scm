@@ -237,6 +237,16 @@
      new-cmd-line)))
 
 ;; SRFI 193 command-name, command-args, script-file, script-directory
+(define (%posix-substring str start end)
+  (let* ((len (- end start))
+         (res (make-string len)))
+    (let loop ((i 0))
+      (if (< i len)
+          (begin
+            (string-set! res i (string-ref str (+ start i)))
+            (loop (+ i 1)))
+          res))))
+
 (define (%srfi193-last-slash-index s)
   (let loop ((i (- (string-length s) 1)))
     (cond
@@ -251,7 +261,7 @@
              (char=? (string-ref s (- len 3)) #\s)
              (char=? (string-ref s (- len 2)) #\c)
              (char=? (string-ref s (- len 1)) #\m))
-        (substring s 0 (- len 4))
+        (%posix-substring s 0 (- len 4))
         s)))
 
 (define (command-name)
@@ -263,7 +273,7 @@
               #f
               (let* ((slash-idx (%srfi193-last-slash-index arg0))
                      (base (if (>= slash-idx 0)
-                               (substring arg0 (+ slash-idx 1) (string-length arg0))
+                               (%posix-substring arg0 (+ slash-idx 1) (string-length arg0))
                                arg0)))
                 (if (= (string-length base) 0)
                     #f
@@ -288,7 +298,7 @@
         #f
         (let ((slash-idx (%srfi193-last-slash-index sf)))
           (if (>= slash-idx 0)
-              (substring sf 0 (+ slash-idx 1))
+              (%posix-substring sf 0 (+ slash-idx 1))
               "./")))))
 
 (define (sys-environ-ptr)

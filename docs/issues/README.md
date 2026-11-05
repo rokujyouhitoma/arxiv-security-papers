@@ -32,6 +32,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **739** | ULisp 標準ライブラリ依存順序の整合化および Makefile / テストスクリプトの未束縛識別子エラー修正 | Bug | 2026-11-05 | [closed/739-fix-ulisp-stdlib-dependency-order-and-makefile-test-targets.md](closed/739-fix-ulisp-stdlib-dependency-order-and-makefile-test-targets.md) |
 | **729** | チャネル受信 (channel-recv!) へのタイムアウト機構の追加と Graceful Shutdown 待機への統合 (C6) | Feature | 2026-11-05 | [closed/729-implement-channel-recv-timeout-for-graceful-shutdown.md](closed/729-implement-channel-recv-timeout-for-graceful-shutdown.md) |
 | **728** | Supervisor 再起動頻度制限の時刻源を sys-clock-gettime-monotonic 単調増加クロックへ置換 (C4) | Bug | 2026-11-05 | [closed/728-replace-supervisor-restart-clock-with-monotonic-system-clock.md](closed/728-replace-supervisor-restart-clock-with-monotonic-system-clock.md) |
 | **727** | Supervisor のタスク駆動化と子タスク DOWN 通知からの supervisor-handle-child-down! 自動ディスパッチ接続 (C7) | Feature | 2026-11-05 | [closed/727-connect-child-down-notifications-to-supervisor-task-loop.md](closed/727-connect-child-down-notifications-to-supervisor-task-loop.md) |

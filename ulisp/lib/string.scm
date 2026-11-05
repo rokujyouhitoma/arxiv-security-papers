@@ -106,22 +106,37 @@
                   (string-set! fstr i (car cs))
                   (copy-f (+ i 1) (cdr cs)))))))))
 
+(define (%str-ratnum? x)
+  (and (vector? x)
+       (= (vector-length x) 3)
+       (eq? (vector-ref x 0) 'ulisp-ratnum-tag)))
+
+(define (%str-flonum? x)
+  (and (vector? x)
+       (= (vector-length x) 2)
+       (eq? (vector-ref x 0) 'ulisp-flonum-tag)))
+
+(define (%str-compnum? x)
+  (and (vector? x)
+       (= (vector-length x) 3)
+       (eq? (vector-ref x 0) 'ulisp-complex-tag)))
+
 (define (%number->string-radix z radix)
   (cond
     ((fixnum? z)
      (%fixnum->string-radix z radix))
-    ((ratnum? z)
+    ((%str-ratnum? z)
      (string-append (%fixnum->string-radix (vector-ref z 1) radix)
                     (string-append "/"
                                    (%fixnum->string-radix (vector-ref z 2) radix))))
-    ((flonum? z)
+    ((%str-flonum? z)
      (let ((v (vector-ref z 1)))
        (cond
          ((eq? v 'pos-inf) "+inf.0")
          ((eq? v 'neg-inf) "-inf.0")
          ((eq? v 'nan) "+nan.0")
          (else (%flonum-micros->string v)))))
-    ((compnum? z)
+    ((%str-compnum? z)
      (let* ((re (vector-ref z 1))
             (im (vector-ref z 2))
             (re-str (%number->string-radix re radix))

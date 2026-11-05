@@ -311,7 +311,7 @@ assert_c "100" "(force (force (delay (delay 100))))"
 echo "--- Step 14: Standalone R7RS Test Suites (test_*.scm) ---"
 run_test_file_c "tests/test_record.scm" "lib/char.scm lib/string.scm lib/vector.scm" "R7RS define-record-type suite"
 run_test_file_c "tests/test_promise.scm" "lib/char.scm lib/string.scm lib/vector.scm lib/promise.scm" "R7RS delay/force/promise suite"
-run_test_file_c "tests/test_stdlib_r7rs.scm" "lib/list.scm lib/char.scm lib/string.scm lib/vector.scm lib/bytevector.scm lib/equality.scm lib/math.scm" "R7RS standard sequence library suite"
+run_test_file_c "tests/test_stdlib_r7rs.scm" "lib/list.scm lib/predicates.scm lib/char.scm lib/string.scm lib/vector.scm lib/bytevector.scm lib/equality.scm lib/math.scm" "R7RS standard sequence library suite"
 
 echo "--- Step 15: R7RS Iteration (Issue 559: do) ---"
 assert_c "55" "(do ((i 1 (+ i 1)) (sum 0 (+ sum i))) ((> i 10) sum))"

@@ -598,7 +598,7 @@ test_include_source_loc: build/compiler_passes.scm
 
 test_exceptions: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/gc.scm tests/test_exceptions.scm > build/test_exn_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_exceptions.scm > build/test_exn_input.scm
 	$(ULISP_COMPILER) build/test_exn_input.scm > build/test_exn.s
 	$(AS) $(ASFLAGS) build/test_exn.s -o build/test_exn.o
 	$(LD) $(LDFLAGS) build/test_exn.o -o build/test_exn
@@ -606,7 +606,7 @@ test_exceptions: $(COMPILER_DEP)
 
 test_values: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/gc.scm tests/test_values.scm > build/test_values_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_values.scm > build/test_values_input.scm
 	$(ULISP_COMPILER) build/test_values_input.scm > build/test_values.s
 	$(AS) $(ASFLAGS) build/test_values.s -o build/test_values.o
 	$(LD) $(LDFLAGS) build/test_values.o -o build/test_values
@@ -614,7 +614,7 @@ test_values: $(COMPILER_DEP)
 
 test_call_cc: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_call_cc.scm > build/test_call_cc_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_call_cc.scm > build/test_call_cc_input.scm
 	$(ULISP_COMPILER) build/test_call_cc_input.scm > build/test_call_cc.s
 	$(AS) $(ASFLAGS) build/test_call_cc.s -o build/test_call_cc.o
 	$(LD) $(LDFLAGS) build/test_call_cc.o -o build/test_call_cc
@@ -622,7 +622,7 @@ test_call_cc: $(COMPILER_DEP)
 
 test_eqv: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_eqv.scm > build/test_eqv_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_eqv.scm > build/test_eqv_input.scm
 	$(ULISP_COMPILER) build/test_eqv_input.scm > build/test_eqv.s
 	$(AS) $(ASFLAGS) build/test_eqv.s -o build/test_eqv.o
 	$(LD) $(LDFLAGS) build/test_eqv.o -o build/test_eqv
@@ -630,7 +630,7 @@ test_eqv: $(COMPILER_DEP)
 
 test_syntax_rules: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_syntax_rules.scm > build/test_syntax_rules_input.scm
 	$(ULISP_COMPILER) build/test_syntax_rules_input.scm > build/test_syntax_rules.s
 	$(AS) $(ASFLAGS) build/test_syntax_rules.s -o build/test_syntax_rules.o
 	$(LD) $(LDFLAGS) build/test_syntax_rules.o -o build/test_syntax_rules
@@ -638,7 +638,7 @@ test_syntax_rules: $(COMPILER_DEP)
 
 test_let_syntax: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_let_syntax.scm > build/test_let_syntax_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_let_syntax.scm > build/test_let_syntax_input.scm
 	$(ULISP_COMPILER) build/test_let_syntax_input.scm > build/test_let_syntax.s
 	$(AS) $(ASFLAGS) build/test_let_syntax.s -o build/test_let_syntax.o
 	$(LD) $(LDFLAGS) build/test_let_syntax.o -o build/test_let_syntax
@@ -646,7 +646,7 @@ test_let_syntax: $(COMPILER_DEP)
 
 test_ports: $(COMPILER_DEP)
 	@mkdir -p build
-	cat lib/posix.scm lib/list.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/predicates.scm lib/exception.scm lib/values.scm lib/continuation.scm lib/gc.scm tests/test_ports.scm > build/test_ports_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_ports.scm > build/test_ports_input.scm
 	$(ULISP_COMPILER) build/test_ports_input.scm > build/test_ports.s
 	$(AS) $(ASFLAGS) build/test_ports.s -o build/test_ports.o
 	$(LD) $(LDFLAGS) build/test_ports.o -o build/test_ports
@@ -1262,7 +1262,7 @@ demo: build/demo_runner.scm
 
 
 # --- Unified JIT Binary: bin/ulisp-jit ---
-build/ulisp_jit_combined.scm: lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
+build/ulisp_jit_combined.scm: lib/posix.scm lib/list.scm lib/predicates.scm lib/math.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
 	@mkdir -p build
 	cat $^ > $@
 
