@@ -2,7 +2,7 @@
 ID: 736
 種別: Bug
 優先度: Medium
-ステータス: Open (New)
+ステータス: Closed
 ---
 
 # [BUG/SEC] チャネル複数回受信を可能にする Affine 検査の借用/移動分離および 4 つの Nanopass パスの不具合修正 (ID: 736)
@@ -22,11 +22,11 @@ ID: 736
 ---
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [pass_split_planes.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_split_planes.scm)
-- [ ] [pass_check_affine.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_check_affine.scm)
-- [ ] [pass_fbip.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_fbip.scm)
-- [ ] [pass_inject_safepoints.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm)
-- [ ] [eval_adapter.scm](../../ulisp/runtime/concurrency/eval_adapter.scm)
+- [x] [pass_split_planes.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_split_planes.scm)
+- [x] [pass_check_affine.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_check_affine.scm)
+- [x] [pass_fbip.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_fbip.scm)
+- [x] [pass_inject_safepoints.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm)
+- [x] [test_pass_check_affine.scm](../../tests/concurrency/test_pass_check_affine.scm)
 
 ---
 
@@ -53,7 +53,7 @@ Target Branch: `fix/736-fix-affine-checker-and-four-passes`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] 同一チャネルからの2回以上の `channel-recv!` / `channel-send!` が Affine 検査を通過し、Use-After-Move（閉じた後の使用や送信済みデータの再利用）は正しく拒否されること。
-- [ ] 4つのパスすべての既知の不具合が解消され、回帰テストが追加されていること。
-- [ ] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
+- [x] 同一チャネルからの2回以上の `channel-recv!` / `channel-send!` が Affine 検査を通過し、Use-After-Move（閉じた後の使用や送信済みデータの再利用）は正しく拒否されること。
+- [x] 4つのパスすべての既知の不具合が解消され、回帰テストが追加されていること。
+- [x] `make format`, `make static_analysis`, `make test` がすべて PASS すること。
 

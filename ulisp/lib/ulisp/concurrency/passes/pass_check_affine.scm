@@ -64,6 +64,38 @@
             (%str-ends-with? "-res" s)
             (%str-ends-with? "-buf" s)))))
 
+(define (channel-borrow-operation? op)
+  (memq op '(channel-recv! recv!
+             channel-try-recv! try-recv!
+             channel-recv-timeout!
+             channel-try-recv-with-status!
+             channel-try-dequeue-val!
+             channel-spsc-try-dequeue-val!
+             channel-recv-values!
+             channel-try-recv-values!
+             channel-recv-unboxed!
+             channel-try-recv-unboxed!
+             channel-count
+             channel-capacity
+             channel-empty?
+             channel-full?
+             channel-closed?
+             channel-poisoned?
+             channel-stats)))
+
+(define (channel-send-operation? op)
+  (memq op '(channel-send! send!
+             channel-try-send! try-send!
+             channel-send-unboxed!
+             channel-try-send-unboxed!
+             channel-spsc-try-enqueue!
+             broadcast-send!)))
+
+(define (channel-consume-operation? op)
+  (memq op '(channel-close! close!
+             channel-poison!
+             %affine-drop!)))
+
 ;;; -----------------------------------------------------------------------
 ;;; 2. Linear Ownership Environment (lin-env)
 ;;; -----------------------------------------------------------------------
@@ -164,10 +196,11 @@
                                                   (merge-loop (cdr e) (cons (cons sym new-st) acc)))))))
                              (list 'ok merged))))))))))
 
-    ;; Local binding: (let ((v e) ...) body ...)
-    ((and (eq? (car expr) 'let) (pair? (cdr expr)) (pair? (cadr expr)))
-     (let* ((bindings (cadr expr))
-            (bodies (cddr expr)))
+    ;; Local binding: (let ((v e) ...) body ...) or named-let: (let name ((v e) ...) body ...)
+    ((and (eq? (car expr) 'let) (pair? (cdr expr)))
+     (let* ((is-named? (symbol? (cadr expr)))
+            (bindings (if is-named? (caddr expr) (cadr expr)))
+            (bodies (if is-named? (cdddr expr) (cddr expr))))
        (let init-loop ((bs bindings) (cur-env env) (new-vars '()))
          (if (pair? bs)
              (let* ((b (car bs))
@@ -196,30 +229,90 @@
                                          (else (cons (car e) (clean-loop (cdr e))))))))
                      (list 'ok outer-env))))))))
 
-    ;; Applications: (channel-send! ch val), (send! ch val), (channel-recv! ch), (recv! ch), (f arg ...)
+    ;; Applications: channel operations vs custom function calls
     ((pair? expr)
      (let ((op (car expr))
            (args (cdr expr)))
-       (if (affine-forbidden-syntax? op)
-           (list 'error 'forbidden-syntax op)
-           (let loop ((as args) (cur-env env))
-             (if (null? as)
-                 (list 'ok cur-env)
-                 (let* ((arg (car as))
-                        (r (validate-affine-ast-internal arg cur-env)))
-                   (if (eq? (car r) 'error)
-                       r
-                       (let* ((env-after (cadr r))
-                              ;; If linear variable is passed as argument, mark it moved
-                              (env-moved (if (and (symbol? arg) (linear-variable? arg))
-                                             (let ((st (lin-env-lookup env-after arg)))
-                                               (if (eq? st 'moved)
-                                                   #f
-                                                   (lin-env-set env-after arg 'moved)))
-                                             env-after)))
-                         (if (not env-moved)
-                             (list 'error 'use-after-move arg)
-                             (loop (cdr as) env-moved))))))))))
+       (cond
+         ((affine-forbidden-syntax? op)
+          (list 'error 'forbidden-syntax op))
+
+         ;; Channel borrow operation: channel endpoint is borrowed ('available maintained)
+         ((channel-borrow-operation? op)
+          (let loop ((as args) (cur-env env))
+            (if (null? as)
+                (list 'ok cur-env)
+                (let* ((arg (car as))
+                       (r (validate-affine-ast-internal arg cur-env)))
+                  (if (eq? (car r) 'error)
+                      r
+                      (loop (cdr as) (cadr r)))))))
+
+         ;; Channel send operation: channel endpoint is borrowed; payload argument is moved if linear
+         ((channel-send-operation? op)
+          (if (null? args)
+              (list 'ok env)
+              (let* ((ch-arg (car args))
+                     (ch-r (validate-affine-ast-internal ch-arg env)))
+                (if (eq? (car ch-r) 'error)
+                    ch-r
+                    (let loop ((as (cdr args)) (cur-env (cadr ch-r)))
+                      (if (null? as)
+                          (list 'ok cur-env)
+                          (let* ((arg (car as))
+                                 (r (validate-affine-ast-internal arg cur-env)))
+                            (if (eq? (car r) 'error)
+                                r
+                                (let* ((env-after (cadr r))
+                                       (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                                                      (let ((st (lin-env-lookup env-after arg)))
+                                                        (if (eq? st 'moved)
+                                                            #f
+                                                            (lin-env-set env-after arg 'moved)))
+                                                      env-after)))
+                                  (if (not env-moved)
+                                      (list 'error 'use-after-move arg)
+                                      (loop (cdr as) env-moved)))))))))))
+
+         ;; Channel consume operation (close!, poison!, drop!): channel endpoint is consumed ('moved)
+         ((channel-consume-operation? op)
+          (let loop ((as args) (cur-env env))
+            (if (null? as)
+                (list 'ok cur-env)
+                (let* ((arg (car as))
+                       (r (validate-affine-ast-internal arg cur-env)))
+                  (if (eq? (car r) 'error)
+                      r
+                      (let* ((env-after (cadr r))
+                             (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                                            (let ((st (lin-env-lookup env-after arg)))
+                                              (if (eq? st 'moved)
+                                                  #f
+                                                  (lin-env-set env-after arg 'moved)))
+                                            env-after)))
+                        (if (not env-moved)
+                            (list 'error 'use-after-move arg)
+                            (loop (cdr as) env-moved))))))))
+
+         ;; General function application: linear arguments are moved
+         (else
+          (let loop ((as args) (cur-env env))
+            (if (null? as)
+                (list 'ok cur-env)
+                (let* ((arg (car as))
+                       (r (validate-affine-ast-internal arg cur-env)))
+                  (if (eq? (car r) 'error)
+                      r
+                      (let* ((env-after (cadr r))
+                             (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                                            (let ((st (lin-env-lookup env-after arg)))
+                                              (if (eq? st 'moved)
+                                                  #f
+                                                  (lin-env-set env-after arg 'moved)))
+                                            env-after)))
+                        (if (not env-moved)
+                            (list 'error 'use-after-move arg)
+                            (loop (cdr as) env-moved)))))))))))
 
     (else
      (list 'ok env))))
@@ -271,9 +364,11 @@
                                   (merge-loop (cdr e) (cons (cons sym new-st) acc)))))))
              (cons (list 'if test-ast then-ast else-ast) merged)))))
 
-    ((and (eq? (car expr) 'let) (pair? (cdr expr)) (pair? (cadr expr)))
-     (let* ((bindings (cadr expr))
-            (bodies (cddr expr)))
+    ((and (eq? (car expr) 'let) (pair? (cdr expr)))
+     (let* ((is-named? (symbol? (cadr expr)))
+            (loop-name (if is-named? (cadr expr) #f))
+            (bindings (if is-named? (caddr expr) (cadr expr)))
+            (bodies (if is-named? (cdddr expr) (cddr expr))))
        (let init-loop ((bs bindings) (acc-b '()) (cur-env env) (new-vars '()))
          (if (pair? bs)
              (let* ((b (car bs))
@@ -326,24 +421,72 @@
                                    ((null? e) '())
                                    ((memq (caar e) new-vars) (clean-loop (cdr e)))
                                    (else (cons (car e) (clean-loop (cdr e))))))))
-               (cons (cons 'let (cons (reverse acc-b) final-body))
+               (cons (if is-named?
+                         (cons 'let (cons loop-name (cons (reverse acc-b) final-body)))
+                         (cons 'let (cons (reverse acc-b) final-body)))
                      outer-env))))))
 
-    ;; General application / function call
+    ;; Applications: channel operations vs custom function calls
     ((pair? expr)
      (let ((op (car expr))
            (args (cdr expr)))
-       (let loop ((as args) (acc-args '()) (cur-env env))
-         (if (null? as)
-             (cons (cons op (reverse acc-args)) cur-env)
-             (let* ((arg (car as))
-                    (r (transform-affine-expr arg cur-env))
-                    (arg-ast (car r))
-                    (env-after (cdr r))
-                    (env-moved (if (and (symbol? arg) (linear-variable? arg))
-                                   (lin-env-set env-after arg 'moved)
-                                   env-after)))
-               (loop (cdr as) (cons arg-ast acc-args) env-moved))))))
+       (cond
+         ;; Channel borrow operation: endpoint is borrowed ('available maintained)
+         ((channel-borrow-operation? op)
+          (let loop ((as args) (acc-args '()) (cur-env env))
+            (if (null? as)
+                (cons (cons op (reverse acc-args)) cur-env)
+                (let* ((arg (car as))
+                       (r (transform-affine-expr arg cur-env)))
+                  (loop (cdr as) (cons (car r) acc-args) (cdr r))))))
+
+         ;; Channel send operation: channel borrowed, linear payload moved
+         ((channel-send-operation? op)
+          (if (null? args)
+              (cons (list op) env)
+              (let* ((ch-arg (car args))
+                     (ch-r (transform-affine-expr ch-arg env))
+                     (ch-ast (car ch-r))
+                     (ch-env (cdr ch-r)))
+                (let loop ((as (cdr args)) (acc-args (list ch-ast)) (cur-env ch-env))
+                  (if (null? as)
+                      (cons (cons op (reverse acc-args)) cur-env)
+                      (let* ((arg (car as))
+                             (r (transform-affine-expr arg cur-env))
+                             (arg-ast (car r))
+                             (env-after (cdr r))
+                             (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                                            (lin-env-set env-after arg 'moved)
+                                            env-after)))
+                        (loop (cdr as) (cons arg-ast acc-args) env-moved)))))))
+
+         ;; Channel consume operation: endpoint is moved
+         ((channel-consume-operation? op)
+          (let loop ((as args) (acc-args '()) (cur-env env))
+            (if (null? as)
+                (cons (cons op (reverse acc-args)) cur-env)
+                (let* ((arg (car as))
+                       (r (transform-affine-expr arg cur-env))
+                       (arg-ast (car r))
+                       (env-after (cdr r))
+                       (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                                      (lin-env-set env-after arg 'moved)
+                                      env-after)))
+                  (loop (cdr as) (cons arg-ast acc-args) env-moved)))))
+
+         ;; General application: linear arguments are moved
+         (else
+          (let loop ((as args) (acc-args '()) (cur-env env))
+            (if (null? as)
+                (cons (cons op (reverse acc-args)) cur-env)
+                (let* ((arg (car as))
+                       (r (transform-affine-expr arg cur-env))
+                       (arg-ast (car r))
+                       (env-after (cdr r))
+                       (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                                      (lin-env-set env-after arg 'moved)
+                                      env-after)))
+                  (loop (cdr as) (cons arg-ast acc-args) env-moved))))))))
 
     (else
      (cons expr env))))

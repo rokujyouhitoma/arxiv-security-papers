@@ -194,7 +194,10 @@
   (if (not (asc-kernel-form? kernel-node))
       kernel-node
       (let* ((header (cadr kernel-node))
-             (body (caddr kernel-node))
+             (raw-bodies (cddr kernel-node))
+             (body (if (null? (cdr raw-bodies))
+                       (car raw-bodies)
+                       (cons 'begin raw-bodies)))
              ;; Wrap kernel prologue
              (prologue-wrapped (wrap-with-safepoint-prologue body))
              ;; Traverse and inject loop backedges

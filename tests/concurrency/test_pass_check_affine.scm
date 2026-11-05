@@ -137,7 +137,7 @@
               r-callcc)
 
 ;;; -----------------------------------------------------------------------
-;;; Group 3: Valid Linear Code Progression (Single Move)
+;;; Group 3: Valid Linear Code Progression (Borrow & Linear Payload Move)
 ;;; -----------------------------------------------------------------------
 (display "\n--- Group 3: Valid Linear Code Progression ---\n")
 
@@ -151,8 +151,8 @@
              (and (pair? r-valid-send) (eq? (car r-valid-send) 'ok)))
 
 (define env-after-send (cadr r-valid-send))
-(assert-equal "3.2 tx is marked moved after channel-send!"
-              'moved
+(assert-equal "3.2 tx is borrowed ('available) after channel-send!"
+              'available
               (lin-env-lookup env-after-send 'tx))
 
 ;; Multiple references to non-linear variable x
@@ -163,23 +163,42 @@
 (assert-true "3.3 non-linear variable can be referenced multiple times"
              (and (pair? r-multi) (eq? (car r-multi) 'ok)))
 
+;; Multi-recv on same rx endpoint
+(define multi-recv-expr
+  '(begin
+     (channel-recv! rx)
+     (channel-recv! rx)))
+(define env-rx-avail (lin-env-add-available '() 'rx))
+(define r-multi-recv (validate-affine-ast multi-recv-expr env-rx-avail))
+(assert-true "3.4 multiple channel-recv! on same endpoint validates ok"
+             (and (pair? r-multi-recv) (eq? (car r-multi-recv) 'ok)))
+
+;; Multi-send on same tx endpoint
+(define multi-send-expr
+  '(begin
+     (channel-send! tx 1)
+     (channel-send! tx 2)))
+(define r-multi-send (validate-affine-ast multi-send-expr env-tx-avail))
+(assert-true "3.5 multiple channel-send! on same endpoint validates ok"
+             (and (pair? r-multi-send) (eq? (car r-multi-send) 'ok)))
+
 ;;; -----------------------------------------------------------------------
 ;;; Group 4: Use-After-Move Detection (CWE-416)
 ;;; -----------------------------------------------------------------------
 (display "\n--- Group 4: Use-After-Move Detection ---\n")
 
-(define double-send-expr
-  '(begin
-     (channel-send! tx 1)
-     (channel-send! tx 2)))
+;; Send a linear payload twice
+(define double-send-payload-expr
+  '(let ((data-channel (make-channel 1)))
+     (channel-send! tx data-channel)
+     (channel-send! tx data-channel)))
 
-(define r-double (validate-affine-ast double-send-expr env-tx-avail))
+(define r-double-payload (validate-affine-ast double-send-payload-expr env-tx-avail))
+(assert-equal "4.1 double send of same linear payload detected as use-after-move"
+              '(error use-after-move data-channel)
+              r-double-payload)
 
-(assert-equal "4.1 double send on same linear channel detected as use-after-move"
-              '(error use-after-move tx)
-              r-double)
-
-;; Passing channel to custom function then sending
+;; Passing channel to custom function (transferring ownership) then sending
 (define pass-then-send
   '(begin
      (forward-packet tx)
@@ -191,6 +210,17 @@
               '(error use-after-move tx)
               r-pass-send)
 
+;; Using channel after channel-close!
+(define close-then-send
+  '(begin
+     (channel-close! tx)
+     (channel-send! tx 42)))
+
+(define r-close-send (validate-affine-ast close-then-send env-tx-avail))
+(assert-equal "4.3 use after channel-close! detected as use-after-move"
+              '(error use-after-move tx)
+              r-close-send)
+
 ;;; -----------------------------------------------------------------------
 ;;; Group 5: Conditional Branching Tracking
 ;;; -----------------------------------------------------------------------
@@ -198,8 +228,8 @@
 
 (define if-both-consume
   '(if is-ready?
-       (channel-send! tx 10)
-       (channel-send! tx 20)))
+       (channel-close! tx)
+       (channel-close! tx)))
 
 (define r-if-both (validate-affine-ast if-both-consume env-tx-avail))
 (assert-true "5.1 consumption in both branches validates ok"
@@ -239,15 +269,31 @@
 ;; Kernel where linear variable is consumed: no RAII drop should be injected
 (define kernel-consumed
   '(%asc-kernel (my-kernel tx n)
-     (channel-send! tx n)))
+     (channel-close! tx)))
 
 (define transformed-k2 (check-affine-kernel kernel-consumed))
 (define k2-body (caddr transformed-k2))
 
-;; k2-body should be direct (channel-send! tx n) or (begin (channel-send! tx n)), NOT wrapped with %affine-drop!
+;; k2-body should be direct (channel-close! tx) or (begin (channel-close! tx)), NOT wrapped with %affine-drop!
 (assert-true "6.4 consumed linear argument does not get extra %affine-drop!"
-             (or (equal? k2-body '(channel-send! tx n))
-                 (equal? k2-body '(begin (channel-send! tx n)))))
+             (or (equal? k2-body '(channel-close! tx))
+                 (equal? k2-body '(begin (channel-close! tx)))))
+
+;; Kernel where channel is borrowed (sent/received): tx is still available at exit so RAII drop IS injected to close it
+(define kernel-borrowed
+  '(%asc-kernel (my-kernel tx n)
+     (channel-send! tx n)))
+
+(define transformed-k3 (check-affine-kernel kernel-borrowed))
+(define k3-body (caddr transformed-k3))
+(assert-true "6.5 borrowed channel at kernel exit gets RAII drop"
+             (and (pair? k3-body)
+                  (eq? (car k3-body) 'let)
+                  (let ((inner (caddr k3-body)))
+                    (and (pair? inner)
+                         (eq? (car inner) 'begin)
+                         (member '(%affine-drop! tx) (cdr inner))
+                         #t))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 7: Pass Manager Injection & Pipeline Integration

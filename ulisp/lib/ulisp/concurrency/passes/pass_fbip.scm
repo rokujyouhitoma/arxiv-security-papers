@@ -18,6 +18,42 @@
 ;;; 1. Utilities & AST Predicates
 ;;; -----------------------------------------------------------------------
 
+(define (%str-starts-with? prefix str)
+  (let ((plen (string-length prefix))
+        (slen (string-length str)))
+    (if (> plen slen)
+        #f
+        (let loop ((i 0))
+          (if (< i plen)
+              (if (char=? (string-ref prefix i) (string-ref str i))
+                  (loop (+ i 1))
+                  #f)
+              #t)))))
+
+(define (%str-ends-with? suffix str)
+  (let ((suflen (string-length suffix))
+        (slen (string-length str)))
+    (if (> suflen slen)
+        #f
+        (let ((offset (- slen suflen)))
+          (let loop ((i 0))
+            (if (< i suflen)
+                (if (char=? (string-ref suffix i) (string-ref str (+ offset i)))
+                    (loop (+ i 1))
+                    #f)
+                #t))))))
+
+(define (pair-variable? sym)
+  (if (not (symbol? sym))
+      #f
+      (let ((s (symbol->string sym)))
+        (or (%str-starts-with? "pair" s)
+            (%str-starts-with? "old-pair" s)
+            (%str-starts-with? "p" s)
+            (%str-ends-with? "-pair" s)
+            (%str-ends-with? "-p" s)
+            (%str-ends-with? "-cell" s)))))
+
 (define (affine-drop-form? expr)
   (and (pair? expr)
        (eq? (car expr) '%affine-drop!)
@@ -74,19 +110,39 @@
            ;; Still active drop
            (cons expr available-drops))))
 
-    ;; Fresh cons: if we have a reusable drop available, convert to in-place reuse!
-    ((and (cons-form? expr) (pair? available-drops))
-     (let* ((reuse-var (car available-drops))
-            (remaining-drops (cdr available-drops))
-            (e1 (cadr expr))
-            (e2 (caddr expr))
-            (r1 (fbip-transform-block e1 remaining-drops))
-            (trans-e1 (car r1))
-            (r2 (fbip-transform-block e2 (cdr r1)))
-            (trans-e2 (car r2))
-            (final-drops (cdr r2)))
-       (cons (list '%fbip-reuse-pair! reuse-var trans-e1 trans-e2)
-             final-drops)))
+    ;; Fresh cons: if we have a reusable pair drop available, convert to in-place reuse!
+    ((cons-form? expr)
+     (let ((reusable-pair (let find-pair ((ds available-drops))
+                            (cond
+                              ((null? ds) #f)
+                              ((pair-variable? (car ds)) (car ds))
+                              (else (find-pair (cdr ds)))))))
+       (if reusable-pair
+           (let* ((reuse-var reusable-pair)
+                  (remaining-drops (let remove-d ((ds available-drops))
+                                     (cond
+                                       ((null? ds) '())
+                                       ((eq? (car ds) reuse-var) (cdr ds))
+                                       (else (cons (car ds) (remove-d (cdr ds)))))))
+                  (e1 (cadr expr))
+                  (e2 (caddr expr))
+                  (r1 (fbip-transform-block e1 remaining-drops))
+                  (trans-e1 (car r1))
+                  (r2 (fbip-transform-block e2 (cdr r1)))
+                  (trans-e2 (car r2))
+                  (final-drops (cdr r2)))
+             (cons (list '%fbip-reuse-pair! reuse-var trans-e1 trans-e2)
+                   final-drops))
+           ;; No pair-typed drop available: preserve normal cons
+           (let* ((e1 (cadr expr))
+                  (e2 (caddr expr))
+                  (r1 (fbip-transform-block e1 available-drops))
+                  (trans-e1 (car r1))
+                  (r2 (fbip-transform-block e2 (cdr r1)))
+                  (trans-e2 (car r2))
+                  (final-drops (cdr r2)))
+             (cons (list 'cons trans-e1 trans-e2)
+                   final-drops)))))
 
     ;; Sequence: (begin e ...)
     ((eq? (car expr) 'begin)
@@ -114,15 +170,26 @@
     ((eq? (car expr) 'if)
      (let* ((test-r (fbip-transform-block (cadr expr) available-drops))
             (test-ast (car test-r))
-            (then-r (fbip-transform-block (caddr expr) (cdr test-r)))
+            (drops-after-test (cdr test-r))
+            (then-r (fbip-transform-block (caddr expr) drops-after-test))
             (then-ast (car then-r))
             (has-else? (pair? (cdddr expr))))
        (if (not has-else?)
            (cons (list 'if test-ast then-ast) (cdr then-r))
-           (let* ((else-r (fbip-transform-block (cadddr expr) (cdr test-r)))
-                  (else-ast (car else-r)))
+           (let* ((else-r (fbip-transform-block (cadddr expr) drops-after-test))
+                  (else-ast (car else-r))
+                  ;; Merge surviving drops: variable must remain surviving in BOTH branches
+                  (drops-then (cdr then-r))
+                  (drops-else (cdr else-r))
+                  (merged-drops (let intersect ((d1 drops-then))
+                                  (cond
+                                    ((null? d1) '())
+                                    ((memq (car d1) drops-else)
+                                     (cons (car d1) (intersect (cdr d1))))
+                                    (else
+                                     (intersect (cdr d1)))))))
              (cons (list 'if test-ast then-ast else-ast)
-                   (cdr then-r))))))
+                   merged-drops)))))
 
     ;; Local binding: (let ((v e) ...) body ...)
     ((and (eq? (car expr) 'let) (pair? (cdr expr)) (pair? (cadr expr)))
