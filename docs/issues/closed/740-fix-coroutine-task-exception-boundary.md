@@ -2,7 +2,7 @@
 ID: 740
 種別: Bug
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [BUG/SEC] コルーチン型タスクの例外境界接続とハンドラ連鎖初期化 (ID: 740)
@@ -106,8 +106,8 @@ Target Branch: `fix/740-fix-coroutine-task-exception-boundary`
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
-- [ ] コルーチン型タスク内で `(car '())`、`(error "boom")`、`(raise 'test)` が発生しても、プロセス全体がクラッシュせず安全に例外境界で捕捉されること
-- [ ] `context.s` において、タスクのハンドラが未登録 (`0`) の場合に親の `ulisp_handler_chain` が破壊されないこと
-- [ ] 捕捉された例外が `%execute-task-panic!` に送られ、タスク状態が適切に終了・遷移すること
-- [ ] `ulisp/tests/test_boundary.scm` および `ulisp/tests/test_scheduler.scm` にコルーチン例外テストが追加され PASS すること
-- [ ] `make -C ulisp test_boundary test_scheduler test_let_it_crash lint_sexpr` がすべて PASS すること
+- [x] コルーチン型タスク内で `(car '())`、`(error "boom")`、`(raise 'test)` が発生しても、プロセス全体がクラッシュせず安全に例外境界で捕捉されること
+- [x] `context.s` において、タスクのハンドラが未登録 (`0`) の場合に親の `ulisp_handler_chain` が破壊されないこと
+- [x] 捕捉された例外が `%execute-task-panic!` に送られ、タスク状態が適切に終了・遷移すること
+- [x] `ulisp/tests/test_boundary.scm` および `ulisp/tests/test_scheduler.scm` にコルーチン例外テストが追加され PASS すること
+- [x] `make -C ulisp test_boundary test_scheduler test_let_it_crash lint_sexpr` がすべて PASS すること

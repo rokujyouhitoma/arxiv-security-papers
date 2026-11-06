@@ -382,11 +382,19 @@
               #t)
           (let ((nxt (task-next-run ctx)))
             (cond
-              ;; Scheme native coroutine context (Issue #634, #720)
+              ;; Scheme native coroutine context (Issue #634, #720, #740)
               ((coroutine-context? nxt)
                (if (not (coroutine-terminated? nxt))
-                   (with-synapse-task-boundary ctx
-                     (lambda () (context-resume! nxt)))
+                   (let ((res (with-synapse-task-boundary ctx
+                                (lambda () (context-resume! nxt)))))
+                     (if (and (pair? res) (eq? (car res) 'panic))
+                         (begin
+                           (let ((stk (coroutine-stack nxt)))
+                             (if (and (task-stack? stk) (not (task-stack-freed? stk)))
+                                 (%context-raw-u64-set! (task-stack-top stk) -24 3)
+                                 #f))
+                           res)
+                         res))
                    #f))
               ;; DSN-37 budgeted-task with reductions (Issue #636, #720)
               ((%is-budgeted-task? nxt)

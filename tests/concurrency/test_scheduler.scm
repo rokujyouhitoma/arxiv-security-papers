@@ -429,6 +429,25 @@
   (assert-error (lambda () (scheduler-spawn! s (lambda () #t)))
                 "scheduler-spawn! rejects spawning into stopped scheduler"))
 
+;; 6e. Coroutine task exception boundary isolation (#740)
+(let* ((s (make-work-stealing-scheduler 2 64))
+       (box (make-atomic-box 0))
+       (bad-coro (make-coroutine-context (lambda () (car '()))))
+       (bad-t (make-task-context))
+       (good-coro (make-coroutine-context (lambda () (atomic-fetch-add! box 55))))
+       (good-t (make-task-context)))
+  (task-next-run-set! bad-t bad-coro)
+  (task-next-run-set! good-t good-coro)
+  (scheduler-spawn! s bad-t 0)
+  (scheduler-spawn! s good-t 1)
+  (scheduler-run! s 3)
+  (assert-equal (task-state bad-t) 'terminated "scheduler isolates crashing coroutine (#740)")
+  (assert-true (coroutine-terminated? bad-coro) "coroutine state is terminated (#740)")
+  (assert-equal (atomic-ref box) 55 "sibling coroutine executes despite crash in scheduler (#740)")
+  (scheduler-stop! s)
+  (free-coroutine-context! bad-coro)
+  (free-coroutine-context! good-coro))
+
 ;; -----------------------------------------------------------------------
 ;; Group 7: NUMA-Aware Hierarchical Work-Stealing Topology & 2-Tier Stealing (#681)
 ;; -----------------------------------------------------------------------

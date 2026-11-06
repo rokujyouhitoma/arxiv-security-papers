@@ -234,7 +234,10 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
     push qword ptr [r9]
     push r9
     mov rax, [rdi - 32]
+    test rax, rax
+    jz .L_resume_keep_handler
     mov [r9], rax
+.L_resume_keep_handler:
     lea rcx, [rip + ulisp_gc_state]
     push qword ptr [rcx + 24]
     push qword ptr [rcx + 48]
@@ -325,7 +328,10 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov rax, [r9 + r8*8]
     mov [rdi - 32], rax
     mov rax, [rsi - 32]
+    test rax, rax
+    jz .L_switch_keep_handler
     mov [r9 + r8*8], rax
+.L_switch_keep_handler:
     lea rcx, [rip + ulisp_gc_state]
     mov [rcx + 24], rsi
     mov [rcx + 48], rsi
