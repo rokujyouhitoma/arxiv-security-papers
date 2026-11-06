@@ -602,8 +602,9 @@
 
   ;; 1. Register formatting
   (assert-equal "arm reg rax" "x0" (arm-reg->str '%rax))
-  (assert-equal "arm reg rdx" "x1" (arm-reg->str '%rdx))
-  (assert-equal "arm reg rcx" "x2" (arm-reg->str '%rcx))
+  (assert-equal "arm reg rsi" "x1" (arm-reg->str '%rsi))
+  (assert-equal "arm reg rdx" "x2" (arm-reg->str '%rdx))
+  (assert-equal "arm reg rcx" "x3" (arm-reg->str '%rcx))
   (assert-equal "arm reg r10" "x10" (arm-reg->str '%r10))
   (assert-equal "arm reg r12" "x19" (arm-reg->str '%r12))
   (assert-equal "arm reg rsp" "sp" (arm-reg->str '%rsp))
@@ -611,15 +612,16 @@
 
   ;; 2. 32-bit register formatting
   (assert-equal "arm w reg rax" "w0" (arm-w-reg->str '%rax))
-  (assert-equal "arm w reg rdx" "w1" (arm-w-reg->str '%rdx))
-  (assert-equal "arm w reg rcx" "w2" (arm-w-reg->str '%rcx))
+  (assert-equal "arm w reg rsi" "w1" (arm-w-reg->str '%rsi))
+  (assert-equal "arm w reg rdx" "w2" (arm-w-reg->str '%rdx))
+  (assert-equal "arm w reg rcx" "w3" (arm-w-reg->str '%rcx))
   (assert-equal "arm w reg r10" "w10" (arm-w-reg->str '%r10))
   (assert-equal "arm w reg r12" "w19" (arm-w-reg->str '%r12))
 
   ;; 3. Memory operand formatting
   (assert-equal "arm mem op rsp -8" "[sp, #-8]" (arm-mem-op->str '%rsp -8))
   (assert-equal "arm mem op rax 7" "[x0, #7]" (arm-mem-op->str '%rax 7))
-  (assert-equal "arm mem op rdx rax" "[x1, x0]" (arm-mem-op->str '%rdx '%rax))
+  (assert-equal "arm mem op rdx rax" "[x2, x0]" (arm-mem-op->str '%rdx '%rax))
 
   ;; 4. Operand formatting
   (assert-equal "arm operand int" "#42" (arm-operand->str 42))
