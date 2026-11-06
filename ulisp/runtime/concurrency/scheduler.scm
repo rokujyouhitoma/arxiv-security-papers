@@ -794,3 +794,9 @@
                                (guard (exn (else #f))
                                  (scheduler-worker-step! sched 0))
                                (main-loop)))))))))))))
+
+
+;; Connect scheduler-spawn! to supervisor automatic restart queueing (Issue #742)
+(guard (exn (else #f))
+  (if (procedure? synapse-set-supervisor-scheduler-spawn-hook!)
+      (synapse-set-supervisor-scheduler-spawn-hook! scheduler-spawn!)))

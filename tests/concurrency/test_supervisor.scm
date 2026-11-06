@@ -286,13 +286,19 @@
 (let* ((sched (make-work-stealing-scheduler 2 32))
        (child-boot-count (make-atomic-box 0))
        (child-recovered-box (make-atomic-box 0))
+       (child-tids-box (make-atomic-box '()))
        (unrelated-sum-box (make-atomic-box 0))
        (crashy-spec
         (make-child-spec
          'crashy_worker
          (lambda ()
-           (let ((t (make-task-context))
-                 (attempt (+ (atomic-fetch-add! child-boot-count 1) 1)))
+           (let* ((t (make-task-context))
+                  (attempt (+ (atomic-fetch-add! child-boot-count 1) 1)))
+             (let retry ()
+               (let ((cur (atomic-ref child-tids-box)))
+                 (if (not (atomic-cas! child-tids-box cur (cons (task-tid t) cur)))
+                     (retry)
+                     #t)))
              (task-next-run-set!
               t
               (lambda ()
@@ -304,7 +310,7 @@
              t))
          'transient))
        (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list crashy-spec)))
-       (sup (make-supervisor sup-spec)))
+       (sup (make-supervisor sup-spec #f sched)))
   (supervisor-start! sup)
   (let* ((t-child-1 (supervisor-child-task sup 'crashy_worker))
          (tid-1 (task-tid t-child-1))
@@ -323,16 +329,14 @@
     (assert-equal (atomic-ref unrelated-sum-box) 300 "unrelated concurrent tasks completed normally (100+200=300)")
     ;; 2. Crashed child task transitioned to 'terminated
     (assert-eq (task-state t-child-1) 'terminated "1st child instance running (car '()) terminated cleanly")
-    ;; 3. Supervisor automatically received DOWN signal and restarted child without manual polling (#727)
-    (let* ((t-child-2 (supervisor-child-task sup 'crashy_worker))
-           (tid-2 (task-tid t-child-2)))
-      (assert-true (task-context? t-child-2) "restarted child task context exists")
-      (assert-true (not (= tid-1 tid-2)) "restarted child assigned a fresh TID")
-      ;; Schedule the restarted child and verify it completes
-      (scheduler-spawn! sched t-child-2 0)
-      (scheduler-run! sched)
-      (assert-equal (atomic-ref child-boot-count) 2 "child booted exactly twice (initial crash + 1 restart)")
-      (assert-equal (atomic-ref child-recovered-box) 777 "restarted child executed and completed normally"))
+    ;; 3. Supervisor automatically received DOWN, restarted child, and enqueued to scheduler (#727, #742)
+    (assert-equal (atomic-ref child-boot-count) 2 "child booted exactly twice (initial crash + 1 restart)")
+    (assert-equal (atomic-ref child-recovered-box) 777 "restarted child automatically enqueued and executed to completion (#742)")
+    (let ((tids (atomic-ref child-tids-box)))
+      (assert-equal (length tids) 2 "2 task instances generated in total")
+      (assert-true (not (= (car tids) (cadr tids))) "restarted child assigned a fresh TID"))
+    ;; 4. Clean exit: transient worker deregistered upon normal completion (#741)
+    (assert-eq (supervisor-child-task sup 'crashy_worker) #f "transient worker cleanly removed after normal exit (#741)")
     (supervisor-stop! sup)
     (scheduler-stop! sched)))
 
@@ -504,6 +508,60 @@
                  (make-child-spec 'bad_args worker-fn 'permanent 'brutal_kill 'worker "not-a-list")
                  #f)
                "make-child-spec rejects non-list init-args (CWE-843)"))
+
+;; -----------------------------------------------------------------------
+;; Group 12: Multi-Strategy Auto-Enqueue to Scheduler on Restart (#742)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 12: Multi-Strategy Scheduler Auto-Enqueue (#742) ---\n")
+(flush-output-port)
+
+(let* ((sched (make-work-stealing-scheduler 2 32))
+       (all-a-runs (make-atomic-box 0))
+       (all-b-runs (make-atomic-box 0))
+       (all-a-spec
+        (make-child-spec
+         'all_a
+         (lambda ()
+           (let ((t (make-task-context))
+                 (run-cnt (+ (atomic-fetch-add! all-a-runs 1) 1)))
+             (task-next-run-set!
+              t
+              (lambda ()
+                (if (= run-cnt 1)
+                    (car '()) ; 1st boot: crash
+                    #t)))     ; 2nd boot: complete normally
+             t))
+         'transient))
+       (all-b-spec
+        (make-child-spec
+         'all_b
+         (lambda ()
+           (let ((t (make-task-context)))
+             (atomic-fetch-add! all-b-runs 1)
+             (task-next-run-set! t (lambda () #t))
+             t))
+         'transient))
+       (sup-spec (make-supervisor-spec 'one_for_all 5 1000 (list all-a-spec all-b-spec)))
+       (sup (make-supervisor sup-spec #f sched)))
+
+  ;; Accessor verification
+  (assert-true (work-stealing-scheduler? (supervisor-scheduler sup)) "supervisor-scheduler returns active scheduler")
+
+  ;; Start supervisor and spawn initial children to scheduler
+  (supervisor-start! sup)
+  (let ((t-a (supervisor-child-task sup 'all_a))
+        (t-b (supervisor-child-task sup 'all_b)))
+    (scheduler-spawn! sched t-a 0)
+    (scheduler-spawn! sched t-b 1)
+    ;; Run scheduler: t-a crashes, supervisor executes one_for_all restart and automatically enqueues both new tasks
+    (scheduler-run! sched)
+
+    (assert-equal (atomic-ref all-a-runs) 2 "all_a booted twice (initial crash + restarted)")
+    (assert-equal (atomic-ref all-b-runs) 2 "all_b booted twice (one_for_all cascaded restart)")
+    (assert-eq (supervisor-child-task sup 'all_a) #f "all_a transient worker removed after normal completion")
+    (assert-eq (supervisor-child-task sup 'all_b) #f "all_b transient worker removed after normal completion")
+    (supervisor-stop! sup)
+    (scheduler-stop! sched)))
 
 ;; -----------------------------------------------------------------------
 ;; Final Summary

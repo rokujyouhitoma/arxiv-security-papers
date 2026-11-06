@@ -668,6 +668,13 @@
         (hook task reason)
         #f)))
 
+;; Optional scheduler spawn hook for supervisor restart auto-enqueue (Issue #742)
+(define *supervisor-scheduler-spawn-hook-box*
+  (vector (lambda (sched task) #f)))
+
+(define (synapse-set-supervisor-scheduler-spawn-hook! hook)
+  (vector-set! *supervisor-scheduler-spawn-hook-box* 0 hook))
+
 (define (task-register-channel! t ch)
   (if (not (task-context? t))
       (error "task-register-channel!: expected <task-context>" t)

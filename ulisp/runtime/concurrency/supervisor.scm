@@ -21,6 +21,17 @@
 (define (synapse-set-supervisor-crash-hook! hook)
   (vector-set! *supervisor-crash-logger-hook-box* 0 hook))
 
+;; Optional scheduler spawn hook (injected via scheduler.scm, Issue #742)
+(define *supervisor-scheduler-spawn-hook-box*
+  (vector (lambda (sched task)
+            (guard (exn (else #f))
+              (if (procedure? scheduler-spawn!)
+                  (scheduler-spawn! sched task)
+                  #f)))))
+
+(define (synapse-set-supervisor-scheduler-spawn-hook! hook)
+  (vector-set! *supervisor-scheduler-spawn-hook-box* 0 hook))
+
 ;; -----------------------------------------------------------------------
 ;; 1. Monotonic System Clock for Supervisor Time Window (Issue #728, Item C4)
 ;; -----------------------------------------------------------------------
@@ -108,14 +119,15 @@
                      (%make-supervisor-spec strategy max-restarts max-time child-specs))))))))
 
 (define-record-type <supervisor-context>
-  (%make-supervisor-context spec sup-task children-box restart-history-box parent-sup state-box)
+  (%make-supervisor-context spec sup-task children-box restart-history-box parent-sup state-box scheduler-box)
   supervisor-context?
   (spec                 supervisor-spec)
   (sup-task             supervisor-task)
   (children-box         %supervisor-children-box)
   (restart-history-box  %supervisor-restart-history-box)
   (parent-sup           supervisor-parent)
-  (state-box            %supervisor-state-box))
+  (state-box            %supervisor-state-box)
+  (scheduler-box        %supervisor-scheduler-box))
 
 (define supervisor-children
   (case-lambda
@@ -137,6 +149,34 @@
      (if (not (supervisor-context? sup))
          (error "supervisor-state: expected <supervisor-context> (CWE-843)" sup)
          (atomic-ref (%supervisor-state-box sup))))))
+
+(define supervisor-scheduler
+  (case-lambda
+    ((sup)
+     (if (not (supervisor-context? sup))
+         (error "supervisor-scheduler: expected <supervisor-context> (CWE-843)" sup)
+         (atomic-ref (%supervisor-scheduler-box sup))))))
+
+(define supervisor-set-scheduler!
+  (case-lambda
+    ((sup sched)
+     (if (not (supervisor-context? sup))
+         (error "supervisor-set-scheduler!: expected <supervisor-context> (CWE-843)" sup)
+         (begin
+           (atomic-set! (%supervisor-scheduler-box sup) sched)
+           sched)))))
+
+(define (%supervisor-enqueue-child! sup child-entry)
+  (let ((sched (supervisor-scheduler sup)))
+    (if sched
+        (let ((ctask (if (pair? child-entry) (cadr child-entry) child-entry)))
+          (if (and ctask (task-context? ctask))
+              (let ((hook (vector-ref *supervisor-scheduler-spawn-hook-box* 0)))
+                (if (procedure? hook)
+                    (hook sched ctask)
+                    #f))
+              #f))
+        #f)))
 
 ;; -----------------------------------------------------------------------
 ;; 3. Child Task Spawning & Monitoring Helpers
@@ -271,8 +311,12 @@
 (define make-supervisor
   (case-lambda
     ((spec)
-     (make-supervisor spec #f))
-    ((spec parent-sup)
+     (make-supervisor spec #f #f))
+    ((spec parent-or-sched)
+     (if (and parent-or-sched (not (supervisor-context? parent-or-sched)))
+         (make-supervisor spec #f parent-or-sched)
+         (make-supervisor spec parent-or-sched #f)))
+    ((spec parent-sup sched)
      (if (not (supervisor-spec? spec))
          (error "make-supervisor: expected <supervisor-spec> (CWE-843)" spec)
          (let* ((sup-task (make-task-context))
@@ -281,7 +325,8 @@
                                                (make-atomic-box (list))
                                                (make-atomic-box (list))
                                                parent-sup
-                                               (make-atomic-box 'stopped))))
+                                               (make-atomic-box 'stopped)
+                                               (make-atomic-box sched))))
            ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7)
            (task-next-run-set!
             sup-task
@@ -295,20 +340,35 @@
 (define supervisor-start!
   (case-lambda
     ((sup)
+     (supervisor-start! sup #f #f))
+    ((sup sched-or-spawn)
+     (if (boolean? sched-or-spawn)
+         (supervisor-start! sup #f sched-or-spawn)
+         (supervisor-start! sup sched-or-spawn #f)))
+    ((sup sched spawn-initial?)
      (if (not (supervisor-context? sup))
          (error "supervisor-start!: expected <supervisor-context> (CWE-843)" sup)
-         (let* ((spec (supervisor-spec sup))
-                (sup-task (supervisor-task sup))
-                (cspecs (supervisor-spec-child-specs spec)))
-           (atomic-set! (%supervisor-state-box sup) 'running)
-           (%register-active-supervisor! sup-task sup)
-           (let ((children (let loop ((specs cspecs) (acc (list)))
-                             (if (null? specs)
-                                 acc
-                                 (let ((child-inst (%spawn-and-monitor-child! sup-task (car specs))))
-                                   (loop (cdr specs) (cons child-inst acc)))))))
-             (atomic-set! (%supervisor-children-box sup) (reverse children))
-             #t))))))
+         (begin
+           (if sched (supervisor-set-scheduler! sup sched))
+           (let* ((spec (supervisor-spec sup))
+                  (sup-task (supervisor-task sup))
+                  (cspecs (supervisor-spec-child-specs spec)))
+             (atomic-set! (%supervisor-state-box sup) 'running)
+             (%register-active-supervisor! sup-task sup)
+             (let ((children (let loop ((specs cspecs) (acc (list)))
+                               (if (null? specs)
+                                   acc
+                                   (let ((child-inst (%spawn-and-monitor-child! sup-task (car specs))))
+                                     (loop (cdr specs) (cons child-inst acc)))))))
+               (let ((rev-children (reverse children)))
+                 (atomic-set! (%supervisor-children-box sup) rev-children)
+                 (if (and spawn-initial? (supervisor-scheduler sup))
+                     (let spawn-loop ((xs rev-children))
+                       (if (not (null? xs))
+                           (begin
+                             (%supervisor-enqueue-child! sup (car xs))
+                             (spawn-loop (cdr xs))))))
+                 #t))))))))
 
 (define supervisor-stop!
   (case-lambda
@@ -348,7 +408,9 @@
                                  (cons new-entry (cdr xs))
                                  (cons (car xs) (map-loop (cdr xs))))))))
         (if (atomic-cas! ch-box cur new-list)
-            new-entry
+            (begin
+              (%supervisor-enqueue-child! sup new-entry)
+              new-entry)
             (retry))))))
 
 (define (%restart-one-for-all! sup)
@@ -369,8 +431,14 @@
                            acc
                            (let ((entry (%spawn-and-monitor-child! sup-task (car specs))))
                              (spawn-loop (cdr specs) (cons entry acc)))))))
-      (atomic-set! ch-box (reverse restarted))
-      (reverse restarted))))
+      (let ((final-list (reverse restarted)))
+        (atomic-set! ch-box final-list)
+        (let enqueue-loop ((xs final-list))
+          (if (not (null? xs))
+              (begin
+                (%supervisor-enqueue-child! sup (car xs))
+                (enqueue-loop (cdr xs)))))
+        final-list))))
 
 (define (%restart-rest-for-one! sup dead-entry)
   (let* ((sup-task (supervisor-task sup))
@@ -400,9 +468,16 @@
                       (let* ((cspec (caar ss))
                              (new-entry (%spawn-and-monitor-child! sup-task cspec)))
                         (respawn-loop (cdr ss) (cons new-entry acc))))))
-               (full-new-list (append prefix (reverse restarted-suffix))))
+               (rev-suffix (reverse restarted-suffix))
+               (full-new-list (append prefix rev-suffix)))
           (if (atomic-cas! ch-box current full-new-list)
-              restarted-suffix
+              (begin
+                (let enqueue-loop ((xs rev-suffix))
+                  (if (not (null? xs))
+                      (begin
+                        (%supervisor-enqueue-child! sup (car xs))
+                        (enqueue-loop (cdr xs)))))
+                restarted-suffix)
               (retry)))))))
 
 ;; -----------------------------------------------------------------------
