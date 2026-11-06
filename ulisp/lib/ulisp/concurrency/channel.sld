@@ -79,6 +79,9 @@
     task-handler-chain-box
     task-handler-chain
     task-set-handler-chain!
+    task-executing-box
+    task-executing?
+    task-executing-set!
     *active-current-task-box*
     *worker-current-task-tls*
     *worker-slot-override-tls*

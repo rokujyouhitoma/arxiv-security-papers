@@ -7,6 +7,7 @@
 (load "ulisp/runtime/concurrency/arena.scm")
 (load "ulisp/runtime/concurrency/queue.scm")
 (load "ulisp/runtime/concurrency/channel.scm")
+(load "ulisp/runtime/concurrency/epoch.scm")
 (load "ulisp/runtime/concurrency/context.scm")
 (load "ulisp/runtime/concurrency/deque.scm")
 (load "ulisp/runtime/concurrency/thread.scm")
@@ -455,6 +456,70 @@
       (assert-equal down-reason '(panic complex-fault 10 20) "Monitor DOWN received deep-copied composite reason")
       (assert-equal exit-reason '(panic complex-fault 10 20) "Link EXIT received deep-copied composite reason")
       (assert-true (not (eq? (cdr down-reason) (cdr exit-reason))) "Monitor and Link received independent deep-copied reason pairs"))))
+
+;; -----------------------------------------------------------------------
+;; Group 11: Verify Task Stop Before Arena Reset (#745, CWE-416)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 11: Verify Task Stop Before Arena Reset (#745) ---\n")
+(flush-output-port)
+
+;; 11.1 task-executing? state lifecycle transitions
+(let* ((worker (make-task-context))
+       (arena (make-task-arena 2048))
+       (inner-executing-box (vector #f)))
+  (task-set-arena! worker arena)
+  (assert-true (not (task-executing? worker)) "worker initially not executing before boundary")
+  (let ((res (with-synapse-task-boundary worker
+               (lambda ()
+                 (vector-set! inner-executing-box 0 (task-executing? (current-synapse-task)))
+                 (arena-allocate! arena 128)
+                 'done))))
+    (assert-eq (car res) 'ok "boundary returns ok")
+    (assert-true (vector-ref inner-executing-box 0) "task-executing? is #t while inside boundary")
+    (assert-true (not (task-executing? worker)) "task-executing? is reset to #f after boundary exit")
+    (assert-eq (arena-used-bytes arena) 128 "normal non-terminated task arena retained")))
+
+;; 11.2 premature arena reset suppressed while task is actively executing
+(let* ((worker (make-task-context))
+       (arena (make-task-arena 2048))
+       (mid-arena-used (vector 0)))
+  (task-set-arena! worker arena)
+  (let ((res (with-synapse-task-boundary worker
+               (lambda ()
+                 (arena-allocate! arena 256)
+                 ;; Invoke cleanup while task is actively executing in boundary
+                 (synapse-cleanup-task-resources! (current-synapse-task) 'external-kill #f #f)
+                 ;; Check that arena is NOT reset prematurely while task is still executing
+                 (vector-set! mid-arena-used 0 (arena-used-bytes arena))
+                 (synapse-panic! 'terminated-after-cleanup)))))
+    (assert-true (> (vector-ref mid-arena-used 0) 0) "arena reset was suppressed while executing in boundary (CWE-416 prevented)")
+    (assert-eq (arena-used-bytes arena) 0 "arena reclaimed to 0 after boundary epilogue unwinding")
+    (assert-true (not (task-executing? worker)) "worker completely stopped after boundary")))
+
+;; 11.3 epoch abort-task! suppresses instant arena-reset! when task is executing
+(let* ((worker (make-task-context))
+       (arena (make-task-arena 2048))
+       (mid-used (vector 0)))
+  (task-set-arena! worker arena)
+  (let ((res (with-synapse-task-boundary worker
+               (lambda ()
+                 (arena-allocate! arena 384)
+                 (abort-task! (current-synapse-task) arena)
+                 (vector-set! mid-used 0 (arena-used-bytes arena))
+                 'exit-ok))))
+    (assert-true (> (vector-ref mid-used 0) 0) "abort-task! preserved executing task arena in boundary")
+    (assert-eq (arena-used-bytes arena) 0 "abort-task! arena reset cleanly upon boundary exit")
+    (assert-true (not (task-executing? worker)) "task execution state cleared after epoch abort")))
+
+;; 11.4 arena is safely reclaimed immediately for non-executing stopped task
+(let* ((idle-task (make-task-context))
+       (arena (make-task-arena 1024)))
+  (task-set-arena! idle-task arena)
+  (arena-allocate! arena 192)
+  (assert-eq (arena-used-bytes arena) 192 "idle task allocated initial bytes")
+  (assert-true (not (task-executing? idle-task)) "idle task is not executing")
+  (synapse-cleanup-task-resources! idle-task 'shutdown #f #f)
+  (assert-eq (arena-used-bytes arena) 0 "non-executing idle task arena reclaimed immediately"))
 
 ;; -----------------------------------------------------------------------
 ;; Final Summary

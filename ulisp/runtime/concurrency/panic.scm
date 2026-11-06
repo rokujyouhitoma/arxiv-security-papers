@@ -56,7 +56,9 @@
   (channel-deep-copy val))
 
 (define (%reclaim-terminated-task-arena! task secure-scrub?)
-  (if (and (task-context? task) (eq? (task-state task) 'terminated))
+  (if (and (task-context? task)
+           (not (task-executing? task))
+           (eq? (task-state task) 'terminated))
       (let ((arena (task-arena task)))
         (if (and arena (task-arena? arena) (> (arena-used-bytes arena) 0))
             (if secure-scrub?
@@ -78,8 +80,12 @@
          (let ((copied-reason (synapse-deep-copy-reason panic-reason)))
            ;; 2. Mark terminated, zero reductions, poison channels & dispatch link/monitor notifications (Issue #723, Item B6 & A4)
            (task-handle-termination! task (cons 'panic copied-reason) wake-hook)
-           ;; 3. After notifications are dispatched and task execution stopped, reset Ephemeral Arena LAST (Issue #724, Item B5)
-           (if (and (eq? (task-state task) 'terminated) (<= (task-reductions task) 0))
+           ;; 3. Safe Arena Reclamation (Issue #745, CWE-416):
+           ;; If the task is currently executing inside with-synapse-task-boundary,
+           ;; DO NOT reset the arena prematurely. The arena will be safely reclaimed
+           ;; at the boundary exit epilogue (%reclaim-terminated-task-arena!).
+           ;; Only if the task is completely stopped (not executing) and terminated, reclaim immediately.
+           (if (and (not (task-executing? task)) (eq? (task-state task) 'terminated))
                (let ((arena (task-arena task)))
                  (if (and arena (task-arena? arena))
                      (if secure-scrub?
@@ -159,6 +165,7 @@
                 (prev-k (task-escape-continuation task))
                 (prev-hc (%asm-get-handler-chain))
                 (task-hc (task-handler-chain task)))
+            (task-executing-set! task #t)
             (let ((result
                    (guard (exn
                            ((and (pair? exn) (eq? (car exn) *synapse-boundary-escape-tag*))
@@ -206,7 +213,8 @@
               (%asm-set-handler-chain! prev-hc)
               (task-set-escape-continuation! task prev-k)
               (%set-current-synapse-task! prev-task)
-              ;; Ensure arena is reclaimed after execution stops if task was terminated via link cascade at safepoint (#723, Item A4)
+              (task-executing-set! task #f)
+              ;; Ensure arena is reclaimed after execution stops if task was terminated via link cascade or panic (Issue #723, #745)
               (%reclaim-terminated-task-arena! task secure-scrub?)
               result)))))
 

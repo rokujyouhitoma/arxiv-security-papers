@@ -853,6 +853,7 @@
       (eval-env-bind! env 'task-exhausted? task-exhausted?)
       (eval-env-bind! env 'task-id task-id)
       (eval-env-bind! env 'task-state task-state)
+      (eval-env-bind! env 'task-executing? task-executing?)
       (eval-env-bind! env 'task-context? task-context?)
       (eval-env-bind! env 'scheduler-yield! scheduler-yield!)
       ;; Fault Tolerance & Let-It-Crash (#668)

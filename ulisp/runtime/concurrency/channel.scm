@@ -94,7 +94,7 @@
                       blocked-on epoch next-run
                       reduction-exhaustions steals-count handoff-box
                       links-box monitors-box monitored-by-box trap-exit-box owned-channels-box
-                      arena-box escape-k-box handler-chain-box)
+                      arena-box escape-k-box handler-chain-box executing-box)
   task-context?
   (tid                   %task-tid)
   (state                 %task-state                 %task-state-set!)
@@ -117,7 +117,8 @@
   (owned-channels-box    %task-owned-channels-box)
   (arena-box             %task-arena-box)
   (escape-k-box          %task-escape-k-box)
-  (handler-chain-box     %task-handler-chain-box))
+  (handler-chain-box     %task-handler-chain-box)
+  (executing-box         %task-executing-box))
 
 ;; -----------------------------------------------------------------------
 ;; Global Monotonically Increasing Atomic Task ID Allocator (#673)
@@ -242,33 +243,27 @@
     (task-table-register! task))
   task)
 
+(define (%create-task-context-default tid state reductions epoch)
+  (%make-task-context tid state reductions 0 0
+                      0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)
+                      (make-atomic-box '()) (make-atomic-box '())
+                      (make-atomic-box '()) (make-atomic-box #f)
+                      (make-atomic-box '())
+                      (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
+                      (make-atomic-box #f)))
+
 (define make-task-context
   (case-lambda
     (()
      (let ((tid (allocate-task-id!)))
        (%register-task-in-table!
-        (%make-task-context tid 'ready *task-default-reductions* 0 0
-                            0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
-                            (make-atomic-box '()) (make-atomic-box '())
-                            (make-atomic-box '()) (make-atomic-box #f)
-                            (make-atomic-box '())
-                            (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))))
+        (%create-task-context-default tid 'ready *task-default-reductions* 0))))
     ((tid)
      (%register-task-in-table!
-      (%make-task-context tid 'ready *task-default-reductions* 0 0
-                          0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
-                          (make-atomic-box '()) (make-atomic-box '())
-                          (make-atomic-box '()) (make-atomic-box #f)
-                          (make-atomic-box '())
-                          (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0))))
+      (%create-task-context-default tid 'ready *task-default-reductions* 0)))
     ((tid epoch)
      (%register-task-in-table!
-      (%make-task-context tid 'ready *task-default-reductions* 0 0
-                          0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)
-                          (make-atomic-box '()) (make-atomic-box '())
-                          (make-atomic-box '()) (make-atomic-box #f)
-                          (make-atomic-box '())
-                          (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0))))
+      (%create-task-context-default tid 'ready *task-default-reductions* epoch)))
     ((tid state reductions continuation-pc stack-pointer
       arena-base arena-offset arena-capacity
       blocked-on epoch next-run
@@ -282,7 +277,8 @@
                           (make-atomic-box '()) (make-atomic-box '())
                           (make-atomic-box '()) (make-atomic-box #f)
                           (make-atomic-box '())
-                          (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0))))))
+                          (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
+                          (make-atomic-box #f))))))
 
 (define (task-tid t)
   (if (not (task-context? t))
@@ -584,6 +580,24 @@
         (atomic-set! (task-handler-chain-box t) hc)
         hc)))
 
+(define (task-executing-box t)
+  (if (not (task-context? t))
+      (error "task-executing-box: expected <task-context>" t)
+      (%task-executing-box t)))
+
+(define (task-executing? t)
+  (if (not (task-context? t))
+      (error "task-executing?: expected <task-context>" t)
+      (atomic-ref (%task-executing-box t))))
+
+(define (task-executing-set! t val)
+  (if (not (task-context? t))
+      (error "task-executing-set!: expected <task-context>" t)
+      (let ((b (if val #t #f)))
+        (atomic-set! (%task-executing-box t) b)
+        (%memory-fence)
+        b)))
+
 ;; -----------------------------------------------------------------------
 ;; Per-Worker Fallback Task Contexts & Default Task Boundary Hook (Issue #720)
 ;; -----------------------------------------------------------------------
@@ -598,7 +612,8 @@
                                                    (make-atomic-box '()) (make-atomic-box '())
                                                    (make-atomic-box '()) (make-atomic-box #f)
                                                    (make-atomic-box '())
-                                                   (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)))
+                                                   (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
+                                                   (make-atomic-box #f)))
             (loop (+ i 1)))
           vec))))
 
@@ -616,6 +631,7 @@
                 (prev-k (task-escape-continuation task))
                 (prev-hc (%asm-get-handler-chain))
                 (task-hc (task-handler-chain task)))
+            (task-executing-set! task #t)
             (let ((result
                    (guard (exn
                            ((and (pair? exn) (eq? (car exn) *synapse-boundary-escape-tag*))
@@ -643,6 +659,7 @@
               (%asm-set-handler-chain! prev-hc)
               (task-set-escape-continuation! task prev-k)
               (%set-current-synapse-task! prev-task)
+              (task-executing-set! task #f)
               result)))))
 
 (define *synapse-task-boundary-hook-box*

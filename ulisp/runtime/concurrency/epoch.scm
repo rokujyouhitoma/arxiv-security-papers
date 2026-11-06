@@ -101,11 +101,16 @@
                (begin
                  (%task-reductions-set! task 0)
                  (%task-state-set! task 'terminated)
-                 (%task-blocked-on-set! task #f)
-                 (%task-arena-offset-set! task 0)))
-           ;; 2. Reset process-local ephemeral arena in O(1)
-           (if (and arena (task-arena? arena))
-               (arena-reset! arena))
+                 (%task-blocked-on-set! task #f)))
+           ;; 2. Reset process-local ephemeral arena in O(1) only if task is not actively executing (Issue #745, CWE-416)
+           ;; If executing, arena will be safely reclaimed at boundary exit epilogue.
+           (if (and arena (task-arena? arena)
+                    (or (not (task-context? task))
+                        (not (task-executing? task))))
+               (begin
+                 (if (task-context? task)
+                     (%task-arena-offset-set! task 0))
+                 (arena-reset! arena)))
            ;; Telemetry
            (atomic-fetch-add! *epoch-stats-aborted-tasks* 1)
            #t)
