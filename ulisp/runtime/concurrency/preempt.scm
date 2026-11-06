@@ -262,6 +262,15 @@
 (define (safepoint-poll! btask)
   (%check-safepoint-impl! btask #f))
 
+(define (%synapse-safepoint-poll!)
+  (let ((cur (current-synapse-task)))
+    (if (and cur (or (budgeted-task? cur) (task-context? cur)))
+        (check-safepoint! cur)
+        #t)))
+
+(define (%safepoint-poll!)
+  (%synapse-safepoint-poll!))
+
 (define (%scheduler-yield-impl! btask sched)
   (cond
     ((budgeted-task? btask)

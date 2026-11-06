@@ -187,7 +187,7 @@
      (map (lambda (e) (inject-safepoints-expr e loop-names)) expr))))
 
 ;;; -----------------------------------------------------------------------
-;;; 4. ASC Kernel Transformation
+;;; 4. Form & ASC Kernel Transformation (Layer 1 & Layer 2)
 ;;; -----------------------------------------------------------------------
 
 (define (inject-safepoints-kernel kernel-node)
@@ -204,12 +204,43 @@
              (trans-body (inject-safepoints-expr prologue-wrapped '())))
         (list '%asc-kernel header trans-body))))
 
+(define (inject-safepoints-form form)
+  (cond
+    ((not (pair? form))
+     form)
+    ;; Quoted forms: leave intact
+    ((eq? (car form) 'quote)
+     form)
+    ;; ASC Kernel block: preserve %asc-kernel wrapper
+    ((asc-kernel-form? form)
+     (inject-safepoints-kernel form))
+    ;; define procedure: (define (name . formals) body ...)
+    ((and (eq? (car form) 'define)
+          (pair? (cdr form))
+          (pair? (cadr form)))
+     (let* ((sig (cadr form))
+            (raw-body (cddr form))
+            (injected-body (prepend-safepoint-to-list raw-body))
+            (trans-body (map (lambda (e) (inject-safepoints-expr e '())) injected-body)))
+       (cons 'define (cons sig trans-body))))
+    ;; define variable: (define name expr)
+    ((and (eq? (car form) 'define)
+          (pair? (cdr form))
+          (symbol? (cadr form))
+          (pair? (cddr form)))
+     (let* ((name (cadr form))
+            (val-expr (caddr form))
+            (trans-val (inject-safepoints-expr val-expr '())))
+       (list 'define name trans-val)))
+    ;; begin block: (begin form ...)
+    ((begin-form? form)
+     (cons 'begin (map inject-safepoints-form (cdr form))))
+    ;; Generic R7RS expressions (let, named-let, lambda, calls, etc.)
+    (else
+     (inject-safepoints-expr form '()))))
+
 (define (inject-safepoints-pass forms)
-  (map (lambda (form)
-         (if (asc-kernel-form? form)
-             (inject-safepoints-kernel form)
-             form))
-       forms))
+  (map inject-safepoints-form forms))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Pluggable Pass Injection & Registration API

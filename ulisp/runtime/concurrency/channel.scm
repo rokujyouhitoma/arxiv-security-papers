@@ -675,6 +675,10 @@
 (define (synapse-set-supervisor-scheduler-spawn-hook! hook)
   (vector-set! *supervisor-scheduler-spawn-hook-box* 0 hook))
 
+;; Global safepoint poll fallback (overridden by preempt.scm, Issue #744)
+(define (%synapse-safepoint-poll!) #t)
+(define (%safepoint-poll!) #t)
+
 (define (task-register-channel! t ch)
   (if (not (task-context? t))
       (error "task-register-channel!: expected <task-context>" t)

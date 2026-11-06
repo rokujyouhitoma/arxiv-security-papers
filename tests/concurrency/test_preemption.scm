@@ -407,6 +407,43 @@
     (assert-equal (arena-used-bytes peer-arena) 0 "peer arena reclaimed to 0 bytes after execution stopped at safepoint")))
 
 ;; -----------------------------------------------------------------------
+;; Group 9: Layer 1 Loop Safepoint Exit & Global Polling Entrypoint (#744)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 9: Layer 1 Loop Safepoint Exit & Global Polling (#744) ---\n")
+
+;; 1. Out-of-task context safety
+(assert-true (%synapse-safepoint-poll!) "%synapse-safepoint-poll! returns #t safely outside task context")
+(assert-true (%safepoint-poll!) "%safepoint-poll! returns #t safely outside task context")
+
+;; 2. In-task Layer 1 loop preemption & forced termination
+(let* ((t-killer (make-task-context))
+       (t-worker (make-task-context))
+       (worker-arena (make-task-arena 2048))
+       (worker-iters (vector 0)))
+  (task-set-arena! t-worker worker-arena)
+  (task-link! t-killer t-worker)
+
+  (let ((res (with-synapse-task-boundary t-worker
+               (lambda ()
+                 ;; Pure Layer 1 R7RS loop with compiler-injected (%synapse-safepoint-poll!)
+                 (let loop ((count 0))
+                   (if (< count 100)
+                       (begin
+                         (vector-set! worker-iters 0 (+ (vector-ref worker-iters 0) 1))
+                         (if (= count 4)
+                             ;; Linked peer terminates abruptly
+                             (task-handle-termination! t-killer 'peer_fault)
+                             #f)
+                         ;; Unparameterized Layer 1 safepoint poll
+                         (%synapse-safepoint-poll!)
+                         (loop (+ count 1)))
+                       'completed-100))))))
+    (assert-equal (task-state t-worker) 'terminated "Layer 1 worker task state transitioned to 'terminated")
+    (assert-equal (task-reductions t-worker) 0 "Layer 1 worker reductions zeroed upon termination")
+    (assert-equal (vector-ref worker-iters 0) 5 "Layer 1 loop stopped immediately on iteration 5 (not 100)")
+    (assert-equal (car res) 'terminated "boundary returned 'terminated from Layer 1 safepoint escape")))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

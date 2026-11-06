@@ -180,18 +180,23 @@
                       (safepoint-poll-form? (cadr body))))))
 
 ;;; -----------------------------------------------------------------------
-;;; Group 5: Non-Intrusiveness on Control Plane Code
+;;; Group 5: Layer 1 (R7RS) Functions & Loops Safepoint Injection (#744)
 ;;; -----------------------------------------------------------------------
 
 (newline)
-(display "--- Group 5: Non-Intrusiveness on Control Plane Code ---\n")
+(display "--- Group 5: Layer 1 (R7RS) Functions & Loops Safepoint Injection (#744) ---\n")
 
 (let* ((r7rs-forms '((define (host-func x) (* x 2))
-                     (let ((val 42)) (+ val 1))))
+                     (let loop () (loop))))
        (out (inject-safepoints-pass r7rs-forms)))
-  (assert-equal "5.1 standard R7RS forms left completely untouched"
-                r7rs-forms
-                out))
+  (assert-true "5.1 define function prologue receives safepoint"
+               (equal? (car out)
+                       '(define (host-func x) (%synapse-safepoint-poll!) (* x 2))))
+  (assert-true "5.2 top-level loop receives safepoint in entry and backedge"
+               (equal? (cadr out)
+                       '(let loop ()
+                          (%synapse-safepoint-poll!)
+                          (begin (%synapse-safepoint-poll!) (loop))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 6: Pass Manager Injection & Pipeline Integration
@@ -242,8 +247,8 @@
 
 (define forms-output (inject-safepoints-pass forms-input))
 
-(assert-equal "6.7 non-kernel form preserved"
-              '(define (caller) 42)
+(assert-equal "6.7 define form transformed with safepoint prologue"
+              '(define (caller) (%synapse-safepoint-poll!) 42)
               (car forms-output))
 
 (assert-true "6.8 kernel form transformed"

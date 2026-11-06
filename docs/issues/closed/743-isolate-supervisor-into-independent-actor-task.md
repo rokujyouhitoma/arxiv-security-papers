@@ -90,3 +90,4 @@ Target Branch: `fix/743-isolate-supervisor-into-independent-actor-task`
 - [x] 新設される並行性ストレステスト（Group 13）を含む全テストケースが PASS すること (83 passed, 0 failed)
 - [x] 既存のテストスイート (`test_supervisor`, `test_links_monitors`, `test_scheduler`, `test_let_it_crash`) が 100% PASS すること
 - [x] `make lint_sexpr` (171 files) および Pre-commit 静的解析（Radon, Xenon, Mypy strict）が 100% PASS すること
+
