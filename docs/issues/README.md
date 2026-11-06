@@ -13,7 +13,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **743** | Supervisor の独立アクタータスク化と並行再起動競合の排除 (C7) | Bug | High | In Progress | [743-isolate-supervisor-into-independent-actor-task.md](743-isolate-supervisor-into-independent-actor-task.md) |
 | **744** | Layer 1 (R7RS) ループおよび関数呼び出しへの強制終了 Safepoint 自動挿入 (B6) | Feature | High | In Progress | [744-insert-safepoints-into-layer-1-loops-and-calls.md](744-insert-safepoints-into-layer-1-loops-and-calls.md) |
 | **745** | タスク完全停止確認後の安全な Ephemeral Arena リセット (A4) | Bug | High | In Progress | [745-verify-task-stop-before-arena-reset.md](745-verify-task-stop-before-arena-reset.md) |
 | **746** | CI テストマトリクスへのマルチスレッド・コルーチン並行性結合テスト統合 | Feature | High | In Progress | [746-integrate-multithread-and-coroutine-integration-tests-into-ci.md](746-integrate-multithread-and-coroutine-integration-tests-into-ci.md) |
@@ -30,6 +29,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **743** | Supervisor の独立アクタータスク化と並行再起動競合の排除 (C7) | Bug | 2026-11-06 | [closed/743-isolate-supervisor-into-independent-actor-task.md](closed/743-isolate-supervisor-into-independent-actor-task.md) |
 | **742** | 再起動した Supervisor 子タスクのスケジューラ自動投入 (C7) | Bug | 2026-11-06 | [closed/742-enqueue-restarted-child-task-to-scheduler.md](closed/742-enqueue-restarted-child-task-to-scheduler.md) |
 | **741** | タスク正常終了時のクリーンアップ・DOWN通知および登録解除の実行 | Bug | 2026-11-06 | [closed/741-handle-normal-task-termination-and-cleanup.md](closed/741-handle-normal-task-termination-and-cleanup.md) |
 | **740** | コルーチン型タスクの例外境界接続とハンドラ連鎖初期化 (A2) | Bug | 2026-11-06 | [closed/740-fix-coroutine-task-exception-boundary.md](closed/740-fix-coroutine-task-exception-boundary.md) |

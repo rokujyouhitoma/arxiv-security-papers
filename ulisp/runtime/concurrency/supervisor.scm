@@ -119,7 +119,7 @@
                      (%make-supervisor-spec strategy max-restarts max-time child-specs))))))))
 
 (define-record-type <supervisor-context>
-  (%make-supervisor-context spec sup-task children-box restart-history-box parent-sup state-box scheduler-box)
+  (%make-supervisor-context spec sup-task children-box restart-history-box parent-sup state-box scheduler-box processing-box)
   supervisor-context?
   (spec                 supervisor-spec)
   (sup-task             supervisor-task)
@@ -127,7 +127,8 @@
   (restart-history-box  %supervisor-restart-history-box)
   (parent-sup           supervisor-parent)
   (state-box            %supervisor-state-box)
-  (scheduler-box        %supervisor-scheduler-box))
+  (scheduler-box        %supervisor-scheduler-box)
+  (processing-box       %supervisor-processing-box))
 
 (define supervisor-children
   (case-lambda
@@ -326,13 +327,15 @@
                                                (make-atomic-box (list))
                                                parent-sup
                                                (make-atomic-box 'stopped)
-                                               (make-atomic-box sched))))
-           ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7)
+                                               (make-atomic-box sched)
+                                               (make-atomic-box #f))))
+           ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7, #743)
            (task-next-run-set!
             sup-task
             (lambda ()
               (let ((res (supervisor-poll-down-signals! sup)))
-                (if (eq? (supervisor-state sup) 'running)
+                (if (and (eq? (supervisor-state sup) 'running)
+                         (task-has-handoff? sup-task))
                     (task-state-set! sup-task 'ready))
                 res)))
            sup)))))
@@ -570,27 +573,47 @@
     ((sup)
      (if (not (supervisor-context? sup))
          (error "supervisor-poll-down-signals!: expected <supervisor-context> (CWE-843)" sup)
-         (let ((sup-task (supervisor-task sup)))
-           (let drain ((last-res #f))
-             (if (not (task-has-handoff? sup-task))
-                 last-res
-                 (let ((msg (task-take-handoff! sup-task)))
-                   (if (and (pair? msg) (eq? (car msg) 'DOWN) (>= (length msg) 5))
-                       (let* ((target-tid (list-ref msg 3))
-                              (reason (list-ref msg 4))
-                              (res (supervisor-handle-child-down! sup target-tid reason)))
-                         (drain res))
-                       (drain last-res))))))))))
+         (let ((proc-box (%supervisor-processing-box sup))
+               (sup-task (supervisor-task sup)))
+           ;; Lock-Free Actor MPSC Work-Draining Loop (Issue #743, Item C7)
+           ;; Guarantees strict serialization of supervisor state updates across concurrent workers
+           (if (not (atomic-cas! proc-box #f #t))
+               #f ; Another worker is actively draining the supervisor mailbox
+               (let outer-loop ((last-res #f))
+                 (let drain-loop ((res last-res))
+                   (if (not (task-has-handoff? sup-task))
+                       (begin
+                         (atomic-set! proc-box #f)
+                         ;; Check once more before releasing lock to prevent lost-wake race
+                         (if (task-has-handoff? sup-task)
+                             (if (atomic-cas! proc-box #f #t)
+                                 (outer-loop res)
+                                 res)
+                             res))
+                       (let ((msg (task-take-handoff! sup-task)))
+                         (if (and (pair? msg) (eq? (car msg) 'DOWN) (>= (length msg) 5))
+                             (let* ((target-tid (list-ref msg 3))
+                                    (reason (list-ref msg 4))
+                                    (h-res (supervisor-handle-child-down! sup target-tid reason)))
+                               (drain-loop h-res))
+                             (drain-loop res))))))))))))
 
-;; Connect monitor DOWN notifications to active supervisor tasks automatically (Issue #727, Item C7)
+;; Connect monitor DOWN notifications to active supervisor tasks automatically (Issue #727, Item C7, #743)
 (guard (exn (else #f))
   (if (procedure? set-monitor-down-dispatch-hook!)
       (set-monitor-down-dispatch-hook!
        (lambda (obs-task)
          (let ((sup (%lookup-active-supervisor-by-task obs-task)))
            (if (and sup (eq? (supervisor-state sup) 'running))
-               (let ((runner (task-next-run obs-task)))
-                 (if (procedure? runner)
-                     (runner)
-                     (supervisor-poll-down-signals! sup)))
+               (let ((sched (supervisor-scheduler sup)))
+                 (if (and sched (procedure? scheduler-spawn!) (scheduler-running? sched))
+                     ;; Actor mode: wake up supervisor task and enqueue to scheduler
+                     (begin
+                       (task-state-set! obs-task 'ready)
+                       (%supervisor-enqueue-child! sup obs-task))
+                     ;; Direct fallback mode (e.g. single-threaded tests): drain via serialized Work-Draining loop
+                     (let ((runner (task-next-run obs-task)))
+                       (if (procedure? runner)
+                           (runner)
+                           (supervisor-poll-down-signals! sup)))))
                #f))))))

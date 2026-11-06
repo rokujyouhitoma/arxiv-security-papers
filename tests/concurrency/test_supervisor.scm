@@ -564,6 +564,62 @@
     (scheduler-stop! sched)))
 
 ;; -----------------------------------------------------------------------
+;; Group 13: Supervisor Actor Serialization & Concurrent Crash Isolation (#743)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 13: Supervisor Actor Concurrent Crash Isolation (#743) ---\n")
+(flush-output-port)
+
+(let* ((race-a-boots (make-atomic-box 0))
+       (race-b-boots (make-atomic-box 0))
+       (spec-a
+        (make-child-spec
+         'race_a
+         (lambda ()
+           (atomic-fetch-add! race-a-boots 1)
+           (make-task-context))
+         'permanent))
+       (spec-b
+        (make-child-spec
+         'race_b
+         (lambda ()
+           (atomic-fetch-add! race-b-boots 1)
+           (make-task-context))
+         'permanent))
+       (sup-spec (make-supervisor-spec 'one_for_all 10 1000 (list spec-a spec-b)))
+       (sup (make-supervisor sup-spec)))
+
+  (supervisor-start! sup)
+  (assert-equal (atomic-ref race-a-boots) 1 "race_a booted once on start")
+  (assert-equal (atomic-ref race-b-boots) 1 "race_b booted once on start")
+
+  (let* ((t-a (supervisor-child-task sup 'race_a))
+         (t-b (supervisor-child-task sup 'race_b))
+         (tid-a (task-tid t-a))
+         (tid-b (task-tid t-b))
+         (sup-task (supervisor-task sup)))
+
+    ;; Simulate two workers concurrently delivering DOWN signals to the supervisor mailbox
+    (task-set-handoff! sup-task (list 'DOWN 101 'process tid-a '(panic . concurrent_fault_a)))
+    (task-set-handoff! sup-task (list 'DOWN 102 'process tid-b '(panic . concurrent_fault_b)))
+
+    ;; Drain signals via serialized Work-Draining loop
+    (supervisor-poll-down-signals! sup)
+
+    ;; In one_for_all, the supervisor drains both DOWN signals in serialized order.
+    ;; 1st DOWN triggers one_for_all restart of both A and B.
+    ;; 2nd DOWN for old tid-b is cleanly ignored/drained since tid-b is already terminated!
+    ;; Therefore, children are restarted cleanly without state corruption or duplicate leaking instances.
+    (assert-equal (length (supervisor-children sup)) 2 "supervisor maintains exactly 2 active children (no duplicate leakage)")
+    (let ((new-a (supervisor-child-task sup 'race_a))
+          (new-b (supervisor-child-task sup 'race_b)))
+      (assert-true (task-context? new-a) "new race_a instance exists")
+      (assert-true (task-context? new-b) "new race_b instance exists")
+      (assert-true (not (= (task-tid new-a) tid-a)) "race_a assigned fresh TID")
+      (assert-true (not (= (task-tid new-b) tid-b)) "race_b assigned fresh TID"))
+
+    (supervisor-stop! sup)))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 
