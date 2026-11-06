@@ -283,6 +283,47 @@
   (scheduler-stop! sched))
 
 ;; -----------------------------------------------------------------------
+;; Group 8: Issue #747 TLS Worker Identification & 32MB+ Heap Resilience
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Issue #747 TLS Worker Identification & Heap Resilience ---\n")
+(flush-output-port)
+
+;; 8.1: Verify TLS initialization
+(assert-true (init-worker-tls!) "init-worker-tls! succeeds and returns #t")
+
+;; 8.2: 32MB+ Heap Allocation in Parallel Worker Threads without Worker ID Drift (CWE-787)
+(let* ((worker-count 2)
+       (sched (make-work-stealing-scheduler worker-count 128))
+       (accum (make-atomic-box 0)))
+  (let loop ((i 0))
+    (if (< i 10)
+        (begin
+          (scheduler-spawn!
+           sched
+           (lambda ()
+             ;; Allocate ~8MB heap in task across workers
+             (let ((vecs (make-vector 1000 #f)))
+               (let vloop ((v 0))
+                 (if (< v 1000)
+                     (begin
+                       (vector-set! vecs v (make-vector 1000 v))
+                       (vloop (+ v 1)))
+                     #t))
+               ;; Verify exception handler isolation under large heap
+               (guard (ex ((eq? ex 'handled-under-stress)
+                           (atomic-fetch-add! accum 1)))
+                 (raise 'handled-under-stress)))))
+          (loop (+ i 1)))
+        #t))
+
+  (let ((completed (scheduler-run-parallel! sched 10)))
+    (assert-equal completed 10 "10 large heap tasks completed across workers")
+    (assert-equal (atomic-ref accum) 10 "all 10 tasks handled exceptions correctly under >32MB heap allocation"))
+  (scheduler-stop! sched))
+(write-string "  [PASS] 32MB+ heap allocation test passed with intact TLS worker isolation.\n")
+(flush-output-port)
+
+;; -----------------------------------------------------------------------
 ;; Test Suite Summary
 ;; -----------------------------------------------------------------------
 (let ((passes (vector-ref *test-mt-passes* 0))

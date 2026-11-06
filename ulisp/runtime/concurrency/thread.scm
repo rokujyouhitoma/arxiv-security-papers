@@ -14,6 +14,9 @@
 (define (%sys-spawn-thread fn-ptr arg)
   (if (and fn-ptr arg) -1 -1))
 
+(define (%sys-init-worker-tls)
+  #t)
+
 (define (%sys-set-affinity! core-id)
   (if (integer? core-id) #f #f))
 
@@ -35,6 +38,9 @@
 
 (define (native-thread-supported?)
   #t)
+
+(define (init-worker-tls!)
+  (%sys-init-worker-tls))
 
 (define (online-cpu-count)
   (let ((cnt (%sys-online-cpu-count)))

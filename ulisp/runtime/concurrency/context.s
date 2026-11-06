@@ -17,6 +17,53 @@
     .text
 
 # -----------------------------------------------------------------------
+# Worker TLS Initialization & Resilience (SYS_arch_prctl)
+# -----------------------------------------------------------------------
+.equ SYS_ARCH_PRCTL,      158
+.equ ARCH_SET_FS,         0x1002
+
+    .globl ulisp_init_worker_tls
+    .weak ulisp_init_worker_tls
+    .globl ulisp_fn__pctinit_worker_tls
+    .weak ulisp_fn__pctinit_worker_tls
+    .globl ulisp_fn__pctsys_init_worker_tls
+    .weak ulisp_fn__pctsys_init_worker_tls
+    .type ulisp_init_worker_tls, @function
+    .p2align 4
+ulisp_init_worker_tls:
+ulisp_fn__pctinit_worker_tls:
+ulisp_fn__pctsys_init_worker_tls:
+    push rbp
+    mov rbp, rsp
+    cmp qword ptr [rip + ulisp_tls_initialized], 1
+    je .L_tls_already_inited
+    push rbx
+    push r11
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    # Set Worker 0 id = 0
+    lea rdx, [rip + ulisp_worker_tls_table]
+    mov qword ptr [rdx], 0
+    # SYS_arch_prctl(ARCH_SET_FS, ulisp_worker_tls_table)
+    mov rax, SYS_ARCH_PRCTL
+    mov rdi, ARCH_SET_FS
+    mov rsi, rdx
+    syscall
+    mov qword ptr [rip + ulisp_tls_initialized], 1
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop r11
+    pop rbx
+.L_tls_already_inited:
+    mov rax, 111    # SCHEME_TRUE
+    pop rbp
+    ret
+
+# -----------------------------------------------------------------------
 # 1. Canonical 15-Instruction System V AMD64 Context Switch
 #    rdi = old_sp_ptr (uint64_t*)
 #    rsi = new_sp     (uint64_t)
@@ -78,14 +125,15 @@ ulisp_task_entry_trampoline:
     .type ulisp_task_exit_trampoline, @function
     .p2align 4
 ulisp_task_exit_trampoline:
+    cmp qword ptr [rip + ulisp_tls_initialized], 1
+    je 1f
+    call ulisp_init_worker_tls
+1:
     mov qword ptr [rbx - 24], 3
     mov qword ptr [rbx - 32], 0
     mov rax, [rbx - 48]
-    lea rdx, [rip + ulisp_gc_state]
-    mov r8, r12
-    sub r8, [rdx]
-    shr r8, 25
-    and r8, [rip + ulisp_thread_idx_mask]
+    mov r8, fs:0
+    and r8, 63
     lea rdx, [rip + ulisp_current_task_top]
     mov [rdx + r8*8], rax
     inc qword ptr [rip + ulisp_total_context_switches]
@@ -114,6 +162,12 @@ ulisp_task_exit_trampoline:
     .p2align 4
 ulisp_fn__pctasm_get_trampoline_addr:
 ulisp_fn___lib_ulisp_concurrency_context___pctasm_get_trampoline_addr:
+    cmp qword ptr [rip + ulisp_tls_initialized], 1
+    je 1f
+    push rdi
+    call ulisp_init_worker_tls
+    pop rdi
+1:
     sar rdi, 2
     cmp rdi, 0
     je .L_get_addr_entry
@@ -127,29 +181,20 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_get_trampoline_addr:
     je .L_get_worker_slot
     cmp rdi, 6
     je .L_get_handler_chain
-    lea rdx, [rip + ulisp_gc_state]
-    mov r8, r12
-    sub r8, [rdx]
-    shr r8, 25
-    and r8, [rip + ulisp_thread_idx_mask]
+    mov r8, fs:0
+    and r8, 63
     lea rax, [rip + ulisp_current_task_top]
     mov rax, [rax + r8*8]
     shl rax, 2
     ret
 .L_get_worker_slot:
-    lea rdx, [rip + ulisp_gc_state]
-    mov rax, r12
-    sub rax, [rdx]
-    shr rax, 25
-    and rax, [rip + ulisp_thread_idx_mask]
+    mov rax, fs:0
+    and rax, 63
     shl rax, 2
     ret
 .L_get_handler_chain:
-    lea rdx, [rip + ulisp_gc_state]
-    mov r8, r12
-    sub r8, [rdx]
-    shr r8, 25
-    and r8, [rip + ulisp_thread_idx_mask]
+    mov r8, fs:0
+    and r8, 63
     lea rax, [rip + ulisp_handler_chain]
     mov rax, [rax + r8*8]
     shl rax, 2
@@ -179,12 +224,15 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_get_trampoline_addr:
     .p2align 4
 ulisp_fn__pctasm_set_handler_chain_excl:
 ulisp_fn___lib_ulisp_concurrency_context___pctasm_set_handler_chain_excl:
+    cmp qword ptr [rip + ulisp_tls_initialized], 1
+    je 1f
+    push rdi
+    call ulisp_init_worker_tls
+    pop rdi
+1:
     sar rdi, 2
-    lea rdx, [rip + ulisp_gc_state]
-    mov r8, r12
-    sub r8, [rdx]
-    shr r8, 25
-    and r8, [rip + ulisp_thread_idx_mask]
+    mov r8, fs:0
+    and r8, 63
     lea r9, [rip + ulisp_handler_chain]
     mov [r9 + r8*8], rdi
     mov rax, 111
@@ -215,16 +263,21 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_swap_context_excl:
     .p2align 4
 ulisp_fn__pctasm_resume_task_excl:
 ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
+    cmp qword ptr [rip + ulisp_tls_initialized], 1
+    je 1f
+    push rdi
+    push rsi
+    call ulisp_init_worker_tls
+    pop rsi
+    pop rdi
+1:
     sar rdi, 2
     mov [rdi - 40], rsi
     mov qword ptr [rdi - 24], 1
     inc qword ptr [rdi - 56]
     inc qword ptr [rip + ulisp_total_context_switches]
-    lea rdx, [rip + ulisp_gc_state]
-    mov r8, r12
-    sub r8, [rdx]
-    shr r8, 25
-    and r8, [rip + ulisp_thread_idx_mask]
+    mov r8, fs:0
+    and r8, 63
     lea rdx, [rip + ulisp_current_task_top]
     mov rax, [rdx + r8*8]
     mov [rdi - 48], rax
@@ -265,11 +318,14 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
     .p2align 4
 ulisp_fn__pctasm_yield_task_excl:
 ulisp_fn___lib_ulisp_concurrency_context___pctasm_yield_task_excl:
-    lea rdx, [rip + ulisp_gc_state]
-    mov r8, r12
-    sub r8, [rdx]
-    shr r8, 25
-    and r8, [rip + ulisp_thread_idx_mask]
+    cmp qword ptr [rip + ulisp_tls_initialized], 1
+    je 1f
+    push rdi
+    call ulisp_init_worker_tls
+    pop rdi
+1:
+    mov r8, fs:0
+    and r8, 63
     lea rdx, [rip + ulisp_current_task_top]
     mov rcx, [rdx + r8*8]
     test rcx, rcx
@@ -302,6 +358,16 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_yield_task_excl:
     .p2align 4
 ulisp_fn__pctasm_switch_task_excl:
 ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
+    cmp qword ptr [rip + ulisp_tls_initialized], 1
+    je 1f
+    push rdi
+    push rsi
+    push rdx
+    call ulisp_init_worker_tls
+    pop rdx
+    pop rsi
+    pop rdi
+1:
     sar rdi, 2
     sar rsi, 2
     mov [rsi - 40], rdx
@@ -317,11 +383,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov rax, [rdi - 48]
     mov [rsi - 48], rax
 .L_switch_parent_ready:
-    lea rdx, [rip + ulisp_gc_state]
-    mov r8, r12
-    sub r8, [rdx]
-    shr r8, 25
-    and r8, [rip + ulisp_thread_idx_mask]
+    mov r8, fs:0
+    and r8, 63
     lea rcx, [rip + ulisp_current_task_top]
     mov [rcx + r8*8], rsi
     lea r9, [rip + ulisp_handler_chain]
@@ -342,11 +405,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     call swap_context
     mov r12, r11
     pop rdi
-    lea rdx, [rip + ulisp_gc_state]
-    mov r8, r12
-    sub r8, [rdx]
-    shr r8, 25
-    and r8, [rip + ulisp_thread_idx_mask]
+    mov r8, fs:0
+    and r8, 63
     lea rcx, [rip + ulisp_current_task_top]
     mov [rcx + r8*8], rdi
     lea r9, [rip + ulisp_handler_chain]
@@ -760,6 +820,15 @@ ulisp_verify_t2_sp:
 ulisp_verify_status:
     .quad 0
 ulisp_bench_completed:
+    .quad 0
+    .globl ulisp_worker_tls_table
+    .weak ulisp_worker_tls_table
+    .p2align 6
+ulisp_worker_tls_table:
+    .zero 4096
+    .globl ulisp_tls_initialized
+    .weak ulisp_tls_initialized
+ulisp_tls_initialized:
     .quad 0
 
     .section .note.GNU-stack,"",@progbits

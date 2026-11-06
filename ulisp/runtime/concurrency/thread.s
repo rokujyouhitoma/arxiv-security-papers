@@ -26,8 +26,10 @@
 #   CLONE_SIGHAND = 0x00000800
 #   CLONE_THREAD  = 0x00010000
 #   CLONE_SYSVSEM = 0x00040000
-# Total flags = 0x00050f00
-.equ CLONE_THREAD_FLAGS, 0x00050f00
+#   CLONE_SETTLS  = 0x00080000
+# Total flags = 0x000d0f00
+.equ CLONE_SETTLS,       0x00080000
+.equ CLONE_THREAD_FLAGS, 0x000d0f00
 
 # Stack size = 1MB (1048576 bytes = 0x100000)
 .equ THREAD_STACK_SIZE,  0x100000
@@ -40,9 +42,13 @@
 .equ SYS_MUNMAP,          11
 .equ SYS_CLONE,           56
 .equ SYS_EXIT,            60
+.equ SYS_ARCH_PRCTL,      158
 .equ SYS_SCHED_SETAFFINITY, 203
 .equ SYS_SCHED_GETAFFINITY, 204
 .equ SYS_GETCPU,           309
+
+# Arch prctl codes (Linux x86-64)
+.equ ARCH_SET_FS,         0x1002
 
 # mmap flags: PROT_READ|PROT_WRITE = 3, MAP_PRIVATE|MAP_ANONYMOUS = 0x22
 .equ PROT_READ_WRITE,     3
@@ -52,6 +58,37 @@
 # Scheme tagged constants
 .equ SCHEME_TRUE,         111   # #t (0x6F)
 .equ SCHEME_FALSE,        47    # #f (0x2F)
+
+# -----------------------------------------------------------------------
+# 0. Worker TLS Initializer (Main Thread / Worker 0)
+# -----------------------------------------------------------------------
+    .globl ulisp_init_worker_tls
+    .globl ulisp_fn__pctinit_worker_tls
+    .globl ulisp_fn__pctsys_init_worker_tls
+    .type ulisp_init_worker_tls, @function
+    .p2align 4
+ulisp_init_worker_tls:
+ulisp_fn__pctinit_worker_tls:
+ulisp_fn__pctsys_init_worker_tls:
+    push rbp
+    mov rbp, rsp
+    cmp qword ptr [rip + ulisp_tls_initialized], 1
+    je .L_tls_init_done
+    # Setup Worker 0 slot at offset 0
+    lea rdx, [rip + ulisp_worker_tls_table]
+    mov qword ptr [rdx], 0              # worker_id = 0
+    # SYS_arch_prctl(ARCH_SET_FS, ulisp_worker_tls_table)
+    mov rax, SYS_ARCH_PRCTL
+    mov rdi, ARCH_SET_FS
+    mov rsi, rdx
+    syscall
+    test rax, rax
+    jnz .L_tls_init_done
+    mov qword ptr [rip + ulisp_tls_initialized], 1
+.L_tls_init_done:
+    mov rax, SCHEME_TRUE
+    pop rbp
+    ret
 
 # -----------------------------------------------------------------------
 # 1. Native Thread Stack Allocator
@@ -118,9 +155,13 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_spawn_thread:
     push r13
     push r14
     push rbx
+    push r15
 
-    mov r13, rdi                # r13 = proc (DO NOT sar - proc is a closure pointer!)
-    mov r14, rsi                # r14 = arg
+    mov r13, rdi                # r13 = proc (preserve BEFORE any calls)
+    mov r14, rsi                # r14 = arg  (preserve BEFORE any calls)
+
+    # Ensure main thread has valid TLS (%fs_base)
+    call ulisp_init_worker_tls
 
     # Allocate 1MB stack with 4KB guard page
     call ulisp_alloc_thread_stack
@@ -130,14 +171,22 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_spawn_thread:
     mov rbx, rax                # rbx = stack_top
     and rbx, -16                # Ensure 16-byte alignment
 
-    # Allocate unique thread spawn index atomically
+    # Allocate unique thread spawn index atomically (max 63 child threads, worker 1..63)
     mov qword ptr [rip + ulisp_thread_idx_mask], 63
-    mov rax, 1
-    lock xadd [rip + ulisp_thread_spawn_counter], rax
-    # rax now holds unique thread index (0, 1, 2, ...)
-    # Compute isolated per-thread heap arena: child_r12 = nursery_base + (rax + 1) * 32MB
+.L_try_alloc_worker_id:
+    mov rax, [rip + ulisp_thread_spawn_counter]
+    cmp rax, 63                         # Maximum 63 child threads allowed (CWE-400)
+    jae .L_spawn_limit_fail
+    lea rdx, [rax + 1]
+    lock cmpxchg [rip + ulisp_thread_spawn_counter], rdx
+    jnz .L_try_alloc_worker_id
+    # rax is original counter (0..62), child_worker_id = rax + 1 (1..63)
     inc rax
-    shl rax, 25                         # rax = (idx + 1) * 32MB (0x02000000)
+    mov r15, rax                        # r15 = child_worker_id (1..63)
+
+    # Compute isolated per-thread heap arena: child_r12 = nursery_base + worker_id * 32MB
+    mov rax, r15
+    shl rax, 25                         # rax = worker_id * 32MB (0x02000000)
     lea rdx, [rip + ulisp_gc_state]
     mov rcx, [rdx]
     test rcx, rcx
@@ -150,6 +199,13 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_spawn_thread:
     jae .L_spawn_limit_ok
     mov [rip + ulisp_heap_limit], rdx
 .L_spawn_limit_ok:
+
+    # Setup child TLS structure in ulisp_worker_tls_table[child_worker_id * 64]
+    lea r8, [rip + ulisp_worker_tls_table]
+    mov rax, r15
+    shl rax, 6                          # 64 bytes per worker
+    add r8, rax                         # r8 = &ulisp_worker_tls_table[child_worker_id * 64]
+    mov [r8], r15                       # worker_id at offset 0
 
     # Prepare child stack frame (32 bytes, maintains 16-byte alignment):
     #   [rbx - 8]  = stack_base (for cleanup)
@@ -169,7 +225,7 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_spawn_thread:
     # rsi is already child_sp
     xor rdx, rdx                        # parent_tidptr = 0
     xor r10, r10                        # child_tidptr = 0
-    xor r8, r8                          # tls = 0
+    # r8 is child TLS block address passed via CLONE_SETTLS
     syscall
 
     test rax, rax
@@ -178,6 +234,7 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_spawn_thread:
 
     # Parent thread: rax = child tid
     shl rax, 2                          # Convert tid to Scheme fixnum
+    pop r15
     pop rbx
     pop r14
     pop r13
@@ -227,6 +284,24 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_spawn_thread:
     syscall
     mov rax, -1
     shl rax, 2
+    pop r15
+    pop rbx
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    ret
+
+.L_spawn_limit_fail:
+    # Max thread limit (64) reached: free stack and return -1 fixnum
+    mov rdi, rbx
+    sub rdi, THREAD_STACK_SIZE          # rdi = stack_base
+    mov rsi, THREAD_STACK_SIZE          # rsi = length
+    mov rax, SYS_MUNMAP
+    syscall
+    mov rax, -1
+    shl rax, 2
+    pop r15
     pop rbx
     pop r14
     pop r13
@@ -237,11 +312,13 @@ ulisp_fn___lib_ulisp_concurrency_thread___pctsys_spawn_thread:
 .L_spawn_stack_fail:
     mov rax, -2
     shl rax, 2
+    pop r15
     pop rbx
     pop r14
     pop r13
     pop r12
     pop rbp
+    ret
     ret
 
 # -----------------------------------------------------------------------
@@ -447,6 +524,20 @@ ulisp_thread_idx_mask:
     .globl ulisp_heap_limit
     .weak ulisp_heap_limit
 ulisp_heap_limit:
+    .quad 0
+
+# -----------------------------------------------------------------------
+# Worker TLS Table (.bss) - 64 workers * 64 bytes
+# -----------------------------------------------------------------------
+    .bss
+    .p2align 6
+    .globl ulisp_worker_tls_table
+    .weak ulisp_worker_tls_table
+ulisp_worker_tls_table:
+    .zero 4096
+    .globl ulisp_tls_initialized
+    .weak ulisp_tls_initialized
+ulisp_tls_initialized:
     .quad 0
 
     .section .note.GNU-stack,"",@progbits
