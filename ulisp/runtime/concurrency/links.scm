@@ -298,3 +298,8 @@
     ((task reason) (task-exit! task reason #f))
     ((task reason wake-hook)
      (task-handle-termination! task reason wake-hook))))
+
+;; Connect task-handle-termination! into global exit hook box (#741)
+(vector-set! *task-exit-hook-box* 0
+  (lambda (task reason)
+    (task-handle-termination! task reason #f)))

@@ -205,6 +205,20 @@
     (assert-eq (supervisor-child-task sup 'worker_temp) #f "temporary worker never restarted")
     (supervisor-stop! sup)))
 
+;; 4.4 Permanent: restarted on normal exit (#741)
+(let* ((perm-spec (make-child-spec 'worker_perm (lambda () (make-task-context)) 'permanent))
+       (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list perm-spec)))
+       (sup (make-supervisor sup-spec)))
+  (supervisor-start! sup)
+  (let* ((t-init (supervisor-child-task sup 'worker_perm))
+         (tid-init (task-tid t-init)))
+    ;; Normal termination: permanent child MUST restart!
+    (supervisor-handle-child-down! sup tid-init 'normal)
+    (let ((t-after (supervisor-child-task sup 'worker_perm)))
+      (assert-true (task-context? t-after) "permanent worker restarted on normal exit (#741)")
+      (assert-true (not (= tid-init (task-tid t-after))) "new TID assigned for permanent child"))
+    (supervisor-stop! sup)))
+
 ;; -----------------------------------------------------------------------
 ;; Group 5: Crash Loop / Flapping Escalation (CWE-400 DoS Mitigation)
 ;; -----------------------------------------------------------------------
@@ -287,7 +301,8 @@
                     (car '())
                     ;; 2nd boot (restarted): succeed normally
                     (atomic-set! child-recovered-box 777))))
-             t))))
+             t))
+         'transient))
        (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list crashy-spec)))
        (sup (make-supervisor sup-spec)))
   (supervisor-start! sup)

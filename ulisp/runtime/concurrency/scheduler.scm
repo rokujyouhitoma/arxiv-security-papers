@@ -382,28 +382,49 @@
               #t)
           (let ((nxt (task-next-run ctx)))
             (cond
-              ;; Scheme native coroutine context (Issue #634, #720, #740)
+              ;; Scheme native coroutine context (Issue #634, #720, #740, #741)
               ((coroutine-context? nxt)
                (if (not (coroutine-terminated? nxt))
                    (let ((res (with-synapse-task-boundary ctx
                                 (lambda () (context-resume! nxt)))))
-                     (if (and (pair? res) (eq? (car res) 'panic))
-                         (begin
-                           (let ((stk (coroutine-stack nxt)))
-                             (if (and (task-stack? stk) (not (task-stack-freed? stk)))
-                                 (%context-raw-u64-set! (task-stack-top stk) -24 3)
-                                 #f))
-                           res)
-                         res))
-                   #f))
-              ;; DSN-37 budgeted-task with reductions (Issue #636, #720)
+                     (cond
+                       ((and (pair? res) (eq? (car res) 'panic))
+                        (let ((stk (coroutine-stack nxt)))
+                          (if (and (task-stack? stk) (not (task-stack-freed? stk)))
+                              (%context-raw-u64-set! (task-stack-top stk) -24 3)
+                              #f))
+                        res)
+                       ((coroutine-terminated? nxt)
+                        (task-exit! ctx 'normal)
+                        res)
+                       (else
+                        res)))
+                   (begin
+                     (if (not (eq? (task-state ctx) 'terminated))
+                         (task-exit! ctx 'normal)
+                         #f)
+                     #f)))
+              ;; DSN-37 budgeted-task with reductions (Issue #636, #720, #741)
               ((%is-budgeted-task? nxt)
-               (with-synapse-task-boundary ctx
-                 (lambda () (budgeted-task-execute! nxt))))
-              ;; Thunk: zero-argument procedure
+               (let ((res (with-synapse-task-boundary ctx
+                            (lambda () (budgeted-task-execute! nxt)))))
+                 (if (and (pair? res) (eq? (car res) 'ok))
+                     (if (or (eq? (task-state nxt) 'completed) (eq? (task-state nxt) 'terminated))
+                         (begin
+                           (task-exit! ctx 'normal)
+                           res)
+                         res)
+                     res)))
+              ;; Thunk: zero-argument procedure (Issue #741)
               ((and (not (vector? nxt)) (procedure? nxt))
-               (with-synapse-task-boundary ctx nxt))
+               (let ((res (with-synapse-task-boundary ctx nxt)))
+                 (if (and (pair? res) (eq? (car res) 'ok))
+                     (begin
+                       (task-exit! ctx 'normal)
+                       res)
+                     res)))
               (else
+               (task-exit! ctx 'normal)
                (cons 'ok #t))))))))
 
 (define scheduler-spawn!

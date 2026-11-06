@@ -655,6 +655,19 @@
     ((task thunk secure-scrub?)
      ((atomic-ref *synapse-task-boundary-hook-box*) task thunk secure-scrub?))))
 
+;; Global hook for task normal termination cleanup (#741)
+(define *task-exit-hook-box*
+  (vector (lambda (t reason)
+            (if (task-context? t)
+                (task-state-set! t 'terminated)
+                #f))))
+
+(define (task-exit! task reason)
+  (let ((hook (vector-ref *task-exit-hook-box* 0)))
+    (if (procedure? hook)
+        (hook task reason)
+        #f)))
+
 (define (task-register-channel! t ch)
   (if (not (task-context? t))
       (error "task-register-channel!: expected <task-context>" t)

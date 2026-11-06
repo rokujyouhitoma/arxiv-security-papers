@@ -363,6 +363,66 @@
     (assert-equal (task-mailbox-size watcher) 0 "watcher mailbox size is 0 after draining")))
 
 ;; -----------------------------------------------------------------------
+;; Group 6: Clean Task Termination & Automatic Cleanup (#741)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 6: Clean Task Termination & Automatic Cleanup (#741) ---\n")
+(flush-output-port)
+
+;; 6.1 Normal exit sends DOWN (normal) to monitor
+(let* ((sched (make-work-stealing-scheduler 2 64))
+       (observer (make-task-context))
+       (target (make-task-context))
+       (notify-ch (make-channel 10))
+       (m-ref (task-monitor observer target notify-ch)))
+  (task-next-run-set! target (lambda () 42))
+  (scheduler-spawn! sched target 0)
+  (scheduler-run! sched 2)
+  (assert-equal (task-state target) 'terminated "target state transitioned to 'terminated on normal exit")
+  (let ((down-msg (channel-try-recv! notify-ch)))
+    (assert-true (pair? down-msg) "DOWN message delivered to notify-ch on normal exit")
+    (assert-equal (car down-msg) 'DOWN "message type is 'DOWN")
+    (assert-equal (cadr down-msg) m-ref "monitor ref matches")
+    (assert-equal (caddr down-msg) 'process "subject is 'process")
+    (assert-equal (cadddr down-msg) (task-tid target) "target TID matches")
+    (assert-equal (list-ref down-msg 4) 'normal "DOWN reason is 'normal"))
+  (scheduler-stop! sched))
+
+;; 6.2 Normal exit does not kill linked tasks
+(let* ((sched (make-work-stealing-scheduler 2 64))
+       (peer (make-task-context))
+       (target (make-task-context))
+       (peer-alive-box (make-atomic-box #f)))
+  (task-link! peer target)
+  (task-next-run-set! target (lambda () 'finished-cleanly))
+  (task-next-run-set! peer (lambda () (atomic-set! peer-alive-box #t)))
+  (scheduler-spawn! sched target 0)
+  (scheduler-spawn! sched peer 1)
+  (scheduler-run! sched 3)
+  (assert-equal (task-state target) 'terminated "target terminated cleanly")
+  (assert-equal (task-state peer) 'terminated "peer also ran to completion")
+  (assert-true (atomic-ref peer-alive-box) "peer was not cascade-killed by normal exit")
+  (scheduler-stop! sched))
+
+;; 6.3 Normal coroutine completion sends DOWN (normal)
+(let* ((sched (make-work-stealing-scheduler 2 64))
+       (observer (make-task-context))
+       (target (make-task-context))
+       (coro (make-coroutine-context (lambda () (* 6 7))))
+       (notify-ch (make-channel 10))
+       (m-ref (task-monitor observer target notify-ch)))
+  (task-next-run-set! target coro)
+  (scheduler-spawn! sched target 0)
+  (scheduler-run! sched 2)
+  (assert-equal (task-state target) 'terminated "coroutine target state is 'terminated")
+  (assert-true (coroutine-terminated? coro) "coro object is terminated")
+  (let ((down-msg (channel-try-recv! notify-ch)))
+    (assert-true (pair? down-msg) "coroutine DOWN message delivered")
+    (assert-equal (car down-msg) 'DOWN "message type is 'DOWN")
+    (assert-equal (list-ref down-msg 4) 'normal "coroutine DOWN reason is 'normal"))
+  (scheduler-stop! sched)
+  (free-coroutine-context! coro))
+
+;; -----------------------------------------------------------------------
 ;; Test Suite Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")
