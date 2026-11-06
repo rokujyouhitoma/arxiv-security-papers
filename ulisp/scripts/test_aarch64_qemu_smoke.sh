@@ -155,6 +155,31 @@ run_qemu_test "Case 6: write-char primitives" '
   0)
 ' 0 "AARCH64"
 
+# --- Case 7: Exception Guard & Raise (Issue #748 TPIDR_EL0 TLS) ---
+run_qemu_test "Case 7: Exception Guard & Raise via TLS Handler Chain" '
+(guard (ex
+        ((eq? ex 99) 42)
+        (else 0))
+  (+ 10 20)
+  (raise 99))
+' 42
+
+# --- Case 8: First-Class Continuation call/cc (Issue #748) ---
+run_qemu_test "Case 8: First-Class call/cc with Handler State" '
+(%raw-call/cc
+  (lambda (k)
+    (k 42)
+    100))
+' 42
+
+# --- Case 9: Nested Exception Guard & Handler Chain Isolation (Issue #748) ---
+run_qemu_test "Case 9: Nested Exception Guard & Handler Chain Isolation" '
+(guard (outer ((eq? outer 999) 0))
+  (let ((res (guard (inner ((eq? inner 10) 42))
+               (raise 10))))
+    res))
+' 42
+
 echo "======================================================================="
 if [ "${TESTS_FAILED}" -eq 0 ]; then
     echo " ALL ${TESTS_PASSED} AArch64 QEMU Smoke Tests PASSED Successfully!"

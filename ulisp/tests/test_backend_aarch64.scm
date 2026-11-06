@@ -138,6 +138,39 @@
                 (car forms)))
 (set-current-target-arch! 'x86_64)
 
+;;; Test 11: TPIDR_EL0 TLS Worker Identification & Exception Isolation (Issue #748)
+(display "--- Step 11: TPIDR_EL0 TLS & Worker Memory Isolation (Issue #748) ---")
+(newline)
+(define (test-aarch64-str-contains? str sub)
+  (let ((slen (string-length str))
+        (sublen (string-length sub)))
+    (let loop ((i 0))
+      (cond
+        ((> (+ i sublen) slen) #f)
+        ((string=? (substring str i (+ i sublen)) sub) #t)
+        (else (loop (+ i 1)))))))
+
+(define (test-aarch64-lines-contain? lines sub)
+  (let loop ((ls lines))
+    (and (pair? ls)
+         (or (test-aarch64-str-contains? (car ls) sub)
+             (loop (cdr ls))))))
+
+(let* ((ast '(guard (ex (else 42)) (raise 'boom)))
+       (lir (generate-lir (closure-convert (anf-all (cp0-optimize (desugar-all ast)))))))
+  (assert-true "lir generated for guard/raise expression" (pair? lir))
+  (let ((emitted-lines '()))
+    (set-emit-line-sink! (lambda (line) (set! emitted-lines (cons line emitted-lines))))
+    (emit-aarch64 lir 'none)
+    (set-emit-line-sink! #f)
+    (let ((lines (reverse emitted-lines)))
+      (assert-true "emitted asm contains tpidr_el0"
+                   (test-aarch64-lines-contain? lines "tpidr_el0"))
+      (assert-true "emitted asm contains ulisp_worker_tls_table"
+                   (test-aarch64-lines-contain? lines "ulisp_worker_tls_table"))
+      (assert-true "emitted asm contains ulisp_handler_chain"
+                   (test-aarch64-lines-contain? lines "ulisp_handler_chain")))))
+
 (display "=======================================================")
 (newline)
 (display " All ")

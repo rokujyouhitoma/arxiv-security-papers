@@ -47,3 +47,27 @@
     (write-char #\newline)
     0))
 
+;; Case 7: Exception Guard & Raise (Issue #748)
+(define (smoke-test-exception)
+  (guard (ex
+          ((eq? ex 99) 42)
+          (else 0))
+    (+ 10 20)
+    (raise 99)))
+
+;; Case 8: First-Class Continuation call/cc (Issue #748)
+(define (smoke-test-callcc)
+  (%raw-call/cc
+    (lambda (k)
+      (k 42)
+      100)))
+
+;; Case 9: Nested Exception Guard & Handler Chain Isolation (Issue #748)
+(define (smoke-test-nested-guard)
+  (guard (outer ((eq? outer 'outer-err) 42))
+    (let ((res (guard (inner ((eq? inner 10) 'inner-ok))
+                 (raise 10))))
+      (if (eq? res 'inner-ok)
+          42
+          0))))
+

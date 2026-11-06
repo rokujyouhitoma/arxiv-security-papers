@@ -13,7 +13,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **748** | AArch64 における Worker メモリ領域の個別分離とマルチスレッド基盤整備 (A1) | Feature | Medium | In Progress | [748-isolate-worker-memory-areas-on-aarch64.md](748-isolate-worker-memory-areas-on-aarch64.md) |
 | **749** | 変数名依存を廃止した型・束縛解析に基づく厳格な Affine 線形性検査 (B8) | Bug | Medium | In Progress | [749-implement-type-based-affine-linearity-check.md](749-implement-type-based-affine-linearity-check.md) |
 | **750** | タスクメールボックスの O(1) FIFO キュー化および上限設定 (CWE-400 対策) | Feature | Low | In Progress | [750-implement-bounded-fifo-task-mailbox-queue.md](750-implement-bounded-fifo-task-mailbox-queue.md) |
 | **751** | Supervisor 受信ループにおける非 DOWN シグナル (EXIT, io_complete 等) の破棄防止 | Bug | Low | In Progress | [751-preserve-non-down-signals-in-supervisor-inbox.md](751-preserve-non-down-signals-in-supervisor-inbox.md) |
@@ -25,6 +24,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **748** | AArch64 における Worker メモリ領域の個別分離とマルチスレッド基盤整備 (A1) | Feature | 2026-11-06 | [closed/748-isolate-worker-memory-areas-on-aarch64.md](closed/748-isolate-worker-memory-areas-on-aarch64.md) |
 | **747** | x86-64 における TLS / worker ID に基づく安全な Worker 判別方式への刷新 (A1) | Bug | 2026-11-06 | [closed/747-implement-tls-worker-identification-for-x86-64.md](closed/747-implement-tls-worker-identification-for-x86-64.md) |
 | **746** | CI テストマトリクスへのマルチスレッド・コルーチン並行性結合テスト統合 | Feature | 2026-11-06 | [closed/746-integrate-multithread-and-coroutine-integration-tests-into-ci.md](closed/746-integrate-multithread-and-coroutine-integration-tests-into-ci.md) |
 | **745** | タスク完全停止確認後の安全な Ephemeral Arena リセット (A4) | Bug | 2026-11-06 | [closed/745-verify-task-stop-before-arena-reset.md](closed/745-verify-task-stop-before-arena-reset.md) |
