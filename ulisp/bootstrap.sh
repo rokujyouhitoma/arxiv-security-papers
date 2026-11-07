@@ -7,6 +7,66 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ULISP_DIR="$ROOT_DIR/ulisp"
 BUILD_DIR="$ULISP_DIR/build"
 
+# Configuration Flags (Issue #776)
+BOOTSTRAP_QUICK="${BOOTSTRAP_QUICK:-0}"
+BOOTSTRAP_RUN_TESTS="${BOOTSTRAP_RUN_TESTS:-0}"
+BOOTSTRAP_FAST="${BOOTSTRAP_FAST:-0}"
+FULL_BOOTSTRAP="${FULL_BOOTSTRAP:-0}"
+BOOTSTRAP_FROM_ILISP="${BOOTSTRAP_FROM_ILISP:-0}"
+BOOTSTRAP_WITH_GOSH="${BOOTSTRAP_WITH_GOSH:-0}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --quick|-q|--stage1-only)
+            BOOTSTRAP_QUICK=1
+            shift
+            ;;
+        --full)
+            FULL_BOOTSTRAP=1
+            BOOTSTRAP_QUICK=0
+            shift
+            ;;
+        --test)
+            BOOTSTRAP_RUN_TESTS=1
+            shift
+            ;;
+        --no-test)
+            BOOTSTRAP_RUN_TESTS=0
+            shift
+            ;;
+        --fast)
+            BOOTSTRAP_FAST=1
+            shift
+            ;;
+        --with-gosh)
+            BOOTSTRAP_WITH_GOSH=1
+            shift
+            ;;
+        --from-ilisp)
+            BOOTSTRAP_FROM_ILISP=1
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --quick, -q, --stage1-only  Stop after Stage 1 smoke test (fast dev cycle)"
+            echo "  --full                      Run full 3-stage bootstrap fixed-point verification"
+            echo "  --test                      Run post-bootstrap test suite (test_incremental)"
+            echo "  --no-test                   Skip post-bootstrap test suite (default)"
+            echo "  --fast                      Reuse existing scheme-stage1 if newer than sources"
+            echo "  --with-gosh                 Force using Gauche for Stage 1 compilation"
+            echo "  --from-ilisp                Force using Python ILisp for Stage 1 compilation"
+            echo "  --help, -h                  Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            echo "Use --help for usage information." >&2
+            exit 1
+            ;;
+    esac
+done
+
 mkdir -p "$BUILD_DIR"
 
 # Apply compiler profile for self-hosting compiler execution (Issue #567)
@@ -221,6 +281,64 @@ run_stage_try() {
     return 0
 }
 
+check_label_only_diff() {
+    local file1="$1"
+    local file2="$2"
+    "$PYTHON_BIN" -c '
+import re, sys
+def norm(t):
+    t = re.sub(r"\.L_([a-zA-Z0-9_]+)_[0-9]+", r".L_\1_#", t)
+    t = re.sub(r"__safepoint_[0-9]+", r"__safepoint_#", t)
+    return t
+with open(sys.argv[1]) as f1, open(sys.argv[2]) as f2:
+    if norm(f1.read()) == norm(f2.read()):
+        sys.exit(0)
+    sys.exit(1)
+' "$file1" "$file2" 2>/dev/null
+}
+
+verify_and_promote() {
+    local final_compiler="$1"
+    local final_stage_name="$2"
+    local should_promote="${3:-1}"
+
+    echo "=== Running Smoke Test on $final_stage_name Binary ==="
+    rm -f "$BUILD_DIR/smoke_test.s" "$BUILD_DIR/smoke_test"
+    echo "42" | "$final_compiler" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+    if [ ! -s "$BUILD_DIR/smoke_test.s" ]; then
+        echo "42" > "$BUILD_DIR/smoke_in.scm"
+        "$final_compiler" "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+        rm -f "$BUILD_DIR/smoke_in.scm"
+    fi
+    as --64 "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test.o"
+    ld -m elf_x86_64 -static "$BUILD_DIR/smoke_test.o" -o "$BUILD_DIR/smoke_test"
+    local smoke_out
+    smoke_out="$(ULISP_PRINT_RESULT=1 "$BUILD_DIR/smoke_test" 2>/dev/null || true)"
+    if [ "$smoke_out" = "42" ]; then
+        echo -e "\033[1;32mPASS: $final_stage_name binary produced functional executable (output: 42).\033[0m"
+    else
+        echo -e "\033[1;31mFAIL: $final_stage_name smoke test returned unexpected output: '$smoke_out'\033[0m" >&2
+        exit 1
+    fi
+
+    if [ "$should_promote" = "1" ]; then
+        mkdir -p "$ULISP_DIR/bin"
+        cp -f "$final_compiler" "$BOOT_BIN"
+        chmod +x "$BOOT_BIN"
+        echo "Updated local bootstrap seed cache ($BOOT_BIN) with verified $final_stage_name compiler."
+    else
+        echo "Quick mode: Built $final_stage_name successfully ($final_compiler). Preserving stable bootstrap seed ($BOOT_BIN)."
+    fi
+
+    if [ "${BOOTSTRAP_RUN_TESTS:-0}" = "1" ]; then
+        echo "=== Running Modular Separate Compilation & Incremental Verification (Issue #608) ==="
+        make -C "$ULISP_DIR" test_incremental
+    else
+        echo "Skipping post-bootstrap incremental test (enable with --test or BOOTSTRAP_RUN_TESTS=1)."
+    fi
+    exit 0
+}
+
 if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ] && [ "$BUILD_DIR/scheme-stage1" -nt "$BUILD_DIR/ulisp_core.scm" ]; then
     echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
 elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ "${BOOTSTRAP_WITH_GOSH:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
@@ -246,6 +364,13 @@ else
     compile_asm "Stage 1 (ILisp)" "$BUILD_DIR/stage1.s" "$BUILD_DIR/scheme-stage1"
 fi
 
+# Quick Bootstrap early exit (Issue #776)
+if [ "${BOOTSTRAP_QUICK:-0}" = "1" ]; then
+    echo -e "\033[1;36m=== [QUICK BOOTSTRAP] Stage 1 built successfully. Skipping Stage 2 & 3 (Issue #776) ===\033[0m"
+    verify_and_promote "$BUILD_DIR/scheme-stage1" "Stage 1" 0
+    exit 0
+fi
+
 echo "[2/3] Stage 2: Compiling ulisp_core.scm with Stage 1 compiler..."
 run_stage "Stage 2 (scheme-stage1)" "$BUILD_DIR/stage2.s" "$BUILD_DIR/scheme-stage1" "$BUILD_DIR/ulisp_core.scm"
 compile_asm "Stage 2 (scheme-stage1)" "$BUILD_DIR/stage2.s" "$BUILD_DIR/scheme-stage2"
@@ -253,55 +378,6 @@ compile_asm "Stage 2 (scheme-stage1)" "$BUILD_DIR/stage2.s" "$BUILD_DIR/scheme-s
 echo "[3/3] Stage 3: Compiling ulisp_core.scm with Stage 2 compiler..."
 run_stage "Stage 3 (scheme-stage2)" "$BUILD_DIR/stage3.s" "$BUILD_DIR/scheme-stage2" "$BUILD_DIR/ulisp_core.scm"
 compile_asm "Stage 3 (scheme-stage2)" "$BUILD_DIR/stage3.s" "$BUILD_DIR/scheme-stage3"
-
-check_label_only_diff() {
-    local file1="$1"
-    local file2="$2"
-    "$PYTHON_BIN" -c '
-import re, sys
-def norm(t):
-    t = re.sub(r"\.L_([a-zA-Z0-9_]+)_[0-9]+", r".L_\1_#", t)
-    t = re.sub(r"__safepoint_[0-9]+", r"__safepoint_#", t)
-    return t
-with open(sys.argv[1]) as f1, open(sys.argv[2]) as f2:
-    if norm(f1.read()) == norm(f2.read()):
-        sys.exit(0)
-    sys.exit(1)
-' "$file1" "$file2" 2>/dev/null
-}
-
-verify_and_promote() {
-    local final_compiler="$1"
-    local final_stage_name="$2"
-
-    echo "=== Running Smoke Test on $final_stage_name Binary ==="
-    rm -f "$BUILD_DIR/smoke_test.s" "$BUILD_DIR/smoke_test"
-    echo "42" | "$final_compiler" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
-    if [ ! -s "$BUILD_DIR/smoke_test.s" ]; then
-        echo "42" > "$BUILD_DIR/smoke_in.scm"
-        "$final_compiler" "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
-        rm -f "$BUILD_DIR/smoke_in.scm"
-    fi
-    as --64 "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test.o"
-    ld -m elf_x86_64 -static "$BUILD_DIR/smoke_test.o" -o "$BUILD_DIR/smoke_test"
-    local smoke_out
-    smoke_out="$(ULISP_PRINT_RESULT=1 "$BUILD_DIR/smoke_test" 2>/dev/null || true)"
-    if [ "$smoke_out" = "42" ]; then
-        echo -e "\033[1;32mPASS: $final_stage_name binary produced functional executable (output: 42).\033[0m"
-    else
-        echo -e "\033[1;31mFAIL: $final_stage_name smoke test returned unexpected output: '$smoke_out'\033[0m" >&2
-        exit 1
-    fi
-
-    mkdir -p "$ULISP_DIR/bin"
-    cp -f "$final_compiler" "$BOOT_BIN"
-    chmod +x "$BOOT_BIN"
-    echo "Updated local bootstrap seed cache ($BOOT_BIN) with verified $final_stage_name compiler."
-
-    echo "=== Running Modular Separate Compilation & Incremental Verification (Issue #608) ==="
-    make -C "$ULISP_DIR" test_incremental
-    exit 0
-}
 
 echo "=== Verifying Fixed Point (diff stage2.s stage3.s) ==="
 if cmp -s "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s"; then

@@ -31,6 +31,9 @@
 | **773** | Root Makefile の py_compile ターゲットにおけるサブプロセス逐次起動ループ廃止と一括・並列コンパイル化 | Feature | High | New | [773-optimize-makefile-py-compile-batch-and-parallel-execution.md](773-optimize-makefile-py-compile-batch-and-parallel-execution.md) |
 | **774** | Root Makefile の compile_grammars ターゲットにおける PEG 増分ビルド化とフォーマッタ一括実行による高速化 | Feature | Medium | New | [774-optimize-compile-grammars-incremental-build-and-batch-formatting.md](774-optimize-compile-grammars-incremental-build-and-batch-formatting.md) |
 | **775** | Root Makefile の build_js ターゲットにおける増分ビルド依存導入と未変更時の Closure Compiler (JVM) 起動スキップ | Feature | Medium | New | [775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md](775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md) |
+| **777** | 事前コンパイル済み標準ライブラリ (ulisp_stdlib.o) 静的リンクによるコンパイラ単体ブートストラップの導入 | Feature | High | New | [777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md](777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md) |
+| **778** | モジュール分割増分コンパイルと make -j 並列実行によるサブセカンド・ブートストラップ基盤の実装 | Feature | Medium | New | [778-implement-modular-parallel-incremental-bootstrap.md](778-implement-modular-parallel-incremental-bootstrap.md) |
+| **779** | コンパイラ初期アリーナヒープ一括確保およびダイレクト ELF 出力によるブートストラップ I/O 高速化 | Feature | Medium | New | [779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md](779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md) |
 
 ---
 
@@ -38,6 +41,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **776** | ULisp bootstrap.sh における開発用 Quick Bootstrap モード導入と後処理テストのオプトイン分離 | Feature | 2026-11-07 | [closed/776-introduce-quick-bootstrap-mode-and-opt-in-post-tests.md](closed/776-introduce-quick-bootstrap-mode-and-opt-in-post-tests.md) |
 | **772** | ULisp 標準ライブラリ (ULISP_STD_LIBS) の事前コンパイル済みオブジェクト化と分割静的リンクへの統一 | Feature | 2026-11-07 | [closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md](closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md) |
 | **771** | ULisp ホスト実行エンジンのネイティブシード優先化とパス単体テスト一括バッチ実行による高速化 | Feature | 2026-11-07 | [closed/771-optimize-ulisp-host-compiler-seed-and-batch-pass-test-runner.md](closed/771-optimize-ulisp-host-compiler-seed-and-batch-pass-test-runner.md) |
 | **755** | 未変更部分木の構造共有 (Smart Reconstruction) 実装および重複 AST Diff トレースフックの一元化 (DSN-33-01 T1.3) | Feature | 2026-11-07 | [closed/755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md](closed/755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md) |

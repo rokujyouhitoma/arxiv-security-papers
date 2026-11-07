@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_aarch64_env test_aarch64_qemu test_freestanding bootstrap bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_aarch64_env test_aarch64_qemu test_freestanding bootstrap bootstrap_quick quick bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_r7rs_cond_expand test_r7rs_include_ci test_r7rs_bytevector_ports test_r7rs_time test_srfi_141_division test_srfi_111_boxes test_srfi_145_assume test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints
 
@@ -1247,6 +1247,9 @@ test_incremental: build/ulisp-modular
 
 bootstrap: core
 	./bootstrap.sh
+
+bootstrap_quick quick: core
+	./bootstrap.sh --quick
 
 bootstrap_diagnose: core
 	BOOTSTRAP_DIAGNOSE=1 ./bootstrap.sh
