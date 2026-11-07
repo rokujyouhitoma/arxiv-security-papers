@@ -2,6 +2,7 @@
 ## 〜 「S式で書かれた小さなインタプリタ」を Lisp トランスレータが解析・部分評価し、最適化された C99 / LLVM IR / x86-64 / AArch64 ネイティブへと導く RPython / Truffle 超越型メタコンパイラ基盤 〜
 
 - **文書番号**: `DSN-33`
+- **補足・個別仕様書**: [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
 - **文書ステータス**: `APPROVED / FULLY-CONSOLIDATED`
 - **対象サブシステム**:
   - `ulisp/` (ULISP コアプロジェクト / S式メタコンパイラ統合フレームワーク)
@@ -40,7 +41,7 @@
   - [2.2 レジスタ割り当て・スタックフレーム・ABI 規約](#22-レジスタ割り当てスタックフレームabi-規約)
   - [2.3 黄金比 Cheney's 2-Space コピーガベージコレクタ戦略 (Issue #501)](#23-黄金比-cheneys-2-space-コピーガベージコレクタ戦略-issue-501)
   - [2.4 シンボル表現と決定論的インターン（Interning）テーブル](#24-シンボル表現と決定論的インターンinterningテーブル)
-  - [2.5 直列 Nanopass 型アーキテクチャと 2 段階 IR（HIR / LIR）設計](#25-直列-nanopass-型アーキテクチャと-2-段階-irhir--lir設計)
+  - [2.5 4階層パス融合アーキテクチャ（Pipeline / Pass / Nanopass / Picopass）と多層 IR（CST / HIR / MIR / LIR）設計](#25-4階層パス融合アーキテクチャpipeline--pass--nanopass--picopassと多層-ircst--hir--mir--lir設計)
   - [2.6 統一 Pass Manager 基盤と動的パス注入機構 (Pass Injection API) (Issue #598, #637)](#26-統一-pass-manager-基盤と動的パス注入機構-pass-injection-api-issue-598-637)
 - [3. 言語機能と低レイヤコード生成仕様](#3-言語機能と低レイヤコード生成仕様)
   - [3.1 即値・単項演算・述語](#31-即値単項演算述語)
@@ -234,35 +235,54 @@ Scheme と x86-64 ハードウェアのビット表現の乖離を解消する�
 * 文字列比較による低速化を防ぐため、コンパイル時および実行時ランタイムに**決定論的シンボルテーブル**を保持する。
 * シンボルはインターン（一度出現した文字列は同一ポインタを共有）され、`eq?` は単なるポインタ比較（`cmp rax, rdx` / 1命令）で $O(1)$ 動作する。
 
-### 2.5 直列 Nanopass 型アーキテクチャと 2 段階 IR（HIR / LIR）設計
+### 2.5 4階層パス融合アーキテクチャ（Pipeline / Pass / Nanopass / Picopass）と多層 IR（CST / HIR / MIR / LIR）設計
 
-Chez Scheme の設計思想に基づき、ULisp はコンパイラを単一のモノリシック走査から**直列 Nanopass パイプライン**へとモジュール分離している。
-さらに、マルチバックエンド（x86-64, AArch64, C/Wasm）への拡張を可能にするため、以下の **2 段階 IR（Intermediate Representation）** を境界線として設ける。
+Chez Scheme (Keep & Dybvig) の Nanopass 設計思想をさらに発展させ、ULisp は「極小規則による高い保守性・単体テスト性」と「最小回数の走査による超高速セルフホスティング」を両立するため、コンパイラ変換基盤を以下の **4階層（Pipeline > Pass > Nanopass > Picopass）** として構成する。
+
+> **詳細設計仕様の委譲**:
+> 4階層アーキテクチャの厳密な責務定義、Picopass 三権分立モデル（`pico`/`femto`/`atto`）、関数合成コンビネータ、Pass Fusion（$O(1)$ Head-Tag ディスパッチ・構造共有）、および 2次元の DAG 最適化（ルール依存 DAG ＆ Term/LIR データ依存 DAG）の完全仕様については、個別仕様書 **[[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** を参照のこと。
+
+1. **最上位：Pipeline（全体配線・スケジューラ / `compiler/pass_manager.scm`）**:
+   - 用途（AOT ネイティブ生成、対話型 REPL、静的検査専用、Dual-Plane 分割コンパイル）と最適化レベル（`-O0`/`-O1`/`-O2`）に応じて、Pass 群の有向非巡回グラフ（Pipeline DAG）を編成・実行する。
+2. **第1層：Pass（粗粒度フェーズ・大域境界）**:
+   - 抽象度の大きなマイルストーン引き下げ（Frontend CST $\to$ HIR $\to$ MIR $\to$ LIR $\to$ Target Binary）および、木走査に収まらない大域グラフアルゴリズム（クロージャ変換、Braun SSA 構築、レジスタ割当、ELF 出力）を統括する。
+3. **第2層：Nanopass（中粒度・言語スキーマ境界と走査ドライバ / `compiler/nanopass.scm`）**:
+   - `define-language` による厳密な中間言語境界（$L_{\text{in}} \to L_{\text{out}}$）を保証し、カタモルフィズム（木走査）またはスライディングウィンドウ（命令列走査）を自動導出して実行する。
+4. **第3層：Picopass（微細粒度・第一級局所規則）**:
+   - 再帰走査ループを一切持たず、単一構文ノードまたは命令ウィンドウに対する処理のみを行う第一級オブジェクト。役割に応じて以下の3種類に三権分立される：
+     - **`define-picopass`**: 単一ノードの脱糖・正規化・局所最適化（書き換え）
+     - **`define-femtopass`**: 木構造を変更しない属性計算・メタデータ注釈（自由変数、型タグ、SourceSpan 等）
+     - **`define-attopass`**: 木構造を変更しない不変条件・安全性アサーション（未展開構文排除、アフィン所有権等）
+   - 開発・単体テスト時は個別の Picopass として1行の S 式断片で検証し、コンパイル時には Nanopass の **Pass Fusion エンジン** が先頭タグ別 $O(1)$ ディスパッチへと自動融合して走査オーバーヘッドをゼロ化する。
 
 ```text
-[ソースコード (S式)]
+[ソースコード / 多言語入力]
       │
-      ▼ [高レベル IR フェーズ (HIR: Canonical Core AST & ANF)]
-  Pass 1: desugar.scm           (構文脱糖)
-  Pass 2: analysis.scm          (静的スコープ・自由変数解析)
-  Pass 3: cp0.scm               (CP0 高レベル最適化: 定数畳み込み・自明分岐剪定)
-  Pass 4: anf.scm               (ANF 3番地正規化: Scoped Pool によるゼロアロケーション)
-  Pass 5: closure_convert.scm   (クロージャ変換 & ラムダリフティング)
+      ▼ 【Pass 1: Frontend フェーズ (L_cst → L_expanded → L_src → L_core)】
+  ・最薄 CST リーダー / PEG パーサ + 衛生的マクロ展開 Nanopass (010〜025)
+  ・Core 脱糖 Nanopass (030: 026〜029 の Picopass 群を 1 回の木走査へ Pass Fusion)
+  ・レキシカルスコープ解決 & アリティ検証 Attopass / Femtopass (035〜040)
       │
-      ▼ [★ IR 境界パス: 低レベル IR フェーズ (LIR: 機械抽象 3番地命令列)]
-  Pass 6: lir.scm               (ターゲット非依存 LIR 生成)
+      ▼ 【Pass 2: MIR フェーズ (L_core → L_anf → L_lifted)】
+  ・CP0 定数畳み込み & 拡張 LVN 共通部分式除去 (050〜060 / Shared Term DAG)
+  ・ANF 3番地正規化 (070)
+  ・S-Annotator 型推論 (080) & S-RTyper アンボクシング (090) & Contification (100)
+  ・フラットクロージャ変換 (110) & TBAA / エスケープ解析 (120)
       │
-      ▼ [バックエンドフェーズ (ターゲット別コード生成)]
-  Pass 7: backend_x86_64.scm    (x86-64 GNU アセンブリ生成)
-  (将来) backend_aarch64.scm    (ARM64 / Apple Silicon / Graviton アセンブリ)
-  (将来) backend_c.scm          (ANSI C99 / WebAssembly トランスパイル)
+      ▼ 【Pass 3: LIR フェーズ (L_lifted → L_lir_raw → L_lir_canonical)】
+  ・ターゲット非依存 LIR 生成 & Braun SSA 構築 (123〜132)
+  ・分岐融合 & データ依存 DAG ピープホール最適化 (128, 133: fuse-window-rules)
+      │
+      ▼ 【Pass 4: Backend フェーズ (ターゲット別コード生成)】
+  ・x86-64 ネイティブ ELF 直接出力 (140〜144)
+  ・AArch64 アセンブリ出力 (150) / Portable ANSI C99 出力 (160)
 ```
 
-詳細な各パス仕様および LIR 命令セット仕様については、[ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md) および [ulisp/docs/spec_lir.md](../../ulisp/docs/spec_lir.md) を参照のこと。
+詳細な各パス仕様および LIR 命令セット仕様については、[[DSN-33-01]](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)、[ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md) および [ulisp/docs/spec_lir.md](../../ulisp/docs/spec_lir.md) を参照のこと。
 
 ### 2.6 統一 Pass Manager 基盤と動的パス注入機構 (Pass Injection API) (Issue #598, #637)
 
-ULisp コンパイラは、単一の固定パイプラインに縛られない高度な柔軟性と関心事の分離（Separation of Concerns）を実現するため、**統一 Pass Manager (`compiler/pass_manager.scm`)** を中核に据える。
+ULisp コンパイラは、単一の固定パイプラインに縛られない高度な柔軟性と関心事の分離（Separation of Concerns）を実現するため、**統一 Pass Manager (`compiler/pass_manager.scm`)** を Pipeline オーケストレータの中核に据える（詳細は [[DSN-33-01] 第2章・第5章](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) を参照）。
 
 #### 1. Pass Descriptor による自己記述型パス定義
 各コンパイラパスは、以下の 10 要素タプルで構成される `pass-descriptor` として定義・登録される：

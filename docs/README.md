@@ -94,6 +94,7 @@
   - `alisp/`, `ilisp/` — 3大境界制御プリミティブ（`with-fuel`, `with-caps`, `define/c`）・S式構造化自己修復プロトコル（`diagnostic` / `patch`）・Managed Virtual Port・Bounded Autonomy（無暴走・無破壊・超省トークン）保証。
 - ⚡ **[[DSN-33] ULISP (Underlying LISP) x86-64 ネイティブ AOT コンパイラ包括設計仕様書](designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)**
   - `ulisp/`, `ilisp/backend/ulisp_codegen/` — Gauche ブートストラップから x86-64 Linux ELF 直結・Tagged Pointer・バンプアロケータ・TCO/フラットクロージャ・ILisp AOT バックエンド統合・3段階セルフホスティング。
+  - 補足仕様: **[[DSN-33-01] ULISP 4層パス階層（Pipeline / Pass / Nanopass / Picopass）＆ 二次元 DAG 最適化アーキテクチャ設計仕様書](designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** — `define-picopass`/`femtopass`/`attopass` 宣言的規則 DSL、単一走査融合（`fuse-rules`）、既存 Nanopass フレームワーク再整理・統廃合、および 6フェーズ・18タスクの実装ロードマップ。
 - 🚀 **[[DSN-34] MLISP (Meta-tracing LISP) 内因性メタトレーシング JIT 包括設計仕様書](designs/DSN-34-mlisp_endogenous_meta_tracing_jit_architecture_specification.md)**
   - `mlisp/` — ホットループ検知・トレース記録・オプティマイザ・ネイティブ機械語 JIT 設計。
 - 📈 **[[DSN-35] ILISP/ULISP AOT/JIT 継続的性能ベンチマークフレームワーク設計書](designs/DSN-35-ilisp_ulisp_aot_jit_continuous_benchmarking_framework.md)**
