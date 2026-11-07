@@ -54,8 +54,15 @@
     task-mailbox-empty?
     task-mailbox-size
     task-mailbox-enqueue!
+    task-mailbox-try-enqueue!
     task-mailbox-dequeue!
     task-mailbox-peek
+    task-mailbox-capacity
+    task-mailbox-capacity-set!
+    task-mailbox-policy
+    task-mailbox-policy-set!
+    task-mailbox-dropped-count
+    *task-mailbox-default-capacity*
     task-links-box
     task-links
     task-monitors-box
