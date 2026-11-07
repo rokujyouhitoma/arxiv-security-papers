@@ -119,7 +119,9 @@
                      (%make-supervisor-spec strategy max-restarts max-time child-specs))))))))
 
 (define-record-type <supervisor-context>
-  (%make-supervisor-context spec sup-task children-box restart-history-box parent-sup state-box scheduler-box processing-box)
+  (%make-supervisor-context spec sup-task children-box restart-history-box parent-sup
+                            state-box scheduler-box processing-box
+                            preserved-inbox-box message-handler-box)
   supervisor-context?
   (spec                 supervisor-spec)
   (sup-task             supervisor-task)
@@ -128,7 +130,55 @@
   (parent-sup           supervisor-parent)
   (state-box            %supervisor-state-box)
   (scheduler-box        %supervisor-scheduler-box)
-  (processing-box       %supervisor-processing-box))
+  (processing-box       %supervisor-processing-box)
+  (preserved-inbox-box  %supervisor-preserved-inbox-box)
+  (message-handler-box  %supervisor-message-handler-box))
+
+(define (supervisor-preserved-messages sup)
+  (if (not (supervisor-context? sup))
+      (error "supervisor-preserved-messages: expected <supervisor-context> (CWE-843)" sup)
+      (atomic-ref (%supervisor-preserved-inbox-box sup))))
+
+(define supervisor-take-preserved-message!
+  (case-lambda
+    ((sup) (supervisor-take-preserved-message! sup #f))
+    ((sup empty-default)
+     (if (not (supervisor-context? sup))
+         (error "supervisor-take-preserved-message!: expected <supervisor-context> (CWE-843)" sup)
+         (let ((pbox (%supervisor-preserved-inbox-box sup)))
+           (let retry ()
+             (let ((cur (atomic-ref pbox)))
+               (if (null? cur)
+                   empty-default
+                   (let ((head (car cur))
+                         (tail (cdr cur)))
+                     (if (atomic-cas! pbox cur tail)
+                         head
+                         (retry)))))))))))
+
+(define (supervisor-clear-preserved-messages! sup)
+  (if (not (supervisor-context? sup))
+      (error "supervisor-clear-preserved-messages!: expected <supervisor-context> (CWE-843)" sup)
+      (let ((pbox (%supervisor-preserved-inbox-box sup)))
+        (let retry ()
+          (let ((cur (atomic-ref pbox)))
+            (if (atomic-cas! pbox cur '())
+                #t
+                (retry)))))))
+
+(define (supervisor-message-handler sup)
+  (if (not (supervisor-context? sup))
+      (error "supervisor-message-handler: expected <supervisor-context> (CWE-843)" sup)
+      (atomic-ref (%supervisor-message-handler-box sup))))
+
+(define (supervisor-set-message-handler! sup handler)
+  (if (not (supervisor-context? sup))
+      (error "supervisor-set-message-handler!: expected <supervisor-context> (CWE-843)" sup)
+      (if (and handler (not (procedure? handler)))
+          (error "supervisor-set-message-handler!: handler must be a procedure or #f (CWE-843)" handler)
+          (begin
+            (atomic-set! (%supervisor-message-handler-box sup) handler)
+            handler))))
 
 (define supervisor-children
   (case-lambda
@@ -328,6 +378,8 @@
                                                parent-sup
                                                (make-atomic-box 'stopped)
                                                (make-atomic-box sched)
+                                               (make-atomic-box #f)
+                                               (make-atomic-box (list))
                                                (make-atomic-box #f))))
            ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7, #743)
            (task-next-run-set!
@@ -568,6 +620,15 @@
                      (cadar xs)
                      (find-loop (cdr xs))))))))))
 
+(define (%supervisor-preserve-message! sup msg)
+  (let ((pbox (%supervisor-preserved-inbox-box sup)))
+    (let retry ()
+      (let* ((cur (atomic-ref pbox))
+             (next (append cur (list msg))))
+        (if (atomic-cas! pbox cur next)
+            #t
+            (retry))))))
+
 (define supervisor-poll-down-signals!
   (case-lambda
     ((sup)
@@ -591,12 +652,46 @@
                                  res)
                              res))
                        (let ((msg (task-take-handoff! sup-task)))
-                         (if (and (pair? msg) (eq? (car msg) 'DOWN) (>= (length msg) 5))
-                             (let* ((target-tid (list-ref msg 3))
-                                    (reason (list-ref msg 4))
-                                    (h-res (supervisor-handle-child-down! sup target-tid reason)))
-                               (drain-loop h-res))
-                             (drain-loop res))))))))))))
+                         (cond
+                           ;; 1. DOWN notification: (DOWN ref subject target-tid reason)
+                           ((and (pair? msg) (eq? (car msg) 'DOWN) (>= (length msg) 5))
+                            (let* ((target-tid (list-ref msg 3))
+                                   (reason (list-ref msg 4))
+                                   (h-res (supervisor-handle-child-down! sup target-tid reason)))
+                              (drain-loop h-res)))
+
+                           ;; 2. EXIT signal: (EXIT from-tid reason) - Erlang/OTP link crash signal (Issue #751)
+                           ((and (pair? msg) (eq? (car msg) 'EXIT) (>= (length msg) 3))
+                            (let* ((from-tid (cadr msg))
+                                   (reason (caddr msg))
+                                   ;; Check if from-tid is an active child of this supervisor
+                                   (is-child (let check-child ((xs (atomic-ref (%supervisor-children-box sup))))
+                                               (cond
+                                                 ((null? xs) #f)
+                                                 ((and (pair? (car xs))
+                                                       (pair? (cdar xs))
+                                                       (task-context? (cadar xs))
+                                                       (= (task-tid (cadar xs)) from-tid))
+                                                  #t)
+                                                 (else (check-child (cdr xs)))))))
+                              (if is-child
+                                  ;; Child died via EXIT signal: trigger supervisor restart!
+                                  (let ((h-res (supervisor-handle-child-down! sup from-tid reason)))
+                                    (drain-loop h-res))
+                                  ;; Not a managed child: dispatch to custom handler or preserve
+                                  (let* ((handler (atomic-ref (%supervisor-message-handler-box sup)))
+                                         (handled? (if (procedure? handler) (handler sup msg) #f)))
+                                    (if (not handled?)
+                                        (%supervisor-preserve-message! sup msg))
+                                    (drain-loop res)))))
+
+                           ;; 3. Non-DOWN/EXIT messages (io_complete, control RPCs, custom tuples) (Issue #751)
+                           (else
+                            (let* ((handler (atomic-ref (%supervisor-message-handler-box sup)))
+                                   (handled? (if (procedure? handler) (handler sup msg) #f)))
+                              (if (not handled?)
+                                  (%supervisor-preserve-message! sup msg))
+                              (drain-loop res))))))))))))))
 
 ;; Connect monitor DOWN notifications to active supervisor tasks automatically (Issue #727, Item C7, #743)
 (guard (exn (else #f))

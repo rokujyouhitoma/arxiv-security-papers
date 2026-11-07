@@ -45,7 +45,15 @@
     supervisor-start!
     supervisor-stop!
     supervisor-handle-child-down!
-    supervisor-child-task)
+    supervisor-child-task
+    supervisor-poll-down-signals!
+
+    ;; Signal Preservation & Message Routing (Issue #751)
+    supervisor-preserved-messages
+    supervisor-take-preserved-message!
+    supervisor-clear-preserved-messages!
+    supervisor-message-handler
+    supervisor-set-message-handler!)
   (import (scheme base)
           (scheme case-lambda)
           (ulisp concurrency channel)

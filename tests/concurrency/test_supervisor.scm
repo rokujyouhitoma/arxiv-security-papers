@@ -620,6 +620,164 @@
     (supervisor-stop! sup)))
 
 ;; -----------------------------------------------------------------------
+;; Group 14: Non-DOWN Signal Preservation & EXIT Auto-Restart (#751)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 14: Non-DOWN Signal Preservation & Routing (#751) ---\n")
+(flush-output-port)
+
+;; 14.1 Interleaved DOWN and io_complete messages
+(let* ((w-boots (make-atomic-box 0))
+       (w-spec (make-child-spec 'w_io
+                                (lambda ()
+                                  (atomic-fetch-add! w-boots 1)
+                                  (make-task-context))
+                                'permanent))
+       (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list w-spec)))
+       (sup (make-supervisor sup-spec)))
+  (supervisor-start! sup)
+  (assert-equal (atomic-ref w-boots) 1 "w_io booted initially")
+
+  (let* ((child-t (supervisor-child-task sup 'w_io))
+         (child-tid (task-tid child-t))
+         (sup-task (supervisor-task sup)))
+
+    ;; Deliver both a DOWN notification and an io_complete message to supervisor
+    (task-set-handoff! sup-task (list 'DOWN 201 'process child-tid '(panic . io_error)))
+    (task-set-handoff! sup-task (cons 'io_complete 8192))
+    (task-set-handoff! sup-task '("custom_audit_event" 12345))
+
+    ;; Poll down signals
+    (supervisor-poll-down-signals! sup)
+
+    ;; 1) DOWN signal must have restarted child w_io
+    (assert-equal (atomic-ref w-boots) 2 "w_io restarted upon DOWN")
+    (let ((new-child (supervisor-child-task sup 'w_io)))
+      (assert-true (task-context? new-child) "new w_io exists")
+      (assert-true (not (= (task-tid new-child) child-tid)) "w_io assigned new TID"))
+
+    ;; 2) io_complete and custom audit messages MUST NOT be discarded; preserved in preserved-inbox
+    (let ((preserved (supervisor-preserved-messages sup)))
+      (assert-equal (length preserved) 2 "both non-DOWN messages preserved in inbox")
+      (assert-equal (car preserved) (cons 'io_complete 8192) "1st preserved message is io_complete")
+      (assert-equal (cadr preserved) '("custom_audit_event" 12345) "2nd preserved message is audit event"))
+
+    ;; 3) supervisor-take-preserved-message! drains FIFO
+    (assert-equal (supervisor-take-preserved-message! sup) (cons 'io_complete 8192)
+                  "drained 1st preserved message")
+    (assert-equal (length (supervisor-preserved-messages sup)) 1 "1 message remaining")
+    (assert-equal (supervisor-take-preserved-message! sup) '("custom_audit_event" 12345)
+                  "drained 2nd preserved message")
+    (assert-equal (supervisor-take-preserved-message! sup 'none) 'none
+                  "empty take returns default")
+    (assert-equal (length (supervisor-preserved-messages sup)) 0 "inbox is empty"))
+
+  (supervisor-stop! sup))
+
+;; 14.2 Managed child EXIT signal triggers supervisor restart
+(let* ((exit-boots (make-atomic-box 0))
+       (w-spec (make-child-spec 'w_exit
+                                (lambda ()
+                                  (atomic-fetch-add! exit-boots 1)
+                                  (make-task-context))
+                                'permanent))
+       (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list w-spec)))
+       (sup (make-supervisor sup-spec)))
+  (supervisor-start! sup)
+  (assert-equal (atomic-ref exit-boots) 1 "w_exit booted initially")
+
+  (let* ((child-t (supervisor-child-task sup 'w_exit))
+         (child-tid (task-tid child-t))
+         (sup-task (supervisor-task sup)))
+
+    ;; Deliver Erlang/OTP style EXIT signal from managed child
+    (task-set-handoff! sup-task (list 'EXIT child-tid '(panic . segv_fault)))
+
+    ;; Poll signals
+    (supervisor-poll-down-signals! sup)
+
+    ;; EXIT signal from managed child MUST trigger automatic restart!
+    (assert-equal (atomic-ref exit-boots) 2 "w_exit restarted via EXIT signal")
+    (let ((new-child (supervisor-child-task sup 'w_exit)))
+      (assert-true (task-context? new-child) "new w_exit exists")
+      (assert-true (not (= (task-tid new-child) child-tid)) "w_exit assigned fresh TID"))
+    ;; Managed child EXIT signal must not be preserved as leftover unhandled message
+    (assert-equal (length (supervisor-preserved-messages sup)) 0 "EXIT signal consumed by restart"))
+
+  (supervisor-stop! sup))
+
+;; 14.3 Unmanaged external EXIT signal is preserved
+(let* ((w-spec (make-child-spec 'w_idle
+                                (lambda () (make-task-context))
+                                'permanent))
+       (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list w-spec)))
+       (sup (make-supervisor sup-spec)))
+  (supervisor-start! sup)
+  (let ((sup-task (supervisor-task sup))
+        (unmanaged-exit (list 'EXIT 88888 'external_linked_peer_crashed)))
+
+    (task-set-handoff! sup-task unmanaged-exit)
+    (supervisor-poll-down-signals! sup)
+
+    (assert-equal (length (supervisor-preserved-messages sup)) 1 "unmanaged EXIT preserved")
+    (assert-equal (supervisor-take-preserved-message! sup) unmanaged-exit "retrieved unmanaged EXIT")
+    (assert-equal (length (supervisor-preserved-messages sup)) 0 "preserved inbox drained"))
+  (supervisor-stop! sup))
+
+;; 14.4 Custom message handler hook & clear API
+(let* ((w-spec (make-child-spec 'w_custom
+                                (lambda () (make-task-context))
+                                'permanent))
+       (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list w-spec)))
+       (sup (make-supervisor sup-spec))
+       (handled-rpc (make-atomic-box #f)))
+
+  ;; Set custom message handler: handles 'rpc_ping, rejects other
+  (supervisor-set-message-handler!
+   sup
+   (lambda (s msg)
+     (if (and (pair? msg) (eq? (car msg) 'rpc_ping))
+         (begin
+           (atomic-set! handled-rpc (cdr msg))
+           #t) ; handled!
+         #f))) ; unhandled -> falls through to preserved inbox
+
+  (assert-true (procedure? (supervisor-message-handler sup)) "message handler installed")
+  (supervisor-start! sup)
+
+  (let ((sup-task (supervisor-task sup)))
+    ;; Deliver handled RPC and unhandled tuple
+    (task-set-handoff! sup-task (cons 'rpc_ping 999))
+    (task-set-handoff! sup-task (cons 'unhandled_command 42))
+
+    (supervisor-poll-down-signals! sup)
+
+    (assert-equal (atomic-ref handled-rpc) 999 "rpc_ping processed by custom handler")
+    (assert-equal (length (supervisor-preserved-messages sup)) 1 "unhandled command preserved")
+    (assert-equal (supervisor-take-preserved-message! sup) (cons 'unhandled_command 42) "unhandled retrieved")
+
+    ;; Test clear preserved messages
+    (task-set-handoff! sup-task 'msg1)
+    (task-set-handoff! sup-task 'msg2)
+    (supervisor-poll-down-signals! sup)
+    (assert-equal (length (supervisor-preserved-messages sup)) 2 "2 messages preserved")
+    (supervisor-clear-preserved-messages! sup)
+    (assert-equal (length (supervisor-preserved-messages sup)) 0 "preserved inbox cleared"))
+
+  (supervisor-stop! sup))
+
+;; 14.5 CWE-843 Type guards on preserved API
+(assert-true (guard (exn (else #t)) (supervisor-preserved-messages 'not-a-sup) #f)
+             "supervisor-preserved-messages rejects non-supervisor (CWE-843)")
+(assert-true (guard (exn (else #t)) (supervisor-take-preserved-message! 'not-a-sup) #f)
+             "supervisor-take-preserved-message! rejects non-supervisor (CWE-843)")
+(assert-true (guard (exn (else #t)) (supervisor-clear-preserved-messages! 'not-a-sup) #f)
+             "supervisor-clear-preserved-messages! rejects non-supervisor (CWE-843)")
+(assert-true (guard (exn (else #t)) (supervisor-set-message-handler! 'not-a-sup (lambda (s m) #t)) #f)
+             "supervisor-set-message-handler! rejects non-supervisor (CWE-843)")
+(assert-true (guard (exn (else #t)) (supervisor-set-message-handler! (make-supervisor (make-supervisor-spec 'one_for_one 1 100 '())) 'not-a-proc) #f)
+             "supervisor-set-message-handler! rejects non-procedure handler (CWE-843)")
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 
