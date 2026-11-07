@@ -27,10 +27,14 @@ RUN_SCHEME = PYTHONPATH=$(ROOT_DIR) $(ILISP)
 export ULISP_GC_PROFILE ?= compiler
 GOSH_BIN = $(shell command -v gosh 2>/dev/null)
 
-# --- 処理系エンジンの決定 (ULISP_BOOT があれば優先、なければ ILISP を使用) ---
+# --- 処理系エンジンの決定 (ULISP_BOOT または ULISP_MODULAR があれば優先、なければ ILISP を使用) ---
 ifeq ($(shell test -x $(ULISP_BOOT) && echo yes),yes)
     ULISP_COMPILER ?= env ULISP_GC_PROFILE=compiler ./$(ULISP_BOOT) <
     COMPILER_DEP = $(ULISP_BOOT)
+    USE_NATIVE_BOOT = 1
+else ifeq ($(shell test -x build/ulisp-modular && echo yes),yes)
+    ULISP_COMPILER ?= env ULISP_GC_PROFILE=compiler ./build/ulisp-modular <
+    COMPILER_DEP = build/ulisp-modular
     USE_NATIVE_BOOT = 1
 else
     ULISP_COMPILER ?= $(RUN_SCHEME) compiler.scm <
@@ -189,13 +193,11 @@ NANOPASS_TESTS = tests/passes/test_000_compiler_diagnostics.scm \
                  tests/passes/test_extern_symbols.scm
 
 test_all_passes: build/compiler_passes.scm
-	@echo "=== Running 1:1 Nanopass Unit Tests (38 Passes) ==="
-	@for t in $(NANOPASS_TESTS); do \
-		echo "Running $$t..."; \
-		cat build/compiler_passes.scm $$t > build/runner_temp.scm && \
-		$(RUN_SCHEME) build/runner_temp.scm || exit 1; \
-	done
-	@echo "SUCCESS: All 38 1:1 Nanopass Unit Tests PASSED!"
+	@echo "=== Running 1:1 Nanopass Unit Tests (Batch Runner for $(words $(NANOPASS_TESTS)) Passes) ==="
+	@mkdir -p build
+	cat build/compiler_passes.scm $(NANOPASS_TESTS) > build/test_all_passes_batch_runner.scm
+	@$(RUN_SCHEME) build/test_all_passes_batch_runner.scm
+	@echo "SUCCESS: All $(words $(NANOPASS_TESTS)) 1:1 Nanopass Unit Tests PASSED!"
 
 test_extern_symbols: build/compiler_passes.scm
 	@cat build/compiler_passes.scm tests/passes/test_extern_symbols.scm > build/runner_temp.scm

@@ -2,7 +2,7 @@
 ID: 771
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] ULisp ホスト実行エンジンのネイティブシード優先化とパス単体テスト一括バッチ実行による高速化 (ID: 771)
