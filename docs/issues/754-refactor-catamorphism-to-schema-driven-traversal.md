@@ -23,7 +23,7 @@ ID: 754
 - 関連設計書:
   - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 8.2 節 課題①・課題③, 第 8.4 節, 第 9.2 節 タスク **T1.2**)
 - 依存関係:
-  - 先行 Issue: [Issue #753 (T1.1: 言語定義ファイルの統廃合と extends 連鎖の確立)](753-consolidate-define-language-files-and-establish-extends-chain.md)
+  - 先行 Issue: [Issue #753 (T1.1: 言語定義ファイルの統廃合と extends 連鎖の確立)](closed/753-consolidate-define-language-files-and-establish-extends-chain.md)
   - 後続 Issue: [Issue #755 (T1.3: 未変更部分木の構造共有と重複 Trace 整理)](755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md), [Issue #764 (T4.3: Verifier の attopass 化)](764-migrate-verifier-to-attopass-and-eliminate-triple-traversal.md)
 
 ---

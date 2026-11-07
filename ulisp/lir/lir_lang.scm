@@ -1,17 +1,25 @@
 ;;; =======================================================================
-;;; ULisp Compiler: Canonical LIR Language Specification (L_lir_canonical)
-;;; Conforms to DSN-33 Architecture Specification & Issue #593
+;;; ULisp Compiler: Low-Level IR (LIR) Language Specifications
+;;; (L_lir_raw -> L_lir_canonical)
+;;; Conforms to DSN-33, DSN-33-01 Architecture Specification & Issues #593, #753
 ;;; =======================================================================
-;;; Formal intermediate language definition for Canonical LIR using Nanopass
-;;; DSL (define-language). Serves as the declarative contract between the
-;;; mid-level optimization/flattening passes and low-level code generation backends.
+;;; Formal intermediate language definitions for Raw LIR and Canonical LIR
+;;; using Nanopass DSL (define-language):
+;;; - L_lir_raw:       Initial LIR emitted by Pass 130 before branch fusion and
+;;;                    peephole normalization.
+;;; - L_lir_canonical: Canonical LIR after Pass 128 (branch fusion) and Pass 133
+;;;                    (peephole optimization / dead code elimination), serving
+;;;                    as the contract for low-level code generation backends.
 ;;; =======================================================================
 
-(define-language L_lir_canonical
+;;; -----------------------------------------------------------------------
+;;; 1. L_lir_raw: Raw Low-Level Intermediate Representation
+;;; -----------------------------------------------------------------------
+(define-language L_lir_raw
   (entry Program)
   (terminals
     (symbol (x lbl var cond_op sp_lbl))
-    (integer (n offset shift frame_size bytes tag si cnt bitmap))
+    (integer (n offset shift frame_size bytes tag si cnt bitmap line col))
     (string (str fn_name)))
   (Register (reg)
     %rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
@@ -31,6 +39,9 @@
     n
     lbl)
   (Inst (inst)
+    ;; Pseudo / Raw-Only Instructions
+    (%nop)
+
     ;; Debug & Source Location
     (%loc n line col)
 
@@ -121,3 +132,12 @@
     (%lir-main (frame-size frame_size) (body inst ...)))
   (Program (p)
     (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)))
+
+;;; -----------------------------------------------------------------------
+;;; 2. L_lir_canonical: Canonical LIR (Post-Branch Fusion & Peephole)
+;;; -----------------------------------------------------------------------
+(define-language L_lir_canonical
+  (extends L_lir_raw)
+  (entry Program)
+  (Inst (inst)
+    (- (%nop))))

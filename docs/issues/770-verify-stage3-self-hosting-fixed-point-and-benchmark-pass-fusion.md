@@ -19,7 +19,7 @@ ID: 770
   - [[DSN-33] ULISP 包括設計仕様書](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) (第 5 章: 3段階セルフホスティングブートストラップ連鎖と不動点検証)
   - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 4.5 節, 第 9.2 節 タスク **T6.3**, 第 9.3 節)
 - 依存関係:
-  - 先行 Issue: [Issue #753](753-consolidate-define-language-files-and-establish-extends-chain.md) 〜 [Issue #769](769-implement-picopass-provenance-tracing-and-auto-bisect.md) (T1.1 〜 T6.2 全タスク)
+  - 先行 Issue: [Issue #753](closed/753-consolidate-define-language-files-and-establish-extends-chain.md) 〜 [Issue #769](769-implement-picopass-provenance-tracing-and-auto-bisect.md) (T1.1 〜 T6.2 全タスク)
   - 後続 Issue: なし（`DSN-33-01` ロードマップ完遂マイルストーン）
 
 ---

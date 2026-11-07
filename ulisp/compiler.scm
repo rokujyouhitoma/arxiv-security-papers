@@ -1151,19 +1151,29 @@
           (loop (cdr rest) (string-append acc "/" part))))))
 
 (define (find-included-file path)
-  (let ((try-file (lambda (p) (if (file-exists? p) p #f))))
-    (or (try-file path)
-        (try-file (string-append "ulisp/" path))
-        (if (string-starts-with? path "ulisp/")
-            (try-file (substring path 6 (string-length path)))
-            #f)
-        path)))
+  (let ((p (open-input-file path)))
+    (if p
+        (begin (close-input-port p) path)
+        (let* ((prefixed (string-append "ulisp/" path))
+               (p2 (open-input-file prefixed)))
+          (if p2
+              (begin (close-input-port p2) prefixed)
+              (if (string-starts-with? path "ulisp/")
+                  (let* ((stripped (substring path 6 (string-length path)))
+                         (p3 (open-input-file stripped)))
+                    (if p3
+                        (begin (close-input-port p3) stripped)
+                        path))
+                  path))))))
 
 (define (ulisp-library-available? name)
   (or (builtin-library-name? name)
       (let* ((sld-rel (library-name->sld-path name))
-             (resolved (find-included-file sld-rel)))
-        (file-exists? resolved))))
+             (resolved (find-included-file sld-rel))
+             (p (open-input-file resolved)))
+        (if p
+            (begin (close-input-port p) #t)
+            #f))))
 
 (define (eval-feature-requirement req)
   (cond
@@ -1574,9 +1584,10 @@
 ;;; Language Derivation via `extends`
 ;;; Computes child language nonterminals and tracks removed production heads
 (define (nanopass-derive-nonterminals-and-removed parent-nts delta-clauses)
-  (let ((nt-table-cell (cons (map (lambda (nt)
-                                    (cons (car nt) (cons (cadr nt) (caddr nt))))
-                                  parent-nts)
+  (let ((nt-table-cell (cons (reverse
+                              (map (lambda (nt)
+                                     (cons (car nt) (cons (cadr nt) (caddr nt))))
+                                   parent-nts))
                              '()))
         (removed-heads-cell (cons '() '())))
     (for-each
@@ -1606,7 +1617,8 @@
                                (lambda (rm)
                                  (let ((c (nanopass-canonicalize-production rm)))
                                    (if (and (pair? c) (symbol? (car c)))
-                                       (set-car! removed-heads-cell (cons (car c) (car removed-heads-cell))))))
+                                       (if (not (memq (car c) (car removed-heads-cell)))
+                                           (set-car! removed-heads-cell (cons (car c) (car removed-heads-cell)))))))
                                to-remove)
                               (loop (cdr rest)
                                     (let remove-loop ((ps prods))
@@ -1634,10 +1646,21 @@
     (list (map (lambda (entry)
                  (list (car entry) (cadr entry) (cddr entry)))
                (reverse (car nt-table-cell)))
-          (car removed-heads-cell))))
+          (reverse (car removed-heads-cell)))))
 
 (define (nanopass-derive-nonterminals parent-nts delta-clauses)
   (car (nanopass-derive-nonterminals-and-removed parent-nts delta-clauses)))
+
+;;; Check whether a symbol matches any terminal or nonterminal meta-variable prefix
+(define (nanopass-symbol-is-meta-var? sym nts terminals)
+  (or (let t-chk ((ts terminals))
+        (and (pair? ts)
+             (or (nanopass-meta-var-matches? sym (cadr (car ts)))
+                 (t-chk (cdr ts)))))
+      (let nt-chk ((ns nts))
+        (and (pair? ns)
+             (or (nanopass-meta-var-matches? sym (cadr (car ns)))
+                 (nt-chk (cdr ns)))))))
 
 ;;; Extract keyword heads from nonterminals
 (define (nanopass-extract-keywords-from-nts nts terminals)
@@ -1653,20 +1676,24 @@
                         (if (and (pair? p) (symbol? (car p)))
                             (let ((head (car p)))
                               ;; Exclude if head matches any terminal or nonterminal meta-var
-                              (let ((is-meta?
-                                     (or (let t-chk ((ts terminals))
-                                           (and (pair? ts)
-                                                (or (nanopass-meta-var-matches? head (cadr (car ts)))
-                                                    (t-chk (cdr ts)))))
-                                         (let nt-chk ((ns nts))
-                                           (and (pair? ns)
-                                                (or (nanopass-meta-var-matches? head (cadr (car ns)))
-                                                    (nt-chk (cdr ns))))))))
-                                (if (or is-meta? (memq head k-acc))
-                                    (p-loop (cdr ps) k-acc)
-                                    (p-loop (cdr ps) (cons head k-acc)))))
+                              (if (or (nanopass-symbol-is-meta-var? head nts terminals)
+                                      (memq head k-acc))
+                                  (p-loop (cdr ps) k-acc)
+                                  (p-loop (cdr ps) (cons head k-acc))))
                             (p-loop (cdr ps) k-acc)))))))
           (loop (cdr rest) (append kw-in-prods acc))))))
+
+;;; Filter removed production heads: exclude active keywords in final-nts and meta-variables
+(define (nanopass-filter-removed-heads candidate-heads active-kws nts terminals)
+  (let loop ((hs candidate-heads) (acc '()))
+    (cond
+      ((null? hs) (reverse acc))
+      ((or (memq (car hs) active-kws)
+           (memq (car hs) acc)
+           (nanopass-symbol-is-meta-var? (car hs) nts terminals))
+       (loop (cdr hs) acc))
+      (else
+       (loop (cdr hs) (cons (car hs) acc))))))
 
 ;;; Language Specification Builder
 (define (nanopass-parse-language-spec name clauses)
@@ -1691,8 +1718,12 @@
                    (nts-and-rm (nanopass-derive-nonterminals-and-removed parent-nts nonterminal-clauses))
                    (final-nts (car nts-and-rm))
                    (new-removed (cadr nts-and-rm))
-                   (final-removed (append new-removed parent-removed))
                    (raw-kws (nanopass-extract-keywords-from-nts final-nts final-terms))
+                   (final-removed (nanopass-filter-removed-heads
+                                   (append new-removed parent-removed)
+                                   raw-kws
+                                   final-nts
+                                   final-terms))
                    (final-kws (append raw-kws (let filter-kws ((ks parent-kws))
                                                 (cond ((null? ks) '())
                                                       ((memq (car ks) raw-kws) (filter-kws (cdr ks)))
@@ -1942,7 +1973,7 @@
 (define (nanopass-get-all-languages)
   (let loop ((cur (car *nanopass-languages*)) (acc '()))
     (if (null? cur)
-        (reverse acc)
+        acc
         (loop (cdr cur) (cons (car (car cur)) acc)))))
 
 (define (language-parent-chain lang-name)
@@ -2687,67 +2718,6 @@
 (define-macro (nanopass-template . args)
   (nanopass-expand-template (car args) '()))
 
-;;; -----------------------------------------------------------------------
-;;; Canonical Compiler Pipeline Languages: L_src and L_core
-;;; -----------------------------------------------------------------------
-
-;;; L_src: Source intermediate language containing full high-level syntactic sugar
-(define-language L_src
-  (terminals
-    (symbol (x))
-    (constant (c)))
-  (Expr (e)
-    x
-    c
-    (quote datum)
-    (if e1 e2 e3)
-    (if e1 e2)
-    (begin e ...)
-    (lambda (x ...) e ...)
-    (set! x e)
-    (let ((x e1) ...) e ...)
-    (letrec ((x e1) ...) e ...)
-    (letrec* ((x e1) ...) e ...)
-    (let* ((x e1) ...) e ...)
-    (do ((x e1 e2) ...) (e_test e_res ...) e_cmd ...)
-    (cond (e1 e2) ... (else e_else))
-    (case key (dat e ...) ... (else e_else))
-    (and e ...)
-    (or e ...)
-    (list e ...)
-    (vector e ...)
-    (bytevector e ...)
-    (vector-append e ...)
-    (bytevector-append e ...)
-    (string-append e ...)
-    (guard (x c ...) e ...)
-    (let-values (((x ...) e1) ...) e ...)
-    (let*-values (((x ...) e1) ...) e ...)
-    (parameterize ((x e1) ...) e ...)
-    (%program defs main)
-    (e0 e1 ...)))
-
-;;; L_core: Core intermediate language where all syntactic sugar has been removed
-(define-language L_core
-  (extends L_src)
-  (Expr (e)
-    (- (cond (e1 e2) ... (else e_else)))
-    (- (case key (dat e ...) ... (else e_else)))
-    (- (let* ((x e1) ...) e ...))
-    (- (letrec* ((x e1) ...) e ...))
-    (- (do ((x e1 e2) ...) (e_test e_res ...) e_cmd ...))
-    (- (and e ...))
-    (- (or e ...))
-    (- (list e ...))
-    (- (vector e ...))
-    (- (bytevector e ...))
-    (- (vector-append e ...))
-    (- (bytevector-append e ...))
-    (- (string-append e ...))
-    (- (guard (x c ...) e ...))
-    (- (let-values (((x ...) e1) ...) e ...))
-    (- (let*-values (((x ...) e1) ...) e ...))
-    (- (parameterize ((x e1) ...) e ...))))
 ;;; =======================================================================
 ;;; ULisp Compiler: Lightweight IR Verifier & Invariant Pass Checker
 ;;; Conforms to DSN-33 Architecture Specification & Issue #576
@@ -3566,13 +3536,13 @@
   ;; Frontend Passes (Opt 0 = Mandatory, Opt 1/2 = Optimization)
   (register-pass!
     (make-pass-descriptor 'pass-010-library "Desugar Libraries and Imports" 'frontend 0
-      (lambda (forms) (desugar-libraries-and-imports forms)) #f 'L_src 'L_src '() #t))
+      (lambda (forms) (desugar-libraries-and-imports forms)) #f 'L_cst 'L_cst '() #t))
   (register-pass!
     (make-pass-descriptor 'pass-015-dsl-expander "DSL Expander" 'frontend 0
-      (lambda (forms) (expand-dsl-forms forms)) #f 'L_src 'L_src '(pass-010-library) #t))
+      (lambda (forms) (expand-dsl-forms forms)) #f 'L_cst 'L_cst '(pass-010-library) #t))
   (register-pass!
     (make-pass-descriptor 'pass-020-macro-expander "Hygienic Macro Expander" 'frontend 0
-      (lambda (forms) (expand-macros-in-forms forms)) #f 'L_src 'L_src '(pass-015-dsl-expander) #t))
+      (lambda (forms) (expand-macros-in-forms forms)) #f 'L_cst 'L_src '(pass-015-dsl-expander) #t))
   (register-pass!
     (make-pass-descriptor 'pass-025-top-level "Rewrite Top-Level" 'frontend 0
       (lambda (forms) (rewrite-top-level forms)) #f 'L_src 'L_src '(pass-020-macro-expander) #t))
@@ -4586,26 +4556,155 @@
       res)))
 ;;; =======================================================================
 ;;; ULisp Compiler: Frontend Intermediate Languages Specification
-;;; (L_anf and L_lifted)
-;;; Conforms to DSN-33 Architecture Specification & Issue #594
+;;; (L_cst -> L_src -> L_core -> L_anf -> L_lifted)
+;;; Conforms to DSN-33, DSN-33-01 Architecture Specification & Issues #594, #753
 ;;; =======================================================================
-;;; Formal intermediate language definitions for the late Frontend pipeline
-;;; using Nanopass DSL (define-language).
-;;; - L_anf: A-Normal Form intermediate language where all function/primitive
-;;;          arguments and conditional tests are atomic operands.
+;;; Formal intermediate language definitions for the entire Frontend pipeline
+;;; using Nanopass DSL (define-language) with a continuous `extends` chain:
+;;; - L_cst:    Concrete Syntax Tree (surface syntax including library declarations,
+;;;             hygienic macros, and Nanopass/Picopass DSL forms).
+;;; - L_src:    Source HIR after library/import desugaring and macro/DSL expansion.
+;;; - L_core:   Core HIR where all 18 high-level syntactic sugar forms are removed.
+;;; - L_anf:    A-Normal Form intermediate language where all function/primitive
+;;;             arguments and conditional tests are atomic operands.
 ;;; - L_lifted: Flat procedure intermediate language where local lambda abstractions
 ;;;             have been hoisted into top-level %function definitions, and closures
 ;;;             are explicitly instantiated via %make-closure / %make-closure-env.
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
-;;; L_anf: 3-Address Code / A-Normal Form Language
+;;; 1. L_cst: Concrete Syntax Tree (Surface Language)
 ;;; -----------------------------------------------------------------------
-(define-language L_anf
+(define-language L_cst
   (entry Program)
   (terminals
     (symbol (x lbl var))
     (constant (c)))
+  (Def (d)
+    (define-library (x ...) d ...)
+    (import d ...)
+    (export x ...)
+    (include c)
+    (include-ci c)
+    (define-syntax x e)
+    (define-language x d ...)
+    (define-pass x d ...)
+    (define-picopass x d ...)
+    (define-femtopass x d ...)
+    (define-attopass x d ...)
+    (define x e)
+    (define (x x1 ...) e ...)
+    e)
+  (Expr (e)
+    x
+    c
+    (quote datum)
+    (quasiquote datum)
+    (let-syntax ((x e1) ...) e ...)
+    (letrec-syntax ((x e1) ...) e ...)
+    (syntax-rules (x ...) (e1 e2) ...)
+    (if e1 e2 e3)
+    (if e1 e2)
+    (begin e ...)
+    (lambda (x ...) e ...)
+    (set! x e)
+    (let ((x e1) ...) e ...)
+    (let x ((x1 e1) ...) e ...)
+    (letrec ((x e1) ...) e ...)
+    (letrec* ((x e1) ...) e ...)
+    (let* ((x e1) ...) e ...)
+    (do ((x e1 e2) ...) (e_test e_res ...) e_cmd ...)
+    (cond (e1 e2) ... (else e_else))
+    (cond-expand (e1 e2 ...) ...)
+    (case key (dat e ...) ... (else e_else))
+    (and e ...)
+    (or e ...)
+    (when e1 e2 ...)
+    (unless e1 e2 ...)
+    (delay e)
+    (delay-force e)
+    (list e ...)
+    (vector e ...)
+    (bytevector e ...)
+    (vector-append e ...)
+    (bytevector-append e ...)
+    (string-append e ...)
+    (guard (x c ...) e ...)
+    (let-values (((x ...) e1) ...) e ...)
+    (let*-values (((x ...) e1) ...) e ...)
+    (parameterize ((x e1) ...) e ...)
+    (define x e)
+    (define (x x1 ...) e ...)
+    (e0 e1 ...))
+  (Program (p)
+    (%program (d ...) e)
+    d
+    e))
+
+;;; -----------------------------------------------------------------------
+;;; 2. L_src: Source HIR (Post-Library & Post-Macro Expansion)
+;;; -----------------------------------------------------------------------
+(define-language L_src
+  (extends L_cst)
+  (entry Program)
+  (Def (d)
+    (- (define-library (x ...) d ...)
+       (import d ...)
+       (export x ...)
+       (include c)
+       (include-ci c)
+       (define-syntax x e)
+       (define-language x d ...)
+       (define-pass x d ...)
+       (define-picopass x d ...)
+       (define-femtopass x d ...)
+       (define-attopass x d ...)))
+  (Expr (e)
+    (- (let-syntax ((x e1) ...) e ...)
+       (letrec-syntax ((x e1) ...) e ...)
+       (syntax-rules (x ...) (e1 e2) ...))))
+
+;;; -----------------------------------------------------------------------
+;;; 3. L_core: Core HIR (All Syntactic Sugar Removed)
+;;; -----------------------------------------------------------------------
+(define-language L_core
+  (extends L_src)
+  (entry Program)
+  (Def (d)
+    (- (define (x x1 ...) e ...)))
+  (Expr (e)
+    (- (quasiquote datum)
+       (let x ((x1 e1) ...) e ...)
+       (letrec* ((x e1) ...) e ...)
+       (let* ((x e1) ...) e ...)
+       (do ((x e1 e2) ...) (e_test e_res ...) e_cmd ...)
+       (cond (e1 e2) ... (else e_else))
+       (cond-expand (e1 e2 ...) ...)
+       (case key (dat e ...) ... (else e_else))
+       (and e ...)
+       (or e ...)
+       (when e1 e2 ...)
+       (unless e1 e2 ...)
+       (delay e)
+       (delay-force e)
+       (list e ...)
+       (vector e ...)
+       (bytevector e ...)
+       (vector-append e ...)
+       (bytevector-append e ...)
+       (string-append e ...)
+       (guard (x c ...) e ...)
+       (let-values (((x ...) e1) ...) e ...)
+       (let*-values (((x ...) e1) ...) e ...)
+       (parameterize ((x e1) ...) e ...)
+       (define (x x1 ...) e ...))))
+
+;;; -----------------------------------------------------------------------
+;;; 4. L_anf: 3-Address Code / A-Normal Form Language
+;;; -----------------------------------------------------------------------
+(define-language L_anf
+  (extends L_core)
+  (entry Program)
   (Atom (a)
     x
     lbl
@@ -4614,38 +4713,36 @@
     (quote datum)
     (%closure-ref a c)
     (%global-ref x))
-  (Def (d)
-    (define x e)
-    e)
   (Expr (e)
-    a
-    (if a e1 e2)
-    (if a e1)
-    (begin e ...)
-    (let ((x e1) ...) e ...)
-    (letrec ((x e1) ...) e ...)
-    (lambda (x ...) e ...)
-    (set! x e)
-    (%make-closure a1 a ...)
-    (%make-closure-env a1 a ...)
-    (%closure-ref a c)
-    (%closure-set! a1 c a2)
-    (%cont-fun x (x ...) e1 e2)
-    (%cont-call x a ...)
-    (%with-handler a1 a2)
-    (%raw-call/cc a)
-    (%call-with-values a1 a2)
-    (%values a ...)
-    (%direct-call a1 a ...)
-    (%global-ref x)
-    (%global-set! x e)
-    (a0 a ...))
+    (- x
+       c
+       (quote datum)
+       (if e1 e2 e3)
+       (if e1 e2)
+       (define x e)
+       (e0 e1 ...))
+    (+ a
+       (if a e1 e2)
+       (if a e1)
+       (%make-closure a1 a ...)
+       (%make-closure-env a1 a ...)
+       (%closure-ref a c)
+       (%closure-set! a1 c a2)
+       (%cont-fun x (x ...) e1 e2)
+       (%cont-call x a ...)
+       (%with-handler a1 a2)
+       (%raw-call/cc a)
+       (%call-with-values a1 a2)
+       (%values a ...)
+       (%direct-call a1 a ...)
+       (%global-ref x)
+       (%global-set! x e)
+       (a0 a ...)))
   (Program (p)
-    (%program (d ...) e)
-    e))
+    (- d)))
 
 ;;; -----------------------------------------------------------------------
-;;; L_lifted: Lambda-Lifted & Explicit Closure Converted Language
+;;; 5. L_lifted: Lambda-Lifted & Explicit Closure Converted Language
 ;;; -----------------------------------------------------------------------
 (define-language L_lifted
   (extends L_anf)
@@ -4842,13 +4939,20 @@
                 (loop (+ i 1)))))))
 
 (define (find-included-file path)
-  (let ((try-file (lambda (p) (if (file-exists? p) p #f))))
-    (or (try-file path)
-        (try-file (string-append "ulisp/" path))
-        (if (string-starts-with? path "ulisp/")
-            (try-file (substring path 6 (string-length path)))
-            #f)
-        path)))
+  (let ((p (open-input-file path)))
+    (if p
+        (begin (close-input-port p) path)
+        (let* ((prefixed (string-append "ulisp/" path))
+               (p2 (open-input-file prefixed)))
+          (if p2
+              (begin (close-input-port p2) prefixed)
+              (if (string-starts-with? path "ulisp/")
+                  (let* ((stripped (substring path 6 (string-length path)))
+                         (p3 (open-input-file stripped)))
+                    (if p3
+                        (begin (close-input-port p3) stripped)
+                        path))
+                  path))))))
 
 (define (resolve-include-path path)
   (if (path-traversal? path)
@@ -4856,9 +4960,10 @@
       (let ((stack (car *include-path-stack*)))
         (if (and (pair? stack) (not (string=? (extract-dir-path (car stack)) "")))
             (let* ((parent-dir (extract-dir-path (car stack)))
-                   (relative-path (string-append parent-dir path)))
-              (if (file-exists? relative-path)
-                  relative-path
+                   (relative-path (string-append parent-dir path))
+                   (p0 (open-input-file relative-path)))
+              (if p0
+                  (begin (close-input-port p0) relative-path)
                   (find-included-file path)))
             (find-included-file path)))))
 
@@ -10766,19 +10871,27 @@
       (let ((esc (collect-escaped-vars program #t)))
         (alias-escape-transform-expr program esc '()))))
 ;;; =======================================================================
-;;; ULisp Compiler: Canonical LIR Language Specification (L_lir_canonical)
-;;; Conforms to DSN-33 Architecture Specification & Issue #593
+;;; ULisp Compiler: Low-Level IR (LIR) Language Specifications
+;;; (L_lir_raw -> L_lir_canonical)
+;;; Conforms to DSN-33, DSN-33-01 Architecture Specification & Issues #593, #753
 ;;; =======================================================================
-;;; Formal intermediate language definition for Canonical LIR using Nanopass
-;;; DSL (define-language). Serves as the declarative contract between the
-;;; mid-level optimization/flattening passes and low-level code generation backends.
+;;; Formal intermediate language definitions for Raw LIR and Canonical LIR
+;;; using Nanopass DSL (define-language):
+;;; - L_lir_raw:       Initial LIR emitted by Pass 130 before branch fusion and
+;;;                    peephole normalization.
+;;; - L_lir_canonical: Canonical LIR after Pass 128 (branch fusion) and Pass 133
+;;;                    (peephole optimization / dead code elimination), serving
+;;;                    as the contract for low-level code generation backends.
 ;;; =======================================================================
 
-(define-language L_lir_canonical
+;;; -----------------------------------------------------------------------
+;;; 1. L_lir_raw: Raw Low-Level Intermediate Representation
+;;; -----------------------------------------------------------------------
+(define-language L_lir_raw
   (entry Program)
   (terminals
     (symbol (x lbl var cond_op sp_lbl))
-    (integer (n offset shift frame_size bytes tag si cnt bitmap))
+    (integer (n offset shift frame_size bytes tag si cnt bitmap line col))
     (string (str fn_name)))
   (Register (reg)
     %rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
@@ -10798,6 +10911,9 @@
     n
     lbl)
   (Inst (inst)
+    ;; Pseudo / Raw-Only Instructions
+    (%nop)
+
     ;; Debug & Source Location
     (%loc n line col)
 
@@ -10888,6 +11004,15 @@
     (%lir-main (frame-size frame_size) (body inst ...)))
   (Program (p)
     (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)))
+
+;;; -----------------------------------------------------------------------
+;;; 2. L_lir_canonical: Canonical LIR (Post-Branch Fusion & Peephole)
+;;; -----------------------------------------------------------------------
+(define-language L_lir_canonical
+  (extends L_lir_raw)
+  (entry Program)
+  (Inst (inst)
+    (- (%nop))))
 ;;; =======================================================================
 ;;; ULisp Compiler: Canonical LIR Specification Verifier & Boundary Validator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #589
@@ -14846,6 +14971,80 @@
     (syscall)
     (cld)
     (rep-movsb))
+  (StringEntry (se)
+    (lbl str))
+  (SafepointEntry (sm)
+    (lbl frame_size bitmap))
+  (FunctionDecl (f)
+    (%asm-function lbl (frame-size n) (body inst ...)))
+  (MainDecl (m)
+    (%asm-main (frame-size n) (body inst ...)))
+  (Program (p)
+    (%asm-program (strings (se ...)) (stackmaps (sm ...)) (%asm-functions f ...) m)))
+
+;;; -----------------------------------------------------------------------
+;;; L_asm_aarch64: Target Machine Assembly for AArch64 (ARM64)
+;;; -----------------------------------------------------------------------
+(define-language L_asm_aarch64
+  (entry Program)
+  (terminals
+    (symbol (lbl var op cc align))
+    (integer (n disp imm shift bitmap frame_size bytes))
+    (string (str)))
+  (Register (reg)
+    x0  x1  x2  x3  x4  x5  x6  x7  x8  x9  x10 x11 x12 x13 x14 x15
+    x16 x17 x18 x19 x20 x21 x22 x23 x24 x25 x26 x27 x28 x29 x30 sp xzr
+    w0  w1  w2  w3  w4  w5  w6  w7  w8  w9  w10 w11 w12 w13 w14 w15
+    w16 w17 w18 w19 w20 w21 w22 w23 w24 w25 w26 w27 w28 w29 w30 wzr
+    (%reg var))
+  (Memory (mem)
+    (%mem reg disp)
+    (%mem reg reg)
+    (%stack disp))
+  (Operand (opnd)
+    reg
+    mem
+    (%imm imm)
+    imm
+    lbl)
+  (Inst (inst)
+    (%label lbl)
+    (%p2align align)
+    (%align align)
+    (%raw-asm str)
+    (mov opnd1 opnd2)
+    (movz opnd1 opnd2)
+    (movk opnd1 opnd2)
+    (adr opnd1 lbl)
+    (add opnd1 opnd2 opnd3)
+    (sub opnd1 opnd2 opnd3)
+    (mul opnd1 opnd2 opnd3)
+    (sdiv opnd1 opnd2 opnd3)
+    (msub opnd1 opnd2 opnd3 opnd4)
+    (and opnd1 opnd2 opnd3)
+    (orr opnd1 opnd2 opnd3)
+    (eor opnd1 opnd2 opnd3)
+    (lsl opnd1 opnd2 opnd3)
+    (lsr opnd1 opnd2 opnd3)
+    (asr opnd1 opnd2 opnd3)
+    (neg opnd1 opnd2)
+    (cmp opnd1 opnd2)
+    (cset opnd cc)
+    (b lbl)
+    (b.cc cc lbl)
+    (cbz opnd lbl)
+    (cbnz opnd lbl)
+    (bl lbl)
+    (blr opnd)
+    (ret)
+    (stp opnd1 opnd2 mem)
+    (ldp opnd1 opnd2 mem)
+    (str opnd mem)
+    (ldr opnd mem)
+    (strb opnd mem)
+    (ldrb opnd mem)
+    (svc imm)
+    (dmb op))
   (StringEntry (se)
     (lbl str))
   (SafepointEntry (sm)

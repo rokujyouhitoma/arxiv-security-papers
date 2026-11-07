@@ -68,15 +68,27 @@
   %program
   entry
   exit
+  L_cst
   L_src
   L_core
   L_anf
   L_lifted
   L_lir_raw
   L_lir_canonical
+  L_asm_x86
+  L_asm_aarch64
   L_x86_64
   L_aarch64
   L_c
+  L_cst?
+  L_src?
+  L_core?
+  L_anf?
+  L_lifted?
+  L_lir_raw?
+  L_lir_canonical?
+  L_asm_x86?
+  L_asm_aarch64?
   string-append2
   vector-append2
   bytevector-append2

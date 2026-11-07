@@ -339,6 +339,45 @@
               '(L_test_src L_test_core)
               (language-parent-chain 'L_test_core))
 
+;;; -----------------------------------------------------------------------
+;;; 13. Issue #753 (DSN-33-01 T1.1): Continuous `extends` Hierarchy & All Languages
+;;; -----------------------------------------------------------------------
+
+(assert-equal "language-parent-chain for L_lifted is L_cst -> L_src -> L_core -> L_anf -> L_lifted"
+              '(L_cst L_src L_core L_anf L_lifted)
+              (language-parent-chain 'L_lifted))
+
+(assert-equal "language-parent-chain for L_lir_canonical is L_lir_raw -> L_lir_canonical"
+              '(L_lir_raw L_lir_canonical)
+              (language-parent-chain 'L_lir_canonical))
+
+(assert-true "L_cst? accepts define-library and let-syntax"
+             (and (L_cst? '(define-library (foo bar) (export x) (define x 42)))
+                  (L_cst? '(let-syntax ((m (syntax-rules () ((m a) a)))) (m 10)))))
+
+(assert-false "L_src? rejects define-library and let-syntax"
+              (or (L_src? '(define-library (foo bar) (export x) (define x 42)))
+                  (L_src? '(let-syntax ((m (syntax-rules () ((m a) a)))) (m 10)))))
+
+(assert-true "language-diff L_core -> L_anf computes non-empty removed and added sets"
+             (let ((d (language-diff 'L_core 'L_anf)))
+               (and (pair? (cadr (assq 'removed d)))
+                    (pair? (cadr (assq 'added d))))))
+
+(assert-false "L_core removed-prods does not falsely mark active keyword 'let or 'define as removed"
+              (let ((rm (cdr (assq 'removed (cddr (language-declaration 'L_core))))))
+                (or (memq 'let rm) (memq 'define rm))))
+
+(assert-true "L_lir_raw? accepts raw (%nop) while L_lir_canonical? rejects (%nop)"
+             (let ((raw-prog '(%lir-program (strings ()) (stackmaps ()) (%lir-functions) (%lir-main (frame-size 0) (body (%nop) (%return))))))
+               (and (L_lir_raw? raw-prog)
+                    (not (L_lir_canonical? raw-prog)))))
+
+(assert-true "L_asm_x86 and L_asm_aarch64 are registered"
+             (let ((all-langs (nanopass-get-all-languages)))
+               (and (memq 'L_asm_x86 all-langs)
+                    (memq 'L_asm_aarch64 all-langs))))
+
 (assert-equal "nanopass-ast-diff identifies identical expressions"
               #f
               (nanopass-ast-diff '(if a b c) '(if a b c)))

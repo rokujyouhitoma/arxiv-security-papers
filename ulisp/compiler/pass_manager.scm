@@ -494,13 +494,13 @@
   ;; Frontend Passes (Opt 0 = Mandatory, Opt 1/2 = Optimization)
   (register-pass!
     (make-pass-descriptor 'pass-010-library "Desugar Libraries and Imports" 'frontend 0
-      (lambda (forms) (desugar-libraries-and-imports forms)) #f 'L_src 'L_src '() #t))
+      (lambda (forms) (desugar-libraries-and-imports forms)) #f 'L_cst 'L_cst '() #t))
   (register-pass!
     (make-pass-descriptor 'pass-015-dsl-expander "DSL Expander" 'frontend 0
-      (lambda (forms) (expand-dsl-forms forms)) #f 'L_src 'L_src '(pass-010-library) #t))
+      (lambda (forms) (expand-dsl-forms forms)) #f 'L_cst 'L_cst '(pass-010-library) #t))
   (register-pass!
     (make-pass-descriptor 'pass-020-macro-expander "Hygienic Macro Expander" 'frontend 0
-      (lambda (forms) (expand-macros-in-forms forms)) #f 'L_src 'L_src '(pass-015-dsl-expander) #t))
+      (lambda (forms) (expand-macros-in-forms forms)) #f 'L_cst 'L_src '(pass-015-dsl-expander) #t))
   (register-pass!
     (make-pass-descriptor 'pass-025-top-level "Rewrite Top-Level" 'frontend 0
       (lambda (forms) (rewrite-top-level forms)) #f 'L_src 'L_src '(pass-020-macro-expander) #t))

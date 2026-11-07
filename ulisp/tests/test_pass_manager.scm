@@ -393,6 +393,25 @@
 (assert-false "7.7 removed pass-injected-pre-desugar no longer in pipeline"
               (memq 'pass-injected-pre-desugar ids-clean))
 
+;;; -----------------------------------------------------------------------
+;;; Group 8: Issue #753 — Pass Registry Language Schema Completeness
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 8: Pass Registry Language Schema Completeness ---\n")
+
+(init-default-pass-registry!)
+(define registered-langs (nanopass-get-all-languages))
+
+(assert-true "8.1 every pass in default registry has registered in-lang and out-lang"
+             (let loop ((ps (pass-registry)))
+               (if (null? ps)
+                   #t
+                   (let* ((p (car ps))
+                          (in-l (pass-in-lang p))
+                          (out-l (pass-out-lang p)))
+                     (and (memq in-l registered-langs)
+                          (memq out-l registered-langs)
+                          (loop (cdr ps)))))))
+
 (display "\n=======================================================\n")
 (display " Test Suite Completed: ")
 (display (car *pass-count*))

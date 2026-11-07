@@ -24,7 +24,7 @@ ID: 760
 - 関連設計書:
   - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 4.1 節, 第 4.3 節, 第 8.3 節, 第 9.2 節 タスク **T3.2**)
 - 依存関係:
-  - 先行 Issue: [Issue #753 (T1.1: 言語定義統廃合)](753-consolidate-define-language-files-and-establish-extends-chain.md), [Issue #759 (T3.1: fuse-rules と O(1) ディスパッチ)](759-implement-fuse-rules-and-head-tag-o1-dispatch.md)
+  - 先行 Issue: [Issue #753 (T1.1: 言語定義統廃合)](closed/753-consolidate-define-language-files-and-establish-extends-chain.md), [Issue #759 (T3.1: fuse-rules と O(1) ディスパッチ)](759-implement-fuse-rules-and-head-tag-o1-dispatch.md)
   - 後続 Issue: [Issue #762 (T4.1: 026〜029 の Picopass 化)](762-migrate-desugar-passes-026-to-029-to-picopass.md), [Issue #763 (T4.2: 030_desugar.scm の fuse-rules 置換)](763-replace-desugar-030-duplicate-rules-with-fuse-rules.md), [Issue #764 (T4.3: Verifier の attopass 化)](764-migrate-verifier-to-attopass-and-eliminate-triple-traversal.md)
 
 ---

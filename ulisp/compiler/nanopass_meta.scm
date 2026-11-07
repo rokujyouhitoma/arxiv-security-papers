@@ -146,9 +146,10 @@
 ;;; Language Derivation via `extends`
 ;;; Computes child language nonterminals and tracks removed production heads
 (define (nanopass-derive-nonterminals-and-removed parent-nts delta-clauses)
-  (let ((nt-table-cell (cons (map (lambda (nt)
-                                    (cons (car nt) (cons (cadr nt) (caddr nt))))
-                                  parent-nts)
+  (let ((nt-table-cell (cons (reverse
+                              (map (lambda (nt)
+                                     (cons (car nt) (cons (cadr nt) (caddr nt))))
+                                   parent-nts))
                              '()))
         (removed-heads-cell (cons '() '())))
     (for-each
@@ -178,7 +179,8 @@
                                (lambda (rm)
                                  (let ((c (nanopass-canonicalize-production rm)))
                                    (if (and (pair? c) (symbol? (car c)))
-                                       (set-car! removed-heads-cell (cons (car c) (car removed-heads-cell))))))
+                                       (if (not (memq (car c) (car removed-heads-cell)))
+                                           (set-car! removed-heads-cell (cons (car c) (car removed-heads-cell)))))))
                                to-remove)
                               (loop (cdr rest)
                                     (let remove-loop ((ps prods))
@@ -206,10 +208,21 @@
     (list (map (lambda (entry)
                  (list (car entry) (cadr entry) (cddr entry)))
                (reverse (car nt-table-cell)))
-          (car removed-heads-cell))))
+          (reverse (car removed-heads-cell)))))
 
 (define (nanopass-derive-nonterminals parent-nts delta-clauses)
   (car (nanopass-derive-nonterminals-and-removed parent-nts delta-clauses)))
+
+;;; Check whether a symbol matches any terminal or nonterminal meta-variable prefix
+(define (nanopass-symbol-is-meta-var? sym nts terminals)
+  (or (let t-chk ((ts terminals))
+        (and (pair? ts)
+             (or (nanopass-meta-var-matches? sym (cadr (car ts)))
+                 (t-chk (cdr ts)))))
+      (let nt-chk ((ns nts))
+        (and (pair? ns)
+             (or (nanopass-meta-var-matches? sym (cadr (car ns)))
+                 (nt-chk (cdr ns)))))))
 
 ;;; Extract keyword heads from nonterminals
 (define (nanopass-extract-keywords-from-nts nts terminals)
@@ -225,20 +238,24 @@
                         (if (and (pair? p) (symbol? (car p)))
                             (let ((head (car p)))
                               ;; Exclude if head matches any terminal or nonterminal meta-var
-                              (let ((is-meta?
-                                     (or (let t-chk ((ts terminals))
-                                           (and (pair? ts)
-                                                (or (nanopass-meta-var-matches? head (cadr (car ts)))
-                                                    (t-chk (cdr ts)))))
-                                         (let nt-chk ((ns nts))
-                                           (and (pair? ns)
-                                                (or (nanopass-meta-var-matches? head (cadr (car ns)))
-                                                    (nt-chk (cdr ns))))))))
-                                (if (or is-meta? (memq head k-acc))
-                                    (p-loop (cdr ps) k-acc)
-                                    (p-loop (cdr ps) (cons head k-acc)))))
+                              (if (or (nanopass-symbol-is-meta-var? head nts terminals)
+                                      (memq head k-acc))
+                                  (p-loop (cdr ps) k-acc)
+                                  (p-loop (cdr ps) (cons head k-acc))))
                             (p-loop (cdr ps) k-acc)))))))
           (loop (cdr rest) (append kw-in-prods acc))))))
+
+;;; Filter removed production heads: exclude active keywords in final-nts and meta-variables
+(define (nanopass-filter-removed-heads candidate-heads active-kws nts terminals)
+  (let loop ((hs candidate-heads) (acc '()))
+    (cond
+      ((null? hs) (reverse acc))
+      ((or (memq (car hs) active-kws)
+           (memq (car hs) acc)
+           (nanopass-symbol-is-meta-var? (car hs) nts terminals))
+       (loop (cdr hs) acc))
+      (else
+       (loop (cdr hs) (cons (car hs) acc))))))
 
 ;;; Language Specification Builder
 (define (nanopass-parse-language-spec name clauses)
@@ -263,8 +280,12 @@
                    (nts-and-rm (nanopass-derive-nonterminals-and-removed parent-nts nonterminal-clauses))
                    (final-nts (car nts-and-rm))
                    (new-removed (cadr nts-and-rm))
-                   (final-removed (append new-removed parent-removed))
                    (raw-kws (nanopass-extract-keywords-from-nts final-nts final-terms))
+                   (final-removed (nanopass-filter-removed-heads
+                                   (append new-removed parent-removed)
+                                   raw-kws
+                                   final-nts
+                                   final-terms))
                    (final-kws (append raw-kws (let filter-kws ((ks parent-kws))
                                                 (cond ((null? ks) '())
                                                       ((memq (car ks) raw-kws) (filter-kws (cdr ks)))
@@ -514,7 +535,7 @@
 (define (nanopass-get-all-languages)
   (let loop ((cur (car *nanopass-languages*)) (acc '()))
     (if (null? cur)
-        (reverse acc)
+        acc
         (loop (cdr cur) (cons (car (car cur)) acc)))))
 
 (define (language-parent-chain lang-name)
