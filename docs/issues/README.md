@@ -34,14 +34,13 @@
 | **777** | 事前コンパイル済み標準ライブラリ (ulisp_stdlib.o) 静的リンクによるコンパイラ単体ブートストラップの導入 | Feature | High | New | [777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md](777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md) |
 | **778** | モジュール分割増分コンパイルと make -j 並列実行によるサブセカンド・ブートストラップ基盤の実装 | Feature | Medium | New | [778-implement-modular-parallel-incremental-bootstrap.md](778-implement-modular-parallel-incremental-bootstrap.md) |
 | **779** | コンパイラ初期アリーナヒープ一括確保およびダイレクト ELF 出力によるブートストラップ I/O 高速化 | Feature | Medium | New | [779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md](779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md) |
-| **781** | シンボルのヒープレコード化による symbol->string 完全 O(1) ダイレクトポインタ参照の実現 | Feature | Medium | In Progress | [781-implement-record-based-symbols-with-direct-string-pointer.md](781-implement-record-based-symbols-with-direct-string-pointer.md) |
-
 ---
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **781** | シンボルのヒープレコード化による symbol->string 完全 O(1) ダイレクトポインタ参照の実現 | Feature | 2026-11-07 | [closed/781-implement-record-based-symbols-with-direct-string-pointer.md](closed/781-implement-record-based-symbols-with-direct-string-pointer.md) |
 | **780** | シンボルテーブル探索の O(N^2) 爆発解消：重複走査撤去・バケット拡大および Direct-Mapped キャッシュ導入 | Feature | 2026-11-07 | [closed/780-optimize-symbol-to-string-with-direct-cache-and-bucket-lookup.md](closed/780-optimize-symbol-to-string-with-direct-cache-and-bucket-lookup.md) |
 | **776** | ULisp bootstrap.sh における開発用 Quick Bootstrap モード導入と後処理テストのオプトイン分離 | Feature | 2026-11-07 | [closed/776-introduce-quick-bootstrap-mode-and-opt-in-post-tests.md](closed/776-introduce-quick-bootstrap-mode-and-opt-in-post-tests.md) |
 | **772** | ULisp 標準ライブラリ (ULISP_STD_LIBS) の事前コンパイル済みオブジェクト化と分割静的リンクへの統一 | Feature | 2026-11-07 | [closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md](closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md) |
