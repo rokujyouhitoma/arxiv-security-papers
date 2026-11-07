@@ -28,8 +28,6 @@
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | New | [768-implement-define-pipeline-for-aot-repl-and-check-modes.md](768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | New | [769-implement-picopass-provenance-tracing-and-auto-bisect.md](769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
 | **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | High | New | [770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
-| **771** | ULisp ホスト実行エンジンのネイティブシード優先化とパス単体テスト一括バッチ実行による高速化 | Feature | High | Closed | [closed/771-optimize-ulisp-host-compiler-seed-and-batch-pass-test-runner.md](closed/771-optimize-ulisp-host-compiler-seed-and-batch-pass-test-runner.md) |
-| **772** | ULisp 標準ライブラリ (ULISP_STD_LIBS) の事前コンパイル済みオブジェクト化と分割静的リンクへの統一 | Feature | High | New | [772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md](772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md) |
 | **773** | Root Makefile の py_compile ターゲットにおけるサブプロセス逐次起動ループ廃止と一括・並列コンパイル化 | Feature | High | New | [773-optimize-makefile-py-compile-batch-and-parallel-execution.md](773-optimize-makefile-py-compile-batch-and-parallel-execution.md) |
 | **774** | Root Makefile の compile_grammars ターゲットにおける PEG 増分ビルド化とフォーマッタ一括実行による高速化 | Feature | Medium | New | [774-optimize-compile-grammars-incremental-build-and-batch-formatting.md](774-optimize-compile-grammars-incremental-build-and-batch-formatting.md) |
 | **775** | Root Makefile の build_js ターゲットにおける増分ビルド依存導入と未変更時の Closure Compiler (JVM) 起動スキップ | Feature | Medium | New | [775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md](775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md) |
@@ -40,6 +38,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **772** | ULisp 標準ライブラリ (ULISP_STD_LIBS) の事前コンパイル済みオブジェクト化と分割静的リンクへの統一 | Feature | 2026-11-07 | [closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md](closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md) |
+| **771** | ULisp ホスト実行エンジンのネイティブシード優先化とパス単体テスト一括バッチ実行による高速化 | Feature | 2026-11-07 | [closed/771-optimize-ulisp-host-compiler-seed-and-batch-pass-test-runner.md](closed/771-optimize-ulisp-host-compiler-seed-and-batch-pass-test-runner.md) |
 | **755** | 未変更部分木の構造共有 (Smart Reconstruction) 実装および重複 AST Diff トレースフックの一元化 (DSN-33-01 T1.3) | Feature | 2026-11-07 | [closed/755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md](closed/755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md) |
 | **754** | nanopass-catamorphism-step の HIR 8構文ハードコード撤去と define-language スキーマ駆動再帰走査化 (DSN-33-01 T1.2) | Feature | 2026-11-07 | [closed/754-refactor-catamorphism-to-schema-driven-traversal.md](closed/754-refactor-catamorphism-to-schema-driven-traversal.md) |
 | **753** | 言語定義ファイルの統廃合と L_cst から L_lir_canonical への連続 extends 継承連鎖の確立 (DSN-33-01 T1.1) | Feature | 2026-11-07 | [closed/753-consolidate-define-language-files-and-establish-extends-chain.md](closed/753-consolidate-define-language-files-and-establish-extends-chain.md) |

@@ -247,60 +247,67 @@ test_library: build/compiler_passes.scm
 	@res_c=$$(./build/test_library_c); echo "Output: $$res_c"; test "$$res_c" = "260"
 	@echo "SUCCESS: library C output 260 matches expected!"
 
-test_runtime: $(COMPILER_DEP)
+test_runtime: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) tests/test_scheme_runtime.scm > build/test_runtime_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_runtime_input.scm
+	@cat lib/stdlib_macros.scm tests/test_scheme_runtime.scm >> build/test_runtime_input.scm
 	$(ULISP_COMPILER) build/test_runtime_input.scm > build/test_runtime.s
 	$(AS) $(ASFLAGS) build/test_runtime.s -o build/test_runtime.o
-	$(LD) $(LDFLAGS) build/test_runtime.o -o build/test_runtime
+	$(LD) $(LDFLAGS) build/test_runtime.o build/ulisp_stdlib.o -o build/test_runtime
 	./build/test_runtime < /dev/null
 
-test_arena: $(COMPILER_DEP)
+test_arena: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_arena.scm > build/test_arena_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_arena_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_arena.scm >> build/test_arena_input.scm
 	$(ULISP_COMPILER) build/test_arena_input.scm > build/test_arena.s
 	$(AS) $(ASFLAGS) build/test_arena.s -o build/test_arena.o
-	$(LD) $(LDFLAGS) build/test_arena.o -o build/test_arena
+	$(LD) $(LDFLAGS) build/test_arena.o build/ulisp_stdlib.o -o build/test_arena
 	./build/test_arena < /dev/null
 
-test_atomic: $(COMPILER_DEP)
+test_atomic: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_atomic.scm > build/test_atomic_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_atomic_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_atomic.scm >> build/test_atomic_input.scm
 	$(ULISP_COMPILER) build/test_atomic_input.scm > build/test_atomic.s
 	$(AS) $(ASFLAGS) build/test_atomic.s -o build/test_atomic.o
-	$(LD) $(LDFLAGS) build/test_atomic.o -o build/test_atomic
+	$(LD) $(LDFLAGS) build/test_atomic.o build/ulisp_stdlib.o -o build/test_atomic
 	./build/test_atomic < /dev/null
 
-test_queue: $(COMPILER_DEP)
+test_queue: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_queue.scm > build/test_queue_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_queue_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_queue.scm >> build/test_queue_input.scm
 	$(ULISP_COMPILER) build/test_queue_input.scm > build/test_queue.s
 	$(AS) $(ASFLAGS) build/test_queue.s -o build/test_queue.o
-	$(LD) $(LDFLAGS) build/test_queue.o -o build/test_queue
+	$(LD) $(LDFLAGS) build/test_queue.o build/ulisp_stdlib.o -o build/test_queue
 	./build/test_queue < /dev/null
 
-test_channel: $(COMPILER_DEP) build/futex.o
+test_channel: $(COMPILER_DEP) build/ulisp_stdlib.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_channel.scm > build/test_channel_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_channel_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_channel.scm >> build/test_channel_input.scm
 	$(ULISP_COMPILER) build/test_channel_input.scm > build/test_channel.s
 	$(AS) $(ASFLAGS) build/test_channel.s -o build/test_channel.o
-	$(LD) $(LDFLAGS) build/test_channel.o build/futex.o -o build/test_channel
+	$(LD) $(LDFLAGS) build/test_channel.o build/ulisp_stdlib.o build/futex.o -o build/test_channel
 	./build/test_channel < /dev/null
 
-test_boundary: $(COMPILER_DEP)
+test_boundary: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_boundary.scm > build/test_boundary_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_boundary_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_boundary.scm >> build/test_boundary_input.scm
 	$(ULISP_COMPILER) build/test_boundary_input.scm > build/test_boundary.s
 	$(AS) $(ASFLAGS) build/test_boundary.s -o build/test_boundary.o
-	$(LD) $(LDFLAGS) build/test_boundary.o -o build/test_boundary
+	$(LD) $(LDFLAGS) build/test_boundary.o build/ulisp_stdlib.o -o build/test_boundary
 	./build/test_boundary < /dev/null
 
-test_epoch: $(COMPILER_DEP)
+test_epoch: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_epoch.scm > build/test_epoch_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_epoch_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_epoch.scm >> build/test_epoch_input.scm
 	$(ULISP_COMPILER) build/test_epoch_input.scm > build/test_epoch.s
 	$(AS) $(ASFLAGS) build/test_epoch.s -o build/test_epoch.o
-	$(LD) $(LDFLAGS) build/test_epoch.o -o build/test_epoch
+	$(LD) $(LDFLAGS) build/test_epoch.o build/ulisp_stdlib.o -o build/test_epoch
 	./build/test_epoch < /dev/null
 
 build/context.o: runtime/concurrency/context.s
@@ -319,136 +326,152 @@ build/io_uring.o: runtime/concurrency/io_uring.s
 	@mkdir -p build
 	$(AS) $(ASFLAGS) runtime/concurrency/io_uring.s -o build/io_uring.o
 
-test_context_switch: $(COMPILER_DEP) build/context.o
+test_context_switch: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_context_switch.scm > build/test_context_switch_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_context_switch_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_context_switch.scm >> build/test_context_switch_input.scm
 	$(ULISP_COMPILER) build/test_context_switch_input.scm > build/test_context_switch.s
 	$(AS) $(ASFLAGS) build/test_context_switch.s -o build/test_context_switch.o
-	$(LD) $(LDFLAGS) build/test_context_switch.o build/context.o -o build/test_context_switch
+	$(LD) $(LDFLAGS) build/test_context_switch.o build/ulisp_stdlib.o build/context.o -o build/test_context_switch
 	./build/test_context_switch < /dev/null
 
-test_scheduler: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_scheduler: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_scheduler.scm > build/test_scheduler_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_scheduler_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_scheduler.scm >> build/test_scheduler_input.scm
 	$(ULISP_COMPILER) build/test_scheduler_input.scm > build/test_scheduler.s
 	$(AS) $(ASFLAGS) build/test_scheduler.s -o build/test_scheduler.o
-	$(LD) $(LDFLAGS) build/test_scheduler.o build/context.o build/thread.o build/futex.o -o build/test_scheduler
+	$(LD) $(LDFLAGS) build/test_scheduler.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_scheduler
 	./build/test_scheduler < /dev/null
 
-test_multithread_scheduler: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_multithread_scheduler: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_multithread_scheduler.scm > build/test_multithread_scheduler_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_multithread_scheduler_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_multithread_scheduler.scm >> build/test_multithread_scheduler_input.scm
 	$(ULISP_COMPILER) build/test_multithread_scheduler_input.scm > build/test_multithread_scheduler.s
 	$(AS) $(ASFLAGS) build/test_multithread_scheduler.s -o build/test_multithread_scheduler.o
-	$(LD) $(LDFLAGS) build/test_multithread_scheduler.o build/context.o build/thread.o build/futex.o -o build/test_multithread_scheduler
+	$(LD) $(LDFLAGS) build/test_multithread_scheduler.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_multithread_scheduler
 	./build/test_multithread_scheduler < /dev/null
 
-test_links_monitors: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_links_monitors: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_links_monitors.scm > build/test_links_monitors_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_links_monitors_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_links_monitors.scm >> build/test_links_monitors_input.scm
 	$(ULISP_COMPILER) build/test_links_monitors_input.scm > build/test_links_monitors.s
 	$(AS) $(ASFLAGS) build/test_links_monitors.s -o build/test_links_monitors.o
-	$(LD) $(LDFLAGS) build/test_links_monitors.o build/context.o build/thread.o build/futex.o -o build/test_links_monitors
+	$(LD) $(LDFLAGS) build/test_links_monitors.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_links_monitors
 	./build/test_links_monitors < /dev/null
 
-test_task_mailbox: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_task_mailbox: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_task_mailbox.scm > build/test_task_mailbox_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_task_mailbox_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_task_mailbox.scm >> build/test_task_mailbox_input.scm
 	$(ULISP_COMPILER) build/test_task_mailbox_input.scm > build/test_task_mailbox.s
 	$(AS) $(ASFLAGS) build/test_task_mailbox.s -o build/test_task_mailbox.o
-	$(LD) $(LDFLAGS) build/test_task_mailbox.o build/context.o build/thread.o build/futex.o -o build/test_task_mailbox
+	$(LD) $(LDFLAGS) build/test_task_mailbox.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_task_mailbox
 	./build/test_task_mailbox < /dev/null
 
-test_let_it_crash: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_let_it_crash: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_let_it_crash.scm > build/test_let_it_crash_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_let_it_crash_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_let_it_crash.scm >> build/test_let_it_crash_input.scm
 	$(ULISP_COMPILER) build/test_let_it_crash_input.scm > build/test_let_it_crash.s
 	$(AS) $(ASFLAGS) build/test_let_it_crash.s -o build/test_let_it_crash.o
-	$(LD) $(LDFLAGS) build/test_let_it_crash.o build/context.o build/thread.o build/futex.o -o build/test_let_it_crash
+	$(LD) $(LDFLAGS) build/test_let_it_crash.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_let_it_crash
 	./build/test_let_it_crash < /dev/null
 
-test_supervisor: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_supervisor: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_supervisor.scm > build/test_supervisor_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_supervisor_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_supervisor.scm >> build/test_supervisor_input.scm
 	$(ULISP_COMPILER) build/test_supervisor_input.scm > build/test_supervisor.s
 	$(AS) $(ASFLAGS) build/test_supervisor.s -o build/test_supervisor.o
-	$(LD) $(LDFLAGS) build/test_supervisor.o build/context.o build/thread.o build/futex.o -o build/test_supervisor
+	$(LD) $(LDFLAGS) build/test_supervisor.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_supervisor
 	./build/test_supervisor < /dev/null
 
-test_futex: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_futex: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_futex.scm > build/test_futex_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_futex_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_futex.scm >> build/test_futex_input.scm
 	$(ULISP_COMPILER) build/test_futex_input.scm > build/test_futex.s
 	$(AS) $(ASFLAGS) build/test_futex.s -o build/test_futex.o
-	$(LD) $(LDFLAGS) build/test_futex.o build/context.o build/thread.o build/futex.o -o build/test_futex
+	$(LD) $(LDFLAGS) build/test_futex.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_futex
 	./build/test_futex < /dev/null
 
-test_registry: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_registry: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_registry.scm > build/test_registry_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_registry_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_registry.scm >> build/test_registry_input.scm
 	$(ULISP_COMPILER) build/test_registry_input.scm > build/test_registry.s
 	$(AS) $(ASFLAGS) build/test_registry.s -o build/test_registry.o
-	$(LD) $(LDFLAGS) build/test_registry.o build/context.o build/thread.o build/futex.o -o build/test_registry
+	$(LD) $(LDFLAGS) build/test_registry.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_registry
 	./build/test_registry < /dev/null
 
-test_crash_logger: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_crash_logger: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm > build/test_crash_logger_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_crash_logger_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm >> build/test_crash_logger_input.scm
 	$(ULISP_COMPILER) build/test_crash_logger_input.scm > build/test_crash_logger.s
 	$(AS) $(ASFLAGS) build/test_crash_logger.s -o build/test_crash_logger.o
-	$(LD) $(LDFLAGS) build/test_crash_logger.o build/context.o build/thread.o build/futex.o -o build/test_crash_logger
+	$(LD) $(LDFLAGS) build/test_crash_logger.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_crash_logger
 	./build/test_crash_logger < /dev/null
 
-test_io_uring: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o build/io_uring.o
+test_io_uring: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o build/io_uring.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_io_uring.scm > build/test_io_uring_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_io_uring_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_io_uring.scm >> build/test_io_uring_input.scm
 	$(ULISP_COMPILER) build/test_io_uring_input.scm > build/test_io_uring.s
 	$(AS) $(ASFLAGS) build/test_io_uring.s -o build/test_io_uring.o
-	$(LD) $(LDFLAGS) build/test_io_uring.o build/context.o build/thread.o build/futex.o build/io_uring.o -o build/test_io_uring
+	$(LD) $(LDFLAGS) build/test_io_uring.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o build/io_uring.o -o build/test_io_uring
 	./build/test_io_uring < /dev/null
 
-test_preemption: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_preemption: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_preemption.scm > build/test_preemption_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_preemption_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_preemption.scm >> build/test_preemption_input.scm
 	$(ULISP_COMPILER) build/test_preemption_input.scm > build/test_preemption.s
 	$(AS) $(ASFLAGS) build/test_preemption.s -o build/test_preemption.o
-	$(LD) $(LDFLAGS) build/test_preemption.o build/context.o build/thread.o build/futex.o -o build/test_preemption
+	$(LD) $(LDFLAGS) build/test_preemption.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_preemption
 	./build/test_preemption < /dev/null
 
-test_eval_adapter: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_eval_adapter: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm > build/test_eval_adapter_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_eval_adapter_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm >> build/test_eval_adapter_input.scm
 	$(ULISP_COMPILER) build/test_eval_adapter_input.scm > build/test_eval_adapter.s
 	$(AS) $(ASFLAGS) build/test_eval_adapter.s -o build/test_eval_adapter.o
-	$(LD) $(LDFLAGS) build/test_eval_adapter.o build/context.o build/thread.o build/futex.o -o build/test_eval_adapter
+	$(LD) $(LDFLAGS) build/test_eval_adapter.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_eval_adapter
 	./build/test_eval_adapter < /dev/null
 
-test_concurrency_harness: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+test_concurrency_harness: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm > build/test_concurrency_harness_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_concurrency_harness_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm >> build/test_concurrency_harness_input.scm
 	$(ULISP_COMPILER) build/test_concurrency_harness_input.scm > build/test_concurrency_harness.s
 	$(AS) $(ASFLAGS) build/test_concurrency_harness.s -o build/test_concurrency_harness.o
-	$(LD) $(LDFLAGS) build/test_concurrency_harness.o build/context.o build/thread.o build/futex.o -o build/test_concurrency_harness
+	$(LD) $(LDFLAGS) build/test_concurrency_harness.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/test_concurrency_harness
 	./build/test_concurrency_harness < /dev/null
 
 test_concurrency: test_multithread_scheduler test_let_it_crash test_supervisor test_scheduler test_links_monitors test_task_mailbox test_preemption test_concurrency_harness
 
 test_concurrency_ci: test_concurrency
 
-bench_microtasks: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+bench_microtasks: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm > build/bench_microtasks_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/bench_microtasks_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm >> build/bench_microtasks_input.scm
 	$(ULISP_COMPILER) build/bench_microtasks_input.scm > build/bench_microtasks.s
 	$(AS) $(ASFLAGS) build/bench_microtasks.s -o build/bench_microtasks.o
-	$(LD) $(LDFLAGS) build/bench_microtasks.o build/context.o build/thread.o build/futex.o -o build/bench_microtasks
+	$(LD) $(LDFLAGS) build/bench_microtasks.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/bench_microtasks
 	./build/bench_microtasks < /dev/null
 
-bench_latency_under_gc: $(COMPILER_DEP) build/context.o build/thread.o build/futex.o
+bench_latency_under_gc: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm > build/bench_latency_under_gc_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/bench_latency_under_gc_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm >> build/bench_latency_under_gc_input.scm
 	$(ULISP_COMPILER) build/bench_latency_under_gc_input.scm > build/bench_latency_under_gc.s
 	$(AS) $(ASFLAGS) build/bench_latency_under_gc.s -o build/bench_latency_under_gc.o
-	$(LD) $(LDFLAGS) build/bench_latency_under_gc.o build/context.o build/thread.o build/futex.o -o build/bench_latency_under_gc
+	$(LD) $(LDFLAGS) build/bench_latency_under_gc.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/bench_latency_under_gc
 	./build/bench_latency_under_gc < /dev/null
 
 bench_concurrency: bench_microtasks bench_latency_under_gc
@@ -1371,13 +1394,14 @@ test_gc_stats: compiler
 	@echo "=== Running Runtime GC Statistics Tests (Issue #622) ==="
 	bash tests/test_gc_stats.sh
 
-test_numeric_tower: $(COMPILER_DEP)
+test_numeric_tower: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@echo "=== Running R7RS Numeric Tower Tests (Issues #711-#715) ==="
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) tests/test_numeric_tower.scm > build/test_numeric_tower_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_numeric_tower_input.scm
+	@cat lib/stdlib_macros.scm tests/test_numeric_tower.scm >> build/test_numeric_tower_input.scm
 	$(ULISP_COMPILER) build/test_numeric_tower_input.scm > build/test_numeric_tower.s
 	$(AS) $(ASFLAGS) build/test_numeric_tower.s -o build/test_numeric_tower.o
-	$(LD) $(LDFLAGS) build/test_numeric_tower.o -o build/test_numeric_tower
+	$(LD) $(LDFLAGS) build/test_numeric_tower.o build/ulisp_stdlib.o -o build/test_numeric_tower
 	./build/test_numeric_tower < /dev/null
 	@echo "SUCCESS: All R7RS Numeric Tower tests passed!"
 

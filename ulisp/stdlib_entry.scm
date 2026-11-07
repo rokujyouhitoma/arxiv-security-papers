@@ -24,7 +24,13 @@
 (include "lib/values.scm")
 (include "lib/continuation.scm")
 (include "lib/parameter.scm")
+(include "lib/hashtable.scm")
+(include "lib/comparator.scm")
+(include "lib/format.scm")
+(include "lib/sort.scm")
+(include "lib/box.scm")
 (include "lib/gc.scm")
+(include "lib/eval.scm")
 
 ;; Runtime Subsystems
 (include "runtime/gc.scm")

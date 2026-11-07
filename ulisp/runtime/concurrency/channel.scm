@@ -222,7 +222,8 @@
                   #f))
             #f))))
 
-(define task-by-id lookup-task-by-tid)
+(define (task-by-id tid)
+  (lookup-task-by-tid tid))
 
 (define (task-table-clear!)
   (let loop ((i 0))
@@ -641,7 +642,10 @@
              (mb (%%normalize-mailbox cur)))
         (vector-ref mb 1))))
 
-(define task-mailbox-dequeue! task-take-handoff!)
+(define task-mailbox-dequeue!
+  (case-lambda
+    ((t) (task-take-handoff! t #f))
+    ((t empty-default) (task-take-handoff! t empty-default))))
 
 (define (task-mailbox-peek t)
   (task-handoff t))
