@@ -537,17 +537,19 @@
 
 ;;; AST Structural Diff Engine
 (define (nanopass-ast-diff-list l1 l2)
-  (let loop ((c1 l1) (c2 l2) (acc '()))
-    (if (or (null? c1) (null? c2))
-        (reverse acc)
-        (let ((o (car c1))
-              (n (car c2)))
-          (loop (cdr c1) (cdr c2)
-                (cons (if (equal? o n) o (nanopass-ast-diff o n)) acc))))))
+  (if (eq? l1 l2)
+      l1
+      (let loop ((c1 l1) (c2 l2) (acc '()))
+        (if (or (null? c1) (null? c2))
+            (reverse acc)
+            (let ((o (car c1))
+                  (n (car c2)))
+              (loop (cdr c1) (cdr c2)
+                    (cons (if (or (eq? o n) (equal? o n)) o (nanopass-ast-diff o n)) acc)))))))
 
 (define (nanopass-ast-diff old-ir new-ir)
   (cond
-    ((equal? old-ir new-ir)
+    ((or (eq? old-ir new-ir) (equal? old-ir new-ir))
      #f)
     ((and (pair? old-ir) (pair? new-ir))
      (let ((head-old (car old-ir))
@@ -563,6 +565,17 @@
 (define (nanopass-trace-enabled?) (car *nanopass-trace*))
 (define (enable-nanopass-trace!) (set-car! *nanopass-trace* #t))
 (define (disable-nanopass-trace!) (set-car! *nanopass-trace* #f))
+
+;;; Pipeline runner guard to prevent duplicate AST diff emission when a `define-pass`
+;;; is invoked inside `run-single-pass` / `run-pass-pipeline` (DSN-33-01 T1.3).
+(define *nanopass-in-pipeline-runner* (cons #f '()))
+(define (nanopass-in-pipeline-runner?) (car *nanopass-in-pipeline-runner*))
+(define (set-nanopass-in-pipeline-runner! flag) (set-car! *nanopass-in-pipeline-runner* flag))
+
+;;; Counter tracking total `nanopass-display-ast-diff` invocations for deterministic testing.
+(define *nanopass-ast-diff-display-count* (cons 0 '()))
+(define (nanopass-ast-diff-display-count) (car *nanopass-ast-diff-display-count*))
+(define (reset-nanopass-ast-diff-display-count!) (set-car! *nanopass-ast-diff-display-count* 0))
 
 (define (nanopass-truncate-expr expr depth max-len)
   (cond
@@ -581,6 +594,7 @@
   (write-char (integer->char 27)))
 
 (define (nanopass-display-ast-diff pass-name old-ir new-ir)
+  (set-car! *nanopass-ast-diff-display-count* (+ (car *nanopass-ast-diff-display-count*) 1))
   (let ((max-depth 8)
         (max-len 16))
     (nanopass-display-esc)
@@ -589,7 +603,7 @@
     (display "] -----------------------------------------------------")
     (nanopass-display-esc)
     (display "[0m\n")
-    (if (equal? old-ir new-ir)
+    (if (or (eq? old-ir new-ir) (equal? old-ir new-ir))
         (display "  (AST unchanged)\n")
         (begin
           (nanopass-display-esc)
@@ -974,7 +988,29 @@
              val)))
     (else val)))
 
-;;; Schema-driven subforms list transformer
+;;; Smart Reconstruction Helpers (DSN-33-01 T1.3)
+;;; Preserves pointer identity (`eq?`) on unchanged AST cons cells and lists
+;;; during catamorphism traversal to avoid redundant heap allocations.
+(define (nanopass-cons-sharing orig-pair new-car new-cdr)
+  (if (and (pair? orig-pair)
+           (eq? new-car (car orig-pair))
+           (eq? new-cdr (cdr orig-pair)))
+      orig-pair
+      (cons new-car new-cdr)))
+
+(define (nanopass-map-sharing fn lst)
+  (if (not (pair? lst))
+      lst
+      (let* ((old-head (car lst))
+             (old-tail (cdr lst))
+             (new-head (fn old-head))
+             (new-tail (nanopass-map-sharing fn old-tail)))
+        (if (and (eq? new-head old-head)
+                 (eq? new-tail old-tail))
+            lst
+            (cons new-head new-tail)))))
+
+;;; Schema-driven subforms list transformer (with Smart Reconstruction)
 (define (nanopass-schema-transform-subforms prod-rest expr-rest lang curr-nt call-recurse)
   (cond
     ((or (null? prod-rest) (null? expr-rest))
@@ -986,26 +1022,32 @@
      (let* ((item-pat (car prod-rest))
             (tail-prod (cddr prod-rest)))
        (if (null? tail-prod)
-           (map (lambda (e)
-                  (nanopass-schema-transform-subpattern item-pat e lang curr-nt call-recurse))
-                expr-rest)
+           (nanopass-map-sharing
+            (lambda (e)
+              (nanopass-schema-transform-subpattern item-pat e lang curr-nt call-recurse))
+            expr-rest)
            (let* ((k (length tail-prod))
                   (n (length expr-rest))
                   (split-idx (if (>= n k) (- n k) 0))
                   (prefix (nanopass-take expr-rest split-idx))
-                  (suffix (nanopass-drop expr-rest split-idx)))
-             (append (map (lambda (e)
-                            (nanopass-schema-transform-subpattern item-pat e lang curr-nt call-recurse))
-                          prefix)
-                     (nanopass-schema-transform-subforms tail-prod suffix lang curr-nt call-recurse))))))
-    ((pair? (car prod-rest))
-     (cons (nanopass-schema-transform-subpattern (car prod-rest) (car expr-rest) lang curr-nt call-recurse)
-           (nanopass-schema-transform-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt call-recurse)))
+                  (suffix (nanopass-drop expr-rest split-idx))
+                  (new-prefix
+                   (nanopass-map-sharing
+                    (lambda (e)
+                      (nanopass-schema-transform-subpattern item-pat e lang curr-nt call-recurse))
+                    prefix))
+                  (new-suffix
+                   (nanopass-schema-transform-subforms tail-prod suffix lang curr-nt call-recurse)))
+             (if (and (eq? new-prefix prefix)
+                      (eq? new-suffix suffix))
+                 expr-rest
+                 (append new-prefix new-suffix))))))
     (else
-     (cons (nanopass-schema-transform-subpattern (car prod-rest) (car expr-rest) lang curr-nt call-recurse)
-           (nanopass-schema-transform-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt call-recurse)))))
+     (let ((new-head (nanopass-schema-transform-subpattern (car prod-rest) (car expr-rest) lang curr-nt call-recurse))
+           (new-tail (nanopass-schema-transform-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt call-recurse)))
+       (nanopass-cons-sharing expr-rest new-head new-tail)))))
 
-;;; Schema-driven node transformer for matched production `prod`
+;;; Schema-driven node transformer for matched production `prod` (with Smart Reconstruction)
 (define (nanopass-schema-transform-node prod ir lang curr-nt call-recurse)
   (cond
     ((not (pair? ir)) ir)
@@ -1028,19 +1070,28 @@
           (let ((cls (nanopass-classify-meta-var head lang)))
             (if cls
                 ;; Application / head meta-variable: (e0 e1 ...) or (a0 a ...)
-                (cons (if (eq? (car cls) 'nonterminal)
-                          (call-recurse (car ir))
-                          (car ir))
-                      (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse))
+                (let ((new-head (if (eq? (car cls) 'nonterminal)
+                                    (call-recurse (car ir))
+                                    (car ir)))
+                      (new-tail (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse)))
+                  (nanopass-cons-sharing ir new-head new-tail))
                 ;; Keyword-headed form: (if ...), (lambda ...), (%block ...), (%lir-program ...), etc.
-                (cons (car ir)
-                      (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse)))))
+                (let ((new-tail (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse)))
+                  (nanopass-cons-sharing ir (car ir) new-tail)))))
          (else
           (nanopass-schema-transform-subforms prod ir lang curr-nt call-recurse)))))
     (else ir)))
 
 ;;; Fallback S-expression structural transform (when language/production is unregistered)
-;;; Preserves exact list structure without implicit `(begin ...)` body wrapping side-effects.
+;;; Preserves exact list structure and `eq?` structural sharing on unchanged subtrees.
+(define (nanopass-fallback-transform-binding b call-recurse)
+  (if (and (pair? b) (pair? (cdr b)))
+      (let* ((tail (cdr b))
+             (new-val (call-recurse (car tail)))
+             (new-tail (nanopass-cons-sharing tail new-val (cdr tail))))
+        (nanopass-cons-sharing b (car b) new-tail))
+      b))
+
 (define (nanopass-fallback-transform-node ir call-recurse)
   (if (not (pair? ir))
       ir
@@ -1048,46 +1099,68 @@
         (case op
           ((quote)
            ir)
-          ((if)
-           (if (null? (cdddr ir))
-               (list 'if (call-recurse (cadr ir)) (call-recurse (caddr ir)))
-               (list 'if (call-recurse (cadr ir)) (call-recurse (caddr ir)) (call-recurse (cadddr ir)))))
-          ((begin)
-           (cons 'begin (map call-recurse (cdr ir))))
+          ((if begin)
+           (nanopass-cons-sharing ir op (nanopass-map-sharing call-recurse (cdr ir))))
           ((lambda)
-           (cons 'lambda (cons (cadr ir) (map call-recurse (cddr ir)))))
+           (let* ((rest (cdr ir))
+                  (new-body (nanopass-map-sharing call-recurse (cdr rest)))
+                  (new-rest (nanopass-cons-sharing rest (car rest) new-body)))
+             (nanopass-cons-sharing ir op new-rest)))
           ((let)
            (if (and (pair? (cdr ir)) (symbol? (cadr ir)))
-               (cons 'let
-                     (cons (cadr ir)
-                           (cons (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (caddr ir))
-                                 (map call-recurse (cdddr ir)))))
-               (cons 'let
-                     (cons (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (cadr ir))
-                           (map call-recurse (cddr ir))))))
+               (let* ((r1 (cdr ir))
+                      (r2 (cdr r1))
+                      (new-bindings
+                       (nanopass-map-sharing
+                        (lambda (b) (nanopass-fallback-transform-binding b call-recurse))
+                        (car r2)))
+                      (new-body (nanopass-map-sharing call-recurse (cdr r2)))
+                      (new-r2 (nanopass-cons-sharing r2 new-bindings new-body))
+                      (new-r1 (nanopass-cons-sharing r1 (car r1) new-r2)))
+                 (nanopass-cons-sharing ir op new-r1))
+               (let* ((r1 (cdr ir))
+                      (new-bindings
+                       (nanopass-map-sharing
+                        (lambda (b) (nanopass-fallback-transform-binding b call-recurse))
+                        (car r1)))
+                      (new-body (nanopass-map-sharing call-recurse (cdr r1)))
+                      (new-r1 (nanopass-cons-sharing r1 new-bindings new-body)))
+                 (nanopass-cons-sharing ir op new-r1))))
           ((letrec let* letrec*)
-           (cons op
-                 (cons (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (cadr ir))
-                       (map call-recurse (cddr ir)))))
+           (let* ((r1 (cdr ir))
+                  (new-bindings
+                   (nanopass-map-sharing
+                    (lambda (b) (nanopass-fallback-transform-binding b call-recurse))
+                    (car r1)))
+                  (new-body (nanopass-map-sharing call-recurse (cdr r1)))
+                  (new-r1 (nanopass-cons-sharing r1 new-bindings new-body)))
+             (nanopass-cons-sharing ir op new-r1)))
           ((set!)
-           (list 'set! (cadr ir) (call-recurse (caddr ir))))
+           (let* ((r1 (cdr ir))
+                  (r2 (cdr r1))
+                  (new-val (call-recurse (car r2)))
+                  (new-r2 (nanopass-cons-sharing r2 new-val (cdr r2)))
+                  (new-r1 (nanopass-cons-sharing r1 (car r1) new-r2)))
+             (nanopass-cons-sharing ir op new-r1)))
           ((%program)
-           (list '%program
-                 (map (lambda (d)
-                        (if (and (pair? d) (eq? (car d) 'define))
-                            (if (pair? (cadr d))
-                                (cons 'define (cons (cadr d) (map call-recurse (cddr d))))
-                                (list 'define (cadr d) (call-recurse (caddr d))))
-                            (call-recurse d)))
-                      (cadr ir))
-                 (call-recurse (caddr ir))))
+           (let* ((r1 (cdr ir))
+                  (r2 (cdr r1))
+                  (new-defs
+                   (nanopass-map-sharing
+                    (lambda (d)
+                      (if (and (pair? d) (eq? (car d) 'define))
+                          (let* ((dr1 (cdr d))
+                                 (new-dbody (nanopass-map-sharing call-recurse (cdr dr1)))
+                                 (new-dr1 (nanopass-cons-sharing dr1 (car dr1) new-dbody)))
+                            (nanopass-cons-sharing d (car d) new-dr1))
+                          (call-recurse d)))
+                    (car r1)))
+                  (new-body (call-recurse (car r2)))
+                  (new-r2 (nanopass-cons-sharing r2 new-body (cdr r2)))
+                  (new-r1 (nanopass-cons-sharing r1 new-defs new-r2)))
+             (nanopass-cons-sharing ir op new-r1)))
           (else
-           (let loop ((cur (cdr ir)) (acc (list (call-recurse op))))
-             (cond
-               ((null? cur) (reverse acc))
-               ((not (pair? cur)) (append (reverse acc) (call-recurse cur)))
-               (else
-                (loop (cdr cur) (cons (call-recurse (car cur)) acc))))))))))
+           (nanopass-map-sharing call-recurse ir))))))
 
 ;;; Schema-driven analyzer accumulator fold for subpattern
 (define (nanopass-schema-analyze-subpattern pat val lang acc step-acc)

@@ -153,10 +153,13 @@
                                                       #f)
                                                 (if force-trace?
                                                     (list 'begin
-                                                          (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
+                                                          (list 'if (list 'not (list (string->symbol "nanopass-in-pipeline-runner?")))
+                                                                (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
+                                                                #f)
                                                           res-var)
                                                     (list 'begin
-                                                          (list 'if (list (string->symbol "nanopass-trace-enabled?"))
+                                                          (list 'if (list 'and (list (string->symbol "nanopass-trace-enabled?"))
+                                                                               (list 'not (list (string->symbol "nanopass-in-pipeline-runner?"))))
                                                                 (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
                                                                 #f)
                                                           res-var)))))))))

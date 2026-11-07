@@ -22,7 +22,7 @@ ID: 756
 - 関連設計書:
   - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 3.1 節, 第 3.2 節, 第 6.3 節, 第 7.1 節, 第 9.2 節 タスク **T2.1**)
 - 依存関係:
-  - 先行 Issue: [Issue #755 (T1.3: 未変更部分木の構造共有と重複 Trace 整理)](755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md)
+  - 先行 Issue: [Issue #755 (T1.3: 未変更部分木の構造共有と重複 Trace 整理)](closed/755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md)
   - 後続 Issue: [Issue #757 (T2.2: 関数合成コンビネータ群の実装)](757-implement-picopass-strategy-combinators.md), [Issue #758 (T2.3: Pass 015 への新 DSL 統合)](758-integrate-picopass-dsl-into-pass-015-expander.md), [Issue #759 (T3.1: fuse-rules と O(1) ディスパッチ)](759-implement-fuse-rules-and-head-tag-o1-dispatch.md)
 
 ---

@@ -206,6 +206,69 @@
 (assert-true "nanopass-verify-pass-data validates valid desugared AST"
              (nanopass-verify-pass-data 'desugar 'L_core '(let ((x 1)) (+ x 2)) 'exit))
 
+;;; -----------------------------------------------------------------------
+;;; 6. Unified Trace Hooks: Single AST Diff Emission (DSN-33-01 T1.3)
+;;; -----------------------------------------------------------------------
+
+;; 6.1 Direct standalone `trace-define-pass` call emits AST diff exactly once
+(reset-nanopass-ast-diff-display-count!)
+(disable-nanopass-trace!)
+(let ((res (test-traced-desugar '(cond ((= a 1) 10) (else 20)))))
+  (assert-equal "standalone trace-define-pass emits AST diff exactly once"
+                1
+                (nanopass-ast-diff-display-count)))
+
+;; 6.2 Direct standalone `define-pass` with `(enable-nanopass-trace!)` emits AST diff exactly once
+(reset-nanopass-ast-diff-display-count!)
+(enable-nanopass-trace!)
+(let ((res (test-valid-pass '(cond ((= a 1) 10) (else 20)))))
+  (assert-equal "standalone define-pass with global trace enabled emits AST diff exactly once"
+                1
+                (nanopass-ast-diff-display-count)))
+(disable-nanopass-trace!)
+
+;; 6.3 Pipeline execution (`run-single-pass`) of a `define-pass` with `trace-mode = #t`
+;;     and `(enable-nanopass-trace!)` emits AST diff exactly ONCE (never twice!)
+(let ((pass-desc (make-pass-descriptor
+                  'test-valid-pass
+                  "Test Valid Pass"
+                  'desugar
+                  0
+                  test-valid-pass
+                  #f
+                  'L_tracer_base
+                  'L_tracer_mid
+                  '()
+                  #t)))
+  (reset-nanopass-ast-diff-display-count!)
+  (enable-nanopass-trace!)
+  (let ((res (run-single-pass pass-desc '(cond ((= a 1) 10) (else 20)) #f #t)))
+    (assert-equal "run-single-pass on define-pass with trace-mode=#t emits AST diff exactly once (no duplicate emission)"
+                  1
+                  (nanopass-ast-diff-display-count))
+    (assert-false "nanopass-in-pipeline-runner? is restored to #f after run-single-pass"
+                  (nanopass-in-pipeline-runner?)))
+  (disable-nanopass-trace!))
+
+;; 6.4 Pipeline execution (`run-single-pass`) of a `trace-define-pass` with `trace-mode = #t`
+;;     also emits AST diff exactly ONCE
+(let ((pass-desc (make-pass-descriptor
+                  'test-traced-desugar
+                  "Test Traced Desugar"
+                  'desugar
+                  0
+                  test-traced-desugar
+                  #f
+                  'L_tracer_base
+                  'L_tracer_mid
+                  '()
+                  #t)))
+  (reset-nanopass-ast-diff-display-count!)
+  (let ((res (run-single-pass pass-desc '(cond ((= a 1) 10) (else 20)) #f #t)))
+    (assert-equal "run-single-pass on trace-define-pass with trace-mode=#t emits AST diff exactly once"
+                  1
+                  (nanopass-ast-diff-display-count))))
+
 (display "=======================================================") (newline)
 (display " Nanopass Phase 4: All ")
 (display *tracer-tests-passed*)

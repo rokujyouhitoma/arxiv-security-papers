@@ -425,20 +425,27 @@
   (let* ((id (pass-id pass-desc))
          (pname (pass-name pass-desc))
          (fn (pass-fn pass-desc))
-         (vphase (pass-verifier-phase pass-desc)))
+         (vphase (pass-verifier-phase pass-desc))
+         (invoke-pass-fn
+          (lambda ()
+            (let ((prev-in-runner (nanopass-in-pipeline-runner?)))
+              (set-nanopass-in-pipeline-runner! #t)
+              (let ((res (fn input-ast)))
+                (set-nanopass-in-pipeline-runner! prev-in-runner)
+                res)))))
     (set-current-pass! id)
     (with-call-frame id input-ast
       (lambda ()
         (if (pipeline-time-passes?)
             (let* ((t0 (current-time-monotonic-us))
                    (m0 (current-heap-alloc-bytes))
-                   (output-ast (fn input-ast))
+                   (output-ast (invoke-pass-fn))
                    (t1 (current-time-monotonic-us))
                    (m1 (current-heap-alloc-bytes))
                    (elapsed-us (let ((d (- t1 t0))) (if (< d 0) 0 d)))
                    (alloc-bytes (let ((d (- m1 m0))) (if (< d 0) 0 d))))
               (record-pass-timing! id pname elapsed-us alloc-bytes)
-              (if trace-mode
+              (if (or trace-mode (nanopass-trace-enabled?))
                   (nanopass-display-ast-diff id input-ast output-ast))
               (if (or (pipeline-print-after-all?)
                       (eq? (pipeline-dump-ir) id)
@@ -448,8 +455,8 @@
                   (if (not (verify-pass-output vphase output-ast))
                       (error "IR Verifier Invariant Violation in pass" id)))
               output-ast)
-            (let ((output-ast (fn input-ast)))
-              (if trace-mode
+            (let ((output-ast (invoke-pass-fn)))
+              (if (or trace-mode (nanopass-trace-enabled?))
                   (nanopass-display-ast-diff id input-ast output-ast))
               (if (or (pipeline-print-after-all?)
                       (eq? (pipeline-dump-ir) id)
@@ -468,22 +475,25 @@
         (enable-verifier!)
         (if (eq? verify-mode 'strict)
             (set-verifier-strict! #t))))
-  (if trace-mode
-      (enable-nanopass-trace!))
-  (let* ((opt-level (pipeline-opt-level))
-         (disabled (pipeline-disabled-passes))
-         (pipeline (build-pipeline opt-level disabled)))
-    (validate-pipeline-prerequisites pipeline)
-    (reset-pass-timings!)
-    (let loop ((ps pipeline) (current-ast forms))
-      (if (null? ps)
-          (begin
-            (if verify-mode
-                (if (not (verify-pass-output 'lir current-ast))
-                    (error "IR Verifier Invariant Violation in final LIR" current-ast)))
-            current-ast)
-          (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
-            (loop (cdr ps) next-ast))))))
+  (let ((prev-trace (nanopass-trace-enabled?)))
+    (if trace-mode
+        (enable-nanopass-trace!))
+    (let* ((opt-level (pipeline-opt-level))
+           (disabled (pipeline-disabled-passes))
+           (pipeline (build-pipeline opt-level disabled)))
+      (validate-pipeline-prerequisites pipeline)
+      (reset-pass-timings!)
+      (let loop ((ps pipeline) (current-ast forms))
+        (if (null? ps)
+            (begin
+              (if (not prev-trace)
+                  (disable-nanopass-trace!))
+              (if verify-mode
+                  (if (not (verify-pass-output 'lir current-ast))
+                      (error "IR Verifier Invariant Violation in final LIR" current-ast)))
+              current-ast)
+            (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
+              (loop (cdr ps) next-ast)))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Default Pass Registry Initialization

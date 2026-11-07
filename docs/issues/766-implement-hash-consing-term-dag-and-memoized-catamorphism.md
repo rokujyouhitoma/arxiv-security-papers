@@ -20,7 +20,7 @@ ID: 766
 - 関連設計書:
   - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 5.2 節, 第 6.2 節, 第 9.2 節 タスク **T5.2**)
 - 依存関係:
-  - 先行 Issue: [Issue #755 (T1.3: 未変更部分木の構造共有)](755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md), [Issue #765 (T5.1: ルール依存関係 DAG と解析キャッシュ維持)](765-implement-rule-dependency-dag-and-femtopass-cache-invalidation.md)
+  - 先行 Issue: [Issue #755 (T1.3: 未変更部分木の構造共有)](closed/755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md), [Issue #765 (T5.1: ルール依存関係 DAG と解析キャッシュ維持)](765-implement-rule-dependency-dag-and-femtopass-cache-invalidation.md)
   - 後続 Issue: [Issue #767 (T5.3: LIR ピープホールの Picopass 化とデータ依存 DAG)](767-migrate-lir-peephole-to-picopass-and-dependency-dag.md), [Issue #770 (T6.3: 3-Stage セルフホスティング不動点検証)](770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md)
 
 ---

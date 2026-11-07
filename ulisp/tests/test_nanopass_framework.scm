@@ -530,6 +530,122 @@
                 3
                 (test-count-lir-movs lir-sample 0)))
 
+;;; -----------------------------------------------------------------------
+;;; 15. Catamorphism Structural Sharing / Smart Reconstruction (DSN-33-01 T1.3)
+;;; -----------------------------------------------------------------------
+
+;; 15.1 Direct helper tests: nanopass-cons-sharing & nanopass-map-sharing
+(let* ((p '(a . b))
+       (same-p (nanopass-cons-sharing p 'a 'b))
+       (diff-p (nanopass-cons-sharing p 'x 'b))
+       (lst '(1 2 3 4))
+       (same-lst (nanopass-map-sharing (lambda (x) x) lst))
+       (part-lst (nanopass-map-sharing (lambda (x) (if (= x 2) 20 x)) lst)))
+  (assert-true "nanopass-cons-sharing returns identical pair (eq?) when car and cdr are unchanged"
+               (eq? p same-p))
+  (assert-false "nanopass-cons-sharing allocates new pair when car changes"
+                (eq? p diff-p))
+  (assert-true "nanopass-map-sharing returns identical list (eq?) when all elements are unchanged"
+               (eq? lst same-lst))
+  (assert-false "nanopass-map-sharing allocates new list prefix when an element changes"
+                (eq? lst part-lst))
+  (assert-true "nanopass-map-sharing shares unchanged tail spine (cddr) via eq?"
+               (eq? (cddr lst) (cddr part-lst))))
+
+;; 15.2 Unchanged AST traversal across HIR (L_core) preserves root pointer identity (eq?)
+(define-pass test-noop-core-pass : L_core (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((%nonexistent-sentinel ,x) x)))
+
+(let* ((core-ast '(%program
+                   ((define f (lambda (x y) (if (< x y) (+ x 1) (begin (set! x 0) (* y 2))))))
+                   (let ((a 10) (b 20))
+                     (f a b))))
+       (core-out (test-noop-core-pass core-ast)))
+  (assert-true "noop pass over L_core preserves root pointer identity (eq?)"
+               (eq? core-ast core-out)))
+
+;; 15.3 Partial AST modification in L_core shares untouched sibling subtrees via eq?
+(define-pass test-rewrite-sentinel-core : L_core (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    ((rewrite-me ,x) (list '+ x 999))))
+
+(let* ((untouched-def '(define helper (lambda (n) (* n n))))
+       (untouched-else '(let ((z 42)) (+ z 100)))
+       (core-in (list '%program
+                      (list untouched-def)
+                      (list 'if '(#t)
+                            '(rewrite-me 1)
+                            untouched-else)))
+       (core-out (test-rewrite-sentinel-core core-in)))
+  (assert-false "modified L_core root is a new pair"
+                (eq? core-in core-out))
+  (assert-equal "modified L_core target branch is rewritten"
+                '(+ 1 999)
+                (caddr (caddr core-out)))
+  (assert-true "untouched top-level define list in %program is shared via eq?"
+               (eq? (cadr core-in) (cadr core-out)))
+  (assert-true "untouched top-level define node in %program is shared via eq?"
+               (eq? untouched-def (car (cadr core-out))))
+  (assert-true "untouched else-branch subtree in if is shared via eq?"
+               (eq? untouched-else (cadddr (caddr core-out)))))
+
+;; 15.4 Unchanged and partially modified LIR (L_lir_raw -> L_lir_canonical) preserves eq? sharing
+(let* ((untouched-fn '(%lir-function L_unchanged (params (a)) (frame-size 8)
+                        (body
+                          (%block L_entry (a)
+                            (%mov %rax a)
+                            (%return %rax)))))
+       (modified-fn '(%lir-function L_target (params (b)) (frame-size 8)
+                       (body
+                         (%block L_b0 (b)
+                           (%nop)
+                           (%return %rax)))))
+       (lir-noop-in (list '%lir-program
+                          '(strings ((L_str0 "hello")))
+                          '(stackmaps ((L_sp0 8 1)))
+                          (list '%lir-functions untouched-fn)
+                          '(%lir-main (frame-size 0)
+                             (body
+                               (%mov %rbx 5)
+                               (%return %rbx)))))
+       (lir-noop-out (test-lir-nop-to-inc lir-noop-in))
+       (lir-part-in (list '%lir-program
+                          '(strings ((L_str0 "hello")))
+                          '(stackmaps ((L_sp0 8 1)))
+                          (list '%lir-functions untouched-fn modified-fn)
+                          '(%lir-main (frame-size 0)
+                             (body
+                               (%mov %rbx 5)
+                               (%return %rbx)))))
+       (lir-part-out (test-lir-nop-to-inc lir-part-in)))
+  (assert-true "L_lir_canonical pass with no matching rules returns eq? root AST"
+               (eq? lir-noop-in lir-noop-out))
+  (assert-false "L_lir_canonical pass with partial rewrite allocates new root"
+                (eq? lir-part-in lir-part-out))
+  (assert-true "untouched %lir-function in %lir-functions is shared via eq?"
+               (eq? untouched-fn (cadr (cadddr lir-part-out))))
+  (assert-true "untouched %lir-main is shared via eq?"
+               (eq? (car (cddddr lir-part-in)) (car (cddddr lir-part-out)))))
+
+;; 15.5 Unchanged L_asm_x86 AST preserves eq? root identity
+(let* ((asm-noop-in '(%asm-program
+                      (strings ((L_s0 "msg")))
+                      (stackmaps ((L_sp0 8 1)))
+                      (%asm-functions
+                        (%asm-function L_f0 (frame-size 8)
+                          (body
+                            (%label L_f0)
+                            (mov rax 1)
+                            (ret))))
+                      (%asm-main (frame-size 0)
+                        (body
+                          (mov rbx 2)
+                          (ret)))))
+       (asm-noop-out (test-asm-x86-rewrite asm-noop-in)))
+  (assert-true "L_asm_x86 pass with no matching instructions returns eq? root AST"
+               (eq? asm-noop-in asm-noop-out)))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)
