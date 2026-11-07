@@ -63,6 +63,24 @@
 | **#676** | Linux SYS_futex に基づくワーカー待機 (Park) およびチャネル起床 (Unpark) による省電力・低遅延同期機構の実装 | 同期基盤: 低遅延・省電力待機 (`futex.s`, `scheduler.scm`) | Closed (Resolved) | [Issue #676](../issues/closed/676-implement-synapse-futex-park-unpark-primitives.md) |
 | **#677** | Linux io_uring 統合による非同期ゼロコピー I/O イベント駆動およびタスクサスペンド・リジューム機構の実装 | I/O基盤: ゼロsyscall非同期I/O (`io_uring.s`, `scheduler.scm`) | Closed (Resolved) | [Issue #677](../issues/closed/677-integrate-synapse-io-uring-event-loop.md) |
 
+### 5. 堅牢性・メモリ隔離・所有権モデル・監視拡張 Issue (完了 / Closed Issues #740 〜 #752)
+
+| Issue ID | タイトル | 修正カテゴリ / 責務 | ステータス | 詳細リンク |
+| :---: | :--- | :--- | :---: | :--- |
+| **#740** | コルーチン型タスクの例外境界接続とハンドラ連鎖初期化 (A2) | 例外基盤: 未捕捉例外境界遮断 (`context.scm`) | Closed (Resolved) | [Issue #740](../issues/closed/740-fix-coroutine-task-exception-boundary.md) |
+| **#741** | タスク正常終了時のクリーンアップ・DOWN通知および登録解除の実行 | ライフサイクル基盤: 正常完了処理 (`links.scm`) | Closed (Resolved) | [Issue #741](../issues/closed/741-handle-normal-task-termination-and-cleanup.md) |
+| **#742** | 再起動した Supervisor 子タスクのスケジューラ自動投入 (C7) | 耐障害性基盤: 再起動タスク自動投入 (`supervisor.scm`) | Closed (Resolved) | [Issue #742](../issues/closed/742-enqueue-restarted-child-task-to-scheduler.md) |
+| **#743** | Supervisor の独立アクタータスク化と並行再起動競合の排除 (C7) | 耐障害性基盤: アクター分離 (`supervisor.scm`) | Closed (Resolved) | [Issue #743](../issues/closed/743-isolate-supervisor-into-independent-actor-task.md) |
+| **#744** | Layer 1 (R7RS) ループおよび関数呼び出しへの強制終了 Safepoint 自動挿入 (B6) | プリエンプション基盤: Layer 1 セーフポイント (`preempt.scm`) | Closed (Resolved) | [Issue #744](../issues/closed/744-insert-safepoints-into-layer-1-loops-and-calls.md) |
+| **#745** | タスク完全停止確認後の安全な Ephemeral Arena リセット (A4) | メモリ安全基盤: アリーナ安全回収 (`arena.scm`) | Closed (Resolved) | [Issue #745](../issues/closed/745-verify-task-stop-before-arena-reset.md) |
+| **#746** | CI テストマトリクスへのマルチスレッド・コルーチン並行性結合テスト統合 | CI 品質ゲート: 並行性 CI 自動化 (`Makefile`) | Closed (Resolved) | [Issue #746](../issues/closed/746-integrate-multithread-and-coroutine-integration-tests-into-ci.md) |
+| **#747** | x86-64 における TLS / worker ID に基づく安全な Worker 判別方式への刷新 (A1) | 並列メモリ基盤: Per-Worker TLS 分離 (`channel.scm`) | Closed (Resolved) | [Issue #747](../issues/closed/747-implement-tls-worker-identification-for-x86-64.md) |
+| **#748** | AArch64 における Worker メモリ領域の個別分離とマルチスレッド基盤整備 (A1) | 並列メモリ基盤: AArch64 メモリ分離 (`scheduler.scm`) | Closed (Resolved) | [Issue #748](../issues/closed/748-isolate-worker-memory-areas-on-aarch64.md) |
+| **#749** | 変数名依存を廃止した型・束縛解析に基づく厳格な Affine 線形性検査 (B8) | コンパイラ基盤: 型導出アフィン検証 (`080_annotator.scm`) | Closed (Resolved) | [Issue #749](../issues/closed/749-implement-type-based-affine-linearity-check.md) |
+| **#750** | タスクメールボックスの O(1) FIFO キュー化および上限設定 (CWE-400 対策) | 通信有界基盤: 2-List Banker's Queue (`channel.scm`) | Closed (Resolved) | [Issue #750](../issues/closed/750-implement-bounded-fifo-task-mailbox-queue.md) |
+| **#751** | Supervisor 受信ループにおける非 DOWN シグナル (EXIT, io_complete 等) の破棄防止 | 耐障害性基盤: Preserved Inbox (`supervisor.scm`) | Closed (Resolved) | [Issue #751](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md) |
+| **#752** | チャネル所有権セマンティクスおよびクラッシュ時自動汚染範囲の仕様策定・実装 | 所有権通信基盤: 移転・共有・Graceful Drain (`channel.scm`) | Closed (Resolved) | [Issue #752](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md) |
+
 ---
 
 ## 体系目次
@@ -77,8 +95,12 @@
 - [3. プレーン別 責務・機能対照マトリクス](#3-プレーン別-責務機能対照マトリクス)
 - [4. 並行通信モデルと所有権の数理的整合性](#4-並行通信モデルと所有権の数理的整合性)
   - [4.1 線形所有権移譲チャネル（Linear Ownership Transfer Channel）](#41-線形所有権移譲チャネルlinear-ownership-transfer-channel)
+    - [4.1.1 チャネル所有権モデル（Ownership, Transfer, Disown, Shared）](#411-チャネル所有権モデルownership-transfer-disown-shared)
+    - [4.1.2 正常終了時 Graceful Drain とクラッシュ時 Crash Poisoning の分離](#412-正常終了時-graceful-drain-とクラッシュ時-crash-poisoning-の分離)
   - [4.2 Fan-out / Broadcast（明示的ディープコピー）](#42-fan-out--broadcast明示的ディープコピー)
   - [4.3 線形型理論に基づく不変条件とバックプレッシャー](#43-線形型理論に基づく不変条件とバックプレッシャー)
+    - [4.3.1 有界チャネルとバックプレッシャー（Backpressure Flow）](#431-有界チャネルとバックプレッシャーbackpressure-flow)
+    - [4.3.2 タスクメールボックスの O(1) 2-List FIFO（Banker's Queue）化と有界流量制御](#432-タスクメールボックスの-o1-2-list-fifobankers-queue化と有界流量制御)
 - [5. メモリモデル：プロセスローカル・エフェメラルアリーナ](#5-メモリモデルプロセスローカルエフェメラルアリーナ)
   - [5.1 ネイティブ LIFO スタックの維持](#51-ネイティブ-lifo-スタックの維持)
   - [5.2 O(1) 瞬時解放アルゴリズム](#52-o1-瞬時解放アルゴリズム)
@@ -95,6 +117,7 @@
     - [7.4.1 Linux sys_clone ネイティブスレッド生成と 1:1 CPU コアピニング (sched_setaffinity)](#741-linux-sys_clone-ネイティブスレッド生成と-11-cpu-コアピニング-sched_setaffinity)
     - [7.4.2 Linux SYS_futex によるワーカー待機 (Park) とチャネル即時起床 (Unpark)](#742-linux-sys_futex-によるワーカー待機-park-とチャネル即時起床-unpark)
     - [7.4.3 Linux io_uring 統合によるゼロシステムコール非同期 I/O とタスクサスペンド](#743-linux-io_uring-統合によるゼロシステムコール非同期-io-とタスクサスペンド)
+    - [7.4.4 Worker スロットと Per-Worker TLS / メモリ領域の完全個別分離](#744-worker-スロットと-per-worker-tls--メモリ領域の完全個別分離)
 - [8. コントロールプレーン境界と分散ロールバック制御](#8-コントロールプレーン境界と分散ロールバック制御)
   - [8.1 境界におけるデータサニタイズ（Shared-Nothing）](#81-境界におけるデータサニタイズshared-nothing)
   - [8.2 外側 call/cc と並列タスクの世代管理型投機タスク破棄](#82-外側-callcc-と並列タスクの世代管理型投機タスク破棄)
@@ -117,7 +140,7 @@
   - [11.2 不適合なユースケース](#112-不適合なユースケース)
 - [12. uLisp (Nanopass) コンパイラパイプライン統合](#12-ulisp-nanopass-コンパイラパイプライン統合)
   - [12.1 split-planes-pass (Plane 境界分離)](#121-split-planes-pass-plane-境界分離)
-  - [12.2 check-affine-types (線形所有権検査と自動 RAII Drop)](#122-check-affine-types-線形所有権検査と自動-raii-drop)
+  - [12.2 check-affine-types (型・束縛解析ベースの厳格アフィン線形性検査と自動 RAII Drop)](#122-check-affine-types-型束縛解析ベースの厳格アフィン線形性検査と自動-raii-drop)
   - [12.3 fbip-inplace-transform (Perceus 再利用)](#123-fbip-inplace-transform-perceus-再利用)
   - [12.4 inject-safepoints (セーフポイント判定コード注入)](#124-inject-safepoints-セーフポイント判定コード注入)
 - [13. 将来のインタプリタ環境との統合と直交的拡張性](#13-将来のインタプリタ環境との統合と直交的拡張性)
@@ -135,6 +158,7 @@
   - [14.7 Phase 5: 統合検証 ＆ 性能ベンチマーク](#147-phase-5-統合検証--性能ベンチマーク)
   - [14.8 Phase 6: Erlang/OTP 型耐障害性拡張 (Fault-Tolerant Supervision)](#148-phase-6-erlangotp-型耐障害性拡張-fault-tolerant-supervision)
   - [14.9 Phase 7: 物理マルチコア並列化 ＆ CPU 飽和拡張 (Hardware Mechanical Sympathy)](#149-phase-7-物理マルチコア並列化--cpu-飽和拡張-hardware-mechanical-sympathy)
+  - [14.10 Phase 8: Synapse 並行ランタイム堅牢化・メモリ隔離・所有権拡張 (Hardening, Memory Isolation & Ownership Semantics)](#1410-phase-8-synapse-並行ランタイム堅牢化メモリ隔離所有権拡張-hardening-memory-isolation--ownership-semantics)
 - [15. 全 16 専門エージェント合同設計審査承認記録 (Review & Sign-Off Ledger)](#15-全-16-専門エージェント合同設計審査承認記録-review--sign-off-ledger)
 - [16. 結論とアーキテクチャ設計原則](#16-結論とアーキテクチャ設計原則)
 
@@ -241,6 +265,42 @@ flowchart LR
 - 送信側は送信式 `(channel-send! ch val)` の評価をもって変数を消費（Consumed）し、以降の同一変数へのアクセスはコンパイル時（Nanopass MIR アフィン検査パス）で拒絶される。
 - メモリの再割り当てやディープコピーを伴わず、ポインタの所有権のみが Task A から Task B へ原子的に譲渡される。
 
+### 4.1.1 チャネル所有権ライフサイクルモデル（Channel Ownership & Lifecycle Semantics / Issue #752）
+
+チャネル構造体 `<channel>` は、通信路自身のライフサイクルと所有責任を追跡するための原子的所有者ボックス（`owner-box`）を保持する。
+
+1. **初期所有者自動バインド (Initial Owner Binding)**:
+   - `make-channel` / `make-spsc-channel` 生成時、実行中コンテキスト `(current-synapse-task)` が存在すれば、そのタスクをチャネルの初期所有者として登録し、タスクの所有リソース一覧（`task-owned-channels`）へ自動登録する（Issue #731）。
+   - タスクコンテキスト外で生成された場合は `owner = #f`（独立共有チャネル / Unowned Channel）。
+2. **所有権の原子的移転 (Atomic Ownership Transfer)**:
+   - `(channel-transfer-ownership! ch target-task)`:
+     チャネルの所有権を現在の所有者から `target-task` へ CAS（Compare-And-Swap）ループによりアトミックに移譲する。旧所有者の管理一覧から安全に登録解除され、新所有者の管理一覧へ登録される。
+   - `(channel-transfer! ch from-task to-task)`:
+     送信元タスク（`from-task`）が現在の所有者と厳密に一致することを検証した上で、安全に `to-task` へ移転する（不一致時は例外送出）。
+3. **独立・共有通信路化 (Disown & Share)**:
+   - `(channel-disown! ch)` / `(channel-share! ch)`:
+     チャネルを特定タスクの生死から切り離し、`owner = #f` とする。特定タスクが終了またはクラッシュしても道連れ破棄されず、明示的な `channel-close!` または GC によってのみ管理される共有通信路となる。
+4. **所有者照会**:
+   - `(channel-owner ch)`: 現在の所有タスク（`<task-context>` または `#f`）を返す。
+
+### 4.1.2 正常終了時 Graceful Drain とクラッシュ時 Crash Poisoning の明確な分離 (Issue #752)
+
+タスク終了クリーンアップ（`task-cleanup-owned-channels!` / `task-handle-termination!`）において、終了理由に応じた決定論的動作を保証する：
+
+```mermaid
+flowchart TD
+    Term["Task Termination (task-cleanup-owned-channels!)"] --> ReasonCheck{reason == 'normal ?}
+    ReasonCheck -- Yes (正常完了) --> Graceful["Graceful Close (channel-close!)<br/>1. closed-box を #t に設定<br/>2. 待機中受信者・送信者を起床<br/>3. バッファ残存メッセージの完全読込（Drain）を保証<br/>4. バッファ枯渇時に初めて EOF ('closed) を返却"]
+    ReasonCheck -- No (クラッシュ/パニック) --> Poison["Crash Poisoning (channel-poison!)<br/>1. closed-box を 'poisoned に設定<br/>2. 待機中受信者・送信者を即時起床<br/>3. 例外/エラー ('poisoned) を即時通知<br/>4. デッドロック（CWE-833）を完全遮断"]
+```
+
+- **正常終了（`safe-reason == 'normal'`）**:
+  - `(channel-close! ch)` を実行。チャネルバッファに残存しているメッセージは、コンシューマがすべて読み切り EOF（`'closed`）を検知するまで安全に読み出し可能（**Graceful Drain 保証 / CWE-703 偽カスケード障害排除**）。
+- **異常終了・クラッシュ（`safe-reason != 'normal'`）**:
+  - `(channel-poison! ch safe-reason wake-hook)` を実行。待機キュー内の全タスクを直ちに起床させ、`'poisoned` 例外を送出（**CWE-833 デッドロック完全防止**）。
+- **独立チャネル（`owner == #f`）**:
+  - いずれのタスクの終了・クラッシュ時にもクローズ・毒化されない。
+
 ## 4.2 Fan-out / Broadcast（明示的ディープコピー）
 
 複数プロセスへのメッセージ同報配信では、ゼロコピー Move は数理的に破綻する。
@@ -275,6 +335,32 @@ flowchart TD
 ```
 
 この決定論的バックプレッシャーにより、上流の高速プロデューサが下流のコンシューマを圧倒してメモリを枯渇させる事故（OOM）を数理的に防止する。
+
+### 4.3.2 タスクメールボックスの O(1) 2-List FIFO（Banker's Queue）化と有界流量制御 (Issue #750)
+
+アクター間非同期メッセージパッシングにおいて、タスク固有の受信箱（Mailbox）が無制限に膨張するとメモリ枯渇（CWE-400）に至る。Synapse では以下の設計により $O(1)$ 最適化と安全な有界制御を両立する：
+
+```mermaid
+flowchart LR
+    subgraph TaskMailbox ["2-List Banker's Queue (front-list, rear-list, count)"]
+        Enq["task-mailbox-enqueue!"] -->|"O(1) cons"| Rear["rear-list (逆順リスト)"]
+        Rear -.->|"front-list 枯渇時 O(1) Amortized reverse"| Front["front-list (正順リスト)"]
+        Front -->|"O(1) car / cdr"| Deq["task-mailbox-dequeue!"]
+    end
+```
+
+1. **2-List FIFO（Banker's Queue）による O(1) 保証**:
+   - 従来の単一リスト（`append` による $O(N)$ 劣化）を廃止し、`front-list` と `rear-list` を保持する 2-List 構造を採用。
+   - エンキューは `rear-list` への $O(1)$ 先頭追加、デキューは `front-list` からの $O(1)$ 取り出し（空になった際のみ `reverse` による償却 $O(1)$ 移動）。
+   - メールボックスサイズは独立カウンタ（`count`）で原子的管理され、$O(1)$ で取得可能。
+2. **有界容量（Bounded Capacity）とオーバーフローポリシー制御**:
+   - デフォルト上限 `*task-mailbox-default-capacity*`（1024 メッセージ）を設定。
+   - `task-mailbox-overflow-policy` により以下の 3 ポリシーを選択可能：
+     - `'reject`: 上限超過時にメッセージを拒絶し `#f` を返却（プロデューサにバックプレッシャーを伝播）。
+     - `'drop-oldest`: 最も古い未処理メッセージを破棄して最新メッセージを格納。
+     - `'drop-newest`: 新規メッセージを破棄。
+3. **死活監視・緊急シグナルの常時バイパス保護**:
+   - `DOWN`, `EXIT`, `poisoned`, `io_complete` 等の死活監視・制御シグナルは、メールボックスが満杯であっても上限判定をバイパスし、即時かつ確実にエンキューされる。これにより監視システムの沈黙やデッドロックを防止する。
 
 ---
 
@@ -546,6 +632,18 @@ flowchart TD
 3. **ゼロシステムコール（SQPOLL）**:
    - カーネルスレッドが SQ リングをポーリングするため、ユーザー空間からシステムコールを発行することなく毎秒数百万件の I/O を CPU 負荷最小で消化。
 
+### 7.4.4 Worker スロットと Per-Worker TLS / メモリ領域の完全個別分離 (Issue #747, #748)
+
+マルチスレッド並列実行下において、共有グローバル変数を用いた実行中タスクの判定はデータ競合とメモリ汚染の温床となる。Synapse ではアーキテクチャ依存の確実なスレッドローカル隔離を導入している：
+
+1. **x86-64 における Per-Worker TLS テーブル (Issue #747)**:
+   - 最大 64 個の固定ワーカー論理スロット（`*worker-current-task-tls*`）を確保。
+   - トランポリンアドレスまたは論理スロットインデックス（`%current-worker-tls-index`）に基づき、各ネイティブワーカーが自身に割り当てられた独立 TLS エントリのみを排他的に更新。
+   - `let*` 束縛による以前のタスクコンテキスト保存・復元（RAII スタイル）により、ネストしたタスク実行やコンテキストスイッチ時にも安全な境界隔離を保証。
+2. **AArch64 における個別 Worker メモリ領域分離 (Issue #748)**:
+   - AArch64 環境において、ワーカー実行スタックおよびアリーナメモリ領域を物理的にアドレス分離。
+   - コア間でのスタック越境破壊（Cross-Stack Smashing）をハードウェアレベルで排除し、ヘテロジニアス環境（ARM big.LITTLE / Apple Silicon / Graviton）での決定論的並列動作を確立。
+
 ---
 
 # 8. コントロールプレーン境界と分散ロールバック制御
@@ -636,28 +734,44 @@ flowchart TD
   - 監視対象タスクの終了理由（正常終了、アリーナ枯渇、パニック等）を検知し、監視元タスクのチャネルへ `'(DOWN <ref> <target-id> <reason>)` 通知メッセージを配送する。監視元の生死は対象タスクに影響を与えない。
 - **関連 Issue**: [[Issue #666]](../issues/closed/666-implement-synapse-task-links-and-monitors.md)
 
-### 8.4.2 チャネル毒化防止（Poisoning / Auto-Close）とデッドロック遮断
-- チャネルで `channel-recv!` または `channel-send!` 待機中のタスクが存在する状況下で、通信対向タスクが異常終了した場合、待機側タスクが永久に起床されないデッドロック（CWE-833）を防止する。
-- タスク終了時に保有チャネルのステータスフラグを `CHANNEL_POISONED` へ不可逆遷移させ、待機キュー内の全タスクを即時に `TASK_ERROR` 状態で起床させて脱出させる。
-- **関連 Issue**: [[Issue #666]](../issues/closed/666-implement-synapse-task-links-and-monitors.md)
+### 8.4.2 チャネル毒化防止（Poisoning / Auto-Close）と Graceful Drain の二重構造 (Issue #752)
+- チャネルで `channel-recv!` または `channel-send!` 待機中のタスクが存在する状況下で、通信対向タスクが終了・クラッシュした場合の動作を二重構造で厳密に規定する：
+  1. **正常終了時（Graceful Drain）**:
+     - 送信タスクが `reason == 'normal'` で終了した場合、チャネルは毒化されず `(channel-close! ch)` による正常クローズとなる。
+     - バッファ内に残存する未読データは、受信側タスクが EOF（`'closed`）に達するまで安全に読み出し可能であり、意図しない道連れクラッシュ（CWE-703 偽カスケード障害）を完全に排除する。
+  2. **異常クラッシュ時（Crash Poisoning / CWE-833 防止）**:
+     - 送信タスクがパニック（`panic`）、強制終了（`killed`）、タイムアウト等でクラッシュした場合、保有チャネルを直ちに `(channel-poison! ch reason)` で毒化する。
+     - 送信・受信待機中の全タスクを即座に起床させ、`'poisoned` 例外を送出することで、永久ハング・デッドロック（CWE-833）を遮断する。
+- **関連 Issue**: [[Issue #666]](../issues/closed/666-implement-synapse-task-links-and-monitors.md), [[Issue #752]](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md)
 
-### 8.4.3 Supervision Tree（階層型監視木）と再起動戦略
+### 8.4.3 Supervision Tree（階層型監視木）と自律復旧基盤 (Issue #667, #735, #742, #743, #751)
 - Layer 1（R7RS 制御プレーン）または専用の監視タスクを木構造（Tree）として編成し、末端ワーカーの死活を自律監視する。
 - **3大再起動戦略（Restart Strategies）**:
   1. `one-for-one`: クラッシュした当該タスクのみを新品のアリーナで再生成する（独立したワーカー群に適用）。
   2. `one-for-all`: 密結合したパイプライン内の1タスクが死んだ際、配下の全タスクを一括終了・再生成する（ステージ間の状態不整合を排除）。
   3. `rest-for-one`: 起動順序に依存関係がある場合、障害が発生したタスクおよびそれ以降に起動されたタスク群のみを順次再起動する。
+- **再起動子タスクのスケジューラ自動投入 (Issue #742)**:
+  - one_for_one / one_for_all / rest_for_one のいずれの戦略においても、スーパーバイザによって再生成された新品の子タスクは、自動的にスケジューラのローカルランキューまたはグローバルキューへエンキュー（投入）され、即座に並行実行が再開される。
+- **Supervisor 自身の独立アクタータスク化と並行再起動競合の排除 (Issue #743)**:
+  - スーパーバイザを専用の独立アクタータスク（`supervisor-task`）として稼働させ、自身へのシグナル受信ループを閉じた単一スレッド／コンテキストでシリアライズ処理する。
+  - 複数子タスクの同時多発クラッシュ時であっても、再起動処理の競合（Race Condition）や重複生成によるリソースリークを完全に防止する。
+- **非 DOWN シグナル退避キュー（Preserved Inbox）とメッセージルーティング (Issue #751)**:
+  - スーパーバイザの受信ループにおいて、`DOWN` 以外のメッセージ（管理下タスクからの `EXIT` シグナル、`io_complete` 非同期完了通知、外部からのカスタム RPC 等）が不当に破棄される問題を解消。
+  - 管理下子タスクからの `EXIT` は自動再起動へルーティングし、管理外メッセージは専用の保留キュー（`preserved-inbox`）に安全退避して `supervisor-take-preserved-message!` 等で取得可能とする。また、`supervisor-set-message-handler!` によりカスタムメッセージハンドラを登録可能。
+- **初期引数のディープコピー保持 (Issue #735)**:
+  - 子タスクの初期起動引数（`init-args`）をディープコピーして保持し、再起動時に常にミューテーションされていないクリーンな引数セットで再起動する。
 - **再起動頻度制限（MaxRestarts / MaxTime）**:
   - 設定された時間窓（Time Window）内で再起動回数が上限を超えた場合（Flapping / Crash Loop 状態）、スーパーバイザ自身が上位の親スーパーバイザへクラッシュをエスカレーションし、無限再起動による CPU 枯渇（CWE-400）を遮断する。
-- **関連 Issue**: [[Issue #667]](../issues/closed/667-implement-synapse-supervision-tree-and-restart-strategies.md)
+- **関連 Issue**: [[Issue #667]](../issues/closed/667-implement-synapse-supervision-tree-and-restart-strategies.md), [[Issue #742]](../issues/closed/742-enqueue-restarted-child-task-to-scheduler.md), [[Issue #743]](../issues/closed/743-isolate-supervisor-into-independent-actor-task.md), [[Issue #751]](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md)
 
-### 8.4.4 "Let It Crash" 哲学とエフェメラルアリーナ O(1) 瞬時解放の融合
+### 8.4.4 "Let It Crash" 哲学とエフェメラルアリーナ安全瞬時解放の融合 (Issue #668, #745)
 - **Fail-Fast パニック (`synapse-panic! reason`)**:
   - 不変条件違反、パケット破損、メモリ限界に直面した際、ASC 内部で無理な局所エラー回復を行わず即座にタスクを停止する。
-- **ゼロコスト・クリーンアップ**:
+- **ゼロコスト・クリーンアップと停止後安全リセット (Issue #745)**:
   - タスク独立アリーナのバンプポインタを $O(1)$ で 0 リセットするだけで全メモリが回収され、GC 走査やファイナライザ遅延が一切発生しない。
+  - タスクが完全に終了状態（`'terminated`）へ遷移したことをアトミック確認した後にのみアリーナをリセットすることで、並行実行中の別ワーカーが旧アリーナ領域を読み書きする競合（Use-After-Free）を完全に排除する。
   - 共有メモリを持たない（Shared-Nothing）ため、クラッシュしたタスクが他タスクのヒープやスタックを汚染することは原理的にあり得ず、新品のクリーンな状態での再起動が保証される。
-- **関連 Issue**: [[Issue #668]](../issues/closed/668-implement-synapse-fail-fast-let-it-crash-semantics.md)
+- **関連 Issue**: [[Issue #668]](../issues/closed/668-implement-synapse-fail-fast-let-it-crash-semantics.md), [[Issue #745]](../issues/closed/745-verify-task-stop-before-arena-reset.md)
 
 ### 8.4.5 プロセス名レジストリ（Registry）と動的チャネル再バインド
 - スーパーバイザによってタスクが再起動されると、新しい Task Context と新しいローカルチャネルが割り当てられる。
@@ -753,11 +867,15 @@ flowchart TD
 ## 12.1 split-planes-pass (Plane 境界分離)
 `spawn-task` や `with-channel` を検知し、コントロールプレーン用 AST と計算プレーン用 AST に分離する。外部変数のキャプチャ解析を行い、即値コピーまたはディープコピー境界コードを生成する。
 
-## 12.2 check-affine-types (線形所有権検査と自動 RAII Drop)
+## 12.2 check-affine-types (型・束縛解析ベースの厳格アフィン線形性検査と自動 RAII Drop / Issue #749)
 アフィン部分言語コア（ASC）内部構文木において、変数が複数回消費されていないか（Use-After-Move の拒絶）、`set!` や `call/cc` が含まれていないかを静的検証する。
-- **線形性違反のコンパイル拒絶**: 二重消費が検知された場合は、明確なファイル名・行番号・シンボル名とともにコンパイルエラーを出力して中断。
+- **型・束縛解析に基づく厳格検査 (Issue #749)**:
+  - 従来の「変数名（`ch*` や `*channel*`）に依存したヒューリスティクス検査」を完全撤廃。
+  - AST 束縛解析（`make-channel`, `make-spsc-channel` 等のコンストラクタ式）およびコンパイラ型推論（`type: channel`）により、プログラマが命名した任意の変数名（`c`, `pipe`, `stream` 等）に対して厳格に線形型をバインド。
+- **線形性違反のコンパイル拒絶**:
+  - 同一チャネルや線形リソースに対する二重送信（`channel-send!` 後の再アクセス）、ブランチ間での消費不整合（片方の分岐でのみ消費されるケースの不変条件違反）を静的に検出し、ファイル名・行番号・シンボル名とともに明確なコンパイルエラーを出力して中断。
 - **スコープ離脱時の自動 RAII Drop**:
-  所有権が他関数やチャネルに譲渡（Move）されずに関数スコープを抜ける線形変数に対し、コンパイラが自動的にリソース解放コード（アリーナ内オブジェクトのクリーンアップまたはデストラクタ呼び出し）を AST 末尾に注入し、未消費リソースの決定論的即時解放を保証する。
+  - 所有権が他関数やチャネルに譲渡（Move）されずに関数スコープを抜ける線形変数に対し、コンパイラが自動的にリソース解放コード（アリーナ内オブジェクトのクリーンアップまたはデストラクタ呼び出し）を AST 末尾に注入し、未消費リソースの決定論的即時解放を保証する。
 
 ## 12.3 fbip-inplace-transform (Perceus 再利用)
 静的に消費が確認されたデータ構造の更新を、直接生メモリ上書き命令へ置換する。不変データ構造の関数型更新であってもヒープ確保を完全にスキップする。
@@ -1152,6 +1270,60 @@ mindmap
   - Seccomp/コンテナ制限環境への自動フォールバック・シミュレータ内蔵。
 - **DoD**:
   - 並行 I/O 実行下で OS スレッドがブロックされず、他タスクの計算が継続すること（全 61 テスト PASS 達成済み）。
+
+---
+
+## 14.10 Phase 8: Synapse 並行ランタイム堅牢化・メモリ隔離・所有権拡張 (Hardening, Memory Isolation & Ownership Semantics)
+
+### Task 8.1: コルーチン例外境界接続とハンドラ連鎖初期化 (`ulisp/runtime/concurrency/context.scm`) [完了 / 済]
+- **目的**: コルーチン境界内での未捕捉例外発生時におけるプロセスクラッシュ（SIGSEGV）を防止し、健全なエスケープ継続脱出を保証。
+- **関連 Issue**: [[Issue #740 (完了)]](../issues/closed/740-fix-coroutine-task-exception-boundary.md)
+- **DoD**: コルーチン例外脱出時に外側プロセスが道連れクラッシュせず、`'terminated` 状態へ安全遷移すること。
+
+### Task 8.2: タスク正常終了時クリーンアップ・DOWN通知および登録解除 (`ulisp/runtime/concurrency/links.scm`) [完了 / 済]
+- **目的**: 正常完了タスクのリソースリークおよび永続監視ハングの解消。
+- **関連 Issue**: [[Issue #741 (完了)]](../issues/closed/741-handle-normal-task-termination-and-cleanup.md)
+- **DoD**: 正常終了タスクがグローバルテーブルおよび監視リストから自動解除され、監視側へ `'(DOWN <ref> <tid> normal)` が確実に配信されること。
+
+### Task 8.3: Supervisor スケジューラ自動投入 ＆ 独立アクター化 (`ulisp/runtime/concurrency/supervisor.scm`) [完了 / 済]
+- **目的**: one_for_all / rest_for_one 再起動タスクの実行再開保証、および複数タスク同時クラッシュ時の競合排除。
+- **関連 Issue**: [[Issue #742 (完了)]](../issues/closed/742-enqueue-restarted-child-task-to-scheduler.md), [[Issue #743 (完了)]](../issues/closed/743-isolate-supervisor-into-independent-actor-task.md)
+- **DoD**: 再起動タスクがスケジューラに自動投入されて実行完了すること、およびスーパーバイザ独立アクタータスク化により競合なく 100% 復旧すること。
+
+### Task 8.4: Layer 1 セーフポイント強制自動挿入 (`ulisp/runtime/concurrency/preempt.scm`) [完了 / 済]
+- **目的**: R7RS コントロールプレーン内のループや関数呼び出しからの強制終了・プリエンプション遅延を遮断。
+- **関連 Issue**: [[Issue #744 (完了)]](../issues/closed/744-insert-safepoints-into-layer-1-loops-and-calls.md)
+- **DoD**: Layer 1 無限ループが指定バジェット消費後に即座に中断され、他タスクへ CPU が渡ること。
+
+### Task 8.5: タスク完全停止確認後 Ephemeral Arena 安全リセット (`ulisp/runtime/concurrency/arena.scm`) [完了 / 済]
+- **目的**: 並行ワーカー間でのメモリ再利用競合（Use-After-Free）の完全排除。
+- **関連 Issue**: [[Issue #745 (完了)]](../issues/closed/745-verify-task-stop-before-arena-reset.md)
+- **DoD**: タスク状態が `'terminated` であることを原子的確認後にのみアリーナをリセットすること。
+
+### Task 8.6: x86-64 Per-Worker TLS & AArch64 メモリ個別分離 (`ulisp/runtime/concurrency/channel.scm`, `scheduler.scm`) [完了 / 済]
+- **目的**: 共有大域変数に依存しない安全なスレッドローカル Worker 判別、および AArch64 でのメモリスタック物理分離。
+- **関連 Issue**: [[Issue #747 (完了)]](../issues/closed/747-implement-tls-worker-identification-for-x86-64.md), [[Issue #748 (完了)]](../issues/closed/748-isolate-worker-memory-areas-on-aarch64.md)
+- **DoD**: 32MB 超の並列高負荷実行下で TLS スロットの混同やスタック越境破壊が 0 件であること。
+
+### Task 8.7: 型・束縛解析ベースの厳格アフィン線形性検査 (`ulisp/compiler/frontend/080_annotator.scm`) [完了 / 済]
+- **目的**: 変数名依存ヒューリスティクスの完全撤廃と、任意の識別子に対する堅牢な所有権二重消費防止。
+- **関連 Issue**: [[Issue #749 (完了)]](../issues/closed/749-implement-type-based-affine-linearity-check.md)
+- **DoD**: AST 束縛解析および型情報に基づき、任意の変数名に対する Use-After-Move が 100% コンパイル時検出されること。
+
+### Task 8.8: タスクメールボックス O(1) 2-List FIFO 化と有界流量制御 (`ulisp/runtime/concurrency/channel.scm`) [完了 / 済]
+- **目的**: アクター間非同期通信における $O(N)$ 性能劣化と無制限メモリ消費（CWE-400）の排除。
+- **関連 Issue**: [[Issue #750 (完了)]](../issues/closed/750-implement-bounded-fifo-task-mailbox-queue.md)
+- **DoD**: 2-List Banker's Queue による $O(1)$ エンキュー・デキュー、有界上限（1024）および緊急シグナルバイパスが機能すること（全 83 テスト PASS）。
+
+### Task 8.9: Supervisor 非 DOWN シグナル保持（Preserved Inbox）とルーティング (`ulisp/runtime/concurrency/supervisor.scm`) [完了 / 済]
+- **目的**: スーパーバイザ受信ループにおける非監視メッセージの不当破棄防止とカスタムメッセージハンドラ統合。
+- **関連 Issue**: [[Issue #751 (完了)]](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md)
+- **DoD**: `EXIT` シグナルによる自動再起動、`io_complete` 等の Preserved Inbox への退避・取得、カスタムハンドラ経由の RPC 応答が機能すること（全 114 テスト PASS）。
+
+### Task 8.10: チャネル所有権セマンティクス & Graceful Drain (`ulisp/runtime/concurrency/channel.scm`, `links.scm`) [完了 / 済]
+- **目的**: 所有権移転（Transfer）および共有化（Disown / Share）の確立、正常終了時バッファドレイン（Graceful Drain）とクラッシュ時毒化（Crash Poisoning）の分離。
+- **関連 Issue**: [[Issue #752 (完了)]](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md)
+- **DoD**: 正常終了時にコンシューマが残存メッセージを EOF まで安全に読み切れること、クラッシュ時に待機者が即座に毒化起床されること、および所有権操作 API 群が機能すること（全 401 テスト PASS）。
 
 ---
 
