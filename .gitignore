@@ -36,8 +36,9 @@ htmlcov/
 # Build & Distribution
 dist/
 build/
-bin/
-ulisp/bin/
+/bin/
+ulisp/bin/*
+!ulisp/bin/ulisp-boot
 ulisp/build/
 *.egg-info/
 src/web/site/app-min.js

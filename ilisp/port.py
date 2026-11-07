@@ -626,22 +626,34 @@ def get_output_string(port: StringOutputPort) -> str:
 # --- File Port Operations ---
 
 
-def open_input_file(filepath: str) -> FileInputPort:
+def open_input_file(filepath: object) -> FileInputPort:
     """Open and return a textual input port for the given file."""
-    if not isinstance(filepath, str):
+    from ilisp.types import MutableString
+
+    if isinstance(filepath, MutableString):
+        path_str = str(filepath)
+    elif isinstance(filepath, str):
+        path_str = filepath
+    else:
         raise TypeError(
-            f"open-input-file: expected str filepath, got {type(filepath).__name__}"
+            f"open-input-file: expected str or MutableString filepath, got {type(filepath).__name__}"
         )
-    return FileInputPort(filepath)
+    return FileInputPort(path_str)
 
 
-def open_output_file(filepath: str) -> FileOutputPort:
+def open_output_file(filepath: object) -> FileOutputPort:
     """Open and return a textual output port for the given file."""
-    if not isinstance(filepath, str):
+    from ilisp.types import MutableString
+
+    if isinstance(filepath, MutableString):
+        path_str = str(filepath)
+    elif isinstance(filepath, str):
+        path_str = filepath
+    else:
         raise TypeError(
-            f"open-output-file: expected str filepath, got {type(filepath).__name__}"
+            f"open-output-file: expected str or MutableString filepath, got {type(filepath).__name__}"
         )
-    return FileOutputPort(filepath)
+    return FileOutputPort(path_str)
 
 
 def call_with_port(port: Port, proc: Callable[[Port], Any]) -> Any:

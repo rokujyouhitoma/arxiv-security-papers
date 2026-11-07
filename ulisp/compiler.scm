@@ -1151,29 +1151,19 @@
           (loop (cdr rest) (string-append acc "/" part))))))
 
 (define (find-included-file path)
-  (let ((p (open-input-file path)))
-    (if p
-        (begin (close-input-port p) path)
-        (let* ((prefixed (string-append "ulisp/" path))
-               (p2 (open-input-file prefixed)))
-          (if p2
-              (begin (close-input-port p2) prefixed)
-              (if (string-starts-with? path "ulisp/")
-                  (let* ((stripped (substring path 6 (string-length path)))
-                         (p3 (open-input-file stripped)))
-                    (if p3
-                        (begin (close-input-port p3) stripped)
-                        path))
-                  path))))))
+  (let ((try-file (lambda (p) (if (file-exists? p) p #f))))
+    (or (try-file path)
+        (try-file (string-append "ulisp/" path))
+        (if (string-starts-with? path "ulisp/")
+            (try-file (substring path 6 (string-length path)))
+            #f)
+        path)))
 
 (define (ulisp-library-available? name)
   (or (builtin-library-name? name)
       (let* ((sld-rel (library-name->sld-path name))
-             (resolved (find-included-file sld-rel))
-             (p (open-input-file resolved)))
-        (if p
-            (begin (close-input-port p) #t)
-            #f))))
+             (resolved (find-included-file sld-rel)))
+        (file-exists? resolved))))
 
 (define (eval-feature-requirement req)
   (cond
@@ -4852,20 +4842,13 @@
                 (loop (+ i 1)))))))
 
 (define (find-included-file path)
-  (let ((p (open-input-file path)))
-    (if p
-        (begin (close-input-port p) path)
-        (let* ((prefixed (string-append "ulisp/" path))
-               (p2 (open-input-file prefixed)))
-          (if p2
-              (begin (close-input-port p2) prefixed)
-              (if (string-starts-with? path "ulisp/")
-                  (let* ((stripped (substring path 6 (string-length path)))
-                         (p3 (open-input-file stripped)))
-                    (if p3
-                        (begin (close-input-port p3) stripped)
-                        path))
-                  path))))))
+  (let ((try-file (lambda (p) (if (file-exists? p) p #f))))
+    (or (try-file path)
+        (try-file (string-append "ulisp/" path))
+        (if (string-starts-with? path "ulisp/")
+            (try-file (substring path 6 (string-length path)))
+            #f)
+        path)))
 
 (define (resolve-include-path path)
   (if (path-traversal? path)
@@ -4873,10 +4856,9 @@
       (let ((stack (car *include-path-stack*)))
         (if (and (pair? stack) (not (string=? (extract-dir-path (car stack)) "")))
             (let* ((parent-dir (extract-dir-path (car stack)))
-                   (relative-path (string-append parent-dir path))
-                   (p0 (open-input-file relative-path)))
-              (if p0
-                  (begin (close-input-port p0) relative-path)
+                   (relative-path (string-append parent-dir path)))
+              (if (file-exists? relative-path)
+                  relative-path
                   (find-included-file path)))
             (find-included-file path)))))
 
