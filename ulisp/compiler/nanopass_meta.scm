@@ -339,14 +339,6 @@
 (define (nanopass-ast-valid-nt? lang-name expr nt-name)
   (nanopass-check-valid-node expr nt-name (nanopass-lookup-language lang-name)))
 
-(define (has-unlifted-lambda? expr)
-  (cond
-    ((not (pair? expr)) #f)
-    ((eq? (car expr) 'quote) #f)
-    ((eq? (car expr) 'lambda) #t)
-    (else (or (has-unlifted-lambda? (car expr))
-              (has-unlifted-lambda? (cdr expr))))))
-
 (define (nanopass-ast-valid? lang-name expr)
   (nanopass-ast-valid-nt? lang-name expr
                           (nanopass-lang-entry (nanopass-lookup-language lang-name))))
@@ -393,21 +385,6 @@
               (and (eq? (car expr) 'quote)
                    (pair? (cdr expr))
                    (null? (cddr expr))))
-             ((eq? head '%program)
-              (and (eq? (car expr) '%program)
-                   (pair? (cdr expr))
-                   (pair? (cddr expr))
-                   (if (eq? (nanopass-lang-name lang) 'L_lifted)
-                       (and (not (has-unlifted-lambda? (cadr expr)))
-                            (not (has-unlifted-lambda? (caddr expr)))
-                            (let check-fns ((fns (cadr expr)))
-                              (if (null? fns)
-                                  #t
-                                  (and (pair? fns)
-                                       (pair? (car fns))
-                                       (eq? (caar fns) '%function)
-                                       (check-fns (cdr fns))))))
-                       #t)))
              ((symbol? head)
               (let ((cls (nanopass-classify-meta-var head lang)))
                 (if cls
@@ -419,7 +396,7 @@
                                  (nanopass-terminal-matches? (cadr cls) (car expr))
                                  (nanopass-check-valid-node (car expr) (cadr cls) lang))
                              (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)))
-                    ;; Keyword-headed production: (if ...), (cond ...), (let ...), etc.
+                    ;; Keyword-headed production: (if ...), (cond ...), (let ...), (%program ...), etc.
                     (if (eq? head (car expr))
                         (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)
                         #f))))
@@ -926,12 +903,273 @@
         #f
         (nanopass-apply-list proc vals))))
 
-;;; Catamorphism Automatic Traversal Code Synthesizer
-;;; Automatically traverses non-matching AST nodes recursively.
+;;; Catamorphism Automatic Traversal Code Synthesizer (DSN-33-01 T1.2)
+;;; Automatically traverses non-matching AST nodes recursively according to
+;;; `define-language` production schemas.
 ;;; Supports both AST transformation (with inherited attributes) and pure analyzer passes (lang-out = '*).
+
+;;; Optional language lookup without raising an error
+(define (nanopass-lookup-language-opt name)
+  (if (not (symbol? name))
+      #f
+      (let ((entry (assq name (car *nanopass-languages*))))
+        (if entry (cdr entry) #f))))
+
+;;; Find the matching production for `ir` in `lang` (searching `nt-name` first, then all nonterminals)
+;;; Returns `(cons matched-nt prod)` or `#f`.
+(define (nanopass-find-matching-production ir nt-name lang)
+  (let* ((nts (nanopass-lang-nonterminals lang))
+         (try-nt
+          (lambda (nt-entry)
+            (let ((curr-nt (car nt-entry))
+                  (prods (caddr nt-entry)))
+              (let loop ((ps prods))
+                (cond
+                  ((null? ps) #f)
+                  ((nanopass-production-matches? (car ps) ir lang curr-nt)
+                   (cons curr-nt (car ps)))
+                  (else (loop (cdr ps))))))))
+         (primary-entry (if (symbol? nt-name) (assq nt-name nts) #f))
+         (primary-match (if primary-entry (try-nt primary-entry) #f)))
+    (if primary-match
+        primary-match
+        (let loop-nts ((rest nts))
+          (if (null? rest)
+              #f
+              (let ((e (car rest)))
+                (if (and primary-entry (eq? (car e) nt-name))
+                    (loop-nts (cdr rest))
+                    (let ((m (try-nt e)))
+                      (if m m (loop-nts (cdr rest)))))))))))
+
+;;; Schema-driven subpattern transformer
+;;; When `pat` is a nonterminal meta-variable (e.g. `d` for `Def`), if `target-nt` is `Def`
+;;; and `val` is a top-level `(define ...)` definition while `curr-nt` is `Program` (so an
+;;; `Expr`-only pass with an internal-define rule would otherwise turn top-level `define` into `let`),
+;;; we traverse `val` directly via `Def`'s production `(define x e)` so its top-level `define`
+;;; wrapper is preserved and `call-recurse` is applied to its body `e`.
+;;; For all other nonterminals (`FunctionDecl`, `MainDecl`, `Inst`, `Expr`, etc.), we invoke
+;;; `call-recurse` on `val` so any user-defined rules on `val` are tried first before falling
+;;; back to `nanopass-catamorphism-step`!
+(define (nanopass-schema-transform-subpattern pat val lang curr-nt call-recurse)
+  (cond
+    ((symbol? pat)
+     (let ((cls (nanopass-classify-meta-var pat lang)))
+       (if (and cls (eq? (car cls) 'nonterminal))
+           (let ((target-nt (cadr cls)))
+             (if (and (eq? target-nt 'Def)
+                      (pair? val)
+                      (eq? (car val) 'define))
+                 (let ((sub-match (nanopass-find-matching-production val 'Def lang)))
+                   (if (and sub-match (pair? (cdr sub-match)))
+                       (nanopass-schema-transform-node (cdr sub-match) val lang 'Def call-recurse)
+                       (call-recurse val)))
+                 (call-recurse val)))
+           val)))
+    ((pair? pat)
+     (if (null? val)
+         '()
+         (if (pair? val)
+             (nanopass-schema-transform-subforms pat val lang curr-nt call-recurse)
+             val)))
+    (else val)))
+
+;;; Schema-driven subforms list transformer
+(define (nanopass-schema-transform-subforms prod-rest expr-rest lang curr-nt call-recurse)
+  (cond
+    ((or (null? prod-rest) (null? expr-rest))
+     expr-rest)
+    ((eq? (car prod-rest) '...)
+     expr-rest)
+    ;; Ellipsis pattern: (item-pat ... . tail-prod)
+    ((and (pair? (cdr prod-rest)) (eq? (cadr prod-rest) '...))
+     (let* ((item-pat (car prod-rest))
+            (tail-prod (cddr prod-rest)))
+       (if (null? tail-prod)
+           (map (lambda (e)
+                  (nanopass-schema-transform-subpattern item-pat e lang curr-nt call-recurse))
+                expr-rest)
+           (let* ((k (length tail-prod))
+                  (n (length expr-rest))
+                  (split-idx (if (>= n k) (- n k) 0))
+                  (prefix (nanopass-take expr-rest split-idx))
+                  (suffix (nanopass-drop expr-rest split-idx)))
+             (append (map (lambda (e)
+                            (nanopass-schema-transform-subpattern item-pat e lang curr-nt call-recurse))
+                          prefix)
+                     (nanopass-schema-transform-subforms tail-prod suffix lang curr-nt call-recurse))))))
+    ((pair? (car prod-rest))
+     (cons (nanopass-schema-transform-subpattern (car prod-rest) (car expr-rest) lang curr-nt call-recurse)
+           (nanopass-schema-transform-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt call-recurse)))
+    (else
+     (cons (nanopass-schema-transform-subpattern (car prod-rest) (car expr-rest) lang curr-nt call-recurse)
+           (nanopass-schema-transform-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt call-recurse)))))
+
+;;; Schema-driven node transformer for matched production `prod`
+(define (nanopass-schema-transform-node prod ir lang curr-nt call-recurse)
+  (cond
+    ((not (pair? ir)) ir)
+    ((symbol? prod)
+     ;; Production is a single meta-var (e.g. `e`, `d`, `a`, `lval`) that matched a pair `ir`.
+     ;; Delegate to the sub-production that matched `ir` inside that nonterminal.
+     (let ((cls (nanopass-classify-meta-var prod lang)))
+       (if (and cls (eq? (car cls) 'nonterminal))
+           (let ((sub-match (nanopass-find-matching-production ir (cadr cls) lang)))
+             (if (and sub-match (not (equal? (cdr sub-match) prod)))
+                 (nanopass-schema-transform-node (cdr sub-match) ir lang (car sub-match) call-recurse)
+                 ir))
+           ir)))
+    ((pair? prod)
+     (let ((head (car prod)))
+       (cond
+         ((eq? head 'quote)
+          ir)
+         ((symbol? head)
+          (let ((cls (nanopass-classify-meta-var head lang)))
+            (if cls
+                ;; Application / head meta-variable: (e0 e1 ...) or (a0 a ...)
+                (cons (if (eq? (car cls) 'nonterminal)
+                          (call-recurse (car ir))
+                          (car ir))
+                      (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse))
+                ;; Keyword-headed form: (if ...), (lambda ...), (%block ...), (%lir-program ...), etc.
+                (cons (car ir)
+                      (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse)))))
+         (else
+          (nanopass-schema-transform-subforms prod ir lang curr-nt call-recurse)))))
+    (else ir)))
+
+;;; Fallback S-expression structural transform (when language/production is unregistered)
+;;; Preserves exact list structure without implicit `(begin ...)` body wrapping side-effects.
+(define (nanopass-fallback-transform-node ir call-recurse)
+  (if (not (pair? ir))
+      ir
+      (let ((op (car ir)))
+        (case op
+          ((quote)
+           ir)
+          ((if)
+           (if (null? (cdddr ir))
+               (list 'if (call-recurse (cadr ir)) (call-recurse (caddr ir)))
+               (list 'if (call-recurse (cadr ir)) (call-recurse (caddr ir)) (call-recurse (cadddr ir)))))
+          ((begin)
+           (cons 'begin (map call-recurse (cdr ir))))
+          ((lambda)
+           (cons 'lambda (cons (cadr ir) (map call-recurse (cddr ir)))))
+          ((let)
+           (if (and (pair? (cdr ir)) (symbol? (cadr ir)))
+               (cons 'let
+                     (cons (cadr ir)
+                           (cons (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (caddr ir))
+                                 (map call-recurse (cdddr ir)))))
+               (cons 'let
+                     (cons (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (cadr ir))
+                           (map call-recurse (cddr ir))))))
+          ((letrec let* letrec*)
+           (cons op
+                 (cons (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (cadr ir))
+                       (map call-recurse (cddr ir)))))
+          ((set!)
+           (list 'set! (cadr ir) (call-recurse (caddr ir))))
+          ((%program)
+           (list '%program
+                 (map (lambda (d)
+                        (if (and (pair? d) (eq? (car d) 'define))
+                            (if (pair? (cadr d))
+                                (cons 'define (cons (cadr d) (map call-recurse (cddr d))))
+                                (list 'define (cadr d) (call-recurse (caddr d))))
+                            (call-recurse d)))
+                      (cadr ir))
+                 (call-recurse (caddr ir))))
+          (else
+           (let loop ((cur (cdr ir)) (acc (list (call-recurse op))))
+             (cond
+               ((null? cur) (reverse acc))
+               ((not (pair? cur)) (append (reverse acc) (call-recurse cur)))
+               (else
+                (loop (cdr cur) (cons (call-recurse (car cur)) acc))))))))))
+
+;;; Schema-driven analyzer accumulator fold for subpattern
+(define (nanopass-schema-analyze-subpattern pat val lang acc step-acc)
+  (cond
+    ((symbol? pat)
+     (let ((cls (nanopass-classify-meta-var pat lang)))
+       (if (and cls (eq? (car cls) 'nonterminal))
+           (step-acc val acc)
+           acc)))
+    ((pair? pat)
+     (if (pair? val)
+         (nanopass-schema-analyze-subforms pat val lang acc step-acc)
+         acc))
+    (else acc)))
+
+;;; Schema-driven analyzer accumulator fold for subforms list
+(define (nanopass-schema-analyze-subforms prod-rest expr-rest lang acc step-acc)
+  (cond
+    ((or (null? prod-rest) (null? expr-rest))
+     acc)
+    ((eq? (car prod-rest) '...)
+     acc)
+    ((and (pair? (cdr prod-rest)) (eq? (cadr prod-rest) '...))
+     (let* ((item-pat (car prod-rest))
+            (tail-prod (cddr prod-rest)))
+       (if (null? tail-prod)
+           (let loop ((es expr-rest) (cur-acc acc))
+             (if (null? es)
+                 cur-acc
+                 (loop (cdr es)
+                       (nanopass-schema-analyze-subpattern item-pat (car es) lang cur-acc step-acc))))
+           (let* ((k (length tail-prod))
+                  (n (length expr-rest))
+                  (split-idx (if (>= n k) (- n k) 0))
+                  (prefix (nanopass-take expr-rest split-idx))
+                  (suffix (nanopass-drop expr-rest split-idx))
+                  (acc1 (let loop ((es prefix) (cur-acc acc))
+                          (if (null? es)
+                              cur-acc
+                              (loop (cdr es)
+                                    (nanopass-schema-analyze-subpattern item-pat (car es) lang cur-acc step-acc))))))
+             (nanopass-schema-analyze-subforms tail-prod suffix lang acc1 step-acc)))))
+    (else
+     (let ((next-acc (nanopass-schema-analyze-subpattern (car prod-rest) (car expr-rest) lang acc step-acc)))
+       (nanopass-schema-analyze-subforms (cdr prod-rest) (cdr expr-rest) lang next-acc step-acc)))))
+
+;;; Schema-driven analyzer accumulator fold for matched production `prod`
+(define (nanopass-schema-analyze-node prod ir lang acc step-acc)
+  (cond
+    ((not (pair? ir)) acc)
+    ((symbol? prod)
+     (let ((cls (nanopass-classify-meta-var prod lang)))
+       (if (and cls (eq? (car cls) 'nonterminal))
+           (let ((sub-match (nanopass-find-matching-production ir (cadr cls) lang)))
+             (if (and sub-match (not (equal? (cdr sub-match) prod)))
+                 (nanopass-schema-analyze-node (cdr sub-match) ir lang acc step-acc)
+                 acc))
+           acc)))
+    ((pair? prod)
+     (let ((head (car prod)))
+       (cond
+         ((eq? head 'quote)
+          acc)
+         ((symbol? head)
+          (let ((cls (nanopass-classify-meta-var head lang)))
+            (if cls
+                ;; In pure analyzer mode, if `(car ir)` is a symbol (operator/primitive name),
+                ;; only fold into `(car ir)` when it is a compound expression (`pair?`),
+                ;; matching Nanopass analyzer convention.
+                (let ((acc1 (if (and (eq? (car cls) 'nonterminal) (pair? (car ir)))
+                                (step-acc (car ir) acc)
+                                acc)))
+                  (nanopass-schema-analyze-subforms (cdr prod) (cdr ir) lang acc1 step-acc))
+                (nanopass-schema-analyze-subforms (cdr prod) (cdr ir) lang acc step-acc))))
+         (else
+          (nanopass-schema-analyze-subforms prod ir lang acc step-acc)))))
+    (else acc)))
+
 (define (nanopass-catamorphism-step lang-in lang-out nt-name ir recurse-fn extra-args extra-out)
   (let ((extra-args (if (pair? extra-args) extra-args '()))
-        (extra-out (if (pair? extra-out) extra-out '())))
+        (extra-out (if (pair? extra-out) extra-out '()))
+        (lang (nanopass-lookup-language-opt lang-in)))
     (if (eq? lang-out '*)
         ;; Pure Analyzer mode: default for unmatched atom is accumulator (if threaded) or #f
         (cond
@@ -944,76 +1182,30 @@
                (let* ((rev-extra (reverse extra-args))
                       (initial-acc (car rev-extra))
                       (prefix (reverse (cdr rev-extra)))
-                      (elements (if (symbol? (car ir)) (cdr ir) ir)))
-                 (let loop ((cur elements) (acc initial-acc))
-                   (cond
-                     ((null? cur) acc)
-                     ((not (pair? cur))
-                      (nanopass-apply-list recurse-fn (cons cur (append prefix (list acc)))))
-                     (else
-                      (let* ((item (car cur))
-                             (new-acc (nanopass-apply-list recurse-fn (cons item (append prefix (list acc))))))
-                        (loop (cdr cur) new-acc))))))
+                      (step-acc
+                       (lambda (item cur-acc)
+                         (nanopass-apply-list recurse-fn (cons item (append prefix (list cur-acc))))))
+                      (matched (if lang (nanopass-find-matching-production ir nt-name lang) #f)))
+                 (if matched
+                     (nanopass-schema-analyze-node (cdr matched) ir lang initial-acc step-acc)
+                     (let ((elements (if (symbol? (car ir)) (cdr ir) ir)))
+                       (let loop ((cur elements) (acc initial-acc))
+                         (cond
+                           ((null? cur) acc)
+                           ((not (pair? cur))
+                            (step-acc cur acc))
+                           (else
+                            (loop (cdr cur) (step-acc (car cur) acc))))))))
                #f)))
-        ;; Transform mode: reconstruct AST while propagating extra inherited attributes
+        ;; Transform mode: reconstruct AST according to define-language schema while propagating inherited attributes
         (let ((call-recurse
                (lambda (node)
                  (if (null? extra-args)
                      (recurse-fn node)
                      (nanopass-apply-list recurse-fn (cons node extra-args))))))
-          (cond
-            ((not (pair? ir))
-             ir)
-            (else
-             (let ((op (car ir)))
-               (case op
-                 ((quote)
-                  ir)
-                 ((if)
-                  (if (null? (cdddr ir))
-                      (list 'if (call-recurse (cadr ir)) (call-recurse (caddr ir)))
-                      (list 'if (call-recurse (cadr ir)) (call-recurse (caddr ir)) (call-recurse (cadddr ir)))))
-                 ((begin)
-                  (cons 'begin (map call-recurse (cdr ir))))
-                 ((lambda)
-                  ;; Later passes expect a single-expression lambda body.
-                  (list 'lambda (cadr ir)
-                        (cond ((null? (cddr ir)) (list 'begin))
-                              ((null? (cdddr ir)) (call-recurse (caddr ir)))
-                              (else (cons 'begin (map call-recurse (cddr ir)))))))
-                 ((let)
-                  (if (symbol? (cadr ir))
-                      (list 'let (cadr ir)
-                            (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (caddr ir))
-                            (if (null? (cddddr ir))
-                                (call-recurse (cadddr ir))
-                                (cons 'begin (map call-recurse (cdddr ir)))))
-                      (list 'let
-                            (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (cadr ir))
-                            (if (null? (cdddr ir))
-                                (call-recurse (caddr ir))
-                                (cons 'begin (map call-recurse (cddr ir)))))))
-                 ((letrec)
-                  (list 'letrec
-                        (map (lambda (b) (list (car b) (call-recurse (cadr b)))) (cadr ir))
-                        (if (null? (cdddr ir))
-                            (call-recurse (caddr ir))
-                            (cons 'begin (map call-recurse (cddr ir))))))
-                 ((set!)
-                  (list 'set! (cadr ir) (call-recurse (caddr ir))))
-                 ((%program)
-                  (list '%program
-                        (map (lambda (d)
-                               (if (and (pair? d) (eq? (car d) 'define))
-                                   (list 'define (cadr d) (call-recurse (caddr d)))
-                                   (call-recurse d)))
-                             (cadr ir))
-                        (call-recurse (caddr ir))))
-                 (else
-                  ;; General function application or compound form
-                  (let loop ((cur (cdr ir)) (acc (list (call-recurse op))))
-                    (cond
-                      ((null? cur) (reverse acc))
-                      ((not (pair? cur)) (append (reverse acc) (call-recurse cur)))
-                      (else
-                       (loop (cdr cur) (cons (call-recurse (car cur)) acc))))))))))))))
+          (if (not (pair? ir))
+              ir
+              (let ((matched (if lang (nanopass-find-matching-production ir nt-name lang) #f)))
+                (if matched
+                    (nanopass-schema-transform-node (cdr matched) ir lang (car matched) call-recurse)
+                    (nanopass-fallback-transform-node ir call-recurse))))))))

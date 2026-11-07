@@ -24,7 +24,7 @@ ID: 755
 - 関連設計書:
   - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 4.3 節, 第 4.5 節, 第 8.2 節 課題④, 第 9.2 節 タスク **T1.3**)
 - 依存関係:
-  - 先行 Issue: [Issue #754 (T1.2: カタモルフィズムのスキーマ駆動化)](754-refactor-catamorphism-to-schema-driven-traversal.md)
+  - 先行 Issue: [Issue #754 (T1.2: カタモルフィズムのスキーマ駆動化)](closed/754-refactor-catamorphism-to-schema-driven-traversal.md)
   - 後続 Issue: [Issue #756 (T2.1: Rule Descriptor と Picopass DSL 実装)](756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md), [Issue #766 (T5.2: Hash-Consing Term DAG)](766-implement-hash-consing-term-dag-and-memoized-catamorphism.md)
 
 ---

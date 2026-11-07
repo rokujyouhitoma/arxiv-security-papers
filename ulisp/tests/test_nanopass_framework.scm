@@ -386,6 +386,150 @@
               '(if a (diff:modified b 42) c)
               (nanopass-ast-diff '(if a b c) '(if a 42 c)))
 
+;;; -----------------------------------------------------------------------
+;;; 14. Issue #754 (DSN-33-01 T1.2): Schema-Driven Catamorphism & Pure Traversal
+;;; -----------------------------------------------------------------------
+
+;; 14.1 Verify catamorphism does NOT implicitly wrap multi-expression bodies in (begin ...)
+;;      when running a pass that does not explicitly desugar lambda/let/letrec bodies.
+(define-pass test-inc-constants-src : L_src (ir) -> L_src ()
+  (Expr : Expr (ir) -> Expr ()
+    (,c (guard (number? c))
+     (+ c 1))))
+
+(assert-equal "schema catamorphism preserves multi-body lambda in L_src without implicit (begin ...)"
+              '(lambda (x y) (set! x 11) (+ x 21))
+              (test-inc-constants-src '(lambda (x y) (set! x 10) (+ x 20))))
+
+(assert-equal "schema catamorphism preserves multi-body let and letrec in L_src without implicit (begin ...)"
+              '(let ((a 2) (b 3)) (display a) (+ a b 4))
+              (test-inc-constants-src '(let ((a 1) (b 2)) (display a) (+ a b 3))))
+
+(assert-equal "schema catamorphism preserves multi-body named-let in L_src without implicit (begin ...)"
+              '(let loop ((i 1)) (display i) (loop (+ i 2)))
+              (test-inc-constants-src '(let loop ((i 0)) (display i) (loop (+ i 1)))))
+
+;; 14.2 Verify schema-driven catamorphism over L_lifted (%program and %function)
+;;      without needing explicit boilerplate rules for %program or %function
+(define-pass test-lifted-inc : L_lifted (ir) -> L_lifted ()
+  (Expr : Expr (ir) -> Expr ()
+    ((%box-fixnum ,e)
+     (list '%box-fixnum (list '%unbox-fixnum (Expr e))))))
+
+(let* ((lifted-in '(%program ((%function fn_add (a b) (%box-fixnum x)))
+                             (if #t (%box-fixnum y) 0)))
+       (lifted-out (test-lifted-inc lifted-in)))
+  (assert-equal "schema catamorphism traverses L_lifted %program and %function automatically"
+                '(%program ((%function fn_add (a b) (%box-fixnum (%unbox-fixnum x))))
+                           (if #t (%box-fixnum (%unbox-fixnum y)) 0))
+                lifted-out)
+  (assert-true "schema catamorphism output on L_lifted satisfies L_lifted?"
+               (L_lifted? lifted-out)))
+
+;; 14.3 Verify schema-driven catamorphism over L_lir_raw / L_lir_canonical
+;;      (%lir-program, %lir-function, %lir-main, %block) with ONLY an Inst rule!
+(define-pass test-lir-nop-to-inc : L_lir_raw (ir) -> L_lir_canonical ()
+  (Inst : Inst (ir) -> Inst ()
+    ((%nop)
+     '(%inc %rax))))
+
+(let* ((lir-in '(%lir-program
+                  (strings ((L_str0 "hello")))
+                  (stackmaps ((L_sp0 16 3)))
+                  (%lir-functions
+                    (%lir-function L_fn1 (params (x y)) (frame-size 16)
+                      (body
+                        (%block L_entry (x y)
+                          (%nop)
+                          (%mov %rax 10)
+                          (%return %rax)))))
+                  (%lir-main (frame-size 8)
+                    (body
+                      (%nop)
+                      (%return 0)))))
+       (lir-out (test-lir-nop-to-inc lir-in)))
+  (assert-equal "schema catamorphism traverses LIR %lir-program, %lir-function, %block, and %lir-main automatically"
+                '(%lir-program
+                  (strings ((L_str0 "hello")))
+                  (stackmaps ((L_sp0 16 3)))
+                  (%lir-functions
+                    (%lir-function L_fn1 (params (x y)) (frame-size 16)
+                      (body
+                        (%block L_entry (x y)
+                          (%inc %rax)
+                          (%mov %rax 10)
+                          (%return %rax)))))
+                  (%lir-main (frame-size 8)
+                    (body
+                      (%inc %rax)
+                      (%return 0))))
+                lir-out)
+  (assert-true "schema catamorphism output on LIR satisfies L_lir_canonical?"
+               (L_lir_canonical? lir-out)))
+
+;; 14.4 Verify schema-driven catamorphism over Backend L_asm_x86 and L_asm_aarch64
+(define-pass test-asm-x86-rewrite : L_asm_x86 (ir) -> L_asm_x86 ()
+  (Inst : Inst (ir) -> Inst ()
+    ((inc ,opnd)
+     (list 'add opnd 1))))
+
+(let* ((asm-in '(%asm-program
+                  (strings ((L_s0 "msg")))
+                  (stackmaps ((L_sp0 8 1)))
+                  (%asm-functions
+                    (%asm-function L_f0 (frame-size 8)
+                      (body
+                        (%label L_f0)
+                        (inc rax)
+                        (ret))))
+                  (%asm-main (frame-size 0)
+                    (body
+                      (inc rbx)
+                      (ret)))))
+       (asm-out (test-asm-x86-rewrite asm-in)))
+  (assert-equal "schema catamorphism traverses L_asm_x86 %asm-program, %asm-function, and %asm-main automatically"
+                '(%asm-program
+                  (strings ((L_s0 "msg")))
+                  (stackmaps ((L_sp0 8 1)))
+                  (%asm-functions
+                    (%asm-function L_f0 (frame-size 8)
+                      (body
+                        (%label L_f0)
+                        (add rax 1)
+                        (ret))))
+                  (%asm-main (frame-size 0)
+                    (body
+                      (add rbx 1)
+                      (ret))))
+                asm-out)
+  (assert-true "schema catamorphism output satisfies L_asm_x86?"
+               (L_asm_x86? asm-out)))
+
+;; 14.5 Verify schema-driven pure analyzer (lang-out = '*) over LIR only visits nonterminals
+;;      and does NOT visit terminal labels or parameter symbols.
+(define-pass test-count-lir-movs : L_lir_canonical (ir acc) -> * (acc)
+  (Inst : Inst (ir acc) -> * (acc)
+    ((%mov ,dst ,src)
+     (+ acc 1))))
+
+(let ((lir-sample '(%lir-program
+                     (strings ((L_str0 "hello")))
+                     (stackmaps ((L_sp0 16 3)))
+                     (%lir-functions
+                       (%lir-function L_fn1 (params (x y)) (frame-size 16)
+                         (body
+                           (%block L_entry (x y)
+                             (%mov %rax 1)
+                             (%mov %rbx 2)
+                             (%return %rax)))))
+                     (%lir-main (frame-size 8)
+                       (body
+                         (%mov %rcx 3)
+                         (%return 0))))))
+  (assert-equal "schema-driven pure analyzer counts %mov instructions across LIR blocks and functions"
+                3
+                (test-count-lir-movs lir-sample 0)))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)

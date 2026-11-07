@@ -13,7 +13,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **754** | nanopass-catamorphism-step の HIR 8構文ハードコード撤去と define-language スキーマ駆動再帰走査化 (DSN-33-01 T1.2) | Feature | High | In Progress | [754-refactor-catamorphism-to-schema-driven-traversal.md](754-refactor-catamorphism-to-schema-driven-traversal.md) |
 | **755** | 未変更部分木の構造共有 (Smart Reconstruction) 実装および重複 AST Diff トレースフックの一元化 (DSN-33-01 T1.3) | Feature | High | New | [755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md](755-implement-catamorphism-structural-sharing-and-unify-trace-hooks.md) |
 | **756** | 第一級ルール記述子 (Rule Descriptor) と define-picopass / define-femtopass / define-attopass DSL の実装 (DSN-33-01 T2.1) | Feature | High | New | [756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md](756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) |
 | **757** | Picopass 関数合成コンビネータ群 (picopass-seq / choice / fixpoint / when) の実装と単体テスト整備 (DSN-33-01 T2.2) | Feature | High | New | [757-implement-picopass-strategy-combinators.md](757-implement-picopass-strategy-combinators.md) |
@@ -37,6 +36,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **754** | nanopass-catamorphism-step の HIR 8構文ハードコード撤去と define-language スキーマ駆動再帰走査化 (DSN-33-01 T1.2) | Feature | 2026-11-07 | [closed/754-refactor-catamorphism-to-schema-driven-traversal.md](closed/754-refactor-catamorphism-to-schema-driven-traversal.md) |
 | **753** | 言語定義ファイルの統廃合と L_cst から L_lir_canonical への連続 extends 継承連鎖の確立 (DSN-33-01 T1.1) | Feature | 2026-11-07 | [closed/753-consolidate-define-language-files-and-establish-extends-chain.md](closed/753-consolidate-define-language-files-and-establish-extends-chain.md) |
 | **752** | チャネル所有権セマンティクスおよびクラッシュ時自動汚染範囲の仕様策定・実装 | Feature | 2026-11-07 | [closed/752-define-channel-ownership-and-crash-poisoning-semantics.md](closed/752-define-channel-ownership-and-crash-poisoning-semantics.md) |
 | **751** | Supervisor 受信ループにおける非 DOWN シグナル (EXIT, io_complete 等) の破棄防止 | Bug | 2026-11-07 | [closed/751-preserve-non-down-signals-in-supervisor-inbox.md](closed/751-preserve-non-down-signals-in-supervisor-inbox.md) |

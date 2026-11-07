@@ -90,7 +90,9 @@
            (> (length (car raw-rules)) 1)
            (pair? (caar raw-rules))
            (pair? (cadar raw-rules))
-           (pair? (cddar raw-rules)))
+           (pair? (cddar raw-rules))
+           (not (eq? (caar raw-rules) 'unquote))
+           (not (and (pair? (cadar raw-rules)) (eq? (caadar raw-rules) 'guard))))
       (car raw-rules)
       raw-rules))
 

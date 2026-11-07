@@ -23,7 +23,7 @@ ID: 764
 - 関連設計書:
   - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 3.1 節, 第 4.1 節, 第 8.2 節 課題②, 第 8.4 節, 第 9.2 節 タスク **T4.3**)
 - 依存関係:
-  - 先行 Issue: [Issue #754 (T1.2: カタモルフィズムのスキーマ駆動化)](754-refactor-catamorphism-to-schema-driven-traversal.md), [Issue #760 (T3.2: 5ステップ融合サイクル)](760-implement-local-redispatch-and-extends-eliminates-validation.md), [Issue #763 (T4.2: 030_desugar.scm の fuse-rules 置換)](763-replace-desugar-030-duplicate-rules-with-fuse-rules.md)
+  - 先行 Issue: [Issue #754 (T1.2: カタモルフィズムのスキーマ駆動化)](closed/754-refactor-catamorphism-to-schema-driven-traversal.md), [Issue #760 (T3.2: 5ステップ融合サイクル)](760-implement-local-redispatch-and-extends-eliminates-validation.md), [Issue #763 (T4.2: 030_desugar.scm の fuse-rules 置換)](763-replace-desugar-030-duplicate-rules-with-fuse-rules.md)
   - 後続 Issue: [Issue #765 (T5.1: ルール依存 DAG 自動構築)](765-implement-rule-dependency-dag-and-femtopass-cache-invalidation.md)
 
 ---

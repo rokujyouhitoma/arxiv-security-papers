@@ -468,10 +468,14 @@ graph TD
   (%global-ref x)
   (%global-set! x e)
   (a0 a |...|)
+  (if e1 e2 e3)
+  (if e1 e2)
+  (%direct-call a1 e |...|)
   (annotate x e)
   (%stack-cons a1 a2)
   (%box-fixnum e)
   (%unbox-fixnum e)
+  (e0 e1 |...|)
 ```
 
 ##### `Program` (p)
