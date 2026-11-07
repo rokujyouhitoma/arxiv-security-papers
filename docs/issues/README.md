@@ -31,9 +31,9 @@
 | **773** | Root Makefile の py_compile ターゲットにおけるサブプロセス逐次起動ループ廃止と一括・並列コンパイル化 | Feature | High | New | [773-optimize-makefile-py-compile-batch-and-parallel-execution.md](773-optimize-makefile-py-compile-batch-and-parallel-execution.md) |
 | **774** | Root Makefile の compile_grammars ターゲットにおける PEG 増分ビルド化とフォーマッタ一括実行による高速化 | Feature | Medium | New | [774-optimize-compile-grammars-incremental-build-and-batch-formatting.md](774-optimize-compile-grammars-incremental-build-and-batch-formatting.md) |
 | **775** | Root Makefile の build_js ターゲットにおける増分ビルド依存導入と未変更時の Closure Compiler (JVM) 起動スキップ | Feature | Medium | New | [775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md](775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md) |
-| **777** | 事前コンパイル済み標準ライブラリ (ulisp_stdlib.o) 静的リンクによるコンパイラ単体ブートストラップの導入 | Feature | High | New | [777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md](777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md) |
-| **778** | モジュール分割増分コンパイルと make -j 並列実行によるサブセカンド・ブートストラップ基盤の実装 | Feature | Medium | New | [778-implement-modular-parallel-incremental-bootstrap.md](778-implement-modular-parallel-incremental-bootstrap.md) |
-| **779** | コンパイラ初期アリーナヒープ一括確保およびダイレクト ELF 出力によるブートストラップ I/O 高速化 | Feature | Medium | New | [779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md](779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md) |
+| **777** | 事前コンパイル済み標準ライブラリ (ulisp_stdlib.o) 静的リンクによるコンパイラ単体ブートストラップの導入 | Feature | High | In Progress | [777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md](777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md) |
+| **778** | モジュール分割増分コンパイルと make -j 並列実行によるサブセカンド・ブートストラップ基盤の実装 | Feature | Medium | In Progress | [778-implement-modular-parallel-incremental-bootstrap.md](778-implement-modular-parallel-incremental-bootstrap.md) |
+| **779** | コンパイラ初期アリーナヒープ一括確保およびダイレクト ELF 出力によるブートストラップ I/O 高速化 | Feature | Medium | In Progress | [779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md](779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md) |
 ---
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
