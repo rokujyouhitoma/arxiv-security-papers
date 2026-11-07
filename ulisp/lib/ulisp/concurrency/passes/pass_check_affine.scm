@@ -49,7 +49,7 @@
              vector-set! string-set! bytevector-u8-set!
              call/cc call-with-current-continuation dynamic-wind)))
 
-(define (linear-variable? sym)
+(define (linear-variable-name-hint? sym)
   (if (not (symbol? sym))
       #f
       (let ((s (symbol->string sym)))
@@ -63,6 +63,87 @@
             (%str-ends-with? "-channel" s)
             (%str-ends-with? "-res" s)
             (%str-ends-with? "-buf" s)))))
+
+;; Backward-compatibility alias for tests and external callers
+(define (linear-variable? sym)
+  (linear-variable-name-hint? sym))
+
+(define (linear-constructor-op? op)
+  (memq op '(make-channel
+             make-spsc-channel
+             make-bounded-channel
+             make-channel-internal
+             make-channel-pair
+             channel-pair)))
+
+(define (non-linear-literal? expr)
+  (or (number? expr)
+      (boolean? expr)
+      (char? expr)
+      (string? expr)
+      (bytevector? expr)
+      (null? expr)
+      (and (pair? expr) (eq? (car expr) 'quote))))
+
+(define (linear-constructor-expr? expr env)
+  (cond
+    ((symbol? expr)
+     (eq? (lin-env-lookup env expr) 'available))
+    ((not (pair? expr)) #f)
+    ((linear-constructor-op? (car expr)) #t)
+    ((and (eq? (car expr) '!linear) (pair? (cdr expr))) #t)
+    (else #f)))
+
+(define (infer-linear-binding? var val-expr env)
+  (cond
+    ;; 1. Explicit linear constructor call: (make-channel ...)
+    ((and (pair? val-expr) (linear-constructor-op? (car val-expr)))
+     #t)
+    ;; 2. Explicit !linear annotation: (!linear <expr>)
+    ((and (pair? val-expr) (eq? (car val-expr) '!linear))
+     #t)
+    ;; 3. Type annotation: (: var Channel) in let: (let (((: c channel) expr)) ...) or (let ((c (: channel expr))) ...)
+    ((and (pair? val-expr)
+          (eq? (car val-expr) ':)
+          (pair? (cdr val-expr))
+          (memq (cadr val-expr) '(channel spsc-channel linear linear-resource)))
+     #t)
+    ;; 4. Linear variable alias / move: (let ((c2 c1)) ...) where c1 is 'available in env
+    ((and (symbol? val-expr) (eq? (lin-env-lookup env val-expr) 'available))
+     #t)
+    ;; 5. Known non-linear literal or primitive arithmetic (CWE-843 False-Positive Protection)
+    ((non-linear-literal? val-expr)
+     #f)
+    ((and (pair? val-expr)
+          (memq (car val-expr) '(+ - * / modulo quotient remainder < > <= >= = eq? equal? zero? not cons list vector)))
+     #f)
+    ;; 6. Name-based hint as fallback only if not a known non-linear expression
+    ((and (symbol? var) (linear-variable-name-hint? var))
+     #t)
+    (else #f)))
+
+(define (kernel-formal-var f)
+  (cond
+    ((symbol? f) f)
+    ((and (pair? f) (eq? (car f) ':) (pair? (cdr f))) (cadr f))
+    ((and (pair? f) (symbol? (car f))) (car f))
+    (else f)))
+
+(define (kernel-formal-linear? f)
+  (cond
+    ;; (: var type)
+    ((and (pair? f) (eq? (car f) ':) (pair? (cdr f)) (pair? (cddr f)))
+     (memq (caddr f) '(channel spsc-channel linear linear-resource)))
+    ;; (var : type)
+    ((and (pair? f) (pair? (cdr f)) (eq? (cadr f) ':) (pair? (cddr f)))
+     (memq (caddr f) '(channel spsc-channel linear linear-resource)))
+    ;; (var type)
+    ((and (pair? f) (pair? (cdr f)) (memq (cadr f) '(channel spsc-channel linear linear-resource)))
+     #t)
+    ;; Symbol fallback to name hint
+    ((symbol? f)
+     (linear-variable-name-hint? f))
+    (else #f)))
 
 (define (channel-borrow-operation? op)
   (memq op '(channel-recv! recv!
@@ -204,13 +285,18 @@
        (let init-loop ((bs bindings) (cur-env env) (new-vars '()))
          (if (pair? bs)
              (let* ((b (car bs))
-                    (v (car b))
+                    (v (kernel-formal-var (car b)))
                     (val-expr (cadr b))
                     (val-r (validate-affine-ast-internal val-expr cur-env)))
                (if (eq? (car val-r) 'error)
                    val-r
-                   (let* ((env-after (cadr val-r))
-                          (is-lin? (linear-variable? v))
+                   (let* ((env-eval (cadr val-r))
+                          (is-lin? (infer-linear-binding? v val-expr env-eval))
+                          ;; If val-expr is an existing linear symbol, transfer its ownership (mark moved)
+                          (env-after (if (and (symbol? val-expr)
+                                              (eq? (lin-env-lookup env-eval val-expr) 'available))
+                                         (lin-env-set env-eval val-expr 'moved)
+                                         env-eval))
                           (env-with-v (if is-lin?
                                           (lin-env-add-available env-after v)
                                           env-after)))
@@ -264,7 +350,7 @@
                             (if (eq? (car r) 'error)
                                 r
                                 (let* ((env-after (cadr r))
-                                       (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                                       (env-moved (if (and (symbol? arg) (lin-env-lookup env-after arg))
                                                       (let ((st (lin-env-lookup env-after arg)))
                                                         (if (eq? st 'moved)
                                                             #f
@@ -284,7 +370,7 @@
                   (if (eq? (car r) 'error)
                       r
                       (let* ((env-after (cadr r))
-                             (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                             (env-moved (if (and (symbol? arg) (lin-env-lookup env-after arg))
                                             (let ((st (lin-env-lookup env-after arg)))
                                               (if (eq? st 'moved)
                                                   #f
@@ -304,7 +390,7 @@
                   (if (eq? (car r) 'error)
                       r
                       (let* ((env-after (cadr r))
-                             (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                             (env-moved (if (and (symbol? arg) (lin-env-lookup env-after arg))
                                             (let ((st (lin-env-lookup env-after arg)))
                                               (if (eq? st 'moved)
                                                   #f
@@ -372,17 +458,22 @@
        (let init-loop ((bs bindings) (acc-b '()) (cur-env env) (new-vars '()))
          (if (pair? bs)
              (let* ((b (car bs))
-                    (v (car b))
+                    (v (kernel-formal-var (car b)))
                     (val-expr (cadr b))
                     (val-r (transform-affine-expr val-expr cur-env))
                     (val-ast (car val-r))
-                    (env-after (cdr val-r))
-                    (is-lin? (linear-variable? v))
+                    (env-eval (cdr val-r))
+                    (is-lin? (infer-linear-binding? v val-expr env-eval))
                     (opt-val-ast (if (and is-lin?
                                           (pair? val-ast)
                                           (eq? (car val-ast) 'make-channel))
                                      (cons 'make-spsc-channel (cdr val-ast))
                                      val-ast))
+                    ;; If val-expr is an existing linear symbol, transfer ownership (mark moved)
+                    (env-after (if (and (symbol? val-expr)
+                                        (eq? (lin-env-lookup env-eval val-expr) 'available))
+                                   (lin-env-set env-eval val-expr 'moved)
+                                   env-eval))
                     (env-with-v (if is-lin?
                                     (lin-env-add-available env-after v)
                                     env-after)))
@@ -455,7 +546,7 @@
                              (r (transform-affine-expr arg cur-env))
                              (arg-ast (car r))
                              (env-after (cdr r))
-                             (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                             (env-moved (if (and (symbol? arg) (lin-env-lookup env-after arg))
                                             (lin-env-set env-after arg 'moved)
                                             env-after)))
                         (loop (cdr as) (cons arg-ast acc-args) env-moved)))))))
@@ -469,7 +560,7 @@
                        (r (transform-affine-expr arg cur-env))
                        (arg-ast (car r))
                        (env-after (cdr r))
-                       (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                       (env-moved (if (and (symbol? arg) (lin-env-lookup env-after arg))
                                       (lin-env-set env-after arg 'moved)
                                       env-after)))
                   (loop (cdr as) (cons arg-ast acc-args) env-moved)))))
@@ -483,7 +574,7 @@
                        (r (transform-affine-expr arg cur-env))
                        (arg-ast (car r))
                        (env-after (cdr r))
-                       (env-moved (if (and (symbol? arg) (linear-variable? arg))
+                       (env-moved (if (and (symbol? arg) (lin-env-lookup env-after arg))
                                       (lin-env-set env-after arg 'moved)
                                       env-after)))
                   (loop (cdr as) (cons arg-ast acc-args) env-moved))))))))
@@ -501,18 +592,21 @@
       (let* ((header (cadr kernel-node))
              (kname (car header))
              (formals (cdr header))
+             (raw-formals (map kernel-formal-var formals))
+             (norm-header (cons kname raw-formals))
              (body (if (pair? (cddr kernel-node))
                        (if (and (pair? (caddr kernel-node)) (eq? (car (caddr kernel-node)) 'begin))
                            (caddr kernel-node)
                            (cons 'begin (cddr kernel-node)))
                        '(begin #f)))
-             ;; Initialize environment with linear formals
+             ;; Initialize environment with linear formals (typed or hinted)
              (init-env (let loop ((fs formals) (acc '()))
                          (if (null? fs)
                              acc
-                             (let ((f (car fs)))
-                               (if (linear-variable? f)
-                                   (loop (cdr fs) (lin-env-add-available acc f))
+                             (let* ((f (car fs))
+                                    (var (kernel-formal-var f)))
+                               (if (kernel-formal-linear? f)
+                                   (loop (cdr fs) (lin-env-add-available acc var))
                                    (loop (cdr fs) acc))))))
              ;; Validate first: report diagnostic errors on forbidden syntax or use-after-move
              (validation (validate-affine-ast body init-env)))
@@ -542,7 +636,7 @@
                                       (append
                                         (map (lambda (v) (list '%affine-drop! v)) unconsumed)
                                         (list res-sym))))))))
-             (list '%asc-kernel header wrapped-body)))))))
+             (list '%asc-kernel norm-header wrapped-body)))))))
 
 (define (check-affine-pass forms)
   (map (lambda (form)

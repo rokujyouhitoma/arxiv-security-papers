@@ -348,6 +348,132 @@
 (assert-false "7.7 check-affine pass cleanly removed"
               (memq 'pass-synapse-check-affine (map pass-id pipeline-clean)))
 
+;;; -----------------------------------------------------------------------
+;;; Group 8: Type-Based Linearity & Provenance Analysis (Issue #749)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 8: Type-Based Linearity & Provenance Analysis (Issue #749) ---\n")
+
+;; 8.1 Constructor operator recognition
+(assert-true "8.1 make-channel is recognized as linear constructor"
+             (linear-constructor-op? 'make-channel))
+(assert-true "8.2 make-spsc-channel is recognized as linear constructor"
+             (linear-constructor-op? 'make-spsc-channel))
+(assert-false "8.3 cons is not linear constructor"
+              (linear-constructor-op? 'cons))
+
+;; 8.2-8.5 Binding type inference
+(assert-true "8.4 arbitrary variable name 'c' bound to make-channel is linear"
+             (infer-linear-binding? 'c '(make-channel 1) '()))
+
+(assert-false "8.5 variable 'result' (res prefix) bound to integer is NOT linear (CWE-843)"
+              (infer-linear-binding? 'result 42 '()))
+
+(assert-false "8.6 variable 'buffer-size' (buf prefix) bound to arithmetic is NOT linear"
+              (infer-linear-binding? 'buffer-size '(+ 1024 16) '()))
+
+(assert-true "8.7 variable 'my-conn' bound to make-bounded-channel is linear"
+             (infer-linear-binding? 'my-conn '(make-bounded-channel 16) '()))
+
+;; 8.8 Arbitrary variable name: Use-After-Move detected on double send as linear payload
+(define double-send-payload-arbitrary
+  '(let ((c (make-channel 1)))
+     (channel-send! tx c)
+     (channel-send! tx c)))
+
+(define r-double-arbitrary (validate-affine-ast double-send-payload-arbitrary env-tx-avail))
+(assert-equal "8.8 double send of arbitrary name 'c' as payload detected as use-after-move"
+              '(error use-after-move c)
+              r-double-arbitrary)
+
+;; 8.7 Close then send on arbitrary name 'pipe'
+(define close-then-send-pipe
+  '(let ((pipe (make-channel 1)))
+     (channel-close! pipe)
+     (channel-send! pipe 42)))
+
+(define r-close-pipe (validate-affine-ast close-then-send-pipe '()))
+(assert-equal "8.9 close then send on arbitrary name 'pipe' detected as use-after-move"
+              '(error use-after-move pipe)
+              r-close-pipe)
+
+;; 8.8 Ownership transfer / Alias move: (let ((c2 c1)) ...)
+(define move-alias-expr
+  '(let ((c1 (make-channel 1)))
+     (let ((c2 c1))
+       (channel-send! c1 10))))
+
+(define r-move-alias (validate-affine-ast move-alias-expr '()))
+(assert-equal "8.10 use of transferred variable c1 detected as use-after-move"
+              '(error use-after-move c1)
+              r-move-alias)
+
+;; 8.9 Non-linear variable 'result' can be referenced multiple times without error
+(define multi-ref-result-expr
+  '(let ((result 100))
+     (+ result (+ result result))))
+
+(define r-multi-result (validate-affine-ast multi-ref-result-expr '()))
+(assert-true "8.11 multi-ref of non-linear 'result' validates ok"
+             (and (pair? r-multi-result) (eq? (car r-multi-result) 'ok)))
+
+;; 8.10 Non-linear variable 'result' does NOT get %affine-drop! injected
+(define trans-result (transform-affine-expr multi-ref-result-expr '()))
+(define trans-result-ast (car trans-result))
+;; Body should simply be the let expression without let __raii_res or %affine-drop!
+(assert-false "8.12 non-linear variable 'result' does NOT get %affine-drop! injected"
+              (and (pair? (caddr trans-result-ast))
+                   (eq? (car (caddr trans-result-ast)) 'let)
+                   (pair? (cadr (caddr trans-result-ast)))
+                   (pair? (caar (cadr (caddr trans-result-ast))))
+                   (eq? (caar (cadr (caddr trans-result-ast))) '__raii_res)))
+
+;; 8.11 Unconsumed arbitrary name 'c' gets %affine-drop! injected
+(define unconsumed-c-expr
+  '(let ((c (make-channel 1)))
+     42))
+
+(define trans-c (transform-affine-expr unconsumed-c-expr '()))
+(define trans-c-ast (car trans-c))
+;; The body of (let ((c ...)) ...) should have let __raii_res with (%affine-drop! c)
+(assert-true "8.13 unconsumed arbitrary name 'c' gets (%affine-drop! c) injected"
+             (and (pair? trans-c-ast)
+                  (eq? (car trans-c-ast) 'let)
+                  (let* ((body (caddr trans-c-ast)))
+                    (and (pair? body)
+                         (eq? (car body) 'let)
+                         (let ((inner-begin (caddr body)))
+                           (and (pair? inner-begin)
+                                (eq? (car inner-begin) 'begin)
+                                (member '(%affine-drop! c) (cdr inner-begin))
+                                #t))))))
+
+;; 8.12 Arbitrary name 'c' bound to make-channel is upgraded to make-spsc-channel
+(define opt-binding-c (car (cadr trans-c-ast)))
+(assert-equal "8.14 make-channel upgraded to make-spsc-channel on arbitrary name 'c'"
+              'make-spsc-channel
+              (caadr opt-binding-c))
+
+;; 8.13 Typed formal parameter (: c channel) in kernel
+(define typed-kernel-expr
+  '(%asc-kernel (my-kernel (: c channel) n)
+     (+ n 100)))
+
+(define trans-typed-k (check-affine-kernel typed-kernel-expr))
+(assert-true "8.15 typed formal (: c channel) produces %asc-kernel with normalized header"
+             (and (pair? trans-typed-k)
+                  (eq? (car trans-typed-k) '%asc-kernel)
+                  (equal? (cadr trans-typed-k) '(my-kernel c n))))
+
+(define typed-k-body (caddr trans-typed-k))
+(assert-true "8.16 unconsumed typed formal 'c' gets (%affine-drop! c) injected"
+             (and (pair? typed-k-body)
+                  (eq? (car typed-k-body) 'let)
+                  (let ((inner (caddr typed-k-body)))
+                    (and (pair? inner)
+                         (eq? (car inner) 'begin)
+                         (member '(%affine-drop! c) (cdr inner))
+                         #t))))
+
 (display "\n=======================================================\n")
 (display " Test Suite Completed: ")
 (display (car *pass-count*))

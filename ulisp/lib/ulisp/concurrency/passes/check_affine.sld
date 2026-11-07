@@ -11,6 +11,10 @@
     check-affine-kernel
     check-affine-expr
     linear-variable?
+    linear-variable-name-hint?
+    linear-constructor-op?
+    linear-constructor-expr?
+    infer-linear-binding?
     affine-forbidden-syntax?
 
     ;; Environment Operations
