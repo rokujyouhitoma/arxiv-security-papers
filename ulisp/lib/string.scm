@@ -31,6 +31,17 @@
                   (loop2 (+ j 1)))
                 res))))))
 
+(define string-append
+  (case-lambda
+    (() "")
+    ((s) s)
+    ((s1 s2) (string-append2 s1 s2))
+    ((s1 s2 . rest)
+     (let loop ((acc (string-append2 s1 s2)) (rs rest))
+       (if (null? rs)
+           acc
+           (loop (string-append2 acc (car rs)) (cdr rs)))))))
+
 (define (substring str start end)
   (let* ((len (- end start))
          (res (make-string len)))
@@ -215,24 +226,44 @@
         (%string-eq-loop s1 s2 0 len1)
         #f)))
 
-;;; Dynamic Symbol Registry in pure Scheme (Hash Table with 1024 buckets - Issue #646)
+;;; Dynamic Symbol Registry in pure Scheme (Hash Table with 16384 buckets & Direct Cache - Issue #780)
 (define *symbol-str-buckets*
-  (let ((v (%make-vector 1024)))
+  (let ((v (%make-vector 16384)))
     (let loop ((i 0))
-      (if (< i 1024)
+      (if (< i 16384)
           (begin
             (vector-set! v i '())
             (loop (+ i 1)))
           v))))
 
 (define *symbol-sym-buckets*
-  (let ((v (%make-vector 1024)))
+  (let ((v (%make-vector 16384)))
     (let loop ((i 0))
-      (if (< i 1024)
+      (if (< i 16384)
           (begin
             (vector-set! v i '())
             (loop (+ i 1)))
           v))))
+
+;; Direct-Mapped Symbol-to-String Cache (4096 entries, Issue #780)
+(define *sym-cache-sym*
+  (let ((v (%make-vector 4096)))
+    (let loop ((i 0))
+      (if (< i 4096)
+          (begin
+            (vector-set! v i #f)
+            (loop (+ i 1)))
+          v))))
+
+(define *sym-cache-str*
+  (let ((v (%make-vector 4096)))
+    (let loop ((i 0))
+      (if (< i 4096)
+          (begin
+            (vector-set! v i #f)
+            (loop (+ i 1)))
+          v))))
+
 (define *symbol-registry* (cons '() '()))
 (define *next-sym-id* (cons 100 '()))
 
@@ -263,14 +294,16 @@
 
 (define (string->symbol str)
   (let* ((h (%symbol-hash-str str))
-         (b-idx (modulo h 1024))
+         (pos-h (if (< h 0) (- 0 h) h))
+         (b-idx (bitwise-and pos-h 16383))
          (bucket (vector-ref *symbol-str-buckets* b-idx))
          (found (%string-find-symbol str bucket)))
     (if found
         found
         (let loop ((cand-h h))
-          (let* ((candidate (integer->symbol cand-h))
-                 (sym-b-idx (modulo (if (< cand-h 0) (- 0 cand-h) cand-h) 1024))
+          (let* ((pos-cand (if (< cand-h 0) (- 0 cand-h) cand-h))
+                 (candidate (integer->symbol cand-h))
+                 (sym-b-idx (bitwise-and pos-cand 16383))
                  (sym-bucket (vector-ref *symbol-sym-buckets* sym-b-idx)))
             (if (%sym-id-taken? candidate sym-bucket)
                 (loop (modulo (+ (* cand-h 33) 1) 16777213))
@@ -469,28 +502,33 @@
     (else (%sym-assoc-string sym (cdr alist)))))
 
 (define (%symbol-find-string sym entries)
-  (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
-    (if known
-        known
-        (let loop ((es entries))
-          (if (or (null? es) (not (pair? es)))
-              "?"
-              (let ((entry (car es)))
-                (if (and (pair? entry) (eq? (cdr entry) sym))
-                    (car entry)
-                    (loop (cdr es)))))))))
+  (let loop ((es entries))
+    (if (or (null? es) (not (pair? es)))
+        #f
+        (let ((entry (car es)))
+          (if (and (pair? entry) (eq? (cdr entry) sym))
+              (car entry)
+              (loop (cdr es)))))))
 
 (define (symbol->string sym)
-  (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
-    (if known
-        known
-        (let* ((h (symbol->integer sym))
-               (b-idx (modulo (if (< h 0) (- 0 h) h) 1024))
-               (bucket (vector-ref *symbol-sym-buckets* b-idx))
-               (res (%symbol-find-string sym bucket)))
-          (if (string=? res "?")
-              (%symbol-find-string sym (car *symbol-registry*))
-              res)))))
+  (let* ((h (symbol->integer sym))
+         (pos-h (if (< h 0) (- 0 h) h))
+         (c-idx (bitwise-and pos-h 4095))
+         (cached-sym (vector-ref *sym-cache-sym* c-idx)))
+    (if (and cached-sym (eq? cached-sym sym))
+        (vector-ref *sym-cache-str* c-idx)
+        (let* ((known (%sym-assoc-string sym *known-runtime-symbols*))
+               (res (if known
+                        known
+                        (let* ((b-idx (bitwise-and pos-h 16383))
+                               (bucket (vector-ref *symbol-sym-buckets* b-idx))
+                               (found (%symbol-find-string sym bucket)))
+                          (if found
+                              found
+                              "?")))))
+          (vector-set! *sym-cache-sym* c-idx sym)
+          (vector-set! *sym-cache-str* c-idx res)
+          res))))
 
 (define (string-copy-range str start end)
   (substring str start end))

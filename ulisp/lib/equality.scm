@@ -33,10 +33,10 @@
 (define (equal? a b)
   (cond
     ((eq? a b) #t)
+    ((or (boolean? a) (boolean? b) (null? a) (null? b)) #f)
     ((and (%number? a) (%number? b)) (%eqv? a b))
     ((and (string? a) (string? b)) (string=? a b))
     ((and (char? a) (char? b)) (char=? a b))
-    ((and (bytevector? a) (bytevector? b)) (bytevector=? a b))
     ((and (vector? a) (vector? b))
      (let ((len-a (vector-length a))
            (len-b (vector-length b)))
@@ -51,6 +51,7 @@
     ((and (pair? a) (pair? b))
      (and (equal? (car a) (car b))
           (equal? (cdr a) (cdr b))))
+    ((and (bytevector? a) (bytevector? b)) (bytevector=? a b))
     (else #f)))
 
 ;; ---------------------------------------------------------------------
