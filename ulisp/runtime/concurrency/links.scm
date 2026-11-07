@@ -239,8 +239,8 @@
            (task-state-set! task 'terminated)
            (task-reductions-set! task 0)
 
-           ;; Step 1: Poison all owned channels (CWE-833 Deadlock Prevention)
-           (task-poison-owned-channels! task safe-reason wake-hook)
+           ;; Step 1: Cleanup owned channels: Graceful Close if normal, Poison if crash (Issue #752)
+           (task-cleanup-owned-channels! task safe-reason wake-hook)
 
            ;; Step 2: Atomically close monitor registration ('closed) before dispatching 'DOWN (Issue #725, Item B4)
            (let ((monitors (atomic-swap! (task-monitored-by-box task) 'closed)))

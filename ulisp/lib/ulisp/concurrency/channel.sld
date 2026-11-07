@@ -76,6 +76,7 @@
     task-owned-channels
     task-register-channel!
     task-unregister-channel!
+    task-cleanup-owned-channels!
     task-poison-owned-channels!
     task-arena-box
     task-arena
@@ -151,7 +152,14 @@
     channel-poison!
     channel-deep-copy
     broadcast-send!
-    channel-stats)
+    channel-stats
+    ;; Channel Ownership & Lifecycle Transfer (Issue #752)
+    channel-owner-box
+    channel-owner
+    channel-transfer-ownership!
+    channel-transfer!
+    channel-disown!
+    channel-share!)
   (import (scheme base)
           (scheme case-lambda))
   (include "ulisp/runtime/concurrency/channel.scm"))

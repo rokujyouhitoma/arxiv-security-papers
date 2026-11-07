@@ -13,7 +13,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **752** | チャネル所有権セマンティクスおよびクラッシュ時自動汚染範囲の仕様策定・実装 | Feature | Low | In Progress | [752-define-channel-ownership-and-crash-poisoning-semantics.md](752-define-channel-ownership-and-crash-poisoning-semantics.md) |
 
 ---
 
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **752** | チャネル所有権セマンティクスおよびクラッシュ時自動汚染範囲の仕様策定・実装 | Feature | 2026-11-07 | [closed/752-define-channel-ownership-and-crash-poisoning-semantics.md](closed/752-define-channel-ownership-and-crash-poisoning-semantics.md) |
 | **751** | Supervisor 受信ループにおける非 DOWN シグナル (EXIT, io_complete 等) の破棄防止 | Bug | 2026-11-07 | [closed/751-preserve-non-down-signals-in-supervisor-inbox.md](closed/751-preserve-non-down-signals-in-supervisor-inbox.md) |
 | **750** | タスクメールボックスの O(1) FIFO キュー化および上限設定 (CWE-400 対策) | Feature | 2026-11-07 | [closed/750-implement-bounded-fifo-task-mailbox-queue.md](closed/750-implement-bounded-fifo-task-mailbox-queue.md) |
 | **749** | 変数名依存を廃止した型・束縛解析に基づく厳格な Affine 線形性検査 (B8) | Bug | 2026-11-07 | [closed/749-implement-type-based-affine-linearity-check.md](closed/749-implement-type-based-affine-linearity-check.md) |

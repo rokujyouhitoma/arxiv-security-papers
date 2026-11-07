@@ -55,10 +55,11 @@
     (vector-ref *worker-current-task-tls* idx)))
 
 (define (%set-current-synapse-task! task)
-  (let ((idx (%current-worker-tls-index)))
+  (let* ((idx (%current-worker-tls-index))
+         (old (vector-ref *worker-current-task-tls* idx)))
     (vector-set! *worker-current-task-tls* idx task)
     (atomic-set! *active-current-task-box* task)
-    task))
+    old))
 
 ;; Optional callback `(lambda (task) ...)` invoked when a suspended task
 ;; transitions from 'waiting-channel to 'ready.
@@ -887,6 +888,27 @@
                         #t
                         (retry)))))))))
 
+(define task-cleanup-owned-channels!
+  (case-lambda
+    ((t) (task-cleanup-owned-channels! t 'killed #f))
+    ((t reason) (task-cleanup-owned-channels! t reason #f))
+    ((t reason wake-hook)
+     (if (not (task-context? t))
+         (error "task-cleanup-owned-channels!: expected <task-context>" t)
+         (let ((chs (atomic-swap! (%task-owned-channels-box t) '())))
+           (let loop ((xs chs))
+             (if (null? xs)
+                 #t
+                 (let ((ch (car xs)))
+                   (let ((ob (%channel-owner-box ch)))
+                     (if ob (atomic-cas! ob t #f) #f))
+                   (if (eq? reason 'normal)
+                       ;; Graceful close: let consumers read remaining buffered messages!
+                       (channel-close! ch wake-hook)
+                       ;; Abnormal termination (crash/panic): poison channel to unblock waiters (CWE-833)
+                       (channel-poison! ch reason wake-hook))
+                   (loop (cdr xs))))))))))
+
 (define task-poison-owned-channels!
   (case-lambda
     ((t) (task-poison-owned-channels! t 'killed #f))
@@ -898,8 +920,10 @@
            (let loop ((xs chs))
              (if (null? xs)
                  #t
-                 (begin
-                   (channel-poison! (car xs) reason wake-hook)
+                 (let ((ch (car xs)))
+                   (let ((ob (%channel-owner-box ch)))
+                     (if ob (atomic-cas! ob t #f) #f))
+                   (channel-poison! ch reason wake-hook)
                    (loop (cdr xs))))))))))
 
 ;; -----------------------------------------------------------------------
@@ -951,7 +975,7 @@
                  sent-count-box received-count-box
                  backpressure-count-box handoff-count-box
                  ring-buffer ring-head-box ring-tail-box ring-mask
-                 spsc?)
+                 spsc? owner-box)
   channel?
   (message-queue          %channel-message-queue)
   (recv-wait-queue        %channel-recv-wait-queue)
@@ -967,7 +991,8 @@
   (ring-head-box          %channel-ring-head-box)
   (ring-tail-box          %channel-ring-tail-box)
   (ring-mask              %channel-ring-mask)
-  (spsc?                  %channel-spsc?))
+  (spsc?                  %channel-spsc?)
+  (owner-box              %channel-owner-box))
 
 (define (%make-channel-instance capacity spsc?)
   (if (or (not (integer? capacity))
@@ -981,6 +1006,7 @@
                        #f))
              (head-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f))
              (tail-box (if (> ring-cap 0) (make-padded-atomic-box 0) #f))
+             (owner-box (make-atomic-box #f))
              (ch (%make-channel (make-lock-free-queue)
                                 (make-lock-free-queue)
                                 (make-lock-free-queue)
@@ -995,13 +1021,16 @@
                                 head-box
                                 tail-box
                                 ring-mask
-                                (if spsc? #t #f))))
+                                (if spsc? #t #f)
+                                owner-box)))
         (%memory-fence)
         ;; Auto-register created channel to currently running task (Issue #731, Item A6)
         (guard (exn (else #f))
           (let ((cur-task (current-synapse-task)))
             (if (task-context? cur-task)
-                (task-register-channel! cur-task ch)
+                (begin
+                  (atomic-set! owner-box cur-task)
+                  (task-register-channel! cur-task ch))
                 #f)))
         ch)))
 
@@ -1061,7 +1090,8 @@
                            head-box
                            tail-box
                            ring-mask
-                           #f)))))
+                           #f
+                           (make-atomic-box #f))))))
 
 (define (channel-message-queue ch)
   (if (not (channel? ch))
@@ -1111,6 +1141,76 @@
           (- (padded-atomic-ref (%channel-ring-head-box ch))
              (padded-atomic-ref (%channel-ring-tail-box ch)))
           (atomic-ref (%channel-current-count ch)))))
+
+;; -----------------------------------------------------------------------
+;; Channel Ownership & Lifecycle Transfer Semantics (Issue #752)
+;; -----------------------------------------------------------------------
+
+(define (channel-owner-box ch)
+  (if (not (channel? ch))
+      (error "channel-owner-box: expected <channel>" ch)
+      (%channel-owner-box ch)))
+
+(define (channel-owner ch)
+  (if (not (channel? ch))
+      (error "channel-owner: expected <channel>" ch)
+      (let ((ob (%channel-owner-box ch)))
+        (if ob (atomic-ref ob) #f))))
+
+(define (channel-transfer-ownership! ch new-owner)
+  (if (not (channel? ch))
+      (error "channel-transfer-ownership!: expected <channel>" ch)
+      (if (and new-owner (not (task-context? new-owner)))
+          (error "channel-transfer-ownership!: expected target-task to be <task-context> or #f" new-owner)
+          (let retry ()
+            (let* ((ob (%channel-owner-box ch))
+                   (cur-owner (atomic-ref ob)))
+              (if (eq? cur-owner new-owner)
+                  #t
+                  (if (atomic-cas! ob cur-owner new-owner)
+                      (begin
+                        (if (task-context? cur-owner)
+                            (task-unregister-channel! cur-owner ch)
+                            #t)
+                        (if (task-context? new-owner)
+                            (task-register-channel! new-owner ch)
+                            #t)
+                        #t)
+                      (retry))))))))
+
+(define (channel-transfer! ch from-task to-task)
+  (if (not (channel? ch))
+      (error "channel-transfer!: expected <channel>" ch)
+      (if (and from-task (not (task-context? from-task)))
+          (error "channel-transfer!: expected from-task to be <task-context> or #f" from-task)
+          (if (and to-task (not (task-context? to-task)))
+              (error "channel-transfer!: expected to-task to be <task-context> or #f" to-task)
+              (let* ((ob (%channel-owner-box ch))
+                     (cur-owner (atomic-ref ob)))
+                (if (and from-task (not (eq? cur-owner from-task)))
+                    (error "channel-transfer!: channel owner mismatch" cur-owner from-task)
+                    (if (eq? cur-owner to-task)
+                        #t
+                        (if (atomic-cas! ob cur-owner to-task)
+                            (begin
+                              (if (task-context? cur-owner)
+                                  (task-unregister-channel! cur-owner ch)
+                                  #t)
+                              (if (task-context? to-task)
+                                  (task-register-channel! to-task ch)
+                                  #t)
+                              #t)
+                            (channel-transfer! ch from-task to-task)))))))))
+
+(define (channel-disown! ch)
+  (if (not (channel? ch))
+      (error "channel-disown!: expected <channel>" ch)
+      (channel-transfer-ownership! ch #f)))
+
+(define (channel-share! ch)
+  (if (not (channel? ch))
+      (error "channel-share!: expected <channel>" ch)
+      (channel-transfer-ownership! ch #f)))
 
 (define (channel-closed? ch)
   (if (not (channel? ch))
@@ -1840,12 +1940,18 @@
                    (begin
                      (%wake-task! (%waiter-task w) wake-hook)
                      (wake-sends)))))
-           ;; Unregister closed channel from currently running task (Issue #731)
+           ;; Unregister closed channel from owner (Issue #731, #752)
            (guard (exn (else #f))
-             (let ((cur-task (current-synapse-task)))
-               (if (task-context? cur-task)
-                   (task-unregister-channel! cur-task ch)
-                   #f)))
+             (let* ((ob (%channel-owner-box ch))
+                    (owner (if ob (atomic-ref ob) #f)))
+               (if (task-context? owner)
+                   (begin
+                     (atomic-cas! ob owner #f)
+                     (task-unregister-channel! owner ch))
+                   (let ((cur-task (current-synapse-task)))
+                     (if (task-context? cur-task)
+                         (task-unregister-channel! cur-task ch)
+                         #f)))))
            #t)))))
 
 (define channel-poison!
@@ -1882,6 +1988,18 @@
                            (%task-state-set! t 'ready)
                            (%wake-task! t wake-hook)))
                      (wake-sends)))))
+           ;; Unregister poisoned channel from owner (Issue #731, #752)
+           (guard (exn (else #f))
+             (let* ((ob (%channel-owner-box ch))
+                    (owner (if ob (atomic-ref ob) #f)))
+               (if (task-context? owner)
+                   (begin
+                     (atomic-cas! ob owner #f)
+                     (task-unregister-channel! owner ch))
+                   (let ((cur-task (current-synapse-task)))
+                     (if (task-context? cur-task)
+                         (task-unregister-channel! cur-task ch)
+                         #f)))))
            #t)))))
 
 ;; Structural deep copy for fan-out broadcast so mutable pairs, vectors,
@@ -1962,5 +2080,6 @@
               (cons 'rendezvous-handoffs (atomic-ref (%channel-handoff-count-box ch)))
               (cons 'closed? (atomic-ref (%channel-closed-box ch)))
               (cons 'unboxed? (if (%channel-ring-buffer ch) #t #f))
-              (cons 'spsc? (if spsc? #t #f))))))
+              (cons 'spsc? (if spsc? #t #f))
+              (cons 'owner (let ((ob (%channel-owner-box ch))) (if ob (atomic-ref ob) #f)))))))
 

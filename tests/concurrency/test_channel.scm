@@ -4,6 +4,7 @@
 ;;; =======================================================================
 
 (load "ulisp/runtime/concurrency/channel.scm")
+(load "ulisp/runtime/concurrency/links.scm")
 
 (define *test-channel-failures* (vector 0))
 (define *test-channel-passes* (vector 0))
@@ -24,6 +25,12 @@
         (write-char #\newline)
         (flush-output-port)
         #t)))
+
+(define (assert-false val msg)
+  (assert-true (not val) msg))
+
+(define (assert-eq actual expected msg)
+  (assert-true (eq? actual expected) msg))
 
 (define (assert-equal actual expected msg)
   (if (not (eqv? actual expected))
@@ -794,6 +801,145 @@
     (assert-true (task-table-unregister! tid2) "task-table-unregister! by tid succeeds")
     (assert-equal (task-table-count) 0 "task table count is 0 after unregistering t2")
     (assert-true (not (task-table-unregister! tid2)) "unregistering non-existent task returns #f")))
+
+;; -----------------------------------------------------------------------
+;; Group 15: Channel Ownership Transfer, Disown, and Graceful Drain (#752)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 15: Channel Ownership Transfer & Graceful Drain (#752) ---\n")
+(flush-output-port)
+
+;; 15a: Initial owner tracking
+(let ((t-unowned (make-channel 2)))
+  (assert-equal (channel-owner t-unowned) #f "channel created outside task has owner #f")
+  (let ((stats (channel-stats t-unowned)))
+    (assert-equal (cdr (assq 'owner stats)) #f "channel-stats reports owner #f")))
+
+(let* ((t1 (make-task-context))
+       (t2 (make-task-context))
+       (t3 (make-task-context))
+       (prev (%set-current-synapse-task! t1)))
+  (let ((ch (make-channel 4)))
+    ;; Initial owner is t1
+    (assert-eq (channel-owner ch) t1 "channel initial owner is t1")
+    (assert-true (memq ch (task-owned-channels t1)) "ch registered in t1 owned channels")
+    (assert-true (not (memq ch (task-owned-channels t2))) "ch not in t2 owned channels")
+
+    ;; 15b: channel-transfer-ownership! to t2
+    (assert-true (channel-transfer-ownership! ch t2) "channel-transfer-ownership! succeeds")
+    (assert-eq (channel-owner ch) t2 "ch owner updated to t2")
+    (assert-true (not (memq ch (task-owned-channels t1))) "ch removed from t1 owned channels")
+    (assert-true (memq ch (task-owned-channels t2)) "ch registered in t2 owned channels")
+
+    ;; 15c: channel-transfer! with explicit source and target
+    (assert-true (channel-transfer! ch t2 t3) "channel-transfer! from t2 to t3 succeeds")
+    (assert-eq (channel-owner ch) t3 "ch owner updated to t3")
+    (assert-true (not (memq ch (task-owned-channels t2))) "ch removed from t2")
+    (assert-true (memq ch (task-owned-channels t3)) "ch registered in t3")
+
+    ;; channel-transfer! with mismatched source throws error
+    (assert-true (guard (exn (else #t))
+                   (channel-transfer! ch t1 t2)
+                   #f)
+                 "channel-transfer! rejects mismatched from-task")
+
+    ;; 15d: channel-disown! / channel-share!
+    (assert-true (channel-disown! ch) "channel-disown! succeeds")
+    (assert-equal (channel-owner ch) #f "disowned channel owner is #f")
+    (assert-true (not (memq ch (task-owned-channels t3))) "ch removed from t3 on disown")
+
+    ;; Disowned channel is immune to previous owner crash
+    (task-handle-termination! t3 'crashed-in-handler)
+    (assert-false (channel-poisoned? ch) "disowned channel is not poisoned by former owner crash")
+    (assert-false (channel-closed? ch) "disowned channel is not closed by former owner crash")
+
+    ;; channel-share! also sets owner to #f
+    (channel-transfer-ownership! ch t1)
+    (assert-eq (channel-owner ch) t1 "ch owned by t1 again")
+    (assert-true (channel-share! ch) "channel-share! succeeds")
+    (assert-equal (channel-owner ch) #f "shared channel owner is #f"))
+
+  (%set-current-synapse-task! prev))
+
+;; 15e: Graceful Drain on Normal Termination (DSN-37 / CWE-703 False Cascade Prevention)
+(let* ((producer (make-task-context))
+       (prev (%set-current-synapse-task! producer)))
+  (let ((pipe (make-channel 4)))
+    (assert-eq (channel-owner pipe) producer "pipe owned by producer")
+    (channel-send! pipe 'alpha)
+    (channel-send! pipe 'beta)
+    (assert-equal (channel-count pipe) 2 "pipe contains 2 buffered messages")
+
+    ;; Producer terminates normally ('normal)
+    (task-handle-termination! producer 'normal)
+
+    ;; Pipe is gracefully closed, NOT poisoned!
+    (assert-false (channel-poisoned? pipe) "pipe is NOT poisoned on normal termination")
+    (assert-true (channel-closed? pipe) "pipe is closed on normal termination")
+    (assert-equal (channel-owner pipe) #f "pipe owner cleared on termination")
+
+    ;; Consumer can drain all buffered messages until EOF ('closed)
+    (let ((m1 (channel-try-recv-with-status! pipe)))
+      (assert-true (car m1) "1st message read status is #t")
+      (assert-equal (cdr m1) 'alpha "1st message value is alpha"))
+
+    (let ((m2 (channel-try-recv-with-status! pipe)))
+      (assert-true (car m2) "2nd message read status is #t")
+      (assert-equal (cdr m2) 'beta "2nd message value is beta"))
+
+    ;; Once drained, subsequent reads cleanly observe closed (EOF) without crashing
+    (let ((eof (channel-try-recv-with-status! pipe)))
+      (assert-false (car eof) "drained pipe read status is #f")
+      (assert-equal (cdr eof) 'closed "drained pipe read value is 'closed (EOF)")))
+
+  (%set-current-synapse-task! prev))
+
+;; 15f: Crash Poisoning on Abnormal Termination (CWE-833 Deadlock Prevention)
+(let* ((crasher (make-task-context))
+       (prev (%set-current-synapse-task! crasher)))
+  (let ((ch-dead (make-channel 2)))
+    (assert-eq (channel-owner ch-dead) crasher "ch-dead owned by crasher")
+
+    ;; Crasher dies abnormally with panic / error
+    (task-handle-termination! crasher 'panic_segfault)
+
+    ;; ch-dead MUST be poisoned immediately to unblock all waiters!
+    (assert-true (channel-poisoned? ch-dead) "ch-dead is poisoned on crash")
+    (assert-true (channel-closed? ch-dead) "ch-dead is closed on crash")
+    (assert-equal (channel-owner ch-dead) #f "ch-dead owner cleared on crash")
+
+    ;; Subsequent recv and send fail with 'poisoned
+    (let ((st-recv (channel-try-recv-with-status! ch-dead)))
+      (assert-false (car st-recv) "status is #f")
+      (assert-equal (cdr st-recv) 'poisoned "recv on poisoned channel returns 'poisoned"))
+    (let ((st-send (channel-try-send! ch-dead 'fail)))
+      (assert-false (car st-send) "status is #f")
+      (assert-equal (cdr st-send) 'poisoned "send on poisoned channel returns 'poisoned")))
+
+  (%set-current-synapse-task! prev))
+
+;; 15g: Type confusion security guards (CWE-843)
+(let ((valid-task (make-task-context))
+      (valid-ch (make-channel 1)))
+  (assert-true (guard (exn (else #t)) (channel-owner "not-a-channel") #f)
+               "channel-owner rejects non-channel (CWE-843)")
+  (assert-true (guard (exn (else #t)) (channel-owner-box 999) #f)
+               "channel-owner-box rejects non-channel (CWE-843)")
+  (assert-true (guard (exn (else #t)) (channel-transfer-ownership! "not-ch" valid-task) #f)
+               "channel-transfer-ownership! rejects non-channel (CWE-843)")
+  (assert-true (guard (exn (else #t)) (channel-transfer-ownership! valid-ch "not-a-task") #f)
+               "channel-transfer-ownership! rejects non-task target (CWE-843)")
+  (assert-true (guard (exn (else #t)) (channel-transfer! "not-ch" valid-task valid-task) #f)
+               "channel-transfer! rejects non-channel (CWE-843)")
+  (assert-true (guard (exn (else #t)) (channel-transfer! valid-ch "not-a-task" valid-task) #f)
+               "channel-transfer! rejects non-task from-task (CWE-843)")
+  (assert-true (guard (exn (else #t)) (channel-transfer! valid-ch valid-task "not-a-task") #f)
+               "channel-transfer! rejects non-task to-task (CWE-843)")
+  (assert-true (guard (exn (else #t)) (channel-disown! 'bad-ch) #f)
+               "channel-disown! rejects non-channel (CWE-843)")
+  (assert-true (guard (exn (else #t)) (channel-share! #(1 2 3)) #f)
+               "channel-share! rejects non-channel (CWE-843)")
+  (assert-true (guard (exn (else #t)) (task-cleanup-owned-channels! "not-task") #f)
+               "task-cleanup-owned-channels! rejects non-task (CWE-843)"))
 
 ;; -----------------------------------------------------------------------
 ;; Summary
