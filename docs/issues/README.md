@@ -31,13 +31,13 @@
 | **773** | Root Makefile の py_compile ターゲットにおけるサブプロセス逐次起動ループ廃止と一括・並列コンパイル化 | Feature | High | New | [773-optimize-makefile-py-compile-batch-and-parallel-execution.md](773-optimize-makefile-py-compile-batch-and-parallel-execution.md) |
 | **774** | Root Makefile の compile_grammars ターゲットにおける PEG 増分ビルド化とフォーマッタ一括実行による高速化 | Feature | Medium | New | [774-optimize-compile-grammars-incremental-build-and-batch-formatting.md](774-optimize-compile-grammars-incremental-build-and-batch-formatting.md) |
 | **775** | Root Makefile の build_js ターゲットにおける増分ビルド依存導入と未変更時の Closure Compiler (JVM) 起動スキップ | Feature | Medium | New | [775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md](775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md) |
-| **779** | コンパイラ初期アリーナヒープ一括確保およびダイレクト ELF 出力によるブートストラップ I/O 高速化 | Feature | Medium | Closed | [closed/779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md](closed/779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md) |
-| **783** | ULisp における GNU as 互換コマンドラインオプション (--as / -c) と ELF64 再配置可能オブジェクト (.o) 出力の実装 | Feature | High | New | [783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md](783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md) |
 | **784** | ULisp における GNU ld 互換コマンドラインオプション (--ld) と複数 ELF64 オブジェクト (.o) 静的リンカの実装 | Feature | High | New | [784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md](784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md) |
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **783** | ULisp における GNU as 互換コマンドラインオプション (--as / -c) と ELF64 再配置可能オブジェクト (.o) 出力の実装 | Feature | 2026-11-08 | [closed/783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md](closed/783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md) |
+| **779** | コンパイラ初期アリーナヒープ一括確保およびダイレクト ELF 出力によるブートストラップ I/O 高速化 | Feature | 2026-11-08 | [closed/779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md](closed/779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md) |
 | **778** | モジュール分割増分コンパイルと make -j 並列実行によるサブセカンド・ブートストラップ基盤の実装 | Feature | 2026-11-08 | [closed/778-implement-modular-parallel-incremental-bootstrap.md](closed/778-implement-modular-parallel-incremental-bootstrap.md) |
 | **777** | 事前コンパイル済み標準ライブラリ (ulisp_stdlib.o) 静的リンクによるコンパイラ単体ブートストラップの導入 | Feature | 2026-11-08 | [closed/777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md](closed/777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md) |
 | **782** | ブートストラップ時のシンボル破壊・未定義参照の解消およびメモリ消費の最適化 | Bug | 2026-11-08 | [closed/782-fix-bootstrap-symbol-corruption-and-optimize-memory-consumption.md](closed/782-fix-bootstrap-symbol-corruption-and-optimize-memory-consumption.md) |

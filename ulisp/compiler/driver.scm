@@ -36,7 +36,7 @@
               ((char=? c #\")
                (loop (+ i 1) nline ncol depth #t #f #f
                      (if (and (= depth 0) (not in-atom)) (cons (cons line col) acc) acc)))
-              ((or (char=? c #\space) (char=? c #\tab) (char=? c #\newline) (char=? c #\return))
+              ((or (char=? c #\space) (char=? c #\tab) (char=? c #\newline) (char=? c (integer->char 13)))
                (loop (+ i 1) nline ncol depth #f #f #f acc))
               ((char=? c #\()
                (loop (+ i 1) nline ncol (+ depth 1) #f #f #f
@@ -109,6 +109,11 @@
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'elf)))
                (set-current-target-arch! 'elf)
                (loop (cdr forms) 'elf gc-mode verify trace debug))
+              ((or (eq? first '--target-obj)
+                   (and (pair? first) (eq? (car first) '!target) (pair? (cdr first))
+                        (or (eq? (cadr first) 'obj) (eq? (cadr first) 'elf-obj))))
+               (set-current-target-arch! 'obj)
+               (loop (cdr forms) 'obj gc-mode verify trace debug))
               ((or (eq? first '--target-asm)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'asm)))
                (set-current-target-arch! 'x86_64)
@@ -255,10 +260,12 @@
   (let* ((tgt-str (cond ((eq? target 'c) "c")
                         ((eq? target 'aarch64) "aarch64")
                         ((eq? target 'elf) "elf")
+                        ((or (eq? target 'obj) (eq? target 'elf-obj)) "elf-obj")
                         (else "x86-64")))
          (pass-id (cond ((eq? target 'c) 'pass-160-backend-c)
                         ((eq? target 'aarch64) 'pass-150-backend-aarch64)
                         ((eq? target 'elf) 'pass-144-backend-x86-elf)
+                        ((or (eq? target 'obj) (eq? target 'elf-obj)) 'pass-144-backend-x86-elf-obj)
                         (else 'pass-140-backend-x86-64)))
          (pass-name (string-append "Backend Code Generation (" tgt-str ")")))
     (set-current-pass! pass-id)
@@ -274,6 +281,8 @@
                            (emit-aarch64 lir-ast gc-mode))
                           ((eq? target 'elf)
                            (emit-x86-64-elf lir-ast gc-mode))
+                          ((or (eq? target 'obj) (eq? target 'elf-obj))
+                           (emit-x86-64-elf-obj lir-ast gc-mode))
                           (else
                            (emit-x86-64 lir-ast gc-mode))))
                    (t1 (current-time-monotonic-us))
@@ -289,6 +298,8 @@
                (emit-aarch64 lir-ast gc-mode))
               ((eq? target 'elf)
                (emit-x86-64-elf lir-ast gc-mode))
+              ((or (eq? target 'obj) (eq? target 'elf-obj))
+               (emit-x86-64-elf-obj lir-ast gc-mode))
               (else
                (emit-x86-64 lir-ast gc-mode))))))))
 
@@ -397,9 +408,11 @@
   (display "  -o <file>             Write output to <file> instead of standard output\n")
   (display "  -e <expr>             Compile Scheme expression string directly to target output\n")
   (display "  -S                    Emit assembly code (default for native backends)\n")
+  (display "  -c, --target-obj      Compile to ELF64 relocatable object file (.o, ET_REL)\n")
+  (display "  --as [--64]           Assemble x86-64 Intel-syntax assembly (.s) to ELF64 object (.o)\n")
   (display "  --target-elf          Emit standalone ELF64 static executable directly\n")
   (display "  -g                    Generate minimal DWARF debug information for GDB / perf\n")
-  (display "  -b, --target <tgt>    Specify compilation target (x86_64, elf, c, aarch64, lir)\n")
+  (display "  -b, --target <tgt>    Specify compilation target (x86_64, obj, elf, c, aarch64, lir)\n")
   (display "  -O0, -O1, -O2         Optimization level (0: minimal, 1: standard, 2: aggressive)\n")
   (display "  -v, --verbose         Enable verbose diagnostic messages to stderr\n")
   (display "  -q, --quiet           Suppress warning and non-essential messages\n")
@@ -459,6 +472,12 @@
              (loop (cdr rest) in-file out-file (substring arg 7 (string-length arg)) target opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((or (string=? arg "--target-elf") (string=? arg "-elf"))
              (loop (cdr rest) in-file out-file inline-expr 'elf opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((or (string=? arg "-c") (string=? arg "--target-obj") (string=? arg "-obj"))
+             (loop (cdr rest) in-file out-file inline-expr 'obj opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((string=? arg "--as")
+             (loop (cdr rest) in-file out-file inline-expr 'as-mode opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((string=? arg "--64")
+             (loop (cdr rest) in-file out-file inline-expr target opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((or (string=? arg "--target-asm") (string=? arg "-S"))
              (loop (cdr rest) in-file out-file inline-expr 'x86_64 opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((or (string=? arg "-g") (string=? arg "--debug-symbols") (string=? arg "-gline-tables-only"))
@@ -578,6 +597,12 @@
             (begin
               (sys-dup2 in-fd 0)
               (sys-close in-fd)))))
+
+  ;; 3b. Builtin Assembler Mode (ulisp --as [--64] [input.s] [-o output.o])
+  (if (eq? cli-target 'as-mode)
+      (begin
+        (assemble-stream-to-elf-obj)
+        (exit 0)))
 
   ;; 4. Read forms
   (let* ((src-name (if (and cli-in-file (not (string=? cli-in-file "-"))) cli-in-file "stdin.scm"))

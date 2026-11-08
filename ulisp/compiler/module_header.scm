@@ -148,6 +148,11 @@
   lir-fuse-branches
   lir-peephole-optimize
   port-write-bytevector-range
-  port-write-bytevector)
+  port-write-bytevector
+  port-read-char
+  %file-input-port
+  assemble-and-build-elf-obj
+  emit-x86-64-elf-obj
+  assemble-stream-to-elf-obj)
 
 

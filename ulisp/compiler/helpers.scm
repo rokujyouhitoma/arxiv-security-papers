@@ -257,7 +257,7 @@
               (cond
                 ((char=? c #\") (loop (- i 1) acc))
                 ((char=? c #\\) (loop (- i 1) (cons #\/ acc)))
-                ((or (char=? c #\newline) (char=? c #\return) (char=? c #\tab))
+                ((or (char=? c #\newline) (char=? c (integer->char 13)) (char=? c #\tab))
                  (loop (- i 1) (cons #\_ acc)))
                 (else (loop (- i 1) (cons c acc)))))))))
 
@@ -1265,7 +1265,10 @@
     (%make-bytevector . "%make-bytevector")
     (%raw-call/cc . "%raw-call/cc")
     (port-write-bytevector-range . "port-write-bytevector-range")
-    (port-write-bytevector . "port-write-bytevector")))
+    (port-write-bytevector . "port-write-bytevector")
+    (assemble-and-build-elf-obj . "assemble-and-build-elf-obj")
+    (emit-x86-64-elf-obj . "emit-x86-64-elf-obj")
+    (assemble-stream-to-elf-obj . "assemble-stream-to-elf-obj")))
 
 (define (symbol->raw-name sym)
   (if (not (symbol? sym))
@@ -1527,7 +1530,7 @@
        (or (eq? tgt 'aarch64) (eq? tgt 'arm64))))
     ((memq feat '(x86-64 x86_64))
      (let ((tgt (current-target-arch)))
-       (or (eq? tgt 'x86_64) (eq? tgt 'x86-64) (eq? tgt 'elf) (eq? tgt 'asm))))
+       (or (eq? tgt 'x86_64) (eq? tgt 'x86-64) (eq? tgt 'elf) (eq? tgt 'asm) (eq? tgt 'obj) (eq? tgt 'elf-obj))))
     ((memq feat '(ulisp r7rs exact-closed little-endian posix linux unix srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
      #t)
     (else #f)))

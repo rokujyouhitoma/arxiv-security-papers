@@ -553,7 +553,7 @@
                   (ucs-range->char-set 65 71)
                   (ucs-range->char-set 97 103)))
 (define char-set:whitespace
-  (list->char-set (list #\space #\tab #\newline (integer->char 11) (integer->char 12) #\return)))
+  (list->char-set (list #\space #\tab #\newline (integer->char 11) (integer->char 12) (integer->char 13))))
 (define char-set:blank
   (list->char-set (list #\space #\tab)))
 (define char-set:iso-control

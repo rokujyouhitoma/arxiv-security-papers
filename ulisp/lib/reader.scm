@@ -558,6 +558,7 @@
                         (cond
                           ((eq? (string-length name) 1) c3)
                           ((string=? name "newline") #\newline)
+                          ((string=? name "return")  (integer->char 13))
                           ((string=? name "space")   #\space)
                           ((string=? name "tab")     #\tab)
                           (else c3)))

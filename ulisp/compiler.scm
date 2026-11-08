@@ -257,7 +257,7 @@
               (cond
                 ((char=? c #\") (loop (- i 1) acc))
                 ((char=? c #\\) (loop (- i 1) (cons #\/ acc)))
-                ((or (char=? c #\newline) (char=? c #\return) (char=? c #\tab))
+                ((or (char=? c #\newline) (char=? c (integer->char 13)) (char=? c #\tab))
                  (loop (- i 1) (cons #\_ acc)))
                 (else (loop (- i 1) (cons c acc)))))))))
 
@@ -1265,7 +1265,10 @@
     (%make-bytevector . "%make-bytevector")
     (%raw-call/cc . "%raw-call/cc")
     (port-write-bytevector-range . "port-write-bytevector-range")
-    (port-write-bytevector . "port-write-bytevector")))
+    (port-write-bytevector . "port-write-bytevector")
+    (assemble-and-build-elf-obj . "assemble-and-build-elf-obj")
+    (emit-x86-64-elf-obj . "emit-x86-64-elf-obj")
+    (assemble-stream-to-elf-obj . "assemble-stream-to-elf-obj")))
 
 (define (symbol->raw-name sym)
   (if (not (symbol? sym))
@@ -1527,7 +1530,7 @@
        (or (eq? tgt 'aarch64) (eq? tgt 'arm64))))
     ((memq feat '(x86-64 x86_64))
      (let ((tgt (current-target-arch)))
-       (or (eq? tgt 'x86_64) (eq? tgt 'x86-64) (eq? tgt 'elf) (eq? tgt 'asm))))
+       (or (eq? tgt 'x86_64) (eq? tgt 'x86-64) (eq? tgt 'elf) (eq? tgt 'asm) (eq? tgt 'obj) (eq? tgt 'elf-obj))))
     ((memq feat '(ulisp r7rs exact-closed little-endian posix linux unix srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
      #t)
     (else #f)))
@@ -19516,12 +19519,12 @@
   (emit "    add rdx, rsi")
   (emit "    mov [rdx], r9")
   (emit "    test rcx, rcx")
-  (emit "    jle 1f")
+  (emit "    jle .L_cont_inv_clamp")
   (emit "    cmp rcx, 8388608")
-  (emit "    jbe 2f")
-  (emit "1:")
+  (emit "    jbe .L_cont_inv_copy")
+  (emit ".L_cont_inv_clamp:")
   (emit "    mov rcx, 65536")
-  (emit "2:")
+  (emit ".L_cont_inv_copy:")
   (emit "    lea rsi, [r10 - 1 + 96]")
   (emit "    lea rdi, [r8 - 256]")
   (emit "    cld")
@@ -20251,6 +20254,306 @@
 
 (define (build-elf64-executable text-bv rodata-bv data-bv bss-size entry-offset)
   (build-elf64-executable-ex text-bv rodata-bv data-bv bss-size entry-offset #f))
+
+;; -----------------------------------------------------------------------
+;; Relocatable ELF64 Object (ET_REL) Builder (Issue #783)
+;; -----------------------------------------------------------------------
+
+(define (elf64-make-rel-shstrtab-bytes)
+  ;; 16 sections:
+  ;;  0: "" (0)
+  ;;  1: ".text" (1)
+  ;;  2: ".rodata" (7)
+  ;;  3: ".data" (15)
+  ;;  4: ".bss" (21)
+  ;;  5: ".init_array" (26)
+  ;;  6: "ulisp_globals_sec" (38)
+  ;;  7: ".rela.text" (56)
+  ;;  8: ".rela.rodata" (67)
+  ;;  9: ".rela.data" (80)
+  ;; 10: ".rela.init_array" (91)
+  ;; 11: ".rela.ulisp_globals_sec" (108)
+  ;; 12: ".note.GNU-stack" (132)
+  ;; 13: ".symtab" (148)
+  ;; 14: ".strtab" (156)
+  ;; 15: ".shstrtab" (164)
+  (elf64-list->bytevector
+    '(0
+      46 116 101 120 116 0                                                 ; .text\0
+      46 114 111 100 97 116 97 0                                           ; .rodata\0
+      46 100 97 116 97 0                                                   ; .data\0
+      46 98 115 115 0                                                      ; .bss\0
+      46 105 110 105 116 95 97 114 114 97 121 0                            ; .init_array\0
+      117 108 105 115 112 95 103 108 111 98 97 108 115 95 115 101 99 0     ; ulisp_globals_sec\0
+      46 114 101 108 97 46 116 101 120 116 0                               ; .rela.text\0
+      46 114 101 108 97 46 114 111 100 97 116 97 0                         ; .rela.rodata\0
+      46 114 101 108 97 46 100 97 116 97 0                                 ; .rela.data\0
+      46 114 101 108 97 46 105 110 105 116 95 97 114 114 97 121 0          ; .rela.init_array\0
+      46 114 101 108 97 46 117 108 105 115 112 95 103 108 111 98 97 108 115 95 115 101 99 0 ; .rela.ulisp_globals_sec\0
+      46 110 111 116 101 46 71 78 85 45 115 116 97 99 107 0                ; .note.GNU-stack\0
+      46 115 121 109 116 97 98 0                                           ; .symtab\0
+      46 115 116 114 116 97 98 0                                           ; .strtab\0
+      46 115 104 115 116 114 116 97 98 0)))                                ; .shstrtab\0
+
+(define (elf64-write-rel-ehdr! bv shoff shnum shstrndx)
+  (elf64-set-u8! bv 0 127)
+  (elf64-set-u8! bv 1 69)
+  (elf64-set-u8! bv 2 76)
+  (elf64-set-u8! bv 3 70)
+  (elf64-set-u8! bv 4 2)    ;; ELFCLASS64
+  (elf64-set-u8! bv 5 1)    ;; ELFDATA2LSB
+  (elf64-set-u8! bv 6 1)    ;; EV_CURRENT
+  (elf64-set-u8! bv 7 0)    ;; ELFOSABI_NONE
+  (elf64-set-u8! bv 8 0)
+  (elf64-set-u16-le! bv 16 1)  ;; e_type = ET_REL (1)
+  (elf64-set-u16-le! bv 18 62) ;; e_machine = EM_X86_64 (62)
+  (elf64-set-u32-le! bv 20 1)  ;; e_version = EV_CURRENT (1)
+  (elf64-set-u64-le! bv 24 0)  ;; e_entry = 0
+  (elf64-set-u64-le! bv 32 0)  ;; e_phoff = 0
+  (elf64-set-u64-le! bv 40 shoff)
+  (elf64-set-u32-le! bv 48 0)  ;; e_flags = 0
+  (elf64-set-u16-le! bv 52 64) ;; e_ehsize = 64
+  (elf64-set-u16-le! bv 54 0)  ;; e_phentsize = 0
+  (elf64-set-u16-le! bv 56 0)  ;; e_phnum = 0
+  (elf64-set-u16-le! bv 58 64) ;; e_shentsize = 64
+  (elf64-set-u16-le! bv 60 shnum)
+  (elf64-set-u16-le! bv 62 shstrndx))
+
+(define (elf64-set-s64-le! bv off val)
+  (if (< val 0)
+      (let* ((pos (- 0 (+ val 1)))
+             (lo (modulo pos 4294967296))
+             (hi (quotient pos 4294967296)))
+        (elf64-set-u32-le! bv off (- 4294967295 lo))
+        (elf64-set-u32-le! bv (+ off 4) (- 4294967295 hi)))
+      (elf64-set-u64-le! bv off val)))
+
+(define (elf64-build-rel-symtab sym-table globl-syms weak-syms sym-types reloc-records)
+  ;; Collect unique named symbols from globl-syms, weak-syms, and string targets in reloc-records
+  (let* ((add-uniq (lambda (s lst)
+                     (if (asm-str-list-member? s lst)
+                         lst
+                         (cons s lst))))
+         (s1 (let loop ((gs globl-syms) (acc '()))
+               (if (null? gs) acc (loop (cdr gs) (add-uniq (car gs) acc)))))
+         (s2 (let loop ((ws weak-syms) (acc s1))
+               (if (null? ws) acc (loop (cdr ws) (add-uniq (car ws) acc)))))
+         (named-syms (let loop ((rs reloc-records) (acc s2))
+                       (if (null? rs)
+                           (reverse acc)
+                           (let ((tgt (caddr (car rs))))
+                             (if (string? tgt)
+                                 (loop (cdr rs) (add-uniq tgt acc))
+                                 (loop (cdr rs) acc))))))
+         ;; Assign string table offsets and symbol indices (starting at 7)
+         (syms-meta
+           (let loop ((syms named-syms) (idx 7) (stroff 1) (acc '()))
+             (if (null? syms)
+                 (reverse acc)
+                 (let* ((name (car syms))
+                        (slen (string-length name)))
+                   (loop (cdr syms) (+ idx 1) (+ (+ stroff slen) 1)
+                         (cons (list name idx stroff) acc))))))
+         (sym-idx-map
+           (let loop ((ms syms-meta) (acc '()))
+             (if (null? ms)
+                 acc
+                 (loop (cdr ms) (cons (cons (caar ms) (cadar ms)) acc)))))
+         (strtab-len (if (null? syms-meta)
+                         1
+                         (let ((last-m (let l ((x syms-meta)) (if (null? (cdr x)) (car x) (l (cdr x))))))
+                           (+ (+ (caddr last-m) (string-length (car last-m))) 1))))
+         (strtab-bv (make-bytevector strtab-len))
+         (num-syms (+ 7 (length syms-meta)))
+         (symtab-bv (make-bytevector (* num-syms 24))))
+    ;; Write strtab-bv
+    (bytevector-u8-set! strtab-bv 0 0)
+    (let loop ((ms syms-meta))
+      (if (pair? ms)
+          (let* ((m (car ms))
+                 (name (car m))
+                 (soff (caddr m))
+                 (slen (string-length name)))
+            (let cloop ((i 0))
+              (if (< i slen)
+                  (begin
+                    (bytevector-u8-set! strtab-bv (+ soff i) (char->integer (string-ref name i)))
+                    (cloop (+ i 1)))
+                  (bytevector-u8-set! strtab-bv (+ soff slen) 0)))
+            (loop (cdr ms)))))
+    ;; Write section symbols 1..6 (STB_LOCAL=0, STT_SECTION=3 -> st_info = 3)
+    (let sec-loop ((sidx 1))
+      (if (<= sidx 6)
+          (let ((off (* sidx 24)))
+            (elf64-set-u32-le! symtab-bv off 0)
+            (elf64-set-u8! symtab-bv (+ off 4) 3)
+            (elf64-set-u8! symtab-bv (+ off 5) 0)
+            (elf64-set-u16-le! symtab-bv (+ off 6) sidx)
+            (elf64-set-u64-le! symtab-bv (+ off 8) 0)
+            (elf64-set-u64-le! symtab-bv (+ off 16) 0)
+            (sec-loop (+ sidx 1)))))
+    ;; Write named symbols 7..N
+    (let sym-loop ((ms syms-meta))
+      (if (pair? ms)
+          (let* ((m (car ms))
+                 (name (car m))
+                 (idx (cadr m))
+                 (soff (caddr m))
+                 (off (* idx 24))
+                 (is-weak? (asm-str-list-member? name weak-syms))
+                 (bind (if is-weak? 2 1)) ;; 2=STB_WEAK, 1=STB_GLOBAL
+                 (def-entry (assoc name sym-table))
+                 (type-entry (assoc name sym-types))
+                 (stt (if type-entry
+                          (cdr type-entry)
+                          (if (and def-entry (eq? (cadr def-entry) 'text))
+                              2 ;; STT_FUNC
+                              0))) ;; STT_NOTYPE
+                 (st-info (+ (* bind 16) stt))
+                 (shndx (if def-entry (asm-sec->shndx (cadr def-entry)) 0))
+                 (st-val (if def-entry (caddr def-entry) 0)))
+            (elf64-set-u32-le! symtab-bv off soff)
+            (elf64-set-u8! symtab-bv (+ off 4) st-info)
+            (elf64-set-u8! symtab-bv (+ off 5) 0)
+            (elf64-set-u16-le! symtab-bv (+ off 6) shndx)
+            (elf64-set-u64-le! symtab-bv (+ off 8) st-val)
+            (elf64-set-u64-le! symtab-bv (+ off 16) 0)
+            (sym-loop (cdr ms)))))
+    (list symtab-bv strtab-bv sym-idx-map)))
+
+(define (elf64-build-rela-section sec-name reloc-records sym-idx-map)
+  (let* ((sec-rels (let loop ((rs reloc-records) (acc '()))
+                     (if (null? rs)
+                         (reverse acc)
+                         (if (eq? (caar rs) sec-name)
+                             (loop (cdr rs) (cons (car rs) acc))
+                             (loop (cdr rs) acc)))))
+         (count (length sec-rels))
+         (bv (make-bytevector (* count 24))))
+    (let loop ((rs sec-rels) (i 0))
+      (if (pair? rs)
+          (let* ((r (car rs))
+                 (r-offset (cadr r))
+                 (target (caddr r))
+                 (r-type (cadddr r))
+                 (r-addend (car (cddddr r)))
+                 (sym-idx (if (number? target)
+                              target
+                              (let ((e (assoc target sym-idx-map)))
+                                (if e (cdr e) 0))))
+                 (off (* i 24)))
+            (elf64-set-u64-le! bv off r-offset)
+            (elf64-set-u32-le! bv (+ off 8) r-type)
+            (elf64-set-u32-le! bv (+ off 12) sym-idx)
+            (elf64-set-s64-le! bv (+ off 16) r-addend)
+            (loop (cdr rs) (+ i 1)))))
+    bv))
+
+(define (build-elf64-relocatable assembled)
+  (let* ((text-bv (car assembled))
+         (rodata-bv (cadr assembled))
+         (data-bv (caddr assembled))
+         (bss-len (cadddr assembled))
+         (init-bv (car (cddddr assembled)))
+         (globals-bv (cadr (cddddr assembled)))
+         (sym-table (caddr (cddddr assembled)))
+         (globl-syms (cadddr (cddddr assembled)))
+         (rest8 (cddddr (cddddr assembled)))
+         (weak-syms (car rest8))
+         (sym-types (cadr rest8))
+         (reloc-records (caddr rest8))
+         (sym-res (elf64-build-rel-symtab sym-table globl-syms weak-syms sym-types reloc-records))
+         (symtab-bv (car sym-res))
+         (strtab-bv (cadr sym-res))
+         (sym-idx-map (caddr sym-res))
+         (rela-text-bv (elf64-build-rela-section 'text reloc-records sym-idx-map))
+         (rela-rodata-bv (elf64-build-rela-section 'rodata reloc-records sym-idx-map))
+         (rela-data-bv (elf64-build-rela-section 'data reloc-records sym-idx-map))
+         (rela-init-bv (elf64-build-rela-section 'init_array reloc-records sym-idx-map))
+         (rela-globals-bv (elf64-build-rela-section 'ulisp_globals_sec reloc-records sym-idx-map))
+         (shstrtab-bv (elf64-make-rel-shstrtab-bytes))
+         ;; Compute aligned section offsets
+         (text-off 64)
+         (text-len (bytevector-length text-bv))
+         (rodata-off (elf64-align-up (+ text-off text-len) 8))
+         (rodata-len (bytevector-length rodata-bv))
+         (data-off (elf64-align-up (+ rodata-off rodata-len) 8))
+         (data-len (bytevector-length data-bv))
+         (bss-off (elf64-align-up (+ data-off data-len) 8))
+         (init-off bss-off)
+         (init-len (bytevector-length init-bv))
+         (globals-off (elf64-align-up (+ init-off init-len) 8))
+         (globals-len (bytevector-length globals-bv))
+         (rela-text-off (elf64-align-up (+ globals-off globals-len) 8))
+         (rela-text-len (bytevector-length rela-text-bv))
+         (rela-rodata-off (elf64-align-up (+ rela-text-off rela-text-len) 8))
+         (rela-rodata-len (bytevector-length rela-rodata-bv))
+         (rela-data-off (elf64-align-up (+ rela-rodata-off rela-rodata-len) 8))
+         (rela-data-len (bytevector-length rela-data-bv))
+         (rela-init-off (elf64-align-up (+ rela-data-off rela-data-len) 8))
+         (rela-init-len (bytevector-length rela-init-bv))
+         (rela-globals-off (elf64-align-up (+ rela-init-off rela-init-len) 8))
+         (rela-globals-len (bytevector-length rela-globals-bv))
+         (symtab-off (elf64-align-up (+ rela-globals-off rela-globals-len) 8))
+         (symtab-len (bytevector-length symtab-bv))
+         (strtab-off (elf64-align-up (+ symtab-off symtab-len) 8))
+         (strtab-len (bytevector-length strtab-bv))
+         (shstrtab-off (elf64-align-up (+ strtab-off strtab-len) 8))
+         (shstrtab-len (bytevector-length shstrtab-bv))
+         (shoff (elf64-align-up (+ shstrtab-off shstrtab-len) 8))
+         (total-len (+ shoff (* 16 64)))
+         (elf-bv (make-bytevector total-len)))
+    ;; Write ELF64 header (ET_REL, 16 sections, shstrndx = 15)
+    (elf64-write-rel-ehdr! elf-bv shoff 16 15)
+    ;; Copy section payloads
+    (if (> text-len 0) (elf64-copy-bytes! elf-bv text-off text-bv 0 text-len))
+    (if (> rodata-len 0) (elf64-copy-bytes! elf-bv rodata-off rodata-bv 0 rodata-len))
+    (if (> data-len 0) (elf64-copy-bytes! elf-bv data-off data-bv 0 data-len))
+    (if (> init-len 0) (elf64-copy-bytes! elf-bv init-off init-bv 0 init-len))
+    (if (> globals-len 0) (elf64-copy-bytes! elf-bv globals-off globals-bv 0 globals-len))
+    (if (> rela-text-len 0) (elf64-copy-bytes! elf-bv rela-text-off rela-text-bv 0 rela-text-len))
+    (if (> rela-rodata-len 0) (elf64-copy-bytes! elf-bv rela-rodata-off rela-rodata-bv 0 rela-rodata-len))
+    (if (> rela-data-len 0) (elf64-copy-bytes! elf-bv rela-data-off rela-data-bv 0 rela-data-len))
+    (if (> rela-init-len 0) (elf64-copy-bytes! elf-bv rela-init-off rela-init-bv 0 rela-init-len))
+    (if (> rela-globals-len 0) (elf64-copy-bytes! elf-bv rela-globals-off rela-globals-bv 0 rela-globals-len))
+    (elf64-copy-bytes! elf-bv symtab-off symtab-bv 0 symtab-len)
+    (elf64-copy-bytes! elf-bv strtab-off strtab-bv 0 strtab-len)
+    (elf64-copy-bytes! elf-bv shstrtab-off shstrtab-bv 0 shstrtab-len)
+    ;; Write Section Headers (0..15)
+    ;; 0: NULL
+    (elf64-write-shdr! elf-bv shoff 0 0 0 0 0 0 0 0 0 0 0)
+    ;; 1: .text (SHT_PROGBITS=1, SHF_ALLOC|SHF_EXECINSTR=6)
+    (elf64-write-shdr! elf-bv shoff 1 1 1 6 0 text-off text-len 0 0 16 0)
+    ;; 2: .rodata (SHT_PROGBITS=1, SHF_ALLOC=2)
+    (elf64-write-shdr! elf-bv shoff 2 7 1 2 0 rodata-off rodata-len 0 0 8 0)
+    ;; 3: .data (SHT_PROGBITS=1, SHF_WRITE|SHF_ALLOC=3)
+    (elf64-write-shdr! elf-bv shoff 3 15 1 3 0 data-off data-len 0 0 8 0)
+    ;; 4: .bss (SHT_NOBITS=8, SHF_WRITE|SHF_ALLOC=3)
+    (elf64-write-shdr! elf-bv shoff 4 21 8 3 0 bss-off bss-len 0 0 8 0)
+    ;; 5: .init_array (SHT_INIT_ARRAY=14, SHF_WRITE|SHF_ALLOC=3)
+    (elf64-write-shdr! elf-bv shoff 5 26 14 3 0 init-off init-len 0 0 8 8)
+    ;; 6: ulisp_globals_sec (SHT_PROGBITS=1, SHF_WRITE|SHF_ALLOC=3)
+    (elf64-write-shdr! elf-bv shoff 6 38 1 3 0 globals-off globals-len 0 0 8 0)
+    ;; 7: .rela.text (SHT_RELA=4, SHF_INFO_LINK=64, link=13, info=1)
+    (elf64-write-shdr! elf-bv shoff 7 56 4 64 0 rela-text-off rela-text-len 13 1 8 24)
+    ;; 8: .rela.rodata (SHT_RELA=4, SHF_INFO_LINK=64, link=13, info=2)
+    (elf64-write-shdr! elf-bv shoff 8 67 4 64 0 rela-rodata-off rela-rodata-len 13 2 8 24)
+    ;; 9: .rela.data (SHT_RELA=4, SHF_INFO_LINK=64, link=13, info=3)
+    (elf64-write-shdr! elf-bv shoff 9 80 4 64 0 rela-data-off rela-data-len 13 3 8 24)
+    ;; 10: .rela.init_array (SHT_RELA=4, SHF_INFO_LINK=64, link=13, info=5)
+    (elf64-write-shdr! elf-bv shoff 10 91 4 64 0 rela-init-off rela-init-len 13 5 8 24)
+    ;; 11: .rela.ulisp_globals_sec (SHT_RELA=4, SHF_INFO_LINK=64, link=13, info=6)
+    (elf64-write-shdr! elf-bv shoff 11 108 4 64 0 rela-globals-off rela-globals-len 13 6 8 24)
+    ;; 12: .note.GNU-stack (SHT_PROGBITS=1, flags=0)
+    (elf64-write-shdr! elf-bv shoff 12 132 1 0 0 symtab-off 0 0 0 1 0)
+    ;; 13: .symtab (SHT_SYMTAB=2, flags=0, link=14 (.strtab), info=7 (first non-local symbol))
+    (elf64-write-shdr! elf-bv shoff 13 148 2 0 0 symtab-off symtab-len 14 7 8 24)
+    ;; 14: .strtab (SHT_STRTAB=3)
+    (elf64-write-shdr! elf-bv shoff 14 156 3 0 0 strtab-off strtab-len 0 0 1 0)
+    ;; 15: .shstrtab (SHT_STRTAB=3)
+    (elf64-write-shdr! elf-bv shoff 15 164 3 0 0 shstrtab-off shstrtab-len 0 0 1 0)
+    elf-bv))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 144a: Standalone x86-64 Machine Code Assembler
 ;;; Conforms to DSN-33 Architecture Specification & Issue #616
@@ -21376,23 +21679,33 @@
                                 (new-entry-off (cond
                                                  ((string=? lbl-name "_start") off)
                                                  ((and (= entry-off -1) (string=? lbl-name "scheme_entry")) off)
-                                                 (else entry-off))))
-                           (pass1-loop (cdr lines-rest)
+                                                 (else entry-off)))
+                                (colon-pos (let cloop ((i 0))
+                                             (if (or (>= i (string-length clean)) (char=? (string-ref clean i) #\:))
+                                                 i
+                                                 (cloop (+ i 1)))))
+                                (rem-line (if (< (+ colon-pos 1) (string-length clean))
+                                              (asm-trim-string (substring clean (+ colon-pos 1) (string-length clean)))
+                                              ""))
+                                (next-lines (if (> (string-length rem-line) 0)
+                                                (cons rem-line (cdr lines-rest))
+                                                (cdr lines-rest))))
+                           (pass1-loop next-lines
                                        (cons (cons lbl-name (list cur-sec off)) sym-table)
                                        relocs text-ops rodata-ops data-ops
                                        cur-sec text-len rodata-len data-len bss-len new-entry-off)))
 
                         ;; Section switching directives
-                        ((string=? first ".text")
+                        ((or (string=? first ".text") (string-starts-with? clean ".section .text"))
                          (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
                                      'text text-len rodata-len data-len bss-len entry-off))
-                        ((or (string=? first ".data") (string=? first ".section .data"))
+                        ((or (string=? first ".data") (string-starts-with? clean ".section .data"))
                          (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
                                      'data text-len rodata-len data-len bss-len entry-off))
-                        ((or (string=? first ".rodata") (string=? first ".section .rodata"))
+                        ((or (string=? first ".rodata") (string-starts-with? clean ".section .rodata"))
                          (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
                                      'rodata text-len rodata-len data-len bss-len entry-off))
-                        ((string=? first ".bss")
+                        ((or (string=? first ".bss") (string-starts-with? clean ".section .bss"))
                          (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
                                      'bss text-len rodata-len data-len bss-len entry-off))
                         ((string-starts-with? clean ".section ulisp_globals_sec")
@@ -21695,6 +22008,357 @@
                 (reverse (car file-table-box))
                 (reverse (car line-table-box))
                 sym-table))))))
+
+;; -----------------------------------------------------------------------
+;; 6. Relocatable ELF64 Object (ET_REL) 2-Pass Assembler (Issue #783)
+;; -----------------------------------------------------------------------
+;; (assemble-x86-relocatable lines)
+;; Returns:
+;;   (list text-bv rodata-bv data-bv bss-len init-array-bv globals-bv
+;;         sym-table globl-syms weak-syms sym-types reloc-records)
+;; where each reloc-record in reloc-records is:
+;;   (list sec patch-off target r-type r-addend)
+;;   - sec: 'text | 'rodata | 'data | 'init_array | 'ulisp_globals_sec
+;;   - patch-off: integer byte offset within sec
+;;   - target: integer 1..6 (section symbol index) OR string (global/weak/undef symbol name)
+;;   - r-type: 1 (R_X86_64_64), 2 (R_X86_64_PC32), or 4 (R_X86_64_PLT32)
+;;   - r-addend: signed 64-bit integer addend
+
+(define (asm-sec->shndx sec)
+  (case sec
+    ((text) 1)
+    ((rodata) 2)
+    ((data) 3)
+    ((bss) 4)
+    ((init_array) 5)
+    ((ulisp_globals_sec) 6)
+    (else 1)))
+
+(define (asm-str-list-member? s lst)
+  (let loop ((rest lst))
+    (if (null? rest)
+        #f
+        (if (string=? s (car rest))
+            #t
+            (loop (cdr rest))))))
+
+(define (asm-copy-section-ops! bv ops)
+  (let loop ((rest (reverse ops)) (off 0))
+    (if (pair? rest)
+        (let ((op (car rest)))
+          (cond
+            ((and (pair? op) (eq? (car op) 'pad-nop))
+             (let ((pad (cdr op)))
+               (let fill ((k 0))
+                 (if (< k pad)
+                     (begin
+                       (bytevector-u8-set! bv (+ off k) 144)
+                       (fill (+ k 1)))
+                     (loop (cdr rest) (+ off pad))))))
+            ((and (pair? op) (eq? (car op) 'pad-zero))
+             (loop (cdr rest) (+ off (cdr op))))
+            (else
+             (let ((n (asm-copy-op-bytes! bv off op)))
+               (loop (cdr rest) (+ off n))))))
+        #t)))
+
+(define (assemble-x86-relocatable lines)
+  (let ((sym-table-box (vector '()))
+        (globl-box (vector '()))
+        (weak-box (vector '()))
+        (types-box (vector '()))
+        (relocs-box (vector '()))
+        (text-ops-box (vector '()))
+        (rodata-ops-box (vector '()))
+        (data-ops-box (vector '()))
+        (init-ops-box (vector '()))
+        (globals-ops-box (vector '()))
+        (lens-vec (vector 0 0 0 0 0 0))) ;; 0:text, 1:rodata, 2:data, 3:bss, 4:init_array, 5:ulisp_globals_sec
+    (let ((get-sec-len (lambda (sec)
+                         (case sec
+                           ((text) (vector-ref lens-vec 0))
+                           ((rodata) (vector-ref lens-vec 1))
+                           ((data) (vector-ref lens-vec 2))
+                           ((bss) (vector-ref lens-vec 3))
+                           ((init_array) (vector-ref lens-vec 4))
+                           ((ulisp_globals_sec) (vector-ref lens-vec 5))
+                           (else (vector-ref lens-vec 0)))))
+          (add-sec-op! (lambda (sec op blen)
+                         (case sec
+                           ((text)
+                            (vector-set! text-ops-box 0 (cons op (vector-ref text-ops-box 0)))
+                            (vector-set! lens-vec 0 (+ (vector-ref lens-vec 0) blen)))
+                           ((rodata)
+                            (vector-set! rodata-ops-box 0 (cons op (vector-ref rodata-ops-box 0)))
+                            (vector-set! lens-vec 1 (+ (vector-ref lens-vec 1) blen)))
+                           ((data)
+                            (vector-set! data-ops-box 0 (cons op (vector-ref data-ops-box 0)))
+                            (vector-set! lens-vec 2 (+ (vector-ref lens-vec 2) blen)))
+                           ((bss)
+                            (vector-set! lens-vec 3 (+ (vector-ref lens-vec 3) blen)))
+                           ((init_array)
+                            (vector-set! init-ops-box 0 (cons op (vector-ref init-ops-box 0)))
+                            (vector-set! lens-vec 4 (+ (vector-ref lens-vec 4) blen)))
+                           ((ulisp_globals_sec)
+                            (vector-set! globals-ops-box 0 (cons op (vector-ref globals-ops-box 0)))
+                            (vector-set! lens-vec 5 (+ (vector-ref lens-vec 5) blen)))
+                           (else #f)))))
+      (let pass1-loop ((lines-rest lines) (cur-sec 'text))
+        (if (pair? lines-rest)
+            (let* ((line (car lines-rest))
+                   (clean (asm-trim-string (asm-strip-comment line))))
+              (if (= (string-length clean) 0)
+                  (pass1-loop (cdr lines-rest) cur-sec)
+                  (let ((tokens (asm-tokenize-line clean)))
+                    (if (null? tokens)
+                        (pass1-loop (cdr lines-rest) cur-sec)
+                        (let ((first (car tokens)))
+                          (cond
+                            ;; Label definition: "NAME:" (possibly followed by inline directive/instruction)
+                            ((or (and (pair? (cdr tokens)) (string=? (cadr tokens) ":"))
+                                 (char=? (string-ref first (- (string-length first) 1)) #\:))
+                             (let* ((colon-in-first? (char=? (string-ref first (- (string-length first) 1)) #\:))
+                                    (lbl-name (if colon-in-first?
+                                                  (substring first 0 (- (string-length first) 1))
+                                                  first))
+                                    (off (get-sec-len cur-sec))
+                                    (colon-pos (let cloop ((i 0))
+                                                 (if (or (>= i (string-length clean)) (char=? (string-ref clean i) #\:))
+                                                     i
+                                                     (cloop (+ i 1)))))
+                                    (rem-line (if (< (+ colon-pos 1) (string-length clean))
+                                                  (asm-trim-string (substring clean (+ colon-pos 1) (string-length clean)))
+                                                  "")))
+                               (vector-set! sym-table-box 0 (cons (cons lbl-name (list cur-sec off)) (vector-ref sym-table-box 0)))
+                               (if (> (string-length rem-line) 0)
+                                   (pass1-loop (cons rem-line (cdr lines-rest)) cur-sec)
+                                   (pass1-loop (cdr lines-rest) cur-sec))))
+
+                            ;; Section switching directives
+                            ((string=? first ".text")
+                             (pass1-loop (cdr lines-rest) 'text))
+                            ((or (string=? first ".data") (string=? first ".section .data"))
+                             (pass1-loop (cdr lines-rest) 'data))
+                            ((or (string=? first ".rodata") (string=? first ".section .rodata"))
+                             (pass1-loop (cdr lines-rest) 'rodata))
+                            ((string=? first ".bss")
+                             (pass1-loop (cdr lines-rest) 'bss))
+                            ((string-starts-with? clean ".section ulisp_globals_sec")
+                             (pass1-loop (cdr lines-rest) 'ulisp_globals_sec))
+                            ((string-starts-with? clean ".section .init_array")
+                             (pass1-loop (cdr lines-rest) 'init_array))
+                            ((string-starts-with? clean ".section .data")
+                             (pass1-loop (cdr lines-rest) 'data))
+                            ((string-starts-with? clean ".section .rodata")
+                             (pass1-loop (cdr lines-rest) 'rodata))
+                            ((string-starts-with? clean ".section .text")
+                             (pass1-loop (cdr lines-rest) 'text))
+                            ((string-starts-with? clean ".section .bss")
+                             (pass1-loop (cdr lines-rest) 'bss))
+
+                            ;; Symbol binding & type directives
+                            ((string=? first ".globl")
+                             (if (pair? (cdr tokens))
+                                 (let ((sym (cadr tokens)))
+                                   (if (not (asm-str-list-member? sym (vector-ref globl-box 0)))
+                                       (vector-set! globl-box 0 (cons sym (vector-ref globl-box 0))))))
+                             (pass1-loop (cdr lines-rest) cur-sec))
+                            ((string=? first ".weak")
+                             (if (pair? (cdr tokens))
+                                 (let ((sym (cadr tokens)))
+                                   (if (not (asm-str-list-member? sym (vector-ref weak-box 0)))
+                                       (vector-set! weak-box 0 (cons sym (vector-ref weak-box 0))))))
+                             (pass1-loop (cdr lines-rest) cur-sec))
+                            ((string=? first ".type")
+                             (if (and (pair? (cdr tokens)) (pair? (cddr tokens)))
+                                 (let* ((sym (cadr tokens))
+                                        (rest-toks (cddr tokens))
+                                        (type-tok (if (and (string=? (car rest-toks) ",") (pair? (cdr rest-toks)))
+                                                      (cadr rest-toks)
+                                                      (car rest-toks)))
+                                        (stt (cond
+                                               ((or (string=? type-tok "@function") (string=? type-tok "%function")) 2)
+                                               ((or (string=? type-tok "@object") (string=? type-tok "%object")) 1)
+                                               (else 0))))
+                                   (vector-set! types-box 0 (cons (cons sym stt) (vector-ref types-box 0)))))
+                             (pass1-loop (cdr lines-rest) cur-sec))
+
+                            ((or (string-starts-with? clean ".section .note")
+                                 (string=? first ".intel_syntax")
+                                 (string=? first ".file")
+                                 (string=? first ".loc"))
+                             (pass1-loop (cdr lines-rest) cur-sec))
+
+                            ;; Alignment
+                            ((or (string=? first ".align") (string=? first ".p2align"))
+                             (let* ((val (if (pair? (cdr tokens)) (safe-string->number (cadr tokens)) 8))
+                                    (align (if (string=? first ".p2align") (expt 2 val) val))
+                                    (cur-len (get-sec-len cur-sec))
+                                    (rem (modulo cur-len align))
+                                    (pad (if (= rem 0) 0 (- align rem))))
+                               (if (> pad 0)
+                                   (if (eq? cur-sec 'text)
+                                       (add-sec-op! 'text (cons 'pad-nop pad) pad)
+                                       (add-sec-op! cur-sec (cons 'pad-zero pad) pad)))
+                               (pass1-loop (cdr lines-rest) cur-sec)))
+
+                            ;; Data directives: .byte
+                            ((string=? first ".byte")
+                             (let byte-loop ((ts (cdr tokens)))
+                               (if (pair? ts)
+                                   (begin
+                                     (if (not (string=? (car ts) ","))
+                                         (let* ((b-num (safe-string->number (car ts)))
+                                                (b (if b-num b-num 0)))
+                                           (add-sec-op! cur-sec (list b) 1)))
+                                     (byte-loop (cdr ts)))
+                                   (pass1-loop (cdr lines-rest) cur-sec))))
+
+                            ;; Data directives: .quad
+                            ((string=? first ".quad")
+                             (let* ((args (cdr tokens))
+                                    (arg-str (let loop ((ts args) (acc ""))
+                                               (if (null? ts) (asm-trim-string acc)
+                                                   (loop (cdr ts) (string-append acc (car ts) " ")))))
+                                    (num (safe-string->number arg-str)))
+                               (if num
+                                   (begin
+                                     (add-sec-op! cur-sec (split-u64-le num) 8)
+                                     (pass1-loop (cdr lines-rest) cur-sec))
+                                   (let* ((plus-pos (let loop ((i 0))
+                                                      (if (or (>= i (string-length arg-str)) (char=? (string-ref arg-str i) #\+))
+                                                          i
+                                                          (loop (+ i 1)))))
+                                          (sym-name (asm-trim-string (if (< plus-pos (string-length arg-str))
+                                                                         (substring arg-str 0 plus-pos)
+                                                                         arg-str)))
+                                          (addend (if (< plus-pos (string-length arg-str))
+                                                      (let ((n (safe-string->number (asm-trim-string (substring arg-str (+ plus-pos 1) (string-length arg-str))))))
+                                                        (if n n 0))
+                                                      0))
+                                          (cur-len (get-sec-len cur-sec)))
+                                     (vector-set! relocs-box 0 (cons (list 'abs64 cur-sec cur-len sym-name addend) (vector-ref relocs-box 0)))
+                                     (add-sec-op! cur-sec '(0 0 0 0 0 0 0 0) 8)
+                                     (pass1-loop (cdr lines-rest) cur-sec)))))
+
+                            ;; Data directives: .asciz / .ascii
+                            ((or (string=? first ".asciz") (string=? first ".ascii"))
+                             (let* ((null-term? (string=? first ".asciz"))
+                                    (str-tok (if (pair? (cdr tokens)) (cadr tokens) ""))
+                                    (bytes (let loop ((i 0) (acc '()))
+                                             (if (>= i (string-length str-tok))
+                                                 (reverse (if null-term? (cons 0 acc) acc))
+                                                 (loop (+ i 1) (cons (char->integer (string-ref str-tok i)) acc)))))
+                                    (blen (length bytes)))
+                               (add-sec-op! cur-sec bytes blen)
+                               (pass1-loop (cdr lines-rest) cur-sec)))
+
+                            ;; Data directives: .space / .zero
+                            ((or (string=? first ".space") (string=? first ".zero"))
+                             (let ((cnt (if (pair? (cdr tokens)) (safe-string->number (cadr tokens)) 0)))
+                               (if (and cnt (> cnt 0))
+                                   (add-sec-op! cur-sec (cons 'pad-zero cnt) cnt))
+                               (pass1-loop (cdr lines-rest) cur-sec)))
+
+                            ;; Instruction
+                            (else
+                             (let* ((has-lock? (and (string=? (safe-string-downcase first) "lock") (pair? (cdr tokens))))
+                                    (mnem (if has-lock? (cadr tokens) first))
+                                    (raw-opnd-tokens (if has-lock? (cddr tokens) (cdr tokens)))
+                                    (opnd-strs (let loop ((ts raw-opnd-tokens) (cur '()) (acc '()))
+                                                 (cond
+                                                   ((null? ts)
+                                                    (if (null? cur) (reverse acc)
+                                                        (reverse (cons (let l ((cs (reverse cur)) (s ""))
+                                                                         (if (null? cs) s (l (cdr cs) (string-append s (car cs) " ")))) acc))))
+                                                   ((string=? (car ts) ",")
+                                                    (loop (cdr ts) '()
+                                                          (cons (let l ((cs (reverse cur)) (s ""))
+                                                                  (if (null? cs) s (l (cdr cs) (string-append s (car cs) " ")))) acc)))
+                                                   (else
+                                                    (loop (cdr ts) (cons (car ts) cur) acc)))))
+                                    (opnds (map parse-operand-str opnd-strs))
+                                    (text-len (vector-ref lens-vec 0))
+                                    (res (assemble-inst mnem opnds (if has-lock? (+ text-len 1) text-len))))
+                               (if (pair? res)
+                                   (let* ((bytes (if has-lock? (cons 240 (car res)) (car res)))
+                                          (reloc (cadr res))
+                                          (blen (length bytes)))
+                                     (if reloc
+                                         (vector-set! relocs-box 0 (cons (cons (car reloc) (cons 'text (cdr reloc))) (vector-ref relocs-box 0))))
+                                     (add-sec-op! 'text bytes blen)))
+                               (pass1-loop (cdr lines-rest) cur-sec))))))))))
+            ;; Pass 2: Materialize section bytevectors and compute ELF64 RELA records
+            (let* ((text-len (vector-ref lens-vec 0))
+                   (rodata-len (vector-ref lens-vec 1))
+                   (data-len (vector-ref lens-vec 2))
+                   (bss-len (vector-ref lens-vec 3))
+                   (init-len (vector-ref lens-vec 4))
+                   (globals-len (vector-ref lens-vec 5))
+                   (text-bv (make-bytevector text-len))
+                   (rodata-bv (make-bytevector rodata-len))
+                   (data-bv (make-bytevector data-len))
+                   (init-bv (make-bytevector init-len))
+                   (globals-bv (make-bytevector globals-len))
+                   (sym-table (vector-ref sym-table-box 0))
+                   (globl-syms (reverse (vector-ref globl-box 0)))
+                   (weak-syms (reverse (vector-ref weak-box 0)))
+                   (sym-types (vector-ref types-box 0)))
+              (asm-copy-section-ops! text-bv (vector-ref text-ops-box 0))
+              (asm-copy-section-ops! rodata-bv (vector-ref rodata-ops-box 0))
+              (asm-copy-section-ops! data-bv (vector-ref data-ops-box 0))
+              (asm-copy-section-ops! init-bv (vector-ref init-ops-box 0))
+              (asm-copy-section-ops! globals-bv (vector-ref globals-ops-box 0))
+              (let reloc-loop ((rels (reverse (vector-ref relocs-box 0))) (rela-acc '()))
+                (if (pair? rels)
+                    (let* ((rel (car rels))
+                           (type (car rel))
+                           (sec (cadr rel))
+                           (patch-off (caddr rel))
+                           (sym (cadddr rel))
+                           (addend (car (cddddr rel)))
+                           (adj (if (pair? (cdr (cddddr rel))) (cadr (cddddr rel)) 0))
+                           (sym-entry (assoc sym sym-table))
+                           (is-exported? (or (asm-str-list-member? sym globl-syms)
+                                             (asm-str-list-member? sym weak-syms))))
+                      (cond
+                        ;; Intra-.text rel32 branch/call to a non-exported local label: resolve directly in text-bv!
+                        ((and (eq? type 'rel32)
+                              (eq? sec 'text)
+                              sym-entry
+                              (eq? (cadr sym-entry) 'text)
+                              (not is-exported?))
+                         (let* ((sym-off (caddr sym-entry))
+                                (diff (- (+ sym-off addend) (+ patch-off 4))))
+                           (elf64-set-u32-le! text-bv patch-off diff)
+                           (reloc-loop (cdr rels) rela-acc)))
+
+                        ;; Otherwise emit an SHT_RELA relocation entry
+                        (else
+                         (let* ((r-type (case type
+                                          ((rel32) 4)       ;; R_X86_64_PLT32 (4)
+                                          ((rip_disp32) 2)  ;; R_X86_64_PC32 (2)
+                                          ((abs64) 1)       ;; R_X86_64_64 (1)
+                                          (else 2)))
+                                (base-addend (case type
+                                               ((rel32) (- addend 4))
+                                               ((rip_disp32) (- (- addend 4) adj))
+                                               ((abs64) addend)
+                                               (else addend))))
+                           (if (and sym-entry (not is-exported?))
+                               ;; Local symbol defined in target-sec: relocate against section symbol (1..6)
+                               (let* ((target-sec (cadr sym-entry))
+                                      (sym-off (caddr sym-entry))
+                                      (sec-shndx (asm-sec->shndx target-sec))
+                                      (final-addend (+ sym-off base-addend)))
+                                 (reloc-loop (cdr rels)
+                                             (cons (list sec patch-off sec-shndx r-type final-addend) rela-acc)))
+                               ;; Exported or undefined symbol: relocate against named symbol
+                               (reloc-loop (cdr rels)
+                                           (cons (list sec patch-off sym r-type base-addend) rela-acc)))))))
+                    (list text-bv rodata-bv data-bv bss-len init-bv globals-bv
+                          sym-table globl-syms weak-syms sym-types (reverse rela-acc)))))))))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 144: Direct ELF64 Static Executable Generator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #616
@@ -21769,6 +22433,72 @@
            (elf-bv (assemble-and-build-elf asm-lines)))
       (write-elf64-bytevector elf-bv)
       elf-bv)))
+
+;;; -----------------------------------------------------------------------
+;;; Issue #783: Builtin Assembler & ELF64 Relocatable Object (.o, ET_REL)
+;;; -----------------------------------------------------------------------
+(define (assemble-and-build-elf-obj lines)
+  (let ((assembled (assemble-x86-relocatable lines)))
+    (build-elf64-relocatable assembled)))
+
+(define (emit-x86-64-elf-obj prog gc-mode)
+  (let ((lines-box (vector '())))
+    (with-emit-line-sink
+      (lambda (line)
+        (vector-set! lines-box 0 (cons line (vector-ref lines-box 0))))
+      (lambda ()
+        (emit-x86-64 prog gc-mode)))
+    (let* ((asm-lines (reverse (vector-ref lines-box 0)))
+           (elf-bv (assemble-and-build-elf-obj asm-lines)))
+      (write-elf64-bytevector elf-bv)
+      elf-bv)))
+
+(define (read-asm-lines-from-stdin)
+  (cond-expand
+    (ulisp
+     (let ((p (list '%file-input-port
+                    0
+                    (cons (make-string 4096) '())
+                    (cons 0 '())
+                    (cons 0 '())
+                    (cons 1 '())
+                    (cons 1 '())
+                    "stdin"
+                    #f)))
+       (let loop ((cur '()) (lines '()))
+         (let ((c (port-read-char p)))
+           (cond
+             ((eof-object? c)
+              (if (null? cur)
+                  (reverse lines)
+                  (reverse (cons (list->string (reverse cur)) lines))))
+             ((char=? c #\newline)
+              (loop '() (cons (list->string (reverse cur)) lines)))
+             ((char=? c (integer->char 13))
+              (loop cur lines))
+             (else
+              (loop (cons c cur) lines)))))))
+    (else
+     (let loop ((cur '()) (lines '()))
+       (let ((c (read-char)))
+         (cond
+           ((eof-object? c)
+            (if (null? cur)
+                (reverse lines)
+                (reverse (cons (list->string (reverse cur)) lines))))
+           ((char=? c #\newline)
+            (loop '() (cons (list->string (reverse cur)) lines)))
+           ((char=? c (integer->char 13))
+            (loop cur lines))
+           (else
+            (loop (cons c cur) lines))))))))
+
+(define (assemble-stream-to-elf-obj)
+  (let* ((lines (read-asm-lines-from-stdin))
+         (elf-bv (assemble-and-build-elf-obj lines)))
+    (write-elf64-bytevector elf-bv)
+    elf-bv))
+
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 7: Native AArch64 (ARM64) Backend Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #503
@@ -24167,7 +24897,7 @@
               ((char=? c #\")
                (loop (+ i 1) nline ncol depth #t #f #f
                      (if (and (= depth 0) (not in-atom)) (cons (cons line col) acc) acc)))
-              ((or (char=? c #\space) (char=? c #\tab) (char=? c #\newline) (char=? c #\return))
+              ((or (char=? c #\space) (char=? c #\tab) (char=? c #\newline) (char=? c (integer->char 13)))
                (loop (+ i 1) nline ncol depth #f #f #f acc))
               ((char=? c #\()
                (loop (+ i 1) nline ncol (+ depth 1) #f #f #f
@@ -24240,6 +24970,11 @@
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'elf)))
                (set-current-target-arch! 'elf)
                (loop (cdr forms) 'elf gc-mode verify trace debug))
+              ((or (eq? first '--target-obj)
+                   (and (pair? first) (eq? (car first) '!target) (pair? (cdr first))
+                        (or (eq? (cadr first) 'obj) (eq? (cadr first) 'elf-obj))))
+               (set-current-target-arch! 'obj)
+               (loop (cdr forms) 'obj gc-mode verify trace debug))
               ((or (eq? first '--target-asm)
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'asm)))
                (set-current-target-arch! 'x86_64)
@@ -24386,10 +25121,12 @@
   (let* ((tgt-str (cond ((eq? target 'c) "c")
                         ((eq? target 'aarch64) "aarch64")
                         ((eq? target 'elf) "elf")
+                        ((or (eq? target 'obj) (eq? target 'elf-obj)) "elf-obj")
                         (else "x86-64")))
          (pass-id (cond ((eq? target 'c) 'pass-160-backend-c)
                         ((eq? target 'aarch64) 'pass-150-backend-aarch64)
                         ((eq? target 'elf) 'pass-144-backend-x86-elf)
+                        ((or (eq? target 'obj) (eq? target 'elf-obj)) 'pass-144-backend-x86-elf-obj)
                         (else 'pass-140-backend-x86-64)))
          (pass-name (string-append "Backend Code Generation (" tgt-str ")")))
     (set-current-pass! pass-id)
@@ -24405,6 +25142,8 @@
                            (emit-aarch64 lir-ast gc-mode))
                           ((eq? target 'elf)
                            (emit-x86-64-elf lir-ast gc-mode))
+                          ((or (eq? target 'obj) (eq? target 'elf-obj))
+                           (emit-x86-64-elf-obj lir-ast gc-mode))
                           (else
                            (emit-x86-64 lir-ast gc-mode))))
                    (t1 (current-time-monotonic-us))
@@ -24420,6 +25159,8 @@
                (emit-aarch64 lir-ast gc-mode))
               ((eq? target 'elf)
                (emit-x86-64-elf lir-ast gc-mode))
+              ((or (eq? target 'obj) (eq? target 'elf-obj))
+               (emit-x86-64-elf-obj lir-ast gc-mode))
               (else
                (emit-x86-64 lir-ast gc-mode))))))))
 
@@ -24528,9 +25269,11 @@
   (display "  -o <file>             Write output to <file> instead of standard output\n")
   (display "  -e <expr>             Compile Scheme expression string directly to target output\n")
   (display "  -S                    Emit assembly code (default for native backends)\n")
+  (display "  -c, --target-obj      Compile to ELF64 relocatable object file (.o, ET_REL)\n")
+  (display "  --as [--64]           Assemble x86-64 Intel-syntax assembly (.s) to ELF64 object (.o)\n")
   (display "  --target-elf          Emit standalone ELF64 static executable directly\n")
   (display "  -g                    Generate minimal DWARF debug information for GDB / perf\n")
-  (display "  -b, --target <tgt>    Specify compilation target (x86_64, elf, c, aarch64, lir)\n")
+  (display "  -b, --target <tgt>    Specify compilation target (x86_64, obj, elf, c, aarch64, lir)\n")
   (display "  -O0, -O1, -O2         Optimization level (0: minimal, 1: standard, 2: aggressive)\n")
   (display "  -v, --verbose         Enable verbose diagnostic messages to stderr\n")
   (display "  -q, --quiet           Suppress warning and non-essential messages\n")
@@ -24590,6 +25333,12 @@
              (loop (cdr rest) in-file out-file (substring arg 7 (string-length arg)) target opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((or (string=? arg "--target-elf") (string=? arg "-elf"))
              (loop (cdr rest) in-file out-file inline-expr 'elf opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((or (string=? arg "-c") (string=? arg "--target-obj") (string=? arg "-obj"))
+             (loop (cdr rest) in-file out-file inline-expr 'obj opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((string=? arg "--as")
+             (loop (cdr rest) in-file out-file inline-expr 'as-mode opt-level verbose quiet time-passes dump-ir allow-extern module-name))
+            ((string=? arg "--64")
+             (loop (cdr rest) in-file out-file inline-expr target opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((or (string=? arg "--target-asm") (string=? arg "-S"))
              (loop (cdr rest) in-file out-file inline-expr 'x86_64 opt-level verbose quiet time-passes dump-ir allow-extern module-name))
             ((or (string=? arg "-g") (string=? arg "--debug-symbols") (string=? arg "-gline-tables-only"))
@@ -24709,6 +25458,12 @@
             (begin
               (sys-dup2 in-fd 0)
               (sys-close in-fd)))))
+
+  ;; 3b. Builtin Assembler Mode (ulisp --as [--64] [input.s] [-o output.o])
+  (if (eq? cli-target 'as-mode)
+      (begin
+        (assemble-stream-to-elf-obj)
+        (exit 0)))
 
   ;; 4. Read forms
   (let* ((src-name (if (and cli-in-file (not (string=? cli-in-file "-"))) cli-in-file "stdin.scm"))

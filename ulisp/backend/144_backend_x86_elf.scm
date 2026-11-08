@@ -72,3 +72,69 @@
            (elf-bv (assemble-and-build-elf asm-lines)))
       (write-elf64-bytevector elf-bv)
       elf-bv)))
+
+;;; -----------------------------------------------------------------------
+;;; Issue #783: Builtin Assembler & ELF64 Relocatable Object (.o, ET_REL)
+;;; -----------------------------------------------------------------------
+(define (assemble-and-build-elf-obj lines)
+  (let ((assembled (assemble-x86-relocatable lines)))
+    (build-elf64-relocatable assembled)))
+
+(define (emit-x86-64-elf-obj prog gc-mode)
+  (let ((lines-box (vector '())))
+    (with-emit-line-sink
+      (lambda (line)
+        (vector-set! lines-box 0 (cons line (vector-ref lines-box 0))))
+      (lambda ()
+        (emit-x86-64 prog gc-mode)))
+    (let* ((asm-lines (reverse (vector-ref lines-box 0)))
+           (elf-bv (assemble-and-build-elf-obj asm-lines)))
+      (write-elf64-bytevector elf-bv)
+      elf-bv)))
+
+(define (read-asm-lines-from-stdin)
+  (cond-expand
+    (ulisp
+     (let ((p (list '%file-input-port
+                    0
+                    (cons (make-string 4096) '())
+                    (cons 0 '())
+                    (cons 0 '())
+                    (cons 1 '())
+                    (cons 1 '())
+                    "stdin"
+                    #f)))
+       (let loop ((cur '()) (lines '()))
+         (let ((c (port-read-char p)))
+           (cond
+             ((eof-object? c)
+              (if (null? cur)
+                  (reverse lines)
+                  (reverse (cons (list->string (reverse cur)) lines))))
+             ((char=? c #\newline)
+              (loop '() (cons (list->string (reverse cur)) lines)))
+             ((char=? c (integer->char 13))
+              (loop cur lines))
+             (else
+              (loop (cons c cur) lines)))))))
+    (else
+     (let loop ((cur '()) (lines '()))
+       (let ((c (read-char)))
+         (cond
+           ((eof-object? c)
+            (if (null? cur)
+                (reverse lines)
+                (reverse (cons (list->string (reverse cur)) lines))))
+           ((char=? c #\newline)
+            (loop '() (cons (list->string (reverse cur)) lines)))
+           ((char=? c (integer->char 13))
+            (loop cur lines))
+           (else
+            (loop (cons c cur) lines))))))))
+
+(define (assemble-stream-to-elf-obj)
+  (let* ((lines (read-asm-lines-from-stdin))
+         (elf-bv (assemble-and-build-elf-obj lines)))
+    (write-elf64-bytevector elf-bv)
+    elf-bv))
+

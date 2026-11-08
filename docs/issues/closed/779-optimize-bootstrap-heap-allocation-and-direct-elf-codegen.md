@@ -22,7 +22,7 @@ ULisp のブートストラップおよび AOT コンパイル実行時におい
 2. **ダイレクト ELF バックエンド（`backend/144_backend_x86_elf.scm`）の一括出力高速化と `bootstrap.sh` 統合**:
    - [`write-elf64-bytevector`](../../../ulisp/backend/144_backend_x86_elf.scm#L18-L40) を `write-bytevector` によるバルク出力へ高速化する。
    - `compiler/driver.scm` で `--target elf` / `-b elf` / `--target-elf` を完全統一し、`bootstrap.sh` に `--emit-elf` Fast-Path オプションおよび Makefile の `test_differential_elf` ターゲットを統合する。
-   - なお、分割コンパイル・モジュラービルドにおける `.o`（ELF64 `ET_REL`）出力用の GNU `as` 互換コマンドオプション（`--as` / `-c`）については [Issue #783](../783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md)、複数 `.o` オブジェクトの静的リンク用 GNU `ld` 互換コマンドオプション（`--ld`）については [Issue #784](../784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md) にてそれぞれ段階的に実装・連携する。
+   - なお、分割コンパイル・モジュラービルドにおける `.o`（ELF64 `ET_REL`）出力用の GNU `as` 互換コマンドオプション（`--as` / `-c`）については [Issue #783](783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md)、複数 `.o` オブジェクトの静的リンク用 GNU `ld` 互換コマンドオプション（`--ld`）については [Issue #784](../784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md) にてそれぞれ段階的に実装・連携する。
 
 これにより、コンパイラ単体のヒープ管理およびバイナリ生成 I/O オーバーヘッドを 30〜50% 削減する。
 
@@ -39,7 +39,7 @@ ULisp のブートストラップおよび AOT コンパイル実行時におい
   - [Issue #777](777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking.md): 事前コンパイル済み標準ライブラリ静的リンクによるコンパイラ単体ブートストラップ
   - [Issue #778](778-implement-modular-parallel-incremental-bootstrap.md): モジュール分割増分コンパイルと make -j 並列実行
   - [Issue #782](782-fix-bootstrap-symbol-corruption-and-optimize-memory-consumption.md): ブートストラップ時のシンボル破壊・未定義参照の解消およびメモリ消費の最適化
-  - [Issue #783](../783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md): ULisp における GNU as 互換コマンドラインオプション (--as / -c) と ELF64 再配置可能オブジェクト (.o) 出力の実装
+  - [Issue #783](783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md): ULisp における GNU as 互換コマンドラインオプション (--as / -c) と ELF64 再配置可能オブジェクト (.o) 出力の実装
   - [Issue #784](../784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md): ULisp における GNU ld 互換コマンドラインオプション (--ld) と複数 ELF64 オブジェクト (.o) 静的リンカの実装
 
 ---

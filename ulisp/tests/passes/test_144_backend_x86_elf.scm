@@ -70,6 +70,39 @@
   (assert-true "ELF size > 4096" (> (bytevector-length elf-out) 4096))
   (test-write-bv-to-file "/tmp/test_pass144_lir_bin" elf-out))
 
+;; 3. Relocatable ELF64 Object Generation (ET_REL, Issue #783)
+(let* ((lines '("    .intel_syntax noprefix"
+                "    .text"
+                "    .globl _start"
+                "    .type _start, @function"
+                "_start:"
+                "    lea rdi, [rip + .L_msg]"
+                "    call ext_helper"
+                "    mov eax, 60"
+                "    xor edi, edi"
+                "    syscall"
+                "    .section .rodata"
+                ".L_msg:"
+                "    .asciz \"hello\""
+                "    .section .init_array, \"aw\""
+                "    .quad _start"
+                "    .section ulisp_globals_sec, \"a\""
+                "    .quad my_gvar"
+                "    .bss"
+                "    .globl my_gvar"
+                "    .weak my_gvar"
+                "my_gvar:"
+                "    .quad 0"))
+       (obj-bv (assemble-and-build-elf-obj lines)))
+  (assert-true "ET_REL bytevector generated" (bytevector? obj-bv))
+  (assert-equal "ET_REL magic 0" #x7f (bytevector-u8-ref obj-bv 0))
+  (assert-equal "ET_REL e_type == 1 (ET_REL)" 1 (bytevector-u8-ref obj-bv 16))
+  (assert-equal "ET_REL e_machine == 62 (EM_X86_64)" 62 (bytevector-u8-ref obj-bv 18))
+  (assert-equal "ET_REL e_phnum == 0" 0 (bytevector-u8-ref obj-bv 56))
+  (assert-equal "ET_REL e_shnum == 16" 16 (bytevector-u8-ref obj-bv 60))
+  (test-write-bv-to-file "/tmp/test_pass144_rel.o" obj-bv))
+
+
 (display "=======================================================") (newline)
 (display " Pass 144 Unit Tests: ")
 (display *pass-tests-passed*)
