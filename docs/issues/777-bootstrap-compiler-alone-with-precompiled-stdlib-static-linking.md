@@ -9,20 +9,22 @@ ID: 777
 
 ## 1. 概要 / Summary
 
-現在、[ulisp/bootstrap.sh](../../ulisp/bootstrap.sh) は `entry_core.scm` 経由で標準ライブラリ（`lib/*.scm` 全28モジュール）とランタイム（`runtime/*.scm` 全4モジュール）をコンパイラ本体と一緒に全結合した巨大ファイル `ulisp_core.scm`（約25,000行）を、Stage 1 / Stage 2 / Stage 3 で毎回フルコンパイルしている。
+現在、[ulisp/bootstrap.sh](../../ulisp/bootstrap.sh) は `entry_core.scm` 経由で標準ライブラリ（`lib/*.scm` 全 28 モジュール）とランタイム（`runtime/*.scm` 全 4 モジュール）をコンパイラ本体と一緒に全結合した巨大ファイル `ulisp_core.scm`（約 25,000 行 / アセンブリ約 65 万行・15MB）を、Stage 1 / Stage 2 / Stage 3 で毎回フルコンパイルしている。
 しかし、標準ライブラリおよびランタイムはコンパイラのメタサーキュラーな自己変換ロジックを含んでおらず、本来セルフホスティングの不動点（Fixed Point）証明の対象とする必要はない。
 
-先行する [Issue #772](closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md) では、標準ライブラリを1回だけ事前コンパイルしたオブジェクト（`build/ulisp_stdlib.o`）を静的リンクする方式により、テストスイートのコンパイル時間を 50〜100 倍（0.1s）に短縮した実績がある。また、[Issue #780](closed/780-optimize-symbol-to-string-with-direct-cache-and-bucket-lookup.md) によりシンボル探索の $O(N^2)$ ボトルネックが完全解消され、2分割静的リンクバイナリ（`build/ulisp-fast`）の検証スイート `test_split_link` は 2 秒で完走する基盤が整っている。
+先行する [Issue #772](closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md) では、標準ライブラリを 1 回だけ事前コンパイルしたオブジェクト（`build/ulisp_stdlib.o`）を静的リンクする方式により、テストスイートのコンパイル時間を 50〜100 倍（0.1s）に短縮した実績がある。
 
 本 Issue では、この分割静的リンク基盤をブートストラップパイプラインへ適用する：
 1. **ブートストラップ対象の極小化**:
-   - `ulisp_core.scm` の全結合コンパイルを廃止（または opt-in フォールバック化）し、ブートストラップ対象を **`compiler_entry.scm`（コンパイラ本体）のみ** に絞る。
+   - `ulisp_core.scm` の全結合コンパイルを廃止し、ブートストラップ対象を **`compiler_entry.scm`（コンパイラ本体）のみ** に絞る（入力行数 25,000 行 $\to$ 9,800 行、アセンブリ 65 万行 $\to$ 22 万行）。
 2. **事前コンパイル済み標準ライブラリとの静的結合**:
    - 事前ビルドされた `build/ulisp_stdlib.o` と生成された `stage_compiler.o` を `ld` で静的リンクして各ステージの実行可能バイナリ（`scheme-stage1`, `scheme-stage2`, `scheme-stage3`）を生成する。
-3. **コンパイラ単体での不動点検証（Fixed Point Protocol）**:
+3. **シンボルテーブル同期と ABI 整合性保証**:
+   - コンパイラ単体ビルド時、コンパイラ固有シンボル（`L_cst`, `include`, `list`, `vector->list` 等）がランタイム側で `?` (`ulisp_fn__p` 等) へ名前破壊（Name Mangling Corruption）されないよう、`*known-compiler-symbols*` および `*known-runtime-symbols*` を完全同期。
+4. **コンパイラ単体での不動点検証（Fixed Point Protocol）**:
    - 不動点検証を `stage2_compiler.s` と `stage3_compiler.s` の完全ビット一致（`cmp -s`）判定へ移行する。
 
-これにより、各ステージの入力 S 式規模および出力アセンブリ（15MB $\to$ 12MB）が大幅にスリム化され、各ステージのコンパイル時間が短縮。3-Stage 全体でも **大幅な時間短縮（従来比 3〜5 倍高速化）** が達成される。
+これにより、各ステージの入力 S 式規模および出力アセンブリが半減し、各ステージのコンパイル時間が **6 分 $\to$ 約 1 分前後**、3-Stage 全体でも **約 3 分（従来比 6 倍高速化）** へ劇的に短縮される。
 
 ---
 
@@ -30,36 +32,38 @@ ID: 777
 
 - 関連設計書:
   - [[DSN-33] ULISP 包括設計仕様書](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) 第 5 章「3段階セルフホスティングブートストラップ連鎖と不動点検証」
+  - [[DSN-33] ULISP 包括設計仕様書](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) 第 4 章「バックエンド・コード生成およびゼロ libc ELF ビルダー」
 - 依存・関連 Issue:
   - [Issue #607](closed/607-support-extern-symbols-and-split-stdlib-compiler-linking.md): 外部シンボル（extern）参照解決と標準ライブラリ・コンパイラの2分割 .o 静的リンク基盤の導入
   - [Issue #772](closed/772-unify-ulisp-test-targets-with-precompiled-stdlib-static-linking.md): ULisp 標準ライブラリの事前コンパイル済みオブジェクト化と分割静的リンクへの統一
   - [Issue #776](776-introduce-quick-bootstrap-mode-and-opt-in-post-tests.md): Quick Bootstrap モード導入
-  - [Issue #780](closed/780-optimize-symbol-to-string-with-direct-cache-and-bucket-lookup.md): シンボル探索の $O(N^2)$ 解消（ダイレクトマップキャッシュ & バケット探索）
-  - [Issue #781](closed/781-implement-record-based-symbols-with-direct-string-pointer.md): Tagged Immediate シンボルアーキテクチャの妥当性証明と確定
+  - [Issue #778](778-implement-modular-parallel-incremental-bootstrap.md): モジュール分割増分コンパイルと make -j 並列実行
+  - [Issue #779](779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md): コンパイラ初期アリーナヒープ一括確保およびダイレクト ELF 出力によるブートストラップ I/O 高速化
+  - [Issue #780](closed/780-optimize-symbol-to-string-with-direct-cache-and-bucket-lookup.md): symbol->string の直接キャッシュとバケット探索による O(N^2) 爆発の解消
+  - [Issue #781](closed/781-implement-record-based-symbols-with-direct-string-pointer.md): レコード指向シンボル表現による O(1) 文字列ポインタ直結とシンボルテーブル完全排除
 
 ---
 
-## 3. 影響範囲と関連ファイル / Scope and Affected Files
+## 3. 脅威モデルと境界分析 / Threat Model & Boundary Analysis
 
-- [x] [ulisp/bootstrap.sh](../../ulisp/bootstrap.sh) (ブートストラップドライバスクリプト)
-- [x] [ulisp/Makefile](../../ulisp/Makefile) (分割ビルドルールと依存関係)
-- [x] [ulisp/compiler_entry.scm](../../ulisp/compiler_entry.scm) (コンパイラ単体エントリ)
-- [x] [ulisp/stdlib_entry.scm](../../ulisp/stdlib_entry.scm) (標準ライブラリエントリ)
-- [x] [docs/issues/README.md](README.md) (Issue 台帳)
+| 脅威 / リスク | 影響度 | 発生要因 | 緩和策 / 防御メカニズム |
+| :--- | :---: | :--- | :--- |
+| **シンボルマングリング破壊 (CWE-704)** | 高 | コンパイラ単体コンパイル時にランタイム未登録シンボルが `"?"` (`ulisp_fn__p`) にフォールバックし、リンカ未定義参照または不正呼び出しを引き起こす | `*known-compiler-symbols*` および `*known-runtime-symbols*` に全 686 個のコア/構文シンボルを一括登録し、`symbol->raw-name` で既知シンボルを優先解決 |
+| **ABI 不整合・未解決外部参照 (CWE-440)** | 高 | `build/ulisp_stdlib.o` と `stage_compiler.o` の間で関数呼び出し規約やクロージャレイアウト（タグ `0x2F` 等）が不整合を起こす | `compiler/module_header.scm` にて標準ライブラリとのインターフェースマクロおよび外部識別子宣言を一元管理し、リンク時静的検証を実施 |
+| **ヒープ領域枯渇による OOM DoS (CWE-400)** | 高 | `(!gc none)` 指定時に 22 万行のコンパイラ自身をコンパイルする過程で 12GB の初期仮想アドレス空間を消費し尽くし `SIGSEGV` クラッシュに至る | 起動時仮想メモリ予約を `MAP_NORESERVE` 付きの 16GB〜32GB に拡張、または `ULISP_GC_PROFILE=compiler` 時のジェネレーション GC（成熟世代 8GB）を正しく稼働させてメモリ枯渇を防止 |
+| **ブートストラップ非決定論 (CWE-697)** | 中 | マクロ展開順序やハッシュテーブル順序の揺らぎにより `stage2_compiler.s` と `stage3_compiler.s` に差分が生じる | ソート済みシンボルテーブル、決定論的カウンタ (`*symbol-counter*`, `*label-counter*`) の適用により 100% 再現可能な不動点一致を担保 |
 
 ---
 
-## 4. セキュリティ・信頼性脅威分析 / Threat Model & Boundary Analysis
+## 4. 影響範囲と関連ファイル / Scope and Affected Files
 
-1. **ABI ドリフト（ABI Drift & Calling Convention Mismatch）**:
-   - *脅威*: コンパイラの内部表現（タグビット、レジスタ割付、クロージャレイアウト）に変更が入った際、古い `ulisp_stdlib.o` を静的リンクすると実行時セグメンテーション違反や未定義動作を引き起こす。
-   - *対策*: `bootstrap.sh` 起動時に `build/ulisp_stdlib.o` のタイムスタンプを検証し、`stdlib_entry.scm` や `lib/*.scm`, `runtime/*.scm` が更新されている場合は必ず自動で `ulisp_stdlib.o` を再ビルドする依存性強制メカニズムを組み込む。
-2. **外部シンボル解決の不整合（Unresolved External Symbols）**:
-   - *脅威*: `compiler_entry.scm` が必要とするライブラリ関数が `stdlib_entry.scm` に含まれていない場合、リンク時エラー（`undefined reference`）となる。
-   - *対策*: GNU `ld` の静的リンク（`-static -m elf_x86_64`）時に未解決シンボルを即座に検知し、リンクエラーログを `as_ld_err.log` 経由で捕捉・報告する。
-3. **不動点決定論の保証（Fixed Point Determinism）**:
-   - *脅威*: 分割静的リンクにおいて、シンボルアドレスや `.rodata` アライメントの違いがアセンブリ出力の非決定性を生むリスク。
-   - *対策*: 比較対象をアセンブリテキスト（`stage2_compiler.s` vs `stage3_compiler.s`）に限定し、機械語アドレスの絶対値ではなくコンパイラが生成する IR/アセンブリ命令列の完全一致（`cmp -s`）で検証する。
+- [ ] [ulisp/bootstrap.sh](../../ulisp/bootstrap.sh) : ブートストラップスクリプトの分割リンク対応（デフォルト化）
+- [ ] [ulisp/Makefile](../../ulisp/Makefile) : `build/ulisp_stdlib.o` 依存接続と `build/ulisp-fast` ターゲット定義
+- [ ] [ulisp/compiler_entry.scm](../../ulisp/compiler_entry.scm) : コンパイラ単体エントリポイント
+- [ ] [ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm) : `*known-compiler-symbols*`, `intern-symbol`, `symbol->raw-name`
+- [ ] [ulisp/lib/string.scm](../../ulisp/lib/string.scm) : `*known-runtime-symbols*` 同期
+- [ ] [ulisp/backend/140_backend_x86_64.scm](../../ulisp/backend/140_backend_x86_64.scm) : `(!gc none)` 時の巨大仮想メモリ予約（`MAP_NORESERVE` 32GB）
+- [ ] [docs/issues/README.md](README.md) : Issue 管理台帳
 
 ---
 
@@ -67,55 +71,39 @@ ID: 777
 
 Target Branch: `feat/777-bootstrap-compiler-alone-with-precompiled-stdlib-static-linking`
 
-### Step 1: `build/compiler_input.scm` の自動生成と Makefile 連携
-- `ulisp/Makefile` の `build/ulisp_stdlib.o` ターゲットを安定化し、ブートストラップ実行前に `make -C "$ULISP_DIR" build/ulisp_stdlib.o` を確実に実行する。
-- `build/compiler_input.scm` を以下のディレクティブで構成：
-  ```scheme
-  (!gc none) (!allow-extern #t)
-  (include "compiler_entry.scm")
-  ```
+### Phase 1: シンボルテーブルとランタイム相互運用の完全同期
+1. `ulisp/compiler/helpers.scm` および `ulisp/lib/string.scm`:
+   - 全 686 個のコンパイラ・ランタイム共有シンボル（`include`, `include-ci`, `L_cst`, `vector->list`, `list`, `lambda`, `syntax-rules` 等）を `*known-compiler-symbols*` および `*known-runtime-symbols*` に完全同期。
+   - `intern-symbol` において `symbol->string` ではなく `symbol->raw-name` を呼び出し、未解決シンボルが `"?"` にフォールバックする現象を恒久遮断。
+   - `symbol->raw-name` において `*known-compiler-symbols*` を最優先でルックアップ。
 
-### Step 2: `ulisp/bootstrap.sh` の CLI オプションとデフォルト動作の更新
-- デフォルトを「分割静的リンクモード（`BOOTSTRAP_SPLIT_LINK=1`）」とし、レガシー全結合テストが必要な場合のために `--monolithic` オプションを追加：
-  ```bash
-  --split-link    # 事前コンパイル済み ulisp_stdlib.o と静的リンクする高速ブートストラップ (デフォルト)
-  --monolithic    # 従来の全結合 ulisp_core.scm による 3-Stage フルビルド
-  ```
+### Phase 2: メモリ空間とアリーナの拡張
+1. `ulisp/backend/140_backend_x86_64.scm`:
+   - `(!gc none)`（GC なしモード）でのブートストラップコンパイル時、`mmap` 仮想アドレス予約サイズを従来の 12GB（`12884901888`）から **32GB（`34359738368`）** へ拡張し、フラグに `MAP_NORESERVE`（`0x4000`）を付与。
+   - 物理メモリを消費せず Linux カーネルの仮想アドレス空間のみを安全にリザーブし、巨大 AST 変換時のヒープバンプポインタ `r12` の上限衝突を排除。
 
-### Step 3: ステージ実行および `compile_asm` の分割リンク対応
-- `compile_asm` 関数を修正し、`BOOTSTRAP_SPLIT_LINK=1` 時は `ld` 呼び出しに `"$BUILD_DIR/ulisp_stdlib.o"` を追加：
-  ```bash
-  if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
-      ld -m elf_x86_64 -static "$obj_file" "$BUILD_DIR/ulisp_stdlib.o" -o "$bin_file"
-  else
-      ld -m elf_x86_64 -static "$obj_file" -o "$bin_file"
-  fi
-  ```
-- 各ステージの入力を `"$BUILD_DIR/compiler_input.scm"`、出力アセンブリを `"$BUILD_DIR/stage${stage_num}_compiler.s"` とする。
+### Phase 3: Makefile ビルドパイプラインの整備
+1. `ulisp/Makefile`:
+   - `build/ulisp_stdlib.o`: `stdlib_entry.scm` から生成。
+   - `build/ulisp_compiler.o`: `compiler_entry.scm` から生成。
+   - `build/ulisp-fast`: `build/ulisp_stdlib.o` + `build/ulisp_compiler.o` を静的リンク。
+   - `test_split_link`: 2 分割リンクバイナリの動作検証ターゲットを整備。
 
-### Step 4: 不動点検証およびプロモーション
-- `diff` 比較対象を `stage2_compiler.s` と `stage3_compiler.s` に切り替え：
-  ```bash
-  if cmp -s "$BUILD_DIR/stage2_compiler.s" "$BUILD_DIR/stage3_compiler.s"; then
-      echo "SUCCESS: Stage 2 and Stage 3 compiler outputs are bit-for-bit IDENTICAL!"
-      verify_and_promote "$BUILD_DIR/scheme-stage3" "Stage 3"
-  fi
-  ```
-- `verify_and_promote` では `scheme-stage3`（静的実行可能バイナリ）の `42` スモークテストを実施後、`bin/ulisp-boot` へプロモート。
-
-### Step 5: テストスイートと品質ゲートの検証
-- `make -C ulisp test_split_link`
-- `./ulisp/bootstrap.sh --quick`
-- `./ulisp/bootstrap.sh` (フル 3-Stage)
-- `make check_format static_analysis py_compile`
+### Phase 4: `ulisp/bootstrap.sh` の分割リンク移行と不動点検証
+1. `ulisp/bootstrap.sh`:
+   - デフォルト動作を `--split-link` モードへ変更。
+   - Stage 1: `build/ulisp_stdlib.o` を作成（未生成時）。`bin/ulisp-boot` で `compiler_entry.scm` をコンパイル $\to$ `stage1_compiler.s` $\to$ `stage1_compiler.o` $\to$ `ulisp_stdlib.o` とリンクして `scheme-stage1` を生成。
+   - Stage 2: `scheme-stage1` で `compiler_entry.scm` をコンパイル $\to$ `stage2_compiler.s` $\to$ `stage2_compiler.o` $\to$ `ulisp_stdlib.o` とリンクして `scheme-stage2` を生成。
+   - Stage 3: `scheme-stage2` で `compiler_entry.scm` をコンパイル $\to$ `stage3_compiler.s`。
+   - 不動点判定: `diff -u stage2_compiler.s stage3_compiler.s`（完全一致）。
+   - `--monolithic` オプション指定時は従来の `ulisp_core.scm` 全結合ビルドへフォールバック可能とする。
 
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `build/ulisp_stdlib.o` と静的リンクしたコンパイラバイナリ（`scheme-stage1`, `scheme-stage2`, `scheme-stage3`）が正常にビルド・リンクされること。
-- [ ] スモークテスト（`42`）が正常に通過すること。
-- [ ] 3-Stage ブートストラップが完走し、`stage2_compiler.s` と `stage3_compiler.s` のビット完全一致（Bit-for-bit identical）が PASS すること。
-- [ ] `--quick` オプション実行時に Stage 1 完了時点でスモークテストを通過し即座に終了すること。
-- [ ] `--monolithic` オプション指定時に従来のモノリシックブートストラップが互換性を持って動作すること。
-- [ ] `make -C ulisp test_split_link` および `make check_format static_analysis py_compile` が 0 エラーで通過すること。
+- [ ] `build/ulisp_stdlib.o` と静的リンクしたコンパイラバイナリ（`build/ulisp-fast`）が正常に動作し、`make -C ulisp test_split_link` が 100% PASS すること。
+- [ ] `stage2_compiler.s` と `stage3_compiler.s` がビット単位で 100% 完全一致（Fixed Point Verified）すること。
+- [ ] 3-Stage ブートストラップが約 3 分前後（従来比 5〜8 倍高速化）で完走すること。
+- [ ] `--quick` オプション指定時、約 1 分前後で Stage 1 開発ビルドが完了すること。
+- [ ] ルート品質ゲート（`make check_format static_analysis py_compile`）が 0 件エラーで通過すること。
