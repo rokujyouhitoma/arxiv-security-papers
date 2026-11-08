@@ -32,6 +32,8 @@
 | **774** | Root Makefile の compile_grammars ターゲットにおける PEG 増分ビルド化とフォーマッタ一括実行による高速化 | Feature | Medium | New | [774-optimize-compile-grammars-incremental-build-and-batch-formatting.md](774-optimize-compile-grammars-incremental-build-and-batch-formatting.md) |
 | **775** | Root Makefile の build_js ターゲットにおける増分ビルド依存導入と未変更時の Closure Compiler (JVM) 起動スキップ | Feature | Medium | New | [775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md](775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md) |
 | **779** | コンパイラ初期アリーナヒープ一括確保およびダイレクト ELF 出力によるブートストラップ I/O 高速化 | Feature | Medium | In Progress | [779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md](779-optimize-bootstrap-heap-allocation-and-direct-elf-codegen.md) |
+| **783** | ULisp における GNU as 互換コマンドラインオプション (--as / -c) と ELF64 再配置可能オブジェクト (.o) 出力の実装 | Feature | High | New | [783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md](783-support-builtin-as-assembler-cli-option-and-elf64-relocatable-object-emission.md) |
+| **784** | ULisp における GNU ld 互換コマンドラインオプション (--ld) と複数 ELF64 オブジェクト (.o) 静的リンカの実装 | Feature | High | New | [784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md](784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md) |
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
