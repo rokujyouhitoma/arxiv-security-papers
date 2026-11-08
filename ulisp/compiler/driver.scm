@@ -546,6 +546,24 @@
             (reverse acc)
             (loop (cons (sanitize-reader-form expr) acc)))))))
 
+;;; -----------------------------------------------------------------------
+;;; Lazy Output Redirection Helper (Issue #785)
+;;; Delays file creation until frontend & LIR analysis succeed to avoid creating empty/stale output files
+;;; -----------------------------------------------------------------------
+(define (open-and-redirect-output-file! cli-out-file)
+  (if (and cli-out-file (not (string=? cli-out-file "-")) (not (car *cli-active-output-file*)))
+      (begin
+        (set-car! *cli-active-output-file* cli-out-file)
+        (let* ((initial-mode 420) ; Open initially as 0644 non-executable
+               (out-fd (sys-open cli-out-file 577 initial-mode)))
+          (if (< out-fd 0)
+              (begin
+                (display-stderr (string-append "ulisp: error: cannot open output file: " cli-out-file "\n"))
+                (compiler-abort-and-cleanup! 1))
+              (begin
+                (sys-dup2 out-fd 1)
+                (sys-close out-fd)))))))
+
 ;;; Entry point: CLI parsing and compilation through two-layer pipeline
 (let* ((cmd-args (let ((cl (command-line)))
                    (if (pair? cl)
@@ -575,17 +593,7 @@
         (set-allow-extern-symbols! #t)
         (set-current-module-id! cli-module-name)))
 
-  ;; 2. Redirect stdout if -o is specified
-  (if (and cli-out-file (not (string=? cli-out-file "-")))
-      (let* ((mode (if (eq? cli-target 'elf) 493 420))
-             (out-fd (sys-open cli-out-file 577 mode)))
-        (if (< out-fd 0)
-            (begin
-              (display-stderr (string-append "ulisp: error: cannot open output file: " cli-out-file "\n"))
-              (exit 1))
-            (begin
-              (sys-dup2 out-fd 1)
-              (sys-close out-fd)))))
+  ;; 2. Lazy Output Redirection (called later upon successful LIR compilation)
 
   ;; 3. Redirect stdin if input file is specified (and not -)
   (if (and cli-in-file (not (string=? cli-in-file "-")))
@@ -593,7 +601,7 @@
         (if (< in-fd 0)
             (begin
               (display-stderr (string-append "ulisp: error: cannot open input file: " cli-in-file "\n"))
-              (exit 1))
+              (compiler-abort-and-cleanup! 1))
             (begin
               (sys-dup2 in-fd 0)
               (sys-close in-fd)))))
@@ -601,7 +609,9 @@
   ;; 3b. Builtin Assembler Mode (ulisp --as [--64] [input.s] [-o output.o])
   (if (eq? cli-target 'as-mode)
       (begin
+        (open-and-redirect-output-file! cli-out-file)
         (assemble-stream-to-elf-obj)
+        (set-car! *cli-active-output-file* #f)
         (exit 0)))
 
   ;; 4. Read forms
@@ -635,6 +645,7 @@
           ;; 1. LIR Intermediate Output Mode (--target-lir or (!target lir))
           ((eq? target 'lir)
            (let ((lir (compile-to-lir forms verify-mode trace-mode)))
+             (open-and-redirect-output-file! cli-out-file)
              (dump-lir-ast lir)
              (if (pipeline-time-passes?)
                  (print-pass-timing-report))))
@@ -646,14 +657,26 @@
                  (begin
                    (enable-verifier!)
                    (verify-pass-output 'lir lir)))
+             (open-and-redirect-output-file! cli-out-file)
              (compile-backend lir target gc-mode)
              (if (pipeline-time-passes?)
                  (print-pass-timing-report))))
           ;; 3. Standard Full Pipeline (Frontend -> LIR -> Backend)
           (else
            (let ((lir (compile-to-lir forms verify-mode trace-mode)))
+             (open-and-redirect-output-file! cli-out-file)
              (compile-backend lir target gc-mode)
              (if (pipeline-time-passes?)
                  (print-pass-timing-report))))))
-    (exit 0)))
+    ;; Flush and finalize output file permissions upon 100% success (Issue #785)
+    (if (car *compiler-in-error*)
+        (compiler-abort-and-cleanup! 1)
+        (begin
+          (if (and cli-out-file (not (string=? cli-out-file "-")) (eq? target 'elf))
+              (cond
+                ((and (procedure? sys-chmod) (not (null? sys-chmod)))
+                 (sys-chmod cli-out-file 493)) ; 0755
+                (else #f)))
+          (set-car! *cli-active-output-file* #f)
+          (exit 0)))))
 

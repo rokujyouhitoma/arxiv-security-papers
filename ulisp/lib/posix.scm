@@ -105,6 +105,17 @@
      (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
        (%to-fixnum (%raw-syscall (%to-raw *sys-unlink*) path-ptr 0 0 0 0 0))))))
 
+;; sys-chmod: sys_chmod(path, mode) (Issue #785)
+(cond-expand
+  ((or aarch64 arm64)
+   (define (sys-chmod path mode)
+     (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+       (%to-fixnum (%raw-syscall (%to-raw 268) (%to-raw *sys-at-fdcwd*) path-ptr (%to-raw mode) 0 0 0)))))
+  (else
+   (define (sys-chmod path mode)
+     (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+       (%to-fixnum (%raw-syscall (%to-raw 90) path-ptr (%to-raw mode) 0 0 0 0))))))
+
 ;; R7RS §6.14 File management
 (define (file-exists? filename)
   (= (sys-access filename 0) 0))
