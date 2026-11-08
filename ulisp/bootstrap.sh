@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ULISP_DIR="$ROOT_DIR/ulisp"
 BUILD_DIR="$ULISP_DIR/build"
 
-# Configuration Flags (Issue #776, Issue #777 & Issue #778)
+# Configuration Flags (Issue #776, Issue #777, Issue #778 & Issue #779)
 BOOTSTRAP_QUICK="${BOOTSTRAP_QUICK:-0}"
 BOOTSTRAP_RUN_TESTS="${BOOTSTRAP_RUN_TESTS:-0}"
 BOOTSTRAP_FAST="${BOOTSTRAP_FAST:-0}"
@@ -16,6 +16,7 @@ BOOTSTRAP_FROM_ILISP="${BOOTSTRAP_FROM_ILISP:-0}"
 BOOTSTRAP_WITH_GOSH="${BOOTSTRAP_WITH_GOSH:-0}"
 BOOTSTRAP_SPLIT_LINK="${BOOTSTRAP_SPLIT_LINK:-1}"
 BOOTSTRAP_MODULAR="${BOOTSTRAP_MODULAR:-0}"
+BOOTSTRAP_EMIT_ELF="${BOOTSTRAP_EMIT_ELF:-0}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -41,6 +42,10 @@ while [ $# -gt 0 ]; do
         --monolithic)
             BOOTSTRAP_SPLIT_LINK=0
             BOOTSTRAP_MODULAR=0
+            shift
+            ;;
+        --emit-elf)
+            BOOTSTRAP_EMIT_ELF=1
             shift
             ;;
         --test)
@@ -71,6 +76,7 @@ while [ $# -gt 0 ]; do
             echo "  --modular                   Run 5-module parallel incremental bootstrap (make -j)"
             echo "  --split-link                Bootstrap compiler_entry.scm linked with ulisp_stdlib.o (default)"
             echo "  --monolithic                Bootstrap monolithic ulisp_core.scm (stdlib + runtime + compiler)"
+            echo "  --emit-elf                  Use Direct-to-ELF backend (--target-elf) for smoke test verification"
             echo "  --test                      Run post-bootstrap test suite (test_incremental)"
             echo "  --no-test                   Skip post-bootstrap test suite (default)"
             echo "  --fast                      Reuse existing scheme-stage1 if newer than sources"
@@ -347,14 +353,24 @@ verify_and_promote() {
 
     echo "=== Running Smoke Test on $final_stage_name Binary ==="
     rm -f "$BUILD_DIR/smoke_test.s" "$BUILD_DIR/smoke_test"
-    echo "42" | "$final_compiler" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
-    if [ ! -s "$BUILD_DIR/smoke_test.s" ]; then
+    if [ "${BOOTSTRAP_EMIT_ELF:-0}" = "1" ]; then
         echo "42" > "$BUILD_DIR/smoke_in.scm"
-        "$final_compiler" "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+        "$final_compiler" --target-elf -o "$BUILD_DIR/smoke_test" "$BUILD_DIR/smoke_in.scm" 2>/dev/null || true
+        if [ ! -s "$BUILD_DIR/smoke_test" ]; then
+            "$final_compiler" --target-elf < "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test" 2>/dev/null
+        fi
         rm -f "$BUILD_DIR/smoke_in.scm"
+        chmod +x "$BUILD_DIR/smoke_test"
+    else
+        echo "42" | "$final_compiler" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+        if [ ! -s "$BUILD_DIR/smoke_test.s" ]; then
+            echo "42" > "$BUILD_DIR/smoke_in.scm"
+            "$final_compiler" "$BUILD_DIR/smoke_in.scm" > "$BUILD_DIR/smoke_test.s" 2>/dev/null
+            rm -f "$BUILD_DIR/smoke_in.scm"
+        fi
+        as --64 "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test.o"
+        ld -m elf_x86_64 -static "$BUILD_DIR/smoke_test.o" -o "$BUILD_DIR/smoke_test"
     fi
-    as --64 "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test.o"
-    ld -m elf_x86_64 -static "$BUILD_DIR/smoke_test.o" -o "$BUILD_DIR/smoke_test"
     local smoke_out
     smoke_out="$(ULISP_PRINT_RESULT=1 "$BUILD_DIR/smoke_test" 2>/dev/null || true)"
     if [ "$smoke_out" = "42" ]; then

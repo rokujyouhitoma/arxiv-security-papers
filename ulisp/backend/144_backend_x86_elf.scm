@@ -16,12 +16,29 @@
       res)))
 
 (define (write-elf64-bytevector bv)
-  (let loop ((i 0) (len (bytevector-length bv)))
-    (if (< i len)
-        (begin
-          (write-char (integer->char (bytevector-u8-ref bv i)))
-          (loop (+ i 1) len))
-        (flush-output-port))))
+  (cond-expand
+    (ulisp
+     (write-bytevector bv)
+     (flush-output-port))
+    (gauche
+     (let loop ((i 0) (len (bytevector-length bv)))
+       (if (< i len)
+           (begin
+             (write-byte (bytevector-u8-ref bv i))
+             (loop (+ i 1) len))
+           (flush))))
+    (else
+     (let ((p (current-output-port)))
+       (if (binary-port? p)
+           (begin
+             (write-bytevector bv p)
+             (flush-output-port p))
+           (let loop ((i 0) (len (bytevector-length bv)))
+             (if (< i len)
+                 (begin
+                   (write-char (integer->char (bytevector-u8-ref bv i)))
+                   (loop (+ i 1) len))
+                 (flush-output-port))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Public Utility: Assemble assembly lines directly into ELF bytevector

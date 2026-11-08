@@ -24,6 +24,20 @@
     ((read) (port-read *stdin-port*))
     ((read p) (port-read p))))
 
+(define-syntax write-bytevector
+  (syntax-rules ()
+    ((write-bytevector bv)
+     (let ((b bv))
+       (port-write-bytevector-range b *stdout-port* 0 (bytevector-length b))))
+    ((write-bytevector bv p)
+     (let ((b bv))
+       (port-write-bytevector-range b p 0 (bytevector-length b))))
+    ((write-bytevector bv p start)
+     (let ((b bv))
+       (port-write-bytevector-range b p start (bytevector-length b))))
+    ((write-bytevector bv p start end)
+     (port-write-bytevector-range bv p start end))))
+
 ;; String-append macro (expanding to stdlib string-append2)
 (define-syntax string-append
   (syntax-rules ()
@@ -132,6 +146,8 @@
   alias-escape-all
   generate-lir
   lir-fuse-branches
-  lir-peephole-optimize)
+  lir-peephole-optimize
+  port-write-bytevector-range
+  port-write-bytevector)
 
 

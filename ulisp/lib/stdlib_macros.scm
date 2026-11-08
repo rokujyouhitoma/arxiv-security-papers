@@ -39,6 +39,20 @@
     ((write-string s) (port-write-string s *stdout-port*))
     ((write-string s p) (port-write-string s p))))
 
+(define-syntax write-bytevector
+  (syntax-rules ()
+    ((write-bytevector bv)
+     (let ((b bv))
+       (port-write-bytevector-range b *stdout-port* 0 (bytevector-length b))))
+    ((write-bytevector bv p)
+     (let ((b bv))
+       (port-write-bytevector-range b p 0 (bytevector-length b))))
+    ((write-bytevector bv p start)
+     (let ((b bv))
+       (port-write-bytevector-range b p start (bytevector-length b))))
+    ((write-bytevector bv p start end)
+     (port-write-bytevector-range bv p start end))))
+
 (define-syntax flush-output-port
   (syntax-rules ()
     ((flush-output-port) (port-flush-output *stdout-port*))

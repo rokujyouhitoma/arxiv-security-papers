@@ -689,7 +689,9 @@
     (vector-append2 . "vector-append2")
     (%make-vector . "%make-vector")
     (%make-bytevector . "%make-bytevector")
-    (%raw-call/cc . "%raw-call/cc")))
+    (%raw-call/cc . "%raw-call/cc")
+    (port-write-bytevector-range . "port-write-bytevector-range")
+    (port-write-bytevector . "port-write-bytevector")))
 
 (define (%sym-assoc-string sym alist)
   (cond

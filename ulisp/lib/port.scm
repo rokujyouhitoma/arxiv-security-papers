@@ -593,6 +593,46 @@
     (else
      (port-write-char (integer->char b) p))))
 
+(define (port-write-bytevector-range bv p start end)
+  (let ((count (- end start))
+        (target-p (if (eq? p *stdout-port*) (current-output-port) p)))
+    (if (<= count 0)
+        #t
+        (cond
+          ((bytevector-output-port? target-p)
+           (let loop ((i start))
+             (if (< i end)
+                 (begin
+                   (port-write-u8 (bytevector-u8-ref bv i) target-p)
+                   (loop (+ i 1)))
+                 #t)))
+          ((string-output-port? target-p)
+           (let loop ((i start))
+             (if (< i end)
+                 (begin
+                   (port-write-char (integer->char (bytevector-u8-ref bv i)) target-p)
+                   (loop (+ i 1)))
+                 #t)))
+          ((file-output-port? target-p)
+           (let ((fd (cadr target-p)))
+             (port-flush-output target-p)
+             (sys-write fd (%ptr-add (%ptr-untag bv) (+ 8 start)) count)
+             #t))
+          ((and (pair? target-p) (eq? (car target-p) '%standard-output-port))
+           (let ((fd (cadr target-p)))
+             (if (= fd 1)
+                 (ulisp-flush)
+                 #t)
+             (sys-write fd (%ptr-add (%ptr-untag bv) (+ 8 start)) count)
+             #t))
+          (else
+           (ulisp-flush)
+           (sys-write 1 (%ptr-add (%ptr-untag bv) (+ 8 start)) count)
+           #t)))))
+
+(define (port-write-bytevector bv p)
+  (port-write-bytevector-range bv p 0 (bytevector-length bv)))
+
 (define (port-read-line p)
   (let ((ch (port-read-char p)))
     (if (eof-object? ch)
@@ -664,6 +704,20 @@
   (syntax-rules ()
     ((write-string s) (port-write-string s (current-output-port)))
     ((write-string s p) (port-write-string s p))))
+
+(define-syntax write-bytevector
+  (syntax-rules ()
+    ((write-bytevector bv)
+     (let ((b bv))
+       (port-write-bytevector-range b (current-output-port) 0 (bytevector-length b))))
+    ((write-bytevector bv p)
+     (let ((b bv))
+       (port-write-bytevector-range b p 0 (bytevector-length b))))
+    ((write-bytevector bv p start)
+     (let ((b bv))
+       (port-write-bytevector-range b p start (bytevector-length b))))
+    ((write-bytevector bv p start end)
+     (port-write-bytevector-range bv p start end))))
 
 (define (port-char-ready? p)
   (cond

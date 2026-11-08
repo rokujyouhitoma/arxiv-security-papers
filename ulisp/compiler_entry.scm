@@ -25,6 +25,20 @@
     ((read) (port-read *stdin-port*))
     ((read p) (port-read p))))
 
+(define-syntax write-bytevector
+  (syntax-rules ()
+    ((write-bytevector bv)
+     (let ((b bv))
+       (port-write-bytevector-range b *stdout-port* 0 (bytevector-length b))))
+    ((write-bytevector bv p)
+     (let ((b bv))
+       (port-write-bytevector-range b p 0 (bytevector-length b))))
+    ((write-bytevector bv p start)
+     (let ((b bv))
+       (port-write-bytevector-range b p start (bytevector-length b))))
+    ((write-bytevector bv p start end)
+     (port-write-bytevector-range bv p start end))))
+
 ;; Compiler Base Infrastructure
 (include "compiler/helpers.scm")
 (include "compiler/primitives.scm")

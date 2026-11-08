@@ -1263,7 +1263,9 @@
     (vector-append2 . "vector-append2")
     (%make-vector . "%make-vector")
     (%make-bytevector . "%make-bytevector")
-    (%raw-call/cc . "%raw-call/cc")))
+    (%raw-call/cc . "%raw-call/cc")
+    (port-write-bytevector-range . "port-write-bytevector-range")
+    (port-write-bytevector . "port-write-bytevector")))
 
 (define (symbol->raw-name sym)
   (if (not (symbol? sym))
@@ -17223,9 +17225,9 @@
        ;; Generational Collector initialization (Pass 141)
        (emit "    mov rax, 9")                     ; sys_mmap
        (emit "    xor rdi, rdi")                   ; addr = NULL
-       (emit "    mov rsi, 8589934592")            ; 8GB total address space reservation
+       (emit "    mov rsi, 17179869184")           ; 16GB total address space reservation (Issue #779)
        (emit "    mov rdx, 3")                     ; PROT_READ|PROT_WRITE
-       (emit "    mov r10, 34")                    ; MAP_PRIVATE|MAP_ANONYMOUS
+       (emit "    mov r10, 16418")                 ; MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE (0x4022)
        (emit "    mov r8, -1")                     ; fd = -1
        (emit "    xor r9, r9")                     ; offset = 0
        (emit "    syscall")
@@ -17312,10 +17314,56 @@
        (emit "    mov r12, 67108864")              ; size = 64MB
        (emit "    mov rsi, 134217728")             ; total = 128MB
        (emit "    jmp .L_gc_state_stress_setup")
-       ;; Compiler Profile (2GB Nursery, 2GB Mature, 8GB Max)
+       ;; Compiler Profile (2GB Nursery, 2GB Mature, 8GB Max; overridable via ULISP_COMPILER_ARENA_MB)
        (emit ".L_profile_compiler:")
-       (emit "    mov r12, 2147483648")            ; nursery_size = 2GB
-       (emit "    mov r13, 2147483648")            ; mature_size = 2GB
+       (emit "    mov r12, 2147483648")            ; nursery_size = 2GB (default)
+       (emit "    mov r13, 2147483648")            ; mature_size = 2GB (default)
+       (emit "    mov rcx, [rbp]")                 ; argc
+       (emit "    lea rdx, [rbp + 16]")            ; &argv[0]
+       (emit "    lea rdx, [rdx + rcx*8]")         ; past argv NULL -> envp
+       (emit ".L_arena_env_loop:")
+       (emit "    mov rsi, [rdx]")
+       (emit "    test rsi, rsi")
+       (emit "    jz .L_arena_env_done")
+       (emit "    add rdx, 8")
+       (emit "    mov rax, [rsi]")
+       (emit "    mov r8, [rip + .L_str_env_arena_mb]")
+       (emit "    cmp rax, r8")
+       (emit "    jne .L_arena_env_loop")
+       (emit "    mov rax, [rsi + 8]")
+       (emit "    mov r8, [rip + .L_str_env_arena_mb + 8]")
+       (emit "    cmp rax, r8")
+       (emit "    jne .L_arena_env_loop")
+       (emit "    mov rax, [rsi + 16]")
+       (emit "    mov r8, [rip + .L_str_env_arena_mb + 16]")
+       (emit "    cmp rax, r8")
+       (emit "    jne .L_arena_env_loop")
+       (emit "    add rsi, 24")
+       (emit "    xor rax, rax")
+       (emit "    movzx rcx, byte ptr [rsi]")
+       (emit "    sub rcx, 48")
+       (emit "    cmp rcx, 9")
+       (emit "    ja .L_arena_env_done")
+       (emit ".L_arena_parse_loop:")
+       (emit "    imul rax, rax, 10")
+       (emit "    add rax, rcx")
+       (emit "    cmp rax, 4096")
+       (emit "    jle .L_arena_no_cap")
+       (emit "    mov rax, 4096")
+       (emit ".L_arena_no_cap:")
+       (emit "    inc rsi")
+       (emit "    movzx rcx, byte ptr [rsi]")
+       (emit "    sub rcx, 48")
+       (emit "    cmp rcx, 9")
+       (emit "    jbe .L_arena_parse_loop")
+       (emit "    cmp rax, 64")
+       (emit "    jge .L_arena_min_ok")
+       (emit "    mov rax, 64")
+       (emit ".L_arena_min_ok:")
+       (emit "    shl rax, 20")
+       (emit "    mov r12, rax")
+       (emit "    mov r13, rax")
+       (emit ".L_arena_env_done:")
        (emit "    mov rsi, 6442516480")            ; total_mmap = ~6.4GB + 64KB remset
        (emit "    mov r8, 8589934592")             ; max_mature = 8GB
        (emit "    mov r10, 1")                     ; profile_id = 1
@@ -17530,6 +17578,9 @@
     (emit "    .align 8")
     (emit ".L_str_env_prefix:")
     (emit "    .ascii \"ULISP_GC_PROFILE=\"")
+    (emit "    .align 8")
+    (emit ".L_str_env_arena_mb:")
+    (emit "    .ascii \"ULISP_COMPILER_ARENA_MB=\"")
     (emit "    .align 8")
     (emit ".L_str_env_quiet:")
     (emit "    .ascii \"ULISP_QUIET=\"")
@@ -21662,12 +21713,29 @@
       res)))
 
 (define (write-elf64-bytevector bv)
-  (let loop ((i 0) (len (bytevector-length bv)))
-    (if (< i len)
-        (begin
-          (write-char (integer->char (bytevector-u8-ref bv i)))
-          (loop (+ i 1) len))
-        (flush-output-port))))
+  (cond-expand
+    (ulisp
+     (write-bytevector bv)
+     (flush-output-port))
+    (gauche
+     (let loop ((i 0) (len (bytevector-length bv)))
+       (if (< i len)
+           (begin
+             (write-byte (bytevector-u8-ref bv i))
+             (loop (+ i 1) len))
+           (flush))))
+    (else
+     (let ((p (current-output-port)))
+       (if (binary-port? p)
+           (begin
+             (write-bytevector bv p)
+             (flush-output-port p))
+           (let loop ((i 0) (len (bytevector-length bv)))
+             (if (< i len)
+                 (begin
+                   (write-char (integer->char (bytevector-u8-ref bv i)))
+                   (loop (+ i 1) len))
+                 (flush-output-port))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Public Utility: Assemble assembly lines directly into ELF bytevector
@@ -24460,8 +24528,9 @@
   (display "  -o <file>             Write output to <file> instead of standard output\n")
   (display "  -e <expr>             Compile Scheme expression string directly to target output\n")
   (display "  -S                    Emit assembly code (default for native backends)\n")
+  (display "  --target-elf          Emit standalone ELF64 static executable directly\n")
   (display "  -g                    Generate minimal DWARF debug information for GDB / perf\n")
-  (display "  -b, --target <tgt>    Specify compilation target (x86_64, c, aarch64, lir)\n")
+  (display "  -b, --target <tgt>    Specify compilation target (x86_64, elf, c, aarch64, lir)\n")
   (display "  -O0, -O1, -O2         Optimization level (0: minimal, 1: standard, 2: aggressive)\n")
   (display "  -v, --verbose         Enable verbose diagnostic messages to stderr\n")
   (display "  -q, --quiet           Suppress warning and non-essential messages\n")

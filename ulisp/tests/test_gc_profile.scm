@@ -46,8 +46,11 @@
     ((eq? cur-prof 'compiler)
      (write-string "Detected Profile: COMPILER (via ULISP_GC_PROFILE)\n")
      (assert-equal (gc-profile-id) 1 "Compiler profile ID is 1")
-     (assert-equal (gc-nursery-size) 2147483648 "Compiler profile nursery size is 2GB")
-     (assert-equal (gc-mature-size) 2147483648 "Compiler profile mature size is 2GB")
+     (let ((expected-arena (if (equal? (get-environment-variable "ULISP_COMPILER_ARENA_MB") "1024")
+                               1073741824
+                               2147483648)))
+       (assert-equal (gc-nursery-size) expected-arena "Compiler profile nursery size matches arena setting")
+       (assert-equal (gc-mature-size) expected-arena "Compiler profile mature size matches arena setting"))
      (assert-equal (gc-max-size) 8589934592 "Compiler profile max mature size is 8GB"))
     ((eq? cur-prof 'server)
      (write-string "Detected Profile: SERVER (via ULISP_GC_PROFILE)\n")
