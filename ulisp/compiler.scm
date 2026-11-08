@@ -17180,9 +17180,9 @@
       ((eq? gc-mode 'none)
        (emit "    mov rax, 9")                     ; sys_mmap
        (emit "    xor rdi, rdi")                   ; addr = NULL
-       (emit "    mov rsi, 17179869184")           ; 16GB heap (0x400000000)
+       (emit "    mov rsi, 34359738368")           ; 32GB virtual address space (0x800000000)
        (emit "    mov rdx, 3")                     ; PROT_READ|PROT_WRITE
-       (emit "    mov r10, 34")                    ; MAP_PRIVATE|MAP_ANONYMOUS
+       (emit "    mov r10, 16418")                 ; MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE (0x4022)
        (emit "    mov r8, -1")                     ; fd = -1
        (emit "    xor r9, r9")                     ; offset = 0
        (emit "    syscall")
@@ -17190,7 +17190,7 @@
        (emit "    js .L_start_exit")
        (emit "    mov rdi, rax")                   ; rdi = heap_base
        (emit "    mov rcx, rax")
-       (emit "    mov rdx, 17179869184")
+       (emit "    mov rdx, 34359738368")
        (emit "    add rcx, rdx")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
        (emit "    mov [rdx], rcx"))

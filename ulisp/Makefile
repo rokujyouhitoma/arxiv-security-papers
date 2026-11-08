@@ -1048,63 +1048,71 @@ build/ulisp_core.scm: entry_core.scm $(ULISP_STD_LIBS) compiler.scm
 	@mkdir -p build
 	cp entry_core.scm $@
 
-build/stage1.s: compiler.scm build/ulisp_core.scm
+build/compiler_input.scm: compiler_entry.scm $(PASSES)
+	@mkdir -p build
+	@echo "(!gc none) (!allow-extern #t)" > $@
+	@cat compiler_entry.scm >> $@
+
+build/stage1_compiler.s: compiler.scm build/compiler_input.scm
 	@mkdir -p build
 	@if [ -x "$(ULISP_BOOT)" ] && [ "$(FULL_BOOTSTRAP)" != "1" ]; then \
-		echo "=== Stage 1: Fast compiling with native seed $(ULISP_BOOT) ==="; \
-		./$(ULISP_BOOT) < build/ulisp_core.scm > $@; \
+		echo "=== Stage 1: Fast compiling compiler_entry.scm with native seed $(ULISP_BOOT) ==="; \
+		./$(ULISP_BOOT) < build/compiler_input.scm > $@; \
 	else \
-		echo "=== Stage 1: Compiling with ILisp $(ILISP) ==="; \
-		$(RUN_SCHEME) compiler.scm < build/ulisp_core.scm > $@; \
+		echo "=== Stage 1: Compiling compiler_entry.scm with ILisp $(ILISP) ==="; \
+		$(RUN_SCHEME) compiler.scm < build/compiler_input.scm > $@; \
 	fi
+	@cp -f $@ build/stage1.s
 
-
-build/stage1.o: build/stage1.s
+build/stage1_compiler.o: build/stage1_compiler.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-build/scheme-stage1: build/stage1.o
-	$(LD) $(LDFLAGS) $< -o $@
+build/scheme-stage1: build/ulisp_stdlib.o build/stage1_compiler.o
+	$(LD) $(LDFLAGS) $^ -o $@
 
 stage1: build/scheme-stage1
 bootstrap_stage1: stage1
 
-build/stage2.s: build/scheme-stage1 build/ulisp_core.scm
+build/stage2_compiler.s: build/scheme-stage1 build/compiler_input.scm
 	@mkdir -p build
-	./build/scheme-stage1 < build/ulisp_core.scm > $@
+	./build/scheme-stage1 < build/compiler_input.scm > $@
+	@cp -f $@ build/stage2.s
 
-build/stage2.o: build/stage2.s
+build/stage2_compiler.o: build/stage2_compiler.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-build/scheme-stage2: build/stage2.o
-	$(LD) $(LDFLAGS) $< -o $@
+build/scheme-stage2: build/ulisp_stdlib.o build/stage2_compiler.o
+	$(LD) $(LDFLAGS) $^ -o $@
 
 stage2: build/scheme-stage2
 bootstrap_stage2: stage2
 
-build/stage3.s: build/scheme-stage2 build/ulisp_core.scm
+build/stage3_compiler.s: build/scheme-stage2 build/compiler_input.scm
 	@mkdir -p build
-	./build/scheme-stage2 < build/ulisp_core.scm > $@
+	./build/scheme-stage2 < build/compiler_input.scm > $@
+	@cp -f $@ build/stage3.s
 
-build/stage3.o: build/stage3.s
+build/stage3_compiler.o: build/stage3_compiler.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-build/scheme-stage3: build/stage3.o
-	$(LD) $(LDFLAGS) $< -o $@
+build/scheme-stage3: build/ulisp_stdlib.o build/stage3_compiler.o
+	$(LD) $(LDFLAGS) $^ -o $@
 
 stage3: build/scheme-stage3
 bootstrap_stage3: stage3
 
 bootstrap_verify: stage2 stage3
-	@echo "=== Verifying 3-Stage Bootstrap Fixed Point (stage2.s vs stage3.s) ==="
-	@if cmp -s build/stage2.s build/stage3.s; then \
+	@echo "=== Verifying 3-Stage Bootstrap Fixed Point (stage2_compiler.s vs stage3_compiler.s) ==="
+	@if cmp -s build/stage2_compiler.s build/stage3_compiler.s; then \
 		echo "SUCCESS: Fixed-point convergence confirmed (Stage 2 and Stage 3 outputs are bit-for-bit identical)!"; \
 		mkdir -p bin; \
-		cp -f build/scheme-stage2 bin/ulisp-boot; \
-		chmod +x bin/ulisp-boot; \
+		cp -f build/scheme-stage3 bin/ulisp-boot; \
+		cp -f build/scheme-stage3 build/ulisp-fast; \
+		chmod +x bin/ulisp-boot build/ulisp-fast; \
 		echo "Seed binary bin/ulisp-boot updated successfully."; \
 	else \
-		echo "FAILURE: Discrepancy detected between stage2.s and stage3.s"; \
-		diff -u build/stage2.s build/stage3.s | head -n 50; \
+		echo "FAILURE: Discrepancy detected between stage2_compiler.s and stage3_compiler.s"; \
+		diff -u build/stage2_compiler.s build/stage3_compiler.s | head -n 50; \
 		exit 1; \
 	fi
 
@@ -1159,13 +1167,14 @@ build/ulisp-fast: build/ulisp_stdlib.o build/ulisp_compiler.o
 	@echo "=== Statically Linking Split Objects (ulisp_stdlib.o + ulisp_compiler.o) ==="
 	$(LD) $(LDFLAGS) $^ -o $@
 
-test_split_link: build/ulisp-fast
+test_split_link: build/ulisp-fast build/ulisp_stdlib.o
 	@echo "=== Verifying 2-Split Statically Linked Compiler Binary (build/ulisp-fast) ==="
-	cat $(ULISP_STD_LIBS) > build/test_split_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_split_input.scm
+	@cat lib/stdlib_macros.scm >> build/test_split_input.scm
 	@echo '(display "Hello from split-linked ULisp!\n") (display (+ 123 456)) (newline)' >> build/test_split_input.scm
 	./build/ulisp-fast build/test_split_input.scm > build/test_split.s
 	$(AS) $(ASFLAGS) build/test_split.s -o build/test_split.o
-	$(LD) $(LDFLAGS) build/test_split.o -o build/test_split
+	$(LD) $(LDFLAGS) build/test_split.o build/ulisp_stdlib.o -o build/test_split
 	@echo "Executing compiled test binary:"
 	@res=$$(./build/test_split | tr -d '\r\n'); \
 	echo "Output: $$res"; \
@@ -1245,13 +1254,13 @@ test_incremental: build/ulisp-modular
 	@bash tests/test_incremental_build.sh
 
 
-bootstrap: core
+bootstrap:
 	./bootstrap.sh
 
-bootstrap_quick quick: core
+bootstrap_quick quick:
 	./bootstrap.sh --quick
 
-bootstrap_diagnose: core
+bootstrap_diagnose:
 	BOOTSTRAP_DIAGNOSE=1 ./bootstrap.sh
 
 test_bootstrap_diagnostics:

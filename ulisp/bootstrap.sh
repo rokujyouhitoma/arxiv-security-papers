@@ -7,13 +7,14 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ULISP_DIR="$ROOT_DIR/ulisp"
 BUILD_DIR="$ULISP_DIR/build"
 
-# Configuration Flags (Issue #776)
+# Configuration Flags (Issue #776 & Issue #777)
 BOOTSTRAP_QUICK="${BOOTSTRAP_QUICK:-0}"
 BOOTSTRAP_RUN_TESTS="${BOOTSTRAP_RUN_TESTS:-0}"
 BOOTSTRAP_FAST="${BOOTSTRAP_FAST:-0}"
 FULL_BOOTSTRAP="${FULL_BOOTSTRAP:-0}"
 BOOTSTRAP_FROM_ILISP="${BOOTSTRAP_FROM_ILISP:-0}"
 BOOTSTRAP_WITH_GOSH="${BOOTSTRAP_WITH_GOSH:-0}"
+BOOTSTRAP_SPLIT_LINK="${BOOTSTRAP_SPLIT_LINK:-1}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -24,6 +25,14 @@ while [ $# -gt 0 ]; do
         --full)
             FULL_BOOTSTRAP=1
             BOOTSTRAP_QUICK=0
+            shift
+            ;;
+        --split-link)
+            BOOTSTRAP_SPLIT_LINK=1
+            shift
+            ;;
+        --monolithic)
+            BOOTSTRAP_SPLIT_LINK=0
             shift
             ;;
         --test)
@@ -51,6 +60,8 @@ while [ $# -gt 0 ]; do
             echo "Options:"
             echo "  --quick, -q, --stage1-only  Stop after Stage 1 smoke test (fast dev cycle)"
             echo "  --full                      Run full 3-stage bootstrap fixed-point verification"
+            echo "  --split-link                Bootstrap compiler_entry.scm linked with ulisp_stdlib.o (default)"
+            echo "  --monolithic                Bootstrap monolithic ulisp_core.scm (stdlib + runtime + compiler)"
             echo "  --test                      Run post-bootstrap test suite (test_incremental)"
             echo "  --no-test                   Skip post-bootstrap test suite (default)"
             echo "  --fast                      Reuse existing scheme-stage1 if newer than sources"
@@ -72,10 +83,29 @@ mkdir -p "$BUILD_DIR"
 # Apply compiler profile for self-hosting compiler execution (Issue #567)
 export ULISP_GC_PROFILE=compiler
 
-echo "[0/4] Preparing unified compiler (entry_core.scm)..."
-make -C "$ULISP_DIR" compiler
-if [ ! -f "$BUILD_DIR/ulisp_core.scm" ] || ! cmp -s "$ULISP_DIR/entry_core.scm" "$BUILD_DIR/ulisp_core.scm"; then
-    cp "$ULISP_DIR/entry_core.scm" "$BUILD_DIR/ulisp_core.scm"
+if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
+    echo "[0/4] Preparing split-linked bootstrap (compiler_entry.scm + build/ulisp_stdlib.o)..."
+    make -C "$ULISP_DIR" compiler build/ulisp_stdlib.o
+    echo "(!gc none) (!allow-extern #t)" > "$BUILD_DIR/compiler_input.scm"
+    cat "$ULISP_DIR/compiler_entry.scm" >> "$BUILD_DIR/compiler_input.scm"
+    BOOTSTRAP_INPUT="$BUILD_DIR/compiler_input.scm"
+    BOOTSTRAP_TARGET_NAME="compiler_entry.scm"
+    STAGE1_ASM="$BUILD_DIR/stage1_compiler.s"
+    STAGE2_ASM="$BUILD_DIR/stage2_compiler.s"
+    STAGE3_ASM="$BUILD_DIR/stage3_compiler.s"
+    STAGE4_ASM="$BUILD_DIR/stage4_compiler.s"
+else
+    echo "[0/4] Preparing unified monolithic compiler (entry_core.scm)..."
+    make -C "$ULISP_DIR" compiler
+    if [ ! -f "$BUILD_DIR/ulisp_core.scm" ] || ! cmp -s "$ULISP_DIR/entry_core.scm" "$BUILD_DIR/ulisp_core.scm"; then
+        cp "$ULISP_DIR/entry_core.scm" "$BUILD_DIR/ulisp_core.scm"
+    fi
+    BOOTSTRAP_INPUT="$BUILD_DIR/ulisp_core.scm"
+    BOOTSTRAP_TARGET_NAME="ulisp_core.scm"
+    STAGE1_ASM="$BUILD_DIR/stage1.s"
+    STAGE2_ASM="$BUILD_DIR/stage2.s"
+    STAGE3_ASM="$BUILD_DIR/stage3.s"
+    STAGE4_ASM="$BUILD_DIR/stage4.s"
 fi
 
 PYTHON_BIN="python3"
@@ -207,7 +237,7 @@ diagnose_stage_failure() {
 check_asm_output() {
     local stage_name="$1"
     local asm_file="$2"
-    local in_file="${3:-"$BUILD_DIR/ulisp_core.scm"}"
+    local in_file="${3:-"$BOOTSTRAP_INPUT"}"
     if [ ! -s "$asm_file" ]; then
         echo -e "\033[1;31m[ERROR] $stage_name produced an empty assembly file: $asm_file\033[0m" >&2
         diagnose_stage_failure "$stage_name" "$asm_file" 0 "Empty assembly output produced" "$in_file"
@@ -226,23 +256,23 @@ run_stage() {
     local asm_file="$2"
     shift 2
     local rc=0
-    "$@" < "$BUILD_DIR/ulisp_core.scm" > "$asm_file" 2>&1 || rc=$?
+    "$@" < "$BOOTSTRAP_INPUT" > "$asm_file" 2>&1 || rc=$?
     if [ "$rc" -ne 0 ]; then
         echo -e "\033[1;31m[ERROR] $stage_name execution failed with exit code $rc:\033[0m" >&2
         if [ -s "$asm_file" ]; then
             cat "$asm_file" >&2
         fi
-        diagnose_stage_failure "$stage_name" "$asm_file" "$rc" "Execution returned non-zero exit code ($rc)" "$BUILD_DIR/ulisp_core.scm"
+        diagnose_stage_failure "$stage_name" "$asm_file" "$rc" "Execution returned non-zero exit code ($rc)" "$BOOTSTRAP_INPUT"
         exit 1
     fi
-    check_asm_output "$stage_name" "$asm_file" "$BUILD_DIR/ulisp_core.scm"
+    check_asm_output "$stage_name" "$asm_file" "$BOOTSTRAP_INPUT"
 }
 
 compile_asm() {
     local stage_name="$1"
     local asm_file="$2"
     local bin_file="$3"
-    local in_file="${4:-"$BUILD_DIR/ulisp_core.scm"}"
+    local in_file="${4:-"$BOOTSTRAP_INPUT"}"
     local obj_file="${asm_file%.s}.o"
     local tool_err="$BUILD_DIR/as_ld_err.log"
     local rc=0
@@ -254,7 +284,11 @@ compile_asm() {
         rm -f "$tool_err"
         exit 1
     fi
-    ld -m elf_x86_64 -static "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+    if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
+        ld -m elf_x86_64 -static "$BUILD_DIR/ulisp_stdlib.o" "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+    else
+        ld -m elf_x86_64 -static "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+    fi
     if [ "$rc" -ne 0 ]; then
         echo -e "\033[1;31m[ERROR] $stage_name: ld (linker) failed with exit code $rc:\033[0m" >&2
         cat "$tool_err" >&2
@@ -271,7 +305,7 @@ run_stage_try() {
     shift 2
     local rc=0
     local stage_timeout="${BOOTSTRAP_STAGE_TIMEOUT:-600s}"
-    timeout "$stage_timeout" "$@" < "$BUILD_DIR/ulisp_core.scm" > "$asm_file" 2>&1 || rc=$?
+    timeout "$stage_timeout" "$@" < "$BOOTSTRAP_INPUT" > "$asm_file" 2>&1 || rc=$?
     if [ "$rc" -eq 124 ]; then
         echo -e "\033[1;33m[WARN] $stage_name timed out after $stage_timeout.\033[0m" >&2
         return 1
@@ -321,6 +355,11 @@ verify_and_promote() {
         exit 1
     fi
 
+    if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
+        cp -f "$final_compiler" "$BUILD_DIR/ulisp-fast"
+        chmod +x "$BUILD_DIR/ulisp-fast"
+    fi
+
     if [ "$should_promote" = "1" ]; then
         mkdir -p "$ULISP_DIR/bin"
         cp -f "$final_compiler" "$BOOT_BIN"
@@ -339,30 +378,31 @@ verify_and_promote() {
     exit 0
 }
 
-if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ] && [ "$BUILD_DIR/scheme-stage1" -nt "$BUILD_DIR/ulisp_core.scm" ]; then
+if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ] && [ "$BUILD_DIR/scheme-stage1" -nt "$BOOTSTRAP_INPUT" ]; then
     echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
 elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ "${BOOTSTRAP_WITH_GOSH:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
-    echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using native seed ($BOOT_BIN)..."
-    if run_stage_try "Stage 1 ($BOOT_BIN)" "$BUILD_DIR/stage1.s" "$BOOT_BIN" "$BUILD_DIR/ulisp_core.scm" && as --64 "$BUILD_DIR/stage1.s" -o "$BUILD_DIR/stage1.o" 2>/dev/null && ld -m elf_x86_64 -static "$BUILD_DIR/stage1.o" -o "$BUILD_DIR/scheme-stage1" 2>/dev/null; then
+    echo "[1/3] Stage 1: Fast compiling $BOOTSTRAP_TARGET_NAME using native seed ($BOOT_BIN)..."
+    if run_stage_try "Stage 1 ($BOOT_BIN)" "$STAGE1_ASM" "$BOOT_BIN" "$BOOTSTRAP_INPUT" && compile_asm "Stage 1 ($BOOT_BIN)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"; then
         echo "  -> Stage 1 successfully compiled with native seed."
     elif [ -n "$GOSH_BIN" ]; then
         echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed (e.g. exit code 139 / timeout / ABI drift). Automatically falling back to Gauche ($GOSH_BIN)...\033[0m"
-        run_stage "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
-        compile_asm "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$BUILD_DIR/scheme-stage1"
+        run_stage "Stage 1 (Gauche)" "$STAGE1_ASM" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
+        compile_asm "Stage 1 (Gauche)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
     else
         echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed. Automatically falling back to ILisp ($PYTHON_BIN)...\033[0m"
-        run_stage "Stage 1 (ILisp)" "$BUILD_DIR/stage1.s" env PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm"
-        compile_asm "Stage 1 (ILisp)" "$BUILD_DIR/stage1.s" "$BUILD_DIR/scheme-stage1"
+        run_stage "Stage 1 (ILisp)" "$STAGE1_ASM" env PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm"
+        compile_asm "Stage 1 (ILisp)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
     fi
 elif [ "${BOOTSTRAP_WITH_GOSH:-0}" = "1" ] && [ -n "$GOSH_BIN" ]; then
-    echo "[1/3] Stage 1: Fast compiling ulisp_core.scm using Gauche ($GOSH_BIN)..."
-    run_stage "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
-    compile_asm "Stage 1 (Gauche)" "$BUILD_DIR/stage1.s" "$BUILD_DIR/scheme-stage1"
+    echo "[1/3] Stage 1: Fast compiling $BOOTSTRAP_TARGET_NAME using Gauche ($GOSH_BIN)..."
+    run_stage "Stage 1 (Gauche)" "$STAGE1_ASM" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
+    compile_asm "Stage 1 (Gauche)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
 else
-    echo "[1/3] Stage 1: Compiling ulisp_core.scm with ILisp ($PYTHON_BIN)..."
-    run_stage "Stage 1 (ILisp)" "$BUILD_DIR/stage1.s" env PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm"
-    compile_asm "Stage 1 (ILisp)" "$BUILD_DIR/stage1.s" "$BUILD_DIR/scheme-stage1"
+    echo "[1/3] Stage 1: Compiling $BOOTSTRAP_TARGET_NAME with ILisp ($PYTHON_BIN)..."
+    run_stage "Stage 1 (ILisp)" "$STAGE1_ASM" env PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm"
+    compile_asm "Stage 1 (ILisp)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
 fi
+[ "$STAGE1_ASM" != "$BUILD_DIR/stage1.s" ] && cp -f "$STAGE1_ASM" "$BUILD_DIR/stage1.s"
 
 # Quick Bootstrap early exit (Issue #776)
 if [ "${BOOTSTRAP_QUICK:-0}" = "1" ]; then
@@ -371,40 +411,46 @@ if [ "${BOOTSTRAP_QUICK:-0}" = "1" ]; then
     exit 0
 fi
 
-echo "[2/3] Stage 2: Compiling ulisp_core.scm with Stage 1 compiler..."
-run_stage "Stage 2 (scheme-stage1)" "$BUILD_DIR/stage2.s" "$BUILD_DIR/scheme-stage1" "$BUILD_DIR/ulisp_core.scm"
-compile_asm "Stage 2 (scheme-stage1)" "$BUILD_DIR/stage2.s" "$BUILD_DIR/scheme-stage2"
+echo "[2/3] Stage 2: Compiling $BOOTSTRAP_TARGET_NAME with Stage 1 compiler..."
+run_stage "Stage 2 (scheme-stage1)" "$STAGE2_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
+compile_asm "Stage 2 (scheme-stage1)" "$STAGE2_ASM" "$BUILD_DIR/scheme-stage2" "$BOOTSTRAP_INPUT"
+[ "$STAGE2_ASM" != "$BUILD_DIR/stage2.s" ] && cp -f "$STAGE2_ASM" "$BUILD_DIR/stage2.s"
 
-echo "[3/3] Stage 3: Compiling ulisp_core.scm with Stage 2 compiler..."
-run_stage "Stage 3 (scheme-stage2)" "$BUILD_DIR/stage3.s" "$BUILD_DIR/scheme-stage2" "$BUILD_DIR/ulisp_core.scm"
-compile_asm "Stage 3 (scheme-stage2)" "$BUILD_DIR/stage3.s" "$BUILD_DIR/scheme-stage3"
+echo "[3/3] Stage 3: Compiling $BOOTSTRAP_TARGET_NAME with Stage 2 compiler..."
+run_stage "Stage 3 (scheme-stage2)" "$STAGE3_ASM" "$BUILD_DIR/scheme-stage2" "$BOOTSTRAP_INPUT"
+compile_asm "Stage 3 (scheme-stage2)" "$STAGE3_ASM" "$BUILD_DIR/scheme-stage3" "$BOOTSTRAP_INPUT"
+[ "$STAGE3_ASM" != "$BUILD_DIR/stage3.s" ] && cp -f "$STAGE3_ASM" "$BUILD_DIR/stage3.s"
 
-echo "=== Verifying Fixed Point (diff stage2.s stage3.s) ==="
-if cmp -s "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s"; then
+STAGE2_BASE="$(basename "$STAGE2_ASM")"
+STAGE3_BASE="$(basename "$STAGE3_ASM")"
+echo "=== Verifying Fixed Point (diff $STAGE2_BASE $STAGE3_BASE) ==="
+if cmp -s "$STAGE2_ASM" "$STAGE3_ASM"; then
     echo -e "\033[1;32mSUCCESS: Stage 2 and Stage 3 outputs are bit-for-bit IDENTICAL!\033[0m"
     echo "Fixed-point bootstrap verified successfully with Thin Debug Runtime & Scheme stdlib."
     verify_and_promote "$BUILD_DIR/scheme-stage3" "Stage 3"
-elif check_label_only_diff "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s"; then
+elif check_label_only_diff "$STAGE2_ASM" "$STAGE3_ASM"; then
     echo -e "\033[1;33m[INFO] Stage 2 and Stage 3 differ ONLY in auto-incremented label counters (1-generation bootstrap lag).\033[0m"
     echo "[INFO] Running Stage 4 to verify convergence at Fixed Point..."
 
-    echo "[4/4] Stage 4: Compiling ulisp_core.scm with Stage 3 compiler..."
-    run_stage "Stage 4 (scheme-stage3)" "$BUILD_DIR/stage4.s" "$BUILD_DIR/scheme-stage3" "$BUILD_DIR/ulisp_core.scm"
-    compile_asm "Stage 4 (scheme-stage3)" "$BUILD_DIR/stage4.s" "$BUILD_DIR/scheme-stage4"
+    echo "[4/4] Stage 4: Compiling $BOOTSTRAP_TARGET_NAME with Stage 3 compiler..."
+    run_stage "Stage 4 (scheme-stage3)" "$STAGE4_ASM" "$BUILD_DIR/scheme-stage3" "$BOOTSTRAP_INPUT"
+    compile_asm "Stage 4 (scheme-stage3)" "$STAGE4_ASM" "$BUILD_DIR/scheme-stage4" "$BOOTSTRAP_INPUT"
+    [ "$STAGE4_ASM" != "$BUILD_DIR/stage4.s" ] && cp -f "$STAGE4_ASM" "$BUILD_DIR/stage4.s"
 
-    echo "=== Verifying Fixed Point (diff stage3.s stage4.s) ==="
-    if cmp -s "$BUILD_DIR/stage3.s" "$BUILD_DIR/stage4.s"; then
+    STAGE4_BASE="$(basename "$STAGE4_ASM")"
+    echo "=== Verifying Fixed Point (diff $STAGE3_BASE $STAGE4_BASE) ==="
+    if cmp -s "$STAGE3_ASM" "$STAGE4_ASM"; then
         echo -e "\033[1;32mSUCCESS: Stage 3 and Stage 4 outputs are bit-for-bit IDENTICAL!\033[0m"
         echo "Fixed-point bootstrap verified successfully after 1-generation seed optimization convergence."
         verify_and_promote "$BUILD_DIR/scheme-stage4" "Stage 4"
     else
-        echo -e "\033[1;31mFAILURE: Discrepancy detected between stage3.s and stage4.s\033[0m" >&2
-        diff -u "$BUILD_DIR/stage3.s" "$BUILD_DIR/stage4.s" | head -n 50
+        echo -e "\033[1;31mFAILURE: Discrepancy detected between $STAGE3_BASE and $STAGE4_BASE\033[0m" >&2
+        diff -u "$STAGE3_ASM" "$STAGE4_ASM" | head -n 50
         exit 1
     fi
 else
-    echo -e "\033[1;31mFAILURE: Semantic discrepancy detected between stage2.s and stage3.s\033[0m" >&2
-    diff -u "$BUILD_DIR/stage2.s" "$BUILD_DIR/stage3.s" | head -n 50
+    echo -e "\033[1;31mFAILURE: Semantic discrepancy detected between $STAGE2_BASE and $STAGE3_BASE\033[0m" >&2
+    diff -u "$STAGE2_ASM" "$STAGE3_ASM" | head -n 50
     exit 1
 fi
 
