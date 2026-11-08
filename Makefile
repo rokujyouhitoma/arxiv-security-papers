@@ -42,6 +42,10 @@ JS_SRCS = src/web/site/js/frameworks/dom-utils.js \
           src/web/site/js/markdown_compiler.js \
           src/web/site/app.js
 JS_OUT = src/web/site/app-min.js
+JS_DASHBOARD_OUT = src/web/site/dashboard-min.js
+JS_BUNDLES = $(JS_OUT) $(JS_DASHBOARD_OUT)
+ALL_JS_SRCS = $(JS_SRCS) src/web/site/js/dashboard.js $(shell find src/web/site/js -type f -name "*.js" 2>/dev/null | sort -u)
+JS_COMPILER_DEPS = scripts/compile_frontend.py tools/closure-compiler/setup_compiler.py src/web/site/externs.js
 
 all: clean setup format static_analysis test build run
 
@@ -53,7 +57,7 @@ help: ## help command
 clean: ## clean virtualenv, bytecode, pycache and build artifacts
 	find . -type d -name "__pycache__" -not -path "./.venv/*" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.py[cod]" -not -path "./.venv/*" -delete 2>/dev/null || true
-	rm -rf dist/ build/ *.egg-info .pytest_cache .mypy_cache .ruff_cache outputs/database/search_vector/ ${JS_OUT} .peg_needs_format
+	rm -rf dist/ build/ *.egg-info .pytest_cache .mypy_cache .ruff_cache outputs/database/search_vector/ ${JS_BUNDLES} .peg_needs_format
 
 .PHONY: setup
 setup: activate install setup_hooks ## setup venv, activate, install python libraries, and setup git hooks
@@ -160,18 +164,22 @@ compile_grammars: activate $(PEG_GENERATED_SRCS) ## Compile .peg grammar specifi
 	fi
 
 
+src/web/site/js/frameworks/cti-query-parser.js: tools/grammars/graph_query.peg $(PEG_COMPILER_DEPS)
+	PYTHONPATH=src ${VENV_PYTHON} -m core.peg.compiler $< -o $@ --target js --ast-only --no-runtime --class-name CTIQuery
+
 .PHONY: build_cti_query_parser
-build_cti_query_parser: activate ## Build client-side CTI query PEG parser for web dashboard
-	PYTHONPATH=src ${VENV_PYTHON} -m core.peg.compiler tools/grammars/graph_query.peg -o src/web/site/js/frameworks/cti-query-parser.js --target js --ast-only --no-runtime --class-name CTIQuery
+build_cti_query_parser: activate src/web/site/js/frameworks/cti-query-parser.js ## Build client-side CTI query PEG parser for web dashboard (incremental)
 
 .PHONY: verify_peg_bootstrap
 verify_peg_bootstrap: activate ## Verify PEG AOT compiler self-hosting fixpoint
 	PYTHONPATH=src ${VENV_PYTHON} -m pytest tests/core/peg/compiler/test_bootstrap.py -v
 
-.PHONY: build_js
-build_js: activate build_cti_query_parser ## Build minified JS bundles using pure Python pipeline & Closure Compiler
+$(JS_BUNDLES) &: $(ALL_JS_SRCS) $(JS_COMPILER_DEPS) src/web/site/js/frameworks/cti-query-parser.js | activate
 	${VENV_PYTHON} tools/closure-compiler/setup_compiler.py
 	${VENV_PYTHON} scripts/compile_frontend.py
+
+.PHONY: build_js
+build_js: activate build_cti_query_parser $(JS_BUNDLES) ## Build minified JS bundles using pure Python pipeline & Closure Compiler (incremental)
 
 .PHONY: watch_js
 watch_js: activate ## Watch frontend JS sources and automatically recompile bundles on change

@@ -65,9 +65,32 @@ COMPILER_JAR = "tools/closure-compiler/closure-compiler-v20240317.jar"
 EXTERNS_FILE = "src/web/site/externs.js"
 
 
-def concat_files(src_paths: Sequence[str], dest_path: str) -> None:
+def is_bundle_up_to_date(
+    src_paths: Sequence[str],
+    dest_path: str,
+    extra_deps: Sequence[str] = (),
+) -> bool:
+    """Checks whether dest_path exists and is newer than all src_paths and extra_deps."""
+    dest_full = WORKSPACE_ROOT / dest_path
+    if not dest_full.exists():
+        return False
+    dest_mtime = dest_full.stat().st_mtime
+    for dep in list(src_paths) + list(extra_deps):
+        dep_full = WORKSPACE_ROOT / dep
+        if dep_full.exists() and dep_full.stat().st_mtime > dest_mtime:
+            return False
+    return True
+
+
+def concat_files(
+    src_paths: Sequence[str], dest_path: str, force: bool = False
+) -> None:
     """Concatenates JavaScript source files into a single bundle with banners."""
     full_dest = WORKSPACE_ROOT / dest_path
+    if not force and is_bundle_up_to_date(src_paths, dest_path):
+        print(f"[UP-TO-DATE] {dest_path} is up to date.")
+        return
+
     full_dest.parent.mkdir(parents=True, exist_ok=True)
 
     with open(full_dest, "w", encoding="utf-8") as out_f:
@@ -93,11 +116,18 @@ def compile_bundle(
     compilation_level: str = "SIMPLE_OPTIMIZATIONS",
     warning_level: str = "VERBOSE",
     strict: bool = True,
+    force: bool = False,
 ) -> int:
     """Compiles JavaScript bundle using Google Closure Compiler with strict type checks."""
     compiler_full_path = WORKSPACE_ROOT / COMPILER_JAR
     externs_full_path = WORKSPACE_ROOT / EXTERNS_FILE
     dest_full_path = WORKSPACE_ROOT / dest_path
+
+    if not force and is_bundle_up_to_date(
+        src_paths, dest_path, extra_deps=[EXTERNS_FILE, COMPILER_JAR]
+    ):
+        print(f"[UP-TO-DATE] {dest_path} is up to date (skipping Closure Compiler).")
+        return 0
 
     if not compiler_full_path.exists() or not shutil.which("java"):
         print(
@@ -105,7 +135,7 @@ def compile_bundle(
             f"Concatenating {len(src_paths)} files into {dest_path}...",
             file=sys.stderr,
         )
-        concat_files(src_paths, dest_path)
+        concat_files(src_paths, dest_path, force=force)
         return 0
 
     cmd: List[str] = [
@@ -161,22 +191,26 @@ def compile_bundle(
         return 0
 
 
-def build_all(concat_only: bool = False, strict: bool = True) -> int:
+def build_all(
+    concat_only: bool = False, strict: bool = True, force: bool = False
+) -> int:
     """Builds both app-min.js and dashboard-min.js."""
     if concat_only:
         print("Concatenating app bundle...")
-        concat_files(APP_SRCS, APP_OUT)
+        concat_files(APP_SRCS, APP_OUT, force=force)
         print("Concatenating dashboard bundle...")
-        concat_files(DASHBOARD_SRCS, DASHBOARD_OUT)
+        concat_files(DASHBOARD_SRCS, DASHBOARD_OUT, force=force)
         print("[SUCCESS] All bundles concatenated successfully.")
         return 0
 
-    rc_app = compile_bundle(APP_SRCS, APP_OUT, strict=strict)
+    rc_app = compile_bundle(APP_SRCS, APP_OUT, strict=strict, force=force)
     if rc_app != 0:
         print("[FAIL] Compilation failed for app bundle.", file=sys.stderr)
         return rc_app
 
-    rc_dash = compile_bundle(DASHBOARD_SRCS, DASHBOARD_OUT, strict=strict)
+    rc_dash = compile_bundle(
+        DASHBOARD_SRCS, DASHBOARD_OUT, strict=strict, force=force
+    )
     if rc_dash != 0:
         print("[FAIL] Compilation failed for dashboard bundle.", file=sys.stderr)
         return rc_dash
@@ -243,6 +277,12 @@ def main() -> int:
         help="Watch monitored frontend source files and rebuild automatically",
     )
     parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Force re-compilation of all bundles regardless of timestamp",
+    )
+    parser.add_argument(
         "--poll-interval",
         type=float,
         default=1.0,
@@ -259,7 +299,9 @@ def main() -> int:
         )
         return 0
 
-    return build_all(concat_only=args.concat_only, strict=args.strict)
+    return build_all(
+        concat_only=args.concat_only, strict=args.strict, force=args.force
+    )
 
 
 if __name__ == "__main__":

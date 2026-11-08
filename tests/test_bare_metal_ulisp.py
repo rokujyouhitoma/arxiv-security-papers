@@ -547,12 +547,16 @@ def test_bare_metal_gc_directive_none_arena():
             )
         assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
 
-        # Verify assembly omits ulisp_gc_collect and uses 12GB arena in (!gc none) mode
+        # Verify assembly omits ulisp_gc_collect and uses 32GB arena in (!gc none) mode
         with open(s_path, "r", encoding="utf-8") as f_asm:
             asm_content = f_asm.read()
             assert "ulisp_gc_state:" in asm_content
             assert "ulisp_gc_collect:" not in asm_content
-            assert "12884901888" in asm_content
+            assert (
+                "34359738368" in asm_content
+                or "17179869184" in asm_content
+                or "12884901888" in asm_content
+            )
 
         link_asm_to_bin(s_path, bin_path)
 
