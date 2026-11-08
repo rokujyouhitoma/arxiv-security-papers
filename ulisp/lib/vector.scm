@@ -70,8 +70,11 @@
     res))
 
 ;; ---------------------------------------------------------------------
-;; §6.8 Vectors: vector->list-range / list->vector
+;; §6.8 Vectors: vector->list / vector->list-range / list->vector
 ;; ---------------------------------------------------------------------
+(define (vector->list vec)
+  (vector->list-range vec 0 (vector-length vec)))
+
 (define (vector->list-range vec start end)
   (let loop ((i (- end 1)) (acc '()))
     (if (< i start)

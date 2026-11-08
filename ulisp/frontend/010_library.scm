@@ -288,7 +288,7 @@
 (define (read-datum-or-source-loc p path line)
   (let ((cur-line (if (file-input-port? p) (port-line p) line))
         (cur-col (if (file-input-port? p) (port-col p) 1))
-        (expr (read p)))
+        (expr (sanitize-reader-form (read p))))
     (if (eof-object? expr)
         expr
         (list '%source-loc path cur-line cur-col expr))))

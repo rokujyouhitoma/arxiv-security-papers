@@ -90,6 +90,17 @@
       (else
        (error "define-values: invalid formals" formals)))))
 
+(define (symbol-directive? sym)
+  (if (symbol? sym)
+      (let ((s (symbol->raw-name sym)))
+        (let ((len (string-length s)))
+          (and (> len 0)
+               (or (char=? (string-ref s 0) #\!)
+                   (and (> len 1)
+                        (char=? (string-ref s 0) #\-)
+                        (char=? (string-ref s 1) #\-))))))
+      #f))
+
 (define (rewrite-top-level forms)
   (let loop ((fs forms) (defs '()) (bodies '()))
     (if (null? fs)
@@ -124,13 +135,9 @@
             ;; Skip compiler directives (!... or --...) appearing anywhere at top level
             ((or (and (pair? f)
                       (symbol? (car f))
-                      (let ((s (symbol->string (car f))))
-                        (or (string-starts-with? s "!")
-                            (string-starts-with? s "--"))))
+                      (symbol-directive? (car f)))
                  (and (symbol? f)
-                      (let ((s (symbol->string f)))
-                        (or (string-starts-with? s "!")
-                            (string-starts-with? s "--")))))
+                      (symbol-directive? f)))
              (loop (cdr fs) defs bodies))
             ((and (pair? f) (eq? (car f) 'define-record-type))
              (set-current-toplevel-name! (cadr f))

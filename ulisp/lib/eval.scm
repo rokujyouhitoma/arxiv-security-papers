@@ -418,7 +418,7 @@
     (cons 'cond-expand 'core-syntax)
     (cons 'define-record-type 'core-syntax)))
 
-(define (%build-scheme-base-bindings)
+(define (%build-scheme-base-numeric-1)
   (list
     ;; Numeric operations
     (cons '+ %eval-plus)
@@ -446,6 +446,10 @@
     (cons 'odd? (lambda (x) (not (= (modulo x 2) 0))))
     (cons 'even? (lambda (x) (= (modulo x 2) 0)))
     (cons 'max max)
+  ))
+
+(define (%build-scheme-base-numeric-2)
+  (list
     (cons 'min min)
     (cons 'abs (lambda (x) (if (num< x 0) (num- x) x)))
     (cons 'quotient (lambda (a b) (quotient a b)))
@@ -472,6 +476,10 @@
     (cons 'number->string number->string)
     (cons 'string->number %eval-string->number)
     ;; Booleans & Equivalence
+  ))
+
+(define (%build-scheme-base-bool-pair)
+  (list
     (cons 'not (lambda (x) (not x)))
     (cons 'boolean? (lambda (x) (boolean? x)))
     (cons 'boolean=? %eval-boolean=?)
@@ -493,6 +501,10 @@
     (cons 'list? list?)
     (cons 'make-list make-list)
     (cons 'list %eval-list)
+  ))
+
+(define (%build-scheme-base-list)
+  (list
     (cons 'length length)
     (cons 'append %eval-append)
     (cons 'reverse reverse)
@@ -507,6 +519,10 @@
     (cons 'assv %eval-assv)
     (cons 'assoc %eval-assoc)
     ;; Symbols
+  ))
+
+(define (%build-scheme-base-sym-char)
+  (list
     (cons 'symbol? (lambda (x) (symbol? x)))
     (cons 'symbol=? %eval-symbol=?)
     (cons 'symbol->string (lambda (s) (symbol->string s)))
@@ -521,6 +537,10 @@
     (cons 'char->integer (lambda (c) (char->integer c)))
     (cons 'integer->char (lambda (n) (integer->char n)))
     ;; Strings
+  ))
+
+(define (%build-scheme-base-string)
+  (list
     (cons 'string? (lambda (x) (string? x)))
     (cons 'make-string (lambda (n) (make-string n)))
     (cons 'string %eval-string)
@@ -537,6 +557,10 @@
     (cons 'string-copy string-copy)
     (cons 'string-fill! string-fill!)
     ;; Vectors
+  ))
+
+(define (%build-scheme-base-vector)
+  (list
     (cons 'vector? (lambda (x) (vector? x)))
     (cons 'make-vector
           (case-lambda
@@ -557,6 +581,10 @@
     (cons 'bytevector-u8-ref (lambda (bv i) (bytevector-u8-ref bv i)))
     (cons 'bytevector-u8-set! (lambda (bv i b) (bytevector-u8-set! bv i b)))
     ;; Control features
+  ))
+
+(define (%build-scheme-base-control)
+  (list
     (cons 'procedure? (lambda (x) (procedure? x)))
     (cons 'apply apply)
     (cons 'map map)
@@ -582,6 +610,10 @@
     (cons 'file-error? file-error?)
     (cons 'make-parameter %eval-make-parameter)
     ;; Ports & I/O
+  ))
+
+(define (%build-scheme-base-io-1)
+  (list
     (cons 'port? port?)
     (cons 'input-port? input-port?)
     (cons 'output-port? output-port?)
@@ -599,6 +631,10 @@
     (cons 'open-output-string open-output-string)
     (cons 'get-output-string get-output-string)
     (cons 'open-input-bytevector open-input-bytevector)
+  ))
+
+(define (%build-scheme-base-io-2)
+  (list
     (cons 'open-output-bytevector open-output-bytevector)
     (cons 'get-output-bytevector get-output-bytevector)
     (cons 'read-char %eval-read-char)
@@ -615,7 +651,20 @@
     (cons 'write-string %eval-write-string)
     (cons 'write-u8 %eval-write-u8)
     (cons 'flush-output-port %eval-flush-output-port)
-    (cons 'features features)))
+    (cons 'features features)
+  ))
+
+(define (%build-scheme-base-bindings)
+  (append (%build-scheme-base-numeric-1)
+          (append (%build-scheme-base-numeric-2)
+          (append (%build-scheme-base-bool-pair)
+          (append (%build-scheme-base-list)
+          (append (%build-scheme-base-sym-char)
+          (append (%build-scheme-base-string)
+          (append (%build-scheme-base-vector)
+          (append (%build-scheme-base-control)
+          (append (%build-scheme-base-io-1)
+          (%build-scheme-base-io-2)))))))))))
 
 (define (%build-scheme-inexact-bindings)
   (list

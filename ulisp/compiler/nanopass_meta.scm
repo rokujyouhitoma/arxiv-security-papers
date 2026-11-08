@@ -57,44 +57,77 @@
 ;;; Meta-variable Prefix Matcher
 ;;; Given a pattern variable name (e.g. 'e1, 'body, 'test_2, 'c) and a list of meta-variable prefixes,
 ;;; determines if the symbol begins with any of the declared prefixes.
+(define (nanopass-meta-suffix-check? s i s-len)
+  (if (>= i s-len)
+      #t
+      (let ((ch (string-ref s i)))
+        (if (or (and (char>=? ch #\0) (char<=? ch #\9)) (char=? ch #\_) (char=? ch #\*))
+            (nanopass-meta-suffix-check? s (+ i 1) s-len)
+            #f))))
+
+(define (nanopass-meta-var-matches-str? s prefs s-len)
+  (if (null? prefs)
+      #f
+      (let* ((p (symbol->raw-name (car prefs)))
+             (p-len (string-length p)))
+        (if (and (>= s-len p-len)
+                 (string-starts-with? s p)
+                 (nanopass-meta-suffix-check? s p-len s-len))
+            #t
+            (nanopass-meta-var-matches-str? s (cdr prefs) s-len)))))
+
 (define (nanopass-meta-var-matches? sym prefixes)
-  (let ((s (symbol->string sym)))
-    (let loop ((prefs prefixes))
-      (if (null? prefs)
-          #f
-          (let* ((p (symbol->string (car prefs)))
-                 (p-len (string-length p))
-                 (s-len (string-length s)))
-            (if (and (>= s-len p-len)
-                     (string=? (substring s 0 p-len) p))
-                ;; Suffix check: after prefix, only digits, underscores, or asterisks are allowed
-                (let suffix-check ((i p-len))
-                  (if (>= i s-len)
-                      #t
-                      (let ((ch (string-ref s i)))
-                        (if (or (and (char>=? ch #\0) (char<=? ch #\9)) (char=? ch #\_) (char=? ch #\*))
-                            (suffix-check (+ i 1))
-                            (loop (cdr prefs))))))
-                (loop (cdr prefs))))))))
+  (let* ((s (symbol->raw-name sym))
+         (s-len (string-length s)))
+    (nanopass-meta-var-matches-str? s prefixes s-len)))
 
 ;;; Identify nonterminal or terminal for a pattern variable
 ;;; Returns (terminal pred) or (nonterminal nt-sym) or #f
-(define (nanopass-classify-meta-var var lang)
-  (let ((terminals (nanopass-lang-terminals lang))
+(define (nanopass-check-terms-str var-str s-len ts)
+  (if (null? ts)
+      #f
+      (let ((term (car ts)))
+        (if (nanopass-meta-var-matches-str? var-str (cadr term) s-len)
+            (list 'terminal (car term))
+            (nanopass-check-terms-str var-str s-len (cdr ts))))))
+
+(define (nanopass-check-nts-str var-str s-len nts)
+  (if (null? nts)
+      #f
+      (let ((nt (car nts)))
+        (if (nanopass-meta-var-matches-str? var-str (cadr nt) s-len)
+            (list 'nonterminal (car nt))
+            (nanopass-check-nts-str var-str s-len (cdr nts))))))
+
+(define (nanopass-classify-meta-var-uncached var-str lang)
+  (let ((s-len (string-length var-str))
+        (terminals (nanopass-lang-terminals lang))
         (nonterminals (nanopass-lang-nonterminals lang)))
-    (let check-terms ((ts terminals))
-      (if (not (null? ts))
-          (let ((term (car ts)))
-            (if (nanopass-meta-var-matches? var (cadr term))
-                (list 'terminal (car term))
-                (check-terms (cdr ts))))
-          (let check-nts ((nts nonterminals))
-            (if (not (null? nts))
-                (let ((nt (car nts)))
-                  (if (nanopass-meta-var-matches? var (cadr nt))
-                      (list 'nonterminal (car nt))
-                      (check-nts (cdr nts))))
-                #f))))))
+    (let ((term-res (nanopass-check-terms-str var-str s-len terminals)))
+      (if term-res
+          term-res
+          (nanopass-check-nts-str var-str s-len nonterminals)))))
+
+(define *classify-meta-var-cache* (make-vector 1024 '()))
+
+(define (nanopass-classify-meta-var var lang)
+  (if (not (symbol? var))
+      #f
+      (let* ((lang-name (if (nanopass-language? lang) (nanopass-lang-name lang) 'unknown))
+             (var-str (symbol->raw-name var))
+             (lang-str (symbol->raw-name lang-name))
+             (h (modulo (+ (string-fast-hash-1024 var-str) (* (string-fast-hash-1024 lang-str) 31)) 1024))
+             (bucket (vector-ref *classify-meta-var-cache* h)))
+        (let loop ((entries bucket))
+          (if (null? entries)
+              (let* ((res (nanopass-classify-meta-var-uncached var-str lang))
+                     (new-entry (cons (cons var lang-name) res)))
+                (vector-set! *classify-meta-var-cache* h (cons new-entry bucket))
+                res)
+              (let ((e (car entries)))
+                (if (and (eq? (caar e) var) (eq? (cdar e) lang-name))
+                    (cdr e)
+                    (loop (cdr entries)))))))))
 
 ;;; Production Normalization and Matching Equality
 (define (nanopass-canonicalize-production prod)
@@ -880,17 +913,25 @@
 
 ;;; Match clause helper: returns list of values for expected vars, or #f
 (define (nanopass-match-clause pat expr expected-vars recurse-fn)
-  (let ((res (nanopass-match-pattern-inner pat expr recurse-fn)))
-    (if (not res)
-        #f
-        (let ((env (cdr res)))
-          (let loop ((vars expected-vars) (vals '()))
-            (if (null? vars)
-                (reverse vals)
-                (let ((entry (assq (car vars) env)))
-                  (if entry
-                      (loop (cdr vars) (cons (cdr entry) vals))
-                      (loop (cdr vars) (cons #f vals))))))))))
+  (if (and (pair? pat)
+           (symbol? (car pat))
+           (not (eq? (car pat) 'unquote))
+           (not (eq? (car pat) '_))
+           (not (and (pair? (cdr pat)) (eq? (cadr pat) '...)))
+           (or (not (pair? expr))
+               (not (eq? (car expr) (car pat)))))
+      #f
+      (let ((res (nanopass-match-pattern-inner pat expr recurse-fn)))
+        (if (not res)
+            #f
+            (let ((env (cdr res)))
+              (let loop ((vars expected-vars) (vals '()))
+                (if (null? vars)
+                    (reverse vals)
+                    (let ((entry (assq (car vars) env)))
+                      (if entry
+                          (loop (cdr vars) (cons (cdr entry) vals))
+                          (loop (cdr vars) (cons #f vals)))))))))))
 
 ;;; Manual `apply` for clause handlers (arity 0-8)
 (define (nanopass-apply-list proc vals)
@@ -1010,6 +1051,18 @@
             lst
             (cons new-head new-tail)))))
 
+(define (nanopass-transform-each lst item-pat lang curr-nt call-recurse)
+  (if (not (pair? lst))
+      lst
+      (let* ((old-head (car lst))
+             (old-tail (cdr lst))
+             (new-head (nanopass-schema-transform-subpattern item-pat old-head lang curr-nt call-recurse))
+             (new-tail (nanopass-transform-each old-tail item-pat lang curr-nt call-recurse)))
+        (if (and (eq? new-head old-head)
+                 (eq? new-tail old-tail))
+            lst
+            (cons new-head new-tail)))))
+
 ;;; Schema-driven subforms list transformer (with Smart Reconstruction)
 (define (nanopass-schema-transform-subforms prod-rest expr-rest lang curr-nt call-recurse)
   (cond
@@ -1022,20 +1075,14 @@
      (let* ((item-pat (car prod-rest))
             (tail-prod (cddr prod-rest)))
        (if (null? tail-prod)
-           (nanopass-map-sharing
-            (lambda (e)
-              (nanopass-schema-transform-subpattern item-pat e lang curr-nt call-recurse))
-            expr-rest)
+           (nanopass-transform-each expr-rest item-pat lang curr-nt call-recurse)
            (let* ((k (length tail-prod))
                   (n (length expr-rest))
                   (split-idx (if (>= n k) (- n k) 0))
                   (prefix (nanopass-take expr-rest split-idx))
                   (suffix (nanopass-drop expr-rest split-idx))
                   (new-prefix
-                   (nanopass-map-sharing
-                    (lambda (e)
-                      (nanopass-schema-transform-subpattern item-pat e lang curr-nt call-recurse))
-                    prefix))
+                   (nanopass-transform-each prefix item-pat lang curr-nt call-recurse))
                   (new-suffix
                    (nanopass-schema-transform-subforms tail-prod suffix lang curr-nt call-recurse)))
              (if (and (eq? new-prefix prefix)

@@ -335,7 +335,14 @@
      (cons (rename-symbol-in-tree (car tree) old-sym new-sym)
            (rename-symbol-in-tree (cdr tree) old-sym new-sym)))
     ((vector? tree)
-     (list->vector (rename-symbol-in-tree (vector->list tree) old-sym new-sym)))
+     (let* ((len (vector-length tree))
+            (new-v (%make-vector len)))
+       (let loop ((i 0))
+         (if (< i len)
+             (begin
+               (vector-set! new-v i (rename-symbol-in-tree (vector-ref tree i) old-sym new-sym))
+               (loop (+ i 1)))
+             new-v))))
     (else tree)))
 
 (define (apply-rename-map tree rename-map)

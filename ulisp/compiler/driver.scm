@@ -72,7 +72,7 @@
     (let ((expr (read)))
       (if (eof-object? expr)
           (reverse acc)
-          (loop (cons expr acc))))))
+          (loop (cons (sanitize-reader-form expr) acc))))))
 
 (define (detect-bench-passes-env)
   (let ((v (sys-getenv "ULISP_BENCH_PASSES")))
@@ -524,7 +524,7 @@
       (let ((expr (read p)))
         (if (eof-object? expr)
             (reverse acc)
-            (loop (cons expr acc)))))))
+            (loop (cons (sanitize-reader-form expr) acc)))))))
 
 ;;; Entry point: CLI parsing and compilation through two-layer pipeline
 (let* ((cmd-args (let ((cl (command-line)))

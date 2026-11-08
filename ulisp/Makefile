@@ -706,13 +706,14 @@ test_ports: $(COMPILER_DEP)
 	$(LD) $(LDFLAGS) build/test_ports.o -o build/test_ports
 	./build/test_ports
 
-test_reader_eof: $(COMPILER_DEP)
+test_reader_eof: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) tests/test_reader_eof.scm > build/test_reader_eof_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_reader_eof_input.scm
+	@cat lib/stdlib_macros.scm tests/test_reader_eof.scm >> build/test_reader_eof_input.scm
 	$(ULISP_COMPILER) build/test_reader_eof_input.scm > build/test_reader_eof.s
 	$(AS) $(ASFLAGS) build/test_reader_eof.s -o build/test_reader_eof.o
-	$(LD) $(LDFLAGS) build/test_reader_eof.o -o build/test_reader_eof
-	./build/test_reader_eof
+	$(LD) $(LDFLAGS) build/test_reader_eof.o build/ulisp_stdlib.o -o build/test_reader_eof
+	./build/test_reader_eof < /dev/null
 
 test_record: $(COMPILER_DEP)
 	@mkdir -p build
@@ -1043,10 +1044,9 @@ test_c: compiler
 
 core: build/ulisp_core.scm
 
-build/ulisp_core.scm: $(ULISP_STD_LIBS) compiler.scm
+build/ulisp_core.scm: entry_core.scm $(ULISP_STD_LIBS) compiler.scm
 	@mkdir -p build
-	echo '(!gc none)' > $@
-	cat $^ >> $@
+	cp entry_core.scm $@
 
 build/stage1.s: compiler.scm build/ulisp_core.scm
 	@mkdir -p build

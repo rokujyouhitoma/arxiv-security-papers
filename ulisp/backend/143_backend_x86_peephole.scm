@@ -25,6 +25,8 @@
   (and (pair? inst)
        (eq? (car inst) '%label)))
 
+(define *peephole-changed* (cons #f '()))
+
 (define (x86-peephole-step-window insts)
   (let loop ((rest insts) (acc '()))
     (cond
@@ -41,6 +43,7 @@
                    (= (length i) 3)
                    (x86-asm-reg? (cadr i))
                    (equal? (cadr i) (caddr i)))))
+       (set-car! *peephole-changed* #t)
        (loop (cdr rest) acc))
 
       ;; -----------------------------------------------------------------
@@ -60,6 +63,7 @@
                    (equal? (caddr i1) (cadr i2))
                    (x86-asm-reg? (cadr i1))
                    (x86-asm-reg? (caddr i1)))))
+       (set-car! *peephole-changed* #t)
        (loop (cddr rest) (cons (car rest) acc)))
 
       ;; -----------------------------------------------------------------
@@ -72,6 +76,7 @@
                    (= (length i) 3)
                    (x86-asm-reg? (cadr i))
                    (x86-asm-zero-imm? (caddr i)))))
+       (set-car! *peephole-changed* #t)
        (let ((reg (cadr (car rest))))
          (loop (cdr rest) (cons (list 'xor reg reg) acc))))
 
@@ -85,6 +90,7 @@
             (eq? (car (car rest)) 'jmp)
             (eq? (car (cadr rest)) '%label)
             (equal? (cadr (car rest)) (cadr (cadr rest))))
+       (set-car! *peephole-changed* #t)
        (loop (cdr rest) acc))
 
       ;; -----------------------------------------------------------------
@@ -100,6 +106,7 @@
             (eq? (car (cadr rest)) '%p2align)
             (eq? (car (caddr rest)) '%label)
             (equal? (cadr (car rest)) (cadr (caddr rest))))
+       (set-car! *peephole-changed* #t)
        (loop (cdr rest) acc))
 
       ;; -----------------------------------------------------------------
@@ -121,6 +128,7 @@
                    (equal? (cadr i2) (cadr i1))
                    (or (integer? (caddr i2))
                        (and (pair? (caddr i2)) (eq? (car (caddr i2)) '%imm) (integer? (cadr (caddr i2))))))))
+       (set-car! *peephole-changed* #t)
        (let* ((i1 (car rest))
               (i2 (cadr rest))
               (dst (cadr i1))
@@ -136,6 +144,7 @@
             (pair? (cdr rest))
             (not (x86-asm-label-inst? (cadr rest)))
             (not (and (pair? (cadr rest)) (eq? (caadr rest) '%p2align))))
+       (set-car! *peephole-changed* #t)
        (let skip ((tail (cdr rest)))
          (cond
            ((null? tail)
@@ -166,6 +175,7 @@
                   ((and (pair? (car scan)) (eq? (caar scan) '%label))
                    (find-lbl (cdr scan) #t))
                   (else (find-lbl (cdr scan) seen-other-label?))))))
+       (set-car! *peephole-changed* #t)
        (loop (cdr rest) (cons '(ret) acc)))
 
       ;; Fallthrough: Keep instruction unchanged
@@ -173,13 +183,15 @@
        (loop (cdr rest) (cons (car rest) acc))))))
 
 (define (optimize-x86-peephole-insts insts)
-  (let loop ((cur insts) (iterations 10))
+  (let loop ((cur insts) (iterations 3))
     (if (<= iterations 0)
         cur
-        (let ((next (x86-peephole-step-window cur)))
-          (if (equal? cur next)
-              cur
-              (loop next (- iterations 1)))))))
+        (begin
+          (set-car! *peephole-changed* #f)
+          (let ((next (x86-peephole-step-window cur)))
+            (if (not (car *peephole-changed*))
+                cur
+                (loop next (- iterations 1))))))))
 
 (define (optimize-x86-peephole-function fn)
   (let* ((lbl (cadr fn))

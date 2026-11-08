@@ -5,6 +5,7 @@
 ;;; =======================================================================
 
 (!gc none)
+(!opt 1)
 
 ;; Standard Library Modules
 (include "lib/posix.scm")

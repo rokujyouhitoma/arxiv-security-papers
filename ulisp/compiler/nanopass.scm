@@ -40,6 +40,26 @@
          (body-expr (nanopass-expand-template raw-body vars)))
     (list pat vars guard-expr body-expr)))
 
+;;; Bind matched pattern variables from list `m-var` without allocating a closure
+(define (nanopass-var-ref-expr m-var idx)
+  (cond
+    ((= idx 0) (list 'car m-var))
+    ((= idx 1) (list 'cadr m-var))
+    ((= idx 2) (list 'caddr m-var))
+    ((= idx 3) (list 'cadddr m-var))
+    (else (list 'list-ref m-var idx))))
+
+(define (nanopass-bind-matched-vars vars m-var body-expr)
+  (if (null? vars)
+      body-expr
+      (list 'let
+            (let loop ((vs vars) (i 0) (acc '()))
+              (if (null? vs)
+                  (reverse acc)
+                  (loop (cdr vs) (+ i 1)
+                        (cons (list (car vs) (nanopass-var-ref-expr m-var i)) acc))))
+            body-expr)))
+
 ;;; Build cascaded if-expression for nonterminal transformer rules
 (define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out)
   (let* ((ir-var (car in-arg-list))
@@ -68,20 +88,35 @@
                  (vars (cadr r))
                  (guard-expr (caddr r))
                  (body-expr (cadddr r))
-                 (c-var (unique-symbol "__c_")))
-            (list 'let (list (list c-var
-                                   (list (string->symbol "nanopass-try-clause")
-                                         (list 'quote pat)
-                                         (list 'quote vars)
-                                         ir-var
-                                         nt-name
-                                         (list 'lambda vars
-                                               (list 'if guard-expr
-                                                     (list 'cons #t body-expr)
-                                                     #f)))))
-                  (list 'if c-var
-                        (list 'cdr c-var)
-                        (loop (cdr rs)))))))))
+                 (m-var (unique-symbol "__m_")))
+            (if (eq? guard-expr #t)
+                (list 'let (list (list m-var
+                                       (list (string->symbol "nanopass-match-clause")
+                                             (list 'quote pat)
+                                             ir-var
+                                             (list 'quote vars)
+                                             nt-name)))
+                      (list 'if m-var
+                            (nanopass-bind-matched-vars vars m-var body-expr)
+                            (loop (cdr rs))))
+                (let ((c-var (unique-symbol "__c_")))
+                  (list 'let (list (list c-var
+                                         (list 'let (list (list m-var
+                                                                (list (string->symbol "nanopass-match-clause")
+                                                                      (list 'quote pat)
+                                                                      ir-var
+                                                                      (list 'quote vars)
+                                                                      nt-name)))
+                                               (list 'if m-var
+                                                     (nanopass-bind-matched-vars
+                                                      vars m-var
+                                                      (list 'if guard-expr
+                                                            (list 'cons #t body-expr)
+                                                            #f))
+                                                     #f))))
+                        (list 'if c-var
+                              (list 'cdr c-var)
+                              (loop (cdr rs)))))))))))
 
 ;;; Normalize rules whether passed as list of rules or single wrapped list
 (define (nanopass-normalize-rules raw-rules)
@@ -211,18 +246,18 @@
   (let* ((name (cadr form))
          (clauses (cddr form)))
     (list 'begin
-          (list 'define (string->symbol (string-append "__lang_" (symbol->string name)))
+          (list 'define (string->symbol (string-append "__lang_" (symbol->raw-name name)))
                 (list (string->symbol "nanopass-register-language!")
                       (list (string->symbol "nanopass-parse-language-spec")
                             (list 'quote name)
                             (list 'quote clauses))))
-          (list 'define (string->symbol (string-append "parse-" (symbol->string name)))
+          (list 'define (string->symbol (string-append "parse-" (symbol->raw-name name)))
                 (list 'lambda (list 'expr)
                       (list (string->symbol "nanopass-parse") (list 'quote name) 'expr)))
-          (list 'define (string->symbol (string-append "unparse-" (symbol->string name)))
+          (list 'define (string->symbol (string-append "unparse-" (symbol->raw-name name)))
                 (list 'lambda (list 'ir)
                       (list (string->symbol "nanopass-unparse") (list 'quote name) 'ir)))
-          (list 'define (string->symbol (string-append (symbol->string name) "?"))
+          (list 'define (string->symbol (string-append (symbol->raw-name name) "?"))
                 (list 'lambda (list 'expr)
                       (list (string->symbol "nanopass-ast-valid?") (list 'quote name) 'expr))))))
 

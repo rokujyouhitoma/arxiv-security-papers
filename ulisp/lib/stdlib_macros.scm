@@ -2,9 +2,13 @@
 ;;; ULisp Precompiled Standard Library Macros & Definitions
 ;;; Core syntax rules and definitions needed when compiling test targets
 ;;; separately and linking against build/ulisp_stdlib.o
+;;; Conforms to R7RS Small (Section 6.1, 6.2, 6.13) & Issue #772
+;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
-;; --- Port / IO Macros ---
+;;; -----------------------------------------------------------------------
+;;; §6.13 Input and Output (Port / IO Macros)
+;;; -----------------------------------------------------------------------
 (define-syntax newline
   (syntax-rules ()
     ((newline) (port-newline *stdout-port*))
@@ -80,17 +84,24 @@
     ((u8-ready?) (port-u8-ready? *stdin-port*))
     ((u8-ready? p) (port-u8-ready? p))))
 
+;;; -----------------------------------------------------------------------
+;;; §6.2.6 Numerical Input and Output (string->number)
+;;; -----------------------------------------------------------------------
 (define-syntax string->number
   (syntax-rules ()
     ((string->number s) (string->number-core s 10 #f))
     ((string->number s r) (string->number-core s r #t))))
 
-;; --- Equivalence Macros ---
+;;; -----------------------------------------------------------------------
+;;; §6.1 Equivalence Predicates (eqv? Macro)
+;;; -----------------------------------------------------------------------
 (define-syntax eqv?
   (syntax-rules ()
     ((_ a b) (%eqv? a b))))
 
-;; --- Numeric Tower Predicate Macros ---
+;;; -----------------------------------------------------------------------
+;;; §6.2.5 Numerical Operations & Predicate Macros
+;;; -----------------------------------------------------------------------
 (define-syntax number?
   (syntax-rules ()
     ((_ x) (%number? x))))
@@ -119,13 +130,17 @@
   (syntax-rules ()
     ((_ x) (%inexact? x))))
 
-;; --- IEEE 754 Flonum Constants ---
+;;; -----------------------------------------------------------------------
+;;; §6.2.5 IEEE 754 Flonum Constants
+;;; -----------------------------------------------------------------------
 (define +inf.0 (vector 'ulisp-flonum-tag 'pos-inf))
 (define -inf.0 (vector 'ulisp-flonum-tag 'neg-inf))
 (define +nan.0 (vector 'ulisp-flonum-tag 'nan))
 (define -nan.0 +nan.0)
 
-;; --- Pre-intern Desugared Compiler Symbols in Reader Table ---
+;;; -----------------------------------------------------------------------
+;;; Pre-intern Desugared Compiler Symbols in Reader Table
+;;; -----------------------------------------------------------------------
 (quote (make-vector-fill
         vector-copy-range
         vector-copy-range!

@@ -409,7 +409,15 @@
                                (let* ((params (cadr val))
                                       (lbody (caddr val))
                                       (bound (cons var params))
-                                      (frees (free-vars-with-globals lbody bound))
+                                      (raw-frees (free-vars-with-globals lbody bound))
+                                      ;; Exclude known-fn bindings from closure environment since they are statically lifted
+                                      (frees (let loop-kf ((fs raw-frees) (acc '()))
+                                               (cond
+                                                 ((null? fs) (reverse acc))
+                                                 ((assq (car fs) known-env-entries)
+                                                  (loop-kf (cdr fs) acc))
+                                                 (else
+                                                  (loop-kf (cdr fs) (cons (car fs) acc))))))
                                       (label (unique-label-sym "L_lambda"))
                                       (env-p (map (lambda (p) (cons p p)) params))
                                       (env-s (cons (cons var '%self) env-p))
@@ -441,7 +449,7 @@
                                 (let loop-f ((fs frees) (idx 1) (p-acc '()))
                                   (if (null? fs) (reverse p-acc)
                                       (let ((fv (car fs)))
-                                        (if (memq fv rec-vars)
+                                        (if (and (memq fv rec-vars) (not (assq fv known-env-entries)))
                                             (loop-f (cdr fs) (+ idx 1)
                                                     (cons (list '%closure-set! var idx fv) p-acc))
                                             (loop-f (cdr fs) (+ idx 1) p-acc)))))))
