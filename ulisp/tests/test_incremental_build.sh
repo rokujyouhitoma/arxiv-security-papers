@@ -24,17 +24,49 @@ if [ "$out" != "334" ]; then
 fi
 echo "SUCCESS: Base execution verified (334)."
 
-echo "=== [3/4] Touching lir/128_lir_branch_fusion.scm and measuring incremental build time ==="
+echo "=== [3/6] Touching lir/128_lir_branch_fusion.scm and measuring LIR incremental build time ==="
 touch lir/128_lir_branch_fusion.scm
 
 start_ns=$(date +%s%N)
-make build/ulisp-modular
+make -j"$(nproc 2>/dev/null || echo 4)" build/ulisp-modular
 end_ns=$(date +%s%N)
 
 duration_ms=$(( (end_ns - start_ns) / 1000000 ))
-echo "Incremental build completed in ${duration_ms} ms."
+echo "LIR incremental build completed in ${duration_ms} ms."
+if [ "$duration_ms" -gt 10000 ]; then
+    echo "FAIL: LIR incremental build took ${duration_ms} ms (> 10000 ms limit)"
+    exit 1
+fi
 
-echo "=== [4/4] Verifying functionality of incrementally built binary ==="
+echo "=== [4/6] Touching frontend/050_cp0.scm and measuring Frontend incremental build time ==="
+touch frontend/050_cp0.scm
+
+start_ns=$(date +%s%N)
+make -j"$(nproc 2>/dev/null || echo 4)" build/ulisp-modular
+end_ns=$(date +%s%N)
+
+duration_ms=$(( (end_ns - start_ns) / 1000000 ))
+echo "Frontend incremental build completed in ${duration_ms} ms."
+if [ "$duration_ms" -gt 10000 ]; then
+    echo "FAIL: Frontend incremental build took ${duration_ms} ms (> 10000 ms limit)"
+    exit 1
+fi
+
+echo "=== [5/6] Touching backend/143_backend_x86_peephole.scm and measuring Backend incremental build time ==="
+touch backend/143_backend_x86_peephole.scm
+
+start_ns=$(date +%s%N)
+make -j"$(nproc 2>/dev/null || echo 4)" build/ulisp-modular
+end_ns=$(date +%s%N)
+
+duration_ms=$(( (end_ns - start_ns) / 1000000 ))
+echo "Backend incremental build completed in ${duration_ms} ms."
+if [ "$duration_ms" -gt 10000 ]; then
+    echo "FAIL: Backend incremental build took ${duration_ms} ms (> 10000 ms limit)"
+    exit 1
+fi
+
+echo "=== [6/6] Verifying functionality of incrementally built binary ==="
 cat << 'EOF' > build/test_inc_fib.scm
 (define (fib n)
   (if (<= n 1)

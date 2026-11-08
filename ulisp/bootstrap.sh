@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ULISP_DIR="$ROOT_DIR/ulisp"
 BUILD_DIR="$ULISP_DIR/build"
 
-# Configuration Flags (Issue #776 & Issue #777)
+# Configuration Flags (Issue #776, Issue #777 & Issue #778)
 BOOTSTRAP_QUICK="${BOOTSTRAP_QUICK:-0}"
 BOOTSTRAP_RUN_TESTS="${BOOTSTRAP_RUN_TESTS:-0}"
 BOOTSTRAP_FAST="${BOOTSTRAP_FAST:-0}"
@@ -15,6 +15,7 @@ FULL_BOOTSTRAP="${FULL_BOOTSTRAP:-0}"
 BOOTSTRAP_FROM_ILISP="${BOOTSTRAP_FROM_ILISP:-0}"
 BOOTSTRAP_WITH_GOSH="${BOOTSTRAP_WITH_GOSH:-0}"
 BOOTSTRAP_SPLIT_LINK="${BOOTSTRAP_SPLIT_LINK:-1}"
+BOOTSTRAP_MODULAR="${BOOTSTRAP_MODULAR:-0}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -27,12 +28,19 @@ while [ $# -gt 0 ]; do
             BOOTSTRAP_QUICK=0
             shift
             ;;
+        --modular)
+            BOOTSTRAP_MODULAR=1
+            BOOTSTRAP_SPLIT_LINK=1
+            shift
+            ;;
         --split-link)
             BOOTSTRAP_SPLIT_LINK=1
+            BOOTSTRAP_MODULAR=0
             shift
             ;;
         --monolithic)
             BOOTSTRAP_SPLIT_LINK=0
+            BOOTSTRAP_MODULAR=0
             shift
             ;;
         --test)
@@ -60,6 +68,7 @@ while [ $# -gt 0 ]; do
             echo "Options:"
             echo "  --quick, -q, --stage1-only  Stop after Stage 1 smoke test (fast dev cycle)"
             echo "  --full                      Run full 3-stage bootstrap fixed-point verification"
+            echo "  --modular                   Run 5-module parallel incremental bootstrap (make -j)"
             echo "  --split-link                Bootstrap compiler_entry.scm linked with ulisp_stdlib.o (default)"
             echo "  --monolithic                Bootstrap monolithic ulisp_core.scm (stdlib + runtime + compiler)"
             echo "  --test                      Run post-bootstrap test suite (test_incremental)"
@@ -355,7 +364,12 @@ verify_and_promote() {
         exit 1
     fi
 
-    if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
+    if [ "${BOOTSTRAP_MODULAR:-0}" = "1" ]; then
+        mkdir -p "$ULISP_DIR/bin"
+        cp -f "$final_compiler" "$BUILD_DIR/ulisp-modular"
+        cp -f "$final_compiler" "$ULISP_DIR/bin/ulisp-modular"
+        chmod +x "$BUILD_DIR/ulisp-modular" "$ULISP_DIR/bin/ulisp-modular"
+    elif [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
         cp -f "$final_compiler" "$BUILD_DIR/ulisp-fast"
         chmod +x "$BUILD_DIR/ulisp-fast"
     fi
@@ -377,6 +391,41 @@ verify_and_promote() {
     fi
     exit 0
 }
+
+if [ "${BOOTSTRAP_MODULAR:-0}" = "1" ]; then
+    JOBS="$(nproc 2>/dev/null || echo 4)"
+    echo "=== [MODULAR PARALLEL BOOTSTRAP] Running 5-Module Parallel Compilation (make -j$JOBS) ==="
+    make -C "$ULISP_DIR" -j"$JOBS" build/meta/compiler_env.sbi build/ulisp_stdlib.o
+
+    echo "[1/3] Stage 1 (Modular): Parallel compiling 5 compiler modules using native seed..."
+    make -C "$ULISP_DIR" -j"$JOBS" build/stage1-modular
+
+    if [ "${BOOTSTRAP_QUICK:-0}" = "1" ]; then
+        echo -e "\033[1;36m=== [QUICK MODULAR BOOTSTRAP] Stage 1 built successfully. Skipping Stage 2 & 3 ===\033[0m"
+        verify_and_promote "$BUILD_DIR/stage1-modular" "Stage 1 (Modular)" 0
+        exit 0
+    fi
+
+    echo "[2/3] Stage 2 (Modular): Parallel compiling 5 compiler modules with Stage 1 modular compiler..."
+    make -C "$ULISP_DIR" -j"$JOBS" build/stage2-modular
+
+    echo "[3/3] Stage 3 (Modular): Parallel compiling 5 compiler modules with Stage 2 modular compiler..."
+    make -C "$ULISP_DIR" -j"$JOBS" build/stage3-modular
+
+    echo "=== Verifying Modular Fixed Point (stage2_*.s vs stage3_*.s across 5 modules) ==="
+    for mod in compiler_base frontend_passes lir_passes backend_passes compiler_driver; do
+        if ! cmp -s "$BUILD_DIR/stage2_${mod}.s" "$BUILD_DIR/stage3_${mod}.s"; then
+            echo -e "\033[1;31mFAILURE: Discrepancy in module: $mod\033[0m" >&2
+            diff -u "$BUILD_DIR/stage2_${mod}.s" "$BUILD_DIR/stage3_${mod}.s" | head -n 50
+            exit 1
+        fi
+        echo -e "  \033[1;32m[PASS]\033[0m Module fixed-point verified: ${mod} (stage2_${mod}.s == stage3_${mod}.s)"
+        cp -f "$BUILD_DIR/stage3_${mod}.s" "$BUILD_DIR/${mod}.s"
+        cp -f "$BUILD_DIR/stage3_${mod}.o" "$BUILD_DIR/${mod}.o"
+    done
+    echo -e "\033[1;32mSUCCESS: All 5 modular Stage 2 and Stage 3 outputs are bit-for-bit IDENTICAL!\033[0m"
+    verify_and_promote "$BUILD_DIR/stage3-modular" "Stage 3 (Modular)" 1
+fi
 
 if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ] && [ "$BUILD_DIR/scheme-stage1" -nt "$BOOTSTRAP_INPUT" ]; then
     echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."

@@ -1,4 +1,4 @@
-.PHONY: all test test_aot test_jit test_c test_aarch64 test_aarch64_env test_aarch64_qemu test_freestanding bootstrap bootstrap_quick quick bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
+.PHONY: all test test_aot test_jit test_c test_aarch64 test_aarch64_env test_aarch64_qemu test_freestanding bootstrap bootstrap_modular bootstrap_quick quick bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_r7rs_cond_expand test_r7rs_include_ci test_r7rs_bytevector_ports test_r7rs_time test_srfi_141_division test_srfi_111_boxes test_srfi_145_assume test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints
 
@@ -1142,7 +1142,7 @@ define COMPILE_SCM_TO_S
 endef
 
 # --- Modular 2-Split Static Linking Targets (Issue #607) ---
-build/ulisp_stdlib.s: compiler.scm stdlib_entry.scm $(ULISP_STD_LIBS)
+build/ulisp_stdlib.s: stdlib_entry.scm $(ULISP_STD_LIBS) | compiler.scm
 	@mkdir -p build
 	@echo "=== Compiling Standard Library Module (stdlib_entry.scm) ==="
 	@echo "(!gc none) (!module #t)" > build/stdlib_input.scm
@@ -1181,56 +1181,71 @@ test_split_link: build/ulisp-fast build/ulisp_stdlib.o
 	test "$$res" = "Hello from split-linked ULisp!579"
 	@echo "SUCCESS: 2-split static linking verification PASSED!"
 
-# --- Modular Separate Compilation & Incremental Build (Issue #608) ---
+# --- Modular Separate Compilation & Incremental Build (Issue #608 & Issue #778) ---
 build/meta/compiler_env.sbi: compiler/module_header.scm
 	@mkdir -p build/meta
 	cp $< $@
 
-build/compiler_base.s: $(COMPILER_BASE) build/meta/compiler_env.sbi
+build/compiler_base_in.scm: $(COMPILER_BASE) build/meta/compiler_env.sbi
+	@mkdir -p build
+	@echo "(!gc none) (!module-name compiler_base) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@cat $(COMPILER_BASE) >> $@
+
+build/compiler_base.s: build/compiler_base_in.scm build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling Compiler Base Module ==="
-	@echo "(!gc none) (!module-name compiler_base) (!import-sbi build/meta/compiler_env.sbi)" > build/compiler_base_in.scm
-	@cat $(COMPILER_BASE) >> build/compiler_base_in.scm
 	$(call COMPILE_SCM_TO_S,build/compiler_base_in.scm,$@)
 
 build/compiler_base.o: build/compiler_base.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-build/frontend_passes.s: $(FRONTEND_PASSES) build/meta/compiler_env.sbi
+build/frontend_passes_in.scm: $(FRONTEND_PASSES) build/meta/compiler_env.sbi
+	@mkdir -p build
+	@echo "(!gc none) (!module-name frontend_passes) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@cat $(FRONTEND_PASSES) >> $@
+
+build/frontend_passes.s: build/frontend_passes_in.scm build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling Frontend Passes Module ==="
-	@echo "(!gc none) (!module-name frontend_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/frontend_passes_in.scm
-	@cat $(FRONTEND_PASSES) >> build/frontend_passes_in.scm
 	$(call COMPILE_SCM_TO_S,build/frontend_passes_in.scm,$@)
 
 build/frontend_passes.o: build/frontend_passes.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-build/lir_passes.s: $(LIR_PASSES) build/meta/compiler_env.sbi
+build/lir_passes_in.scm: $(LIR_PASSES) build/meta/compiler_env.sbi
+	@mkdir -p build
+	@echo "(!gc none) (!module-name lir_passes) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@cat $(LIR_PASSES) >> $@
+
+build/lir_passes.s: build/lir_passes_in.scm build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling LIR Passes Module ==="
-	@echo "(!gc none) (!module-name lir_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/lir_passes_in.scm
-	@cat $(LIR_PASSES) >> build/lir_passes_in.scm
 	$(call COMPILE_SCM_TO_S,build/lir_passes_in.scm,$@)
 
 build/lir_passes.o: build/lir_passes.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-build/backend_passes.s: $(BACKEND_PASSES) build/meta/compiler_env.sbi
+build/backend_passes_in.scm: $(BACKEND_PASSES) build/meta/compiler_env.sbi
+	@mkdir -p build
+	@echo "(!gc none) (!module-name backend_passes) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@cat $(BACKEND_PASSES) >> $@
+
+build/backend_passes.s: build/backend_passes_in.scm build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling Backend Passes Module ==="
-	@echo "(!gc none) (!module-name backend_passes) (!import-sbi build/meta/compiler_env.sbi)" > build/backend_passes_in.scm
-	@cat $(BACKEND_PASSES) >> build/backend_passes_in.scm
 	$(call COMPILE_SCM_TO_S,build/backend_passes_in.scm,$@)
 
 build/backend_passes.o: build/backend_passes.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-build/compiler_driver.s: compiler/driver.scm build/meta/compiler_env.sbi
+build/compiler_driver_in.scm: compiler/driver.scm build/meta/compiler_env.sbi
+	@mkdir -p build
+	@echo "(!gc none) (!allow-extern #t) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@cat compiler/driver.scm >> $@
+
+build/compiler_driver.s: build/compiler_driver_in.scm build/meta/compiler_env.sbi
 	@mkdir -p build
 	@echo "=== Compiling Driver Module ==="
-	@echo "(!gc none) (!allow-extern #t) (!import-sbi build/meta/compiler_env.sbi)" > build/compiler_driver_in.scm
-	@cat compiler/driver.scm >> build/compiler_driver_in.scm
 	$(call COMPILE_SCM_TO_S,build/compiler_driver_in.scm,$@)
 
 build/compiler_driver.o: build/compiler_driver.s
@@ -1247,8 +1262,60 @@ build/ulisp-modular: $(MODULAR_COMPILER_OBJS)
 	@mkdir -p build bin
 	@echo "=== Statically Linking Modular ULisp Binary ($@) ==="
 	$(LD) $(LDFLAGS) $^ -o $@
-	cp $@ bin/ulisp-modular
-	cp $@ bin/ulisp-modular
+	cp -f $@ bin/ulisp-modular
+
+# --- Stage-Specific Modular Parallel Bootstrap Targets (Issue #778) ---
+MODULAR_MODULES = compiler_base frontend_passes lir_passes backend_passes compiler_driver
+
+STAGE1_MOD_ASM  = $(patsubst %,build/stage1_%.s,$(MODULAR_MODULES))
+STAGE1_MOD_OBJS = $(patsubst %,build/stage1_%.o,$(MODULAR_MODULES))
+
+STAGE2_MOD_ASM  = $(patsubst %,build/stage2_%.s,$(MODULAR_MODULES))
+STAGE2_MOD_OBJS = $(patsubst %,build/stage2_%.o,$(MODULAR_MODULES))
+
+STAGE3_MOD_ASM  = $(patsubst %,build/stage3_%.s,$(MODULAR_MODULES))
+STAGE3_MOD_OBJS = $(patsubst %,build/stage3_%.o,$(MODULAR_MODULES))
+
+.SECONDARY: $(STAGE1_MOD_ASM) $(STAGE1_MOD_OBJS) $(STAGE2_MOD_ASM) $(STAGE2_MOD_OBJS) $(STAGE3_MOD_ASM) $(STAGE3_MOD_OBJS)
+
+build/stage1_%.s: build/%_in.scm build/meta/compiler_env.sbi
+	@mkdir -p build
+	@echo "=== [Stage 1 Modular] Compiling $* ==="
+	$(call COMPILE_SCM_TO_S,$<,$@)
+
+build/stage1_%.o: build/stage1_%.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/stage1-modular: build/ulisp_stdlib.o $(STAGE1_MOD_OBJS)
+	@mkdir -p build
+	@echo "=== [Stage 1 Modular] Linking $@ ==="
+	$(LD) $(LDFLAGS) $^ -o $@
+
+build/stage2_%.s: build/%_in.scm build/stage1-modular build/meta/compiler_env.sbi
+	@mkdir -p build
+	@echo "=== [Stage 2 Modular] Compiling $* ==="
+	env ULISP_GC_PROFILE=compiler ./build/stage1-modular < $< > $@
+
+build/stage2_%.o: build/stage2_%.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/stage2-modular: build/ulisp_stdlib.o $(STAGE2_MOD_OBJS)
+	@mkdir -p build
+	@echo "=== [Stage 2 Modular] Linking $@ ==="
+	$(LD) $(LDFLAGS) $^ -o $@
+
+build/stage3_%.s: build/%_in.scm build/stage2-modular build/meta/compiler_env.sbi
+	@mkdir -p build
+	@echo "=== [Stage 3 Modular] Compiling $* ==="
+	env ULISP_GC_PROFILE=compiler ./build/stage2-modular < $< > $@
+
+build/stage3_%.o: build/stage3_%.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/stage3-modular: build/ulisp_stdlib.o $(STAGE3_MOD_OBJS)
+	@mkdir -p build
+	@echo "=== [Stage 3 Modular] Linking $@ ==="
+	$(LD) $(LDFLAGS) $^ -o $@
 
 test_incremental: build/ulisp-modular
 	@bash tests/test_incremental_build.sh
@@ -1256,6 +1323,9 @@ test_incremental: build/ulisp-modular
 
 bootstrap:
 	./bootstrap.sh
+
+bootstrap_modular:
+	./bootstrap.sh --modular
 
 bootstrap_quick quick:
 	./bootstrap.sh --quick
