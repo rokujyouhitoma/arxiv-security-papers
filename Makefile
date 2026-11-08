@@ -94,9 +94,9 @@ static_analysis: radon-cc radon-raw radon-mi radon-hal xenon mypy py_compile ## 
 
 .PHONY: py_compile
 py_compile: activate ## py_compile syntax check for all python sources
-	@for py in $(PYTHON_SRCS); do \
-		${VENV_PYTHON} -m py_compile $$py || exit 1; \
-	done
+	@if [ -n "$(PYTHON_SRCS)" ]; then \
+		${VENV_PYTHON} -m compileall -q -j 0 $(PYTHON_SRCS); \
+	fi
 
 .PHONY: compile_grammars
 compile_grammars: activate ## Compile .peg grammar specifications to standalone Python parsers
