@@ -267,6 +267,71 @@
               (memq 'pass-synapse-inject-safepoints clean-ids))
 
 ;;; -----------------------------------------------------------------------
+;;; Group 7: Default Registry Integration & Automatic Safepoint Injection (#790)
+;;; -----------------------------------------------------------------------
+
+(newline)
+(display "--- Group 7: Default Registry Integration & Pipeline Hook (#790) ---\n")
+
+;; Re-register hook and re-initialize default pass registry
+(register-pass-registry-init-hook! inject-synapse-safepoints-pass!)
+(init-default-pass-registry!)
+
+(define def-pipeline (build-pipeline 0 '()))
+(define def-ids (map pass-id def-pipeline))
+
+(assert-true "7.1 pass-synapse-inject-safepoints automatically registered in default registry"
+             (memq 'pass-synapse-inject-safepoints def-ids))
+
+(assert-true "7.2 default pipeline satisfies DAG prerequisites without Synapse FBIP"
+             (validate-pipeline-prerequisites def-pipeline))
+
+;; Test dynamic pass disabling via pass manager
+(disable-pass! 'pass-synapse-inject-safepoints)
+(define disabled-pipe (build-pipeline 0 (pipeline-disabled-passes)))
+(define disabled-ids (map pass-id disabled-pipe))
+
+(assert-false "7.3 pass-synapse-inject-safepoints excluded when disabled"
+              (memq 'pass-synapse-inject-safepoints disabled-ids))
+
+;; Re-enable pass
+(enable-pass! 'pass-synapse-inject-safepoints)
+(define reenabled-pipe (build-pipeline 0 (pipeline-disabled-passes)))
+(define reenabled-ids (map pass-id reenabled-pipe))
+
+(assert-true "7.4 pass-synapse-inject-safepoints restored when enabled"
+             (memq 'pass-synapse-inject-safepoints reenabled-ids))
+
+;; Test AST transformation via inject-safepoints-pass on pure Scheme forms
+(define test-pure-forms
+  (list
+    '(define (compute-sum n)
+       (let loop ((i 0) (acc 0))
+         (if (< i n)
+             (loop (+ i 1) (+ acc i))
+             acc)))))
+
+(define transformed-pure-forms (inject-safepoints-pass test-pure-forms))
+(define trans-def (car transformed-pure-forms))
+
+;; Check prologue in define
+(assert-true "7.5 define form received automatic prologue safepoint"
+             (and (eq? (car trans-def) 'define)
+                  (pair? (cddr trans-def))
+                  (safepoint-poll-form? (caddr trans-def))))
+
+;; Check loop entry and backedge in named-let
+(define trans-let (cadddr trans-def))
+(assert-true "7.6 named-let received automatic entry safepoint"
+             (and (eq? (car trans-let) 'let)
+                  (eq? (cadr trans-let) 'loop)
+                  (safepoint-poll-form? (cadddr trans-let))))
+
+;; Clean up pass from manager
+(remove-synapse-safepoints-pass!)
+
+
+;;; -----------------------------------------------------------------------
 ;;; Test Summary
 ;;; -----------------------------------------------------------------------
 

@@ -38,6 +38,32 @@
 (define (reset-pass-registry!)
   (set-car! *pass-registry* '()))
 
+;;; -----------------------------------------------------------------------
+;;; Pass Registry Initialization Hooks (Pluggable Extensions Integration)
+;;; -----------------------------------------------------------------------
+(define *pass-registry-init-hooks* (cons '() '()))
+
+(define (pass-registry-init-hooks)
+  (car *pass-registry-init-hooks*))
+
+(define (register-pass-registry-init-hook! hook-fn)
+  (let ((hooks (car *pass-registry-init-hooks*)))
+    (if (not (memq hook-fn hooks))
+        (set-car! *pass-registry-init-hooks* (append hooks (list hook-fn))))))
+
+(define (unregister-pass-registry-init-hook! hook-fn)
+  (let loop ((hooks (car *pass-registry-init-hooks*)) (acc '()))
+    (cond
+      ((null? hooks)
+       (set-car! *pass-registry-init-hooks* (reverse acc)))
+      ((eq? (car hooks) hook-fn)
+       (loop (cdr hooks) acc))
+      (else
+       (loop (cdr hooks) (cons (car hooks) acc))))))
+
+(define (reset-pass-registry-init-hooks!)
+  (set-car! *pass-registry-init-hooks* '()))
+
 (define (register-pass! descriptor)
   (let* ((id (pass-id descriptor))
          (current (car *pass-registry*))
@@ -557,4 +583,10 @@
   (register-pass!
     (make-pass-descriptor 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
       (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_raw 'L_lir_canonical '(pass-130-lir) #f))
+  ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)
+  (let loop ((hooks (car *pass-registry-init-hooks*)))
+    (if (not (null? hooks))
+        (begin
+          ((car hooks))
+          (loop (cdr hooks)))))
   #t)

@@ -444,6 +444,42 @@
     (assert-equal (car res) 'terminated "boundary returned 'terminated from Layer 1 safepoint escape")))
 
 ;; -----------------------------------------------------------------------
+;; Group 10: Automatic Safepoint Injection into Pure Scheme Loops (#790)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 10: Automatic Safepoint Preemption & Forced Exit (#790) ---\n")
+
+;; 1. Out-of-band termination signal handled at loop entry/backedge safepoint
+(let* ((t-killer2 (make-task-context))
+       (t-worker2 (make-task-context))
+       (worker-arena2 (make-task-arena 2048))
+       (auto-worker-iters (vector 0)))
+  (task-set-arena! t-worker2 worker-arena2)
+  (task-link! t-killer2 t-worker2)
+
+  ;; Loop structured exactly as transformed by pass-synapse-inject-safepoints:
+  ;; prologue safepoint at loop entry and backedge safepoint before recursive call.
+  (let ((res (with-synapse-task-boundary t-worker2
+               (lambda ()
+                 (let loop ((count 0))
+                   (%synapse-safepoint-poll!)
+                   (if (< count 100)
+                       (begin
+                         (vector-set! auto-worker-iters 0 (+ (vector-ref auto-worker-iters 0) 1))
+                         (if (= count 4)
+                             (task-handle-termination! t-killer2 'peer_fault)
+                             #f)
+                         (begin
+                           (%synapse-safepoint-poll!)
+                           (loop (+ count 1))))
+                       'completed-100))))))
+    (assert-equal (task-state t-worker2) 'terminated "worker state transitioned to 'terminated via injected safepoint")
+    (assert-equal (task-reductions t-worker2) 0 "worker reductions zeroed upon termination")
+    (assert-equal (vector-ref auto-worker-iters 0) 5 "loop stopped immediately on iteration 5 (not 100)")
+    (assert-equal (car res) 'terminated "task boundary caught safepoint termination exit")))
+
+
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")
