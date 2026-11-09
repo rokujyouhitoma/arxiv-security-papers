@@ -2,7 +2,8 @@
 ID: 792
 種別: Bug
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
+完了日: 2026-11-09
 ---
 
 # [BUG/SEC] Affine 検査における変数名ヒント強制判定の廃止と関数シグネチャ・戻り値型伝播の導入 (ID: 792)
@@ -157,9 +158,9 @@ Target Branch: `fix/792-affine-check-signature-based-type-inference`
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] `(let ((result (compute))) (+ result result))` 等、`result` や `response` を複数回参照するコードで Use-After-Move エラーが発生しないこと。
-- [ ] 非線形変数 `result` / `response` に対して不要な `%affine-drop!` が注入されないこと。
-- [ ] 既知コンストラクタまたはシグネチャ付き関数の戻り値を受け取る任意名の変数（`c` など）に対し、二重消費検出（Use-After-Move）と未消費 RAII Drop 注入が正しく動作すること。
-- [ ] `linear-variable-name-hint?` の `"res"` が `"resource"` に正規化され、既存のテスト（Group 1〜8）に一切の回帰がないこと。
-- [ ] `make -C ulisp test_pass_check_affine` が 100% PASS すること（テストケース追加後も全件合格）。
-- [ ] `make -C ulisp test_passes` および `make verify_quality` が 100% PASS すること。
+- [x] `(let ((result (compute))) (+ result result))` 等、`result` や `response` を複数回参照するコードで Use-After-Move エラーが発生しないこと。
+- [x] 非線形変数 `result` / `response` に対して不要な `%affine-drop!` が注入されないこと。
+- [x] 既知コンストラクタまたはシグネチャ付き関数の戻り値を受け取る任意名の変数（`c` など）に対し、二重消費検出（Use-After-Move）と未消費 RAII Drop 注入が正しく動作すること。
+- [x] `linear-variable-name-hint?` の `"res"` が `"resource"` に正規化され、既存のテスト（Group 1〜8）に一切の回帰がないこと。
+- [x] `make -C ulisp test_pass_check_affine` が 100% PASS すること（テストケース追加後も全件合格）。
+- [x] `make -C ulisp test_passes` および `make verify_quality` が 100% PASS すること。

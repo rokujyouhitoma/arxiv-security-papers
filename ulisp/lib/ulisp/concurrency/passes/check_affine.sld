@@ -12,10 +12,19 @@
     check-affine-expr
     linear-variable?
     linear-variable-name-hint?
+    linear-type?
     linear-constructor-op?
     linear-constructor-expr?
     infer-linear-binding?
     affine-forbidden-syntax?
+
+    ;; Signatures & Return Type Propagation (Issue #792)
+    *default-affine-signatures*
+    register-affine-signature!
+    reset-affine-signatures!
+    lookup-affine-signature
+    scan-form-signatures
+    infer-expr-linear-return-type
 
     ;; Environment Operations
     lin-env-lookup
