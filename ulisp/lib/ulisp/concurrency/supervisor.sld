@@ -38,6 +38,7 @@
     supervisor-children
     supervisor-restart-history
     supervisor-state
+    supervisor-enqueued-state
     supervisor-parent
     make-supervisor
 

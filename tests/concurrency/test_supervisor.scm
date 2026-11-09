@@ -893,6 +893,190 @@
   (assert-eq (task-state (supervisor-task parent-sup)) 'terminated "parent supervisor terminated after explicit stop"))
 
 ;; -----------------------------------------------------------------------
+;; Group 16: Coalesced Supervisor Spawning & Multi-Child Crash Isolation (Issue #789)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 16: Coalesced Supervisor Spawning & Multi-Child Crash Isolation (#789) ---\n")
+(flush-output-port)
+
+;; 16.1 supervisor-enqueued-state API & Security Guards (CWE-843)
+(let* ((spec (make-supervisor-spec 'one_for_one 5 1000 '()))
+       (sup (make-supervisor spec)))
+  (assert-eq (supervisor-enqueued-state sup) 'idle "initial supervisor enqueued state is 'idle (#789)")
+  (supervisor-start! sup)
+  (assert-eq (supervisor-enqueued-state sup) 'idle "running supervisor with empty mailbox is 'idle")
+  (supervisor-stop! sup)
+  (assert-eq (supervisor-enqueued-state sup) 'idle "stopped supervisor is 'idle"))
+
+(assert-true (guard (exn (else #t)) (supervisor-enqueued-state 'not-a-sup) #f)
+             "supervisor-enqueued-state rejects non-supervisor (CWE-843)")
+
+;; 16.2 4-State Actor Machine Transitions (idle -> scheduled -> running -> running_notified -> idle)
+(let* ((sched (make-work-stealing-scheduler 2 256))
+       (spec (make-supervisor-spec 'one_for_one 5 1000 '()))
+       (sup (make-supervisor spec #f sched))
+       (sup-task (supervisor-task sup)))
+  (supervisor-start! sup sched #f)
+  (assert-eq (supervisor-enqueued-state sup) 'idle "initial state is 'idle")
+
+  ;; Schedule actor: transition 'idle -> 'scheduled
+  (assert-true (%supervisor-schedule-actor! sup sup-task) "%supervisor-schedule-actor! returns #t")
+  (assert-eq (supervisor-enqueued-state sup) 'scheduled "state transitioned to 'scheduled")
+  (assert-eq (task-state sup-task) 'ready "sup-task is 'ready")
+
+  ;; Second schedule attempt while already 'scheduled must be coalesced (no duplicate spawn)
+  (let ((sched-spawned-before (scheduler-tasks-spawned sched)))
+    (assert-true (%supervisor-schedule-actor! sup sup-task) "second schedule returns #t (coalesced)")
+    (assert-eq (supervisor-enqueued-state sup) 'scheduled "state remains 'scheduled (no duplicate)")
+    (assert-eq (scheduler-tasks-spawned sched) sched-spawned-before "no additional task spawned into scheduler (#789)"))
+
+  ;; Worker pops and starts executing: drain loop sets state to 'running
+  (let ((res (%supervisor-drain-loop! sup)))
+    ;; Drain loop completes and transitions back to 'idle
+    (assert-eq (supervisor-enqueued-state sup) 'idle "state returned to 'idle after drain"))
+
+  ;; Test 'running -> 'running_notified transition
+  (let ((box (%supervisor-enqueued-box sup)))
+    (atomic-set! box 'running)
+    (assert-eq (supervisor-enqueued-state sup) 'running "manually set to 'running")
+    (assert-true (%supervisor-schedule-actor! sup sup-task) "schedule while running returns #t")
+    (assert-eq (supervisor-enqueued-state sup) 'running_notified "state transitioned to 'running_notified (#789)")
+    ;; Additional notification while already 'running_notified remains 'running_notified
+    (assert-true (%supervisor-schedule-actor! sup sup-task) "repeated notification while running_notified returns #t")
+    (assert-eq (supervisor-enqueued-state sup) 'running_notified "state remains 'running_notified (#789)")
+    ;; Reset to idle
+    (atomic-set! box 'idle))
+
+  (supervisor-stop! sup))
+
+;; 16.3 Multi-Child Simultaneous Crash: Coalesced Scheduling & Full Recovery
+(let* ((sched (make-work-stealing-scheduler 2 256))
+       (b0 (make-atomic-box 0))
+       (b1 (make-atomic-box 0))
+       (b2 (make-atomic-box 0))
+       (b3 (make-atomic-box 0))
+       (b4 (make-atomic-box 0))
+       (b5 (make-atomic-box 0))
+       (make-worker (lambda (name b)
+                      (make-child-spec name
+                                       (lambda ()
+                                         (atomic-fetch-add! b 1)
+                                         (let ((t (make-task-context)))
+                                           (task-resident-set! t #t)
+                                           t))
+                                       'permanent)))
+       (w0-spec (make-worker 'w0 b0))
+       (w1-spec (make-worker 'w1 b1))
+       (w2-spec (make-worker 'w2 b2))
+       (w3-spec (make-worker 'w3 b3))
+       (w4-spec (make-worker 'w4 b4))
+       (w5-spec (make-worker 'w5 b5))
+       (sup-spec (make-supervisor-spec 'one_for_one 20 1000 (list w0-spec w1-spec w2-spec w3-spec w4-spec w5-spec)))
+       (sup (make-supervisor sup-spec #f sched))
+       (sup-task (supervisor-task sup)))
+
+  (supervisor-start! sup sched #t)
+
+  ;; Verify all 6 workers booted once
+  (assert-eq (atomic-ref b0) 1 "w0 booted initially")
+  (assert-eq (atomic-ref b1) 1 "w1 booted initially")
+  (assert-eq (atomic-ref b2) 1 "w2 booted initially")
+  (assert-eq (atomic-ref b3) 1 "w3 booted initially")
+  (assert-eq (atomic-ref b4) 1 "w4 booted initially")
+  (assert-eq (atomic-ref b5) 1 "w5 booted initially")
+
+  (let ((t0 (supervisor-child-task sup 'w0))
+        (t1 (supervisor-child-task sup 'w1))
+        (t2 (supervisor-child-task sup 'w2))
+        (t3 (supervisor-child-task sup 'w3))
+        (t4 (supervisor-child-task sup 'w4))
+        (t5 (supervisor-child-task sup 'w5)))
+
+    (let ((tid0 (task-tid t0))
+          (tid1 (task-tid t1))
+          (tid2 (task-tid t2))
+          (tid3 (task-tid t3))
+          (tid4 (task-tid t4))
+          (tid5 (task-tid t5)))
+
+      ;; SIMULTANEOUS BURST CRASH: all 6 children terminate concurrently!
+      (task-exit! t0 '(panic . simultaneous_crash_0))
+      (task-exit! t1 '(panic . simultaneous_crash_1))
+      (task-exit! t2 '(panic . simultaneous_crash_2))
+      (task-exit! t3 '(panic . simultaneous_crash_3))
+      (task-exit! t4 '(panic . simultaneous_crash_4))
+      (task-exit! t5 '(panic . simultaneous_crash_5))
+
+      ;; Because of Coalesced Scheduling (#789):
+      ;; sup-task was enqueued into sched ONCE, not 6 times!
+      (assert-true (or (eq? (supervisor-enqueued-state sup) 'scheduled)
+                       (eq? (supervisor-enqueued-state sup) 'running)
+                       (eq? (supervisor-enqueued-state sup) 'running_notified))
+                   "supervisor task is scheduled or running")
+
+      ;; Execute tasks through the scheduler to drain all notifications and perform restarts
+      (scheduler-run! sched 30)
+
+      ;; Verify all 6 workers restarted cleanly (boot count = 2)
+      (assert-eq (atomic-ref b0) 2 "w0 restarted after burst crash")
+      (assert-eq (atomic-ref b1) 2 "w1 restarted after burst crash")
+      (assert-eq (atomic-ref b2) 2 "w2 restarted after burst crash")
+      (assert-eq (atomic-ref b3) 2 "w3 restarted after burst crash")
+      (assert-eq (atomic-ref b4) 2 "w4 restarted after burst crash")
+      (assert-eq (atomic-ref b5) 2 "w5 restarted after burst crash")
+
+      ;; Verify each child has a new, fresh TID
+      (assert-true (not (= (task-tid (supervisor-child-task sup 'w0)) tid0)) "w0 assigned fresh TID")
+      (assert-true (not (= (task-tid (supervisor-child-task sup 'w1)) tid1)) "w1 assigned fresh TID")
+      (assert-true (not (= (task-tid (supervisor-child-task sup 'w2)) tid2)) "w2 assigned fresh TID")
+      (assert-true (not (= (task-tid (supervisor-child-task sup 'w3)) tid3)) "w3 assigned fresh TID")
+      (assert-true (not (= (task-tid (supervisor-child-task sup 'w4)) tid4)) "w4 assigned fresh TID")
+      (assert-true (not (= (task-tid (supervisor-child-task sup 'w5)) tid5)) "w5 assigned fresh TID")
+
+      ;; Verify supervisor task state is 'waiting and enqueued state is 'idle
+      (assert-eq (task-state sup-task) 'waiting "supervisor task returned to 'waiting")
+      (assert-eq (supervisor-enqueued-state sup) 'idle "supervisor enqueued state returned to 'idle (#789)")))
+
+  (supervisor-stop! sup))
+
+;; 16.4 Multi-Worker Work-Stealing Crash Isolation (4 Workers, CWE-362 / CWE-662)
+(let* ((sched (make-work-stealing-scheduler 4 256))
+       (restarts (make-atomic-box 0))
+       (make-spec (lambda (name)
+                    (make-child-spec name
+                                     (lambda ()
+                                       (atomic-fetch-add! restarts 1)
+                                       (let ((t (make-task-context)))
+                                         (task-resident-set! t #t)
+                                         t))
+                                     'permanent)))
+       (cspecs (list (make-spec 'c0) (make-spec 'c1) (make-spec 'c2) (make-spec 'c3)
+                     (make-spec 'c4) (make-spec 'c5) (make-spec 'c6) (make-spec 'c7)))
+       (sup-spec (make-supervisor-spec 'one_for_one 30 1000 cspecs))
+       (sup (make-supervisor sup-spec #f sched))
+       (sup-task (supervisor-task sup)))
+
+  (supervisor-start! sup sched #t)
+  (assert-eq (atomic-ref restarts) 8 "all 8 workers booted initially")
+
+  ;; Crash all 8 workers in rapid succession
+  (let loop ((names '(c0 c1 c2 c3 c4 c5 c6 c7)))
+    (if (not (null? names))
+        (let ((ctask (supervisor-child-task sup (car names))))
+          (task-exit! ctask '(panic . burst_crash))
+          (loop (cdr names)))))
+
+  ;; Drain scheduler with 4 workers
+  (scheduler-run! sched 40)
+
+  ;; Verify exactly 8 restarts occurred (total 16 boots)
+  (assert-eq (atomic-ref restarts) 16 "all 8 workers restarted exactly once under 4-worker scheduler (#789)")
+  (assert-eq (supervisor-enqueued-state sup) 'idle "supervisor enqueued state is 'idle after multi-worker drain")
+  (assert-eq (task-state sup-task) 'waiting "supervisor task state is 'waiting")
+
+  (supervisor-stop! sup)
+  (assert-eq (supervisor-enqueued-state sup) 'idle "stopped supervisor remains 'idle"))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 

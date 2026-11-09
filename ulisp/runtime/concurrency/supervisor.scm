@@ -121,7 +121,8 @@
 (define-record-type <supervisor-context>
   (%make-supervisor-context spec sup-task children-box restart-history-box parent-sup
                             state-box scheduler-box processing-box
-                            preserved-inbox-box message-handler-box)
+                            preserved-inbox-box message-handler-box
+                            enqueued-box)
   supervisor-context?
   (spec                 supervisor-spec)
   (sup-task             supervisor-task)
@@ -132,7 +133,13 @@
   (scheduler-box        %supervisor-scheduler-box)
   (processing-box       %supervisor-processing-box)
   (preserved-inbox-box  %supervisor-preserved-inbox-box)
-  (message-handler-box  %supervisor-message-handler-box))
+  (message-handler-box  %supervisor-message-handler-box)
+  (enqueued-box         %supervisor-enqueued-box))
+
+(define (supervisor-enqueued-state sup)
+  (if (not (supervisor-context? sup))
+      (error "supervisor-enqueued-state: expected <supervisor-context> (CWE-843)" sup)
+      (atomic-ref (%supervisor-enqueued-box sup))))
 
 (define (supervisor-preserved-messages sup)
   (if (not (supervisor-context? sup))
@@ -380,18 +387,15 @@
                                                (make-atomic-box sched)
                                                (make-atomic-box #f)
                                                (make-atomic-box (list))
-                                               (make-atomic-box #f))))
+                                               (make-atomic-box #f)
+                                               (make-atomic-box 'idle))))
            ;; Mark sup-task as a resident actor task (Issue #788)
            (task-resident-set! sup-task #t)
-           ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7, #743)
+           ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7, #743, #789)
            (task-next-run-set!
             sup-task
             (lambda ()
-              (let ((res (supervisor-poll-down-signals! sup)))
-                (if (and (eq? (supervisor-state sup) 'running)
-                         (task-has-handoff? sup-task))
-                    (task-state-set! sup-task 'ready))
-                res)))
+              (%supervisor-drain-loop! sup)))
            sup)))))
 
 (define supervisor-start!
@@ -434,6 +438,7 @@
          (error "supervisor-stop!: expected <supervisor-context> (CWE-843)" sup)
          (let ((sup-task (supervisor-task sup)))
            (task-resident-set! sup-task #f)
+           (atomic-set! (%supervisor-enqueued-box sup) 'idle)
            (atomic-set! (%supervisor-state-box sup) 'stopping)
            (%unregister-active-supervisor! sup-task)
            (let ((children (atomic-swap! (%supervisor-children-box sup) (list))))
@@ -697,7 +702,60 @@
                                   (%supervisor-preserve-message! sup msg))
                               (drain-loop res))))))))))))))
 
-;; Connect monitor DOWN notifications to active supervisor tasks automatically (Issue #727, Item C7, #743)
+;; -----------------------------------------------------------------------
+;; Coalesced Actor Scheduling & Drain Loop (Issue #789)
+;; -----------------------------------------------------------------------
+
+(define (%supervisor-schedule-actor! sup sup-task)
+  (let ((box (%supervisor-enqueued-box sup)))
+    (let retry ()
+      (let ((cur (atomic-ref box)))
+        (cond
+          ;; Case 1: Idle -> transition to 'scheduled and enqueue once
+          ((eq? cur 'idle)
+           (if (atomic-cas! box 'idle 'scheduled)
+               (begin
+                 (task-state-set! sup-task 'ready)
+                 (%supervisor-enqueue-child! sup sup-task)
+                 #t)
+               (retry)))
+          ;; Case 2: Already scheduled in runqueue -> coalesced, nothing to do
+          ((eq? cur 'scheduled)
+           #t)
+          ;; Case 3: Currently running on a worker -> mark 'running_notified so worker loops
+          ((eq? cur 'running)
+           (if (atomic-cas! box 'running 'running_notified)
+               #t
+               (retry)))
+          ;; Case 4: Already running and marked notified -> nothing to do
+          ((eq? cur 'running_notified)
+           #t)
+          (else #f))))))
+
+(define (%supervisor-drain-loop! sup)
+  (let ((box (%supervisor-enqueued-box sup))
+        (sup-task (supervisor-task sup)))
+    ;; Transition to 'running (from 'scheduled in actor mode, or 'idle in direct mode)
+    (atomic-set! box 'running)
+    (let loop ((last-res #f))
+      (let ((res (supervisor-poll-down-signals! sup)))
+        (let check-next ()
+          (let ((cur (atomic-ref box)))
+            (cond
+              ;; If new signals arrived while we were polling:
+              ((eq? cur 'running_notified)
+               (atomic-set! box 'running)
+               (loop res))
+              ;; If no new signals were notified, try to return to 'idle:
+              ((eq? cur 'running)
+               (if (task-has-handoff? sup-task)
+                   (loop res)
+                   (if (atomic-cas! box 'running 'idle)
+                       res
+                       (check-next))))
+              (else res))))))))
+
+;; Connect monitor DOWN notifications to active supervisor tasks automatically (Issue #727, Item C7, #743, #789)
 (guard (exn (else #f))
   (if (procedure? set-monitor-down-dispatch-hook!)
       (set-monitor-down-dispatch-hook!
@@ -706,10 +764,8 @@
            (if (and sup (eq? (supervisor-state sup) 'running))
                (let ((sched (supervisor-scheduler sup)))
                  (if (and sched (procedure? scheduler-spawn!) (scheduler-running? sched))
-                     ;; Actor mode: wake up supervisor task and enqueue to scheduler
-                     (begin
-                       (task-state-set! obs-task 'ready)
-                       (%supervisor-enqueue-child! sup obs-task))
+                     ;; Actor mode: wake up supervisor task and enqueue to scheduler with coalescing (#789)
+                     (%supervisor-schedule-actor! sup obs-task)
                      ;; Direct fallback mode (e.g. single-threaded tests): drain via serialized Work-Draining loop
                      (let ((runner (task-next-run obs-task)))
                        (if (procedure? runner)

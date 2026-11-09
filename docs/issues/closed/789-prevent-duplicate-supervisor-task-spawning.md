@@ -2,7 +2,7 @@
 ID: 789
 種別: Bug
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [BUG/SEC] 複数子タスク同時終了時における同一 Supervisor タスクの重複投入 (scheduler-spawn!) 抑止 (ID: 789)
@@ -34,9 +34,9 @@ Supervisor のタスクは受信メールボックス内のメッセージを順
 ---
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [supervisor.scm](../../ulisp/runtime/concurrency/supervisor.scm) — `<supervisor-context>` への `enqueued-box` 追加、4状態アクター遷移機構（`idle`, `scheduled`, `running`, `running_notified`）および Coalesced スケジューリングの実装
-- [ ] [supervisor.sld](../../ulisp/lib/ulisp/concurrency/supervisor.sld) — `supervisor-enqueued-state` の export
-- [ ] [test_supervisor.scm](../../tests/concurrency/test_supervisor.scm) — Group 16: Coalesced Supervisor Spawning & Multi-Child Simultaneous Crash Isolation テストの追加
+- [x] [supervisor.scm](../../ulisp/runtime/concurrency/supervisor.scm) — `<supervisor-context>` への `enqueued-box` 追加、4状態アクター遷移機構（`idle`, `scheduled`, `running`, `running_notified`）および Coalesced スケジューリングの実装
+- [x] [supervisor.sld](../../ulisp/lib/ulisp/concurrency/supervisor.sld) — `supervisor-enqueued-state` の export
+- [x] [test_supervisor.scm](../../tests/concurrency/test_supervisor.scm) — Group 16: Coalesced Supervisor Spawning & Multi-Child Simultaneous Crash Isolation テストの追加
 
 ---
 
@@ -210,9 +210,19 @@ Target Branch: `fix/789-supervisor-task-coalesced-spawn`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] 複数の子が同時に終了しても同一 Supervisor タスクが同時に 2 つ以上の worker で実行されないこと。
-- [ ] すべての DOWN シグナルが取りこぼしなくドレインされ、全滅した子が規定のポリシー通り 100% 確実に再起動されること。
-- [ ] `supervisor-enqueued-state` が `idle`, `scheduled`, `running`, `running_notified` を正確に遷移すること。
-- [ ] マルチスレッドストレステストにおいてタスクコンテキスト破壊（CWE-362 / CWE-662）が 0 件であること。
-- [ ] `make test_supervisor` および全並行性回帰テスト（`test_scheduler`, `test_multithread_scheduler` 等）が 100% PASS すること。
-- [ ] 相対パス規則および Python 構文・リンターエラー 0 件が保証されていること。
+- [x] 複数の子が同時に終了しても同一 Supervisor タスクが同時に 2 つ以上の worker で実行されないこと。
+- [x] すべての DOWN シグナルが取りこぼしなくドレインされ、全滅した子が規定のポリシー通り 100% 確実に再起動されること。
+- [x] `supervisor-enqueued-state` が `idle`, `scheduled`, `running`, `running_notified` を正確に遷移すること。
+- [x] マルチスレッドストレステストにおいてタスクコンテキスト破壊（CWE-362 / CWE-662）が 0 件であること。
+- [x] `make test_supervisor` および全並行性回帰テスト（`test_scheduler`, `test_multithread_scheduler` 等）が 100% PASS すること。
+- [x] 相対パス規則および Python 構文・リンターエラー 0 件が保証されていること。
+
+---
+
+## 7. 検証結果 / Verification Results
+- `make test_supervisor`: 182 passed, 0 failed (Group 16 新設: 16.1〜16.4 全パス)
+- `make test_scheduler`: 167 passed, 0 failed
+- `make test_multithread_scheduler`: 55 passed, 0 failed
+- `make test_context_switch`: 89 passed, 0 failed
+- `make test_let_it_crash`: 113 passed, 0 failed
+- `make py_compile`: 0 errors / 警告なし
