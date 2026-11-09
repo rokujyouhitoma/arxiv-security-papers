@@ -13,6 +13,7 @@
     *context-stack-align*
     *context-tcb-header-size*
     *context-frame-size*
+    context-frame-size
     *context-stack-canary*
 
     ;; <task-stack> Record & Stack Management

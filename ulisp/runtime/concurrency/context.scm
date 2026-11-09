@@ -17,8 +17,12 @@
 (define *context-max-stack-size* 65536)       ; 64KB maximum micro-stack size
 (define *context-stack-align* 16)             ; System V AMD64 16-byte stack alignment
 (define *context-tcb-header-size* 64)         ; 64-byte TCB header at stack top
-(define *context-frame-size* 64)              ; 64-byte initial swap_context frame (8 slots)
+(define *context-frame-size* 64)              ; 64-byte initial swap_context frame (8 slots on x86-64)
 (define *context-stack-canary* 21130214873854) ; 0x1337BEEFCAFE (45-bit fixnum-safe canary)
+
+(define (context-frame-size)
+  (let ((sz (%asm-get-trampoline-addr 7)))
+    (if (> sz 0) sz 64)))
 
 ;; -----------------------------------------------------------------------
 ;; 2. Low-Level Assembly Entrypoint Stubs (Overridden by context.s)
@@ -112,7 +116,8 @@
            (if (<= base 0)
                (error "make-task-stack: sys-mmap failed" aligned-size)
                (let* ((top (%context-align-down (+ base aligned-size) *context-stack-align*))
-                      (init-sp (- top (+ *context-tcb-header-size* *context-frame-size*))))
+                      (frame-sz (context-frame-size))
+                      (init-sp (- top (+ *context-tcb-header-size* frame-sz))))
                  ;; Write bottom and top stack overflow canaries
                  (%context-raw-u64-set! base 0 *context-stack-canary*)
                  (%context-raw-u64-set! top -64 *context-stack-canary*)
@@ -158,16 +163,9 @@
           (error "task-stack-sp: stack has been freed (CWE-416)" stack)
           (%context-raw-u64-ref (task-stack-top stack) -16))))
 
-;; Build initial System V AMD64 context frame on [stack-base, stack-base + stack-size)
-;; Layout at frame_top = top - 64:
-;;   [frame_top -  8] ([top -  72]) : ulisp_task_exit_trampoline (return address when entry_rip returns)
-;;   [frame_top - 16] ([top -  80]) : entry_rip (popped by swap_context's ret; at entry rsp = top - 72, rsp % 16 == 8)
-;;   [frame_top - 24] ([top -  88]) : initial rbp (frame_top)
-;;   [frame_top - 32] ([top -  96]) : initial rbx (top)
-;;   [frame_top - 40] ([top - 104]) : initial r12 (0, inherited from caller %r12 via %r11)
-;;   [frame_top - 48] ([top - 112]) : initial r13 (entry-fn closure or 0)
-;;   [frame_top - 56] ([top - 120]) : initial r14 (0)
-;;   [frame_top - 64] ([top - 128]) : initial r15 (0) <-- initial_sp (16-byte aligned)
+;; Build initial context frame on [stack-base, stack-base + stack-size)
+;; On System V AMD64 (frame-sz == 64): 8 slots at [frame_top - 64 .. frame_top - 8]
+;; On ARM64 AAPCS64  (frame-sz == 96): 12 slots at [frame_top - 96 .. frame_top - 8]
 (define (%setup-task-stack-raw! base size entry-fn)
   (if (or (not (integer? base)) (<= base 0))
       (error "setup-task-stack: invalid stack-base" base)
@@ -177,7 +175,8 @@
               (error "setup-task-stack: entry-fn must be a procedure or integer code address" entry-fn)
               (let* ((top (%context-align-down (+ base size) *context-stack-align*))
                      (frame-top (- top *context-tcb-header-size*))
-                     (init-sp (- frame-top *context-frame-size*))
+                     (frame-sz (context-frame-size))
+                     (init-sp (- frame-top frame-sz))
                      (entry-tramp (%asm-get-trampoline-addr 0))
                      (exit-tramp (%asm-get-trampoline-addr 1))
                      (entry-rip (if (procedure? entry-fn) entry-tramp entry-fn)))
@@ -192,17 +191,35 @@
                 (%context-raw-u64-set! top -24 0)
                 (%context-raw-u64-set! top -16 init-sp)
                 (%context-raw-u64-set! top -8 0)
-                ;; Initialize swap_context frame at [frame-top - 64 .. frame-top - 8]
-                (%context-raw-u64-set! frame-top -8 exit-tramp)
-                (%context-raw-u64-set! frame-top -16 entry-rip)
-                (%context-raw-u64-set! frame-top -24 frame-top)
-                (%context-raw-u64-set! frame-top -32 top)
-                (%context-raw-u64-set! frame-top -40 0)
-                (if (procedure? entry-fn)
-                    (%context-raw-obj-set! frame-top -48 entry-fn)
-                    (%context-raw-u64-set! frame-top -48 0))
-                (%context-raw-u64-set! frame-top -56 0)
-                (%context-raw-u64-set! frame-top -64 0)
+                (if (= frame-sz 96)
+                    ;; AAPCS64 AArch64 96-byte frame (12 callee-saved registers)
+                    (begin
+                      (%context-raw-u64-set! frame-top -8 entry-rip)     ; x30 (LR / return PC)
+                      (%context-raw-u64-set! frame-top -16 frame-top)    ; x29 (FP)
+                      (%context-raw-u64-set! frame-top -24 0)            ; x28
+                      (%context-raw-u64-set! frame-top -32 0)            ; x27
+                      (%context-raw-u64-set! frame-top -40 0)            ; x26
+                      (%context-raw-u64-set! frame-top -48 0)            ; x25
+                      (%context-raw-u64-set! frame-top -56 0)            ; x24
+                      (%context-raw-u64-set! frame-top -64 0)            ; x23
+                      (%context-raw-u64-set! frame-top -72 0)            ; x22
+                      (if (procedure? entry-fn)
+                          (%context-raw-obj-set! frame-top -80 entry-fn) ; x21 (entry closure)
+                          (%context-raw-u64-set! frame-top -80 entry-fn))
+                      (%context-raw-u64-set! frame-top -88 top)          ; x20 (TCB top)
+                      (%context-raw-u64-set! frame-top -96 0))           ; x19 (uLisp heap pointer)
+                    ;; System V AMD64 64-byte frame (8 slots)
+                    (begin
+                      (%context-raw-u64-set! frame-top -8 exit-tramp)
+                      (%context-raw-u64-set! frame-top -16 entry-rip)
+                      (%context-raw-u64-set! frame-top -24 frame-top)
+                      (%context-raw-u64-set! frame-top -32 top)
+                      (%context-raw-u64-set! frame-top -40 0)
+                      (if (procedure? entry-fn)
+                          (%context-raw-obj-set! frame-top -48 entry-fn)
+                          (%context-raw-u64-set! frame-top -48 0))
+                      (%context-raw-u64-set! frame-top -56 0)
+                      (%context-raw-u64-set! frame-top -64 0)))
                 init-sp)))))
 
 (define setup-task-stack

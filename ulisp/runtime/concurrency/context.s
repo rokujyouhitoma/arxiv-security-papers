@@ -181,6 +181,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_get_trampoline_addr:
     je .L_get_worker_slot
     cmp rdi, 6
     je .L_get_handler_chain
+    cmp rdi, 7
+    je .L_get_frame_size
     mov r8, fs:0
     and r8, 63
     lea rax, [rip + ulisp_current_task_top]
@@ -214,6 +216,10 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_get_trampoline_addr:
 .L_get_total_switches:
     lea rax, [rip + ulisp_total_context_switches]
     mov rax, [rax]
+    shl rax, 2
+    ret
+.L_get_frame_size:
+    mov rax, 64
     shl rax, 2
     ret
 

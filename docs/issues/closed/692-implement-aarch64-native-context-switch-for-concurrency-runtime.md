@@ -2,7 +2,8 @@
 ID: 692
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Resolved)
+完了日: 2026-11-10
 ---
 
 # [FEAT] Synapse 並行性ランタイム向け AArch64 ネイティブコンテキストスイッチ (context_aarch64.s) の実装 (ID: 692)
@@ -27,13 +28,13 @@ AArch64 における Callee-saved レジスタ群（`x19`〜`x28`、`x29/fp`、`
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/runtime/concurrency/context_aarch64.s](../../ulisp/runtime/concurrency/context_aarch64.s) - AAPCS64 準拠ネイティブコンテキストスイッチルーチンおよび Scheme プリミティブ群の新規実装
-- [ ] [ulisp/runtime/concurrency/context.scm](../../ulisp/runtime/concurrency/context.scm) - アーキテクチャに応じたフレームサイズ（x86-64: 64B, AArch64: 96B）および初期スタックレイアウト（`setup-task-stack`）の適応
-- [ ] [ulisp/lib/ulisp/concurrency/context.sld](../../ulisp/lib/ulisp/concurrency/context.sld) - ライブラリ定義およびエクスポートシンボルの整合性維持
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) - `build/context_aarch64.o` アセンブルターゲットおよび QEMU AArch64 コンテキストスイッチ結合テストの追加
-- [ ] [tests/concurrency/test_context_switch_aarch64.scm](../../tests/concurrency/test_context_switch_aarch64.scm) - AArch64 QEMU 上で実行するネイティブコンテキストスイッチ単体・結合テストスイート
-- [ ] [docs/designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md) - Section 7.3 における AArch64 AAPCS64 レジスタレイアウトの仕様追記
-- [ ] [docs/issues/README.md](README.md) - Issue 台帳のステータス更新 (`In Progress`)
+- [x] [ulisp/runtime/concurrency/context_aarch64.s](../../ulisp/runtime/concurrency/context_aarch64.s) - AAPCS64 準拠ネイティブコンテキストスイッチルーチンおよび Scheme プリミティブ群の新規実装
+- [x] [ulisp/runtime/concurrency/context.scm](../../ulisp/runtime/concurrency/context.scm) - アーキテクチャに応じたフレームサイズ（x86-64: 64B, AArch64: 96B）および初期スタックレイアウト（`setup-task-stack`）の適応
+- [x] [ulisp/lib/ulisp/concurrency/context.sld](../../ulisp/lib/ulisp/concurrency/context.sld) - ライブラリ定義およびエクスポートシンボルの整合性維持
+- [x] [ulisp/Makefile](../../ulisp/Makefile) - `build/context_aarch64.o` アセンブルターゲットおよび QEMU AArch64 コンテキストスイッチ結合テストの追加
+- [x] [tests/concurrency/test_context_switch_aarch64.scm](../../tests/concurrency/test_context_switch_aarch64.scm) - AArch64 QEMU 上で実行するネイティブコンテキストスイッチ単体・結合テストスイート
+- [x] [docs/designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md](../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md) - Section 7.3 における AArch64 AAPCS64 レジスタレイアウトの仕様追記
+- [x] [docs/issues/README.md](README.md) - Issue 台帳のステータス更新 (`Closed`)
 
 ---
 
@@ -154,16 +155,16 @@ Target Branch: `feat/692-implement-aarch64-native-context-switch`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] **AArch64 アセンブル完全成功**:
+- [x] **AArch64 アセンブル完全成功**:
   - `context_aarch64.s` が `aarch64-linux-gnu-as` で警告・エラー 0 件でオブジェクトファイル（ELF64 AArch64）へアセンブルできること。
-- [ ] **16 バイトスタックアライメント厳格保証**:
+- [x] **16 バイトスタックアライメント厳格保証**:
   - `qemu-aarch64` 上でタスク切り替えおよびネスト呼出しを実行した際、SP Alignment Fault や `SIGBUS` が 0 件であること。
-- [ ] **Callee-saved レジスタ群の完全維持**:
+- [x] **Callee-saved レジスタ群の完全維持**:
   - `x19`〜`x28`、`x29` (FP)、`x30` (LR) がコンテキストスイッチ間で 1 ビットも破壊されず保持されること。
-- [ ] **コルーチン基本動作の実証**:
+- [x] **コルーチン基本動作の実証**:
   - `qemu-aarch64` 上で複数のコルーチン間で `context-resume!`、`context-yield!`、`context-switch!` が正常に値を受け渡し、終了時に `'terminated` へ安全に遷移すること。
-- [ ] **既存アーキテクチャ (x86-64) への無影響**:
+- [x] **既存アーキテクチャ (x86-64) への無影響**:
   - `make -C ulisp test_context_switch` を含む全 x86-64 並行性テスト（89 passed）がリグレッションなく 100% 合格すること。
-- [ ] **品質ゲート検証 100% PASS**:
+- [x] **品質ゲート検証 100% PASS**:
   - `make -C ulisp lint_sexpr` が全ファイルで括弧一致（100% balanced）すること。
   - `make verify_quality` が 100% PASS すること。

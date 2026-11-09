@@ -38,6 +38,21 @@
            (string-append "w" (substring s 1 (string-length s)))
            s)))))
 
+(define (arm-emit-sib-address base offset)
+  (let* ((idx (arm-reg->str (cadr offset)))
+         (scale (caddr offset))
+         (shift (case scale ((1) 0) ((2) 1) ((4) 2) ((8) 3) (else 0)))
+         (disp (cadddr offset))
+         (b-str (arm-reg->str base)))
+    (if (= shift 0)
+        (emit (string-append "    add x9, " b-str ", " idx))
+        (emit (string-append "    add x9, " b-str ", " idx ", lsl #" (number->string shift))))
+    (cond
+      ((> disp 0)
+       (emit (string-append "    add x9, x9, #" (number->string disp))))
+      ((< disp 0)
+       (emit (string-append "    sub x9, x9, #" (number->string (- 0 disp))))))))
+
 (define (arm-mem-op->str base offset)
   (let ((base-str (arm-reg->str base)))
     (cond
@@ -184,13 +199,18 @@
       ((%jump-if-false)
        (let* ((reg (cadr inst))
               (lbl (caddr inst))
-              (args (if (pair? (cdddr inst)) (cadddr inst) '())))
+              (args (if (pair? (cdddr inst)) (cadddr inst) '()))
+              (reg-str (if (pair? reg)
+                           (begin
+                             (emit (string-append "    ldr x10, " (arm-operand->str reg)))
+                             "x10")
+                           (arm-reg->str reg))))
          (if (null? args)
              (begin
-               (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
+               (emit (string-append "    cmp " reg-str ", #0x2F"))
                (emit (string-append "    b.eq " (if (symbol? lbl) (symbol->string lbl) lbl))))
              (let ((cont-lbl (unique-label-sym "L_cont_")))
-               (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
+               (emit (string-append "    cmp " reg-str ", #0x2F"))
                (emit (string-append "    b.ne " (symbol->string cont-lbl)))
                (emit-arm-parallel-copy lbl args)
                (emit (string-append "    b " (if (symbol? lbl) (symbol->string lbl) lbl)))
@@ -203,8 +223,13 @@
               (rest-else (cdr (cdddr inst)))
               (else-lbl (car rest-else))
               (else-args (cadr rest-else))
-              (else-tramline (unique-label-sym "L_else_tramline_")))
-         (emit (string-append "    cmp " (arm-reg->str reg) ", #0x2F"))
+              (else-tramline (unique-label-sym "L_else_tramline_"))
+              (reg-str (if (pair? reg)
+                           (begin
+                             (emit (string-append "    ldr x10, " (arm-operand->str reg)))
+                             "x10")
+                           (arm-reg->str reg))))
+         (emit (string-append "    cmp " reg-str ", #0x2F"))
          (emit (string-append "    b.eq " (symbol->string else-tramline)))
          (if (pair? then-args)
              (emit-arm-parallel-copy then-lbl then-args))
@@ -251,13 +276,21 @@
        (let ((dst (cadr inst))
              (base (caddr inst))
              (offset (cadddr inst)))
-         (emit (string-append "    ldr " (arm-reg->str dst) ", " (arm-mem-op->str base offset)))))
+         (if (and (pair? offset) (eq? (car offset) '%sib))
+             (begin
+               (arm-emit-sib-address base offset)
+               (emit (string-append "    ldr " (arm-reg->str dst) ", [x9]")))
+             (emit (string-append "    ldr " (arm-reg->str dst) ", " (arm-mem-op->str base offset))))))
 
       ((%store)
        (let ((base (cadr inst))
              (offset (caddr inst))
              (src (cadddr inst)))
-         (emit (string-append "    str " (arm-reg->str src) ", " (arm-mem-op->str base offset)))))
+         (if (and (pair? offset) (eq? (car offset) '%sib))
+             (begin
+               (arm-emit-sib-address base offset)
+               (emit (string-append "    str " (arm-reg->str src) ", [x9]")))
+             (emit (string-append "    str " (arm-reg->str src) ", " (arm-mem-op->str base offset))))))
 
       ((%memory-fence)
        (emit "    dmb ish"))
@@ -291,20 +324,35 @@
        (let ((base (cadr inst))
              (offset (caddr inst))
              (src (cadddr inst)))
-         (cond
-           ((and (number? src) (= src 0))
-            (emit (string-append "    strb wzr, " (arm-mem-op->str base offset))))
-           ((number? src)
-            (emit (string-append "    mov w9, #" (number->string src)))
-            (emit (string-append "    strb w9, " (arm-mem-op->str base offset))))
-           (else
-            (emit (string-append "    strb " (arm-w-reg->str src) ", " (arm-mem-op->str base offset)))))))
+         (if (and (pair? offset) (eq? (car offset) '%sib))
+             (begin
+               (arm-emit-sib-address base offset)
+               (cond
+                 ((and (number? src) (= src 0))
+                  (emit "    strb wzr, [x9]"))
+                 ((number? src)
+                  (emit (string-append "    mov w10, #" (number->string src)))
+                  (emit "    strb w10, [x9]"))
+                 (else
+                  (emit (string-append "    strb " (arm-w-reg->str src) ", [x9]")))))
+             (cond
+               ((and (number? src) (= src 0))
+                (emit (string-append "    strb wzr, " (arm-mem-op->str base offset))))
+               ((number? src)
+                (emit (string-append "    mov w9, #" (number->string src)))
+                (emit (string-append "    strb w9, " (arm-mem-op->str base offset))))
+               (else
+                (emit (string-append "    strb " (arm-w-reg->str src) ", " (arm-mem-op->str base offset))))))))
 
       ((%load-byte-zx)
        (let ((dst (cadr inst))
              (base (caddr inst))
              (offset (cadddr inst)))
-         (emit (string-append "    ldrb " (arm-w-reg->str dst) ", " (arm-mem-op->str base offset)))))
+         (if (and (pair? offset) (eq? (car offset) '%sib))
+             (begin
+               (arm-emit-sib-address base offset)
+               (emit (string-append "    ldrb " (arm-w-reg->str dst) ", [x9]")))
+             (emit (string-append "    ldrb " (arm-w-reg->str dst) ", " (arm-mem-op->str base offset))))))
 
       ((%add %raw-add)
        (let ((dst (cadr inst))
@@ -373,7 +421,7 @@
        (let ((src (cadr inst)))
          (let ((src-str (arm-operand->str src)))
            (emit (string-append "    sdiv x9, x0, " src-str))
-           (emit (string-append "    msub x1, x9, " src-str ", x0"))
+           (emit (string-append "    msub x2, x9, " src-str ", x0"))
            (emit "    mov x0, x9"))))
 
       ((%inc)
@@ -437,18 +485,33 @@
       ((%cmp %raw-cmp)
        (let ((s1 (cadr inst))
              (s2 (caddr inst)))
-         (cond
-           ((pair? s2)
-            (emit (string-append "    ldr x9, " (arm-operand->str s2)))
-            (emit (string-append "    cmp " (arm-reg->str s1) ", x9")))
-           ((number? s2)
-            (if (and (>= s2 0) (<= s2 4095))
-                (emit (string-append "    cmp " (arm-reg->str s1) ", #" (number->string s2)))
-                (begin
-                  (emit (string-append "    ldr x9, =" (number->string s2)))
-                  (emit (string-append "    cmp " (arm-reg->str s1) ", x9")))))
-           (else
-            (emit (string-append "    cmp " (arm-reg->str s1) ", " (arm-operand->str s2)))))))
+         (if (pair? s1)
+             (begin
+               (emit (string-append "    ldr x10, " (arm-operand->str s1)))
+               (cond
+                 ((pair? s2)
+                  (emit (string-append "    ldr x9, " (arm-operand->str s2)))
+                  (emit "    cmp x10, x9"))
+                 ((number? s2)
+                  (if (and (>= s2 0) (<= s2 4095))
+                      (emit (string-append "    cmp x10, #" (number->string s2)))
+                      (begin
+                        (emit (string-append "    ldr x9, =" (number->string s2)))
+                        (emit "    cmp x10, x9"))))
+                 (else
+                  (emit (string-append "    cmp x10, " (arm-operand->str s2))))))
+             (cond
+               ((pair? s2)
+                (emit (string-append "    ldr x9, " (arm-operand->str s2)))
+                (emit (string-append "    cmp " (arm-reg->str s1) ", x9")))
+               ((number? s2)
+                (if (and (>= s2 0) (<= s2 4095))
+                    (emit (string-append "    cmp " (arm-reg->str s1) ", #" (number->string s2)))
+                    (begin
+                      (emit (string-append "    ldr x9, =" (number->string s2)))
+                      (emit (string-append "    cmp " (arm-reg->str s1) ", x9")))))
+               (else
+                (emit (string-append "    cmp " (arm-reg->str s1) ", " (arm-operand->str s2))))))))
 
       ((%set-boolean)
        (let ((cc (caddr inst)))
@@ -570,6 +633,7 @@
            (emit "    mov x9, sp")
            (emit (string-append "    str x9, " (arm-mem-op->str '%rsp (+ frame-si 8))))
            (emit (string-append "    str x29, " (arm-mem-op->str '%rsp (+ frame-si 16))))
+           (emit (string-append "    str x30, " (arm-mem-op->str '%rsp (+ frame-si 40))))
            (emit (string-append "    ldr x9, " (arm-mem-op->str '%rsp handler-si)))
            (emit (string-append "    str x9, " (arm-mem-op->str '%rsp (+ frame-si 32))))
            (emit (string-append "    sub x9, sp, #" (number->string (- 0 frame-si))))
@@ -604,6 +668,7 @@
        (emit "    ldr x9, [x3, #8]")
        (emit "    mov sp, x9")
        (emit "    ldr x29, [x3, #16]")
+       (emit "    ldr x30, [x3, #40]")
        (emit "    ldr x9, [x3, #24]")
        (emit "    ldr x10, [x3, #32]")
        (emit "    br x9"))
@@ -841,6 +906,9 @@
          (body (cdr (assq 'body (cddr fn)))))
     (scan-arm-blocks! body)
     (emit "    .p2align 4")
+    (emit (string-append "    .globl " label-str))
+    (emit (string-append "    .weak " label-str))
+    (emit (string-append "    .type " label-str ", %function"))
     (emit (string-append label-str ":"))
     ;; Callee prologue: self closure pointer was in x10
     ;; Store self closure pointer at [sp, #-8]

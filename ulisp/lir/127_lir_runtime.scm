@@ -14,7 +14,7 @@
          (catch-lbl (unique-label-sym "L_handler_catch_"))
          (handler-si si)
          (thunk-si (- si 8))
-         (frame-si (- si 48))
+         (frame-si (- si 56))
          (call-si (- frame-si 8)))
     (track-lir-si! handler-si)
     (track-lir-si! thunk-si)

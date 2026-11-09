@@ -577,7 +577,53 @@ Erlang BEAM の Reduction 機構に倣い、uLisp の AOT コンパイラパス�
 
 ## 7.3 極小スタック・コルーチンコンテキストスイッチ
 
-スタックの退避・復元は、x86-64 System V ABI の Callee-saved レジスタ（`rsp`, `rbp`, `rbx`, `r12-r15`）のみを交換するわずか 10〜15 命令の低レベルアセンブラルーチン（`swap_context`）により極超高速に実行される。
+スタックの退避・復元は、アーキテクチャごとの ABI 規約に従い、Callee-saved レジスタのみを交換する極小命令（10〜17命令）の低レベルアセンブラルーチン（`swap_context`）により極超高速に実行される。
+
+### 7.3.1 x86-64 System V AMD64 ABI 実装 (`context.s`)
+- **Callee-saved レジスタ (64バイト)**: `rbp`, `rbx`, `r12`, `r13`, `r14`, `r15` (各8バイト) + 戻り先アドレス (`ret`)
+- **スタックアライメント**: System V ABI に準拠（関数呼び出し直前で `rsp % 16 == 0`、呼び出しエントリ時点で `rsp % 16 == 8`）。
+- **初期フレーム構造**: スタック最上位 `top` から 64 バイトの TCB ヘッダ直下に 64 バイトのフレーム（合計 `top - 128`）を配置。
+
+### 7.3.2 AArch64 AAPCS64 ABI 実装 (`context_aarch64.s`, Issue #692)
+- **Callee-saved レジスタ (96バイト / 12レジスタ)**:
+  - `x19`〜`x28` (10本): 汎用保存レジスタ（`x19` は uLisp 生ヒープフロントポインタ）
+  - `x29` (FP / Frame Pointer): フレームポインタ
+  - `x30` (LR / Link Register): 戻り先アドレス（`ret` 復帰 PC）
+- **スタックアライメント**: ARM64 ハードウェア要件に従い、全メモリアクセス・スタック操作において常に厳格な 16 バイト境界（`sp % 16 == 0`）を維持。
+- **正準 17 命令 AAPCS64 コンテキストスイッチ**:
+  ```assembly
+  # x0 = old_sp_ptr (uint64_t*), x1 = new_sp (uint64_t)
+  swap_context:
+      sub sp, sp, #96
+      stp x19, x20, [sp, #0]
+      stp x21, x22, [sp, #16]
+      stp x23, x24, [sp, #32]
+      stp x25, x26, [sp, #48]
+      stp x27, x28, [sp, #64]
+      stp x29, x30, [sp, #80]
+      mov x2, sp
+      str x2, [x0]
+      mov sp, x1
+      ldp x19, x20, [sp, #0]
+      ldp x21, x22, [sp, #16]
+      ldp x23, x24, [sp, #32]
+      ldp x25, x26, [sp, #48]
+      ldp x27, x28, [sp, #64]
+      ldp x29, x30, [sp, #80]
+      add sp, sp, #96
+      ret
+  ```
+- **初期スタックフレーム構造 (`setup-task-stack`)**:
+  - `[top - 64 .. top]`: TCB (Task Control Block) メタデータ
+  - `[top - 80 .. top - 64]`: `x29` = `top - 64`, `x30` = `ulisp_task_entry_trampoline`
+  - `[top - 96 .. top - 80]`: `x27` = 0, `x28` = 0
+  - `[top - 112 .. top - 96]`: `x25` = 0, `x26` = 0
+  - `[top - 128 .. top - 112]`: `x23` = 0, `x24` = 0
+  - `[top - 144 .. top - 128]`: `x21` = `entry-fn`, `x22` = 0
+  - `[top - 160 .. top - 144]`: `x19` = `heap_base`, `x20` = `top` (TCB Base)
+  - 初期スタックポインタ: `initial_sp = top - 160`（16バイト整列: `160 % 16 == 0`）
+- **動的アーキテクチャ判定**:
+  `(%asm-get-trampoline-addr 7)` 経由でランタイムのフレーム長（x86-64: 64B、AArch64: 96B）を取得し、共通 Scheme インターフェース（`context.scm`）から完全透過的にタスクスタックを初期化・制御。
 
 ## 7.4 物理マルチコア並列化と CPU 飽和アーキテクチャ（Hardware Mechanical Sympathy）
 
