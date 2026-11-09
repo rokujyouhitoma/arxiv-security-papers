@@ -113,7 +113,7 @@
        (list '%global-ref var))
       ((lir-primitive? var)
        var)
-      ((allow-extern-symbols?)
+      ((or (allow-extern-symbols?) (stdlib-symbol? var))
        ;; External reference fallback: treat as external global variable
        (list '%global-ref var))
       (else var))))
@@ -216,7 +216,7 @@
                   (let ((label (cdr (assq op (car *top-level-fns*))))
                         (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
                     (cons '%direct-call (cons label args))))
-                 ((allow-extern-symbols?)
+                 ((or (allow-extern-symbols?) (stdlib-symbol? op))
                   (let ((label (mangle-fn-label op))
                         (args (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
                     (cons '%direct-call (cons label args))))

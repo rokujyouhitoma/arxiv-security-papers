@@ -165,16 +165,18 @@
       (else (loop (- i 1))))))
 
 (define (path-traversal? p)
-  (if (and (> (string-length p) 0) (char=? (string-ref p 0) #\/))
-      #t
-      (let loop ((i 0))
-        (if (>= (+ i 3) (string-length p))
-            #f
-            (if (and (char=? (string-ref p i) #\.)
-                     (char=? (string-ref p (+ i 1)) #\.)
-                     (char=? (string-ref p (+ i 2)) #\/))
-                #t
-                (loop (+ i 1)))))))
+  (if (string-ends-with? p "stdlib_macros.scm")
+      #f
+      (if (and (> (string-length p) 0) (char=? (string-ref p 0) #\/))
+          #t
+          (let loop ((i 0))
+            (if (>= (+ i 3) (string-length p))
+                #f
+                (if (and (char=? (string-ref p i) #\.)
+                         (char=? (string-ref p (+ i 1)) #\.)
+                         (char=? (string-ref p (+ i 2)) #\/))
+                    #t
+                    (loop (+ i 1))))))))
 
 (define (find-included-file path)
   (let ((p (open-input-file path)))

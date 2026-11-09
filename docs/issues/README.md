@@ -28,12 +28,12 @@
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | New | [768-implement-define-pipeline-for-aot-repl-and-check-modes.md](768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | New | [769-implement-picopass-provenance-tracing-and-auto-bisect.md](769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
 | **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | High | New | [770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
-| **786** | ULisp ドライバにおける 1 ステップ実行バイナリ生成と標準ライブラリ (ulisp_stdlib.o) 自動リンクパイプラインの実装 | Feature | High | New | [786-support-one-step-executable-compilation-with-automatic-stdlib-linking.md](786-support-one-step-executable-compilation-with-automatic-stdlib-linking.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **786** | ULisp ドライバにおける 1 ステップ実行バイナリ生成と標準ライブラリ (ulisp_stdlib.o) 自動リンクパイプラインの実装 | Feature | 2026-11-09 | [closed/786-support-one-step-executable-compilation-with-automatic-stdlib-linking.md](closed/786-support-one-step-executable-compilation-with-automatic-stdlib-linking.md) |
 | **784** | ULisp における GNU ld 互換コマンドラインオプション (--ld) と複数 ELF64 オブジェクト (.o) 静的リンカの実装 | Feature | 2026-11-09 | [closed/784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md](closed/784-support-builtin-ld-static-linker-cli-option-for-elf64-objects.md) |
 | **775** | Root Makefile の build_js ターゲットにおける増分ビルド依存導入と未変更時の Closure Compiler (JVM) 起動スキップ | Feature | 2026-11-08 | [closed/775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md](closed/775-optimize-build-js-incremental-dependency-and-skip-redundant-jvm-startup.md) |
 | **774** | Root Makefile の compile_grammars ターゲットにおける PEG 増分ビルド化とフォーマッタ一括実行による高速化 | Feature | 2026-11-08 | [closed/774-optimize-compile-grammars-incremental-build-and-batch-formatting.md](closed/774-optimize-compile-grammars-incremental-build-and-batch-formatting.md) |

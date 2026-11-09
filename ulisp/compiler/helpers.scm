@@ -35,6 +35,19 @@
                   (loop (+ i 1))
                   #f))))))
 
+(define (string-ends-with? s suffix)
+  (let ((slen (string-length s))
+        (suflen (string-length suffix)))
+    (if (< slen suflen)
+        #f
+        (let ((start (- slen suflen)))
+          (let loop ((i 0))
+            (if (= i suflen)
+                #t
+                (if (char=? (string-ref s (+ start i)) (string-ref suffix i))
+                    (loop (+ i 1))
+                    #f)))))))
+
 (define (car* x) (car x))
 (define (cadr x) (safe-car (safe-cdr x)))
 (define (cddr x) (safe-cdr (safe-cdr x)))
@@ -205,6 +218,93 @@
 (define *allow-extern-symbols* (cons #f '()))
 (define (allow-extern-symbols?) (car *allow-extern-symbols*))
 (define (set-allow-extern-symbols! val) (set-car! *allow-extern-symbols* val))
+
+(define *stdlib-enabled* (cons #t '()))
+(define (stdlib-enabled?) (car *stdlib-enabled*))
+(define (set-stdlib-enabled! val) (set-car! *stdlib-enabled* val))
+
+(define (is-known-stdlib-symbol? sym)
+  (memq sym '(*stdout-port*
+              *stdin-port*
+              *stderr-port*
+              *current-input-port-cell*
+              *current-output-port-cell*
+              *current-error-port-cell*
+              port-newline
+              port-display
+              port-display-string
+              port-write
+              port-write-char
+              port-write-u8
+              port-write-string
+              port-write-bytevector
+              port-write-bytevector-range
+              port-flush-output
+              port-read
+              port-read-char
+              port-peek-char
+              port-read-line
+              port-read-u8
+              port-peek-u8
+              port-char-ready?
+              port-u8-ready?
+              port-close
+              close-port
+              close-input-port
+              close-output-port
+              current-input-port
+              current-output-port
+              current-error-port
+              open-input-file
+              open-output-file
+              open-input-string
+              open-output-string
+              get-output-string
+              call-with-port
+              string->number-core
+              %eqv?
+              %number?
+              %complex?
+              %real?
+              %rational?
+              %integer?
+              %exact?
+              %inexact?
+              ulisp-flonum-tag
+              pos-inf
+              neg-inf
+              nan
+              make-hash-table
+              hash-table-ref
+              hash-table-set!
+              hash-table-delete!
+              hash-table-contains?
+              hash-table-size
+              hash-table-keys
+              hash-table-values
+              number->string
+              string->number
+              exact
+              inexact
+              floor
+              ceiling
+              truncate
+              round
+              sin
+              cos
+              tan
+              asin
+              acos
+              atan
+              sqrt
+              exp
+              log
+              expt)))
+
+(define (stdlib-symbol? sym)
+  (and (stdlib-enabled?)
+       (symbol? sym)
+       (is-known-stdlib-symbol? sym)))
 
 (define *module-mode* (cons #f '()))
 (define (module-mode?) (car *module-mode*))
@@ -1305,6 +1405,7 @@
     (port-write-bytevector . "port-write-bytevector")
     (assemble-and-build-elf-obj . "assemble-and-build-elf-obj")
     (emit-x86-64-elf-obj . "emit-x86-64-elf-obj")
+    (build-x86-64-elf-obj . "build-x86-64-elf-obj")
     (assemble-stream-to-elf-obj . "assemble-stream-to-elf-obj")))
 
 (define (symbol->raw-name sym)

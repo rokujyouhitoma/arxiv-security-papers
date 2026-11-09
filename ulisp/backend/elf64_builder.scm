@@ -1065,8 +1065,9 @@
                         (if (null? paths)
                             (reverse acc)
                             (let* ((p (car paths))
-                                   (bv (read-binary-file-to-bytevector p))
-                                   (obj (elf64-parse-relocatable-object bv p)))
+                                   (bv (if (bytevector? p) p (read-binary-file-to-bytevector p)))
+                                   (label (if (bytevector? p) "<memory.o>" p))
+                                   (obj (elf64-parse-relocatable-object bv label)))
                               (loop-p (cdr paths) (cons obj acc))))))
          ;; 2. Plan Segment 1 (RX: 0x400000) layout
          ;; text-file-offset = 240 (64 ehdr + 3 * 56 phdr = 232 -> aligned 16 = 240)

@@ -92,6 +92,16 @@
       (write-elf64-bytevector elf-bv)
       elf-bv)))
 
+(define (build-x86-64-elf-obj prog gc-mode)
+  (let ((lines-box (vector '())))
+    (with-emit-line-sink
+      (lambda (line)
+        (vector-set! lines-box 0 (cons line (vector-ref lines-box 0))))
+      (lambda ()
+        (emit-x86-64 prog gc-mode)))
+    (let* ((asm-lines (reverse (vector-ref lines-box 0))))
+      (assemble-and-build-elf-obj asm-lines))))
+
 (define (read-asm-lines-from-stdin)
   (cond-expand
     (ulisp

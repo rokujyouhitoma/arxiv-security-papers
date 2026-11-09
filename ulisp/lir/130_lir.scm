@@ -91,7 +91,7 @@
 (define (lir-compile-variable var env)
   (let ((binding (assq var env)))
     (if (not binding)
-        (if (allow-extern-symbols?)
+        (if (or (allow-extern-symbols?) (stdlib-symbol? var))
             (emit-lir! (list '%global-ref '%rax var))
             (begin
               (dump-lir-unbound-variable-diagnostic var env)

@@ -153,6 +153,7 @@
   %file-input-port
   assemble-and-build-elf-obj
   emit-x86-64-elf-obj
+  build-x86-64-elf-obj
   assemble-stream-to-elf-obj)
 
 
