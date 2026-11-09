@@ -606,11 +606,13 @@ test_aarch64_env:
 	 QEMU_AARCH64="$(QEMU_AARCH64)" \
 	 bash scripts/test_aarch64_env.sh
 
-test_aarch64_qemu: compiler test_context_switch_aarch64
+test_aarch64_qemu: compiler build/ulisp_stdlib_aarch64.o test_context_switch_aarch64
 	@CROSS_AS_AARCH64="$(CROSS_AS_AARCH64)" \
 	 CROSS_LD_AARCH64="$(CROSS_LD_AARCH64)" \
 	 QEMU_AARCH64="$(QEMU_AARCH64)" \
-	 bash scripts/test_aarch64_qemu_smoke.sh
+	 bash scripts/test_aarch64_qemu_regression.sh
+
+test-aarch64-qemu: test_aarch64_qemu
 
 test_verifier: build/compiler_passes.scm test_lir_verifier
 	@mkdir -p build
@@ -1179,6 +1181,16 @@ build/ulisp_stdlib.s: stdlib_entry.scm $(ULISP_STD_LIBS) | compiler.scm
 
 build/ulisp_stdlib.o: build/ulisp_stdlib.s
 	$(AS) $(ASFLAGS) $< -o $@
+
+build/ulisp_stdlib_aarch64.s: stdlib_entry.scm $(ULISP_STD_LIBS) | compiler.scm
+	@mkdir -p build
+	@echo "=== Compiling AArch64 Standard Library Module (stdlib_entry.scm) ==="
+	@echo "(!gc none) (!module #t)" > build/stdlib_aarch64_input.scm
+	@cat stdlib_entry.scm >> build/stdlib_aarch64_input.scm
+	cd $(ROOT_DIR) && $(if $(GOSH_BIN),$(GOSH_BIN) -I ulisp ulisp/compiler.scm,$(RUN_SCHEME) ulisp/compiler.scm) --target=aarch64 < ulisp/build/stdlib_aarch64_input.scm > ulisp/build/ulisp_stdlib_aarch64.s
+
+build/ulisp_stdlib_aarch64.o: build/ulisp_stdlib_aarch64.s
+	$(CROSS_AS_AARCH64) -march=armv8.1-a $< -o $@
 
 build/ulisp_compiler.s: compiler.scm compiler_entry.scm $(COMPILER_BASE) $(FRONTEND_PASSES) $(LIR_PASSES) $(BACKEND_PASSES) compiler/driver.scm
 	@mkdir -p build

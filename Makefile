@@ -198,6 +198,15 @@ test-concurrency: test_concurrency
 test_concurrency_ci: ## Run 100-iteration multicore concurrency CI harness in uLisp
 	$(MAKE) -C ulisp test_concurrency_ci
 
+.PHONY: test_aarch64 test_aarch64_qemu test-aarch64-qemu
+test_aarch64: ## Run AArch64 backend unit and LIR tests in uLisp
+	$(MAKE) -C ulisp test_aarch64
+
+test_aarch64_qemu: ## Run fully automated QEMU AArch64 regression test suite (Issue #693)
+	$(MAKE) -C ulisp test_aarch64_qemu
+
+test-aarch64-qemu: test_aarch64_qemu
+
 .PHONY: verify_r7rs_traceability
 verify_r7rs_traceability: activate ## Verify R7RS specification traceability and diagnostic tags (Issue #665)
 	${VENV_PYTHON} scripts/verify_r7rs_traceability.py
