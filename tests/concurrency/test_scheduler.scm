@@ -7,6 +7,8 @@
 ;;;   Group 4: Asymmetric Work-Stealing Load Balancing & Channel Wake
 ;;;   Group 5: 100,000 Tasks High-Throughput Work-Stealing Endurance Test
 ;;;   Group 6: Security & Boundary Guards (CWE-362 / CWE-400 / CWE-843 / CWE-20)
+;;;   Group 7: NUMA-Aware Hierarchical Work-Stealing (#681)
+;;;   Group 8: Live Tasks Concurrency Limit & CWE-400 Long-Running DoS Prevention (#793)
 ;;; =======================================================================
 
 (load "ulisp/runtime/concurrency/channel.scm")
@@ -220,6 +222,8 @@
   (assert-equal (scheduler-total-spawned sched) 0 "scheduler-total-spawned matches tasks-spawned (0)")
   (assert-equal (scheduler-total-completed sched) 0 "scheduler-total-completed matches tasks-completed (0)")
   (assert-equal (scheduler-total-failed sched) 0 "scheduler-total-failed matches tasks-failed (0)")
+  (assert-equal (scheduler-live-tasks sched) 0 "initial live-tasks is 0")
+  (assert-equal (scheduler-total-live sched) 0 "scheduler-total-live matches live-tasks (0)")
 
   ;; Verify atomic increment operations
   (%scheduler-tasks-spawned-inc! sched)
@@ -234,6 +238,10 @@
   (assert-equal (scheduler-tasks-failed sched) 1 "tasks-failed is 1 after inc")
   (assert-equal (scheduler-total-failed sched) 1 "total-failed reflects 1")
 
+  (%scheduler-live-tasks-inc! sched)
+  (assert-equal (scheduler-live-tasks sched) 1 "live-tasks is 1 after inc")
+  (assert-equal (scheduler-total-live sched) 1 "total-live reflects 1")
+
   ;; Perform rapid 100 increments
   (let loop ((k 0))
     (if (< k 100)
@@ -241,38 +249,45 @@
           (%scheduler-tasks-spawned-inc! sched)
           (%scheduler-tasks-completed-inc! sched)
           (%scheduler-tasks-failed-inc! sched)
+          (%scheduler-live-tasks-inc! sched)
           (loop (+ k 1)))
         #t))
 
   (assert-equal (scheduler-tasks-spawned sched) 101 "tasks-spawned reached 101")
   (assert-equal (scheduler-tasks-completed sched) 101 "tasks-completed reached 101")
   (assert-equal (scheduler-tasks-failed sched) 101 "tasks-failed reached 101")
+  (assert-equal (scheduler-live-tasks sched) 101 "live-tasks reached 101")
 
   ;; Check scheduler-stats alist
   (let ((st (scheduler-stats sched)))
     (assert-equal (cdr (assq 'tasks-spawned st)) 101 "stats tasks-spawned is 101")
     (assert-equal (cdr (assq 'tasks-completed st)) 101 "stats tasks-completed is 101")
-    (assert-equal (cdr (assq 'tasks-failed st)) 101 "stats tasks-failed is 101"))
+    (assert-equal (cdr (assq 'tasks-failed st)) 101 "stats tasks-failed is 101")
+    (assert-equal (cdr (assq 'live-tasks st)) 101 "stats live-tasks is 101"))
 
   ;; Reset stats
   (assert-true (%scheduler-stats-reset! sched) "%scheduler-stats-reset! returns #t")
   (assert-equal (scheduler-tasks-spawned sched) 0 "tasks-spawned is 0 after reset")
   (assert-equal (scheduler-tasks-completed sched) 0 "tasks-completed is 0 after reset")
   (assert-equal (scheduler-tasks-failed sched) 0 "tasks-failed is 0 after reset")
+  (assert-equal (scheduler-live-tasks sched) 0 "live-tasks is 0 after reset")
 
   ;; Test real execution differentiation: spawn 2 successful tasks, 1 failing task
   (scheduler-spawn! sched (lambda () 42))
   (scheduler-spawn! sched (lambda () (error "simulated task panic")))
   (scheduler-spawn! sched (lambda () 100))
+  (assert-equal (scheduler-live-tasks sched) 3 "3 live tasks spawned before run")
   (scheduler-run! sched 3)
   (assert-equal (scheduler-tasks-spawned sched) 3 "spawned 3 tasks")
   (assert-equal (scheduler-tasks-completed sched) 2 "2 tasks completed successfully")
   (assert-equal (scheduler-tasks-failed sched) 1 "1 task recorded as failed")
+  (assert-equal (scheduler-live-tasks sched) 0 "live-tasks is 0 after all 3 tasks finish")
 
   ;; Guard against non-scheduler object (CWE-843)
   (assert-error (lambda () (scheduler-tasks-spawned "invalid")) "scheduler-tasks-spawned rejects non-scheduler (CWE-843)")
   (assert-error (lambda () (scheduler-tasks-completed 12345)) "scheduler-tasks-completed rejects non-scheduler (CWE-843)")
   (assert-error (lambda () (scheduler-tasks-failed 'bad)) "scheduler-tasks-failed rejects non-scheduler (CWE-843)")
+  (assert-error (lambda () (scheduler-live-tasks #f)) "scheduler-live-tasks rejects non-scheduler (CWE-843)")
   (assert-error (lambda () (%scheduler-stats-reset! #f)) "%scheduler-stats-reset! rejects non-scheduler (CWE-843)")
 
   (scheduler-stop! sched))
@@ -566,6 +581,70 @@
   (scheduler-run! s 4)
   (assert-equal (atomic-ref ok-count) 1 "valid task completes after preceding tasks raise/error/(car '()) (#720)")
   (scheduler-stop! s))
+
+;; -----------------------------------------------------------------------
+;; Group 8: Live Tasks Concurrency Limit & CWE-400 Long-Running DoS Prevention (#793)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Live Tasks Concurrency Limit & CWE-400 Prevention (#793) ---\n")
+(flush-output-port)
+
+(let* ((sched (make-work-stealing-scheduler 2 32))
+       (orig-limit (scheduler-max-tasks))
+       (counter (make-atomic-box 0)))
+  ;; Test 8a: Verify live-tasks increases on spawn and decreases on completion
+  (assert-equal (scheduler-live-tasks sched) 0 "initial live-tasks is 0")
+  (scheduler-spawn! sched (lambda () (atomic-fetch-add! counter 1)))
+  (assert-equal (scheduler-live-tasks sched) 1 "live-tasks is 1 after spawn")
+  (assert-equal (scheduler-tasks-spawned sched) 1 "tasks-spawned is 1")
+  (scheduler-run! sched 1)
+  (assert-equal (scheduler-live-tasks sched) 0 "live-tasks returns to 0 after run")
+  (assert-equal (scheduler-tasks-completed sched) 1 "tasks-completed is 1")
+  (assert-equal (atomic-ref counter) 1 "counter incremented to 1")
+
+  ;; Test 8b: Set small concurrency limit via scheduler-set-max-tasks! (limit = 3)
+  (assert-true (scheduler-set-max-tasks! 3) "scheduler-set-max-tasks! to 3 succeeds")
+  (assert-equal (scheduler-max-tasks) 3 "scheduler-max-tasks reflects 3")
+  ;; Guard checks on scheduler-set-max-tasks! (CWE-843 / CWE-400)
+  (assert-error (lambda () (scheduler-set-max-tasks! "invalid"))
+                "scheduler-set-max-tasks! rejects non-integer limit (CWE-843)")
+  (assert-error (lambda () (scheduler-set-max-tasks! 0))
+                "scheduler-set-max-tasks! rejects 0 limit (CWE-400)")
+  (assert-error (lambda () (scheduler-set-max-tasks! -5))
+                "scheduler-set-max-tasks! rejects negative limit (CWE-400)")
+
+  ;; Spawn 3 concurrent tasks (reaches max-tasks limit)
+  (scheduler-spawn! sched (lambda () (atomic-fetch-add! counter 10)))
+  (scheduler-spawn! sched (lambda () (atomic-fetch-add! counter 20)))
+  (scheduler-spawn! sched (lambda () (atomic-fetch-add! counter 30)))
+  (assert-equal (scheduler-live-tasks sched) 3 "live-tasks is 3 (at limit)")
+  ;; 4th spawn MUST fail with CWE-400 because live-tasks (3) >= limit (3)
+  (assert-error (lambda () (scheduler-spawn! sched (lambda () 999)))
+                "scheduler-spawn! rejects 4th task when live-tasks >= *scheduler-max-tasks* (CWE-400)")
+
+  ;; Now run scheduler to drain the 3 live tasks
+  (scheduler-run! sched 3)
+  (assert-equal (scheduler-live-tasks sched) 0 "live-tasks returns to 0 after draining")
+  (assert-equal (scheduler-tasks-spawned sched) 4 "cumulative tasks-spawned is 4 (1 prior + 3 drained)")
+  (assert-equal (scheduler-tasks-completed sched) 4 "cumulative tasks-completed is 4")
+
+  ;; Test 8c: Crucial Issue #793 verification:
+  ;; Even though cumulative tasks-spawned (4) >= *scheduler-max-tasks* (3),
+  ;; spawning a new task MUST SUCCEED because live-tasks is 0 (< 3)!
+  (assert-true (scheduler-spawn! sched (lambda () (atomic-fetch-add! counter 100)))
+               "scheduler-spawn! succeeds when cumulative > max-tasks but live-tasks < max-tasks (#793)")
+  (assert-equal (scheduler-live-tasks sched) 1 "live-tasks is 1 after post-limit spawn")
+  (assert-equal (scheduler-tasks-spawned sched) 5 "tasks-spawned incremented to 5")
+
+  ;; Complete the 5th task
+  (scheduler-run! sched 1)
+  (assert-equal (scheduler-live-tasks sched) 0 "live-tasks is 0 after final step")
+  (assert-equal (scheduler-tasks-completed sched) 5 "tasks-completed incremented to 5")
+  (assert-equal (atomic-ref counter) 161 "all task operations executed safely (1+10+20+30+100)")
+
+  ;; Restore original limit
+  (assert-true (scheduler-set-max-tasks! orig-limit) "restore scheduler-max-tasks succeeds")
+  (assert-equal (scheduler-max-tasks) orig-limit "scheduler-max-tasks restored")
+  (scheduler-stop! sched))
 
 ;; -----------------------------------------------------------------------
 ;; Summary

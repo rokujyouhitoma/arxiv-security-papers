@@ -42,9 +42,11 @@
     scheduler-tasks-spawned
     scheduler-tasks-completed
     scheduler-tasks-failed
+    scheduler-live-tasks
     scheduler-total-spawned
     scheduler-total-completed
     scheduler-total-failed
+    scheduler-total-live
     %scheduler-stats-reset!
 
     ;; Execution and work-stealing
@@ -59,7 +61,9 @@
     ;; Channel wake integration
     scheduler-enable-channel-wake!
 
-    ;; Constants
+    ;; Configuration & Constants
+    scheduler-max-tasks
+    scheduler-set-max-tasks!
     *scheduler-default-workers*
     *scheduler-max-workers*
     *scheduler-max-tasks*)

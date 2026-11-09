@@ -2,7 +2,7 @@
 ID: 793
 種別: Bug
 優先度: Low
-ステータス: Open (In Progress)
+ステータス: Closed (Resolved)
 ---
 
 # [BUG/SEC] スケジューラの最大タスク上限 (scheduler-max-tasks) 判定における累積値から生存タスク数への修正 (ID: 793)
@@ -36,10 +36,10 @@ Synapse 並行ランタイムのスケジューラ（`ulisp/runtime/concurrency/
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/runtime/concurrency/scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm) - スケジューラ統計ベクタ拡張（3要素 $\to$ 4要素）、`scheduler-live-tasks` / `%scheduler-live-tasks-inc!` / `%scheduler-live-tasks-dec!` 実装、`scheduler-spawn!` 判定の変更、タスク完了・異常終了時のデクリメント接続
-- [ ] [ulisp/lib/ulisp/concurrency/scheduler.sld](../../ulisp/lib/ulisp/concurrency/scheduler.sld) - `scheduler-live-tasks` および `scheduler-total-live` のエクスポート宣言
-- [ ] [tests/concurrency/test_scheduler.scm](../../tests/concurrency/test_scheduler.scm) - Group 3b 統計検証および Group 6/8 における生存タスク数に基づく CWE-400 境界検証単体テスト追加
-- [ ] [docs/issues/README.md](README.md) - Issue 台帳のステータス更新 (`In Progress`)
+- [x] [ulisp/runtime/concurrency/scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm) - スケジューラ統計ベクタ拡張（3要素 $\to$ 4要素）、`scheduler-live-tasks` / `%scheduler-live-tasks-inc!` / `%scheduler-live-tasks-dec!` 実装、`scheduler-spawn!` 判定の変更、タスク完了・異常終了時のデクリメント接続
+- [x] [ulisp/lib/ulisp/concurrency/scheduler.sld](../../ulisp/lib/ulisp/concurrency/scheduler.sld) - `scheduler-live-tasks` および `scheduler-total-live` のエクスポート宣言
+- [x] [tests/concurrency/test_scheduler.scm](../../tests/concurrency/test_scheduler.scm) - Group 3b 統計検証および Group 6/8 における生存タスク数に基づく CWE-400 境界検証単体テスト追加
+- [x] [docs/issues/README.md](README.md) - Issue 台帳のステータス更新 (`Closed`)
 
 ---
 
@@ -148,18 +148,18 @@ Target Branch: `fix/793-scheduler-live-tasks-limit`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] **生存タスク数の正確な追跡**:
+- [x] **生存タスク数の正確な追跡**:
   - `scheduler-live-tasks` がタスク投入時に正確に +1 され、実行終了時（正常完了およびパニック異常終了の双方）に確実に -1 されること。
-- [ ] **累積値と生存値の明確な分離**:
+- [x] **累積値と生存値の明確な分離**:
   - `scheduler-tasks-spawned` は単調増加を維持し、`scheduler-live-tasks` は現在のアクティブタスク数を正確に反映すること。
-- [ ] **長寿命システムにおける DoS (CWE-400) 回避実証**:
+- [x] **長寿命システムにおける DoS (CWE-400) 回避実証**:
   - 累積タスク生成数が上限値に達した状態であっても、現在の生存タスク数が上限未満であれば後続タスクの spawn が拒絶されず正常に動作すること。
-- [ ] **同時実行タスク数超過時の適正な拒絶**:
+- [x] **同時実行タスク数超過時の適正な拒絶**:
   - 現在アクティブな生存タスク数が上限値に達している瞬間には、新規 spawn が適切に CWE-400 エラーで拒絶されること。
-- [ ] **R7RS ライブラリ整合性**:
+- [x] **R7RS ライブラリ整合性**:
   - `ulisp/lib/ulisp/concurrency/scheduler.sld` から `scheduler-live-tasks` および `scheduler-total-live` が正常にエクスポートされていること。
-- [ ] **全品質ゲートの完全通過**:
+- [x] **全品質ゲートの完全通過**:
   - `make -C ulisp lint_sexpr` が全ファイルで括弧完全一致（100% balanced）であること。
-  - `make -C ulisp test_scheduler` が全アサーション合格（PASS）すること。
-  - `make -C ulisp test_multithread_scheduler` が全アサーション合格すること。
-  - `make verify_quality` が 100% PASS すること。
+  - `make -C ulisp test_scheduler` が全アサーション合格（201 passed, 0 failed）すること。
+  - `make -C ulisp test_multithread_scheduler` が全アサーション合格（72 passed, 0 failed）すること。
+  - `make verify_quality` が 100% PASS すること（2,766 passed, 83.15% coverage）。

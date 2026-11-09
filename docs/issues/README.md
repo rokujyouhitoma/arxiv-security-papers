@@ -28,12 +28,12 @@
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | New | [768-implement-define-pipeline-for-aot-repl-and-check-modes.md](768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | New | [769-implement-picopass-provenance-tracing-and-auto-bisect.md](769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
 | **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | High | New | [770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
-| **793** | スケジューラの最大タスク上限 (scheduler-max-tasks) 判定における累積値から生存タスク数への修正 | Bug | Low | In Progress | [793-fix-scheduler-max-tasks-limit-to-use-live-task-count.md](793-fix-scheduler-max-tasks-limit-to-use-live-task-count.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **793** | スケジューラの最大タスク上限 (scheduler-max-tasks) 判定における累積値から生存タスク数への修正 | Bug | 2026-11-10 | [closed/793-fix-scheduler-max-tasks-limit-to-use-live-task-count.md](closed/793-fix-scheduler-max-tasks-limit-to-use-live-task-count.md) |
 | **792** | Affine 検査における変数名ヒント強制判定の廃止と関数シグネチャ・戻り値型伝播の導入 | Bug | 2026-11-09 | [closed/792-refactor-affine-check-to-eliminate-name-based-heuristics.md](closed/792-refactor-affine-check-to-eliminate-name-based-heuristics.md) |
 | **791** | 並行スケジューラ (scheduler-run-parallel!) 上での Supervisor・コルーチン・同時子異常終了の結合テスト整備 | Feature | 2026-11-09 | [closed/791-add-parallel-integration-tests-for-supervisor-and-coroutines.md](closed/791-add-parallel-integration-tests-for-supervisor-and-coroutines.md) |
 | **790** | R7RS タスク強制終了のためのセーフポイント挿入パス (pass-synapse-inject-safepoints) のコンパイラ統合 | Bug | 2026-11-09 | [closed/790-integrate-safepoint-injection-pass-into-default-pipeline.md](closed/790-integrate-safepoint-injection-pass-into-default-pipeline.md) |
