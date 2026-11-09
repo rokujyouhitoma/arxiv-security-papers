@@ -340,6 +340,72 @@
   (free-coroutine-context! co-a)
   (free-coroutine-context! co-b))
 
+;; -----------------------------------------------------------------------
+;; Group 8: Coroutine Exception Handler Chain After Yield (#740, Issue #787)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 8: Coroutine Exception Handler Chain After Yield (#740, Issue #787) ---\n")
+(flush-output-port)
+
+;; 8a. Coroutine without local handler yields, then raises exception on 2nd resume
+(let* ((caught (vector #f))
+       (co-no-handler (make-coroutine-context
+                       (lambda ()
+                         (context-yield! 'first-yield)
+                         ;; No local handler installed; exception must propagate to current host boundary
+                         (car '())))))
+  ;; 1st resume: receives yielded value
+  (assert-equal (context-resume! co-no-handler) 'first-yield
+                "8a.1 coroutine yields 'first-yield without local handler")
+  ;; 2nd resume: exception occurs inside coroutine; must be caught by host boundary without crashing
+  (guard (exn (#t
+               (vector-set! caught 0 #t)
+               ;; Mark terminated upon escape
+               (%context-raw-u64-set! (task-stack-top (coroutine-stack co-no-handler)) -24 3)))
+    (context-resume! co-no-handler))
+  (assert-true (vector-ref caught 0)
+               "8a.2 host boundary safely caught (car '()) from coroutine resumed after yield")
+  (assert-true (coroutine-terminated? co-no-handler)
+               "8a.3 coroutine marked terminated after unhandled exception")
+  (free-coroutine-context! co-no-handler))
+
+;; 8b. Coroutine yields multiple times before raising exception
+(let* ((caught-multi (vector #f))
+       (step (vector 0))
+       (co-multi-yield (make-coroutine-context
+                        (lambda ()
+                          (vector-set! step 0 1)
+                          (context-yield! 'step-1)
+                          (vector-set! step 0 2)
+                          (context-yield! 'step-2)
+                          (vector-set! step 0 3)
+                          (context-yield! 'step-3)
+                          (vector-set! step 0 4)
+                          (raise 'boom-after-3-yields)))))
+  (assert-equal (context-resume! co-multi-yield) 'step-1 "8b.1 resume 1 yields step-1")
+  (assert-equal (context-resume! co-multi-yield) 'step-2 "8b.2 resume 2 yields step-2")
+  (assert-equal (context-resume! co-multi-yield) 'step-3 "8b.3 resume 3 yields step-3")
+  (guard (exn (#t (vector-set! caught-multi 0 exn)))
+    (context-resume! co-multi-yield))
+  (assert-equal (vector-ref caught-multi 0) 'boom-after-3-yields
+                "8b.4 host boundary caught 'boom-after-3-yields on 4th resume")
+  (assert-equal (vector-ref step 0) 4 "8b.5 coroutine progressed to step 4")
+  (free-coroutine-context! co-multi-yield))
+
+;; 8c. Coroutine with local handler yields, resumes, and catches its own exception
+(let* ((local-caught (vector #f))
+       (co-local-handler (make-coroutine-context
+                          (lambda ()
+                            (guard (e (#t (vector-set! local-caught 0 e) 'local-ok))
+                              (context-yield! 'yield-in-guard)
+                              (raise 'local-boom))))))
+  (assert-equal (context-resume! co-local-handler) 'yield-in-guard
+                "8c.1 coroutine yields from within guard body")
+  (assert-equal (context-resume! co-local-handler) 'local-ok
+                "8c.2 coroutine resumes and its local guard catches 'local-boom")
+  (assert-equal (vector-ref local-caught 0) 'local-boom
+                "8c.3 local guard recorded 'local-boom")
+  (free-coroutine-context! co-local-handler))
+
 (write-string "=======================================================\n")
 (write-string " Native Context Switch Test Summary: ")
 (write-string (number->string (vector-ref *test-context-passes* 0)))

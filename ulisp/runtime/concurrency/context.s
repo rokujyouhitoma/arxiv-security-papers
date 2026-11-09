@@ -289,6 +289,23 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
     mov rax, [rdi - 32]
     test rax, rax
     jz .L_resume_keep_handler
+    # Task has its own local handler chain. Traverse to find the deepest frame (prev == 0)
+    # and stitch the current worker's boundary frame ([rsp + 8]) as its tail.
+    mov rdx, rax
+    mov r10, [rsp + 8]
+.L_resume_stitch_loop:
+    mov r11, [rdx]
+    test r11, r11
+    jz .L_resume_found_tail
+    lea rcx, [rdi - 65536]
+    cmp r11, rcx
+    jb .L_resume_found_tail
+    cmp r11, rdi
+    jae .L_resume_found_tail
+    mov rdx, r11
+    jmp .L_resume_stitch_loop
+.L_resume_found_tail:
+    mov [rdx], r10
     mov [r9], rax
 .L_resume_keep_handler:
     lea rcx, [rip + ulisp_gc_state]
@@ -337,7 +354,33 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_yield_task_excl:
     mov [rdx + r8*8], rax
     lea r9, [rip + ulisp_handler_chain]
     mov rax, [r9 + r8*8]
+    # Check if current handler frame is within the task micro-stack [rcx - 65536 .. rcx]
+    lea rdx, [rcx - 65536]
+    cmp rax, rdx
+    jb .L_yield_no_local_handler
+    cmp rax, rcx
+    jae .L_yield_no_local_handler
+    # Current handler is within task stack. Traverse chain and sever link to boundary frame
+    mov rdx, rax
+.L_yield_prune_loop:
+    mov r10, [rdx]
+    test r10, r10
+    jz .L_yield_chain_pruned
+    lea r11, [rcx - 65536]
+    cmp r10, r11
+    jb .L_yield_cut_link
+    cmp r10, rcx
+    jae .L_yield_cut_link
+    mov rdx, r10
+    jmp .L_yield_prune_loop
+.L_yield_cut_link:
+    mov qword ptr [rdx], 0
+.L_yield_chain_pruned:
     mov [rcx - 32], rax
+    jmp .L_yield_handler_done
+.L_yield_no_local_handler:
+    mov qword ptr [rcx - 32], 0
+.L_yield_handler_done:
     push rcx
     mov r11, r12
     lea rdi, [rcx - 16]
@@ -389,10 +432,50 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov [rcx + r8*8], rsi
     lea r9, [rip + ulisp_handler_chain]
     mov rax, [r9 + r8*8]
+    # Check if from-task handler frame is within rdi micro-stack [rdi - 65536 .. rdi]
+    lea rdx, [rdi - 65536]
+    cmp rax, rdx
+    jb .L_switch_no_local_from
+    cmp rax, rdi
+    jae .L_switch_no_local_from
+    mov rdx, rax
+.L_switch_prune_from:
+    mov r10, [rdx]
+    test r10, r10
+    jz .L_switch_pruned_from
+    lea r11, [rdi - 65536]
+    cmp r10, r11
+    jb .L_switch_cut_from
+    cmp r10, rdi
+    jae .L_switch_cut_from
+    mov rdx, r10
+    jmp .L_switch_prune_from
+.L_switch_cut_from:
+    mov qword ptr [rdx], 0
+.L_switch_pruned_from:
     mov [rdi - 32], rax
+    jmp .L_switch_check_to
+.L_switch_no_local_from:
+    mov qword ptr [rdi - 32], 0
+.L_switch_check_to:
     mov rax, [rsi - 32]
     test rax, rax
     jz .L_switch_keep_handler
+    mov rdx, rax
+    mov r10, [r9 + r8*8]
+.L_switch_stitch_to:
+    mov r11, [rdx]
+    test r11, r11
+    jz .L_switch_found_tail_to
+    lea rcx, [rsi - 65536]
+    cmp r11, rcx
+    jb .L_switch_found_tail_to
+    cmp r11, rsi
+    jae .L_switch_found_tail_to
+    mov rdx, r11
+    jmp .L_switch_stitch_to
+.L_switch_found_tail_to:
+    mov [rdx], r10
     mov [r9 + r8*8], rax
 .L_switch_keep_handler:
     lea rcx, [rip + ulisp_gc_state]
@@ -411,7 +494,25 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov [rcx + r8*8], rdi
     lea r9, [rip + ulisp_handler_chain]
     mov rax, [rdi - 32]
+    test rax, rax
+    jz .L_switch_back_keep_handler
+    mov rdx, rax
+    mov r10, [r9 + r8*8]
+.L_switch_stitch_back:
+    mov r11, [rdx]
+    test r11, r11
+    jz .L_switch_found_tail_back
+    lea rcx, [rdi - 65536]
+    cmp r11, rcx
+    jb .L_switch_found_tail_back
+    cmp r11, rdi
+    jae .L_switch_found_tail_back
+    mov rdx, r11
+    jmp .L_switch_stitch_back
+.L_switch_found_tail_back:
+    mov [rdx], r10
     mov [r9 + r8*8], rax
+.L_switch_back_keep_handler:
     lea rcx, [rip + ulisp_gc_state]
     mov [rcx + 24], rdi
     mov [rcx + 48], rdi

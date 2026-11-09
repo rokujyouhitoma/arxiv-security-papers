@@ -324,6 +324,52 @@
 (flush-output-port)
 
 ;; -----------------------------------------------------------------------
+;; Group 9: Issue #740 / #787 Coroutine Yield & Cross-Worker Exception Resilience
+;; -----------------------------------------------------------------------
+(write-string "--- Group 9: Coroutine Yield & Cross-Worker Exception Resilience (#740, Issue #787) ---\n")
+(flush-output-port)
+
+(let* ((sched (make-work-stealing-scheduler 4 256))
+       (n-tasks 20)
+       (yield-count (make-atomic-box 0))
+       (caught-count (make-atomic-box 0)))
+  ;; Test: Worker 0 initiates coroutine, yields, then cross-worker task resumes and catches exception
+  (let loop ((i 0))
+    (if (< i n-tasks)
+        (begin
+          (scheduler-spawn!
+           sched
+           (lambda ()
+             (let* ((co (make-coroutine-context
+                         (lambda ()
+                           (atomic-fetch-add! yield-count 1)
+                           (context-yield! 'yielded-ok)
+                           ;; Exception without local handler upon cross-worker resume
+                           (car '()))))
+                    (first-val (context-resume! co)))
+               (assert-equal first-val 'yielded-ok "coroutine yielded successfully in initial worker")
+               ;; Spawn resumption into another worker (cross-thread worker resumption)
+               (scheduler-spawn!
+                sched
+                (lambda ()
+                  (guard (exn (#t
+                               (atomic-fetch-add! caught-count 1)
+                               'caught-cleanly-across-workers))
+                    (context-resume! co)))
+                (+ (modulo i 3) 1))))
+           0)
+          (loop (+ i 1)))
+        #t))
+
+  (let ((completed (scheduler-run-parallel! sched (* n-tasks 2))))
+    (assert-equal (atomic-ref yield-count) n-tasks "all 20 coroutines yielded in worker 0")
+    (assert-equal (atomic-ref caught-count) n-tasks "all 20 exceptions caught cleanly across different workers")
+    (assert-equal completed (* n-tasks 2) "all 40 combined tasks completed cleanly in parallel"))
+  (scheduler-stop! sched))
+(write-string "  [PASS] Coroutine yield and cross-worker exception resilience verified.\n")
+(flush-output-port)
+
+;; -----------------------------------------------------------------------
 ;; Test Suite Summary
 ;; -----------------------------------------------------------------------
 (let ((passes (vector-ref *test-mt-passes* 0))
