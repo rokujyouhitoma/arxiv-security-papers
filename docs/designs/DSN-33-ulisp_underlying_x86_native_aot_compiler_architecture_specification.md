@@ -785,6 +785,7 @@ ulisp/
 | **JIT 包括テスト** | `make -C ulisp test_jit` | delimcc, tracer, auto_instrument, optimizer, bridge, examples 全 94 件 100% PASS |
 | **マルチバックエンド検証** | `make -C ulisp test_c test_aarch64` | C99 (42件), AArch64 (28件) 100% PASS (-Werror 警告ゼロ) |
 | **QEMU AArch64 回帰検証** | `make -C ulisp test_aarch64_qemu` | QEMU エミュレーション環境下で Smoke (9件), Concurrency (71件), R7RS Values/Char (126件) 計 206 件 100% PASS |
+| **Windows Wine 検証環境** | `make -C ulisp test_wine_env` | MinGW-w64 クロスコンパイル + Wine64 ヘッドレス環境下で PE32+ exit(42), Stdio, Win32 API, MS x64 ABI 全 4 ステージ 100% PASS |
 | **セルフホスト固定点テスト**| `make -C ulisp bootstrap` | `diff stage2.s stage3.s` が終了コード 0（ビット単位完全一致） |
 | **ワンバイナリ E2E 検証** | `make -C ulisp run_jit` | `bin/ulisp-jit` が AOT コンパイルおよび JIT ループ実行の双方で正常終了 |
 | **AOT vs JIT ベンチマーク** | `make -C ulisp bench` | バイナリサイズ、セグメント使用量、AOT スループットの測定完走 |

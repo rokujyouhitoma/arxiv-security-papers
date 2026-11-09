@@ -2,7 +2,7 @@
 ID: 694
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] MinGW-w64 および Wine を用いた Windows 向けクロスコンパイル・ローカル検証環境の構築 (ID: 694)
@@ -48,10 +48,10 @@ ULisp コンパイラおよび Synapse 並行性ランタイムにおけるマ�
 ### 3.2 影響ファイル一覧
 - [x] [docs/issues/694-setup-mingw-and-wine-verification-environment.md](694-setup-mingw-and-wine-verification-environment.md) (本仕様書)
 - [x] [docs/issues/README.md](README.md) (Issue 台帳のステータス更新)
-- [ ] [ulisp/scripts/test_wine_env.sh](../../ulisp/scripts/test_wine_env.sh) (新規作成: MinGW & Wine ヘッドレス疎通・ABI 検証スクリプト)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`CROSS_CC_WIN64`, `WINE64` 変数および `test_wine_env` / `test-wine-env` ターゲット追加)
-- [ ] [Makefile](../../Makefile) (ルート `test_wine_env` ターゲット追加と委譲)
-- [ ] [docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) (テスト自動化マトリクス追記)
+- [x] [ulisp/scripts/test_wine_env.sh](../../ulisp/scripts/test_wine_env.sh) (新規作成: MinGW & Wine ヘッドレス疎通・ABI 検証スクリプト)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`CROSS_CC_WIN64`, `WINE64` 変数および `test_wine_env` / `test-wine-env` ターゲット追加)
+- [x] [Makefile](../../Makefile) (ルート `test_wine_env` ターゲット追加と委譲)
+- [x] [docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) (テスト自動化マトリクス追記)
 
 ---
 
@@ -145,16 +145,16 @@ Target Branch: `feat/694-setup-mingw-wine-verification-environment`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] **クロスコンパイル＆エミュレータツールの配備とパス解決**:
+- [x] **クロスコンパイル＆エミュレータツールの配備とパス解決**:
   - `x86_64-w64-mingw32-gcc --version` および `wine64 --version` (または `wine --version`) が正常に終了コード 0 を返却すること。
-- [ ] **全自動ワンコマンド疎通検証**:
+- [x] **全自動ワンコマンド疎通検証**:
   - `make -C ulisp test_wine_env`（および `make test_wine_env`）の 1 コマンドで、全 4 ステージのコンパイル・実行・出力検証が自動完走すること。
-- [ ] **Win32 API および MS x64 呼出規約の整合性**:
+- [x] **Win32 API および MS x64 呼出規約の整合性**:
   - Direct Win32 API 呼び出しおよび 32 バイト Shadow Space / 16 バイトスタックアライメントが Wine 上で正常動作すること。
-- [ ] **完全隔離されたヘッドレス実行**:
+- [x] **完全隔離されたヘッドレス実行**:
   - 一時 `WINEPREFIX` 上で `WINEDEBUG=-all` かつ `DISPLAY=` により GUI ダイアログ一切なしでヘッドレス完走し、終了時に `wineserver -k` で確実にクリーンアップされること。
-- [ ] **既存環境への無影響 (リグレッションフリー)**:
+- [x] **既存環境への無影響 (リグレッションフリー)**:
   - `make test_aarch64_qemu` (206 件) および `make -C ulisp test_context_switch` (89 件) が 100% PASS を維持すること。
-- [ ] **品質ゲート 100% 合格**:
+- [x] **品質ゲート 100% 合格**:
   - `make -C ulisp lint_sexpr` が 100% PASS すること。
   - `make py_compile`, `make check_format`, `make static_analysis` がエラー 0 件で合格すること。

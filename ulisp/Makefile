@@ -16,6 +16,12 @@ CROSS_LD_AARCH64 ?= aarch64-linux-gnu-ld
 CROSS_CC_AARCH64 ?= aarch64-linux-gnu-gcc
 QEMU_AARCH64 ?= $(shell command -v qemu-aarch64 2>/dev/null || command -v qemu-aarch64-static 2>/dev/null)
 
+# Windows x64 Cross-Toolchain (MinGW-w64) & Wine Emulation (Issue #694)
+CROSS_CC_WIN64 ?= x86_64-w64-mingw32-gcc
+CROSS_AS_WIN64 ?= x86_64-w64-mingw32-as
+CROSS_LD_WIN64 ?= x86_64-w64-mingw32-ld
+WINE64 ?= $(shell command -v wine64 2>/dev/null || command -v wine 2>/dev/null || if [ -x /usr/lib/wine/wine64 ]; then echo /usr/lib/wine/wine64; fi)
+
 %.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
 
@@ -613,6 +619,15 @@ test_aarch64_qemu: compiler build/ulisp_stdlib_aarch64.o test_context_switch_aar
 	 bash scripts/test_aarch64_qemu_regression.sh
 
 test-aarch64-qemu: test_aarch64_qemu
+
+test_wine_env:
+	@CROSS_CC_WIN64="$(CROSS_CC_WIN64)" \
+	 CROSS_AS_WIN64="$(CROSS_AS_WIN64)" \
+	 CROSS_LD_WIN64="$(CROSS_LD_WIN64)" \
+	 WINE64="$(WINE64)" \
+	 bash scripts/test_wine_env.sh
+
+test-wine-env: test_wine_env
 
 test_verifier: build/compiler_passes.scm test_lir_verifier
 	@mkdir -p build

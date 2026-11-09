@@ -207,6 +207,12 @@ test_aarch64_qemu: ## Run fully automated QEMU AArch64 regression test suite (Is
 
 test-aarch64-qemu: test_aarch64_qemu
 
+.PHONY: test_wine_env test-wine-env
+test_wine_env: ## Run MinGW-w64 and Wine verification environment test suite (Issue #694)
+	$(MAKE) -C ulisp test_wine_env
+
+test-wine-env: test_wine_env
+
 .PHONY: verify_r7rs_traceability
 verify_r7rs_traceability: activate ## Verify R7RS specification traceability and diagnostic tags (Issue #665)
 	${VENV_PYTHON} scripts/verify_r7rs_traceability.py
