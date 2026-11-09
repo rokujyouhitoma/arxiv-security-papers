@@ -542,6 +542,18 @@ flowchart LR
 - 各 Worker はローカルの両端キュー（Chase-Lev ワークスティーリング Deque）を保持。
 - 自タスクキューが空になった Worker は、他 Worker のキュー末尾からタスクを CAS で盗取（Steal）し、負荷を自律分散する。
 
+### 7.1.1 スケジューラ並行性上限と生存タスク数管理 (CWE-400 対策 / Issue #793)
+
+- **累積値と生存値の完全分離**:
+  - `tasks-spawned`: 累積タスク生成数（単調増加の観測メトリクス）。
+  - `tasks-completed` / `tasks-failed`: 累積正常完了および異常終了数（単調増加）。
+  - `live-tasks`: 現在並行に生存・実行中のアクティブタスク数（`scheduler-live-tasks` / `scheduler-total-live`）。
+- **`*scheduler-max-tasks*` ガードの厳格化**:
+  - `scheduler-spawn!` における同時実行数上限チェック（デフォルト 1,000 万）を `scheduler-live-tasks` に対して適用。
+  - 短命タスクの生成・完了を繰り返す長寿命サービスにおいて、累積数が上限に達しても現在生存数が上限未満であれば正常に spawn 可能とし、累積カウンタ枯渇による恒久 DoS（CWE-400）および Supervisor 子タスク再起動不能を完全に遮断。
+  - `scheduler-set-max-tasks!` による動的構成変更（CWE-843, CWE-400 境界検証付き）および `scheduler-max-tasks` ゲッターをサポート。
+  - `scheduler-run!` および `scheduler-run-parallel!` において、ステップ数上限指定を呼び出し時点からの相対デルタ実行（`target = completed + failed + max-tasks`）として正しく処理。
+
 ## 7.2 リダクション方式セーフポイント注入による決定論的プリエンプション
 
 Erlang BEAM の Reduction 機構に倣い、uLisp の AOT コンパイラパス（`inject-safepoints-pass`）が関数のプロローグおよびループバックエッジにリダクション・セーフポイント判定（命令バジェット減算）の S 式を自動注入する。
