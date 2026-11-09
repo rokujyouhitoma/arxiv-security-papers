@@ -474,6 +474,151 @@
                          (member '(%affine-drop! c) (cdr inner))
                          #t))))
 
+;;; -----------------------------------------------------------------------
+;;; Group 9: Elimination of Name-Based Heuristics & Signature Propagation (Issue #792)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 9: Elimination of Name-Based Heuristics & Signature Propagation (Issue #792) ---\n")
+
+;; 9.1-9.2 Variable name heuristics elimination for let bindings
+(assert-false "9.1 variable 'result' bound to function call is NOT linear (CWE-843)"
+              (infer-linear-binding? 'result '(compute-val) '()))
+
+(assert-false "9.2 variable 'response' bound to function call is NOT linear"
+              (infer-linear-binding? 'response '(fetch-packet) '()))
+
+;; 9.3-9.5 Name hint predicate refinement
+(assert-false "9.3 linear-variable-name-hint? rejects 'result"
+              (linear-variable-name-hint? 'result))
+
+(assert-false "9.4 linear-variable-name-hint? rejects 'response"
+              (linear-variable-name-hint? 'response))
+
+(assert-true "9.5 linear-variable-name-hint? accepts 'resource"
+             (linear-variable-name-hint? 'resource))
+
+;; 9.6 Multi-reference of 'result' bound to function call validates ok (False-Positive Fixed)
+(define multi-ref-result-call-expr
+  '(let ((result (compute-val)))
+     (+ result result)))
+
+(define r-multi-result-call (validate-affine-ast multi-ref-result-call-expr '()))
+(assert-true "9.6 multi-ref of 'result' bound to function call validates ok without use-after-move"
+             (and (pair? r-multi-result-call) (eq? (car r-multi-result-call) 'ok)))
+
+;; 9.7 Non-linear variable 'result' from function call does NOT get %affine-drop! injected
+(define trans-result-call (transform-affine-expr multi-ref-result-call-expr '()))
+(define trans-result-call-ast (car trans-result-call))
+(assert-false "9.7 non-linear 'result' from function call does NOT get %affine-drop! injected"
+              (and (pair? (caddr trans-result-call-ast))
+                   (eq? (car (caddr trans-result-call-ast)) 'let)
+                   (pair? (cadr (caddr trans-result-call-ast)))
+                   (pair? (caar (cadr (caddr trans-result-call-ast))))
+                   (eq? (caar (cadr (caddr trans-result-call-ast))) '__raii_res)))
+
+;; 9.8 Multi-reference of 'response' validates ok
+(define multi-ref-response-expr
+  '(let ((response (fetch-data)))
+     (list response response)))
+
+(define r-multi-response (validate-affine-ast multi-ref-response-expr '()))
+(assert-true "9.8 multi-ref of 'response' validates ok without error"
+             (and (pair? r-multi-response) (eq? (car r-multi-response) 'ok)))
+
+;; 9.9 Function signature propagation: arbitrary name 'c' bound to function returning channel
+(define sig-env-pipe '((open-pipe . channel)))
+(assert-true "9.9 arbitrary name 'c' bound to function returning channel is linear via sig-env"
+             (infer-linear-binding? 'c '(open-pipe) '() sig-env-pipe))
+
+;; 9.10 Double send of channel 'c' from function return detected as use-after-move (False-Negative Fixed)
+(define double-send-c-from-pipe
+  '(let ((c (open-pipe)))
+     (channel-send! tx c)
+     (channel-send! tx c)))
+
+(define r-double-c-pipe (validate-affine-ast double-send-c-from-pipe env-tx-avail sig-env-pipe))
+(assert-equal "9.10 double send of channel 'c' from function return detected as use-after-move"
+              '(error use-after-move c)
+              r-double-c-pipe)
+
+;; 9.11 Close then send on 'c' from function return detected as use-after-move
+(define close-then-send-c-pipe
+  '(let ((c (open-pipe)))
+     (channel-close! c)
+     (channel-send! c 42)))
+
+(define r-close-c-pipe (validate-affine-ast close-then-send-c-pipe '() sig-env-pipe))
+(assert-equal "9.11 close then send on channel 'c' detected as use-after-move"
+              '(error use-after-move c)
+              r-close-c-pipe)
+
+;; 9.12 Unconsumed channel 'c' from function return gets (%affine-drop! c) injected (CWE-775)
+(define unconsumed-c-pipe
+  '(let ((c (open-pipe)))
+     42))
+
+(define trans-c-pipe (transform-affine-expr unconsumed-c-pipe '() sig-env-pipe))
+(define trans-c-pipe-ast (car trans-c-pipe))
+(assert-true "9.12 unconsumed channel 'c' from function return gets (%affine-drop! c) injected"
+             (and (pair? trans-c-pipe-ast)
+                  (eq? (car trans-c-pipe-ast) 'let)
+                  (let* ((body (caddr trans-c-pipe-ast)))
+                    (and (pair? body)
+                         (eq? (car body) 'let)
+                         (let ((inner (caddr body)))
+                           (and (pair? inner)
+                                (eq? (car inner) 'begin)
+                                (member '(%affine-drop! c) (cdr inner))
+                                #t))))))
+
+;; 9.13-9.15 Explicit annotations support
+(assert-true "9.13 typed let-binding (: c channel) is recognized as linear"
+             (infer-linear-binding? '(: c channel) '(external-call) '()))
+
+(assert-true "9.14 explicit !linear annotation in let value is linear"
+             (infer-linear-binding? 'c '(!linear (external-call)) '()))
+
+(assert-true "9.15 explicit (: channel expr) in let value is linear"
+             (infer-linear-binding? 'c '(: channel (external-call)) '()))
+
+;; 9.16 Dynamic signature registration
+(register-affine-signature! 'dyn-chan 'channel)
+(assert-true "9.16 dynamic signature registration makes function call linear"
+             (infer-linear-binding? 'c '(dyn-chan) '()))
+
+;; 9.17-9.19 Top-level form signature scanning via scan-form-signatures
+(define test-forms
+  (list
+    '(: typed-pipe (-> () channel))
+    '(define (tail-chan-pipe) (make-channel 16))
+    '(define (normal-fn) (+ 1 2))))
+
+(define scanned-sigs (scan-form-signatures test-forms))
+(assert-equal "9.17 scan-form-signatures detects typed-pipe return type"
+              'channel
+              (cdr (assq 'typed-pipe scanned-sigs)))
+
+(assert-equal "9.18 scan-form-signatures infers tail-chan-pipe return type"
+              'channel
+              (cdr (assq 'tail-chan-pipe scanned-sigs)))
+
+(assert-false "9.19 normal-fn is not in scanned signatures"
+              (assq 'normal-fn scanned-sigs))
+
+;; 9.20 End-to-end check-affine-pass integration with signature propagation & non-linear 'result'
+(define full-program-forms
+  (list
+    '(: open-comm (-> () channel))
+    '(%asc-kernel (run-worker rx)
+       (let ((result (compute-data)))
+         (let ((c (open-comm)))
+           (channel-send! rx result)
+           (channel-send! rx c))))))
+
+(define pass-out (check-affine-pass full-program-forms))
+(assert-true "9.20 check-affine-pass succeeds with 'result' and 'c' from signature"
+             (and (pair? (cadr pass-out))
+                  (eq? (car (cadr pass-out)) '%asc-kernel)))
+
 (display "\n=======================================================\n")
 (display " Test Suite Completed: ")
 (display (car *pass-count*))
