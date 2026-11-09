@@ -381,6 +381,8 @@
                                                (make-atomic-box #f)
                                                (make-atomic-box (list))
                                                (make-atomic-box #f))))
+           ;; Mark sup-task as a resident actor task (Issue #788)
+           (task-resident-set! sup-task #t)
            ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7, #743)
            (task-next-run-set!
             sup-task
@@ -431,6 +433,7 @@
      (if (not (supervisor-context? sup))
          (error "supervisor-stop!: expected <supervisor-context> (CWE-843)" sup)
          (let ((sup-task (supervisor-task sup)))
+           (task-resident-set! sup-task #f)
            (atomic-set! (%supervisor-state-box sup) 'stopping)
            (%unregister-active-supervisor! sup-task)
            (let ((children (atomic-swap! (%supervisor-children-box sup) (list))))
@@ -441,6 +444,7 @@
                    (begin
                      (%stop-child-instance! sup-task (car cs))
                      (loop (cdr cs))))))
+           (task-exit! sup-task 'normal)
            (atomic-set! (%supervisor-state-box sup) 'stopped)
            #t)))))
 

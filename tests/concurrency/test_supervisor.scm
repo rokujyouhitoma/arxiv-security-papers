@@ -778,6 +778,121 @@
              "supervisor-set-message-handler! rejects non-procedure handler (CWE-843)")
 
 ;; -----------------------------------------------------------------------
+;; Group 15: Nested Supervision Tree & Persistent Supervisor Tasks (Issue #788)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 15: Nested Supervision Tree & Persistent Supervisor Tasks (#788) ---\n")
+(flush-output-port)
+
+;; 15.1 task-resident? API & Security Guards (CWE-843)
+(let ((t (make-task-context)))
+  (assert-true (not (task-resident? t)) "default task is not resident")
+  (assert-true (task-resident-set! t #t) "task-resident-set! #t returns #t")
+  (assert-true (task-resident? t) "task-resident? is now #t")
+  (assert-true (not (task-resident-set! t #f)) "task-resident-set! #f returns #f")
+  (assert-true (not (task-resident? t)) "task-resident? is now #f"))
+
+(assert-true (not (task-resident? 'not-a-task)) "task-resident? on non-task returns #f")
+(assert-true (guard (exn (else #t)) (task-resident-set! 'not-a-task #t) #f)
+             "task-resident-set! rejects non-task (CWE-843)")
+
+;; 15.2 Supervisor sup-task is marked resident by default
+(let* ((spec (make-supervisor-spec 'one_for_one 5 1000 '()))
+       (sup (make-supervisor spec)))
+  (assert-true (task-resident? (supervisor-task sup)) "supervisor-task is marked resident on creation (#788)")
+  (supervisor-start! sup)
+  (assert-true (task-resident? (supervisor-task sup)) "supervisor-task remains resident after start")
+  (supervisor-stop! sup)
+  (assert-true (not (task-resident? (supervisor-task sup))) "supervisor-stop! clears resident flag (#788)")
+  (assert-eq (task-state (supervisor-task sup)) 'terminated "supervisor-stop! terminates sup-task"))
+
+;; 15.3 Single Supervisor Mailbox Drain preserves 'waiting state in Scheduler
+(let* ((sched (make-work-stealing-scheduler 2 256))
+       (w-boots (make-atomic-box 0))
+       (w-spec (make-child-spec 'w_drain
+                                (lambda ()
+                                  (atomic-fetch-add! w-boots 1)
+                                  (let ((t (make-task-context)))
+                                    (task-next-run-set! t (lambda () (cons 'ok 'drain_done)))
+                                    t))
+                                'transient))
+       (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list w-spec)))
+       (sup (make-supervisor sup-spec #f sched)))
+  (supervisor-start! sup sched #t)
+  (let* ((sup-task (supervisor-task sup))
+         (child (supervisor-child-task sup 'w_drain)))
+    (assert-eq (atomic-ref w-boots) 1 "w_drain booted initially")
+    ;; Run scheduler step to execute child task to normal completion
+    (scheduler-worker-step! sched 0)
+    ;; Child completed normally -> sends DOWN (normal) to sup-task
+    ;; Draining DOWN signal by sup-task via scheduler step:
+    (scheduler-worker-step! sched 0)
+    ;; Verify sup-task state is 'waiting (NOT 'terminated!)
+    (assert-eq (task-state sup-task) 'waiting "supervisor task state is 'waiting after mailbox drain (#788)")
+    (assert-true (not (eq? (task-state sup-task) 'terminated)) "supervisor task is not terminated (#788)")
+    (supervisor-stop! sup)))
+
+;; 15.4 Nested Supervision Tree: Worker crash under Child Supervisor does not trigger Parent restart
+(let* ((sched (make-work-stealing-scheduler 2 256))
+       (leaf-boots (make-atomic-box 0))
+       (leaf-spec (make-child-spec 'leaf_worker
+                                   (lambda ()
+                                     (atomic-fetch-add! leaf-boots 1)
+                                     (make-task-context))
+                                   'permanent))
+       (child-sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list leaf-spec)))
+       (child-sup (make-supervisor child-sup-spec #f sched))
+       (child-sup-task (supervisor-task child-sup))
+       (initial-child-sup-tid (task-tid child-sup-task))
+       (parent-restarts-of-child (make-atomic-box 0))
+       (child-sup-child-spec (make-child-spec 'sub_supervisor
+                                              (lambda ()
+                                                (atomic-fetch-add! parent-restarts-of-child 1)
+                                                child-sup-task)
+                                              'permanent
+                                              'supervisor))
+       (parent-sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list child-sup-child-spec)))
+       (parent-sup (make-supervisor parent-sup-spec #f sched)))
+
+  ;; Start child supervisor then parent supervisor
+  (supervisor-start! child-sup sched #t)
+  (supervisor-start! parent-sup sched #t)
+
+  (assert-eq (atomic-ref leaf-boots) 1 "leaf_worker booted initially (1st time)")
+  (assert-eq (atomic-ref parent-restarts-of-child) 1 "child_supervisor registered in parent (1st time)")
+
+  (let* ((leaf-task (supervisor-child-task child-sup 'leaf_worker))
+         (leaf-tid (task-tid leaf-task)))
+    ;; Simulate a failure of leaf_worker
+    (task-exit! leaf-task '(panic . simulated_leaf_fault))
+
+    ;; Process DOWN signals through scheduler
+    (scheduler-worker-step! sched 0)
+    (scheduler-worker-step! sched 0)
+
+    ;; Verify leaf_worker was restarted under child-sup
+    (assert-eq (atomic-ref leaf-boots) 2 "leaf_worker restarted after fault")
+    (let ((new-leaf (supervisor-child-task child-sup 'leaf_worker)))
+      (assert-true (task-context? new-leaf) "new leaf_worker task exists")
+      (assert-true (not (= (task-tid new-leaf) leaf-tid)) "new leaf_worker has fresh TID"))
+
+    ;; Crucial verification of Issue #788:
+    ;; child-sup-task did NOT prematurely exit or send spurious DOWN (normal) to parent-sup!
+    (assert-eq (task-state child-sup-task) 'waiting "child supervisor task is 'waiting (not terminated) (#788)")
+    (assert-eq (atomic-ref parent-restarts-of-child) 1 "parent supervisor NEVER restarted child supervisor (#788)")
+    (assert-eq (task-tid (supervisor-child-task parent-sup 'sub_supervisor))
+               initial-child-sup-tid
+               "child supervisor preserved original TID across child worker restarts (#788)")
+
+    ;; Verify parent-sup inbox has no unhandled DOWN messages
+    (assert-equal (length (supervisor-preserved-messages parent-sup)) 0
+                  "parent supervisor received 0 spurious signals (#788)"))
+
+  (supervisor-stop! parent-sup)
+  (supervisor-stop! child-sup)
+  (assert-eq (task-state child-sup-task) 'terminated "child supervisor terminated after explicit stop")
+  (assert-eq (task-state (supervisor-task parent-sup)) 'terminated "parent supervisor terminated after explicit stop"))
+
+;; -----------------------------------------------------------------------
 ;; Final Summary
 ;; -----------------------------------------------------------------------
 

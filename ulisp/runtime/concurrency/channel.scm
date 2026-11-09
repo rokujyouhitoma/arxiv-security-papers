@@ -95,7 +95,7 @@
                       blocked-on epoch next-run
                       reduction-exhaustions steals-count handoff-box
                       links-box monitors-box monitored-by-box trap-exit-box owned-channels-box
-                      arena-box escape-k-box handler-chain-box executing-box)
+                      arena-box escape-k-box handler-chain-box executing-box resident-box)
   task-context?
   (tid                   %task-tid)
   (state                 %task-state                 %task-state-set!)
@@ -119,7 +119,8 @@
   (arena-box             %task-arena-box)
   (escape-k-box          %task-escape-k-box)
   (handler-chain-box     %task-handler-chain-box)
-  (executing-box         %task-executing-box))
+  (executing-box         %task-executing-box)
+  (resident-box          %task-resident-box))
 
 ;; -----------------------------------------------------------------------
 ;; Global Monotonically Increasing Atomic Task ID Allocator (#673)
@@ -252,7 +253,7 @@
                       (make-atomic-box '()) (make-atomic-box #f)
                       (make-atomic-box '())
                       (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
-                      (make-atomic-box #f)))
+                      (make-atomic-box #f) (make-atomic-box #f)))
 
 (define make-task-context
   (case-lambda
@@ -280,7 +281,7 @@
                           (make-atomic-box '()) (make-atomic-box #f)
                           (make-atomic-box '())
                           (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
-                          (make-atomic-box #f))))))
+                          (make-atomic-box #f) (make-atomic-box #f))))))
 
 (define (task-tid t)
   (if (not (task-context? t))
@@ -762,6 +763,24 @@
         (%memory-fence)
         b)))
 
+(define (task-resident-box t)
+  (if (not (task-context? t))
+      (error "task-resident-box: expected <task-context>" t)
+      (%task-resident-box t)))
+
+(define (task-resident? t)
+  (if (not (task-context? t))
+      #f
+      (atomic-ref (%task-resident-box t))))
+
+(define (task-resident-set! t val)
+  (if (not (task-context? t))
+      (error "task-resident-set!: expected <task-context> (CWE-843)" t)
+      (let ((b (if val #t #f)))
+        (atomic-set! (%task-resident-box t) b)
+        (%memory-fence)
+        b)))
+
 ;; -----------------------------------------------------------------------
 ;; Per-Worker Fallback Task Contexts & Default Task Boundary Hook (Issue #720)
 ;; -----------------------------------------------------------------------
@@ -777,7 +796,7 @@
                                                    (make-atomic-box '()) (make-atomic-box #f)
                                                    (make-atomic-box '())
                                                    (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
-                                                   (make-atomic-box #f)))
+                                                   (make-atomic-box #f) (make-atomic-box #f)))
             (loop (+ i 1)))
           vec))))
 

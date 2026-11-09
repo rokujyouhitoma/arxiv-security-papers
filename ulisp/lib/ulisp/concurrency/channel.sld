@@ -90,6 +90,9 @@
     task-executing-box
     task-executing?
     task-executing-set!
+    task-resident-box
+    task-resident?
+    task-resident-set!
     *active-current-task-box*
     *worker-current-task-tls*
     *worker-slot-override-tls*

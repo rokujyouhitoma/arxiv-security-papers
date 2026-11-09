@@ -415,17 +415,29 @@
                            res)
                          res)
                      res)))
-              ;; Thunk: zero-argument procedure (Issue #741)
+              ;; Thunk: zero-argument procedure (Issue #741, #788)
               ((and (not (vector? nxt)) (procedure? nxt))
                (let ((res (with-synapse-task-boundary ctx nxt)))
                  (if (and (pair? res) (eq? (car res) 'ok))
-                     (begin
-                       (task-exit! ctx 'normal)
-                       res)
+                     (if (task-resident? ctx)
+                         ;; Resident actor task: do NOT exit! Transition to idle/waiting
+                         (begin
+                           (if (not (eq? (task-state ctx) 'terminated))
+                               (task-state-set! ctx 'waiting))
+                           res)
+                         (begin
+                           (task-exit! ctx 'normal)
+                           res))
                      res)))
               (else
-               (task-exit! ctx 'normal)
-               (cons 'ok #t))))))))
+               (if (task-resident? ctx)
+                   (begin
+                     (if (not (eq? (task-state ctx) 'terminated))
+                         (task-state-set! ctx 'waiting))
+                     (cons 'ok #t))
+                   (begin
+                     (task-exit! ctx 'normal)
+                     (cons 'ok #t))))))))))
 
 (define scheduler-spawn!
   (case-lambda
