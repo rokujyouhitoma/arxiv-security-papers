@@ -431,7 +431,7 @@
 
 (define (run-scenario-supervisor-fault-isolation! iter prng)
   (begin
-    (vector-set! *harness-current-scenario* 0 "Scenario 4e: Supervisor Fault Isolation (#722)")
+    (vector-set! *harness-current-scenario* 0 "Scenario 4e: Autonomous Supervisor Fault Isolation (#722, #791)")
     (let* ((sched (make-work-stealing-scheduler 2 32))
            (child-boot-count (make-atomic-box 0))
            (child-recovered-box (make-atomic-box 0))
@@ -442,6 +442,7 @@
              (lambda ()
                (let ((t (make-task-context))
                      (attempt (+ (atomic-fetch-add! child-boot-count 1) 1)))
+                 (task-resident-set! t #t)
                  (task-next-run-set!
                   t
                   (lambda ()
@@ -450,10 +451,11 @@
                         (car '())
                         (atomic-set! child-recovered-box 999))))
                  t))
-             'transient))
+             'permanent))
            (sup-spec (make-supervisor-spec 'one_for_one 5 1000 (list crashy-spec)))
-           (sup (make-supervisor sup-spec)))
-      (supervisor-start! sup)
+           (sup (make-supervisor sup-spec #f sched)))
+      ;; Autonomous startup: Supervisor registers into scheduler and automatically spawns children (#741, #791)
+      (supervisor-start! sup sched #t)
       (let* ((t-child-1 (supervisor-child-task sup 'ci_crashy_worker))
              (tid-1 (task-tid t-child-1))
              (u1 (make-task-context))
@@ -461,19 +463,17 @@
         (task-next-run-set! u1 (lambda () (inject-jitter! prng 4) (atomic-fetch-add! unrelated-sum-box 10)))
         (task-next-run-set! u2 (lambda () (inject-jitter! prng 4) (atomic-fetch-add! unrelated-sum-box 20)))
         (scheduler-spawn! sched u1 0)
-        (scheduler-spawn! sched t-child-1 0)
         (scheduler-spawn! sched u2 1)
-        (scheduler-run! sched)
+        ;; Run scheduler: unrelated tasks execute, child crashes with (car '()),
+        ;; Supervisor automatically handles DOWN, restarts child, and drains to completion!
+        (scheduler-run! sched 30)
         (harness-assert-equal (atomic-ref unrelated-sum-box) 30 "Unrelated tasks must complete despite child (car '())")
         (harness-assert-equal (task-state t-child-1) 'terminated "Crashing child must transition to 'terminated")
-        (supervisor-poll-down-signals! sup)
         (let* ((t-child-2 (supervisor-child-task sup 'ci_crashy_worker))
                (tid-2 (task-tid t-child-2)))
           (harness-assert-false (= tid-1 tid-2) "Restarted child must receive fresh TID")
-          (scheduler-spawn! sched t-child-2 0)
-          (scheduler-run! sched)
-          (harness-assert-equal (atomic-ref child-boot-count) 2 "Child must boot twice")
-          (harness-assert-equal (atomic-ref child-recovered-box) 999 "Restarted child must complete"))
+          (harness-assert-equal (atomic-ref child-boot-count) 2 "Child must boot twice autonomously")
+          (harness-assert-equal (atomic-ref child-recovered-box) 999 "Restarted child must complete autonomously"))
         (supervisor-stop! sup)
         (scheduler-stop! sched)))))
 

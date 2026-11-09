@@ -12,11 +12,15 @@
 ;;; =======================================================================
 
 (load "ulisp/runtime/concurrency/atomic.scm")
+(load "ulisp/runtime/concurrency/arena.scm")
 (load "ulisp/runtime/concurrency/queue.scm")
 (load "ulisp/runtime/concurrency/channel.scm")
 (load "ulisp/runtime/concurrency/context.scm")
 (load "ulisp/runtime/concurrency/deque.scm")
 (load "ulisp/runtime/concurrency/thread.scm")
+(load "ulisp/runtime/concurrency/links.scm")
+(load "ulisp/runtime/concurrency/panic.scm")
+(load "ulisp/runtime/concurrency/supervisor.scm")
 (load "ulisp/runtime/concurrency/scheduler.scm")
 
 (define *test-mt-failures* (vector 0))
@@ -368,6 +372,143 @@
   (scheduler-stop! sched))
 (write-string "  [PASS] Coroutine yield and cross-worker exception resilience verified.\n")
 (flush-output-port)
+
+;; -----------------------------------------------------------------------
+;; Group 10: Multi-Worker Parallel Supervisor Burst Crash Recovery (#791, Issue #789)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 10: Parallel Supervisor Multi-Worker Burst Crash Recovery (#791) ---\n")
+(flush-output-port)
+
+(let* ((sched (make-work-stealing-scheduler 4 256))
+       (child-restarts (make-atomic-box 0))
+       (make-parallel-child
+        (lambda (name)
+          (make-child-spec
+           name
+           (lambda ()
+             (atomic-fetch-add! child-restarts 1)
+             (let ((t (make-task-context)))
+               (task-resident-set! t #t)
+               (task-next-run-set!
+                t
+                (lambda ()
+                  ;; Permanent child stays in waiting state until termination
+                  #t))
+               t))
+           'permanent)))
+       (cspecs (list (make-parallel-child 'c0) (make-parallel-child 'c1)
+                     (make-parallel-child 'c2) (make-parallel-child 'c3)
+                     (make-parallel-child 'c4) (make-parallel-child 'c5)
+                     (make-parallel-child 'c6) (make-parallel-child 'c7)))
+       (sup-spec (make-supervisor-spec 'one_for_one 30 1000 cspecs))
+       (sup (make-supervisor sup-spec #f sched))
+       (sup-task (supervisor-task sup)))
+
+  ;; Autonomous startup in multi-worker scheduler
+  (supervisor-start! sup sched #t)
+  (assert-equal (atomic-ref child-restarts) 8 "all 8 child tasks booted initially under parallel scheduler")
+
+  ;; Save original child TIDs
+  (let* ((tid0 (task-tid (supervisor-child-task sup 'c0)))
+         (tid1 (task-tid (supervisor-child-task sup 'c1)))
+         (tid2 (task-tid (supervisor-child-task sup 'c2)))
+         (tid3 (task-tid (supervisor-child-task sup 'c3)))
+         (tid4 (task-tid (supervisor-child-task sup 'c4)))
+         (tid5 (task-tid (supervisor-child-task sup 'c5)))
+         (tid6 (task-tid (supervisor-child-task sup 'c6)))
+         (tid7 (task-tid (supervisor-child-task sup 'c7))))
+
+    ;; Concurrent Burst Crash: terminate all 8 child tasks rapidly
+    (let loop ((names '(c0 c1 c2 c3 c4 c5 c6 c7)))
+      (if (not (null? names))
+          (let ((ctask (supervisor-child-task sup (car names))))
+            (task-exit! ctask '(panic . burst_crash_parallel))
+            (loop (cdr names)))))
+
+    ;; Run parallel scheduler across 4 native OS threads
+    (scheduler-run-parallel! sched 30)
+
+    ;; Verify all 8 workers restarted exactly once (total 16 boots)
+    (assert-equal (atomic-ref child-restarts) 16 "all 8 children restarted cleanly under parallel multi-worker execution")
+
+    ;; Verify all children assigned fresh, distinct TIDs
+    (assert-true (not (= (task-tid (supervisor-child-task sup 'c0)) tid0)) "c0 assigned fresh TID")
+    (assert-true (not (= (task-tid (supervisor-child-task sup 'c1)) tid1)) "c1 assigned fresh TID")
+    (assert-true (not (= (task-tid (supervisor-child-task sup 'c2)) tid2)) "c2 assigned fresh TID")
+    (assert-true (not (= (task-tid (supervisor-child-task sup 'c3)) tid3)) "c3 assigned fresh TID")
+    (assert-true (not (= (task-tid (supervisor-child-task sup 'c4)) tid4)) "c4 assigned fresh TID")
+    (assert-true (not (= (task-tid (supervisor-child-task sup 'c5)) tid5)) "c5 assigned fresh TID")
+    (assert-true (not (= (task-tid (supervisor-child-task sup 'c6)) tid6)) "c6 assigned fresh TID")
+    (assert-true (not (= (task-tid (supervisor-child-task sup 'c7)) tid7)) "c7 assigned fresh TID")
+
+    ;; Verify supervisor task returned safely to waiting state and idle enqueued state
+    (assert-equal (task-state sup-task) 'waiting "supervisor task state returned to 'waiting")
+    (assert-equal (supervisor-enqueued-state sup) 'idle "supervisor enqueued state returned to 'idle"))
+
+  (supervisor-stop! sup)
+  (scheduler-stop! sched))
+(write-string "  [PASS] Parallel multi-worker supervisor burst crash recovery verified.\n")
+(flush-output-port)
+
+;; -----------------------------------------------------------------------
+;; Group 11: Multi-Worker Parallel Supervisor Coroutine Child Lifecycle (#791)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 11: Parallel Supervisor Coroutine Child Lifecycle (#791) ---\n")
+(flush-output-port)
+
+(let* ((sched (make-work-stealing-scheduler 4 256))
+       (coro-boot-count (make-atomic-box 0))
+       (coro-yield-count (make-atomic-box 0))
+       (coro-completed-box (make-atomic-box 0))
+       (coro-child-spec
+        (make-child-spec
+         'coro_child
+         (lambda ()
+           (let ((boot-idx (atomic-fetch-add! coro-boot-count 1)))
+             (let ((t (make-task-context)))
+               (task-resident-set! t #t)
+               (task-next-run-set!
+                t
+                (lambda ()
+                  (let* ((co (make-coroutine-context
+                              (lambda ()
+                                (atomic-fetch-add! coro-yield-count 1)
+                                (context-yield! 'yielded_ok)
+                                (atomic-set! coro-completed-box 999)
+                                'coroutine_done))))
+                    ;; Step 1: initial resume up to yield point
+                    (let ((val (context-resume! co)))
+                      (if (= boot-idx 0)
+                          ;; On first boot, simulate an external crash while child is yielded
+                          (task-exit! t '(panic . coro_crashed_while_yielded))
+                          ;; On second boot, resume coroutine to completion
+                          (begin
+                            (context-resume! co)
+                            #t))))))
+               t)))
+         'permanent))
+       (sup-spec (make-supervisor-spec 'one_for_one 10 1000 (list coro-child-spec)))
+       (sup (make-supervisor sup-spec #f sched))
+       (sup-task (supervisor-task sup)))
+
+  ;; Autonomous startup in 4-worker parallel scheduler
+  (supervisor-start! sup sched #t)
+
+  ;; Run parallel scheduler: child executes, yields, crashes, Supervisor catches DOWN, restarts it,
+  ;; and child re-runs to completion.
+  (scheduler-run-parallel! sched 20)
+
+  (assert-equal (atomic-ref coro-boot-count) 2 "coroutine child booted exactly twice (initial + restart)")
+  (assert-equal (atomic-ref coro-yield-count) 2 "coroutine yielded twice across distinct lifecycles")
+  (assert-equal (atomic-ref coro-completed-box) 999 "restarted coroutine child reached completion")
+  (assert-equal (task-state sup-task) 'waiting "supervisor task state returned to 'waiting")
+  (assert-equal (supervisor-enqueued-state sup) 'idle "supervisor enqueued state returned to 'idle")
+
+  (supervisor-stop! sup)
+  (scheduler-stop! sched))
+(write-string "  [PASS] Parallel supervisor coroutine child lifecycle & crash recovery verified.\n")
+(flush-output-port)
+
 
 ;; -----------------------------------------------------------------------
 ;; Test Suite Summary
