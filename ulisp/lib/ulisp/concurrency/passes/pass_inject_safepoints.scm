@@ -246,6 +246,14 @@
 ;;; 5. Pluggable Pass Injection & Registration API
 ;;; -----------------------------------------------------------------------
 
+(define (synapse-safepoint-prerequisites)
+  (cond
+    ((pass-registered? 'pass-synapse-inline-hotpath) '(pass-synapse-inline-hotpath))
+    ((pass-registered? 'pass-synapse-fbip) '(pass-synapse-fbip))
+    ((pass-registered? 'pass-040-analysis) '(pass-040-analysis))
+    ((pass-registered? 'pass-035-scope-resolve) '(pass-035-scope-resolve))
+    (else '(pass-030-desugar))))
+
 (define (synapse-inject-safepoints-descriptor)
   (make-pass-descriptor
     'pass-synapse-inject-safepoints
@@ -256,15 +264,33 @@
     #f
     'L_core
     'L_core
-    '(pass-synapse-fbip)
+    (synapse-safepoint-prerequisites)
     #t))
 
 (define (inject-synapse-safepoints-pass!)
   ;; Canonical order: fbip -> inline-hotpath (Issue #682) -> inject-safepoints.
-  (if (pass-registered? 'pass-synapse-inline-hotpath)
-      (inject-pass-after! 'pass-synapse-inline-hotpath (synapse-inject-safepoints-descriptor))
-      (inject-pass-after! 'pass-synapse-fbip (synapse-inject-safepoints-descriptor))))
+  ;; When Synapse passes are absent, inject into standard frontend Core phase.
+  (cond
+    ((pass-registered? 'pass-synapse-inline-hotpath)
+     (inject-pass-after! 'pass-synapse-inline-hotpath (synapse-inject-safepoints-descriptor)))
+    ((pass-registered? 'pass-synapse-fbip)
+     (inject-pass-after! 'pass-synapse-fbip (synapse-inject-safepoints-descriptor)))
+    ((pass-registered? 'pass-040-analysis)
+     (inject-pass-after! 'pass-040-analysis (synapse-inject-safepoints-descriptor)))
+    ((pass-registered? 'pass-035-scope-resolve)
+     (inject-pass-after! 'pass-035-scope-resolve (synapse-inject-safepoints-descriptor)))
+    (else
+     (inject-pass-after! 'pass-030-desugar (synapse-inject-safepoints-descriptor)))))
 
 (define (remove-synapse-safepoints-pass!)
+  (unregister-pass-registry-init-hook! inject-synapse-safepoints-pass!)
   (remove-injected-pass! 'pass-synapse-inject-safepoints))
+
+;; Automatically register hook for pipeline reinitialization
+(register-pass-registry-init-hook! inject-synapse-safepoints-pass!)
+
+;; If registry is already initialized with Core passes, inject immediately
+(if (pass-registered? 'pass-030-desugar)
+    (inject-synapse-safepoints-pass!))
+
 

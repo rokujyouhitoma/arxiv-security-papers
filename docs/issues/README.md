@@ -28,7 +28,6 @@
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | New | [768-implement-define-pipeline-for-aot-repl-and-check-modes.md](768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | New | [769-implement-picopass-provenance-tracing-and-auto-bisect.md](769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
 | **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | High | New | [770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
-| **790** | R7RS タスク強制終了のためのセーフポイント挿入パス (pass-synapse-inject-safepoints) のコンパイラ統合 | Bug | High | In Progress | [790-integrate-safepoint-injection-pass-into-default-pipeline.md](790-integrate-safepoint-injection-pass-into-default-pipeline.md) |
 | **791** | 並行スケジューラ (scheduler-run-parallel!) 上での Supervisor・コルーチン・同時子異常終了の結合テスト整備 | Feature | Medium | New | [791-add-parallel-integration-tests-for-supervisor-and-coroutines.md](791-add-parallel-integration-tests-for-supervisor-and-coroutines.md) |
 | **792** | Affine 検査における変数名ヒント強制判定の廃止と関数シグネチャ・戻り値型伝播の導入 | Bug | Medium | New | [792-refactor-affine-check-to-eliminate-name-based-heuristics.md](792-refactor-affine-check-to-eliminate-name-based-heuristics.md) |
 | **793** | スケジューラの最大タスク上限 (scheduler-max-tasks) 判定における累積値から生存タスク数への修正 | Bug | Low | New | [793-fix-scheduler-max-tasks-limit-to-use-live-task-count.md](793-fix-scheduler-max-tasks-limit-to-use-live-task-count.md) |
@@ -37,6 +36,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **790** | R7RS タスク強制終了のためのセーフポイント挿入パス (pass-synapse-inject-safepoints) のコンパイラ統合 | Bug | 2026-11-09 | [closed/790-integrate-safepoint-injection-pass-into-default-pipeline.md](closed/790-integrate-safepoint-injection-pass-into-default-pipeline.md) |
 | **789** | 複数子タスク同時終了時における同一 Supervisor タスクの重複投入 (scheduler-spawn!) 抑止 | Bug | 2026-11-09 | [closed/789-prevent-duplicate-supervisor-task-spawning.md](closed/789-prevent-duplicate-supervisor-task-spawning.md) |
 | **788** | Supervisor タスクのメールボックス処理完了に伴う誤った正常終了 (task-exit!) の防止 | Bug | 2026-11-09 | [closed/788-prevent-supervisor-task-premature-normal-exit.md](closed/788-prevent-supervisor-task-premature-normal-exit.md) |
 | **787** | コルーチンが yield したあとの例外ハンドラ連鎖復元不具合の修正 | Bug | 2026-11-09 | [closed/787-fix-coroutine-exception-handler-chain-restore-after-yield.md](closed/787-fix-coroutine-exception-handler-chain-restore-after-yield.md) |
