@@ -22,6 +22,7 @@
    (define *sys-mmap* 222)
    (define *sys-mremap* 216)
    (define *sys-munmap* 215)
+   (define *sys-lseek* 62)
    (define *sys-clock-gettime* 113)
    (define *sys-at-fdcwd* -100))
   (else
@@ -29,6 +30,7 @@
    (define *sys-write* 1)
    (define *sys-open* 2)
    (define *sys-close* 3)
+   (define *sys-lseek* 8)
    (define *sys-access* 21)
    (define *sys-dup2* 33)
    (define *sys-exit* 60)
@@ -115,6 +117,10 @@
    (define (sys-chmod path mode)
      (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
        (%to-fixnum (%raw-syscall (%to-raw 90) path-ptr (%to-raw mode) 0 0 0 0))))))
+
+;; sys-lseek: sys_lseek(fd, offset, whence) (Issue #784)
+(define (sys-lseek fd offset whence)
+  (%to-fixnum (%raw-syscall (%to-raw *sys-lseek*) (%to-raw fd) (%to-raw offset) (%to-raw whence) 0 0 0)))
 
 ;; R7RS §6.14 File management
 (define (file-exists? filename)

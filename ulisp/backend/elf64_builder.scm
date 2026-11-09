@@ -771,3 +771,615 @@
     (elf64-write-shdr! elf-bv shoff 15 164 3 0 0 shstrtab-off shstrtab-len 0 0 1 0)
     elf-bv))
 
+;; =======================================================================
+;; ELF64 Static Linker Core Engine (--ld) (Issue #784)
+;; Conforms to DSN-33 Architecture Specification & AMD64 System V ABI
+;; =======================================================================
+
+(define (elf64-get-u8 bv off)
+  (bytevector-u8-ref bv off))
+
+(define (elf64-get-u16-le bv off)
+  (+ (bytevector-u8-ref bv off)
+     (* (bytevector-u8-ref bv (+ off 1)) 256)))
+
+(define (elf64-get-u32-le bv off)
+  (+ (+ (+ (bytevector-u8-ref bv off)
+           (* (bytevector-u8-ref bv (+ off 1)) 256))
+        (* (bytevector-u8-ref bv (+ off 2)) 65536))
+     (* (bytevector-u8-ref bv (+ off 3)) 16777216)))
+
+(define *elf64-max-disp32* 2147483647)
+(define *elf64-min-disp32* -2147483648)
+
+(define (elf64-get-s32-le bv off)
+  (let ((b3 (bytevector-u8-ref bv (+ off 3))))
+    (if (>= b3 128)
+        (- (elf64-get-u32-le bv off) 4294967296)
+        (elf64-get-u32-le bv off))))
+
+(define (elf64-get-u64-le bv off)
+  (let ((lo (elf64-get-u32-le bv off))
+        (hi (elf64-get-u32-le bv (+ off 4))))
+    (+ lo (* hi 4294967296))))
+
+(define (elf64-get-s64-le bv off)
+  (let ((lo (elf64-get-u32-le bv off))
+        (hi (elf64-get-s32-le bv (+ off 4))))
+    (+ lo (* hi 4294967296))))
+
+(define (elf64-read-string-from-strtab bv off)
+  (let ((len (bytevector-length bv)))
+    (let loop ((i off) (chars '()))
+      (if (or (>= i len) (= (bytevector-u8-ref bv i) 0))
+          (list->string (reverse chars))
+          (loop (+ i 1) (cons (integer->char (bytevector-u8-ref bv i)) chars))))))
+
+(define (elf64-sub-bytevector src off len)
+  (let ((dst (make-bytevector len)))
+    (elf64-copy-bytes! dst 0 src off len)
+    dst))
+
+;; String hash and bucket map for O(1) global symbol resolution
+(define (elf64-string-hash str)
+  (let ((len (string-length str)))
+    (let loop ((i 0) (h 5381))
+      (if (< i len)
+          (loop (+ i 1)
+                (modulo (+ (* h 33) (char->integer (string-ref str i))) 1000000007))
+          h))))
+
+(define (make-symbol-map size)
+  (make-vector size '()))
+
+(define (symbol-map-get sm key)
+  (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
+         (bucket (vector-ref sm h)))
+    (assoc key bucket)))
+
+(define (symbol-map-set! sm key val)
+  (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
+         (bucket (vector-ref sm h))
+         (entry (assoc key bucket)))
+    (if entry
+        (set-cdr! entry val)
+        (vector-set! sm h (cons (cons key val) bucket)))))
+
+;; Binary file reader returning raw bytevector
+(define (read-binary-file-to-bytevector path)
+  (cond-expand
+    (gauche
+     (call-with-input-file path
+       (lambda (p) (read-bytevector 1000000000 p))
+       :element-type :binary))
+    (else
+     (let ((fd (sys-open path 0 0)))
+       (if (< fd 0)
+           (begin
+             (display-stderr (string-append "ulisp --ld: error: cannot open input object file: " path "\n"))
+             (compiler-abort-and-cleanup! 1))
+           (let* ((file-size (sys-lseek fd 0 2)))
+             (if (< file-size 0)
+                 (begin
+                   (sys-close fd)
+                   (display-stderr (string-append "ulisp --ld: error: failed to seek file: " path "\n"))
+                   (compiler-abort-and-cleanup! 1))
+                 (begin
+                   (sys-lseek fd 0 0)
+                   (let ((bv (make-bytevector file-size)))
+                     (let loop ((read-total 0))
+                       (if (< read-total file-size)
+                           (let* ((buf-ptr (%ptr-add (%ptr-untag bv) (+ 8 read-total)))
+                                  (n (sys-read fd buf-ptr (- file-size read-total))))
+                             (if (<= n 0)
+                                 (begin
+                                   (sys-close fd)
+                                   (display-stderr (string-append "ulisp --ld: error: unexpected EOF reading: " path "\n"))
+                                   (compiler-abort-and-cleanup! 1))
+                                 (loop (+ read-total n))))
+                           (begin
+                             (sys-close fd)
+                             bv))))))))))))
+
+;; Parse an ELF64 ET_REL relocatable object file into structured vectors
+;; Returns: (vector path sec-vec sym-vec relocs)
+(define (elf64-parse-relocatable-object bv path)
+  (if (< (bytevector-length bv) 64)
+      (begin
+        (display-stderr (string-append "ulisp --ld: error: file too small for ELF header: " path "\n"))
+        (compiler-abort-and-cleanup! 1)))
+  (if (not (and (= (elf64-get-u8 bv 0) 127)
+                (= (elf64-get-u8 bv 1) 69)
+                (= (elf64-get-u8 bv 2) 76)
+                (= (elf64-get-u8 bv 3) 70)
+                (= (elf64-get-u8 bv 4) 2)   ;; ELFCLASS64
+                (= (elf64-get-u8 bv 5) 1)   ;; ELFDATA2LSB
+                (= (elf64-get-u16-le bv 16) 1) ;; e_type == ET_REL
+                (= (elf64-get-u16-le bv 18) 62))) ;; e_machine == EM_X86_64
+      (begin
+        (display-stderr (string-append "ulisp --ld: error: " path " is not an x86-64 ELF relocatable object (ET_REL)\n"))
+        (compiler-abort-and-cleanup! 1)))
+  (let* ((e-shoff (elf64-get-u64-le bv 40))
+         (e-shentsize (elf64-get-u16-le bv 58))
+         (e-shnum (elf64-get-u16-le bv 60))
+         (e-shstrndx (elf64-get-u16-le bv 62))
+         (shstr-shdr-off (+ e-shoff (* e-shstrndx e-shentsize)))
+         (shstr-file-off (elf64-get-u64-le bv (+ shstr-shdr-off 24)))
+         (shstr-size (elf64-get-u64-le bv (+ shstr-shdr-off 32)))
+         (shstrtab-bv (elf64-sub-bytevector bv shstr-file-off shstr-size)))
+    (let loop-shdr ((idx 0) (sections '()))
+      (if (< idx e-shnum)
+          (let* ((shdr-off (+ e-shoff (* idx e-shentsize)))
+                 (sh-name-idx (elf64-get-u32-le bv shdr-off))
+                 (sec-name (elf64-read-string-from-strtab shstrtab-bv sh-name-idx))
+                 (sh-type (elf64-get-u32-le bv (+ shdr-off 4)))
+                 (sh-flags (elf64-get-u64-le bv (+ shdr-off 8)))
+                 (sh-addr (elf64-get-u64-le bv (+ shdr-off 16)))
+                 (sh-offset (elf64-get-u64-le bv (+ shdr-off 24)))
+                 (sh-size (elf64-get-u64-le bv (+ shdr-off 32)))
+                 (sh-link (elf64-get-u32-le bv (+ shdr-off 40)))
+                 (sh-info (elf64-get-u32-le bv (+ shdr-off 44)))
+                 (sh-align (elf64-get-u64-le bv (+ shdr-off 48)))
+                 (data-bv (if (and (> sh-size 0) (not (= sh-type 8)))
+                              (elf64-sub-bytevector bv sh-offset sh-size)
+                              (make-bytevector 0))))
+            (loop-shdr (+ idx 1)
+                       (cons (vector idx sec-name sh-type sh-flags sh-size sh-align sh-link sh-info data-bv)
+                             sections)))
+          (let* ((sec-vec (list->vector (reverse sections)))
+                 (symtab-sec (let find-sym ((i 0))
+                               (if (< i (vector-length sec-vec))
+                                   (let ((s (vector-ref sec-vec i)))
+                                     (if (= (vector-ref s 2) 2) s (find-sym (+ i 1))))
+                                   #f)))
+                 (symtab-bv (if symtab-sec (vector-ref symtab-sec 8) (make-bytevector 0)))
+                 (strtab-idx (if symtab-sec (vector-ref symtab-sec 6) 0))
+                 (strtab-sec (if (< strtab-idx (vector-length sec-vec))
+                                 (vector-ref sec-vec strtab-idx)
+                                 #f))
+                 (strtab-bv (if strtab-sec (vector-ref strtab-sec 8) (make-bytevector 0)))
+                 (sym-count (quotient (bytevector-length symtab-bv) 24))
+                 (sym-vec (make-vector sym-count #f)))
+            (let loop-sym ((k 0))
+              (if (< k sym-count)
+                  (let* ((sym-off (* k 24))
+                         (st-name (elf64-get-u32-le symtab-bv sym-off))
+                         (sym-name (elf64-read-string-from-strtab strtab-bv st-name))
+                         (st-info (elf64-get-u8 symtab-bv (+ sym-off 4)))
+                         (st-bind (quotient st-info 16))
+                         (st-type (modulo st-info 16))
+                         (st-other (elf64-get-u8 symtab-bv (+ sym-off 5)))
+                         (st-shndx (elf64-get-u16-le symtab-bv (+ sym-off 6)))
+                         (st-value (elf64-get-u64-le symtab-bv (+ sym-off 8)))
+                         (st-size (elf64-get-u64-le symtab-bv (+ sym-off 16))))
+                    (vector-set! sym-vec k (vector k sym-name st-bind st-type st-shndx st-value st-size))
+                    (loop-sym (+ k 1)))))
+            (let loop-rela ((s-idx 0) (all-relocs '()))
+              (if (< s-idx (vector-length sec-vec))
+                  (let* ((s (vector-ref sec-vec s-idx))
+                         (stype (vector-ref s 2)))
+                    (if (= stype 4) ;; SHT_RELA
+                        (let* ((target-shndx (vector-ref s 7))
+                               (target-sec (if (< target-shndx (vector-length sec-vec))
+                                               (vector-ref sec-vec target-shndx)
+                                               #f))
+                               (target-sec-name (if target-sec (vector-ref target-sec 1) ""))
+                               (rela-bv (vector-ref s 8))
+                               (rela-count (quotient (bytevector-length rela-bv) 24)))
+                          (let inner ((r-idx 0) (sec-relocs '()))
+                            (if (< r-idx rela-count)
+                                (let* ((off (* r-idx 24))
+                                       (r-offset (elf64-get-u64-le rela-bv off))
+                                       (r-info (elf64-get-u64-le rela-bv (+ off 8)))
+                                       (r-addend (elf64-get-s64-le rela-bv (+ off 16)))
+                                       (sym-idx (quotient r-info 4294967296))
+                                       (r-type (modulo r-info 4294967296)))
+                                  (inner (+ r-idx 1)
+                                         (cons (vector target-shndx target-sec-name r-offset r-type sym-idx r-addend)
+                                               sec-relocs)))
+                                (loop-rela (+ s-idx 1) (append (reverse sec-relocs) all-relocs)))))
+                        (loop-rela (+ s-idx 1) all-relocs)))
+                  (vector path sec-vec sym-vec (reverse all-relocs)))))))))
+
+(define (elf64-obj-find-section obj sec-name)
+  (let* ((sec-vec (vector-ref obj 1))
+         (len (vector-length sec-vec)))
+    (let loop ((i 0))
+      (if (< i len)
+          (let ((s (vector-ref sec-vec i)))
+            (if (string=? (vector-ref s 1) sec-name)
+                s
+                (loop (+ i 1))))
+          #f))))
+
+(define (elf64-write-phdr-base! bv off p-type flags file-off vaddr)
+  (elf64-set-u32-le! bv off p-type)
+  (elf64-set-u32-le! bv (+ off 4) flags)
+  (elf64-set-u64-le! bv (+ off 8) file-off)
+  (elf64-set-u64-le! bv (+ off 16) vaddr)
+  (elf64-set-u64-le! bv (+ off 24) vaddr))
+
+(define (elf64-write-phdr-sizes! bv off filesz memsz align)
+  (elf64-set-u64-le! bv (+ off 32) filesz)
+  (elf64-set-u64-le! bv (+ off 40) memsz)
+  (elf64-set-u64-le! bv (+ off 48) align))
+
+(define (elf64-write-ehdr-ex! bv entry-vaddr phoff phnum)
+  (elf64-set-u8! bv 0 127)
+  (elf64-set-u8! bv 1 69)
+  (elf64-set-u8! bv 2 76)
+  (elf64-set-u8! bv 3 70)
+  (elf64-set-u8! bv 4 2)    ;; ELFCLASS64
+  (elf64-set-u8! bv 5 1)    ;; ELFDATA2LSB
+  (elf64-set-u8! bv 6 1)    ;; EV_CURRENT
+  (elf64-set-u8! bv 7 0)    ;; ELFOSABI_NONE
+  (elf64-set-u8! bv 8 0)
+  (elf64-set-u16-le! bv 16 2)  ;; e_type = ET_EXEC (2)
+  (elf64-set-u16-le! bv 18 62) ;; e_machine = EM_X86_64 (62)
+  (elf64-set-u32-le! bv 20 1)  ;; e_version = 1
+  (elf64-set-u64-le! bv 24 entry-vaddr)
+  (elf64-set-u64-le! bv 32 phoff)
+  (elf64-set-u64-le! bv 40 0)
+  (elf64-set-u32-le! bv 48 0)
+  (elf64-set-u16-le! bv 52 64) ;; e_ehsize = 64
+  (elf64-set-u16-le! bv 54 56) ;; e_phentsize = 56
+  (elf64-set-u16-le! bv 56 phnum)
+  (elf64-set-u16-le! bv 58 64) ;; e_shentsize = 64
+  (elf64-set-u16-le! bv 60 0)
+  (elf64-set-u16-le! bv 62 0))
+
+(define (elf64-plan-section-placements objs sec-name base-vaddr start-off align-bytes)
+  (let loop ((os objs) (cur-off start-off) (acc '()))
+    (if (null? os)
+        (cons (- cur-off start-off) (reverse acc))
+        (let* ((obj (car os))
+               (s (elf64-obj-find-section obj sec-name))
+               (sz (if s (vector-ref s 4) 0))
+               (aligned-off (elf64-align-up cur-off align-bytes))
+               (vaddr (+ base-vaddr aligned-off)))
+          (loop (cdr os) (+ aligned-off sz) (cons (list obj vaddr aligned-off sz) acc))))))
+
+(define (elf64-lookup-obj-sec-vaddr obj sec-name places-vec)
+  (let ((placements
+         (cond
+           ((string=? sec-name ".text") (vector-ref places-vec 0))
+           ((string=? sec-name ".rodata") (vector-ref places-vec 1))
+           ((string=? sec-name ".init_array") (vector-ref places-vec 2))
+           ((string=? sec-name ".data") (vector-ref places-vec 3))
+           ((string=? sec-name "ulisp_globals_sec") (vector-ref places-vec 4))
+           ((string=? sec-name ".bss") (vector-ref places-vec 5))
+           (else #f))))
+    (if placements
+        (let ((e (assoc obj placements)))
+          (if e (cadr e) 0))
+        0)))
+
+;; Main Static Linker Procedure: Links multiple ELF64 ET_REL objects into a single ET_EXEC binary bytevector
+(define (link-elf64-relocatable-objects obj-paths entry-sym)
+  (if (null? obj-paths)
+      (begin
+        (display-stderr "ulisp --ld: error: no input object files specified\n")
+        (compiler-abort-and-cleanup! 1)))
+  ;; 1. Parse all input ELF64 ET_REL object files
+  (let* ((parsed-objs (let loop-p ((paths obj-paths) (acc '()))
+                        (if (null? paths)
+                            (reverse acc)
+                            (let* ((p (car paths))
+                                   (bv (read-binary-file-to-bytevector p))
+                                   (obj (elf64-parse-relocatable-object bv p)))
+                              (loop-p (cdr paths) (cons obj acc))))))
+         ;; 2. Plan Segment 1 (RX: 0x400000) layout
+         ;; text-file-offset = 240 (64 ehdr + 3 * 56 phdr = 232 -> aligned 16 = 240)
+         (text-file-offset 240)
+         (text-base-vaddr (+ 4194304 text-file-offset))
+         ;; Plan .text placement
+         (text-plan (elf64-plan-section-placements parsed-objs ".text" text-base-vaddr 0 16))
+         (merged-text-len (car text-plan))
+         (obj-text-placements (cdr text-plan))
+
+         ;; Plan .rodata placement
+         (rodata-file-offset (elf64-align-up (+ text-file-offset merged-text-len) 16))
+         (rodata-base-vaddr (+ 4194304 rodata-file-offset))
+         (rodata-plan (elf64-plan-section-placements parsed-objs ".rodata" rodata-base-vaddr 0 16))
+         (merged-rodata-len (car rodata-plan))
+         (obj-rodata-placements (cdr rodata-plan))
+
+         (seg1-raw-end (+ rodata-file-offset merged-rodata-len))
+         (seg1-filesz (elf64-align-up seg1-raw-end 4096))
+         (seg1-memsz seg1-filesz)
+
+         ;; 3. Plan Segment 2 (RW) layout: dynamically placed after Segment 1 aligned to 2MB
+         (seg2-base-vaddr (elf64-align-up (+ 4194304 seg1-filesz) 2097152))
+         ;; Plan .init_array placement
+         (init-plan (elf64-plan-section-placements parsed-objs ".init_array" seg2-base-vaddr 0 8))
+         (merged-init-len (car init-plan))
+         (obj-init-placements (cdr init-plan))
+         (init-array-start seg2-base-vaddr)
+         (init-array-end (+ seg2-base-vaddr merged-init-len))
+
+         ;; Plan .data placement
+         (data-start-off (elf64-align-up merged-init-len 16))
+         (data-plan (elf64-plan-section-placements parsed-objs ".data" seg2-base-vaddr data-start-off 16))
+         (merged-data-len (car data-plan))
+         (obj-data-placements (cdr data-plan))
+
+         ;; Plan ulisp_globals_sec placement
+         (globals-start-off (elf64-align-up (+ data-start-off merged-data-len) 8))
+         (start-ulisp-globals-sec (+ seg2-base-vaddr globals-start-off))
+         (globals-plan (elf64-plan-section-placements parsed-objs "ulisp_globals_sec" seg2-base-vaddr globals-start-off 8))
+         (merged-globals-len (car globals-plan))
+         (obj-globals-placements (cdr globals-plan))
+         (stop-ulisp-globals-sec (+ start-ulisp-globals-sec merged-globals-len))
+
+         ;; Plan .bss placement
+         (bss-start-off (elf64-align-up (+ globals-start-off merged-globals-len) 8))
+         (bss-plan (elf64-plan-section-placements parsed-objs ".bss" seg2-base-vaddr bss-start-off 8))
+         (merged-bss-len (car bss-plan))
+         (obj-bss-placements (cdr bss-plan))
+
+         (seg2-filesz bss-start-off)
+         (seg2-memsz (+ seg2-filesz merged-bss-len))
+
+         ;; Allocate Segment Buffers
+         (seg1-bv (make-bytevector seg1-filesz 0))
+         (seg2-bv (make-bytevector seg2-filesz 0)))
+
+    ;; Copy payload into Segment 1
+    (let copy-s1 ((t-places obj-text-placements))
+      (if (pair? t-places)
+          (let* ((entry (car t-places))
+                 (obj (car entry))
+                 (off (+ text-file-offset (caddr entry)))
+                 (sz (cadddr entry))
+                 (s (elf64-obj-find-section obj ".text")))
+            (if (and s (> sz 0))
+                (elf64-copy-bytes! seg1-bv off (vector-ref s 8) 0 sz))
+            (copy-s1 (cdr t-places)))))
+
+    (let copy-ro ((r-places obj-rodata-placements))
+      (if (pair? r-places)
+          (let* ((entry (car r-places))
+                 (obj (car entry))
+                 (off (+ rodata-file-offset (caddr entry)))
+                 (sz (cadddr entry))
+                 (s (elf64-obj-find-section obj ".rodata")))
+            (if (and s (> sz 0))
+                (elf64-copy-bytes! seg1-bv off (vector-ref s 8) 0 sz))
+            (copy-ro (cdr r-places)))))
+
+    ;; Copy payload into Segment 2
+    (let copy-init ((i-places obj-init-placements))
+      (if (pair? i-places)
+          (let* ((entry (car i-places))
+                 (obj (car entry))
+                 (off (caddr entry))
+                 (sz (cadddr entry))
+                 (s (elf64-obj-find-section obj ".init_array")))
+            (if (and s (> sz 0))
+                (elf64-copy-bytes! seg2-bv off (vector-ref s 8) 0 sz))
+            (copy-init (cdr i-places)))))
+
+    (let copy-d ((d-places obj-data-placements))
+      (if (pair? d-places)
+          (let* ((entry (car d-places))
+                 (obj (car entry))
+                 (off (caddr entry))
+                 (sz (cadddr entry))
+                 (s (elf64-obj-find-section obj ".data")))
+            (if (and s (> sz 0))
+                (elf64-copy-bytes! seg2-bv off (vector-ref s 8) 0 sz))
+            (copy-d (cdr d-places)))))
+
+    (let copy-g ((g-places obj-globals-placements))
+      (if (pair? g-places)
+          (let* ((entry (car g-places))
+                 (obj (car entry))
+                 (off (caddr entry))
+                 (sz (cadddr entry))
+                 (s (elf64-obj-find-section obj "ulisp_globals_sec")))
+            (if (and s (> sz 0))
+                (elf64-copy-bytes! seg2-bv off (vector-ref s 8) 0 sz))
+            (copy-g (cdr g-places)))))
+
+    ;; 4. Build Global Symbol Map & Local Symbol Vectors
+    (let* ((places-vec (vector obj-text-placements
+                               obj-rodata-placements
+                               obj-init-placements
+                               obj-data-placements
+                               obj-globals-placements
+                               obj-bss-placements))
+           (lookup-sec (lambda (obj sec-name)
+                         (elf64-lookup-obj-sec-vaddr obj sec-name places-vec)))
+           (global-syms (make-symbol-map 4096))
+           ;; Register Linker Synthetic Boundary Symbols
+           (_dummy1 (symbol-map-set! global-syms "__init_array_start" (list init-array-start 1 "linker")))
+           (_dummy2 (symbol-map-set! global-syms "__init_array_end" (list init-array-end 1 "linker")))
+           (_dummy3 (symbol-map-set! global-syms "__start_ulisp_globals_sec" (list start-ulisp-globals-sec 1 "linker")))
+           (_dummy4 (symbol-map-set! global-syms "__stop_ulisp_globals_sec" (list stop-ulisp-globals-sec 1 "linker")))
+           ;; Process defined symbols from each object into obj-local-sym-vecs
+           (obj-local-sym-vecs
+             (let loop-objs ((objs parsed-objs) (acc '()))
+               (if (null? objs)
+                   (reverse acc)
+                   (let* ((obj (car objs))
+                          (path (vector-ref obj 0))
+                          (sec-vec (vector-ref obj 1))
+                          (sym-vec (vector-ref obj 2))
+                          (sym-count (vector-length sym-vec))
+                          (local-vec (make-vector sym-count 0)))
+                     (let loop-s ((idx 0))
+                       (if (< idx sym-count)
+                           (let* ((sym (vector-ref sym-vec idx))
+                                  (s-name (vector-ref sym 1))
+                                  (s-bind (vector-ref sym 2))
+                                  (s-type (vector-ref sym 3))
+                                  (s-shndx (vector-ref sym 4))
+                                  (s-val (vector-ref sym 5)))
+                             (if (and (> s-shndx 0) (< s-shndx (vector-length sec-vec)))
+                                 (let* ((sec (vector-ref sec-vec s-shndx))
+                                        (sec-name (vector-ref sec 1))
+                                        (sec-base (lookup-sec obj sec-name))
+                                        (sym-vaddr (+ sec-base s-val)))
+                                   (if (= s-bind 0) ;; STB_LOCAL
+                                       (vector-set! local-vec idx sym-vaddr)
+                                       ;; STB_GLOBAL (1) or STB_WEAK (2)
+                                       (let ((existing (symbol-map-get global-syms s-name)))
+                                         (cond
+                                           ((not existing)
+                                            (symbol-map-set! global-syms s-name (list sym-vaddr s-bind path)))
+                                           ((and (= (cadr (cdr existing)) 2) (= s-bind 1))
+                                            ;; WEAK overridden by GLOBAL
+                                            (symbol-map-set! global-syms s-name (list sym-vaddr s-bind path)))
+                                           ((and (= (cadr (cdr existing)) 1) (= s-bind 2))
+                                            ;; GLOBAL retains precedence over new WEAK
+                                            #t)
+                                           ((and (= (cadr (cdr existing)) 2) (= s-bind 2))
+                                            ;; First WEAK retains precedence
+                                            #t)
+                                           ((and (= (cadr (cdr existing)) 1) (= s-bind 1))
+                                            ;; Multiple GLOBAL definition error
+                                            (display-stderr (string-append "ulisp --ld: error: multiple definition of `" s-name "` in " path " (first defined in " (caddr (cdr existing)) ")\n"))
+                                            (compiler-abort-and-cleanup! 1))))))
+                                 (if (= s-bind 0)
+                                     (vector-set! local-vec idx 0)))
+                             (loop-s (+ idx 1)))))
+                     (loop-objs (cdr objs) (cons (cons obj local-vec) acc)))))))
+
+      ;; 5. Verify Undefined References
+      (let check-objs ((objs parsed-objs))
+        (if (pair? objs)
+            (let* ((obj (car objs))
+                   (path (vector-ref obj 0))
+                   (sym-vec (vector-ref obj 2))
+                   (relocs (vector-ref obj 3)))
+              (let check-r ((rs relocs))
+                (if (pair? rs)
+                    (let* ((r (car rs))
+                           (sym-idx (vector-ref r 4))
+                           (sym (vector-ref sym-vec sym-idx))
+                           (s-name (vector-ref sym 1))
+                           (s-bind (vector-ref sym 2))
+                           (s-shndx (vector-ref sym 4)))
+                      (if (= s-shndx 0) ;; SHN_UNDEF
+                          (let ((resolved (symbol-map-get global-syms s-name)))
+                            (cond
+                              (resolved #t)
+                              ((= s-bind 2)
+                               ;; Undefined WEAK symbol resolves to NULL (0)
+                               (symbol-map-set! global-syms s-name (list 0 2 "weak-null")))
+                              (else
+                               (display-stderr (string-append "ulisp --ld: error: undefined reference to `" s-name "` in " path "\n"))
+                               (compiler-abort-and-cleanup! 1)))))
+                      (check-r (cdr rs)))))
+              (check-objs (cdr objs)))))
+
+      ;; 6. Apply Relocations
+      (let apply-objs ((objs parsed-objs))
+        (if (pair? objs)
+            (let* ((obj (car objs))
+                   (sec-vec (vector-ref obj 1))
+                   (sym-vec (vector-ref obj 2))
+                   (relocs (vector-ref obj 3))
+                   (local-vec (cdr (assoc obj obj-local-sym-vecs))))
+              (let apply-r ((rs relocs))
+                (if (pair? rs)
+                    (let* ((r (car rs))
+                           (target-sec-name (vector-ref r 1))
+                           (r-offset (vector-ref r 2))
+                           (r-type (vector-ref r 3))
+                           (sym-idx (vector-ref r 4))
+                           (r-addend (vector-ref r 5))
+                           (sym (vector-ref sym-vec sym-idx))
+                           (s-name (vector-ref sym 1))
+                           (s-bind (vector-ref sym 2))
+                           (s-type (vector-ref sym 3))
+                           (s-shndx (vector-ref sym 4))
+                           (target-sec-vaddr (lookup-sec obj target-sec-name))
+                           (P (+ target-sec-vaddr r-offset))
+                           ;; Determine Symbol Value S
+                           (S (cond
+                                ((= s-type 3) ;; STT_SECTION
+                                 (if (and (> s-shndx 0) (< s-shndx (vector-length sec-vec)))
+                                     (let* ((sec (vector-ref sec-vec s-shndx))
+                                            (sname (vector-ref sec 1)))
+                                       (lookup-sec obj sname))
+                                     0))
+                                ((= s-bind 0) ;; STB_LOCAL
+                                 (vector-ref local-vec sym-idx))
+                                (else ;; STB_GLOBAL or STB_WEAK
+                                 (let ((g (symbol-map-get global-syms s-name)))
+                                   (if g (car (cdr g)) 0)))))
+                           ;; Determine Target Buffer & Buffer Offset
+                           (buf-pair (cond
+                                       ((string=? target-sec-name ".text")
+                                        (let* ((entry (assoc obj obj-text-placements))
+                                               (boff (+ (+ text-file-offset (caddr entry)) r-offset)))
+                                          (cons seg1-bv boff)))
+                                       ((string=? target-sec-name ".rodata")
+                                        (let* ((entry (assoc obj obj-rodata-placements))
+                                               (boff (+ (+ rodata-file-offset (caddr entry)) r-offset)))
+                                          (cons seg1-bv boff)))
+                                       ((string=? target-sec-name ".init_array")
+                                        (let* ((entry (assoc obj obj-init-placements))
+                                               (boff (+ (caddr entry) r-offset)))
+                                          (cons seg2-bv boff)))
+                                       ((string=? target-sec-name ".data")
+                                        (let* ((entry (assoc obj obj-data-placements))
+                                               (boff (+ (caddr entry) r-offset)))
+                                          (cons seg2-bv boff)))
+                                       ((string=? target-sec-name "ulisp_globals_sec")
+                                        (let* ((entry (assoc obj obj-globals-placements))
+                                               (boff (+ (caddr entry) r-offset)))
+                                          (cons seg2-bv boff)))
+                                       (else #f))))
+                      (if buf-pair
+                          (let ((target-bv (car buf-pair))
+                                (buf-off (cdr buf-pair)))
+                            (cond
+                              ((= r-type 1) ;; R_X86_64_64
+                               (let ((val (+ S r-addend)))
+                                 (elf64-set-u64-le! target-bv buf-off val)))
+                              ((or (= r-type 2) (= r-type 4)) ;; R_X86_64_PC32 or PLT32
+                               (let ((disp (- (+ S r-addend) P)))
+                                 (if (or (< disp *elf64-min-disp32*) (> disp *elf64-max-disp32*))
+                                     (begin
+                                       (display-stderr (string-append "ulisp --ld: error: relocation overflow for " s-name "\n"))
+                                       (compiler-abort-and-cleanup! 1))
+                                     (elf64-set-u32-le! target-bv buf-off disp))))
+                              ((or (= r-type 10) (= r-type 11)) ;; R_X86_64_32 or 32S
+                               (let ((val (+ S r-addend)))
+                                 (elf64-set-u32-le! target-bv buf-off val)))
+                              (else
+                               (display-stderr (string-append "ulisp --ld: warning: unsupported relocation type: " (number->string r-type) "\n"))))))
+                      (apply-r (cdr rs)))))
+              (apply-objs (cdr objs)))))
+
+      ;; 7. Resolve Entry Point Symbol
+      (let* ((entry-name (if entry-sym entry-sym "_start"))
+             (entry-lookup (symbol-map-get global-syms entry-name))
+             (entry-vaddr (if entry-lookup
+                              (car (cdr entry-lookup))
+                              (begin
+                                (display-stderr (string-append "ulisp --ld: error: entry point symbol '" entry-name "' not found\n"))
+                                (compiler-abort-and-cleanup! 1)))))
+
+        ;; 8. Write ELF64 Header & Program Headers (3 headers: PT_LOAD RX, PT_LOAD RW, PT_GNU_STACK)
+        (elf64-write-ehdr-ex! seg1-bv entry-vaddr 64 3)
+        ;; Program Header 0: PT_LOAD RX (flags 5)
+        (elf64-write-phdr-base! seg1-bv 64 1 5 0 4194304)
+        (elf64-write-phdr-sizes! seg1-bv 64 seg1-filesz seg1-memsz 4096)
+        ;; Program Header 1: PT_LOAD RW (flags 6)
+        (elf64-write-phdr-base! seg1-bv 120 1 6 seg1-filesz seg2-base-vaddr)
+        (elf64-write-phdr-sizes! seg1-bv 120 seg2-filesz seg2-memsz 4096)
+        ;; Program Header 2: PT_GNU_STACK RW (flags 6, p_type 0x6474e551)
+        (elf64-write-phdr-base! seg1-bv 176 1685382481 6 0 0)
+        (elf64-write-phdr-sizes! seg1-bv 176 0 0 16)
+
+        ;; 9. Assemble Complete Binary Bytevector
+        (let* ((total-size (+ seg1-filesz seg2-filesz))
+               (final-bv (make-bytevector total-size 0)))
+          (elf64-copy-bytes! final-bv 0 seg1-bv 0 seg1-filesz)
+          (elf64-copy-bytes! final-bv seg1-filesz seg2-bv 0 seg2-filesz)
+          final-bv)))))
+
+

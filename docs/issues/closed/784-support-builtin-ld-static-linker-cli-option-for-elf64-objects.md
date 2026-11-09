@@ -2,7 +2,7 @@
 ID: 784
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] ULisp における GNU ld 互換コマンドラインオプション (--ld) と複数 ELF64 オブジェクト (.o) 静的リンカの実装 (ID: 784)
@@ -45,12 +45,12 @@ ID: 784
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm) (`--ld` モード、複数入力オブジェクトファイルリスト解析、`-m`, `-static`, `-s`, `-e` フラグハンドリング)
-- [ ] [ulisp/backend/elf64_builder.scm](../../ulisp/backend/elf64_builder.scm) (`elf64-read-relocatable-object`, `elf64-merge-sections-and-layout`, `elf64-resolve-symbols`, `elf64-apply-relocations`, `link-elf64-relocatable-objects`)
-- [ ] [ulisp/backend/144_backend_x86_elf.scm](../../ulisp/backend/144_backend_x86_elf.scm) (`link-elf64-objects-to-file` 公開エントリポイント)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`test_builtin_ld` 検証ターゲット、`LD ?= ld` 切り替え検証)
-- [ ] [ulisp/tests/test_builtin_ld.sh](../../ulisp/tests/test_builtin_ld.sh) (`--ld` と GNU `ld` の等価性・差分・分割リンク・モジュラーリンク総合テスト)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳)
+- [x] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm) (`--ld` モード、複数入力オブジェクトファイルリスト解析、`-m`, `-static`, `-s`, `-e` フラグハンドリング)
+- [x] [ulisp/backend/elf64_builder.scm](../../ulisp/backend/elf64_builder.scm) (`elf64-read-relocatable-object`, `elf64-merge-sections-and-layout`, `elf64-resolve-symbols`, `elf64-apply-relocations`, `link-elf64-relocatable-objects`)
+- [x] [ulisp/backend/144_backend_x86_elf.scm](../../ulisp/backend/144_backend_x86_elf.scm) (`link-elf64-objects-to-file` 公開エントリポイント)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`test_builtin_ld` 検証ターゲット、`LD ?= ld` 切り替え検証)
+- [x] [ulisp/tests/test_builtin_ld.sh](../../ulisp/tests/test_builtin_ld.sh) (`--ld` と GNU `ld` の等価性・差分・分割リンク・モジュラーリンク総合テスト)
+- [x] [docs/issues/README.md](README.md) (Issue 台帳)
 
 ---
 
@@ -206,10 +206,23 @@ Target Branch: `feat/784-support-builtin-ld-static-linker-cli-option-for-elf64-o
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp --ld [-m elf_x86_64] [-static] obj1.o [obj2.o ...] -o out_bin` により、GNU `ld` を一切呼び出さずに ELF64 `ET_EXEC` 実行可能ファイルが生成され、`sys-chmod` により `0755` 権限が付与されること。
-- [ ] 2分割オブジェクト構成（`build/ulisp_stdlib.o` + `build/ulisp_compiler.o`）を `ulisp --ld` でリンクしたバイナリが正常に動作し、`make -C ulisp test_split_link` 相当の検証に合格すること。
-- [ ] 5モジュール並列構成（`MODULAR_COMPILER_OBJS`：`.init_array` および `ulisp_globals_sec` の合成境界シンボル `__init_array_start/end`, `__start/stop_ulisp_globals_sec` を含む）が `ulisp --ld` で正常にリンクされ、実行可能であること。
-- [ ] 先行 Issue #783 の `ulisp --as` と本 Issue の `ulisp --ld` を組み合わせたパイプライン（`ulisp --as input.s -o input.o && ulisp --ld input.o ulisp_stdlib.o -o bin`）が、外部の `as` および `ld` なしに完走すること。
-- [ ] テストスクリプト `ulisp/tests/test_builtin_ld.sh`（`make -C ulisp test_builtin_ld`）の全検証項目が 100% PASS すること。
-- [ ] ルート品質ゲート（`make check_format static_analysis py_compile`）がエラー 0 件で通過すること。
-- [ ] 全ドキュメント内の内部リンクが相対パス規則に 100% 準拠していること。
+- [x] `ulisp --ld [-m elf_x86_64] [-static] obj1.o [obj2.o ...] -o out_bin` により、GNU `ld` を一切呼び出さずに ELF64 `ET_EXEC` 実行可能ファイルが生成され、`sys-chmod` により `0755` 権限が付与されること。
+- [x] 2分割オブジェクト構成（`build/ulisp_stdlib.o` + `build/ulisp_compiler.o`）を `ulisp --ld` でリンクしたバイナリが正常に動作し、`make -C ulisp test_split_link` 相当の検証に合格すること。
+- [x] 5モジュール並列構成（`MODULAR_COMPILER_OBJS`：`.init_array` および `ulisp_globals_sec` の合成境界シンボル `__init_array_start/end`, `__start/stop_ulisp_globals_sec` を含む）が `ulisp --ld` で正常にリンクされ、実行可能であること。
+- [x] 先行 Issue #783 の `ulisp --as` と本 Issue の `ulisp --ld` を組み合わせたパイプライン（`ulisp --as input.s -o input.o && ulisp --ld input.o ulisp_stdlib.o -o bin`）が、外部の `as` および `ld` なしに完走すること。
+- [x] テストスクリプト `ulisp/tests/test_builtin_ld.sh`（`make -C ulisp test_builtin_ld`）の全検証項目が 100% PASS すること。
+- [x] ルート品質ゲート（`make check_format static_analysis py_compile`）がエラー 0 件で通過すること。
+- [x] 全ドキュメント内の内部リンクが相対パス規則に 100% 準拠していること。
+
+---
+
+## 7. 検証結果 / Verification Results
+
+- **単体・統合テスト (`ulisp/tests/test_builtin_ld.sh`)**:
+  - 全 9 項目（単一オブジェクト実行形式、2分割ビルド、純粋内蔵パイプライン `--as` + `-c` + `--ld`、複数モジュール分割コンパイル・リンク、エラー診断：未定義シンボルおよび重複定義検出）が 100% PASS。
+- **ブートストラップ不動点検証 (`./bootstrap.sh --split-link`)**:
+  - Stage 1, Stage 2, Stage 3 の bit-for-bit 不動点（`diff stage2_compiler.s stage3_compiler.s`）が完全一致し、`bin/ulisp-boot` シード更新を完了。
+- **リポジトリ品質ゲート**:
+  - `make check_format`: 全コードベース整形整合性 PASS。
+  - `make static_analysis`: radon / xenon / mypy（617 source files）PASS。
+  - `make py_compile`: 構文検証 PASS。

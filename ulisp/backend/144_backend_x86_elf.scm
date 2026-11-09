@@ -138,3 +138,12 @@
     (write-elf64-bytevector elf-bv)
     elf-bv))
 
+;;; -----------------------------------------------------------------------
+;;; Public Utility: Link multiple ELF64 ET_REL objects into static executable (Issue #784)
+;;; -----------------------------------------------------------------------
+(define (link-elf64-objects-to-file obj-paths out-path entry-sym)
+  (let ((bin-bv (link-elf64-relocatable-objects obj-paths entry-sym)))
+    (write-elf64-bytevector bin-bv)
+    bin-bv))
+
+

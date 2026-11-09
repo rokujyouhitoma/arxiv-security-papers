@@ -53,7 +53,9 @@
     (else #f)))
 
 (define (lvn-bind-var env var vn)
-  (let* ((vars (cons (cons var vn) (lvn-env-vars env)))
+  (if (or (not vn) (<= vn 0))
+      env
+      (let* ((vars (cons (cons var vn) (lvn-env-vars env)))
          (env1 (lvn-set-vars env vars))
          (vn-entry (assq vn (lvn-env-vns env1))))
     ;; If this VN does not have a canonical variable yet (or has a compound expr),
@@ -62,7 +64,7 @@
         (let ((new-vns (cons (cons vn (cons var (cddr vn-entry)))
                              (lvn-env-vns env1))))
           (lvn-set-vns env1 new-vns))
-        env1)))
+        env1))))
 
 (define (lvn-record-tuple env tuple vn)
   (lvn-set-tuples env (cons (cons tuple vn) (lvn-env-tuples env))))
@@ -220,7 +222,7 @@
            ((= eq? eqv? char=?)
             (cond
               ;; (= x x) -> #t, (eq? x x) -> #t, (eqv? x x) -> #t
-              ((= vn1 vn2)
+              ((and (> vn1 0) (> vn2 0) (= vn1 vn2))
                (let ((true-res (lvn-eval-const #t env)))
                  (list #t (car true-res) (cadr true-res) (caddr true-res))))
               (else (list #f #f #f env))))
@@ -236,7 +238,8 @@
     (if (and (= nargs 1) (pure-accessor-op? op))
         (let* ((arg (car opt-args))
                (vn-p (car vn-args)))
-          (cond
+          (if (and vn-p (> vn-p 0))
+              (cond
             ;; 1. Check if vn-p is known to be constructed by (cons vn-a vn-b)
             ((lvn-vn-is-pair? env vn-p)
              (let* ((target-vn (if (eq? op 'car)
@@ -264,7 +267,8 @@
                           (new-vn (car alloc-res))
                           (env1 (cdr alloc-res))
                           (env2 (lvn-record-tuple env1 tuple-key new-vn)))
-                     (list #t (list op arg) new-vn env2)))))))
+                     (list #t (list op arg) new-vn env2))))))
+              (list #f #f #f env)))
         (list #f #f #f env))))
 
 ;;; -----------------------------------------------------------------------
@@ -496,8 +500,9 @@
                   (map (lambda (b)
                          (list (car b) (lvn-expr (cadr b) (make-lvn-env))))
                        bindings))
-                 (opt-body (lvn-expr body (make-lvn-env))))
-            (list (list 'letrec opt-bindings opt-body) 0 env)))
+                 (opt-body (lvn-expr body (make-lvn-env)))
+                 (alloc-res (lvn-alloc-vn env (list 'letrec opt-bindings opt-body) '())))
+            (list (list 'letrec opt-bindings opt-body) (car alloc-res) (cdr alloc-res))))
          ((lambda)
           (let* ((params (cadr expr))
                  (body (caddr expr))
