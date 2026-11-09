@@ -7,7 +7,7 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **692** | Synapse 並行性ランタイム向け AArch64 ネイティブコンテキストスイッチ (context_aarch64.s) の実装 | Feature | High | New | [692-implement-aarch64-native-context-switch-for-concurrency-runtime.md](692-implement-aarch64-native-context-switch-for-concurrency-runtime.md) |
+| **692** | Synapse 並行性ランタイム向け AArch64 ネイティブコンテキストスイッチ (context_aarch64.s) の実装 | Feature | High | In Progress | [692-implement-aarch64-native-context-switch-for-concurrency-runtime.md](692-implement-aarch64-native-context-switch-for-concurrency-runtime.md) |
 | **693** | ULisp Makefile への QEMU AArch64 全自動回帰テストスイートの統合 | Feature | Medium | New | [693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md](693-integrate-qemu-aarch64-automated-regression-test-suite-into-makefile.md) |
 | **694** | MinGW-w64 および Wine を用いた Windows 向けクロスコンパイル・ローカル検証環境の構築 | Feature | High | New | [694-setup-mingw-and-wine-verification-environment.md](694-setup-mingw-and-wine-verification-environment.md) |
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
