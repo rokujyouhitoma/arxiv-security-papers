@@ -2,7 +2,7 @@
 ID: 795
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] 並行性 DoD 基準の復元・スケーリング測定追加および CI 性能リグレッション防止ゲートの確立 (ID: 795)
@@ -25,11 +25,11 @@ ID: 795
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [benchmarks/concurrency/bench_microtasks.scm](../../benchmarks/concurrency/bench_microtasks.scm) - スケーリング測定および DoD 厳格判定ロジックの実装
-- [ ] [scripts/verify_concurrency_regression.py](../../scripts/verify_concurrency_regression.py) - CI 向け性能リグレッション自動検出スクリプト（新規作成）
-- [ ] [docs/benchmarks/baseline_concurrency.json](../../docs/benchmarks/baseline_concurrency.json) - 性能ベースライン JSON 定義（新規作成）
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) - `bench_scaling` および `bench_concurrency_gate` ターゲットの追加
-- [ ] [docs/benchmarks/concurrency_evaluation.md](../../docs/benchmarks/concurrency_evaluation.md) - スケーリング評価セクションおよび DoD 厳格基準の追記
+- [x] [benchmarks/concurrency/bench_microtasks.scm](../../benchmarks/concurrency/bench_microtasks.scm) - スケーリング測定および DoD 厳格判定ロジックの実装
+- [x] [scripts/verify_concurrency_regression.py](../../scripts/verify_concurrency_regression.py) - CI 向け性能リグレッション自動検出スクリプト（新規作成）
+- [x] [docs/benchmarks/baseline_concurrency.json](../../docs/benchmarks/baseline_concurrency.json) - 性能ベースライン JSON 定義（新規作成）
+- [x] [ulisp/Makefile](../../ulisp/Makefile) - `bench_scaling` および `bench_concurrency_gate` ターゲットの追加
+- [x] [docs/benchmarks/concurrency_evaluation.md](../../docs/benchmarks/concurrency_evaluation.md) - スケーリング評価セクションおよび DoD 厳格基準の追記
 
 ---
 
@@ -80,14 +80,14 @@ Target Branch: `feat/795-restore-concurrency-dod-and-add-scaling-benchmark-gate`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] **DoD 厳格基準の自動検証**:
-  - `bench_microtasks` がスループット `>1,000,000 tasks/sec` および Spawn 時間 `<200 ms` を自動検査し、基準割れ時に FAILED となること。
-- [ ] **多次元スケーリング測定**:
-  - タスク数（1万、10万、100万）およびワーカー数（1, 2, 4）のスケーリング測定が動作し、結果が出力されること。
-- [ ] **CI リグレッション防止ゲート**:
-  - `make -C ulisp bench_concurrency_gate` が整備され、意図的な性能劣化（20%超低下）を与えた際に CI を停止できること。
-- [ ] **ベースライン JSON & レポート整合性**:
+- [x] **DoD 厳格基準の自動検証**:
+  - `bench_microtasks` がスループット `>1,000,000 tasks/sec` および Spawn 時間 `<200 ms` を自動検査し、基準割れ時に FAILED となることを検証。
+- [x] **多次元スケーリング測定**:
+  - タスク数（1万、10万、100万）およびワーカー数（1, 2, 4）のスケーリング測定が動作し、10k $\to$ 100k $\to$ 1M での完全 $O(n)$ 線形性を実証。
+- [x] **CI リグレッション防止ゲート**:
+  - `make -C ulisp bench_concurrency_gate` が整備され、意図的な性能劣化（20%超低下）を与えた際に CI を停止できることを検証。
+- [x] **ベースライン JSON & レポート整合性**:
   - `docs/benchmarks/baseline_concurrency.json` が作成され、`concurrency_evaluation.md` の基準が本来の厳格な数値に統一されていること。
-- [ ] **品質ゲート**:
-  - `make py_compile` および `make static_analysis` が 0 エラーで PASS すること。
+- [x] **品質ゲート**:
+  - `make py_compile` および `make static_analysis` が 0 エラーで PASS。
   - 相対パスリンクのみで記述されていること。

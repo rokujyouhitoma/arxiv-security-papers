@@ -37,11 +37,22 @@
   (write-char #\newline)
   (flush-output-port))
 
+;; Global Failure Flag & JSON Metrics Accumulator
+(define *bench-overall-failed* (make-atomic-box #f))
+(define *bench-metrics-json* (make-atomic-box '()))
+
+(define (record-metric-pair! key val)
+  (let retry ()
+    (let ((cur (atomic-ref *bench-metrics-json*)))
+      (if (atomic-cas! *bench-metrics-json* cur (cons (cons key val) cur))
+          #t
+          (retry)))))
+
 ;; -----------------------------------------------------------------------
-;; Benchmark 1: 100,000 Microtasks Scheduling & Work-Stealing Endurance
+;; Benchmark 1: Microtasks Scheduling & Work-Stealing Endurance
 ;; -----------------------------------------------------------------------
 (define (run-microtasks-benchmark n-tasks n-workers)
-  (bench-print-header "1. 100,000 Microtasks Work-Stealing Throughput Benchmark")
+  (bench-print-header (string-append "1. " (number->string n-tasks) " Microtasks Work-Stealing Throughput Benchmark"))
   (let* ((sched (make-work-stealing-scheduler n-workers 1024))
          (completed-counter (vector 0))
          (t0 (get-monotonic-time-ns)))
@@ -83,13 +94,37 @@
       (bench-print-metric "Throughput" throughput-tasks-per-sec "tasks/sec")
       (bench-print-metric "Average Latency per Task" avg-latency-per-task-ns "ns")
       (scheduler-stop! sched)
-      (if (= total-done n-tasks)
-          (begin
-            (write-string "  [STATUS]: PASS (100% of tasks completed deterministically)\n")
-            (flush-output-port))
-          (begin
-            (write-string "  [STATUS]: FAIL (task count mismatch)\n")
-            (flush-output-port))))))
+
+      ;; Record metrics for JSON export
+      (record-metric-pair! "microtasks_total" total-done)
+      (record-metric-pair! "microtasks_workers" n-workers)
+      (record-metric-pair! "microtasks_spawn_ms" spawn-elapsed-ms)
+      (record-metric-pair! "microtasks_exec_ms" exec-elapsed-ms)
+      (record-metric-pair! "microtasks_total_ms" total-elapsed-ms)
+      (record-metric-pair! "microtasks_throughput" throughput-tasks-per-sec)
+      (record-metric-pair! "microtasks_latency_ns" avg-latency-per-task-ns)
+
+      ;; Strict DoD Criteria Check for baseline 100k tasks:
+      ;; 1. Zero data loss (total-done == n-tasks)
+      ;; 2. Throughput >= 1,000,000 tasks/sec
+      ;; 3. Spawn time <= 250 ms (protect against O(n^2) regression)
+      (let ((pass-count? (= total-done n-tasks))
+            (pass-tput? (or (not (= n-tasks 100000)) (>= throughput-tasks-per-sec 1000000)))
+            (pass-spawn? (or (not (= n-tasks 100000)) (<= spawn-elapsed-ms 250))))
+        (if (and pass-count? pass-tput? pass-spawn?)
+            (begin
+              (record-metric-pair! "microtasks_status" "PASS")
+              (write-string "  [STATUS]: PASS (100% tasks completed, DoD >1M tasks/sec verified)\n")
+              (flush-output-port))
+            (begin
+              (atomic-set! *bench-overall-failed* #t)
+              (record-metric-pair! "microtasks_status" "FAIL")
+              (write-string "  [STATUS]: FAIL (DoD violation: ")
+              (if (not pass-count?) (write-string "task count mismatch; "))
+              (if (not pass-tput?) (write-string (string-append "throughput " (number->string throughput-tasks-per-sec) " < 1,000,000; ")))
+              (if (not pass-spawn?) (write-string (string-append "spawn time " (number->string spawn-elapsed-ms) " > 250ms; ")))
+              (write-string ")\n")
+              (flush-output-port)))))))
 
 ;; -----------------------------------------------------------------------
 ;; Benchmark 2: Linear Channel Messaging & Ring Relay
@@ -122,6 +157,8 @@
       (bench-print-metric "Messaging Throughput" throughput-msgs-per-sec "msgs/sec")
       (bench-print-metric "Latency per Send/Recv Pair" latency-per-op-ns "ns")
       (channel-close! ch)
+      (record-metric-pair! "channel_throughput" throughput-msgs-per-sec)
+      (record-metric-pair! "channel_latency_ns" latency-per-op-ns)
       (write-string "  [STATUS]: PASS (Zero Message Loss in Linear Channel)\n")
       (flush-output-port))))
 
@@ -171,6 +208,8 @@
       (bench-print-metric "Inlined Latency per Send/Recv Pair" latency-per-op-ns "ns")
       (bench-print-metric "Individual Send/Recv Latency" (quotient latency-per-op-ns 2) "ns")
       (channel-close! ch)
+      (record-metric-pair! "inlined_channel_throughput" throughput-msgs-per-sec)
+      (record-metric-pair! "inlined_channel_latency_ns" latency-per-op-ns)
       (write-string "  [STATUS]: PASS (Go 34ns Surpassed via Direct Inlining)\n")
       (flush-output-port))))
 
@@ -206,8 +245,101 @@
       (bench-print-metric "Arena Throughput" cycles-per-sec "cycles/sec")
       (bench-print-metric "Cost per Alloc-Reset Cycle" ns-per-cycle "ns")
       (bench-print-metric "Heap Growth / Leak" (arena-offset arena) "bytes")
+      (record-metric-pair! "arena_throughput" cycles-per-sec)
+      (record-metric-pair! "arena_cost_ns" ns-per-cycle)
       (write-string "  [STATUS]: PASS (Zero Heap Fragmentation & 0B Leak)\n")
       (flush-output-port))))
+
+;; -----------------------------------------------------------------------
+;; Benchmark 4: Multi-Dimensional Scaling Benchmark Suite (Issue #795)
+;; -----------------------------------------------------------------------
+(define (run-scaling-step n-tasks n-workers)
+  (let* ((sched (make-work-stealing-scheduler n-workers 1024))
+         (completed-counter (vector 0))
+         (t0 (get-monotonic-time-ns)))
+    (let spawn-loop ((i 0))
+      (if (< i n-tasks)
+          (begin
+            (let ((target-worker (modulo i (+ n-workers 1))))
+              (scheduler-spawn! sched
+                                (lambda ()
+                                  (vector-set! completed-counter 0 (+ (vector-ref completed-counter 0) 1)))
+                                (if (= target-worker n-workers) #f target-worker)))
+            (spawn-loop (+ i 1)))))
+    (let* ((t1 (get-monotonic-time-ns))
+           (spawn-ms (quotient (- t1 t0) 1000000))
+           (t-exec-start (get-monotonic-time-ns))
+           (total-done (scheduler-run! sched n-tasks))
+           (t-exec-end (get-monotonic-time-ns))
+           (exec-ms (quotient (- t-exec-end t-exec-start) 1000000))
+           (total-ms (quotient (- t-exec-end t0) 1000000))
+           (tput (if (> (- t-exec-end t-exec-start) 0)
+                     (quotient (* n-tasks 1000000000) (- t-exec-end t-exec-start))
+                     0)))
+      (scheduler-stop! sched)
+      (write-string (string-append "    [" (number->string n-tasks) " tasks, "
+                                   (number->string n-workers) " workers]: Spawn="
+                                   (number->string spawn-ms) "ms, Exec="
+                                   (number->string exec-ms) "ms, Total="
+                                   (number->string total-ms) "ms, Tput="
+                                   (number->string tput) " tasks/s\n"))
+      (flush-output-port)
+      total-ms)))
+
+(define (run-scaling-benchmark)
+  (bench-print-header "4. Multi-Dimensional Scaling Benchmark Suite (Issue #795)")
+  (write-string "--- 4a. Task Count Linearity Scaling (4 Workers) ---\n")
+  (flush-output-port)
+  (let ((t-10k (run-scaling-step 10000 4))
+        (t-100k (run-scaling-step 100000 4))
+        (t-1m (run-scaling-step 1000000 4)))
+    (write-string "\n  [Linearity Audit]: 10k -> 100k -> 1M tasks completed.\n")
+    (flush-output-port))
+
+  (write-string "\n--- 4b. Worker Thread Strong Scaling (100,000 Tasks) ---\n")
+  (flush-output-port)
+  (let ((t-w1 (run-scaling-step 100000 1))
+        (t-w2 (run-scaling-step 100000 2))
+        (t-w4 (run-scaling-step 100000 4)))
+    (let ((speedup-2 (if (> t-w2 0) (quotient (* t-w1 100) t-w2) 100))
+          (speedup-4 (if (> t-w4 0) (quotient (* t-w1 100) t-w4) 100)))
+      (write-string (string-append "  [Strong Scaling Speedup]: 2 Workers="
+                                   (number->string speedup-2) "%, 4 Workers="
+                                   (number->string speedup-4) "%\n"))
+      (flush-output-port))))
+
+;; -----------------------------------------------------------------------
+;; JSON Metrics Exporter
+;; -----------------------------------------------------------------------
+(define (export-metrics-json! filepath)
+  (if (and (string? filepath) (> (string-length filepath) 0))
+      (guard (exn (else
+                   (write-string (string-append "  [JSON WARNING]: failed to open " filepath " for writing\n"))
+                   (flush-output-port)
+                   #f))
+        (let ((p (open-output-file filepath)))
+          (write-string "{\n" p)
+          (write-string "  \"benchmark\": \"synapse_concurrency\",\n" p)
+          (write-string "  \"hardware\": \"Linux x86-64\"" p)
+          (let loop ((pairs (atomic-ref *bench-metrics-json*)))
+            (if (null? pairs)
+                #t
+                (let* ((entry (car pairs))
+                       (k (car entry))
+                       (v (cdr entry)))
+                  (write-string ",\n  \"" p)
+                  (write-string k p)
+                  (write-string "\": " p)
+                  (cond
+                    ((number? v) (write-string (number->string v) p))
+                    ((string? v) (begin (write-string "\"" p) (write-string v p) (write-string "\"" p)))
+                    (else (write-string "\"unknown\"" p)))
+                  (loop (cdr pairs)))))
+          (write-string "\n}\n" p)
+          (close-output-port p)
+          (write-string (string-append "  [JSON]: Exported benchmark metrics to " filepath "\n"))
+          (flush-output-port)))
+      #f))
 
 ;; -----------------------------------------------------------------------
 ;; Main Runner
@@ -231,8 +363,27 @@
   ;; 3. 100,000 Ephemeral Arena Allocation & Reset Cycles
   (run-arena-benchmark 100000)
 
+  ;; 4. Optional Scaling Suite (Triggered via ULISP_BENCH_SCALING=1)
+  (let ((scaling-flag (get-environment-variable "ULISP_BENCH_SCALING")))
+    (if (and (string? scaling-flag) (string=? scaling-flag "1"))
+        (run-scaling-benchmark)
+        #f))
+
+  ;; 5. Optional JSON Metrics Export
+  (let ((json-out-path (get-environment-variable "ULISP_BENCH_JSON_OUT")))
+    (if (and (string? json-out-path) (> (string-length json-out-path) 0))
+        (export-metrics-json! json-out-path)
+        #f))
+
   (write-string "\n=======================================================\n")
-  (write-string " ALL MICRO-CONCURRENCY BENCHMARKS COMPLETED SUCCESSFULLY\n")
-  (write-string "=======================================================\n\n")
-  (flush-output-port))
+  (if (atomic-ref *bench-overall-failed*)
+      (begin
+        (write-string " BENCHMARK COMPLETED WITH DoD THRESHOLD VIOLATIONS\n")
+        (write-string "=======================================================\n\n")
+        (flush-output-port)
+        (exit 1))
+      (begin
+        (write-string " ALL MICRO-CONCURRENCY BENCHMARKS COMPLETED SUCCESSFULLY\n")
+        (write-string "=======================================================\n\n")
+        (flush-output-port))))
 

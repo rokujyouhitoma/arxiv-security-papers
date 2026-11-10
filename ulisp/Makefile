@@ -495,6 +495,28 @@ bench_latency_under_gc: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o bui
 
 bench_concurrency: bench_microtasks bench_latency_under_gc
 
+bench_scaling: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
+	@mkdir -p build
+	@echo "(!gc none) (!allow-extern #t)" > build/bench_microtasks_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm >> build/bench_microtasks_input.scm
+	$(ULISP_COMPILER) build/bench_microtasks_input.scm > build/bench_microtasks.s
+	$(AS) $(ASFLAGS) build/bench_microtasks.s -o build/bench_microtasks.o
+	$(LD) $(LDFLAGS) build/bench_microtasks.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/bench_microtasks
+	ULISP_BENCH_SCALING=1 ./build/bench_microtasks < /dev/null
+
+bench_concurrency_gate: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
+	@mkdir -p $(ROOT_DIR)/build
+	@mkdir -p build
+	@echo "(!gc none) (!allow-extern #t)" > build/bench_microtasks_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm >> build/bench_microtasks_input.scm
+	$(ULISP_COMPILER) build/bench_microtasks_input.scm > build/bench_microtasks.s
+	$(AS) $(ASFLAGS) build/bench_microtasks.s -o build/bench_microtasks.o
+	$(LD) $(LDFLAGS) build/bench_microtasks.o build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o -o build/bench_microtasks
+	ULISP_BENCH_JSON_OUT=$(ROOT_DIR)/build/current_concurrency.json ./build/bench_microtasks < /dev/null
+	$(PYTHON) $(ROOT_DIR)/scripts/verify_concurrency_regression.py \
+		--current $(ROOT_DIR)/build/current_concurrency.json \
+		--baseline $(ROOT_DIR)/docs/benchmarks/baseline_concurrency.json
+
 test_lvn: build/compiler_passes.scm
 	@mkdir -p build
 	cat build/compiler_passes.scm tests/passes/test_lvn.scm > build/test_lvn_runner.scm

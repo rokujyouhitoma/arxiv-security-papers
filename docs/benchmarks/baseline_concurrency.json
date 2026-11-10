@@ -1,0 +1,19 @@
+{
+  "benchmark": "synapse_concurrency",
+  "hardware": "Linux x86-64",
+  "microtasks_total": 100000,
+  "microtasks_workers": 4,
+  "microtasks_spawn_ms": 70,
+  "microtasks_exec_ms": 93,
+  "microtasks_total_ms": 164,
+  "microtasks_throughput": 1068655,
+  "microtasks_latency_ns": 935,
+  "microtasks_status": "PASS",
+  "channel_throughput": 4208073,
+  "channel_latency_ns": 237,
+  "inlined_channel_throughput": 12051355,
+  "inlined_channel_latency_ns": 82,
+  "arena_throughput": 9719058,
+  "arena_cost_ns": 102
+}
+
