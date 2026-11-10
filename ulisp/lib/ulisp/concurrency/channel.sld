@@ -93,6 +93,7 @@
     task-resident-box
     task-resident?
     task-resident-set!
+    task-resident-hook
     *active-current-task-box*
     *worker-current-task-tls*
     *worker-slot-override-tls*

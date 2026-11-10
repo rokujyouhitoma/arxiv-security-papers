@@ -783,17 +783,29 @@
 (write-string "--- Group 15: Nested Supervision Tree & Persistent Supervisor Tasks (#788) ---\n")
 (flush-output-port)
 
-;; 15.1 task-resident? API & Security Guards (CWE-843)
+;; 15.1 task-resident-set!, task-resident?, and task-resident-hook API (CWE-843)
 (let ((t (make-task-context)))
   (assert-true (not (task-resident? t)) "default task is not resident")
+  (assert-true (not (task-resident-hook t)) "default task has no resident-hook")
   (assert-true (task-resident-set! t #t) "task-resident-set! #t returns #t")
   (assert-true (task-resident? t) "task-resident? is now #t")
+  (assert-true (not (task-resident-hook t)) "task-resident-hook is #f when set to #t")
+  (let ((custom-hook (lambda (task) 'hook-executed)))
+    (assert-true (procedure? (task-resident-set! t custom-hook)) "task-resident-set! accepts procedure")
+    (assert-true (task-resident? t) "task-resident? is #t when procedure is set")
+    (assert-eq (task-resident-hook t) custom-hook "task-resident-hook returns custom procedure"))
   (assert-true (not (task-resident-set! t #f)) "task-resident-set! #f returns #f")
-  (assert-true (not (task-resident? t)) "task-resident? is now #f"))
+  (assert-true (not (task-resident? t)) "task-resident? is now #f")
+  (assert-true (not (task-resident-hook t)) "task-resident-hook is now #f"))
 
 (assert-true (not (task-resident? 'not-a-task)) "task-resident? on non-task returns #f")
+(assert-true (not (task-resident-hook 'not-a-task)) "task-resident-hook on non-task returns #f")
 (assert-true (guard (exn (else #t)) (task-resident-set! 'not-a-task #t) #f)
              "task-resident-set! rejects non-task (CWE-843)")
+(assert-true (guard (exn (else #t)) (task-resident-set! (make-task-context) "invalid-string") #f)
+             "task-resident-set! rejects invalid type string (CWE-843)")
+(assert-true (guard (exn (else #t)) (task-resident-set! (make-task-context) 12345) #f)
+             "task-resident-set! rejects invalid type integer (CWE-843)")
 
 ;; 15.2 Supervisor sup-task is marked resident by default
 (let* ((spec (make-supervisor-spec 'one_for_one 5 1000 '()))
@@ -1072,6 +1084,104 @@
   (assert-eq (atomic-ref restarts) 16 "all 8 workers restarted exactly once under 4-worker scheduler (#789)")
   (assert-eq (supervisor-enqueued-state sup) 'idle "supervisor enqueued state is 'idle after multi-worker drain")
   (assert-eq (task-state sup-task) 'waiting "supervisor task state is 'waiting")
+
+  (supervisor-stop! sup)
+  (assert-eq (supervisor-enqueued-state sup) 'idle "stopped supervisor remains 'idle"))
+
+;; -----------------------------------------------------------------------
+;; Group 17: Post-Boundary Hook & Race-Free Idle Re-Entry under 4-Worker Burst (#798)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 17: Post-Boundary Hook & Race-Free Idle Re-Entry (#798) ---\n")
+(flush-output-port)
+
+;; 17.1 sup-task automatically receives post-drain resident hook on creation
+(let* ((spec (make-supervisor-spec 'one_for_one 5 1000 '()))
+       (sup (make-supervisor spec))
+       (sup-task (supervisor-task sup)))
+  (assert-true (task-resident? sup-task) "sup-task is resident")
+  (assert-true (procedure? (task-resident-hook sup-task)) "sup-task has procedure resident hook (#798)")
+  (supervisor-stop! sup))
+
+;; 17.2 scheduler-execute-task! calls task-resident-hook after task-state becomes 'waiting
+(let* ((sched (make-work-stealing-scheduler 1 64))
+       (hook-called (make-atomic-box #f))
+       (state-at-hook (make-atomic-box #f))
+       (t (make-task-context)))
+  (task-resident-set! t (lambda (task)
+                          (atomic-set! hook-called #t)
+                          (atomic-set! state-at-hook (task-state task))))
+  (task-next-run-set! t (lambda () (cons 'ok 'done)))
+  (scheduler-spawn! sched t 0)
+  (scheduler-worker-step! sched 0)
+  (assert-true (atomic-ref hook-called) "post-boundary hook called after execution (#798)")
+  (assert-eq (atomic-ref state-at-hook) 'waiting "task-state is 'waiting when hook is executed (#798)")
+  (assert-eq (task-state t) 'waiting "task remains 'waiting after hook"))
+
+;; 17.3 4-Worker High-Frequency Burst Crash: Zero Concurrent Re-entry (CWE-362/662)
+(let* ((sched (make-work-stealing-scheduler 4 512))
+       (restarts (make-atomic-box 0))
+       (active-workers (make-atomic-box 0))
+       (max-active-workers (make-atomic-box 0))
+       (make-spec (lambda (name)
+                    (make-child-spec name
+                                     (lambda ()
+                                       (atomic-fetch-add! restarts 1)
+                                       (let ((t (make-task-context)))
+                                         (task-resident-set! t #t)
+                                         (task-next-run-set! t (lambda () (cons 'ok 'worker_alive)))
+                                         t))
+                                     'permanent)))
+       (cspecs (list (make-spec 'k0) (make-spec 'k1) (make-spec 'k2) (make-spec 'k3)
+                     (make-spec 'k4) (make-spec 'k5) (make-spec 'k6) (make-spec 'k7)))
+       (sup-spec (make-supervisor-spec 'one_for_one 100 2000 cspecs))
+       (sup (make-supervisor sup-spec #f sched))
+       (sup-task (supervisor-task sup))
+       (orig-hook (task-resident-hook sup-task)))
+
+  ;; Instrument supervisor task execution with concurrency detector
+  (let ((orig-runner (task-next-run sup-task)))
+    (task-next-run-set!
+     sup-task
+     (lambda ()
+       (let ((cur (atomic-fetch-add! active-workers 1)))
+         (let retry-max ()
+           (let* ((old-max (atomic-ref max-active-workers))
+                  (new-max (+ cur 1)))
+             (if (> new-max old-max)
+                 (if (not (atomic-cas! max-active-workers old-max new-max))
+                     (retry-max)
+                     #t)
+                 #t)))
+         (let ((res (orig-runner)))
+           (atomic-fetch-add! active-workers -1)
+           res)))))
+
+  (supervisor-start! sup sched #t)
+  (assert-eq (atomic-ref restarts) 8 "all 8 burst workers booted initially")
+
+  ;; Perform 3 rounds of 8-worker burst crashes (total 24 crashes)
+  (let round-loop ((round 0))
+    (if (< round 3)
+        (begin
+          (let crash-loop ((names '(k0 k1 k2 k3 k4 k5 k6 k7)))
+            (if (not (null? names))
+                (let ((ctask (supervisor-child-task sup (car names))))
+                  (task-exit! ctask (cons 'panic (cons 'burst_round round)))
+                  (crash-loop (cdr names)))))
+          (scheduler-run! sched 20)
+          (round-loop (+ round 1)))))
+
+  ;; Final drain of scheduler queues
+  (scheduler-run! sched 40)
+
+  ;; Assertions
+  ;; Initial 8 boots + 24 restarts = 32 boots
+  (assert-eq (atomic-ref restarts) 32 "all 8 workers restarted 3 times (total 32 boots) (#798)")
+  ;; Concurrent supervisor execution count MUST never exceed 1 (Zero Re-Entry)
+  (assert-true (<= (atomic-ref max-active-workers) 1) "supervisor concurrency never exceeded 1 worker (CWE-362/662) (#798)")
+  (assert-eq (atomic-ref active-workers) 0 "no workers actively running supervisor at idle state")
+  (assert-eq (supervisor-enqueued-state sup) 'idle "supervisor enqueued state is 'idle after burst drain (#798)")
+  (assert-eq (task-state sup-task) 'waiting "supervisor task state is 'waiting after burst drain")
 
   (supervisor-stop! sup)
   (assert-eq (supervisor-enqueued-state sup) 'idle "stopped supervisor remains 'idle"))

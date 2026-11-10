@@ -839,15 +839,24 @@
 (define (task-resident? t)
   (if (not (task-context? t))
       #f
-      (atomic-ref (%task-resident-box t))))
+      (let ((val (atomic-ref (%task-resident-box t))))
+        (if val #t #f))))
+
+(define (task-resident-hook t)
+  (if (not (task-context? t))
+      #f
+      (let ((val (atomic-ref (%task-resident-box t))))
+        (if (procedure? val) val #f))))
 
 (define (task-resident-set! t val)
   (if (not (task-context? t))
       (error "task-resident-set!: expected <task-context> (CWE-843)" t)
-      (let ((b (if val #t #f)))
-        (atomic-set! (%task-resident-box t) b)
-        (%memory-fence)
-        b)))
+      (if (and val (not (boolean? val)) (not (procedure? val)))
+          (error "task-resident-set!: expected boolean or procedure (CWE-843)" val)
+          (begin
+            (atomic-set! (%task-resident-box t) val)
+            (%memory-fence)
+            val))))
 
 ;; -----------------------------------------------------------------------
 ;; Per-Worker Fallback Task Contexts & Default Task Boundary Hook (Issue #720)

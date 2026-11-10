@@ -445,7 +445,7 @@
                            res)
                          res)
                      res)))
-              ;; Thunk: zero-argument procedure (Issue #741, #788)
+              ;; Thunk: zero-argument procedure (Issue #741, #788, #798)
               ((and (not (vector? nxt)) (procedure? nxt))
                (let ((res (with-synapse-task-boundary ctx nxt)))
                  (if (and (pair? res) (eq? (car res) 'ok))
@@ -454,6 +454,10 @@
                          (begin
                            (if (not (eq? (task-state ctx) 'terminated))
                                (task-state-set! ctx 'waiting))
+                           (let ((hook (task-resident-hook ctx)))
+                             (if (procedure? hook)
+                                 (hook ctx)
+                                 #t))
                            res)
                          (begin
                            (task-exit! ctx 'normal)
@@ -464,6 +468,10 @@
                    (begin
                      (if (not (eq? (task-state ctx) 'terminated))
                          (task-state-set! ctx 'waiting))
+                     (let ((hook (task-resident-hook ctx)))
+                       (if (procedure? hook)
+                           (hook ctx)
+                           #t))
                      (cons 'ok #t))
                    (begin
                      (task-exit! ctx 'normal)

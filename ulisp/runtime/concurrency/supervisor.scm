@@ -389,13 +389,15 @@
                                                (make-atomic-box (list))
                                                (make-atomic-box #f)
                                                (make-atomic-box 'idle))))
-           ;; Mark sup-task as a resident actor task (Issue #788)
-           (task-resident-set! sup-task #t)
-           ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7, #743, #789)
+           ;; Mark sup-task as a resident actor task with post-drain hook (Issue #788, #798)
+           (task-resident-set! sup-task
+                               (lambda (t)
+                                 (%supervisor-post-drain-hook! sup t)))
+           ;; Configure sup-task as an executable task whose loop drains DOWN signals (Issue #727, Item C7, #743, #789, #798)
            (task-next-run-set!
             sup-task
             (lambda ()
-              (%supervisor-drain-loop! sup)))
+              (%supervisor-drain-loop! sup #t)))
            sup)))))
 
 (define supervisor-start!
@@ -732,28 +734,55 @@
            #t)
           (else #f))))))
 
-(define (%supervisor-drain-loop! sup)
-  (let ((box (%supervisor-enqueued-box sup))
-        (sup-task (supervisor-task sup)))
-    ;; Transition to 'running (from 'scheduled in actor mode, or 'idle in direct mode)
-    (atomic-set! box 'running)
-    (let loop ((last-res #f))
-      (let ((res (supervisor-poll-down-signals! sup)))
-        (let check-next ()
-          (let ((cur (atomic-ref box)))
-            (cond
-              ;; If new signals arrived while we were polling:
-              ((eq? cur 'running_notified)
-               (atomic-set! box 'running)
-               (loop res))
-              ;; If no new signals were notified, try to return to 'idle:
-              ((eq? cur 'running)
-               (if (task-has-handoff? sup-task)
-                   (loop res)
-                   (if (atomic-cas! box 'running 'idle)
-                       res
-                       (check-next))))
-              (else res))))))))
+(define (%supervisor-post-drain-hook! sup sup-task)
+  (let ((box (%supervisor-enqueued-box sup)))
+    (let retry ()
+      (let ((cur (atomic-ref box)))
+        (cond
+          ;; If new signals arrived while task was exiting/waiting:
+          ((eq? cur 'running_notified)
+           (atomic-set! box 'scheduled)
+           (task-state-set! sup-task 'ready)
+           (%supervisor-enqueue-child! sup sup-task)
+           #t)
+          ;; Normal exit: transition 'running -> 'idle via CAS (#798)
+          ((eq? cur 'running)
+           (if (atomic-cas! box 'running 'idle)
+               #t
+               (retry)))
+          ;; Already stopped or idle
+          (else #t))))))
+
+(define %supervisor-drain-loop!
+  (case-lambda
+    ((sup)
+     (%supervisor-drain-loop! sup #f))
+    ((sup defer-idle?)
+     (let ((box (%supervisor-enqueued-box sup))
+           (sup-task (supervisor-task sup)))
+       ;; Transition to 'running (from 'scheduled in actor mode, or 'idle in direct mode)
+       (atomic-set! box 'running)
+       (let loop ((last-res #f))
+         (let ((res (supervisor-poll-down-signals! sup)))
+           (let check-next ()
+             (let ((cur (atomic-ref box)))
+               (cond
+                 ;; If new signals arrived while we were polling:
+                 ((eq? cur 'running_notified)
+                  (atomic-set! box 'running)
+                  (loop res))
+                 ;; If no new signals were notified:
+                 ((eq? cur 'running)
+                  (if (task-has-handoff? sup-task)
+                      (loop res)
+                      (if defer-idle?
+                          ;; Defer transition to 'idle to post-boundary hook (#798)
+                          res
+                          ;; Direct mode: immediate CAS to 'idle
+                          (if (atomic-cas! box 'running 'idle)
+                              res
+                              (check-next)))))
+                 (else res))))))))))
 
 ;; Connect monitor DOWN notifications to active supervisor tasks automatically (Issue #727, Item C7, #743, #789)
 (guard (exn (else #f))
