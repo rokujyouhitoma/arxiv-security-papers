@@ -49,25 +49,15 @@
              vector-set! string-set! bytevector-u8-set!
              call/cc call-with-current-continuation dynamic-wind)))
 
+;; NOTE (Issue #797): Variable name heuristics are completely eliminated from the compiler.
+;; All linear variables must be established via explicit type annotation (: var type),
+;; constructor provenance, or function signatures.
 (define (linear-variable-name-hint? sym)
-  (if (not (symbol? sym))
-      #f
-      (let ((s (symbol->string sym)))
-        (or (%str-starts-with? "chan" s)
-            (%str-starts-with? "rx" s)
-            (%str-starts-with? "tx" s)
-            (%str-starts-with? "resource" s)
-            (%str-starts-with? "buf" s)
-            (%str-ends-with? "-ch" s)
-            (%str-ends-with? "-chan" s)
-            (%str-ends-with? "-channel" s)
-            (%str-ends-with? "-res" s)
-            (%str-ends-with? "-resource" s)
-            (%str-ends-with? "-buf" s)))))
+  #f)
 
-;; Backward-compatibility alias for tests and external callers
+;; Backward-compatibility stub: name-based linearity is disabled (#797)
 (define (linear-variable? sym)
-  (linear-variable-name-hint? sym))
+  #f)
 
 ;;; -----------------------------------------------------------------------
 ;;; 1b. Function Signatures & Return Type Propagation (Issue #792)
@@ -352,9 +342,9 @@
     ;; (var type)
     ((and (pair? f) (pair? (cdr f)) (linear-type? (cadr f)))
      #t)
-    ;; Symbol fallback to name hint (for untyped kernel parameters rx, tx, chan)
+    ;; Symbol formal without explicit linear type annotation is strictly non-linear (Issue #797)
     ((symbol? f)
-     (linear-variable-name-hint? f))
+     #f)
     (else #f)))
 
 (define (lin-env-mark-moved env sym)

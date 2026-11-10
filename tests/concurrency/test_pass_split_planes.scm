@@ -104,52 +104,74 @@
               (extract-free-variables '(let ((x z)) (+ x 1)) '(+)))
 
 ;;; -----------------------------------------------------------------------
-;;; Group 2: Capture Mode Classification (DSN-37 Section 8.1)
+;;; Group 2: Capture Mode Classification (DSN-37 Section 8.1 & Issue #797)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 2: Capture Mode Classification ---\n")
+(display "\n--- Group 2: Capture Mode Classification (Type-Driven / No Name Heuristics) ---\n")
 
-;; Immediate types
-(assert-equal "2.1 count is classified as immediate"
+(define sample-type-env
+  '((count . integer)
+    (idx . fixnum)
+    (n . integer)
+    (is-ready? . boolean)
+    (c . channel)
+    (my-pipe . spsc-channel)
+    (chan-val . integer)
+    (chan-flag . boolean)
+    (payload-buffer . vector)
+    (shared-vec . vector)))
+
+;; Immediate types via type environment (Issue #797)
+(assert-equal "2.1 count (integer) is classified as immediate"
               'immediate
-              (classify-capture-mode 'count))
+              (classify-capture-mode 'count sample-type-env))
 
-(assert-equal "2.2 idx is classified as immediate"
+(assert-equal "2.2 idx (fixnum) is classified as immediate"
               'immediate
-              (classify-capture-mode 'idx))
+              (classify-capture-mode 'idx sample-type-env))
 
-(assert-equal "2.3 n is classified as immediate"
+(assert-equal "2.3 n (integer) is classified as immediate"
               'immediate
-              (classify-capture-mode 'n))
+              (classify-capture-mode 'n sample-type-env))
 
-(assert-equal "2.4 is-ready? is classified as immediate"
+(assert-equal "2.4 is-ready? (boolean) is classified as immediate"
               'immediate
-              (classify-capture-mode 'is-ready?))
+              (classify-capture-mode 'is-ready? sample-type-env))
 
-;; Linear Move (Channels)
-(assert-equal "2.5 rx is classified as linear-move"
+;; Variable with 'chan' prefix but integer type is NOT linear (CWE-843 Type Confusion Prevention)
+(assert-equal "2.5 chan-val (integer) is classified as immediate, NOT linear"
+              'immediate
+              (classify-capture-mode 'chan-val sample-type-env))
+
+(assert-equal "2.6 chan-flag (boolean) is classified as immediate, NOT linear"
+              'immediate
+              (classify-capture-mode 'chan-flag sample-type-env))
+
+;; Linear Move via Type Environment: arbitrary names (Issue #797)
+(assert-equal "2.7 arbitrary name 'c' (channel) is classified as linear-move"
               'linear-move
-              (classify-capture-mode 'rx))
+              (classify-capture-mode 'c sample-type-env))
 
-(assert-equal "2.6 tx is classified as linear-move"
+(assert-equal "2.8 arbitrary name 'my-pipe' (spsc-channel) is classified as linear-move"
               'linear-move
-              (classify-capture-mode 'tx))
+              (classify-capture-mode 'my-pipe sample-type-env))
 
-(assert-equal "2.7 chan is classified as linear-move"
+;; Direct inline type annotation (: var type)
+(assert-equal "2.9 inline (: pipe channel) is classified as linear-move"
               'linear-move
-              (classify-capture-mode 'chan))
+              (classify-capture-mode '(: pipe channel)))
 
-(assert-equal "2.8 data-channel is classified as linear-move"
-              'linear-move
-              (classify-capture-mode 'data-channel))
+(assert-equal "2.10 inline (: max-size integer) is classified as immediate"
+              'immediate
+              (classify-capture-mode '(: max-size integer)))
 
-;; Deep Copy (Shared-Nothing CWE-362/662 defense)
-(assert-equal "2.9 payload-buffer is classified as deep-copy"
+;; Deep Copy (Shared-Nothing CWE-362/662 safe default for untyped or composite)
+(assert-equal "2.11 payload-buffer (vector) is classified as deep-copy"
               'deep-copy
-              (classify-capture-mode 'payload-buffer))
+              (classify-capture-mode 'payload-buffer sample-type-env))
 
-(assert-equal "2.10 shared-vec is classified as deep-copy"
+(assert-equal "2.12 untyped variable defaults to deep-copy (safe default)"
               'deep-copy
-              (classify-capture-mode 'shared-vec))
+              (classify-capture-mode 'untyped-var '()))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: spawn-task and with-channel Plane Boundary Splitting
@@ -162,7 +184,7 @@
   '(spawn-task
      (+ n count)))
 
-(define split-res-1 (split-planes-ast input-spawn-1))
+(define split-res-1 (split-planes-ast input-spawn-1 sample-type-env))
 (define bridge-1 (car split-res-1))
 (define kernels-1 (cdr split-res-1))
 
@@ -191,7 +213,7 @@
      (send! tx payload-buffer)
      (recv! rx)))
 
-(define split-res-2 (split-planes-ast input-chan-1))
+(define split-res-2 (split-planes-ast input-chan-1 sample-type-env))
 (define bridge-2 (car split-res-2))
 (define kernels-2 (cdr split-res-2))
 
@@ -206,8 +228,8 @@
 (assert-true "3.8 with-channel kernel is %asc-kernel"
              (asc-kernel? kernel-2))
 
-(assert-equal "3.9 with-channel kernel formals include rx tx and fvars"
-              '(%asc-kernel-2 rx tx payload-buffer)
+(assert-equal "3.9 with-channel kernel formals include typed rx tx and fvars"
+              '(%asc-kernel-2 (: rx channel) (: tx channel) payload-buffer)
               (cadr kernel-2))
 
 ;;; -----------------------------------------------------------------------

@@ -60,28 +60,30 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Linear Variable Predicates & Environment Operations
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 1: Linear Variable Predicates & Environment ---\n")
+(display "\n--- Group 1: Linear Type Predicates & Formal Invariants (Issue #797) ---\n")
 
-(assert-true "1.1 rx is linear"
-             (linear-variable? 'rx))
+;; 1.1-1.5: Linear Type Predicates (Type-Driven, free of variable name heuristics)
+(assert-true "1.1 channel is a linear type"
+             (linear-type? 'channel))
 
-(assert-true "1.2 tx is linear"
-             (linear-variable? 'tx))
+(assert-true "1.2 spsc-channel is a linear type"
+             (linear-type? 'spsc-channel))
 
-(assert-true "1.3 chan is linear"
-             (linear-variable? 'chan))
+(assert-true "1.3 bounded-channel is a linear type"
+             (linear-type? 'bounded-channel))
 
-(assert-true "1.4 data-channel is linear"
-             (linear-variable? 'data-channel))
+(assert-true "1.4 linear is a linear type"
+             (linear-type? 'linear))
 
-(assert-true "1.5 payload-buf is linear"
-             (linear-variable? 'payload-buf))
+(assert-false "1.5 integer is NOT a linear type"
+              (linear-type? 'integer))
 
-(assert-false "1.6 count is not linear"
-              (linear-variable? 'count))
+;; 1.6-1.7: Formal Parameter Linearity: Strictly requires type annotation (: var type)
+(assert-true "1.6 typed formal (: c channel) is linear"
+             (kernel-formal-linear? '(: c channel)))
 
-(assert-false "1.7 x is not linear"
-              (linear-variable? 'x))
+(assert-false "1.7 untyped symbol 'rx' is NOT linear without type annotation (CWE-843 #797)"
+              (kernel-formal-linear? 'rx))
 
 (define env1 (lin-env-add-available '() 'rx))
 (assert-equal "1.8 lin-env-add-available records available status"
@@ -245,9 +247,9 @@
 ;;; -----------------------------------------------------------------------
 (display "\n--- Group 6: Automatic RAII Drop Injection ---\n")
 
-;; Unconsumed linear formal in kernel
+;; Unconsumed linear formal in kernel (with explicit type annotation #797)
 (define kernel-with-unconsumed
-  '(%asc-kernel (my-kernel rx n)
+  '(%asc-kernel (my-kernel (: rx channel) n)
      (+ n 100)))
 
 (define transformed-k1 (check-affine-kernel kernel-with-unconsumed))
@@ -268,7 +270,7 @@
 
 ;; Kernel where linear variable is consumed: no RAII drop should be injected
 (define kernel-consumed
-  '(%asc-kernel (my-kernel tx n)
+  '(%asc-kernel (my-kernel (: tx channel) n)
      (channel-close! tx)))
 
 (define transformed-k2 (check-affine-kernel kernel-consumed))
@@ -281,7 +283,7 @@
 
 ;; Kernel where channel is borrowed (sent/received): tx is still available at exit so RAII drop IS injected to close it
 (define kernel-borrowed
-  '(%asc-kernel (my-kernel tx n)
+  '(%asc-kernel (my-kernel (: tx channel) n)
      (channel-send! tx n)))
 
 (define transformed-k3 (check-affine-kernel kernel-borrowed))
@@ -493,8 +495,8 @@
 (assert-false "9.4 linear-variable-name-hint? rejects 'response"
               (linear-variable-name-hint? 'response))
 
-(assert-true "9.5 linear-variable-name-hint? accepts 'resource"
-             (linear-variable-name-hint? 'resource))
+(assert-false "9.5 linear-variable-name-hint? unconditionally rejects 'resource (heuristics eliminated #797)"
+              (linear-variable-name-hint? 'resource))
 
 ;; 9.6 Multi-reference of 'result' bound to function call validates ok (False-Positive Fixed)
 (define multi-ref-result-call-expr
