@@ -140,23 +140,29 @@
       (atomic-set! *task-next-id* val)))
 
 ;; -----------------------------------------------------------------------
-;; Global Lock-Free Task Table for O(1) TID Resolution (Issue #733, Item B2)
+;; Global Lock-Free Task Table for O(1) TID Resolution (Issue #733, #794)
 ;; -----------------------------------------------------------------------
+;; Uses a 2-level Paged Slot Array indexed directly by monotonic integer TID.
+;; Slot resolution is O(1) direct memory dereference with zero hashing collisions
+;; and zero traversal overhead. Supports up to 4,194,304 tasks (4096 pages * 1024 slots).
 
-(define *task-table-bucket-count* 64)
+(define *task-table-bucket-count* 64)        ; Backward compatibility constant
+(define *task-table-page-size* 1024)         ; 1024 slots per page
+(define *task-table-max-pages* 4096)         ; Max 4M tasks
 
-(define *global-task-table-buckets*
-  (let ((vec (make-vector *task-table-bucket-count* #f)))
+(define *task-table-pages*
+  (let ((vec (make-vector *task-table-max-pages* #f)))
     (let loop ((i 0))
-      (if (< i *task-table-bucket-count*)
+      (if (< i *task-table-max-pages*)
           (begin
-            (vector-set! vec i (make-atomic-box '()))
+            (vector-set! vec i (make-atomic-box #f))
             (loop (+ i 1)))
           vec))))
 
-(define (%task-table-bucket-index tid)
-  (let ((h (if (integer? tid) tid 0)))
-    (modulo (if (< h 0) (- 0 h) h) *task-table-bucket-count*)))
+(define *task-table-live-count* (make-atomic-box 0))
+
+;; Overflow bucket for negative or extreme out-of-range TIDs (CWE-843 defense)
+(define *task-table-overflow-bucket* (make-atomic-box '()))
 
 (define (%task-table-assv tid xs)
   (let loop ((cur xs))
@@ -165,85 +171,147 @@
       ((and (pair? (car cur)) (eqv? (caar cur) tid)) (car cur))
       (else (loop (cdr cur))))))
 
+(define (%allocate-task-table-page!)
+  (let ((page (make-vector *task-table-page-size* #f)))
+    (let loop ((i 0))
+      (if (< i *task-table-page-size*)
+          (begin
+            (vector-set! page i (make-atomic-box #f))
+            (loop (+ i 1)))
+          page))))
+
+(define (%get-task-table-slot-box tid allocate?)
+  (if (and (integer? tid) (>= tid 0))
+      (let ((p-idx (quotient tid *task-table-page-size*))
+            (s-idx (bitwise-and tid 1023)))
+        (if (< p-idx *task-table-max-pages*)
+            (let ((page-box (vector-ref *task-table-pages* p-idx)))
+              (let ((page (atomic-ref page-box)))
+                (if page
+                    (vector-ref page s-idx)
+                    (if (not allocate?)
+                        #f
+                        (let ((new-page (%allocate-task-table-page!)))
+                          (if (atomic-cas! page-box #f new-page)
+                              (vector-ref new-page s-idx)
+                              (vector-ref (atomic-ref page-box) s-idx)))))))
+            #f))
+      #f))
+
 (define (task-table-register! task)
   (if (not (task-context? task))
       (error "task-table-register!: expected <task-context>" task)
       (let* ((tid (task-tid task))
-             (idx (%task-table-bucket-index tid))
-             (b-box (vector-ref *global-task-table-buckets* idx)))
-        (let retry ()
-          (let* ((cur (atomic-ref b-box))
-                 (existing (%task-table-assv tid cur)))
-            (if existing
-                (let ((new-list (cons (cons tid task)
-                                      (let remove-loop ((xs cur))
-                                        (cond ((null? xs) '())
-                                              ((eqv? (caar xs) tid) (cdr xs))
-                                              (else (cons (car xs) (remove-loop (cdr xs)))))))))
-                  (if (atomic-cas! b-box cur new-list)
-                      #t
-                      (retry)))
-                (let ((new-list (cons (cons tid task) cur)))
-                  (if (atomic-cas! b-box cur new-list)
-                      #t
-                      (retry)))))))))
+             (slot-box (%get-task-table-slot-box tid #t)))
+        (if slot-box
+            (if (atomic-cas! slot-box #f task)
+                (begin
+                  (atomic-fetch-add! *task-table-live-count* 1)
+                  #t)
+                (let retry ()
+                  (let ((cur (atomic-ref slot-box)))
+                    (if (atomic-cas! slot-box cur task)
+                        (begin
+                          (if (not cur)
+                              (atomic-fetch-add! *task-table-live-count* 1)
+                              #f)
+                          #t)
+                        (retry)))))
+            ;; Fallback for negative or extreme out-of-range TIDs
+            (let retry-overflow ()
+              (let* ((cur (atomic-ref *task-table-overflow-bucket*))
+                     (existing (%task-table-assv tid cur)))
+                (if existing
+                    (let ((new-list (cons (cons tid task)
+                                          (let remove-loop ((xs cur))
+                                            (cond ((null? xs) '())
+                                                  ((eqv? (caar xs) tid) (cdr xs))
+                                                  (else (cons (car xs) (remove-loop (cdr xs)))))))))
+                      (if (atomic-cas! *task-table-overflow-bucket* cur new-list)
+                          #t
+                          (retry-overflow)))
+                    (let ((new-list (cons (cons tid task) cur)))
+                      (if (atomic-cas! *task-table-overflow-bucket* cur new-list)
+                          (begin
+                            (atomic-fetch-add! *task-table-live-count* 1)
+                            #t)
+                          (retry-overflow))))))))))
 
 (define (task-table-unregister! tid-or-task)
   (let ((tid (cond
                ((integer? tid-or-task) tid-or-task)
                ((task-context? tid-or-task) (task-tid tid-or-task))
                (else (error "task-table-unregister!: expected integer TID or <task-context>" tid-or-task)))))
-    (let* ((idx (%task-table-bucket-index tid))
-           (b-box (vector-ref *global-task-table-buckets* idx)))
-      (let retry ()
-        (let* ((cur (atomic-ref b-box))
-               (existing (%task-table-assv tid cur)))
-          (if (not existing)
-              #f
-              (let ((new-list (let remove-loop ((xs cur))
-                                (cond ((null? xs) '())
-                                      ((eqv? (caar xs) tid) (cdr xs))
-                                      (else (cons (car xs) (remove-loop (cdr xs))))))))
-                (if (atomic-cas! b-box cur new-list)
-                    #t
-                    (retry)))))))))
+    (let ((slot-box (%get-task-table-slot-box tid #f)))
+      (if slot-box
+          (let retry ()
+            (let ((cur (atomic-ref slot-box)))
+              (if (not cur)
+                  #f
+                  (if (atomic-cas! slot-box cur #f)
+                      (begin
+                        (atomic-fetch-add! *task-table-live-count* -1)
+                        #t)
+                      (retry)))))
+          ;; Check overflow bucket
+          (let retry-overflow ()
+            (let* ((cur (atomic-ref *task-table-overflow-bucket*))
+                   (existing (%task-table-assv tid cur)))
+              (if (not existing)
+                  #f
+                  (let ((new-list (let remove-loop ((xs cur))
+                                    (cond ((null? xs) '())
+                                          ((eqv? (caar xs) tid) (cdr xs))
+                                          (else (cons (car xs) (remove-loop (cdr xs))))))))
+                    (if (atomic-cas! *task-table-overflow-bucket* cur new-list)
+                        (begin
+                          (atomic-fetch-add! *task-table-live-count* -1)
+                          #t)
+                        (retry-overflow))))))))))
 
 (define (lookup-task-by-tid tid)
   (if (not (integer? tid))
       #f
-      (let* ((idx (%task-table-bucket-index tid))
-             (b-box (vector-ref *global-task-table-buckets* idx))
-             (cur (atomic-ref b-box))
-             (pair (%task-table-assv tid cur)))
-        (if pair
-            (let ((task (cdr pair)))
+      (let ((slot-box (%get-task-table-slot-box tid #f)))
+        (if slot-box
+            (let ((task (atomic-ref slot-box)))
               (if (and (task-context? task)
                        (not (eq? (%task-state task) 'terminated)))
                   task
                   #f))
-            #f))))
+            ;; Check overflow bucket
+            (let* ((cur (atomic-ref *task-table-overflow-bucket*))
+                   (pair (%task-table-assv tid cur)))
+              (if pair
+                  (let ((task (cdr pair)))
+                    (if (and (task-context? task)
+                             (not (eq? (%task-state task) 'terminated)))
+                        task
+                        #f))
+                  #f))))))
 
 (define (task-by-id tid)
   (lookup-task-by-tid tid))
 
 (define (task-table-clear!)
   (let loop ((i 0))
-    (if (< i *task-table-bucket-count*)
-        (begin
-          (atomic-set! (vector-ref *global-task-table-buckets* i) '())
+    (if (< i *task-table-max-pages*)
+        (let ((p-box (vector-ref *task-table-pages* i)))
+          (if (atomic-ref p-box)
+              (atomic-set! p-box #f)
+              #f)
           (loop (+ i 1)))
-        #t)))
+        (begin
+          (atomic-set! *task-table-overflow-bucket* '())
+          (atomic-set! *task-table-live-count* 0)
+          #t))))
 
 (define (task-table-count)
-  (let loop ((i 0) (count 0))
-    (if (< i *task-table-bucket-count*)
-        (let ((b-box (vector-ref *global-task-table-buckets* i)))
-          (loop (+ i 1) (+ count (length (atomic-ref b-box)))))
-        count)))
+  (let ((c (atomic-ref *task-table-live-count*)))
+    (if (< c 0) 0 c)))
 
 (define (%register-task-in-table! task)
-  (guard (exn (else #f))
-    (task-table-register! task))
+  (task-table-register! task)
   task)
 
 (define (%create-task-context-default tid state reductions epoch)
