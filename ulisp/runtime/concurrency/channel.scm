@@ -86,16 +86,45 @@
   (atomic-ref *channel-epoch-validator-box*))
 
 ;; -----------------------------------------------------------------------
-;; 2. <task-context> (TCB) Record Type (DSN-37 Section 6.1)
+;; 2. <task-meta> (Lazy Metadata Extension) & <task-context> (TCB) Record Types (DSN-37, Issue #800)
 ;; -----------------------------------------------------------------------
+
+(define-record-type <task-meta>
+  (%make-task-meta handoff-box links-box monitors-box monitored-by-box trap-exit-box
+                   owned-channels-box arena-box escape-k-box handler-chain-box executing-box resident-box)
+  task-meta?
+  (handoff-box        %meta-handoff-box)
+  (links-box          %meta-links-box)
+  (monitors-box       %meta-monitors-box)
+  (monitored-by-box   %meta-monitored-by-box)
+  (trap-exit-box      %meta-trap-exit-box)
+  (owned-channels-box %meta-owned-channels-box)
+  (arena-box          %meta-arena-box)
+  (escape-k-box       %meta-escape-k-box)
+  (handler-chain-box  %meta-handler-chain-box)
+  (executing-box      %meta-executing-box)
+  (resident-box       %meta-resident-box))
+
+(define (%create-task-meta-default state escape-k handler-chain executing)
+  (let ((closed? (eq? state 'terminated)))
+    (%make-task-meta (make-atomic-box #f)
+                     (make-atomic-box (if closed? 'closed '()))
+                     (make-atomic-box '())
+                     (make-atomic-box (if closed? 'closed '()))
+                     (make-atomic-box #f)
+                     (make-atomic-box '())
+                     (make-atomic-box #f)
+                     (make-atomic-box escape-k)
+                     (make-atomic-box handler-chain)
+                     (make-atomic-box executing)
+                     (make-atomic-box #f))))
 
 (define-record-type <task-context>
   (%make-task-context tid state reductions continuation-pc stack-pointer
                       arena-base arena-offset arena-capacity
                       blocked-on epoch next-run
-                      reduction-exhaustions steals-count handoff-box
-                      links-box monitors-box monitored-by-box trap-exit-box owned-channels-box
-                      arena-box escape-k-box handler-chain-box executing-box resident-box)
+                      reduction-exhaustions steals-count
+                      escape-k handler-chain executing meta-box)
   task-context?
   (tid                   %task-tid)
   (state                 %task-state                 %task-state-set!)
@@ -110,17 +139,29 @@
   (next-run              %task-next-run              %task-next-run-set!)
   (reduction-exhaustions %task-reduction-exhaustions %task-reduction-exhaustions-set!)
   (steals-count          %task-steals-count          %task-steals-count-set!)
-  (handoff-box           %task-handoff-box)
-  (links-box             %task-links-box)
-  (monitors-box          %task-monitors-box)
-  (monitored-by-box      %task-monitored-by-box)
-  (trap-exit-box         %task-trap-exit-box)
-  (owned-channels-box    %task-owned-channels-box)
-  (arena-box             %task-arena-box)
-  (escape-k-box          %task-escape-k-box)
-  (handler-chain-box     %task-handler-chain-box)
-  (executing-box         %task-executing-box)
-  (resident-box          %task-resident-box))
+  (escape-k              %task-escape-k              %task-escape-k-set!)
+  (handler-chain         %task-handler-chain         %task-handler-chain-set!)
+  (executing             %task-executing             %task-executing-set!)
+  (meta-box              %task-meta-box))
+
+(define (task-meta-fast t)
+  (if (not (task-context? t))
+      #f
+      (atomic-ref (%task-meta-box t))))
+
+(define (ensure-task-meta! t)
+  (let ((box (%task-meta-box t)))
+    (let loop ()
+      (let ((meta (atomic-ref box)))
+        (if meta
+            meta
+            (let ((new-meta (%create-task-meta-default (%task-state t)
+                                                       (%task-escape-k t)
+                                                       (%task-handler-chain t)
+                                                       (%task-executing t))))
+              (if (atomic-cas! box #f new-meta)
+                  new-meta
+                  (loop))))))))
 
 ;; -----------------------------------------------------------------------
 ;; Global Monotonically Increasing Atomic Task ID Allocator (#673)
@@ -316,12 +357,9 @@
 
 (define (%create-task-context-default tid state reductions epoch)
   (%make-task-context tid state reductions 0 0
-                      0 0 4096 #f epoch #f 0 0 (make-atomic-box #f)
-                      (make-atomic-box '()) (make-atomic-box '())
-                      (make-atomic-box '()) (make-atomic-box #f)
-                      (make-atomic-box '())
-                      (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
-                      (make-atomic-box #f) (make-atomic-box #f)))
+                      0 0 4096 #f epoch #f 0 0
+                      #f 0 #f
+                      (make-atomic-box #f)))
 
 (define make-task-context
   (case-lambda
@@ -344,12 +382,8 @@
                           arena-base arena-offset arena-capacity
                           blocked-on epoch next-run
                           reduction-exhaustions steals-count
-                          (make-atomic-box #f)
-                          (make-atomic-box '()) (make-atomic-box '())
-                          (make-atomic-box '()) (make-atomic-box #f)
-                          (make-atomic-box '())
-                          (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
-                          (make-atomic-box #f) (make-atomic-box #f))))))
+                          #f 0 #f
+                          (make-atomic-box #f))))))
 
 (define (task-tid t)
   (if (not (task-context? t))
@@ -517,43 +551,52 @@
 (define (task-has-handoff? t)
   (if (not (task-context? t))
       (error "task-has-handoff?: expected <task-context>" t)
-      (let* ((cur (atomic-ref (%task-handoff-box t)))
-             (mb (%%normalize-mailbox cur)))
-        (> (vector-ref mb 1) 0))))
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            #f
+            (let* ((cur (atomic-ref (%meta-handoff-box meta)))
+                   (mb (%%normalize-mailbox cur)))
+              (> (vector-ref mb 1) 0))))))
 
 (define (task-handoff-box t)
   (if (not (task-context? t))
       (error "task-handoff-box: expected <task-context>" t)
-      (%task-handoff-box t)))
+      (%meta-handoff-box (ensure-task-meta! t))))
 
 (define (task-handoff t)
   (if (not (task-context? t))
       (error "task-handoff: expected <task-context>" t)
-      (let* ((cur (atomic-ref (%task-handoff-box t)))
-             (mb (%%normalize-mailbox cur))
-             (cnt (vector-ref mb 1)))
-        (if (= cnt 0)
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
             #f
-            (let ((front (vector-ref mb 3)))
-              (if (pair? front)
-                  (let ((e (car front))) (if (pair? e) (cdr e) e))
-                  (let* ((rear (vector-ref mb 4))
-                         (rev (reverse rear)))
-                    (if (pair? rev)
-                        (let ((e (car rev))) (if (pair? e) (cdr e) e))
-                        #f))))))))
+            (let* ((cur (atomic-ref (%meta-handoff-box meta)))
+                   (mb (%%normalize-mailbox cur))
+                   (cnt (vector-ref mb 1)))
+              (if (= cnt 0)
+                  #f
+                  (let ((front (vector-ref mb 3)))
+                    (if (pair? front)
+                        (let ((e (car front))) (if (pair? e) (cdr e) e))
+                        (let* ((rear (vector-ref mb 4))
+                               (rev (reverse rear)))
+                          (if (pair? rev)
+                              (let ((e (car rev))) (if (pair? e) (cdr e) e))
+                              #f))))))))))
 
 (define (task-mailbox-capacity t)
   (if (not (task-context? t))
       (error "task-mailbox-capacity: expected <task-context>" t)
-      (vector-ref (%%normalize-mailbox (atomic-ref (%task-handoff-box t))) 2)))
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            *task-mailbox-default-capacity*
+            (vector-ref (%%normalize-mailbox (atomic-ref (%meta-handoff-box meta))) 2)))))
 
 (define (task-mailbox-capacity-set! t new-cap)
   (if (not (task-context? t))
       (error "task-mailbox-capacity-set!: expected <task-context>" t)
       (if (not (integer? new-cap))
           (error "task-mailbox-capacity-set!: capacity must be an integer" new-cap)
-          (let ((box (%task-handoff-box t)))
+          (let ((box (task-handoff-box t)))
             (let retry ()
               (let* ((cur (atomic-ref box))
                      (mb (%%normalize-mailbox cur))
@@ -572,14 +615,17 @@
 (define (task-mailbox-policy t)
   (if (not (task-context? t))
       (error "task-mailbox-policy: expected <task-context>" t)
-      (vector-ref (%%normalize-mailbox (atomic-ref (%task-handoff-box t))) 6)))
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            'reject
+            (vector-ref (%%normalize-mailbox (atomic-ref (%meta-handoff-box meta))) 6)))))
 
 (define (task-mailbox-policy-set! t new-pol)
   (if (not (task-context? t))
       (error "task-mailbox-policy-set!: expected <task-context>" t)
       (if (not (memq new-pol '(reject drop-oldest drop-newest)))
           (error "task-mailbox-policy-set!: policy must be 'reject, 'drop-oldest, or 'drop-newest" new-pol)
-          (let ((box (%task-handoff-box t)))
+          (let ((box (task-handoff-box t)))
             (let retry ()
               (let* ((cur (atomic-ref box))
                      (mb (%%normalize-mailbox cur))
@@ -598,10 +644,13 @@
 (define (task-mailbox-dropped-count t)
   (if (not (task-context? t))
       (error "task-mailbox-dropped-count: expected <task-context>" t)
-      (vector-ref (%%normalize-mailbox (atomic-ref (%task-handoff-box t))) 5)))
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            0
+            (vector-ref (%%normalize-mailbox (atomic-ref (%meta-handoff-box meta))) 5)))))
 
 (define (%task-mailbox-enqueue-internal! t val error-on-reject?)
-  (let ((box (%task-handoff-box t))
+  (let ((box (task-handoff-box t))
         (entry (cons #t val))
         (is-crit (%%is-critical-signal? val)))
     (let retry ()
@@ -675,30 +724,33 @@
     ((t empty-default)
      (if (not (task-context? t))
          (error "task-take-handoff!: expected <task-context>" t)
-         (let ((box (%task-handoff-box t)))
-           (let retry ()
-             (let* ((cur (atomic-ref box))
-                    (mb (%%normalize-mailbox cur))
-                    (cnt (vector-ref mb 1))
-                    (cap (vector-ref mb 2))
-                    (front (vector-ref mb 3))
-                    (rear (vector-ref mb 4))
-                    (dropped (vector-ref mb 5))
-                    (pol (vector-ref mb 6)))
-               (if (<= cnt 0)
-                   empty-default
-                   (let* ((has-front (pair? front))
-                          (work-front (if has-front front (reverse rear)))
-                          (work-rear (if has-front rear '()))
-                          (entry (car work-front))
-                          (next-front (cdr work-front))
-                          (next-cnt (- cnt 1))
-                          (next (vector '%%task-mailbox next-cnt cap next-front work-rear dropped pol)))
-                     (if (atomic-cas! box cur next)
-                         (begin
-                           (%memory-fence)
-                           (if (pair? entry) (cdr entry) entry))
-                         (retry)))))))))))
+         (let ((meta (task-meta-fast t)))
+           (if (not meta)
+               empty-default
+               (let ((box (%meta-handoff-box meta)))
+                 (let retry ()
+                   (let* ((cur (atomic-ref box))
+                          (mb (%%normalize-mailbox cur))
+                          (cnt (vector-ref mb 1))
+                          (cap (vector-ref mb 2))
+                          (front (vector-ref mb 3))
+                          (rear (vector-ref mb 4))
+                          (dropped (vector-ref mb 5))
+                          (pol (vector-ref mb 6)))
+                     (if (<= cnt 0)
+                         empty-default
+                         (let* ((has-front (pair? front))
+                                (work-front (if has-front front (reverse rear)))
+                                (work-rear (if has-front rear '()))
+                                (entry (car work-front))
+                                (next-front (cdr work-front))
+                                (next-cnt (- cnt 1))
+                                (next (vector '%%task-mailbox next-cnt cap next-front work-rear dropped pol)))
+                           (if (atomic-cas! box cur next)
+                               (begin
+                                 (%memory-fence)
+                                 (if (pair? entry) (cdr entry) entry))
+                               (retry)))))))))))))
 
 ;; Explicit Task Mailbox (FIFO Queue) API (Issue #726, #750)
 (define (task-mailbox-empty? t)
@@ -707,9 +759,12 @@
 (define (task-mailbox-size t)
   (if (not (task-context? t))
       (error "task-mailbox-size: expected <task-context>" t)
-      (let* ((cur (atomic-ref (%task-handoff-box t)))
-             (mb (%%normalize-mailbox cur)))
-        (vector-ref mb 1))))
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            0
+            (let* ((cur (atomic-ref (%meta-handoff-box meta)))
+                   (mb (%%normalize-mailbox cur)))
+              (vector-ref mb 1))))))
 
 (define task-mailbox-dequeue!
   (case-lambda
@@ -719,142 +774,187 @@
 (define (task-mailbox-peek t)
   (task-handoff t))
 
-;; 耐障害性・リンク・モニタ・チャネル所有メタデータアクセサ
+;; 耐障害性・リンク・モニタ・チャネル所有メタデータアクセサ (Lazy Initialization, Issue #800)
 (define (task-links-box t)
   (if (not (task-context? t))
       (error "task-links-box: expected <task-context>" t)
-      (%task-links-box t)))
+      (%meta-links-box (ensure-task-meta! t))))
 
 (define (task-links t)
-  (let ((v (atomic-ref (task-links-box t))))
-    (if (list? v) v '())))
+  (if (not (task-context? t))
+      '()
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            '()
+            (let ((v (atomic-ref (%meta-links-box meta))))
+              (if (list? v) v '()))))))
 
 (define (task-monitors-box t)
   (if (not (task-context? t))
       (error "task-monitors-box: expected <task-context>" t)
-      (%task-monitors-box t)))
+      (%meta-monitors-box (ensure-task-meta! t))))
 
 (define (task-monitors t)
-  (let ((v (atomic-ref (task-monitors-box t))))
-    (if (list? v) v '())))
+  (if (not (task-context? t))
+      '()
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            '()
+            (let ((v (atomic-ref (%meta-monitors-box meta))))
+              (if (list? v) v '()))))))
 
 (define (task-monitored-by-box t)
   (if (not (task-context? t))
       (error "task-monitored-by-box: expected <task-context>" t)
-      (%task-monitored-by-box t)))
+      (%meta-monitored-by-box (ensure-task-meta! t))))
 
 (define (task-monitored-by t)
-  (let ((v (atomic-ref (task-monitored-by-box t))))
-    (if (list? v) v '())))
+  (if (not (task-context? t))
+      '()
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            '()
+            (let ((v (atomic-ref (%meta-monitored-by-box meta))))
+              (if (list? v) v '()))))))
 
 (define (task-trap-exit? t)
   (if (not (task-context? t))
       (error "task-trap-exit?: expected <task-context>" t)
-      (atomic-ref (%task-trap-exit-box t))))
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            #f
+            (atomic-ref (%meta-trap-exit-box meta))))))
 
 (define (task-trap-exit! t val)
   (if (not (task-context? t))
       (error "task-trap-exit!: expected <task-context>" t)
-      (let ((b (if val #t #f)))
-        (atomic-set! (%task-trap-exit-box t) b)
+      (let* ((meta (ensure-task-meta! t))
+             (b (if val #t #f)))
+        (atomic-set! (%meta-trap-exit-box meta) b)
         (%memory-fence)
         b)))
 
 (define (task-owned-channels-box t)
   (if (not (task-context? t))
       (error "task-owned-channels-box: expected <task-context>" t)
-      (%task-owned-channels-box t)))
+      (%meta-owned-channels-box (ensure-task-meta! t))))
 
 (define (task-owned-channels t)
-  (atomic-ref (task-owned-channels-box t)))
+  (if (not (task-context? t))
+      '()
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            '()
+            (let ((v (atomic-ref (%meta-owned-channels-box meta))))
+              (if (list? v) v '()))))))
 
 (define (task-arena-box t)
   (if (not (task-context? t))
       (error "task-arena-box: expected <task-context>" t)
-      (%task-arena-box t)))
+      (%meta-arena-box (ensure-task-meta! t))))
 
 (define (task-arena t)
-  (atomic-ref (task-arena-box t)))
+  (if (not (task-context? t))
+      #f
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            #f
+            (atomic-ref (%meta-arena-box meta))))))
 
 (define (task-set-arena! t arena)
   (if (not (task-context? t))
       (error "task-set-arena!: expected <task-context>" t)
-      (begin
-        (atomic-set! (task-arena-box t) arena)
+      (let ((meta (ensure-task-meta! t)))
+        (atomic-set! (%meta-arena-box meta) arena)
         arena)))
 
 (define (task-escape-k-box t)
   (if (not (task-context? t))
       (error "task-escape-k-box: expected <task-context>" t)
-      (%task-escape-k-box t)))
+      (%meta-escape-k-box (ensure-task-meta! t))))
 
 (define (task-escape-continuation t)
-  (atomic-ref (task-escape-k-box t)))
+  (if (not (task-context? t))
+      #f
+      (%task-escape-k t)))
 
 (define (task-set-escape-continuation! t k)
   (if (not (task-context? t))
       (error "task-set-escape-continuation!: expected <task-context>" t)
       (begin
-        (atomic-set! (task-escape-k-box t) k)
+        (%task-escape-k-set! t k)
+        (let ((meta (task-meta-fast t)))
+          (if meta (atomic-set! (%meta-escape-k-box meta) k) #f))
         k)))
 
 (define (task-handler-chain-box t)
   (if (not (task-context? t))
       (error "task-handler-chain-box: expected <task-context>" t)
-      (%task-handler-chain-box t)))
+      (%meta-handler-chain-box (ensure-task-meta! t))))
 
 (define (task-handler-chain t)
-  (atomic-ref (task-handler-chain-box t)))
+  (if (not (task-context? t))
+      0
+      (%task-handler-chain t)))
 
 (define (task-set-handler-chain! t hc)
   (if (not (task-context? t))
       (error "task-set-handler-chain!: expected <task-context>" t)
       (begin
-        (atomic-set! (task-handler-chain-box t) hc)
+        (%task-handler-chain-set! t hc)
+        (let ((meta (task-meta-fast t)))
+          (if meta (atomic-set! (%meta-handler-chain-box meta) hc) #f))
         hc)))
 
 (define (task-executing-box t)
   (if (not (task-context? t))
       (error "task-executing-box: expected <task-context>" t)
-      (%task-executing-box t)))
+      (%meta-executing-box (ensure-task-meta! t))))
 
 (define (task-executing? t)
   (if (not (task-context? t))
-      (error "task-executing?: expected <task-context>" t)
-      (atomic-ref (%task-executing-box t))))
+      #f
+      (%task-executing t)))
 
 (define (task-executing-set! t val)
   (if (not (task-context? t))
       (error "task-executing-set!: expected <task-context>" t)
       (let ((b (if val #t #f)))
-        (atomic-set! (%task-executing-box t) b)
-        (%memory-fence)
+        (%task-executing-set! t b)
+        (let ((meta (task-meta-fast t)))
+          (if meta (atomic-set! (%meta-executing-box meta) b) #f))
         b)))
 
 (define (task-resident-box t)
   (if (not (task-context? t))
       (error "task-resident-box: expected <task-context>" t)
-      (%task-resident-box t)))
+      (%meta-resident-box (ensure-task-meta! t))))
 
 (define (task-resident? t)
   (if (not (task-context? t))
       #f
-      (let ((val (atomic-ref (%task-resident-box t))))
-        (if val #t #f))))
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            #f
+            (let ((val (atomic-ref (%meta-resident-box meta))))
+              (if val #t #f))))))
 
 (define (task-resident-hook t)
   (if (not (task-context? t))
       #f
-      (let ((val (atomic-ref (%task-resident-box t))))
-        (if (procedure? val) val #f))))
+      (let ((meta (task-meta-fast t)))
+        (if (not meta)
+            #f
+            (let ((val (atomic-ref (%meta-resident-box meta))))
+              (if (procedure? val) val #f))))))
 
 (define (task-resident-set! t val)
   (if (not (task-context? t))
       (error "task-resident-set!: expected <task-context> (CWE-843)" t)
       (if (and val (not (boolean? val)) (not (procedure? val)))
           (error "task-resident-set!: expected boolean or procedure (CWE-843)" val)
-          (begin
-            (atomic-set! (%task-resident-box t) val)
+          (let ((meta (ensure-task-meta! t)))
+            (atomic-set! (%meta-resident-box meta) val)
             (%memory-fence)
             val))))
 
@@ -868,12 +968,7 @@
       (if (< i 64)
           (begin
             (vector-set! vec i (%make-task-context (- -1000 i) 'ready *task-default-reductions* 0 0
-                                                   0 0 4096 #f 0 #f 0 0 (make-atomic-box #f)
-                                                   (make-atomic-box '()) (make-atomic-box '())
-                                                   (make-atomic-box '()) (make-atomic-box #f)
-                                                   (make-atomic-box '())
-                                                   (make-atomic-box #f) (make-atomic-box #f) (make-atomic-box 0)
-                                                   (make-atomic-box #f) (make-atomic-box #f)))
+                                                   0 0 4096 #f 0 #f 0 0 #f 0 #f (make-atomic-box #f)))
             (loop (+ i 1)))
           vec))))
 
@@ -962,7 +1057,7 @@
       (if (not (channel? ch))
           (error "task-register-channel!: expected <channel>" ch)
           (let retry ()
-            (let* ((box (%task-owned-channels-box t))
+            (let* ((box (task-owned-channels-box t))
                    (cur (atomic-ref box)))
               (if (memq ch cur)
                   #t
@@ -975,18 +1070,21 @@
       (error "task-unregister-channel!: expected <task-context>" t)
       (if (not (channel? ch))
           (error "task-unregister-channel!: expected <channel>" ch)
-          (let retry ()
-            (let* ((box (%task-owned-channels-box t))
-                   (cur (atomic-ref box)))
-              (if (not (memq ch cur))
-                  #t
-                  (let ((new-list (let remove-ch ((xs cur))
-                                    (cond ((null? xs) '())
-                                          ((eq? (car xs) ch) (cdr xs))
-                                          (else (cons (car xs) (remove-ch (cdr xs))))))))
-                    (if (atomic-cas! box cur new-list)
+          (let ((meta (task-meta-fast t)))
+            (if (not meta)
+                #t
+                (let retry ()
+                  (let* ((box (%meta-owned-channels-box meta))
+                         (cur (atomic-ref box)))
+                    (if (not (memq ch cur))
                         #t
-                        (retry)))))))))
+                        (let ((new-list (let remove-ch ((xs cur))
+                                          (cond ((null? xs) '())
+                                                ((eq? (car xs) ch) (cdr xs))
+                                                (else (cons (car xs) (remove-ch (cdr xs))))))))
+                          (if (atomic-cas! box cur new-list)
+                              #t
+                              (retry)))))))))))
 
 (define task-cleanup-owned-channels!
   (case-lambda
@@ -995,23 +1093,26 @@
     ((t reason wake-hook)
      (if (not (task-context? t))
          (error "task-cleanup-owned-channels!: expected <task-context>" t)
-          (let* ((box (%task-owned-channels-box t))
-                 (cur (atomic-ref box)))
-            (if (pair? cur)
-                (let ((chs (atomic-swap! box '())))
-                  (let loop ((xs chs))
-                    (if (null? xs)
-                        #t
-                        (let ((ch (car xs)))
-                          (let ((ob (%channel-owner-box ch)))
-                            (if ob (atomic-cas! ob t #f) #f))
-                          (if (eq? reason 'normal)
-                              ;; Graceful close: let consumers read remaining buffered messages!
-                              (channel-close! ch wake-hook)
-                              ;; Abnormal termination (crash/panic): poison channel to unblock waiters (CWE-833)
-                              (channel-poison! ch reason wake-hook))
-                          (loop (cdr xs))))))
-                #t))))))
+         (let ((meta (task-meta-fast t)))
+           (if (not meta)
+               #t
+               (let* ((box (%meta-owned-channels-box meta))
+                      (cur (atomic-ref box)))
+                 (if (pair? cur)
+                     (let ((chs (atomic-swap! box '())))
+                       (let loop ((xs chs))
+                         (if (null? xs)
+                             #t
+                             (let ((ch (car xs)))
+                               (let ((ob (%channel-owner-box ch)))
+                                 (if ob (atomic-cas! ob t #f) #f))
+                               (if (eq? reason 'normal)
+                                   ;; Graceful close: let consumers read remaining buffered messages!
+                                   (channel-close! ch wake-hook)
+                                   ;; Abnormal termination (crash/panic): poison channel to unblock waiters (CWE-833)
+                                   (channel-poison! ch reason wake-hook))
+                               (loop (cdr xs))))))
+                     #t))))))))
 
 (define task-poison-owned-channels!
   (case-lambda
@@ -1020,15 +1121,18 @@
     ((t reason wake-hook)
      (if (not (task-context? t))
          (error "task-poison-owned-channels!: expected <task-context>" t)
-         (let ((chs (atomic-swap! (%task-owned-channels-box t) '())))
-           (let loop ((xs chs))
-             (if (null? xs)
-                 #t
-                 (let ((ch (car xs)))
-                   (let ((ob (%channel-owner-box ch)))
-                     (if ob (atomic-cas! ob t #f) #f))
-                   (channel-poison! ch reason wake-hook)
-                   (loop (cdr xs))))))))))
+         (let ((meta (task-meta-fast t)))
+           (if (not meta)
+               #t
+               (let ((chs (atomic-swap! (%meta-owned-channels-box meta) '())))
+                 (let loop ((xs chs))
+                   (if (null? xs)
+                       #t
+                       (let ((ch (car xs)))
+                         (let ((ob (%channel-owner-box ch)))
+                           (if ob (atomic-cas! ob t #f) #f))
+                         (channel-poison! ch reason wake-hook)
+                         (loop (cdr xs))))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 3. <channel-waiter> Record Type (Wait Queue Entry)

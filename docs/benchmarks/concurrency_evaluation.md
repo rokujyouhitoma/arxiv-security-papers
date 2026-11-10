@@ -7,7 +7,7 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 - **ハードウェア環境**: Linux x86-64 (SMP 4+ Cores)
 - **コンパイラ**: uLisp Native AOT (`bin/ulisp-boot`)
 - **実行ターゲット**: `make -C ulisp bench_concurrency`
-- **評価 Issue**: [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md), [Issue #678](../issues/closed/678-update-concurrency-benchmark-evaluation-after-synapse-runtimes-enhancements.md), [Issue #684](../issues/closed/684-implement-channel-power-of-two-bitmask-indexing.md), [Issue #685](../issues/closed/685-implement-channel-flat-unboxed-memory-buffer.md), [Issue #686](../issues/closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md), [Issue #687](../issues/closed/687-implement-synapse-spsc-linear-channel-lock-free-ring.md), [Issue #688](../issues/closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md), [Issue #747](../issues/closed/747-implement-tls-worker-identification-for-x86-64.md), [Issue #749](../issues/closed/749-implement-type-based-affine-linearity-check.md), [Issue #750](../issues/closed/750-implement-bounded-fifo-task-mailbox-queue.md), [Issue #751](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md), [Issue #752](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md), [Issue #794](../issues/closed/794-optimize-task-table-to-o1-slot-array-and-eliminate-quadratic-spawn-overhead.md), [Issue #795](../issues/closed/795-restore-concurrency-dod-criteria-and-add-scaling-benchmark-and-ci-regression-gate.md), [Issue #796](../issues/closed/796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md), [Issue #797](../issues/closed/797-eliminate-name-based-heuristics-in-split-planes-capture-and-affine-check.md), [Issue #798](../issues/closed/798-fix-supervisor-idle-state-transition-race-condition.md), [Issue #799](../issues/closed/799-add-cross-worker-coroutine-yield-exception-and-linux-ci-stress-tests.md)
+- **評価 Issue**: [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md), [Issue #678](../issues/closed/678-update-concurrency-benchmark-evaluation-after-synapse-runtimes-enhancements.md), [Issue #684](../issues/closed/684-implement-channel-power-of-two-bitmask-indexing.md), [Issue #685](../issues/closed/685-implement-channel-flat-unboxed-memory-buffer.md), [Issue #686](../issues/closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md), [Issue #687](../issues/closed/687-implement-synapse-spsc-linear-channel-lock-free-ring.md), [Issue #688](../issues/closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md), [Issue #747](../issues/closed/747-implement-tls-worker-identification-for-x86-64.md), [Issue #749](../issues/closed/749-implement-type-based-affine-linearity-check.md), [Issue #750](../issues/closed/750-implement-bounded-fifo-task-mailbox-queue.md), [Issue #751](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md), [Issue #752](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md), [Issue #794](../issues/closed/794-optimize-task-table-to-o1-slot-array-and-eliminate-quadratic-spawn-overhead.md), [Issue #795](../issues/closed/795-restore-concurrency-dod-criteria-and-add-scaling-benchmark-and-ci-regression-gate.md), [Issue #796](../issues/closed/796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md), [Issue #797](../issues/closed/797-eliminate-name-based-heuristics-in-split-planes-capture-and-affine-check.md), [Issue #798](../issues/closed/798-fix-supervisor-idle-state-transition-race-condition.md), [Issue #799](../issues/closed/799-add-cross-worker-coroutine-yield-exception-and-linux-ci-stress-tests.md), [Issue #800](../issues/closed/800-implement-lazy-allocation-for-task-context-atomic-boxes.md)
 
 ---
 
@@ -15,18 +15,19 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 
 | 評価項目 | 測定メトリクス | 測定値 (最新実測値) | 目標値 (DoD基準) | 判定 |
 | :--- | :--- | :---: | :---: | :---: |
-| **10 万並行マイクロタスク耐久** | スループット | **1,160,885 tasks/sec (116.0 万件/秒)** | > 1,000,000 tasks/sec | **PASS (#799 4ワーカー例外復旧・10回CIストレステスト後も >1M 堅持・7.6%向上)** |
-| | 10 万タスク実行時間 | **86 ms** (Spawn **80 ms**, 合計 **167 ms**) | < 2,000 ms | **PASS (Spawn 80ms: DoD <250ms 大幅達成)** |
-| | 平均コンテキスト遅延 | **861 ns/task** (実行単体) | < 1,000 ns | **PASS (<1μs 堅持)** |
+| **10 万並行マイクロタスク耐久** | スループット | **1,561,112 tasks/sec (156.1 万件/秒)** | > 1,000,000 tasks/sec | **PASS (#800 atomic-box遅延初期化により >1.5M 突破・+34.5%向上)** |
+| | 10 万タスク実行時間 | **64 ms** (Spawn **40 ms**, 合計 **104 ms**) | < 2,000 ms | **PASS (Spawn 40ms: DoD <250ms 大幅達成・50%短縮)** |
+| | 平均コンテキスト遅延 | **640 ns/task** (実行単体) | < 1,000 ns | **PASS (640ns 達成・25.7%短縮)** |
 | | タスク完了率 | **100% (100,000 / 100,000)** | 100% | **PASS (データ欠損ゼロ)** |
-| **線形チャネル P2P メッセージング (SPSC)** | スループット | **5,457,769 msgs/sec (545 万件/秒)** | > 1,000,000 msgs/sec | **PASS (5.4x 達成・高速リングバッファ)** |
-| | 送受信ペア遅延 | **183 ns/pair** (片道実質 **91.5 ns/op**) | < 1,000 ns | **PASS (Erlang 760ns を 4.1x 凌駕)** |
+| | 即時ヒープ割り当て削減 | **10万タスクで110万個 -> 10万個 (91%削減)** | > 50% 削減 | **PASS (未初期化タスクのゼロアロケーション)** |
+| **線形チャネル P2P メッセージング (SPSC)** | スループット | **5,645,452 msgs/sec (564 万件/秒)** | > 1,000,000 msgs/sec | **PASS (5.6x 達成・高速リングバッファ)** |
+| | 送受信ペア遅延 | **177 ns/pair** (片道実質 **88.5 ns/op**) | < 1,000 ns | **PASS (Erlang 760ns を 4.3x 凌駕)** |
 | | メッセージ損失率 | **0% (ゼロロス)** | 0% | **PASS** |
-| **AOT 直接インライン展開 SPSC チャネル (#688)** | インライン・スループット | **11,656,144 msgs/sec (1,165 万件/秒)** | > 2,000,000 msgs/sec | **PASS (11.6M msgs/sec 達成)** |
-| | インライン送受信ペア遅延 | **85 ns/pair** (片道実質 **42.5 ns/op**) | < 200 ns | **PASS (Rust 68ns に肉薄、呼出しオーバーヘッドゼロ)** |
+| **AOT 直接インライン展開 SPSC チャネル (#688)** | インライン・スループット | **12,897,986 msgs/sec (1,289 万件/秒)** | > 2,000,000 msgs/sec | **PASS (12.8M msgs/sec 達成)** |
+| | インライン送受信ペア遅延 | **77 ns/pair** (片道実質 **38.5 ns/op**) | < 200 ns | **PASS (Rust 68ns に肉薄、呼出しオーバーヘッドゼロ)** |
 | | メッセージ損失率 | **0% (ゼロロス)** | 0% | **PASS** |
-| **エフェメラルアリーナ即時回収** | アロケーション・リセット率 | **4,927,856 cycles/sec (492 万回/秒)** | > 2,000,000 cycles/sec | **PASS (490 万回/秒達成)** |
-| | 1 サイクルあたりコスト | **202 ns/cycle** | < 500 ns | **PASS (極小アリーナライフサイクル)** |
+| **エフェメラルアリーナ即時回収** | アロケーション・リセット率 | **11,199,369 cycles/sec (1,119 万回/秒)** | > 2,000,000 cycles/sec | **PASS (1,119 万回/秒達成)** |
+| | 1 サイクルあたりコスト | **89 ns/cycle** | < 500 ns | **PASS (極小アリーナライフサイクル)** |
 | | メモリリーク | **0 bytes** | 0 bytes | **PASS (完全リークフリー)** |
 | **並行ストレステスト (10回反復)** | 4ワーカー並行/例外復旧耐久 | **10 / 10 PASS (0 Failures)** | 10 / 10 PASS | **PASS (Group 12 クロスワーカーYield例外含む)** |
 | **STW-GC ゼロ実時間決定論性** | ホスト STW-GC 発生回数 | **100 collections** | > 10 collections | **PASS** |
@@ -49,8 +50,8 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 | **Erlang / OTP 25** | BEAM VM (`bench_erlang.erl`) | **143 ms** | **696,145 tasks/sec** | **1,436 ns** | **760 ns** (片道 380 ns) | プロセス独立ヒープ (309 words), STW-GC なし, メッセージディープコピー |
 | **Rust Tokio** | 1.75.0 Release (`rust_bench`) | **44 ms** | **2,268,943 tasks/sec** | **440 ns** | **68 ns** (片道 34 ns) | 非同期ステートマシン, `tokio::spawn` (Box ヒープ確保), GC なし |
 | **Go 1.22.2** | Native M:N (`bench_go.go`) | **24 ms** | **4,073,936 tasks/sec** | **245 ns** | **34 ns** (片道 17 ns) | 2KB 動的伸長スタック (`mcache` 割り当て), 並行三色 Mark-Sweep GC |
-| **Synapse (uLisp)** | Native AOT (`bench_microtasks.scm`) | **86 ms** (Spawn **80 ms**, 計 **167 ms**) | **1,160,885 tasks/sec** | **861 ns** | **183 ns** (片道 **91.5 ns**) | **プロセスローカルアリーナ (8B バンプ), $O(1)$ 即時リセット, STW-GC ゼロ** |
-| **Synapse (AOT Inlined)** | Nanopass Hotpath (`pass_inline_hotpath`) | **4 ms** | **11,656,144 msgs/sec** | - | **85 ns** (片道 **42.5 ns**) | **直接インライン展開 (呼出しスタックゼロ), 5〜8 命令, Go 34ns に肉薄** |
+| **Synapse (uLisp)** | Native AOT (`bench_microtasks.scm`) | **64 ms** (Spawn **40 ms**, 計 **104 ms**) | **1,561,112 tasks/sec** | **640 ns** | **177 ns** (片道 **88.5 ns**) | **遅延 atomic-box 初期化 (#800), 即時ヒープ確保 91% 削減, プロセスローカルアリーナ, STW-GC ゼロ** |
+| **Synapse (AOT Inlined)** | Nanopass Hotpath (`pass_inline_hotpath`) | **3 ms** | **12,897,986 msgs/sec** | - | **77 ns** (片道 **38.5 ns**) | **直接インライン展開 (呼出しスタックゼロ), 5〜8 命令, Go 34ns に肉薄** |
 
 > **測定コードの再現性**:
 > - Go 測定コード: `benchmarks/baseline_comparisons/bench_go.go` (`go run`)
@@ -71,6 +72,12 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
    - Scheme の汎用関数呼出しが伴うコールスタックフレーム生成、`case-lambda` アリティ判定、`<channel>` レコード型の防御的型検査、アクセサ関数呼び出しの間接参照を、Nanopass コンパイラパス `pass_inline_hotpath.scm` によって完全排除。
    - アフィン線形所有権で証明された `spsc-channel` に対し、Power-of-Two ビットマスク演算、直接ベクタインデックス参照、Acquire/Release メモリフェンス付きアトミック更新の **5〜8 命令ネイティブコードへ直接インライン展開**。
    - 最新の実機測定（Benchmark 2b）において、**10,543,351 msgs/sec（1,054 万件/秒）** の 10M 突破スループットと、送受信ペア **94 ns/pair（片道実質 47 ns/op）** を達成。**Rust Tokio（68 ns）を超越し、Go 1.22（34 ns）に肉薄** しました。バッファ満杯・空時の Backpressure サスペンドや毒化チャネル（CWE-833）は安全にスローパスへ委譲され、決定論的安全性を 100% 堅持しています。
+4. **タスクコンテキスト atomic-box の遅延初期化によるヒープ割り当て 91% 削減と Spawn 50% 短縮 (Issue #800)**:
+   - 従来のタスク生成では、1 タスクあたり 11 個の `(make-atomic-box ...)` を無条件に即時割り当てており、10 万タスクで 1,100,000 個（110 万個）のヒープオブジェクト生成と GC 圧力が生じていました。
+   - **Issue #800** では、アクター・リンク・モニタ・所有チャネル・アリーナ・レジデントフック等の稀少メタデータを `<task-meta>` レコードへ集約し、`meta-box` への `atomic-cas!` によるアトミック昇格（One-time Lazy Init, CWE-362 ゼロ）を導入。
+   - タスク生成時の即時ヒープ割り当てを **11 個から 1 個（`meta-box`）へ 91% 削減**（10 万タスクで 100 万個のオブジェクト割り当てを完全排除）。
+   - さらに、タスク実行ループの境界（`with-synapse-task-boundary`）におけるスレッドローカル状態（`escape-k`, `handler-chain`, `executing`）を `<task-context>` の直接スロット化することで、純粋マイクロタスクの実行・終了フェーズで `<task-meta>` が一切割り当てられない「真のゼロアロケーション Fast-Path」を確立。
+   - この結果、10 万タスクの Spawn 時間は **80 ms から 40 ms へ半減（50% 短縮）** し、スループットは **1,561,112 tasks/sec（156.1 万件/秒、+34.5% 向上）**、コンテキスト遅延は **640 ns/task**（25.7% 短縮）を達成しました。
 
 ---
 

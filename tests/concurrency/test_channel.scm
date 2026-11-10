@@ -942,6 +942,58 @@
                "task-cleanup-owned-channels! rejects non-task (CWE-843)"))
 
 ;; -----------------------------------------------------------------------
+;; Group 16: Lazy Allocation for Task Context Atomic Boxes (#800)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 16: Lazy Allocation for Task Context Atomic Boxes (#800) ---\n")
+
+;; 16a: Newly created task has #f task-meta-fast (zero immediate meta allocation)
+(let ((t (make-task-context)))
+  (assert-false (task-meta-fast t) "new task-context has #f meta-box initially")
+  ;; Read-only accessors must return safe defaults without allocating meta
+  (assert-equal (task-links t) '() "task-links returns empty list without allocating meta")
+  (assert-equal (task-monitors t) '() "task-monitors returns empty list without allocating meta")
+  (assert-equal (task-monitored-by t) '() "task-monitored-by returns empty list without allocating meta")
+  (assert-false (task-trap-exit? t) "task-trap-exit? returns #f without allocating meta")
+  (assert-equal (task-owned-channels t) '() "task-owned-channels returns empty list without allocating meta")
+  (assert-false (task-arena t) "task-arena returns #f without allocating meta")
+  (assert-false (task-escape-continuation t) "task-escape-continuation returns #f without allocating meta")
+  (assert-equal (task-handler-chain t) 0 "task-handler-chain returns 0 without allocating meta")
+  (assert-false (task-executing? t) "task-executing? returns #f without allocating meta")
+  (assert-false (task-resident? t) "task-resident? returns #f without allocating meta")
+  (assert-false (task-has-handoff? t) "task-has-handoff? returns #f without allocating meta")
+  (assert-false (task-handoff t) "task-handoff returns #f without allocating meta")
+  (assert-equal (task-mailbox-size t) 0 "task-mailbox-size returns 0 without allocating meta")
+  ;; Confirm meta-box was NOT lazily allocated by any read-only access
+  (assert-false (task-meta-fast t) "meta-box remains unallocated after read-only accessors")
+
+  ;; 16b: Fast-path cleanup on unallocated task terminates safely without allocating meta
+  (assert-true (task-cleanup-owned-channels! t 'normal) "task-cleanup-owned-channels! succeeds on unallocated meta")
+  (assert-false (task-meta-fast t) "meta-box remains unallocated after task-cleanup-owned-channels!")
+
+  ;; 16c: Lazy allocation triggered on-demand by box-returning accessor
+  (let ((lbox (task-links-box t)))
+    (assert-true (task-meta-fast t) "meta-box is lazily allocated upon task-links-box request")
+    (assert-true (atomic-box? lbox) "task-links-box returns valid atomic-box")
+    (assert-equal (atomic-ref lbox) '() "task-links-box contains empty list initially")
+    ;; Second call returns the identical cached atomic box (idempotent)
+    (assert-true (eq? lbox (task-links-box t)) "subsequent task-links-box returns identical box"))
+
+  ;; 16d: Lazy allocation triggered on-demand by mutating setter
+  (let ((t2 (make-task-context)))
+    (assert-false (task-meta-fast t2) "t2 meta-box initially #f")
+    (task-trap-exit! t2 #t)
+    (assert-true (task-meta-fast t2) "t2 meta-box lazily allocated upon task-trap-exit!")
+    (assert-true (task-trap-exit? t2) "t2 task-trap-exit? reflects #t"))
+
+  ;; 16e: Post-termination lazy allocation initializes links/monitors to 'closed
+  (let ((t3 (make-task-context)))
+    (assert-false (task-meta-fast t3) "t3 meta-box initially #f")
+    (task-state-set! t3 'terminated)
+    (let ((lbox (task-links-box t3)))
+      (assert-true (task-meta-fast t3) "t3 meta-box lazily allocated after termination")
+      (assert-equal (atomic-ref lbox) 'closed "links-box on terminated task initializes to 'closed"))))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")
