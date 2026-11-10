@@ -509,6 +509,90 @@
 (write-string "  [PASS] Parallel supervisor coroutine child lifecycle & crash recovery verified.\n")
 (flush-output-port)
 
+;; -----------------------------------------------------------------------
+;; Group 12: Cross-Worker Coroutine Yield, Migration & Unhandled Exception Recovery (#799)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 12: Cross-Worker Coroutine Yield & Exception Recovery (#799) ---\n")
+(flush-output-port)
+
+(let* ((sched (make-work-stealing-scheduler 4 256))
+       (boot-count (make-atomic-box 0))
+       (yield-count (make-atomic-box 0))
+       (completed-box (make-atomic-box 0))
+       (worker-0-runs (make-atomic-box 0))
+       (worker-2-runs (make-atomic-box 0))
+       (migrating-child-spec
+        (make-child-spec
+         'migrating_child
+         (lambda ()
+           (let ((boot-idx (atomic-fetch-add! boot-count 1)))
+             (let ((t (make-task-context)))
+               (task-resident-set! t #t)
+               (if (= boot-idx 0)
+                   ;; First boot: runs on worker 0, yields, then migrates t to worker 2 where exception occurs
+                   (let* ((co (make-coroutine-context
+                               (lambda ()
+                                 (atomic-fetch-add! yield-count 1)
+                                 (context-yield! 'yielded_step1)
+                                 ;; Unhandled runtime exception in coroutine upon migration
+                                 (car '())))))
+                     (task-next-run-set!
+                      t
+                      (lambda ()
+                        (let ((first-res (context-resume! co)))
+                          (atomic-fetch-add! worker-0-runs 1)
+                          (assert-equal first-res 'yielded_step1 "coroutine yielded step1 in worker 0")
+                          ;; Reconfigure t's next-run to resume co on migrated worker 2
+                          (task-next-run-set!
+                           t
+                           (lambda ()
+                             (atomic-fetch-add! worker-2-runs 1)
+                             ;; This context-resume! will trigger (car '()) inside co on worker 2's stack.
+                             (context-resume! co)))
+                          ;; Re-enqueue t into target worker 2 (cross-worker migration)
+                          (task-state-set! t 'ready)
+                          (scheduler-spawn! sched t 2)
+                          ;; Exit first step without terminating task
+                          (cons 'ok 'step1_done))))
+                     t)
+                   ;; Second boot (after Supervisor auto-restart): run to normal completion
+                   (let* ((co-recovered (make-coroutine-context
+                                         (lambda ()
+                                           (atomic-fetch-add! yield-count 1)
+                                           (context-yield! 'yielded_recovered)
+                                           (atomic-set! completed-box 777)
+                                           'coro_recovered_done))))
+                     (task-next-run-set!
+                      t
+                      (lambda ()
+                        (context-resume! co-recovered)
+                        (context-resume! co-recovered)
+                        (cons 'ok 'recovered_done)))
+                     t)))))
+         'permanent))
+       (sup-spec (make-supervisor-spec 'one_for_one 10 1000 (list migrating-child-spec)))
+       (sup (make-supervisor sup-spec #f sched))
+       (sup-task (supervisor-task sup)))
+
+  ;; Autonomous startup in 4-worker parallel scheduler
+  (supervisor-start! sup sched #t)
+
+  ;; Execute 40 steps across 4 native workers
+  (scheduler-run-parallel! sched 40)
+
+  (assert-equal (atomic-ref boot-count) 2 "coroutine child booted twice (initial crash + auto-restart) (#799)")
+  (assert-equal (atomic-ref yield-count) 2 "coroutine yielded in both initial and recovered instances")
+  (assert-equal (atomic-ref worker-0-runs) 1 "worker 0 executed initial coroutine step")
+  (assert-equal (atomic-ref worker-2-runs) 1 "worker 2 executed cross-worker resumption step (#799)")
+  (assert-equal (atomic-ref completed-box) 777 "recovered coroutine reached completion cleanly (#799)")
+  (assert-equal (task-state sup-task) 'waiting "supervisor task state returned to 'waiting")
+  (assert-equal (supervisor-enqueued-state sup) 'idle "supervisor enqueued state returned to 'idle")
+
+  (supervisor-stop! sup)
+  (scheduler-stop! sched))
+(write-string "  [PASS] Cross-worker coroutine yield, migration & exception recovery verified.\n")
+(flush-output-port)
+
 
 ;; -----------------------------------------------------------------------
 ;; Test Suite Summary

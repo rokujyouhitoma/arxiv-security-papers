@@ -4,6 +4,8 @@
 ;;; ZERO libc / ZERO external libraries / Direct Linux x86-64 Syscalls
 ;;; =======================================================================
 
+(!disable-pass pass-synapse-inject-safepoints)
+
 ;;; -----------------------------------------------------------------------
 ;;; §6.14 / SRFI 170 Raw Linux System Calls (Multi-Architecture Abstracted)
 ;;; Conforms to Issue #690 / DSN-33 §2.2

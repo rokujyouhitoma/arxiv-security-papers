@@ -57,5 +57,5 @@ jobs:
       - name: Quality Gate 5 - Database Compatibility Differential Audit
         run: make differential_audit
 
-      - name: Quality Gate 6 - Multicore Concurrency & Coroutine Integration Tests
-        run: make test_concurrency
+      - name: Quality Gate 6 - Multicore Concurrency & Stress Tests (Issue #799)
+        run: make test_concurrency_stress

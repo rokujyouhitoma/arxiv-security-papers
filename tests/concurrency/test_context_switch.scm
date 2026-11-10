@@ -103,10 +103,10 @@
        (dummy-fn (lambda () 123))
        (sp1 (setup-task-stack stk dummy-fn))
        (top (task-stack-top stk))
-       (frame-top (- top 64))
+       (frame-top (- top *context-tcb-header-size*))
        (entry-tramp (%asm-get-trampoline-addr 0))
        (exit-tramp (%asm-get-trampoline-addr 1)))
-  (assert-equal sp1 (- top 128) "setup-task-stack returns initial_sp = top - 128")
+  (assert-equal sp1 (- top (+ *context-tcb-header-size* (context-frame-size))) "setup-task-stack returns initial_sp = top - (tcb + frame)")
   (assert-equal (modulo sp1 16) 0 "initial_sp is 16-byte aligned (0 mod 16)")
   ;; After swap_context pops 6 registers (48B) and executes ret (8B), rsp = initial_sp + 56 = frame_top - 8
   (assert-equal (modulo (+ sp1 56) 16) 8 "post-ret function entry rsp has System V ABI alignment (rsp % 16 == 8)")

@@ -995,19 +995,23 @@
     ((t reason wake-hook)
      (if (not (task-context? t))
          (error "task-cleanup-owned-channels!: expected <task-context>" t)
-         (let ((chs (atomic-swap! (%task-owned-channels-box t) '())))
-           (let loop ((xs chs))
-             (if (null? xs)
-                 #t
-                 (let ((ch (car xs)))
-                   (let ((ob (%channel-owner-box ch)))
-                     (if ob (atomic-cas! ob t #f) #f))
-                   (if (eq? reason 'normal)
-                       ;; Graceful close: let consumers read remaining buffered messages!
-                       (channel-close! ch wake-hook)
-                       ;; Abnormal termination (crash/panic): poison channel to unblock waiters (CWE-833)
-                       (channel-poison! ch reason wake-hook))
-                   (loop (cdr xs))))))))))
+          (let* ((box (%task-owned-channels-box t))
+                 (cur (atomic-ref box)))
+            (if (pair? cur)
+                (let ((chs (atomic-swap! box '())))
+                  (let loop ((xs chs))
+                    (if (null? xs)
+                        #t
+                        (let ((ch (car xs)))
+                          (let ((ob (%channel-owner-box ch)))
+                            (if ob (atomic-cas! ob t #f) #f))
+                          (if (eq? reason 'normal)
+                              ;; Graceful close: let consumers read remaining buffered messages!
+                              (channel-close! ch wake-hook)
+                              ;; Abnormal termination (crash/panic): poison channel to unblock waiters (CWE-833)
+                              (channel-poison! ch reason wake-hook))
+                          (loop (cdr xs))))))
+                #t))))))
 
 (define task-poison-owned-channels!
   (case-lambda

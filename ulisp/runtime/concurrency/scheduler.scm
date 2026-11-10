@@ -498,10 +498,20 @@
                                   (integer? target-worker-id)
                                   (>= target-worker-id 0)
                                   (< target-worker-id (scheduler-worker-count sched)))
-                             (let ((w (scheduler-get-worker sched target-worker-id)))
-                               (deque-push! (worker-deque w) normalized)
-                               (let ((cell (worker-futex-cell w)))
-                                 (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))))
+                             (let ((cur-slot (%asm-current-worker-slot))
+                                   (native-running (> (atomic-ref *scheduler-native-workers-running-box*) 0)))
+                               (if (or (not native-running) (= target-worker-id cur-slot))
+                                   ;; Single-thread test setup OR local worker: safe to push to worker deque
+                                   (let ((w (scheduler-get-worker sched target-worker-id)))
+                                     (deque-push! (worker-deque w) normalized)
+                                     (let ((cell (worker-futex-cell w)))
+                                       (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))))
+                                   ;; Multi-worker running & cross-worker spawn: enqueue to thread-safe Michael-Scott global queue (CWE-362)
+                                   (begin
+                                     (queue-enqueue! (scheduler-global-queue sched) normalized)
+                                     (let* ((w (scheduler-get-worker sched target-worker-id))
+                                            (cell (worker-futex-cell w)))
+                                       (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))))))
                              (begin
                                (queue-enqueue! (scheduler-global-queue sched) normalized)
                                ;; Wake a worker to consume from global queue
@@ -625,23 +635,22 @@
 (define (%scheduler-run-and-record! sched worker task)
   (let* ((cur-box (%worker-current-task-box worker))
          (wid (worker-id worker))
-         (prev-override (vector-ref *worker-slot-override-tls* (%asm-current-worker-slot)))
-         (prev-task (current-synapse-task))
-         (prev-hc (%asm-get-handler-chain)))
-    (%set-current-worker-tls-override! wid)
+         (cur-slot (%asm-current-worker-slot))
+         (need-override? (not (= wid cur-slot)))
+         (prev-override (if need-override? (vector-ref *worker-slot-override-tls* cur-slot) #f))
+         (has-hc? (and (task-context? task) (> (task-handler-chain task) 0)))
+         (prev-hc (if has-hc? (%asm-get-handler-chain) 0)))
+    (if need-override? (%set-current-worker-tls-override! wid) #f)
     (vector-set! cur-box 0 task)
-    (%set-current-synapse-task! task)
-    (if (and (task-context? task) (> (task-handler-chain task) 0))
-        (%asm-set-handler-chain! (task-handler-chain task))
-        #f)
+    (if has-hc? (%asm-set-handler-chain! (task-handler-chain task)) #f)
     (let ((result (scheduler-execute-task! task)))
-      (if (task-context? task)
-          (task-set-handler-chain! task (%asm-get-handler-chain))
+      (if has-hc?
+          (begin
+            (task-set-handler-chain! task (%asm-get-handler-chain))
+            (%asm-set-handler-chain! prev-hc))
           #f)
-      (%asm-set-handler-chain! prev-hc)
       (vector-set! cur-box 0 #f)
-      (%set-current-synapse-task! prev-task)
-      (%set-current-worker-tls-override! prev-override)
+      (if need-override? (%set-current-worker-tls-override! prev-override) #f)
       (%worker-tasks-exec-inc! worker)
       ;; Separate completed (normal) vs failed (panic / exception) counters (Issue #732, Item A8)
       ;; and decrement live tasks counter upon completion (Issue #793)
@@ -712,6 +721,8 @@
                 (target (+ (+ c f) max-tasks)))
            (%scheduler-run-loop sched target (scheduler-worker-count sched)))))))
 
+(define *scheduler-native-workers-running-box* (make-atomic-box 0))
+
 (define (scheduler-stop! sched)
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-stop!: expected <work-stealing-scheduler>" sched)
@@ -727,6 +738,14 @@
                   (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))
                   (wake-loop (+ i 1)))
                 #t)))
+        ;; Synchronously wait for all active native OS worker threads to exit loop (#799)
+        (let wait-loop ((spins 0))
+          (if (and (> (atomic-ref *scheduler-native-workers-running-box*) 0)
+                   (< spins 500000))
+              (begin
+                (%sys-cpu-pause 50)
+                (wait-loop (+ spins 1)))
+              #t))
         #t)))
 
 ;; -----------------------------------------------------------------------
@@ -789,6 +808,7 @@
 
 (define (%scheduler-worker-native-loop sched worker-id)
   (begin
+    (atomic-fetch-add! *scheduler-native-workers-running-box* 1)
     ;; 1:1 CPU core pinning
     (guard (exn (else #f))
       (set-thread-affinity! worker-id))
@@ -807,7 +827,10 @@
                           #f)))
                   #f)
               (loop))
-            #t)))))
+            (begin
+              ;; Decrement running workers count upon clean loop exit (#799)
+              (atomic-fetch-add! *scheduler-native-workers-running-box* -1)
+              #t))))))
 
 (define (scheduler-start-native-workers! sched)
   (if (not (work-stealing-scheduler? sched))
@@ -847,15 +870,24 @@
                        (let* ((spawned (scheduler-tasks-spawned sched))
                               (completed (scheduler-tasks-completed sched))
                               (failed (scheduler-tasks-failed sched))
+                              (live (scheduler-live-tasks sched))
                               (total-done (+ completed failed)))
                          (if (or (>= total-done target)
-                                 (and (>= total-done spawned) (> spawned 0)))
+                                 (and (= live 0) (>= total-done spawned) (> spawned 0)))
                              (begin
                                (scheduler-stop! sched)
                                total-done)
-                             (begin
-                               (guard (exn (else #f))
-                                 (scheduler-worker-step! sched 0))
+                             (let ((executed? (guard (exn (else #f))
+                                                (scheduler-worker-step! sched 0))))
+                               (if (not executed?)
+                                   (begin
+                                     (%scheduler-idle-backoff!)
+                                     (let ((w (scheduler-get-worker sched 0)))
+                                       (let ((cell (worker-futex-cell w)))
+                                         (if (and cell (scheduler-running? sched))
+                                             ((vector-ref *scheduler-futex-park-adaptive-box* 0) cell 256 50)
+                                             #f))))
+                                   #f)
                                (main-loop)))))))))))))
 
 

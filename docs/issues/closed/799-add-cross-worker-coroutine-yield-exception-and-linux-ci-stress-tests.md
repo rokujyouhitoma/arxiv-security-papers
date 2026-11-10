@@ -2,7 +2,7 @@
 ID: 799
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/TEST] クロスワーカー環境におけるコルーチン yield 後例外テスト拡充および Linux 実機 CI 検証環境の確立 (ID: 799)
@@ -95,9 +95,9 @@ Target Branch: `feat/799-add-cross-worker-coroutine-yield-exception-and-linux-ci
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
-- [ ] `tests/concurrency/test_multithread_scheduler.scm` に Group 12 が追加され、4 ワーカー環境でのコルーチン yield $\to$ ワークスチール再開 $\to$ 未処理例外 $\to$ Supervisor 自動復旧 $\to$ 完走が 100% PASS すること。
-- [ ] `ulisp/Makefile` およびルート `Makefile` に `test_concurrency_stress` ターゲットが実装され、反復実行でエラーが 0 件であること。
-- [ ] `.github/workflows/ci.yml` に `make test_concurrency_stress` が組み込まれ、CI パイプライン定義が更新されていること。
-- [ ] `make -C ulisp test_multithread_scheduler` が全件 PASS すること。
-- [ ] `make -C ulisp test_supervisor`, `make -C ulisp test_preemption`, `make -C ulisp bench_concurrency_gate` がリグレッションなく PASS すること。
-- [ ] 相対パス規約が 100% 遵守されていること（絶対パス 0 件）。
+- [x] `tests/concurrency/test_multithread_scheduler.scm` に Group 12 が追加され、4 ワーカー環境でのコルーチン yield $\to$ ワークスチール再開 $\to$ 未処理例外 $\to$ Supervisor 自動復旧 $\to$ 完走が 100% PASS すること。
+- [x] `ulisp/Makefile` およびルート `Makefile` に `test_concurrency_stress` ターゲットが実装され、反復実行でエラーが 0 件であること。
+- [x] `.github/workflows/ci.yml` に `make test_concurrency_stress` が組み込まれ、CI パイプライン定義が更新されていること。
+- [x] `make -C ulisp test_multithread_scheduler` が全件 PASS すること。
+- [x] `make -C ulisp test_supervisor`, `make -C ulisp test_preemption`, `make -C ulisp bench_concurrency_gate` がリグレッションなく PASS すること。
+- [x] 相対パス規約が 100% 遵守されていること（絶対パス 0 件）。

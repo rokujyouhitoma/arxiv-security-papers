@@ -198,6 +198,12 @@ test-concurrency: test_concurrency
 test_concurrency_ci: ## Run 100-iteration multicore concurrency CI harness in uLisp
 	$(MAKE) -C ulisp test_concurrency_ci
 
+.PHONY: test_concurrency_stress test-concurrency-stress
+test_concurrency_stress: ## Run high-load 10-iteration concurrency stress test suite (#799)
+	$(MAKE) -C ulisp test_concurrency_stress
+
+test-concurrency-stress: test_concurrency_stress
+
 .PHONY: test_aarch64 test_aarch64_qemu test-aarch64-qemu
 test_aarch64: ## Run AArch64 backend unit and LIR tests in uLisp
 	$(MAKE) -C ulisp test_aarch64

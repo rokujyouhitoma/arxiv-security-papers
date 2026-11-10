@@ -16,7 +16,7 @@
 (define *context-default-stack-size* 8192)    ; 8KB default stack size
 (define *context-max-stack-size* 65536)       ; 64KB maximum micro-stack size
 (define *context-stack-align* 16)             ; System V AMD64 16-byte stack alignment
-(define *context-tcb-header-size* 64)         ; 64-byte TCB header at stack top
+(define *context-tcb-header-size* 80)         ; 80-byte TCB header at stack top (Issue #787, #799)
 (define *context-frame-size* 64)              ; 64-byte initial swap_context frame (8 slots on x86-64)
 (define *context-stack-canary* 21130214873854) ; 0x1337BEEFCAFE (45-bit fixnum-safe canary)
 
@@ -120,8 +120,10 @@
                       (init-sp (- top (+ *context-tcb-header-size* frame-sz))))
                  ;; Write bottom and top stack overflow canaries
                  (%context-raw-u64-set! base 0 *context-stack-canary*)
-                 (%context-raw-u64-set! top -64 *context-stack-canary*)
-                 ;; Initialize TCB header slots [top - 56 .. top - 8]
+                 (%context-raw-u64-set! top -80 *context-stack-canary*)
+                 ;; Initialize TCB header slots [top - 72 .. top - 8]
+                 (%context-raw-u64-set! top -72 base)        ; task_stack_base = base (Issue #799)
+                 (%context-raw-u64-set! top -64 aligned-size); task_stack_size = aligned-size (Issue #799)
                  (%context-raw-u64-set! top -56 0)   ; switch_count = 0
                  (%context-raw-u64-set! top -48 0)   ; prev_task_top = 0
                  (%context-raw-obj-set! top -40 #f)  ; task_value_slot = #f
@@ -141,7 +143,7 @@
                 (top (task-stack-top stack)))
             ;; Scrub canaries before unmapping (CWE-212 / CWE-416)
             (%context-raw-u64-set! base 0 0)
-            (%context-raw-u64-set! top -64 0)
+            (%context-raw-u64-set! top -80 0)
             (%task-stack-freed-set! stack #t)
             (%context-sys-munmap base size)
             #t))))
@@ -154,7 +156,7 @@
           (let ((base (task-stack-base stack))
                 (top (task-stack-top stack)))
             (and (= (%context-raw-u64-ref base 0) *context-stack-canary*)
-                 (= (%context-raw-u64-ref top -64) *context-stack-canary*))))))
+                 (= (%context-raw-u64-ref top -80) *context-stack-canary*))))))
 
 (define (task-stack-sp stack)
   (if (not (task-stack? stack))
@@ -182,8 +184,10 @@
                      (entry-rip (if (procedure? entry-fn) entry-tramp entry-fn)))
                 ;; Write bottom and top stack overflow canaries
                 (%context-raw-u64-set! base 0 *context-stack-canary*)
-                (%context-raw-u64-set! top -64 *context-stack-canary*)
-                ;; Initialize TCB header at [top - 56 .. top - 8]
+                (%context-raw-u64-set! top -80 *context-stack-canary*)
+                ;; Initialize TCB header at [top - 72 .. top - 8]
+                (%context-raw-u64-set! top -72 base)        ; task_stack_base = base (Issue #799)
+                (%context-raw-u64-set! top -64 size)        ; task_stack_size = size (Issue #799)
                 (%context-raw-u64-set! top -56 0)
                 (%context-raw-u64-set! top -48 0)
                 (%context-raw-obj-set! top -40 #f)

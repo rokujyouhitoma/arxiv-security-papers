@@ -303,7 +303,11 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
     mov r11, [rdx]
     test r11, r11
     jz .L_resume_found_tail
+    mov rcx, [rdi - 72]
+    test rcx, rcx
+    jnz 1f
     lea rcx, [rdi - 65536]
+1:
     cmp r11, rcx
     jb .L_resume_found_tail
     cmp r11, rdi
@@ -360,8 +364,12 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_yield_task_excl:
     mov [rdx + r8*8], rax
     lea r9, [rip + ulisp_handler_chain]
     mov rax, [r9 + r8*8]
-    # Check if current handler frame is within the task micro-stack [rcx - 65536 .. rcx]
+    # Check if current handler frame is within the task micro-stack [rcx - 72 .. rcx]
+    mov rdx, [rcx - 72]
+    test rdx, rdx
+    jnz 1f
     lea rdx, [rcx - 65536]
+1:
     cmp rax, rdx
     jb .L_yield_no_local_handler
     cmp rax, rcx
@@ -372,7 +380,11 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_yield_task_excl:
     mov r10, [rdx]
     test r10, r10
     jz .L_yield_chain_pruned
+    mov r11, [rcx - 72]
+    test r11, r11
+    jnz 2f
     lea r11, [rcx - 65536]
+2:
     cmp r10, r11
     jb .L_yield_cut_link
     cmp r10, rcx
@@ -438,8 +450,12 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov [rcx + r8*8], rsi
     lea r9, [rip + ulisp_handler_chain]
     mov rax, [r9 + r8*8]
-    # Check if from-task handler frame is within rdi micro-stack [rdi - 65536 .. rdi]
+    # Check if from-task handler frame is within rdi micro-stack [rdi - 72 .. rdi]
+    mov rdx, [rdi - 72]
+    test rdx, rdx
+    jnz 1f
     lea rdx, [rdi - 65536]
+1:
     cmp rax, rdx
     jb .L_switch_no_local_from
     cmp rax, rdi
@@ -449,7 +465,11 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov r10, [rdx]
     test r10, r10
     jz .L_switch_pruned_from
+    mov r11, [rdi - 72]
+    test r11, r11
+    jnz 2f
     lea r11, [rdi - 65536]
+2:
     cmp r10, r11
     jb .L_switch_cut_from
     cmp r10, rdi
@@ -473,7 +493,11 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov r11, [rdx]
     test r11, r11
     jz .L_switch_found_tail_to
+    mov rcx, [rsi - 72]
+    test rcx, rcx
+    jnz 3f
     lea rcx, [rsi - 65536]
+3:
     cmp r11, rcx
     jb .L_switch_found_tail_to
     cmp r11, rsi
@@ -508,7 +532,11 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_switch_task_excl:
     mov r11, [rdx]
     test r11, r11
     jz .L_switch_found_tail_back
+    mov rcx, [rdi - 72]
+    test rcx, rcx
+    jnz 4f
     lea rcx, [rdi - 65536]
+4:
     cmp r11, rcx
     jb .L_switch_found_tail_back
     cmp r11, rdi
@@ -547,8 +575,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_verify_swap_context_regs_excl:
     sar rsi, 2
     mov qword ptr [rip + ulisp_verify_status], 0
 
-    # Set up Task 1 stack frame at (stack1_top - 128)
-    lea r8, [rdi - 64]
+    # Set up Task 1 stack frame at (stack1_top - 144)
+    lea r8, [rdi - 80]
     lea rax, [rip + .L_verify_task1_entry]
     mov qword ptr [r8 - 8], 0
     mov [r8 - 16], rax
@@ -567,8 +595,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_verify_swap_context_regs_excl:
     lea rax, [r8 - 64]
     mov [rip + ulisp_verify_t1_sp], rax
 
-    # Set up Task 2 stack frame at (stack2_top - 128)
-    lea r9, [rsi - 64]
+    # Set up Task 2 stack frame at (stack2_top - 144)
+    lea r9, [rsi - 80]
     lea rax, [rip + .L_verify_task2_entry]
     mov qword ptr [r9 - 8], 0
     mov [r9 - 16], rax
@@ -787,8 +815,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_bench_swap_context_excl:
     shr rdx, 1
     mov qword ptr [rip + ulisp_bench_completed], 0
 
-    # Prepare Task 1 stack at (stack1_top - 128)
-    lea r8, [rdi - 64]
+    # Prepare Task 1 stack at (stack1_top - 144)
+    lea r8, [rdi - 80]
     lea rax, [rip + .L_bench_task1_entry]
     mov qword ptr [r8 - 8], 0
     mov [r8 - 16], rax
@@ -803,8 +831,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_bench_swap_context_excl:
     lea rax, [r8 - 64]
     mov [rip + ulisp_verify_t1_sp], rax
 
-    # Prepare Task 2 stack at (stack2_top - 128)
-    lea r9, [rsi - 64]
+    # Prepare Task 2 stack at (stack2_top - 144)
+    lea r9, [rsi - 80]
     lea rax, [rip + .L_bench_task2_entry]
     mov qword ptr [r9 - 8], 0
     mov [r9 - 16], rax

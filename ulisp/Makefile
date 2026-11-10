@@ -1,6 +1,6 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_aarch64_env test_aarch64_qemu test_freestanding bootstrap bootstrap_modular bootstrap_quick quick bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
         test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_r7rs_cond_expand test_r7rs_include_ci test_r7rs_bytevector_ports test_r7rs_time test_srfi_141_division test_srfi_111_boxes test_srfi_145_assume test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
-        test_split_link test_incremental test_differential_elf test_builtin_as test_builtin_ld test_onestep_compile lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_context_switch_aarch64 test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints
+        test_split_link test_incremental test_differential_elf test_builtin_as test_builtin_ld test_onestep_compile lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_context_switch_aarch64 test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_concurrency_stress test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints
 
 AS ?= as
 LD ?= ld
@@ -475,6 +475,15 @@ test_concurrency_harness: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o b
 test_concurrency: test_multithread_scheduler test_let_it_crash test_supervisor test_scheduler test_links_monitors test_task_mailbox test_preemption test_concurrency_harness
 
 test_concurrency_ci: test_concurrency
+
+test_concurrency_stress: test_concurrency
+	@echo "=== [Stress Gate] Running 10-Iteration Multithreaded & Supervisor Concurrency Stress (#799) ==="
+	@for i in $$(seq 1 10); do \
+		echo "--- Stress Iteration $$i / 10 ---"; \
+		./build/test_multithread_scheduler < /dev/null || exit 1; \
+		./build/test_supervisor < /dev/null || exit 1; \
+	done
+	@echo "[PASS] 10-Iteration Concurrency Stress Testing Completed with 0 Failures (#799)"
 
 bench_microtasks: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
@@ -1213,7 +1222,7 @@ endef
 build/ulisp_stdlib.s: stdlib_entry.scm $(ULISP_STD_LIBS) | compiler.scm
 	@mkdir -p build
 	@echo "=== Compiling Standard Library Module (stdlib_entry.scm) ==="
-	@echo "(!gc none) (!module #t)" > build/stdlib_input.scm
+	@echo "(!gc none) (!module #t) (!disable-pass pass-synapse-inject-safepoints)" > build/stdlib_input.scm
 	@cat stdlib_entry.scm >> build/stdlib_input.scm
 	$(call COMPILE_SCM_TO_S,build/stdlib_input.scm,$@)
 
@@ -1223,7 +1232,7 @@ build/ulisp_stdlib.o: build/ulisp_stdlib.s
 build/ulisp_stdlib_aarch64.s: stdlib_entry.scm $(ULISP_STD_LIBS) | compiler.scm
 	@mkdir -p build
 	@echo "=== Compiling AArch64 Standard Library Module (stdlib_entry.scm) ==="
-	@echo "(!gc none) (!module #t)" > build/stdlib_aarch64_input.scm
+	@echo "(!gc none) (!module #t) (!disable-pass pass-synapse-inject-safepoints)" > build/stdlib_aarch64_input.scm
 	@cat stdlib_entry.scm >> build/stdlib_aarch64_input.scm
 	cd $(ROOT_DIR) && $(if $(GOSH_BIN),$(GOSH_BIN) -I ulisp ulisp/compiler.scm,$(RUN_SCHEME) ulisp/compiler.scm) --target=aarch64 < ulisp/build/stdlib_aarch64_input.scm > ulisp/build/ulisp_stdlib_aarch64.s
 

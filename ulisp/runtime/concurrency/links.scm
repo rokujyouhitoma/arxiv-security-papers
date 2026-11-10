@@ -288,8 +288,7 @@
                  #t))
 
            ;; Step 5: Auto-unregister from global task table (Issue #733, Item B2)
-           (guard (exn (else #f))
-             (task-table-unregister! task))
+           (task-table-unregister! task)
            #t)))))
 
 (define task-exit!
