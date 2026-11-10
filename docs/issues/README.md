@@ -25,6 +25,15 @@
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | New | [768-implement-define-pipeline-for-aot-repl-and-check-modes.md](768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | New | [769-implement-picopass-provenance-tracing-and-auto-bisect.md](769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
 | **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | High | New | [770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
+| **794** | タスクテーブルの O(1) スロット配列化による Spawn 性能 $O(n^2)$ 劣化の根本解消 | Bug | High | New | [794-optimize-task-table-to-o1-slot-array-and-eliminate-quadratic-spawn-overhead.md](794-optimize-task-table-to-o1-slot-array-and-eliminate-quadratic-spawn-overhead.md) |
+| **795** | 並行性 DoD 基準の復元・スケーリング測定追加および CI 性能リグレッション防止ゲートの確立 | Feature | High | New | [795-restore-concurrency-dod-criteria-and-add-scaling-benchmark-and-ci-regression-gate.md](795-restore-concurrency-dod-criteria-and-add-scaling-benchmark-and-ci-regression-gate.md) |
+| **796** | セーフポイント注入パス (pass-inject-safepoints) の本番コンパイラ PASSES パイプライン正式統合 | Bug | High | New | [796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md](796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md) |
+| **797** | split-planes パスおよび ASC カーネルにおける変数名依存ヒューリスティックの完全撤廃 | Bug | Medium | New | [797-eliminate-name-based-heuristics-in-split-planes-capture-and-affine-check.md](797-eliminate-name-based-heuristics-in-split-planes-capture-and-affine-check.md) |
+| **798** | Supervisor の idle 状態復帰とスケジューラ後処理間のレースコンディション解消 | Bug | Medium | New | [798-fix-supervisor-idle-state-transition-race-condition.md](798-fix-supervisor-idle-state-transition-race-condition.md) |
+| **799** | クロスワーカー環境におけるコルーチン yield 後例外テスト拡充および Linux 実機 CI 検証環境の確立 | Feature | Medium | New | [799-add-cross-worker-coroutine-yield-exception-and-linux-ci-stress-tests.md](799-add-cross-worker-coroutine-yield-exception-and-linux-ci-stress-tests.md) |
+| **800** | task-context における atomic-box の遅延初期化によるヒープ割り当てと GC 負荷の削減 | Feature | Medium | New | [800-implement-lazy-allocation-for-task-context-atomic-boxes.md](800-implement-lazy-allocation-for-task-context-atomic-boxes.md) |
+| **801** | 正常終了タスク向け Fast-path Termination による実行フェーズオーバーヘッドの削減 | Feature | Medium | New | [801-implement-fast-path-for-normal-task-termination.md](801-implement-fast-path-for-normal-task-termination.md) |
+| **802** | セーフポイント注入時における末尾呼び出し最適化 (TCO) の保護とスタックオーバーフロー防止 | Bug | High | New | [802-preserve-tail-call-optimization-in-safepoint-injection.md](802-preserve-tail-call-optimization-in-safepoint-injection.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
