@@ -994,6 +994,50 @@
       (assert-equal (atomic-ref lbox) 'closed "links-box on terminated task initializes to 'closed"))))
 
 ;; -----------------------------------------------------------------------
+;; Group 17: Fast-Path Normal Exit for Microtasks (#801)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 17: Fast-Path Normal Exit for Microtasks (#801) ---\n")
+
+;; 17a: Uninitialized task exits via Fast-path without allocating metadata
+(let ((t (make-task-context)))
+  (assert-false (task-meta-fast t) "t meta-box initially #f")
+  (task-exit! t 'normal)
+  (assert-equal (task-state t) 'terminated "fast-path normal exit sets state to 'terminated")
+  (assert-equal (task-reductions t) 0 "fast-path normal exit zeroes reductions")
+  (assert-false (task-meta-fast t) "meta-box remains unallocated after fast-path exit")
+  (assert-false (lookup-task-by-tid (task-tid t)) "task is unregistered from global task table"))
+
+;; 17b: 1-argument task-exit! (defaults to 'normal) takes fast-path
+(let ((t (make-task-context)))
+  (task-exit! t)
+  (assert-equal (task-state t) 'terminated "1-arg task-exit! sets state to 'terminated")
+  (assert-false (task-meta-fast t) "1-arg task-exit! preserves unallocated meta-box"))
+
+;; 17c: Meta-initialized task with empty links/monitors takes fast-path
+(let ((t (make-task-context)))
+  ;; Trigger lazy meta allocation with empty structures
+  (let ((mb (task-monitored-by-box t)))
+    (assert-true (task-meta-fast t) "meta allocated")
+    (assert-equal (atomic-ref mb) '() "monitored-by is empty")
+    (task-exit! t 'normal)
+    (assert-equal (task-state t) 'terminated "meta-allocated empty task terminated cleanly")
+    (assert-equal (atomic-ref (task-monitored-by-box t)) 'closed "monitored-by sealed to 'closed")
+    (assert-equal (atomic-ref (task-links-box t)) 'closed "links sealed to 'closed")))
+
+;; 17d: Task with active monitor routes to slow-path and delivers DOWN signal
+(let ((target (make-task-context))
+      (observer (make-task-context)))
+  (let ((ref (task-monitor observer target)))
+    (assert-true (> ref 0) "monitor established")
+    (task-exit! target 'normal)
+    (assert-equal (task-state target) 'terminated "target terminated")
+    (assert-true (task-has-handoff? observer) "observer received DOWN notification via slow-path")
+    (let ((msg (task-handoff observer)))
+      (assert-equal (car msg) 'DOWN "message is DOWN")
+      (assert-equal (cadr msg) ref "ref matches")
+      (assert-equal (cadddr (cdr msg)) 'normal "reason is normal"))))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

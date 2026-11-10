@@ -226,6 +226,21 @@
 ;; 4. Termination & Signal Cascade Propagation (DSN-37 Section 8.4.1 & 8.4.2)
 ;; -----------------------------------------------------------------------
 
+(define (%task-fast-normal-termination! task)
+  ;; Step 1: Mark terminated and zero out reductions so it exits at next safepoint
+  (task-state-set! task 'terminated)
+  (task-reductions-set! task 0)
+
+  ;; Step 2: Auto-unregister from process registry IF hook exists (Issue #730, Item C5)
+  (let ((unreg-hook (vector-ref *task-termination-registry-unregister-hook* 0)))
+    (if (procedure? unreg-hook)
+        (unreg-hook task)
+        #t))
+
+  ;; Step 3: Auto-unregister from global task table (Issue #733, Item B2)
+  (task-table-unregister! task)
+  #t)
+
 (define task-handle-termination!
   (case-lambda
     ((task reason)
@@ -233,75 +248,105 @@
     ((task reason wake-hook)
      (if (not (task-context? task))
          (error "task-handle-termination!: expected <task-context>" task)
-         ;; Deep-copy exit reason before notifying monitors/links or resetting task arena (Issue #724, Item B5)
-         (let ((safe-reason (channel-deep-copy reason)))
-           ;; Mark task state as terminated and zero out reductions so it exits at next safepoint (Issue #723, Item B6)
-           (task-state-set! task 'terminated)
-           (task-reductions-set! task 0)
+         (let ((normal-exit? (eq? reason 'normal))
+               (meta (task-meta-fast task)))
+           ;; Fast-Path: Normal exit with uninitialized or empty metadata (Issue #801)
+           ;; (Bypasses deep-copy, LOCK XCHG bus locks, and link/monitor traversals)
+           (if (and normal-exit?
+                    (or (not meta)
+                        (and (let ((m (atomic-ref (task-monitors-box task)))) (or (not m) (null? m) (eq? m 'closed)))
+                             (let ((mb (atomic-ref (task-monitored-by-box task)))) (or (not mb) (null? mb) (eq? mb 'closed)))
+                             (let ((l (atomic-ref (task-links-box task)))) (or (not l) (null? l) (eq? l 'closed)))
+                             (let ((chs (atomic-ref (task-owned-channels-box task)))) (or (not chs) (null? chs))))))
+               (begin
+                 (if meta
+                     (begin
+                       (atomic-set! (task-monitored-by-box task) 'closed)
+                       (atomic-set! (task-links-box task) 'closed))
+                     #f)
+                 (%task-fast-normal-termination! task))
+               ;; Slow-Path: Abnormal exit or active monitors/links/channels
+               (let ((safe-reason (if (or (symbol? reason) (number? reason) (boolean? reason))
+                                      reason
+                                      (channel-deep-copy reason))))
+                 (task-state-set! task 'terminated)
+                 (task-reductions-set! task 0)
+                 (if meta
+                     (begin
+                       ;; Step 1: Cleanup owned channels: Graceful Close if normal, Poison if crash (Issue #752)
+                       (task-cleanup-owned-channels! task safe-reason wake-hook)
 
-           ;; Fast-Path: if task metadata is uninitialized (#f), no channels, monitors, or links exist! (Issue #800)
-           (let ((meta (task-meta-fast task)))
-             (if meta
-                 (begin
-                   ;; Step 1: Cleanup owned channels: Graceful Close if normal, Poison if crash (Issue #752)
-                   (task-cleanup-owned-channels! task safe-reason wake-hook)
+                       ;; Step 2: Atomically close monitor registration ('closed) before dispatching 'DOWN (Issue #725, Item B4)
+                       (let ((monitors (atomic-swap! (task-monitored-by-box task) 'closed)))
+                         (if (list? monitors)
+                             (let notify-loop ((ms monitors))
+                               (if (null? ms)
+                                   #t
+                                   (let* ((entry (car ms))
+                                          (ref (car entry))
+                                          (target-tid (task-tid task))
+                                          (ch (caddr entry))
+                                          (obs-task (cadddr entry)))
+                                     (%deliver-monitor-down! obs-task ch ref target-tid safe-reason wake-hook)
+                                     (notify-loop (cdr ms)))))
+                             #t))
 
-                   ;; Step 2: Atomically close monitor registration ('closed) before dispatching 'DOWN (Issue #725, Item B4)
-                   (let ((monitors (atomic-swap! (task-monitored-by-box task) 'closed)))
-                     (if (list? monitors)
-                         (let notify-loop ((ms monitors))
-                           (if (null? ms)
-                               #t
-                               (let* ((entry (car ms))
-                                      (ref (car entry))
-                                      (target-tid (task-tid task))
-                                      (ch (caddr entry))
-                                      (obs-task (cadddr entry)))
-                                 (%deliver-monitor-down! obs-task ch ref target-tid safe-reason wake-hook)
-                                 (notify-loop (cdr ms)))))
-                         #t))
+                       ;; Step 3: Atomically close link registration ('closed) before propagating EXIT signals (Issue #725, Item B4)
+                       (let ((links (atomic-swap! (task-links-box task) 'closed)))
+                         (if (list? links)
+                             (let propagate-loop ((ls links))
+                               (if (null? ls)
+                                   #t
+                                   (let ((linked (car ls)))
+                                     ;; Unlink the other direction to break cycles
+                                     (%remove-from-atomic-list! (task-links-box linked) task)
 
-                   ;; Step 3: Atomically close link registration ('closed) before propagating EXIT signals (Issue #725, Item B4)
-                   (let ((links (atomic-swap! (task-links-box task) 'closed)))
-                     (if (list? links)
-                         (let propagate-loop ((ls links))
-                           (if (null? ls)
-                               #t
-                               (let ((linked (car ls)))
-                                 ;; Unlink the other direction to break cycles
-                                 (%remove-from-atomic-list! (task-links-box linked) task)
+                                     (if (task-trap-exit? linked)
+                                         ;; Trapped: deliver EXIT message with deep-copied reason without killing linked task
+                                         (let ((exit-msg (list 'EXIT (task-tid task) (channel-deep-copy safe-reason))))
+                                           (task-set-handoff! linked exit-msg)
+                                           (task-wake! linked wake-hook))
+                                         ;; Not trapped: check reason
+                                         (if (eq? safe-reason 'normal)
+                                             ;; Normal exit does not kill linked tasks
+                                             #t
+                                             ;; Abnormal exit: cascade kill linked task!
+                                             (task-handle-termination! linked (channel-deep-copy safe-reason) wake-hook)))
+                                     (propagate-loop (cdr ls)))))
+                             #t)))
+                     #t)
 
-                                 (if (task-trap-exit? linked)
-                                     ;; Trapped: deliver EXIT message with deep-copied reason without killing linked task
-                                     (let ((exit-msg (list 'EXIT (task-tid task) (channel-deep-copy safe-reason))))
-                                       (task-set-handoff! linked exit-msg)
-                                       (task-wake! linked wake-hook))
-                                     ;; Not trapped: check reason
-                                     (if (eq? safe-reason 'normal)
-                                         ;; Normal exit does not kill linked tasks
-                                         #t
-                                         ;; Abnormal exit: cascade kill linked task!
-                                         (task-handle-termination! linked (channel-deep-copy safe-reason) wake-hook)))
-                                 (propagate-loop (cdr ls)))))
-                         #t)))
-                 #t))
+                 ;; Step 4: Auto-unregister from process registry (Issue #730, Item C5)
+                 (let ((unreg-hook (vector-ref *task-termination-registry-unregister-hook* 0)))
+                   (if (procedure? unreg-hook)
+                       (unreg-hook task)
+                       #t))
 
-           ;; Step 4: Auto-unregister from process registry (Issue #730, Item C5)
-           (let ((unreg-hook (vector-ref *task-termination-registry-unregister-hook* 0)))
-             (if (procedure? unreg-hook)
-                 (unreg-hook task)
-                 #t))
-
-           ;; Step 5: Auto-unregister from global task table (Issue #733, Item B2)
-           (task-table-unregister! task)
-           #t)))))
+                 ;; Step 5: Auto-unregister from global task table (Issue #733, Item B2)
+                 (task-table-unregister! task)
+                 #t)))))))
 
 (define task-exit!
   (case-lambda
-    ((task) (task-exit! task 'normal #f))
-    ((task reason) (task-exit! task reason #f))
+    ((task)
+     (if (task-context? task)
+         (let ((meta (task-meta-fast task)))
+           (if (not meta)
+               (%task-fast-normal-termination! task)
+               (task-handle-termination! task 'normal #f)))
+         (error "task-exit!: expected <task-context>" task)))
+    ((task reason)
+     (if (task-context? task)
+         (if (and (eq? reason 'normal) (not (task-meta-fast task)))
+             (%task-fast-normal-termination! task)
+             (task-handle-termination! task reason #f))
+         (error "task-exit!: expected <task-context>" task)))
     ((task reason wake-hook)
-     (task-handle-termination! task reason wake-hook))))
+     (if (task-context? task)
+         (if (and (eq? reason 'normal) (not wake-hook) (not (task-meta-fast task)))
+             (%task-fast-normal-termination! task)
+             (task-handle-termination! task reason wake-hook))
+         (error "task-exit!: expected <task-context>" task)))))
 
 ;; Connect task-handle-termination! into global exit hook box (#741)
 (vector-set! *task-exit-hook-box* 0

@@ -180,15 +180,20 @@
      (let loop ((regs (atomic-ref *active-synapse-registries-box*)) (total 0))
        (if (null? regs)
            total
-           (loop (cdr regs) (+ total (synapse-unregister-target! (car regs) target))))))
+           (let ((r (car regs)))
+             (if (<= (atomic-ref (%process-registry-count-box r)) 0)
+                 (loop (cdr regs) total)
+                 (loop (cdr regs) (+ total (synapse-unregister-target! r target))))))))
     ((reg target)
      (if (not (process-registry? reg))
          (error "synapse-unregister-target!: expected <process-registry> (CWE-843)" reg)
-         (let* ((buckets (%process-registry-buckets reg))
-                (cnt-box (%process-registry-count-box reg)))
-           (let bucket-loop ((i 0) (total-removed 0))
-             (if (< i *registry-default-bucket-count*)
-                 (let ((bucket (vector-ref buckets i)))
+         (let ((cnt-box (%process-registry-count-box reg)))
+           (if (<= (atomic-ref cnt-box) 0)
+               0
+               (let ((buckets (%process-registry-buckets reg)))
+                 (let bucket-loop ((i 0) (total-removed 0))
+                   (if (< i *registry-default-bucket-count*)
+                       (let ((bucket (vector-ref buckets i)))
                    (let retry ()
                      (let* ((cur (atomic-ref bucket))
                             (to-remove
@@ -218,7 +223,7 @@
                                    (atomic-fetch-add! cnt-box (- 0 num))
                                    (atomic-fetch-add! (%process-registry-epoch-box reg) 1)
                                    (bucket-loop (+ i 1) (+ total-removed num)))))))))
-                 total-removed)))))))
+                 total-removed)))))))))
 
 ;; (synapse-whereis [reg] name)
 ;; Resolves `name` to its current target.
