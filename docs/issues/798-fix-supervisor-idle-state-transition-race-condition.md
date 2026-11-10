@@ -2,57 +2,140 @@
 ID: 798
 種別: Bug
 優先度: Medium
-ステータス: Open (New)
+ステータス: Open (In Progress)
 ---
 
 # [BUG/CONCURRENCY] Supervisor の idle 状態復帰とスケジューラ後処理間のレースコンディション解消 (ID: 798)
 
 ## 1. 概要 / Summary
-Issue #788 および #789 により Supervisor タスクの重複投入抑止（`idle`, `scheduled`, `running`, `running_notified` の4状態マシン）が導入されたが、状態遷移とスケジューラ内部処理の順序関係に起因する競合窓（Race Condition Window）が残存している。
-Supervisor がメールボックス受信ループを終え、CAS により状態を `idle` に戻してから、スケジューラがコンテキストの後処理（状態の `waiting` への変更、実行中フラグのクリア、escape-k の復元）を完全に終えるまでのわずかな隙間に次の `DOWN` シグナルが到着した場合、同一 Supervisor タスクが別 worker によって即座に `scheduled` $\to$ `running` として投入され、2 つの worker スレッド上で並行動作を開始してしまうリスクが存在する。
-本 Issue では、`idle` への復帰 CAS をスケジューラの後処理が完全に完了した後（タスク境界を脱出した直後のフック等）で安全に実行するようリファクタリングし、多重実行を完全に防止する。
+Issue #788 および #789 により、Supervisor タスクの重複投入抑止機構（`idle`, `scheduled`, `running`, `running_notified` の 4 状態マシン）が導入された。
+しかし、状態遷移とスケジューラ内部のタスク境界処理の順序関係に起因する深刻な競合窓（Race Condition Window）が残存している。
+
+現行の実装では、Supervisor の実行 thunk 内で呼ばれる `%supervisor-drain-loop!` の末尾において、未処理シグナルがなくなったと判定した時点で直接 `(atomic-cas! box 'running 'idle)` を発行している。
+しかし、この時点ではまだタスク境界（`with-synapse-task-boundary`）を脱出しておらず、スケジューラの後処理（レジスタ・エスケープ継続復元、`task-executing-set! #f`、および `task-state-set! ctx 'waiting'`）が完了していない。
+
+もしこのわずかな隙間（TOCTOU 窓）に別ワーカー上で子タスクが異常終了して次の `DOWN` シグナルが到着した場合：
+1. `box` が既に `'idle` であるため、`%supervisor-schedule-actor!` は即座に `atomic-cas! box 'idle 'scheduled` に成功し、`sup-task` を runqueue に投入する。
+2. 別の worker スレッドが即座に `sup-task` を pop し、`scheduler-execute-task!` で `task-state-set! ctx 'running'` やコンテキスト復帰を開始する。
+3. 一方、元のワーカーではまだ脱出処理の最中であり、元のワーカーの `task-state-set! ctx 'waiting'` やスタック/継続復元処理が、新ワーカーの実行中コンテキストを上書き・破壊してしまう（CWE-362 / CWE-662）。
+
+本 Issue では、Supervisor の `idle` 復帰 CAS をタスク内コードから完全に切り離し、スケジューラがコンテキストを完全に静止化（`waiting` への変更および境界脱出）した直後の境界脱出後コールバック（post-task-boundary hook）において安全に実行するようリファクタリングし、多重実行およびコンテキスト破壊を根本から防止する。
 
 ### 再現手順 / Steps to Reproduce
 1. マルチワーカー環境（ワーカー数 4）上で Supervisor タスクを常駐稼働させる。
-2. 子タスク群を高速に連続クラッシュさせ、Supervisor が一度受信ループを抜ける瞬間と次の `DOWN` シグナル受信タイミングを意図的に衝突させる。
-3. 2 つのワーカー上で同一 Supervisor の実行フラグまたはコンテキストが一時的に競合する現象を確認する。
+2. 多数の子タスク群を非同期かつ高頻度に連続クラッシュさせ、Supervisor がメールボックス受信ループを抜ける瞬間と、次の `DOWN` シグナル受信タイミングを意図的に衝突させる。
+3. 2 つのワーカー上で同一 Supervisor の実行フラグ（`task-executing`）やタスク状態（`running` vs `waiting`）が競合し、アサーションエラーや二重実行が発生する現象を確認する。
 
 ### 再現環境 / Environment
 - OS / Env: Linux x86-64 / macOS arm64
-- File: [supervisor.scm](../../ulisp/runtime/concurrency/supervisor.scm), [scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm)
+- Target Files:
+  - `ulisp/runtime/concurrency/channel.scm`
+  - `ulisp/runtime/concurrency/scheduler.scm`
+  - `ulisp/runtime/concurrency/supervisor.scm`
+  - `tests/concurrency/test_supervisor.scm`
 
 ---
 
 ## 2. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/runtime/concurrency/supervisor.scm](../../ulisp/runtime/concurrency/supervisor.scm) - Supervisor 状態遷移ロジック
-- [ ] [ulisp/runtime/concurrency/scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm) - タスク終了・後処理フック
-- [ ] [tests/concurrency/test_supervisor.scm](../../tests/concurrency/test_supervisor.scm) - 並行クラッシュ時の多重複入ストレステスト
+- [ ] [ulisp/runtime/concurrency/channel.scm](../../ulisp/runtime/concurrency/channel.scm)
+  - `task-resident-set!`: 真偽値 `#t` / `#f` に加え、境界脱出時コールバック（`procedure?`）の受け入れをサポート。
+  - `task-resident?`: 真偽値およびプロシージャのいずれがセットされている場合でも `#t` を返却（後方互換性 100% 維持）。
+- [ ] [ulisp/runtime/concurrency/scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm)
+  - `scheduler-execute-task!`: `task-resident?` タスクが `with-synapse-task-boundary` を脱出し、`(task-state-set! ctx 'waiting)` を完了した直後に、登録された post-boundary hook を安全に呼び出す。
+- [ ] [ulisp/runtime/concurrency/supervisor.scm](../../ulisp/runtime/concurrency/supervisor.scm)
+  - `make-supervisor`: `sup-task` の `task-resident-set!` に post-boundary hook（`%supervisor-post-drain-hook!`）を登録。
+  - `%supervisor-drain-loop!`: スケジューラ経由実行時に `idle` への即時復帰を遅延（フックへ委譲）。
+  - `%supervisor-post-drain-hook!`: スケジューラがコンテキストを静止化させた後に呼び出され、`running` $\to$ `idle` への CAS、または脱出中に到着した `running_notified` の安全な再スケジュール（`scheduled` $\to$ `ready` $\to$ re-enqueue）を実施。
+- [ ] [tests/concurrency/test_supervisor.scm](../../tests/concurrency/test_supervisor.scm)
+  - Group 17 として、4 ワーカー環境における高頻度バーストクラッシュ下での Supervisor 単一実行性・コンテキスト不変性ストレステストを追加。
 
 ---
 
 ## 3. 根本原因分析 (RCA) / Root Cause Analysis
-- Supervisor 側が自身の実行終了とみなして状態を `idle` へ戻す CAS を発行するタイミングが、スケジューラが当該タスクのレジスタ/スタック/フラグの後片付けを完了するよりも前に行われているため、タイム・オブ・チェック〜タイム・オブ・ユース（TOCTOU）のギャップが発生している。
+- Supervisor が自身の受信処理を終えて状態を `idle` に戻す CAS を発行する契機が、スケジューラが当該タスクのレジスタ/スタック/フラグの後処理（`task-state-set! ctx 'waiting'` 等）を完了するより前（タスク実行 thunk の内部）で行われていた。
+- このため、CAS 成功からスケジューラの脱出処理完了までのわずかな時間に新しいシグナルが到着すると、別のスレッドで同一タスクが多重複入（Concurrent Re-entry）してしまい、タイム・オブ・チェック〜タイム・オブ・ユース（TOCTOU）の並行競合が発生していた。
 
 ---
 
-## 4. 暫定対処と恒久対策 / Workaround & Permanent Fix
-* **暫定対処 (Workaround)**:
-  - なし（並行タイミング問題のため設計修正が必要）。
-* **恒久対策 (Permanent Fix)**:
-  - 状態を `idle` へ遷移させる処理を Supervisor のタスク内コードから切り離し、スケジューラがタスク切り替え（コンテキスト保存・waiting 設定）を完了した境界脱出後コールバック（post-context-switch hook）において実行する。
+## 4. 脅威モデリングと安全性検証 / Threat Modeling & Safety Analysis
+- **CWE-362 (Race Condition) / CWE-662 (Improper Synchronization)**:
+  - 状態遷移がコンテキスト静止化よりも先行することで、2つのスレッドが同一タスクコンテキスト（スタック、TLS、エスケープ継続）に並行アクセスし、データ破壊やセグメンテーションフォールトを引き起こす。
+  - **対策**: スケジューラがタスク境界を脱出し、`task-state` を `waiting` に更新した後の post-boundary hook で状態復帰 CAS を行うことで、競合窓を完全に 0 にする。
+- **CWE-843 (Type Confusion)**:
+  - `task-resident-set!` は boolean または 1 引数 procedure（引数: `task`）のみを受け入れ、不正な型の代入を静的・動的ガードで排除する。
+- **Lost Wakeup / Signal Starvation 防止**:
+  - ループを抜けてからフックが呼ばれるまでの間に到着したシグナルは `running_notified` として記録され、フック実行時に即座に `scheduled` へ遷移してスケジューラに再投入されるため、シグナルの取りこぼしが 100% 発生しない。
 
 ---
 
 ## 5. 実装方針 / Implementation Plan
 Target Branch: `fix/798-fix-supervisor-idle-state-transition-race`
 
-1. スケジューラのタスク実行完了パスに境界脱出後フック機構を整備。
-2. Supervisor の `idle` 復帰 CAS をこのフック内で実行するよう変更。
-3. 4 ワーカー高頻度クラッシュテストを実施し、多重起動が発生しないことを検証。
+### 1. `task-resident` へのフック機能統合 (`channel.scm`)
+- `(task-resident-set! t val)`:
+  - `val` が boolean（`#t`, `#f`）または procedure であることを検証（CWE-843）。
+  - `%task-resident-box` に格納。
+- `(task-resident? t)`:
+  - 格納値が `#f` でなければ `#t` を返却。
+- `(task-resident-hook t)`:
+  - 格納値が procedure であればその手続きを返却、それ以外は `#f`。
+
+### 2. スケジューラにおける脱出後フック呼び出し (`scheduler.scm`)
+- `scheduler-execute-task!` の `task-resident?` 処理部：
+  ```scheme
+  (if (task-resident? ctx)
+      (begin
+        (if (not (eq? (task-state ctx) 'terminated))
+            (task-state-set! ctx 'waiting))
+        (let ((hook (task-resident-hook ctx)))
+          (if (procedure? hook)
+              (hook ctx)
+              #t))
+        res)
+      (begin
+        (task-exit! ctx 'normal)
+        res))
+  ```
+
+### 3. Supervisor 側の遅延アイドル復帰と安全な再スケジュール (`supervisor.scm`)
+- `%supervisor-post-drain-hook!` の実装:
+  ```scheme
+  (define (%supervisor-post-drain-hook! sup sup-task)
+    (let ((box (%supervisor-enqueued-box sup)))
+      (let retry ()
+        (let ((cur (atomic-ref box)))
+          (cond
+            ;; 境界脱出中にシグナルが到着していた場合：即座に再スケジュール
+            ((eq? cur 'running_notified)
+             (atomic-set! box 'scheduled)
+             (task-state-set! sup-task 'ready)
+             (%supervisor-enqueue-child! sup sup-task)
+             #t)
+            ;; 通常時：running -> idle へ CAS
+            ((eq? cur 'running)
+             (if (atomic-cas! box 'running 'idle)
+                 #t
+                 (retry)))
+            (else #t))))))
+  ```
+- `make-supervisor`:
+  - `sup-task` に対して `(task-resident-set! sup-task (lambda (task) (%supervisor-post-drain-hook! sup task)))` を設定。
+- `%supervisor-drain-loop!`:
+  - スケジューラ経由（引数 `defer-idle?` が `#t`）の場合は `box` を `'idle` に戻さずにループを抜け、フックに遷移を委譲。直接呼び出し時は後方互換性のため即時 CAS を維持。
+
+### 4. テストスイートの追加と検証 (`test_supervisor.scm`)
+- Group 17:
+  - 4 ワーカー高負荷マルチスレッドスケジューラ上で Supervisor を稼働。
+  - 10 個以上の子タスクを非同期かつ超高速に連続クラッシュ（各タスク複数回クラッシュ）させる。
+  - Supervisor タスクの同時実行数カウンタが常に最大 1 であり、二重起動やコンテキスト競合が皆無であることを検証。
 
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] 高速連続クラッシュ時でも Supervisor が同一時刻に単一のワーカーでのみ実行されることが保証されること。
-- [ ] 並行性ストレステストにおいてコンテキスト競合や二重起動アサーションエラーが 0 件であること。
-
+- [ ] `task-resident-set!` がプロシージャを安全に保持でき、`task-resident?` が既存のコードと完全互換であること。
+- [ ] `scheduler-execute-task!` において、タスク境界脱出および `waiting` 状態設定後に post-boundary hook が確実に実行されること。
+- [ ] `%supervisor-drain-loop!` のスケジューラ経由実行時に、`idle` 復帰が境界脱出後フックへ遅延委譲されること。
+- [ ] 脱出処理中にシグナルが到着した場合（`running_notified`）に、安全に `scheduled` へ再スケジュールされること（Lost Wakeup 防止）。
+- [ ] `make -C ulisp test_supervisor` が 100% PASS すること（Group 17 追加後も 0 failed）。
+- [ ] `make -C ulisp test_scheduler`, `make -C ulisp test_preemption`, `make -C ulisp bench_concurrency_gate` が 100% PASS すること。
+- [ ] 相対パス規約が 100% 遵守されていること（絶対パス 0 件）。
