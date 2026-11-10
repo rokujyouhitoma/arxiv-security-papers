@@ -400,6 +400,94 @@
 
 
 ;;; -----------------------------------------------------------------------
+;;; Group 9: Tail-Call Optimization (TCO) Preservation & Stack Safety (#802)
+;;; -----------------------------------------------------------------------
+
+(newline)
+(display "--- Group 9: Tail-Call Optimization (TCO) Preservation & Stack Safety (#802) ---\n")
+
+;; Mock runtime polling definition for interpreter-level execution tests
+(define (%synapse-safepoint-poll!) #t)
+
+;; 9.1 cont-recurse-tail? detects %cont-call inside begin wrapper
+(let ((wrapped '(%cont-call loop (- n 1) (+ acc n))))
+  (assert-true "9.1 direct %cont-call is in tail position"
+               (cont-recurse-tail? 'loop wrapped)))
+
+(let ((wrapped '(begin (%synapse-safepoint-poll!) (%cont-call loop (- n 1) (+ acc n)))))
+  (assert-true "9.2 %cont-call wrapped in begin safepoint is recognized as tail call"
+               (cont-recurse-tail? 'loop wrapped)))
+
+(let ((wrapped '(begin (display "poll") (%synapse-safepoint-poll!) (%cont-call loop 0 0))))
+  (assert-true "9.3 multi-statement begin with %cont-call at tail is recognized as tail call"
+               (cont-recurse-tail? 'loop wrapped)))
+
+;; 9.4 cont-loop-rotation-candidate? recognizes loop with safepoint prologue
+(let* ((f-body '(begin
+                  (%synapse-safepoint-poll!)
+                  (if (= n 0)
+                      acc
+                      (begin (%synapse-safepoint-poll!) (%cont-call loop (- n 1) (+ acc n))))))
+       (rot (cont-loop-rotation-candidate? 'loop f-body)))
+  (assert-true "9.4 loop with safepoint prologue recognized as rotation candidate"
+               (and rot (pair? rot))))
+
+;; 9.5 cont-can-unroll-counting-loop? recognizes counting loop with begin wrapper
+(let* ((cmp '(= i 16))
+       (recurse '(begin (%synapse-safepoint-poll!) (%cont-call loop (+ i 1) (+ acc i)))))
+  (assert-true "9.5 counting loop with begin wrapper recognized for unrolling"
+               (cont-can-unroll-counting-loop? '(i acc) cmp recurse 'loop)))
+
+;; 9.6 TCO & Zero-Closure Verification: inject-safepoints + contify + closure-convert + LIR
+(let* ((input '(letrec ((loop (lambda (n acc)
+                                (begin
+                                  (%synapse-safepoint-poll!)
+                                  (if (= n 0)
+                                      acc
+                                      (begin
+                                        (%synapse-safepoint-poll!)
+                                        (loop (- n 1) (+ acc n))))))))
+                 (loop 10 0)))
+       (contified (contify-all input))
+       (closed (closure-convert contified))
+       (lir (generate-lir closed))
+       (main-insts (caddr (assq '%lir-main lir))))
+  ;; Verify that NO %call-closure instructions were generated (TCO preserved)
+  (let ((has-call-closure?
+         (let check-cc ((insts main-insts))
+           (and (pair? insts)
+                (or (and (pair? (car insts)) (eq? (caar insts) '%call-closure))
+                    (check-cc (cdr insts)))))))
+    (assert-false "9.6 no %call-closure in safepoint-injected contified loop LIR"
+                  has-call-closure?))
+  ;; Verify that %jump instructions are generated for the loop
+  (let ((jump-count
+         (let check-jmp ((insts main-insts) (cnt 0))
+           (if (null? insts) cnt
+               (let ((inst (car insts)))
+                 (if (and (pair? inst) (eq? (car inst) '%jump))
+                     (check-jmp (cdr insts) (+ cnt 1))
+                     (check-jmp (cdr insts) cnt)))))))
+    (assert-true "9.7 safepoint-injected loop generates %jump instructions (TCO jmp)"
+                 (>= jump-count 2))))
+
+;; 9.8 1,000,000-iteration tail-recursive execution completes without stack overflow (CWE-400)
+(let* ((million 1000000)
+       (sum-million
+        (let loop ((i 0) (acc 0))
+          (begin
+            (%synapse-safepoint-poll!)
+            (if (= i million)
+                acc
+                (begin
+                  (%synapse-safepoint-poll!)
+                  (loop (+ i 1) (+ acc 1))))))))
+  (assert-equal "9.8 1,000,000 iterations complete with constant stack (TCO verified)"
+                million
+                sum-million))
+
+
+;;; -----------------------------------------------------------------------
 ;;; Test Summary
 ;;; -----------------------------------------------------------------------
 

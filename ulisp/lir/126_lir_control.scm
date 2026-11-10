@@ -6,24 +6,54 @@
 ;;; performing Join Node Path Splitting and ANF Condition/Branch Flag Fusion.
 ;;; =======================================================================
 
-(define (lir-compile-let bindings body si env tail?)
+(define (terminal-cont-call-info body bindings env)
   (cond
-    ;; In-place Tail Loop Argument Shuffle: (let ((t0 e0) (t1 e1) ...) (%cont-call loop t0 t1 ...))
-    ((and (pair? body)
-          (eq? (car body) '%cont-call)
-          (let* ((f-name (cadr body))
-                 (call-args (cddr body))
-                 (binding-vars (map car* bindings))
-                 (b-entry (assq f-name env)))
-            (and (equal? call-args binding-vars)
-                 b-entry
-                 (pair? (cdr b-entry))
-                 (eq? (cadr b-entry) '%cont-target)
-                 (cont-target-all-regs? (cdr b-entry)))))
+    ((and (pair? body) (eq? (car body) '%cont-call))
      (let* ((f-name (cadr body))
-            (target-info (cdr (assq f-name env)))
-            (exprs (map cadr bindings)))
-       (lir-compile-in-place-cont-call f-name exprs target-info si env)))
+            (call-args (cddr body))
+            (binding-vars (map car* bindings))
+            (b-entry (assq f-name env)))
+       (if (and (equal? call-args binding-vars)
+                b-entry
+                (pair? (cdr b-entry))
+                (eq? (cadr b-entry) '%cont-target)
+                (cont-target-all-regs? (cdr b-entry)))
+           (list '() f-name (cdr b-entry))
+           #f)))
+    ((and (pair? body) (eq? (car body) 'begin) (pair? (cdr body)))
+     (let loop ((es (cdr body)) (prologue '()))
+       (cond
+         ((null? (cdr es))
+          (let ((term (car es)))
+            (if (and (pair? term) (eq? (car term) '%cont-call))
+                (let* ((f-name (cadr term))
+                       (call-args (cddr term))
+                       (binding-vars (map car* bindings))
+                       (b-entry (assq f-name env)))
+                  (if (and (equal? call-args binding-vars)
+                           b-entry
+                           (pair? (cdr b-entry))
+                           (eq? (cadr b-entry) '%cont-target)
+                           (cont-target-all-regs? (cdr b-entry)))
+                      (list (reverse prologue) f-name (cdr b-entry))
+                      #f))
+                #f)))
+         (else
+          (loop (cdr es) (cons (car es) prologue))))))
+    (else #f)))
+
+(define (lir-compile-let bindings body si env tail?)
+  (let ((term-info (terminal-cont-call-info body bindings env)))
+    (cond
+      ;; In-place Tail Loop Argument Shuffle: (let ((t0 e0) (t1 e1) ...) (%cont-call loop t0 t1 ...))
+      ;; or (let ((t0 e0) (t1 e1) ...) (begin ... (%cont-call loop t0 t1 ...)))
+      (term-info
+       (let* ((prologue (car term-info))
+              (f-name (cadr term-info))
+              (target-info (caddr term-info))
+              (exprs (map cadr bindings)))
+         (for-each (lambda (p) (lir-compile-expr p si env #f)) prologue)
+         (lir-compile-in-place-cont-call f-name exprs target-info si env)))
 
     ;; Flag / Branch Fusion on ANF: (let ((var (cmp-or-pred-expr ...))) (if var then-e else-e))
     ((and (= (length bindings) 1)
@@ -129,7 +159,7 @@
                    (loop (cdr bs)
                          next-si
                          (cons (cons var curr-si)
-                               (set-stack-vars next-svars (set-raw-vars next-rvars new-env))))))))))))
+                               (set-stack-vars next-svars (set-raw-vars next-rvars new-env)))))))))))))
 
 (define (lir-compile-if test then else-opt si env tail?)
   (let ((else-label (unique-label-sym "L_else"))
