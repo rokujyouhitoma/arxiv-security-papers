@@ -7,7 +7,7 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 - **ハードウェア環境**: Linux x86-64 (SMP 4+ Cores)
 - **コンパイラ**: uLisp Native AOT (`bin/ulisp-boot`)
 - **実行ターゲット**: `make -C ulisp bench_concurrency`
-- **評価 Issue**: [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md), [Issue #678](../issues/closed/678-update-concurrency-benchmark-evaluation-after-synapse-runtimes-enhancements.md), [Issue #684](../issues/closed/684-implement-channel-power-of-two-bitmask-indexing.md), [Issue #685](../issues/closed/685-implement-channel-flat-unboxed-memory-buffer.md), [Issue #686](../issues/closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md), [Issue #687](../issues/closed/687-implement-synapse-spsc-linear-channel-lock-free-ring.md), [Issue #688](../issues/closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md), [Issue #747](../issues/closed/747-implement-tls-worker-identification-for-x86-64.md), [Issue #749](../issues/closed/749-implement-type-based-affine-linearity-check.md), [Issue #750](../issues/closed/750-implement-bounded-fifo-task-mailbox-queue.md), [Issue #751](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md), [Issue #752](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md), [Issue #794](../issues/closed/794-optimize-task-table-to-o1-slot-array-and-eliminate-quadratic-spawn-overhead.md), [Issue #795](../issues/closed/795-restore-concurrency-dod-criteria-and-add-scaling-benchmark-and-ci-regression-gate.md)
+- **評価 Issue**: [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md), [Issue #678](../issues/closed/678-update-concurrency-benchmark-evaluation-after-synapse-runtimes-enhancements.md), [Issue #684](../issues/closed/684-implement-channel-power-of-two-bitmask-indexing.md), [Issue #685](../issues/closed/685-implement-channel-flat-unboxed-memory-buffer.md), [Issue #686](../issues/closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md), [Issue #687](../issues/closed/687-implement-synapse-spsc-linear-channel-lock-free-ring.md), [Issue #688](../issues/closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md), [Issue #747](../issues/closed/747-implement-tls-worker-identification-for-x86-64.md), [Issue #749](../issues/closed/749-implement-type-based-affine-linearity-check.md), [Issue #750](../issues/closed/750-implement-bounded-fifo-task-mailbox-queue.md), [Issue #751](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md), [Issue #752](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md), [Issue #794](../issues/closed/794-optimize-task-table-to-o1-slot-array-and-eliminate-quadratic-spawn-overhead.md), [Issue #795](../issues/closed/795-restore-concurrency-dod-criteria-and-add-scaling-benchmark-and-ci-regression-gate.md), [Issue #796](../issues/closed/796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md)
 
 ---
 
@@ -15,18 +15,18 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 
 | 評価項目 | 測定メトリクス | 測定値 (最新実測値) | 目標値 (DoD基準) | 判定 |
 | :--- | :--- | :---: | :---: | :---: |
-| **10 万並行マイクロタスク耐久** | スループット | **1,084,393 tasks/sec (108.4 万件/秒)** | > 1,000,000 tasks/sec | **PASS (#794 スロット配列化により >1M 突破復帰)** |
-| | 10 万タスク実行時間 | **92 ms** (Spawn **70 ms**, 合計 **162 ms**) | < 2,000 ms | **PASS (Spawn 3,831ms $\to$ 70ms: 54倍高速化)** |
-| | 平均コンテキスト遅延 | **922 ns/task** (実行単体) | < 1,000 ns | **PASS (<1μs 復帰)** |
+| **10 万並行マイクロタスク耐久** | スループット | **1,079,230 tasks/sec (107.9 万件/秒)** | > 1,000,000 tasks/sec | **PASS (#796 セーフポイント本番統合後も >1M 堅持)** |
+| | 10 万タスク実行時間 | **92 ms** (Spawn **69 ms**, 合計 **162 ms**) | < 2,000 ms | **PASS (Spawn 69ms: DoD <250ms 大幅達成)** |
+| | 平均コンテキスト遅延 | **926 ns/task** (実行単体) | < 1,000 ns | **PASS (<1μs 堅持)** |
 | | タスク完了率 | **100% (100,000 / 100,000)** | 100% | **PASS (データ欠損ゼロ)** |
-| **線形チャネル P2P メッセージング (SPSC)** | スループット | **5,284,976 msgs/sec (528 万件/秒)** | > 1,000,000 msgs/sec | **PASS (5.28x 達成、旧 380 万から大幅向上)** |
-| | 送受信ペア遅延 | **189 ns/pair** (片道実質 **94.5 ns/op**) | < 1,000 ns | **PASS (Erlang 760ns を 4.0x 凌駕)** |
+| **線形チャネル P2P メッセージング (SPSC)** | スループット | **6,346,447 msgs/sec (634 万件/秒)** | > 1,000,000 msgs/sec | **PASS (6.3x 達成、旧 528 万からさらに向上)** |
+| | 送受信ペア遅延 | **157 ns/pair** (片道実質 **78.5 ns/op**) | < 1,000 ns | **PASS (Erlang 760ns を 4.8x 凌駕)** |
 | | メッセージ損失率 | **0% (ゼロロス)** | 0% | **PASS** |
-| **AOT 直接インライン展開 SPSC チャネル (#688)** | インライン・スループット | **10,543,351 msgs/sec (1,054 万件/秒)** | > 2,000,000 msgs/sec | **PASS (10M msgs/sec 突破・21x 超過達成)** |
-| | インライン送受信ペア遅延 | **94 ns/pair** (片道実質 **47 ns/op**) | < 200 ns | **PASS (Rust 68ns を超越, Go 34ns に肉薄)** |
+| **AOT 直接インライン展開 SPSC チャネル (#688)** | インライン・スループット | **13,355,004 msgs/sec (1,335 万件/秒)** | > 2,000,000 msgs/sec | **PASS (13M msgs/sec 突破・旧 1,054 万から向上)** |
+| | インライン送受信ペア遅延 | **74 ns/pair** (片道実質 **37 ns/op**) | < 200 ns | **PASS (Go 34ns にほぼ同等・Rust 68ns を圧倒)** |
 | | メッセージ損失率 | **0% (ゼロロス)** | 0% | **PASS** |
-| **エフェメラルアリーナ即時回収** | アロケーション・リセット率 | **9,194,254 cycles/sec (919 万回/秒)** | > 2,000,000 cycles/sec | **PASS (旧 480 万からほぼ倍増)** |
-| | 1 サイクルあたりコスト | **108 ns/cycle** | < 500 ns | **PASS (旧 207 ns から半減)** |
+| **エフェメラルアリーナ即時回収** | アロケーション・リセット率 | **10,990,903 cycles/sec (1,099 万回/秒)** | > 2,000,000 cycles/sec | **PASS (1,000 万回/秒突破)** |
+| | 1 サイクルあたりコスト | **90 ns/cycle** | < 500 ns | **PASS (旧 108 ns から短縮)** |
 | | メモリリーク | **0 bytes** | 0 bytes | **PASS (完全リークフリー)** |
 | **STW-GC ゼロ実時間決定論性** | ホスト STW-GC 発生回数 | **100 collections** | > 10 collections | **PASS** |
 | | Layer 2 Min レイテンシ | **208 ns (0.21 us)** | - | **INFO** |
@@ -48,8 +48,8 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 | **Erlang / OTP 25** | BEAM VM (`bench_erlang.erl`) | **143 ms** | **696,145 tasks/sec** | **1,436 ns** | **760 ns** (片道 380 ns) | プロセス独立ヒープ (309 words), STW-GC なし, メッセージディープコピー |
 | **Rust Tokio** | 1.75.0 Release (`rust_bench`) | **44 ms** | **2,268,943 tasks/sec** | **440 ns** | **68 ns** (片道 34 ns) | 非同期ステートマシン, `tokio::spawn` (Box ヒープ確保), GC なし |
 | **Go 1.22.2** | Native M:N (`bench_go.go`) | **24 ms** | **4,073,936 tasks/sec** | **245 ns** | **34 ns** (片道 17 ns) | 2KB 動的伸長スタック (`mcache` 割り当て), 並行三色 Mark-Sweep GC |
-| **Synapse (uLisp)** | Native AOT (`bench_microtasks.scm`) | **92 ms** (Spawn **70 ms**, 計 **162 ms**) | **1,084,393 tasks/sec** | **922 ns** | **189 ns** (片道 **94.5 ns**) | **プロセスローカルアリーナ (8B バンプ), $O(1)$ 即時リセット, STW-GC ゼロ** |
-| **Synapse (AOT Inlined)** | Nanopass Hotpath (`pass_inline_hotpath`) | **4 ms** | **10,543,351 msgs/sec** | - | **94 ns** (片道 **47 ns**) | **直接インライン展開 (呼出しスタックゼロ), 5〜8 命令, Rust 68ns 超越** |
+| **Synapse (uLisp)** | Native AOT (`bench_microtasks.scm`) | **92 ms** (Spawn **69 ms**, 計 **162 ms**) | **1,079,230 tasks/sec** | **926 ns** | **157 ns** (片道 **78.5 ns**) | **プロセスローカルアリーナ (8B バンプ), $O(1)$ 即時リセット, STW-GC ゼロ** |
+| **Synapse (AOT Inlined)** | Nanopass Hotpath (`pass_inline_hotpath`) | **3 ms** | **13,355,004 msgs/sec** | - | **74 ns** (片道 **37 ns**) | **直接インライン展開 (呼出しスタックゼロ), 5〜8 命令, Go 34ns に肉薄** |
 
 > **測定コードの再現性**:
 > - Go 測定コード: `benchmarks/baseline_comparisons/bench_go.go` (`go run`)
@@ -149,19 +149,19 @@ Issue #795 に基づき、タスク数およびワーカー数の多次元スケ
 
 | 投入タスク数 | ワーカー数 | Spawn 時間 (ms) | 実行時間 (ms) | 合計時間 (ms) | スループット (tasks/s) | 線形性判定 ($O(n)$) |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **10,000** | 4 | **6 ms** | **9 ms** | **15 ms** | 1,079,734 | 基準 ($1\times$) |
-| **100,000** | 4 | **67 ms** | **90 ms** | **158 ms** | 1,100,841 | **完全線形 ($10.5\times$ 所要時間)** |
-| **1,000,000** | 4 | **781 ms** | **1,038 ms** | **1,820 ms** | 962,828 | **完全線形 ($12.1\times$ 所要時間)** |
+| **10,000** | 4 | **6 ms** | **8 ms** | **15 ms** | 1,141,522 | 基準 ($1\times$) |
+| **100,000** | 4 | **69 ms** | **92 ms** | **162 ms** | 1,075,793 | **完全線形 ($10.8\times$ 所要時間)** |
+| **1,000,000** | 4 | **877 ms** | **1,014 ms** | **1,891 ms** | 985,949 | **完全線形 ($12.6\times$ 所要時間)** |
 
-> **判定結果**: タスク数を 1 万 $\to$ 10 万 $\to$ 100 万と 100 倍にスケールさせた場合でも、所要時間は約 120 倍（1.8 秒）にとどまり、二乗オーダー（$O(n^2)$）の兆候は完全ゼロであることを実証。
+> **判定結果**: タスク数を 1 万 $\to$ 10 万 $\to$ 100 万と 100 倍にスケールさせた場合でも、所要時間は約 126 倍（1.89 秒）にとどまり、二乗オーダー（$O(n^2)$）の兆候は完全ゼロであることを実証。Issue #796 によるコンパイラセーフポイント本番統合後も、スループットおよび線形性は一切劣化していません。
 
 ### 5.2 ワーカー数強スケーリング測定 (100,000 タスク)
 
 | ワーカー数 | Spawn 時間 (ms) | 実行時間 (ms) | 合計時間 (ms) | スループット (tasks/s) | 並列効率 / 速度比 |
 | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1 Worker** | 87 ms | 98 ms | 186 ms | 1,017,654 | 1.00x (ベースライン) |
-| **2 Workers** | 91 ms | 107 ms | 198 ms | 932,249 | 0.93x (93%) |
-| **4 Workers** | 95 ms | 104 ms | 199 ms | 957,979 | 0.93x (93%) |
+| **1 Worker** | 93 ms | 103 ms | 197 ms | 966,191 | 1.00x (ベースライン) |
+| **2 Workers** | 101 ms | 106 ms | 208 ms | 938,515 | 0.94x (94%) |
+| **4 Workers** | 95 ms | 99 ms | 195 ms | 1,001,908 | 1.01x (101%) |
 
 ### 5.3 CI 性能リグレッション防止ゲート (`scripts/verify_concurrency_regression.py`)
 

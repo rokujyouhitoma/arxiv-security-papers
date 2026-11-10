@@ -24,6 +24,92 @@
 (define (make-safepoint-poll)
   '(%synapse-safepoint-poll!))
 
+(define (safepoint-string-starts-with? str prefix)
+  (let ((s-len (string-length str))
+        (p-len (string-length prefix)))
+    (if (< s-len p-len)
+        #f
+        (let loop ((i 0))
+          (if (= i p-len)
+              #t
+              (if (char=? (string-ref str i) (string-ref prefix i))
+                  (loop (+ i 1))
+                  #f))))))
+
+(define *safepoint-excluded-prefixes*
+  '("synapse-" "task-" "thread-" "futex-" "arena-"
+    "atomic-" "channel-" "queue-" "epoch-" "boundary-" "registry-"
+    "preempt-" "io-uring-" "context-" "scheduler-" "supervisor-"
+    "coroutine-" "worker-" "current-synapse-" "check-safepoint"
+    "safepoint-" "sys-" "gc-" "make-"))
+
+(define *safepoint-excluded-exact-symbols*
+  '(sys-poll
+    task-yield!
+    yield
+    current-synapse-task
+    check-safepoint!
+    safepoint-poll!))
+
+(define (safepoint-excluded-name? sym)
+  (if (not (symbol? sym))
+      #f
+      (let ((str (symbol->string sym)))
+        (cond
+          ;; All low-level %-prefixed runtime primitives are strictly excluded to prevent reentrancy cycles
+          ((safepoint-string-starts-with? str "%") #t)
+          ((memq sym *safepoint-excluded-exact-symbols*) #t)
+          (else
+           (let loop ((prefixes *safepoint-excluded-prefixes*))
+             (cond
+               ((null? prefixes) #f)
+               ((safepoint-string-starts-with? str (car prefixes)) #t)
+               (else (loop (cdr prefixes))))))))))
+
+(define (safepoint-no-safepoint-decl? expr)
+  (and (pair? expr)
+       (or (and (eq? (car expr) 'declare)
+                (pair? (cdr expr))
+                (let ((decl (cadr expr)))
+                  (or (eq? decl 'no-safepoint)
+                      (eq? decl 'no-safepoints)
+                      (and (pair? decl)
+                           (or (eq? (car decl) 'no-safepoint)
+                               (eq? (car decl) 'no-safepoints))))))
+           (eq? (car expr) 'no-safepoint)
+           (eq? (car expr) '%no-safepoint))))
+
+(define *safepoint-trivial-accessors*
+  '(car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
+    vector-ref string-ref bytevector-u8-ref slot-ref))
+
+(define (safepoint-trivial-atom? expr)
+  (or (symbol? expr)
+      (number? expr)
+      (boolean? expr)
+      (string? expr)
+      (null? expr)
+      (and (pair? expr) (eq? (car expr) 'quote))))
+
+(define (safepoint-trivial-leaf-expr? expr)
+  (and (pair? expr)
+       (let ((op (car expr))
+             (args (cdr expr)))
+         (and (symbol? op)
+              (memq op *safepoint-trivial-accessors*)
+              (not (null? args))
+              (let loop ((as args))
+                (cond
+                  ((null? as) #t)
+                  ((symbol? (car as)) (loop (cdr as)))
+                  ((number? (car as)) (loop (cdr as)))
+                  (else #f)))))))
+
+(define (safepoint-trivial-body? body-list)
+  (and (pair? body-list)
+       (null? (cdr body-list))
+       (safepoint-trivial-leaf-expr? (car body-list))))
+
 (define (lambda-form? expr)
   (and (pair? expr)
        (eq? (car expr) 'lambda)
@@ -100,20 +186,37 @@
     ((safepoint-poll-form? expr)
      expr)
 
-    ;; Lambda abstraction: inject safepoint into prologue
+    ;; Lambda abstraction: inject safepoint into prologue (skipping explicit no-safepoint)
     ((lambda-form? expr)
      (let* ((formals (cadr expr))
             (raw-body (cddr expr))
-            (injected-body (prepend-safepoint-to-list raw-body))
-            (transformed-body (map (lambda (e) (inject-safepoints-expr e loop-names))
-                                   injected-body)))
-       (cons 'lambda (cons formals transformed-body))))
+            (single-body (if (null? (cdr raw-body))
+                             (car raw-body)
+                             (cons 'begin raw-body)))
+            (skip? (and (pair? raw-body) (safepoint-no-safepoint-decl? (car raw-body))))
+            (clean-body (if (and skip? (begin-form? single-body))
+                            (if (safepoint-no-safepoint-decl? (cadr single-body))
+                                (if (null? (cddr single-body))
+                                    #t
+                                    (if (null? (cdddr single-body))
+                                        (caddr single-body)
+                                        (cons 'begin (cddr single-body))))
+                                single-body)
+                            single-body))
+            (injected-body (if skip?
+                               clean-body
+                               (wrap-with-safepoint-prologue clean-body)))
+            (trans-body (inject-safepoints-expr injected-body loop-names)))
+       (list 'lambda formals trans-body)))
 
     ;; Named let (loop construct): inject into loop entry & track loop identifier
     ((named-let-form? expr)
      (let* ((loop-name (cadr expr))
             (bindings (caddr expr))
             (raw-body (cdddr expr))
+            (single-body (if (null? (cdr raw-body))
+                             (car raw-body)
+                             (cons 'begin raw-body)))
             (new-loop-names (if (memq loop-name loop-names)
                                 loop-names
                                 (cons loop-name loop-names)))
@@ -125,10 +228,9 @@
                          b))
                    bindings))
             ;; Inject safepoint at loop entry
-            (injected-body (prepend-safepoint-to-list raw-body))
-            (trans-body (map (lambda (e) (inject-safepoints-expr e new-loop-names))
-                             injected-body)))
-       (cons 'let (cons loop-name (cons trans-bindings trans-body)))))
+            (injected-body (wrap-with-safepoint-prologue single-body))
+            (trans-body (inject-safepoints-expr injected-body new-loop-names)))
+       (list 'let loop-name trans-bindings trans-body)))
 
     ;; Standard let
     ((let-form? expr)
@@ -211,6 +313,15 @@
     ;; Quoted forms: leave intact
     ((eq? (car form) 'quote)
      form)
+    ;; %program wrapper from Pass 025: (%program defs-list body-expr)
+    ((and (eq? (car form) '%program)
+          (pair? (cdr form))
+          (pair? (cddr form)))
+     (let* ((defs (cadr form))
+            (body-expr (caddr form))
+            (trans-defs (map inject-safepoints-form defs))
+            (trans-body (inject-safepoints-expr body-expr '())))
+       (list '%program trans-defs trans-body)))
     ;; ASC Kernel block: preserve %asc-kernel wrapper
     ((asc-kernel-form? form)
      (inject-safepoints-kernel form))
@@ -219,8 +330,17 @@
           (pair? (cdr form))
           (pair? (cadr form)))
      (let* ((sig (cadr form))
+            (proc-name (car sig))
             (raw-body (cddr form))
-            (injected-body (prepend-safepoint-to-list raw-body))
+            (skip? (or (safepoint-excluded-name? proc-name)
+                       (safepoint-trivial-body? raw-body)
+                       (and (pair? raw-body) (safepoint-no-safepoint-decl? (car raw-body)))))
+            (clean-body (if (and (pair? raw-body) (safepoint-no-safepoint-decl? (car raw-body)))
+                            (cdr raw-body)
+                            raw-body))
+            (injected-body (if skip?
+                               clean-body
+                               (prepend-safepoint-to-list clean-body)))
             (trans-body (map (lambda (e) (inject-safepoints-expr e '())) injected-body)))
        (cons 'define (cons sig trans-body))))
     ;; define variable: (define name expr)
@@ -230,7 +350,9 @@
           (pair? (cddr form)))
      (let* ((name (cadr form))
             (val-expr (caddr form))
-            (trans-val (inject-safepoints-expr val-expr '())))
+            (trans-val (if (safepoint-excluded-name? name)
+                           val-expr
+                           (inject-safepoints-expr val-expr '()))))
        (list 'define name trans-val)))
     ;; begin block: (begin form ...)
     ((begin-form? form)
@@ -239,8 +361,14 @@
     (else
      (inject-safepoints-expr form '()))))
 
-(define (inject-safepoints-pass forms)
-  (map inject-safepoints-form forms))
+(define (inject-safepoints-pass ir)
+  (cond
+    ((and (pair? ir) (eq? (car ir) '%program))
+     (inject-safepoints-form ir))
+    ((list? ir)
+     (map inject-safepoints-form ir))
+    (else
+     (inject-safepoints-form ir))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Pluggable Pass Injection & Registration API

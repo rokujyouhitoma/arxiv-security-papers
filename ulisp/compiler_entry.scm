@@ -61,6 +61,7 @@
 (include "frontend/029_desugar_dynamic.scm")
 (include "frontend/030_desugar.scm")
 (include "frontend/040_analysis.scm")
+(include "lib/ulisp/concurrency/passes/pass_inject_safepoints.scm")
 (include "frontend/050_cp0.scm")
 (include "frontend/060_lvn.scm")
 (include "frontend/070_anf.scm")

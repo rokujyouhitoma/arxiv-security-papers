@@ -101,19 +101,19 @@
 (let* ((orig '(lambda (x) (+ x 1)))
        (res (inject-safepoints-expr orig '())))
   (assert-true "2.1 lambda prologue gets safepoint injected"
-               (equal? res '(lambda (x) (%synapse-safepoint-poll!) (+ x 1)))))
+               (equal? res '(lambda (x) (begin (%synapse-safepoint-poll!) (+ x 1))))))
 
 ;; Idempotency: verify no duplicate injection if already present
-(let* ((orig '(lambda (x) (%synapse-safepoint-poll!) (+ x 1)))
+(let* ((orig '(lambda (x) (begin (%synapse-safepoint-poll!) (+ x 1))))
        (res (inject-safepoints-expr orig '())))
   (assert-true "2.2 lambda prologue does not duplicate existing safepoint"
-               (equal? res '(lambda (x) (%synapse-safepoint-poll!) (+ x 1)))))
+               (equal? res '(lambda (x) (begin (%synapse-safepoint-poll!) (+ x 1))))))
 
 ;; Multi-expression lambda body
 (let* ((orig '(lambda (a b) (display a) (+ a b)))
        (res (inject-safepoints-expr orig '())))
   (assert-true "2.3 multi-expression lambda preserves all expressions after safepoint"
-               (equal? res '(lambda (a b) (%synapse-safepoint-poll!) (display a) (+ a b)))))
+               (equal? res '(lambda (a b) (begin (%synapse-safepoint-poll!) (display a) (+ a b))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: Loop Backedge & Named-Let Injection
@@ -127,8 +127,9 @@
        (res (inject-safepoints-expr orig '())))
   (assert-true "3.1 named-let infinite loop receives entry safepoint and backedge safepoint"
                (equal? res '(let loop ()
-                              (%synapse-safepoint-poll!)
-                              (begin (%synapse-safepoint-poll!) (loop))))))
+                              (begin
+                                (%synapse-safepoint-poll!)
+                                (begin (%synapse-safepoint-poll!) (loop)))))))
 
 ;; Conditional loop with recursion
 (let* ((orig '(let loop ((n 10))
@@ -138,10 +139,11 @@
        (res (inject-safepoints-expr orig '())))
   (assert-true "3.2 conditional loop backedge receives safepoint before recursive call"
                (equal? res '(let loop ((n 10))
-                              (%synapse-safepoint-poll!)
-                              (if (> n 0)
-                                  (begin (%synapse-safepoint-poll!) (loop (- n 1)))
-                                  n)))))
+                              (begin
+                                (%synapse-safepoint-poll!)
+                                (if (> n 0)
+                                    (begin (%synapse-safepoint-poll!) (loop (- n 1)))
+                                    n))))))
 
 ;; Nested loops
 (let* ((orig '(let outer ()
@@ -195,8 +197,9 @@
   (assert-true "5.2 top-level loop receives safepoint in entry and backedge"
                (equal? (cadr out)
                        '(let loop ()
-                          (%synapse-safepoint-poll!)
-                          (begin (%synapse-safepoint-poll!) (loop))))))
+                          (begin
+                            (%synapse-safepoint-poll!)
+                            (begin (%synapse-safepoint-poll!) (loop)))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 6: Pass Manager Injection & Pipeline Integration
@@ -325,10 +328,75 @@
 (assert-true "7.6 named-let received automatic entry safepoint"
              (and (eq? (car trans-let) 'let)
                   (eq? (cadr trans-let) 'loop)
-                  (safepoint-poll-form? (cadddr trans-let))))
+                  (pair? (cadddr trans-let))
+                  (eq? (car (cadddr trans-let)) 'begin)
+                  (safepoint-poll-form? (cadr (cadddr trans-let)))))
 
 ;; Clean up pass from manager
 (remove-synapse-safepoints-pass!)
+
+;;; -----------------------------------------------------------------------
+;;; Group 8: Exclusion Rules & Trivial Accessor Pruning (#796)
+;;; -----------------------------------------------------------------------
+
+(newline)
+(display "--- Group 8: Exclusion Rules & Trivial Accessor Pruning (#796) ---\n")
+
+;; 8.1 Runtime internal procedures must NOT receive safepoint prologue
+(let* ((forms '((define (task-internal-helper a b) (display a) (+ a b))
+                (define (%synapse-lowlevel-call x) (display x) x)
+                (define (futex-atomic-op f) (display f) 0)))
+       (trans (inject-safepoints-pass forms)))
+  (assert-false "8.1 task-* internal procedure does not receive safepoint prologue"
+                (safepoint-poll-form? (caddr (car trans))))
+  (assert-false "8.2 %synapse-* internal procedure does not receive safepoint prologue"
+                (safepoint-poll-form? (caddr (cadr trans))))
+  (assert-false "8.3 futex-* internal procedure does not receive safepoint prologue"
+                (safepoint-poll-form? (caddr (caddr trans)))))
+
+;; 8.2 Explicit (declare (no-safepoints)) skips safepoint injection
+(let* ((forms '((define (explicitly-exempt x y)
+                  (declare (no-safepoints))
+                  (display x)
+                  (+ x y))
+                (lambda (a b)
+                  (declare (no-safepoints))
+                  (display a)
+                  (+ a b))))
+       (trans (inject-safepoints-pass forms)))
+  (assert-false "8.4 explicit declare no-safepoints skips define prologue safepoint"
+                (safepoint-poll-form? (caddr (car trans))))
+  (assert-false "8.5 explicit declare no-safepoints skips lambda prologue safepoint"
+                (safepoint-poll-form? (cadr (cadr trans)))))
+
+;; 8.3 Trivial field accessors skip safepoint prologue
+(let* ((forms '((define (get-car p) (car p))
+                (define (get-cdr p) (cdr p))
+                (define (get-field v) (vector-ref v 0))))
+       (trans (inject-safepoints-pass forms)))
+  (assert-false "8.6 trivial car accessor skips prologue safepoint"
+                (safepoint-poll-form? (caddr (car trans))))
+  (assert-false "8.7 trivial cdr accessor skips prologue safepoint"
+                (safepoint-poll-form? (caddr (cadr trans))))
+  (assert-false "8.8 trivial vector-ref accessor skips prologue safepoint"
+                (safepoint-poll-form? (caddr (caddr trans)))))
+
+;; 8.4 Function with named-let loop still receives loop entry & backedge safepoints
+(let* ((forms '((define (scan-list lst)
+                  (let loop ((cur lst))
+                    (if (null? cur)
+                        #f
+                        (begin
+                          (display (car cur))
+                          (loop (cdr cur))))))))
+       (trans (inject-safepoints-pass forms)))
+  (let* ((fn (car trans))
+         ;; fn is (define (scan-list lst) (%synapse-safepoint-poll!) (let loop ...))
+         (loop-expr (cadddr fn)))
+    (assert-true "8.9 loop entry inside function receives safepoint"
+                 (and (pair? (cadddr loop-expr))
+                      (eq? (car (cadddr loop-expr)) 'begin)
+                      (safepoint-poll-form? (cadr (cadddr loop-expr)))))))
 
 
 ;;; -----------------------------------------------------------------------

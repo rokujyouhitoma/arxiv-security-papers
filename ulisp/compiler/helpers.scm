@@ -299,7 +299,10 @@
               sqrt
               exp
               log
-              expt)))
+              expt
+              %synapse-safepoint-poll!
+              synapse-safepoint-poll!
+              %safepoint-poll!)))
 
 (define (stdlib-symbol? sym)
   (and (stdlib-enabled?)
