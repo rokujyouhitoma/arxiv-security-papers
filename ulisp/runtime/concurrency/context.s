@@ -286,6 +286,10 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_resume_task_excl:
     and r8, 63
     lea rdx, [rip + ulisp_current_task_top]
     mov rax, [rdx + r8*8]
+    cmp rax, rdi
+    jne 2f
+    xor rax, rax
+2:
     mov [rdi - 48], rax
     mov [rdx + r8*8], rdi
     lea r9, [rip + ulisp_handler_chain]

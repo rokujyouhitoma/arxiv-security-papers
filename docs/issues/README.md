@@ -20,11 +20,11 @@
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | New | [768-implement-define-pipeline-for-aot-repl-and-check-modes.md](768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | New | [769-implement-picopass-provenance-tracing-and-auto-bisect.md](769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
 | **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | High | New | [770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
-
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **807** | x86-64 バックエンドにおけるセーフポイントポーリング stub 重複定義の解消 | Bug | 2026-11-11 | [closed/807-eliminate-duplicate-safepoint-poll-stub-in-x86-64-backend.md](closed/807-eliminate-duplicate-safepoint-poll-stub-in-x86-64-backend.md) |
 | **760** | 5ステップ融合サイクルの局所再適用 (Local Re-dispatch) と extends (-) 対 eliminates 自動整合性検証の実装 (DSN-33-01 T3.2) | Feature | 2026-11-11 | [closed/760-implement-local-redispatch-and-extends-eliminates-validation.md](closed/760-implement-local-redispatch-and-extends-eliminates-validation.md) |
 | **759** | define-pass 内 fuse-rules 構文と先頭タグ (Head-Tag) 別 O(1) case ディスパッチ生成エンジンの実装 (DSN-33-01 T3.1) | Feature | 2026-11-11 | [closed/759-implement-fuse-rules-and-head-tag-o1-dispatch.md](closed/759-implement-fuse-rules-and-head-tag-o1-dispatch.md) |
 | **758** | Pass 015 (015_dsl_expander.scm) 先行 DSL 展開器への pico / femto / atto 構文統合 (DSN-33-01 T2.3) | Feature | 2026-11-11 | [closed/758-integrate-picopass-dsl-into-pass-015-expander.md](closed/758-integrate-picopass-dsl-into-pass-015-expander.md) |

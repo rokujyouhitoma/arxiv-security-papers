@@ -182,6 +182,10 @@
     ((eq? (car expr) 'quote)
      expr)
 
+    ;; Improper / dotted pairs: cannot be function applications, leave intact
+    ((not (list? expr))
+     expr)
+
     ;; Safepoint poll already present: leave intact
     ((safepoint-poll-form? expr)
      expr)
@@ -313,6 +317,9 @@
     ;; Quoted forms: leave intact
     ((eq? (car form) 'quote)
      form)
+    ;; Improper / dotted pairs: cannot be top-level forms, leave intact
+    ((not (list? form))
+     form)
     ;; %program wrapper from Pass 025: (%program defs-list body-expr)
     ((and (eq? (car form) '%program)
           (pair? (cdr form))
@@ -365,7 +372,10 @@
   (cond
     ((and (pair? ir) (eq? (car ir) '%program))
      (inject-safepoints-form ir))
-    ((list? ir)
+    ((and (list? ir) (pair? ir) (pair? (car ir))
+          (or (eq? (caar ir) 'define)
+              (eq? (caar ir) '%asc-kernel)
+              (eq? (caar ir) 'module)))
      (map inject-safepoints-form ir))
     (else
      (inject-safepoints-form ir))))
