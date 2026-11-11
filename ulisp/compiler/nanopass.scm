@@ -61,62 +61,208 @@
             body-expr)))
 
 ;;; Build cascaded if-expression for nonterminal transformer rules
+(define (nanopass-rule-head-symbol pat)
+  (cond
+    ((not (pair? pat)) #f)
+    ((eq? (car pat) 'unquote) #f)
+    ((eq? (car pat) '_) #f)
+    ((eq? (car pat) '...) #f)
+    ((symbol? (car pat)) (car pat))
+    (else #f)))
+
+;;; Check if pattern can potentially match a pair
+(define (nanopass-rule-can-match-pair? pat)
+  (or (pair? pat) (eq? pat '_)))
+
+;;; Check if pattern can potentially match an atom
+(define (nanopass-rule-can-match-atom? pat)
+  (or (not (pair? pat)) (eq? (car pat) 'unquote)))
+
+;;; Append a rule into the appropriate tag bucket preserving tag & rule order
+(define (nanopass-add-rule-to-bucket tag rule buckets)
+  (let loop ((rem buckets) (acc '()))
+    (cond
+      ((null? rem)
+       (append buckets (list (list tag rule))))
+      ((eq? (caar rem) tag)
+       (append (reverse acc)
+               (cons (append (car rem) (list rule))
+                     (cdr rem))))
+      (else
+       (loop (cdr rem) (cons (car rem) acc))))))
+
+;;; Partition a list of expanded rules into:
+;;; (list buckets pair-fallbacks atom-rules)
+;;; where buckets is ((tag r1 r2 ...) ...)
+(define (nanopass-partition-rules rules)
+  (let loop ((rem rules)
+             (buckets '())
+             (pair-fallbacks '())
+             (atom-rules '()))
+    (if (null? rem)
+        (list buckets (reverse pair-fallbacks) (reverse atom-rules))
+        (let* ((r (car rem))
+               (pat (car r))
+               (tag (nanopass-rule-head-symbol pat)))
+          (if tag
+              (loop (cdr rem)
+                    (nanopass-add-rule-to-bucket tag r buckets)
+                    pair-fallbacks
+                    atom-rules)
+              (loop (cdr rem)
+                    buckets
+                    (if (nanopass-rule-can-match-pair? pat)
+                        (cons r pair-fallbacks)
+                        pair-fallbacks)
+                    (if (nanopass-rule-can-match-atom? pat)
+                        (cons r atom-rules)
+                        atom-rules)))))))
+
+;;; Compile a single expanded rule into an if-check with fallback
+(define (nanopass-compile-single-rule-cascade r ir-var nt-name fallback-expr)
+  (let* ((pat (car r))
+         (vars (cadr r))
+         (guard-expr (caddr r))
+         (body-expr (cadddr r))
+         (m-var (unique-symbol "__m_")))
+    (if (eq? guard-expr #t)
+        (list 'let (list (list m-var
+                               (list (string->symbol "nanopass-match-clause")
+                                     (list 'quote pat)
+                                     ir-var
+                                     (list 'quote vars)
+                                     nt-name)))
+              (list 'if m-var
+                    (nanopass-bind-matched-vars vars m-var body-expr)
+                    fallback-expr))
+        (let ((c-var (unique-symbol "__c_")))
+          (list 'let (list (list c-var
+                                 (list 'let (list (list m-var
+                                                        (list (string->symbol "nanopass-match-clause")
+                                                              (list 'quote pat)
+                                                              ir-var
+                                                              (list 'quote vars)
+                                                              nt-name)))
+                                        (list 'if m-var
+                                              (nanopass-bind-matched-vars
+                                               vars m-var
+                                               (list 'if guard-expr
+                                                     (list 'cons #t body-expr)
+                                                     #f))
+                                              #f))))
+                (list 'if c-var
+                      (list 'cdr c-var)
+                      fallback-expr))))))
+
+;;; Compile a list of expanded rules sequentially with fallback-expr at the tail
+(define (nanopass-compile-rule-list rs ir-var nt-name fallback-expr)
+  (let loop ((rem rs))
+    (if (null? rem)
+        fallback-expr
+        (nanopass-compile-single-rule-cascade (car rem) ir-var nt-name (loop (cdr rem))))))
+
+;;; Make catamorphism recursive call
+(define (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out)
+  (let ((extra-in (cdr in-arg-list)))
+    (if (null? extra-in)
+        (list (string->symbol "nanopass-catamorphism-step")
+              (list 'quote l-in)
+              (list 'quote l-out)
+              (list 'quote nt-name)
+              ir-var
+              nt-name
+              ''()
+              (list 'quote extra-out))
+        (list (string->symbol "nanopass-catamorphism-step")
+              (list 'quote l-in)
+              (list 'quote l-out)
+              (list 'quote nt-name)
+              ir-var
+              nt-name
+              (cons 'list extra-in)
+              (list 'quote extra-out)))))
+
+;;; Extract expanded clauses from a list of rule names or descriptors
+(define (nanopass-extract-fused-clauses specs nt-name)
+  (let ((flat-specs (if (and (= (length specs) 1) (list? (car specs)))
+                        (car specs)
+                        specs)))
+    (let loop ((rem flat-specs) (acc '()))
+      (if (null? rem)
+          (reverse acc)
+          (let* ((spec (car rem))
+                 (desc (nanopass-lookup-rule spec))
+                 (clauses (rule-clauses desc)))
+            (loop (cdr rem) (append (reverse clauses) acc)))))))
+
+;;; Flatten NT rules: inline (fuse-rules ...) and (fuse-tree-rules ...),
+;;; and expand regular rules
+(define (nanopass-flatten-nt-rules raw-rules nt-name)
+  (let loop ((rem raw-rules) (acc '()))
+    (cond
+      ((null? rem)
+       (reverse acc))
+      ((and (pair? (car rem)) (memq (caar rem) '(fuse-rules fuse-tree-rules)))
+       (let* ((specs (cdar rem))
+              (fused-clauses (nanopass-extract-fused-clauses specs nt-name)))
+         (loop (cdr rem) (append (reverse fused-clauses) acc))))
+      (else
+       (let ((expanded (nanopass-expand-rule (car rem) nt-name)))
+         (loop (cdr rem) (cons expanded acc)))))))
+
+;;; Group rule descriptors by target NT name for top-level fuse-rules
+(define (nanopass-group-rules-by-nt specs default-nt)
+  (let loop ((rem specs) (groups '()))
+    (if (null? rem)
+        (reverse (map (lambda (g) (cons (car g) (reverse (cdr g)))) groups))
+        (let* ((spec (car rem))
+               (desc (nanopass-lookup-rule spec))
+               (nt (if (rule-nt-name desc) (rule-nt-name desc) default-nt))
+               (cls (rule-clauses desc)))
+          (let add-to-groups ((gs groups) (acc '()))
+            (cond
+              ((null? gs)
+               (loop (cdr rem) (cons (cons nt (reverse cls)) groups)))
+              ((eq? (caar gs) nt)
+               (loop (cdr rem)
+                     (append (reverse acc)
+                             (cons (cons nt (append (reverse cls) (cdar gs)))
+                                   (cdr gs)))))
+              (else
+               (add-to-groups (cdr gs) (cons (car gs) acc)))))))))
+
+;;; Build cascaded dispatch expression for nonterminal transformer rules
+;;; Incorporates O(1) Head-Tag bucketing (case dispatch), pair fallback, and atom fast-path.
 (define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out)
   (let* ((ir-var (car in-arg-list))
-         (extra-in (cdr in-arg-list)))
-    (let loop ((rs rules))
-      (if (null? rs)
-          (if (null? extra-in)
-              (list (string->symbol "nanopass-catamorphism-step")
-                    (list 'quote l-in)
-                    (list 'quote l-out)
-                    (list 'quote nt-name)
-                    ir-var
-                    nt-name
-                    ''()
-                    (list 'quote extra-out))
-              (list (string->symbol "nanopass-catamorphism-step")
-                    (list 'quote l-in)
-                    (list 'quote l-out)
-                    (list 'quote nt-name)
-                    ir-var
-                    nt-name
-                    (cons 'list extra-in)
-                    (list 'quote extra-out)))
-          (let* ((r (car rs))
-                 (pat (car r))
-                 (vars (cadr r))
-                 (guard-expr (caddr r))
-                 (body-expr (cadddr r))
-                 (m-var (unique-symbol "__m_")))
-            (if (eq? guard-expr #t)
-                (list 'let (list (list m-var
-                                       (list (string->symbol "nanopass-match-clause")
-                                             (list 'quote pat)
-                                             ir-var
-                                             (list 'quote vars)
-                                             nt-name)))
-                      (list 'if m-var
-                            (nanopass-bind-matched-vars vars m-var body-expr)
-                            (loop (cdr rs))))
-                (let ((c-var (unique-symbol "__c_")))
-                  (list 'let (list (list c-var
-                                         (list 'let (list (list m-var
-                                                                (list (string->symbol "nanopass-match-clause")
-                                                                      (list 'quote pat)
-                                                                      ir-var
-                                                                      (list 'quote vars)
-                                                                      nt-name)))
-                                               (list 'if m-var
-                                                     (nanopass-bind-matched-vars
-                                                      vars m-var
-                                                      (list 'if guard-expr
-                                                            (list 'cons #t body-expr)
-                                                            #f))
-                                                     #f))))
-                        (list 'if c-var
-                              (list 'cdr c-var)
-                              (loop (cdr rs)))))))))))
+         (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out))
+         (partitioned (nanopass-partition-rules rules))
+         (buckets (car partitioned))
+         (pair-fallbacks (cadr partitioned))
+         (atom-rules (caddr partitioned))
+         (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name cata-call))
+         (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name cata-call)))
+    (if (null? buckets)
+        (if (and (null? pair-fallbacks) (null? atom-rules))
+            cata-call
+            (if (equal? pair-fallbacks atom-rules)
+                pair-fallback-expr
+                (list 'if (list 'pair? ir-var)
+                      pair-fallback-expr
+                      atom-fallback-expr)))
+        (let ((case-expr
+               (cons 'case
+                     (cons (list 'car ir-var)
+                           (append (map (lambda (b)
+                                          (list (list (car b))
+                                                (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr)))
+                                        buckets)
+                                   (list (list 'else pair-fallback-expr)))))))
+          (list 'if (list 'pair? ir-var)
+                (list 'if (list 'symbol? (list 'car ir-var))
+                      case-expr
+                      pair-fallback-expr)
+                atom-fallback-expr)))))
 
 ;;; Normalize rules whether passed as list of rules or single wrapped list
 (define (nanopass-normalize-rules raw-rules)
@@ -215,6 +361,22 @@
               ;; (entry EntryNT)
               ((and (pair? c) (eq? (car c) 'entry))
                (loop (cdr rest) defs nt-procs (cadr c)))
+              ;; (fuse-rules r1 r2 ...) or (fuse-tree-rules r1 r2 ...) at top-level
+              ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules)))
+               (let* ((specs (cdr c))
+                      (flat-specs (if (and (= (length specs) 1) (list? (car specs))) (car specs) specs))
+                      (groups (nanopass-group-rules-by-nt flat-specs (if entry-nt entry-nt 'Expr))))
+                 (let group-loop ((gs groups) (cur-procs nt-procs) (cur-entry entry-nt))
+                   (if (null? gs)
+                       (loop (cdr rest) defs cur-procs cur-entry)
+                       (let* ((g (car gs))
+                              (g-nt (car g))
+                              (g-clauses (cdr g))
+                              (body-expr (nanopass-build-rules-cascade g-clauses l-in l-out g-nt in-arg-list extra-out))
+                              (proc-binding (list g-nt (list 'lambda in-arg-list body-expr))))
+                         (group-loop (cdr gs)
+                                     (cons proc-binding cur-procs)
+                                     (if cur-entry cur-entry g-nt)))))))
               ;; (NT : NT_in (ir extra ...) -> NT_out (extra_out ...) rules ...)
               ;; or (NT (ir extra ...) rules ...)
               ((and (pair? c) (symbol? (car c)))
@@ -224,7 +386,7 @@
                       (nt-out (caddr parsed-nt))
                       (nt-extra-out (cadddr parsed-nt))
                       (raw-rules (car (cddddr parsed-nt)))
-                      (expanded-rules (map (lambda (r) (nanopass-expand-rule r nt-name)) raw-rules))
+                      (expanded-rules (nanopass-flatten-nt-rules raw-rules nt-name))
                       (body-expr (nanopass-build-rules-cascade expanded-rules l-in nt-out nt-name nt-in-args (if (pair? nt-extra-out) nt-extra-out extra-out)))
                       (proc-binding (list nt-name (list 'lambda nt-in-args body-expr))))
                  (loop (cdr rest)
@@ -477,3 +639,8 @@
                 acc
                 (loop (cdr rem) (list 'picopass-choice acc (car rem))))))))
 
+(define-macro (fuse-rules . args)
+  (error "fuse-rules: cannot be used outside of define-pass" args))
+
+(define-macro (fuse-tree-rules . args)
+  (error "fuse-tree-rules: cannot be used outside of define-pass" args))

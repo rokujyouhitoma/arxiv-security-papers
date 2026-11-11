@@ -1006,6 +1006,136 @@
                 '(scale)
                 (rule-head-tags desc-when)))
 
+;;; =======================================================================
+;;; 18. define-pass fuse-rules & Head-Tag O(1) Dispatch (DSN-33-01 T3.1)
+;;; =======================================================================
+
+;; 18.1 Define picopasses for rule fusion
+(define-picopass rule-fuse-add-zero
+  (Expr
+    ((+ ,x 0) x)))
+
+(define-picopass rule-fuse-mul-one
+  (Expr
+    ((* ,x 1) x)))
+
+(define-picopass rule-fuse-mul-zero
+  (Expr
+    ((* ,x 0) 0)))
+
+;; 18.2 Top-level (fuse-rules ...) in define-pass
+(define-pass test-pass-fused-top : L_src (ir) -> L_src ()
+  (fuse-rules rule-fuse-add-zero rule-fuse-mul-one rule-fuse-mul-zero))
+
+(assert-equal "top-level fuse-rules rewrites (+ a 0) -> a"
+              'a
+              (test-pass-fused-top '(+ a 0)))
+
+(assert-equal "top-level fuse-rules rewrites (* b 1) -> b"
+              'b
+              (test-pass-fused-top '(* b 1)))
+
+(assert-equal "top-level fuse-rules rewrites (* c 0) -> 0"
+              0
+              (test-pass-fused-top '(* c 0)))
+
+(assert-equal "top-level fuse-rules catamorphism on nested tree (list (+ a 0) (* b 1)) -> (list a b)"
+              '(list a b)
+              (test-pass-fused-top '(list (+ a 0) (* b 1))))
+
+(assert-equal "top-level fuse-rules leaves unmatched construct untouched (- a 0)"
+              '(- a 0)
+              (test-pass-fused-top '(- a 0)))
+
+;; 18.3 Inline (fuse-rules ...) mixed with custom rules in NT clause
+(define-pass test-pass-fused-inline : L_src (ir) -> L_src ()
+  (Expr : Expr (ir) -> Expr ()
+    (fuse-rules rule-fuse-add-zero rule-fuse-mul-one)
+    ((- ,x 0) x)
+    ((/ ,x 1) x)))
+
+(assert-equal "inline fuse-rules handles fused rule (+ x 0) -> x"
+              'foo
+              (test-pass-fused-inline '(+ foo 0)))
+
+(assert-equal "inline fuse-rules handles fused rule (* x 1) -> x"
+              'bar
+              (test-pass-fused-inline '(* bar 1)))
+
+(assert-equal "inline fuse-rules handles inline rule (- x 0) -> x"
+              'baz
+              (test-pass-fused-inline '(- baz 0)))
+
+(assert-equal "inline fuse-rules handles inline rule (/ x 1) -> x"
+              'qux
+              (test-pass-fused-inline '(/ qux 1)))
+
+;; 18.4 fuse-tree-rules alias compatibility
+(define-pass test-pass-fused-tree : L_src (ir) -> L_src ()
+  (Expr : Expr (ir) -> Expr ()
+    (fuse-tree-rules rule-fuse-add-zero rule-fuse-mul-zero)))
+
+(assert-equal "fuse-tree-rules rewrites (+ z 0) -> z"
+              'z
+              (test-pass-fused-tree '(+ z 0)))
+
+(assert-equal "fuse-tree-rules rewrites (* z 0) -> 0"
+              0
+              (test-pass-fused-tree '(* z 0)))
+
+;; 18.5 O(1) Head-Tag dispatch: multiple tags with atom fast-path & fallbacks
+(define-pass test-pass-head-tag-dispatch : L_src (ir) -> L_src ()
+  (Expr : Expr (ir) -> Expr ()
+    ((tag-alpha ,x) (list 'alpha-rewritten x))
+    ((tag-beta ,x ,y) (list 'beta-rewritten x y))
+    ((tag-gamma ,x) (list 'gamma-rewritten x))
+    ;; Atom fast-path rule (guard on numbers)
+    (,c (guard (number? c)) (+ c 1000))))
+
+(assert-equal "head-tag dispatch jumps to tag-alpha"
+              '(alpha-rewritten 42)
+              (test-pass-head-tag-dispatch '(tag-alpha 42)))
+
+(assert-equal "head-tag dispatch jumps to tag-beta"
+              '(beta-rewritten 10 20)
+              (test-pass-head-tag-dispatch '(tag-beta 10 20)))
+
+(assert-equal "head-tag dispatch jumps to tag-gamma"
+              '(gamma-rewritten 99)
+              (test-pass-head-tag-dispatch '(tag-gamma 99)))
+
+(assert-equal "head-tag dispatch atom fast-path rewrites constant 7 -> 1007"
+              1007
+              (test-pass-head-tag-dispatch 7))
+
+(assert-equal "head-tag dispatch unlisted tag falls through to catamorphism and rewrites children"
+              '(unlisted-tag (alpha-rewritten 1))
+              (test-pass-head-tag-dispatch '(unlisted-tag (tag-alpha 1))))
+
+(assert-equal "head-tag dispatch unlisted tag with untouched subforms is preserved"
+              '(unlisted-tag (untouched symbol-x))
+              (test-pass-head-tag-dispatch '(unlisted-tag (untouched symbol-x))))
+
+;; 18.6 Rule order preservation within the same tag bucket
+(define-picopass rule-head-tag-first
+  (Expr
+    ((same-tag 0) 'first-match)))
+
+(define-picopass rule-head-tag-second
+  (Expr
+    ((same-tag ,x) (list 'second-match x))))
+
+(define-pass test-pass-bucket-order : L_src (ir) -> L_src ()
+  (fuse-rules rule-head-tag-first rule-head-tag-second))
+
+(assert-equal "same tag bucket evaluates first rule first when matching"
+              'first-match
+              (test-pass-bucket-order '(same-tag 0)))
+
+(assert-equal "same tag bucket falls through to second rule when first fails"
+              '(second-match 42)
+              (test-pass-bucket-order '(same-tag 42)))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)
