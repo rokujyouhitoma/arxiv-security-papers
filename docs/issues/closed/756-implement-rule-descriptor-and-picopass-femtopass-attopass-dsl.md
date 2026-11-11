@@ -207,3 +207,4 @@ Pass Fusion（T3.1）およびルール依存関係 DAG（T5.1）が利用する
    - `make -C ulisp test_pass_manager`: 全 61 アサーション 100% PASS。
    - `make -C ulisp test_verifier test_lir_verifier`: 全 73 テスト（46 LIR Verifier + 27 IR Verifier）100% PASS。
    - `make py_compile static_analysis`: Python 構文・Xenon 複雑度・Mypy 型検査 0 エラーで PASS。
+
