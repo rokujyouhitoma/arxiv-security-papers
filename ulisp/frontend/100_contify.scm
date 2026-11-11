@@ -113,30 +113,58 @@
                 (or (has-call? var (car es))
                     (loop (cdr es)))))))))
 
+;;; -----------------------------------------------------------------------
+;;; First-Class Femtopass & Picopass Rules for Contification (DSN-33-01 T5.2)
+;;; -----------------------------------------------------------------------
+
+(define-femtopass femto-contifiable?
+  :reads '(lambda)
+  (Expr
+    ((letrec ((,x* ,e*) ...) ,body)
+     (let loop ((xs x*) (es e*) (acc '()))
+       (if (null? xs)
+           (reverse acc)
+           (let ((v (car xs))
+                 (val (car es)))
+             (if (contifiable-binding? v val body)
+                 (loop (cdr xs) (cdr es) (cons v acc))
+                 (loop (cdr xs) (cdr es) acc))))))))
+
+(define-picopass rule-contify-letrec
+  :reads '(letrec) :writes '(%cont-fun)
+  (Expr
+    ((letrec ((,x* ,e*) ...) ,body)
+     (if (= (length x*) 1)
+         (let ((var (car x*))
+               (val (car e*)))
+           (if (and (has-call? var body)
+                    (contifiable-binding? var val body))
+               (let* ((params (cadr val))
+                      (lbody (caddr val))
+                      (opt-lbody (contify-calls var lbody))
+                      (opt-body (contify-calls var body)))
+                 (list '%cont-fun var params
+                       (contify-expr opt-lbody)
+                       (contify-expr opt-body)))
+               #f))
+         #f))))
+
 ;;; Processes a letrec form, lifting contifiable local bindings into %cont-fun wrappers.
 (define (contify-letrec bindings orig-body)
-  (if (= (length bindings) 1)
-      (let* ((b (car bindings))
-             (var (car b))
-             (val (cadr b)))
-        (if (and (has-call? var orig-body)
-                 (contifiable-binding? var val orig-body))
-            (let* ((params (cadr val))
-                   (lbody (caddr val))
-                   (opt-lbody (contify-calls var lbody))
-                   (opt-body (contify-calls var orig-body)))
-              (list '%cont-fun var params
-                    (contify-expr opt-lbody)
-                    (contify-expr opt-body)))
+  (or (rule-contify-letrec (list 'letrec bindings orig-body))
+      (if (= (length bindings) 1)
+          (let* ((b (car bindings))
+                 (var (car b))
+                 (val (cadr b)))
             (list 'letrec
                   (list (list var (contify-expr val)))
-                  (contify-expr orig-body))))
-      ;; Multi-binding letrec (top-level procedures or mutual recursion):
-      ;; Preserve letrec structure to maintain inter-procedure references,
-      ;; while recursively contifying local loops inside each procedure body.
-      (list 'letrec
-            (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
-            (contify-expr orig-body))))
+                  (contify-expr orig-body)))
+          ;; Multi-binding letrec (top-level procedures or mutual recursion):
+          ;; Preserve letrec structure to maintain inter-procedure references,
+          ;; while recursively contifying local loops inside each procedure body.
+          (list 'letrec
+                (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
+                (contify-expr orig-body)))))
 
 ;;; Pass 4c Entrypoint: Contification & local closure elimination across all expressions.
 (define (contify-all form)
