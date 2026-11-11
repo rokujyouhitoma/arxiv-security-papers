@@ -1,226 +1,48 @@
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 030: Core Syntax Desugaring & Normalization Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Framework Standard
-;;; Migrated to Nanopass DSL (Phase 1) per Issue #581.
-;;; Eliminates manual Catamorphism recursion boilerplate for Core constructs
-;;; (if, begin, lambda, let, letrec, quote, set!, %program, applications).
+;;; Migrated to Declarative Pass Fusion (fuse-rules) per Issue #763 (DSN-33-01 T4.2).
+;;; Automatically combines all 31 Picopasses/Attopasses from Passes 026-029 into
+;;; a single O(1) Head-Tag dispatch traversal with local re-dispatch.
 ;;; =======================================================================
-
-;;; Helper transformations for composite types, constructors, math variadics,
-;;; format, dynamic environment, and promises are now canonically provided by
-;;; Pass 026 (026_desugar_constructors.scm) and Pass 029 (029_desugar_dynamic.scm)
-;;; per Issue #762 (DSN-33-01 T4.1).
-
-
-;;; =======================================================================
-;;; Canonical Nanopass DSL Pass: desugar-all
-;;; Transforms high-level L_src AST into canonical L_core AST
-;;; =======================================================================
-(define (desugar-dispatch-dyn op args ir Expr)
-  (case op
-    ((guard)
-     (if (pair? args)
-         (Expr (desugar-guard (car args) (cdr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((let-values)
-     (if (pair? args)
-         (Expr (desugar-let-values (car args) (cdr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((let*-values)
-     (if (pair? args)
-         (Expr (desugar-let*-values (car args) (cdr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((parameterize)
-     (if (pair? args)
-         (Expr (desugar-parameterize (car args) (cdr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((delay) (Expr (desugar-delay (cons 'delay args))))
-    ((delay-force) (Expr (desugar-delay-force (cons 'delay-force args))))
-    ((make-parameter) (Expr (desugar-make-parameter (map Expr args))))
-    ((values) (Expr (desugar-values (map Expr args))))
-    ((%raw-call/cc)
-     (if (and (pair? args) (null? (cdr args)))
-         (list '%raw-call/cc (Expr (car args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((call-with-values %call-with-values)
-     (if (and (pair? args) (pair? (cdr args)) (null? (cddr args)))
-         (list '%call-with-values (Expr (car args)) (Expr (cadr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((error) (Expr (desugar-error (cons 'error args))))
-    ((assume) (Expr (desugar-assume (cons 'assume args))))
-    ((assert) (Expr (desugar-assume (cons 'assert args))))
-    ((syntax-error) (Expr (desugar-syntax-error (cons 'syntax-error args))))
-    ((let-syntax letrec-syntax)
-     (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))
-    ((%with-handler with-exception-handler)
-     (if (and (pair? args) (pair? (cdr args)) (null? (cddr args)))
-         (list '%with-handler (Expr (car args)) (Expr (cadr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((caar cadr cdar cddr caddr cdddr cadddr)
-     (if (and (pair? args) (null? (cdr args)))
-         (let ((arg (car args)))
-           (case op
-             ((caar) (Expr (list 'car (list 'car arg))))
-             ((cadr) (Expr (list 'car (list 'cdr arg))))
-             ((cdar) (Expr (list 'cdr (list 'car arg))))
-             ((cddr) (Expr (list 'cdr (list 'cdr arg))))
-             ((caddr) (Expr (list 'car (list 'cdr (list 'cdr arg)))))
-             ((cdddr) (Expr (list 'cdr (list 'cdr (list 'cdr arg)))))
-             ((cadddr) (Expr (list 'car (list 'cdr (list 'cdr (list 'cdr arg))))))
-             (else (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '()))))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    (else
-     (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '()))))
-
-(define (desugar-dispatch-ctors op args ir Expr)
-  (case op
-    ((list) (Expr (desugar-list args)))
-    ((string-append) (Expr (desugar-string-append args)))
-    ((string-copy) (Expr (desugar-string-copy (map Expr args))))
-    ((string-copy!) (Expr (desugar-string-copy! (map Expr args))))
-    ((string-fill!) (Expr (desugar-string-fill! (map Expr args))))
-    ((string->utf8) (Expr (desugar-string->utf8 (map Expr args))))
-    ((utf8->string) (Expr (desugar-utf8->string (map Expr args))))
-    ((string->list) (Expr (desugar-string->list (map Expr args))))
-    ((string->vector) (Expr (desugar-string->vector (map Expr args))))
-    ((vector) (Expr (desugar-vector args)))
-    ((vector-append) (Expr (desugar-vector-append args)))
-    ((make-vector) (Expr (desugar-make-vector (map Expr args))))
-    ((vector-copy) (Expr (desugar-vector-copy (map Expr args))))
-    ((vector-copy!) (Expr (desugar-vector-copy! (map Expr args))))
-    ((vector-fill!) (Expr (desugar-vector-fill! (map Expr args))))
-    ((vector->list) (Expr (desugar-vector->list (map Expr args))))
-    ((vector->string) (Expr (desugar-vector->string (map Expr args))))
-    ((make-list) (Expr (desugar-make-list (map Expr args))))
-    ((bytevector) (Expr (desugar-bytevector args)))
-    ((bytevector-append) (Expr (desugar-bytevector-append args)))
-    ((make-bytevector) (Expr (desugar-make-bytevector (map Expr args))))
-    ((bytevector-copy) (Expr (desugar-bytevector-copy (map Expr args))))
-    ((bytevector-copy!) (Expr (desugar-bytevector-copy! (map Expr args))))
-    ((gcd) (Expr (desugar-gcd (map Expr args))))
-    ((lcm) (Expr (desugar-lcm (map Expr args))))
-    ((max) (Expr (desugar-max (map Expr args))))
-    ((min) (Expr (desugar-min (map Expr args))))
-    ((format) (Expr (desugar-format (map Expr args))))
-    (else (desugar-dispatch-dyn op args ir Expr))))
-
-(define (desugar-dispatch-bindings op args ir Expr)
-  (case op
-    ((case-lambda) (Expr (desugar-case-lambda args)))
-    ((let*)
-     (if (pair? args)
-         (Expr (desugar-let* (car args) (cdr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((letrec*)
-     (if (and (pair? args) (list? (car args)))
-         (Expr (desugar-letrec* (car args) (cdr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((let)
-     (cond
-       ((and (pair? args) (symbol? (car args)) (pair? (cdr args)))
-        (Expr (desugar-named-let ir)))
-       ((and (pair? args) (list? (car args)))
-        (let ((bindings (car args))
-              (bodies (cdr args)))
-          (cond
-            ((null? bodies)
-             (Expr (list 'let bindings '(begin))))
-            ((pair? (cdr bodies))
-             (Expr (list 'let bindings (cons 'begin bodies))))
-            (else
-             (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))))
-       (else
-        (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '()))))
-    ((letrec)
-     (if (and (pair? args) (list? (car args)))
-         (let ((bindings (car args))
-               (bodies (cdr args)))
-           (cond
-             ((null? bodies)
-              (Expr (list 'letrec bindings '(begin))))
-             ((pair? (cdr bodies))
-              (Expr (list 'letrec bindings (cons 'begin bodies))))
-             (else
-              (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '()))))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((lambda)
-     (if (pair? args)
-         (let ((params (car args))
-               (bodies (cdr args)))
-           (cond
-             ((null? bodies)
-              (Expr (list 'lambda params '(begin))))
-             ((pair? (cdr bodies))
-              (Expr (list 'lambda params (cons 'begin bodies))))
-             (else
-              (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '()))))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((do)
-     (if (and (pair? args) (pair? (cdr args)))
-         (Expr (desugar-do (car args) (cadr args) (cddr args)))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((begin)
-     (if (and (pair? args) (pair? (car args)))
-         (let ((first (car args))
-               (rest (cdr args)))
-           (cond
-             ((eq? (car first) 'begin)
-              (Expr (cons 'begin (append (cdr first) rest))))
-             ((and (eq? (car first) 'define) (pair? (cdr first)))
-              (Expr (desugar-internal-define (cadr first) (cddr first) rest)))
-             ((and (eq? (car first) 'define-values)
-                   (pair? (cdr first))
-                   (pair? (cddr first))
-                   (null? (cdddr first)))
-              (Expr (desugar-define-values (cadr first) (caddr first) rest)))
-             (else
-              (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '()))))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((define)
-     (if (pair? args)
-         (Expr (desugar-internal-define (car args) (cdr args) '()))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    ((define-values)
-     (if (and (pair? args) (pair? (cdr args)) (null? (cddr args)))
-         (Expr (desugar-define-values (car args) (cadr args) '()))
-         (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-    (else (desugar-dispatch-ctors op args ir Expr))))
-
-(define (desugar-dispatch-expr ir Expr)
-  (if (not (pair? ir))
-      (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())
-      (let ((op (car ir))
-            (args (cdr ir)))
-        (case op
-          ((%program)
-           (if (and (pair? args) (pair? (cdr args)))
-               (let ((defs (car args))
-                     (bodies (cdr args))
-                     (map-def (lambda (d)
-                                (if (and (pair? d) (eq? (car d) 'define))
-                                    (cons 'define (cons (cadr d) (map Expr (cddr d))))
-                                    (Expr d)))))
-                 (if (null? (cdr bodies))
-                     (list '%program (map map-def defs) (Expr (car bodies)))
-                     (list '%program (map map-def defs) (map Expr bodies))))
-               (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-          ((cond-expand) (Expr (desugar-cond-expand args)))
-          ((cond) (Expr (desugar-cond args)))
-          ((case)
-           (if (pair? args)
-               (Expr (desugar-case (car args) (cdr args)))
-               (nanopass-catamorphism-step 'L_src 'L_core 'Expr ir Expr '() '())))
-          ((and) (Expr (desugar-and args)))
-          ((or) (Expr (desugar-or args)))
-          ((char<? char>? char<=? char>=? char=?
-            string<? string>? string<=? string>=? string=?
-            char-ci<? char-ci>? char-ci<=? char-ci>=? char-ci=?
-            string-ci<? string-ci>? string-ci<=? string-ci>=? string-ci=?)
-           (if (or (null? args) (null? (cdr args)) (null? (cddr args)))
-               (cons op (map Expr args))
-               (Expr (desugar-chain-cmp op args))))
-          (else (desugar-dispatch-bindings op args ir Expr))))))
 
 (define-pass desugar-all : L_src (ir) -> L_core ()
-  (Expr : Expr (ir) -> Expr ()
-    (,e (desugar-dispatch-expr e Expr))))
+  (fuse-rules
+    ;; --- Pass 026: Composite Literals & Constructors ---
+    rule-desugar-list
+    rule-desugar-vector
+    rule-desugar-bytevector
+    rule-desugar-string-ops
+    rule-desugar-vector-ops
+    rule-desugar-bytevector-ops
+    rule-desugar-math-variadic
+    rule-desugar-format
+    rule-desugar-cxr
+
+    ;; --- Pass 027: Conditionals & Comparisons ---
+    rule-desugar-cond-expand
+    rule-desugar-cond
+    rule-desugar-case
+    rule-desugar-and
+    rule-desugar-or
+    rule-desugar-chain-cmp
+
+    ;; --- Pass 028: Bindings & Internal Definitions ---
+    rule-desugar-case-lambda
+    rule-desugar-let*
+    rule-desugar-letrec*
+    rule-desugar-named-let
+    rule-desugar-multi-body
+    rule-desugar-do
+    rule-desugar-internal-define
+
+    ;; --- Pass 029: Dynamic Environment & Values ---
+    rule-desugar-let-values
+    rule-desugar-define-values
+    rule-desugar-guard
+    rule-desugar-parameterize
+    rule-desugar-delay
+    rule-desugar-parameter-ops
+    rule-desugar-values
+    rule-desugar-error-assume
+    atto-no-unexpanded-let-syntax))

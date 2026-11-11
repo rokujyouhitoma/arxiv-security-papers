@@ -56,7 +56,7 @@
 
 (let ((dyn-res (desugar-dynamic '(begin (define-values (x y) (values 10 20)) (+ x y)))))
   (assert-true "desugar-dynamic expands begin define-values" (pair? dyn-res))
-  (assert-equal "desugar-dynamic expands to call-with-values" 'call-with-values (car dyn-res)))
+  (assert-equal "desugar-dynamic expands to %call-with-values" '%call-with-values (car dyn-res)))
 
 ;;; -----------------------------------------------------------------------
 ;;; Section 6: Pass 029 1-Line Picopass Direct S-Expression Unit Tests (DSN-33-01 T4.1)
@@ -101,10 +101,18 @@
               42
               (rule-desugar-values '(values 42)))
 
+(assert-equal "rule-desugar-values call-with-values"
+              '(%call-with-values producer consumer)
+              (rule-desugar-values '(call-with-values producer consumer)))
+
 ;; 13. rule-desugar-error-assume
 (let ((res (rule-desugar-error-assume '(error "msg" 1 2))))
   (assert-true "rule-desugar-error-assume produces raise" (pair? res))
   (assert-equal "rule-desugar-error-assume root" 'raise (car res)))
+
+(assert-equal "rule-desugar-error-assume with-exception-handler"
+              '(%with-handler handler thunk)
+              (rule-desugar-error-assume '(with-exception-handler handler thunk)))
 
 ;; 14. atto-no-unexpanded-let-syntax (invariant verification)
 (assert-equal "atto-no-unexpanded-let-syntax passes normal expr"
