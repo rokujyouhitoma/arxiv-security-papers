@@ -2,18 +2,18 @@
 ID: 761
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] LIR 命令列向け fuse-window-rules スライディングウィンドウ走査および収束ドライバの実装 (DSN-33-01 T3.3) (ID: 761)
 
 ## 1. 概要 / Summary
 
-[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 2.3 節、第 4.4 節（走査ドライバの二大系統）、第 6.3 節（LIR スライディングウィンドウ・依存融合）、および第 9.2 節タスク **T3.3** に基づき、低レベル中間表現（LIR）の線形命令列に対するスライディングウィンドウ走査および有界不動点収束ドライバ **`fuse-window-rules`** を実装する。
+[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 2.3 節、第 4.4 節（走査ドライバの二大系統）、第 6.3 節（LIR スライディングウィンドウ・依存融合）、および第 9.2 節タスク **T3.3** に基づき、低レベル中間表現（LIR）の線形命令列に対するスライディングウィンドウ走査および有界不動点収束ドライバ **`fuse-window-rules`** を実装した。
 
-現在、LIR 分岐融合（`128_lir_branch_fusion.scm`）、LIR ピープホール最適化（`133_lir_peephole.scm`）、および x86-64 バックエンドピープホール（`143_backend_x86_peephole.scm`）は、それぞれ各パス内部で独自に手書きされた `let loop ((rest insts) (acc '()))` と深い `car`/`cadr`/`caddr` ネストによって実装されている。これにより、パス間で同様の窓進行・命令再構築ループが重複し、命令パターンの追加や検証のコストが増大している。
+現在、LIR 分岐融合（`128_lir_branch_fusion.scm`）、LIR ピープホール最適化（`133_lir_peephole.scm`）、および x86-64 バックエンドピープホール（`143_backend_x86_peephole.scm`）は、それぞれ各パス内部で独自に手書きされた `let loop ((rest insts) (acc '()))` と深い `car`/`cadr`/`caddr` ネストによって実装されていた。これにより、パス間で同様の窓進行・命令再構築ループが重複し、命令パターンの追加や検証のコストが増大していた。
 
-本 Issue では、S式構文木（AST / Term DAG）に対する再帰カタモルフィズム走査ドライバ `fuse-rules`（`fuse-tree-rules`）と対をなす、**線形命令列のための第2の標準走査ドライバ `fuse-window-rules`** を Nanopass コンパイラ基盤に正式導入する。これにより、`define-picopass` で記述された独立な命令窓変換ルール群（`InstWindow`）を単一の $O(1)$ Opcode Head-Tag ディスパッチ走査へと自動融合し、後続の LIR パス Picopass 化（[Issue #767](767-migrate-lir-peephole-to-picopass-and-dependency-dag.md)）への決定的な足がかりを築く。
+本 Issue により、S式構文木（AST / Term DAG）に対する再帰カタモルフィズム走査ドライバ `fuse-rules`（`fuse-tree-rules`）と対をなす、**線形命令列のための第2の標準走査ドライバ `fuse-window-rules`** が Nanopass コンパイラ基盤に正式導入された。これにより、`define-picopass` で記述された独立な命令窓変換ルール群（`InstWindow`）を単一の $O(1)$ Opcode Head-Tag ディスパッチ走査へと自動融合し、後続の LIR パス Picopass 化（[Issue #767](../767-migrate-lir-peephole-to-picopass-and-dependency-dag.md)）への決定的な足がかりを確立した。
 
 ### 1.1 背景とアーキテクチャ上の課題
 
@@ -36,37 +36,38 @@ ID: 761
 ## 2. トレーサビリティ / Traceability
 
 - **関連設計書**:
-  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
     - 第 2.3 節（Pass 粒度の4層構造と責務境界）
     - 第 4.4 節（走査ドライバの二大系統: 構文木 `fuse-rules` と線形命令列 `fuse-window-rules`）
     - 第 6.3 節（3. LIR スライディングウィンドウ・依存融合: `fuse-window-rules`）
     - 第 9.2 節（Phase 3 タスク **T3.3**）
 - **依存関係**:
   - **先行 Issue**:
-    - [Issue #756](closed/756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) (T2.1: 第一級 Rule Descriptor と Picopass DSL 実装) (Closed)
-    - [Issue #757](closed/757-implement-picopass-strategy-combinators.md) (T2.2: Picopass 関数合成コンビネータ群の実装) (Closed)
-    - [Issue #758](closed/758-integrate-picopass-dsl-into-pass-015-expander.md) (T2.3: Pass 015 先行 DSL 展開器への pico/femto/atto 構文統合) (Closed)
-    - [Issue #759](closed/759-implement-fuse-rules-and-head-tag-o1-dispatch.md) (T3.1: fuse-rules 構文と Head-Tag O(1) ディスパッチ生成エンジンの実装) (Closed)
-    - [Issue #760](closed/760-implement-local-redispatch-and-extends-eliminates-validation.md) (T3.2: 5ステップ融合サイクルの局所再適用と extends (-) 対 eliminates 自動整合性検証) (Closed)
+    - [Issue #756](756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) (T2.1: 第一級 Rule Descriptor と Picopass DSL 実装) (Closed)
+    - [Issue #757](757-implement-picopass-strategy-combinators.md) (T2.2: Picopass 関数合成コンビネータ群の実装) (Closed)
+    - [Issue #758](758-integrate-picopass-dsl-into-pass-015-expander.md) (T2.3: Pass 015 先行 DSL 展開器への pico/femto/atto 構文統合) (Closed)
+    - [Issue #759](759-implement-fuse-rules-and-head-tag-o1-dispatch.md) (T3.1: fuse-rules 構文と Head-Tag O(1) ディスパッチ生成エンジンの実装) (Closed)
+    - [Issue #760](760-implement-local-redispatch-and-extends-eliminates-validation.md) (T3.2: 5ステップ融合サイクルの局所再適用と extends (-) 対 eliminates 自動整合性検証) (Closed)
   - **後続 Issue**:
-    - [Issue #767](767-migrate-lir-peephole-to-picopass-and-dependency-dag.md) (T5.3: 128/133 LIR ピープホールの Picopass 化と基本ブロック内データ依存 DAG 走査の導入)
-    - [Issue #765](765-implement-rule-dependency-dag-and-femtopass-cache-invalidation.md) (T5.1: ルール依存関係 DAG 自動構築・独立ルール自動 Fusion・Femtopass キャッシュ維持)
+    - [Issue #767](../767-migrate-lir-peephole-to-picopass-and-dependency-dag.md) (T5.3: 128/133 LIR ピープホールの Picopass 化と基本ブロック内データ依存 DAG 走査の導入)
+    - [Issue #765](../765-implement-rule-dependency-dag-and-femtopass-cache-invalidation.md) (T5.1: ルール依存関係 DAG 自動構築・独立ルール自動 Fusion・Femtopass キャッシュ維持)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/compiler/nanopass.scm](../../ulisp/compiler/nanopass.scm)
+- [x] [ulisp/compiler/nanopass.scm](../../../ulisp/compiler/nanopass.scm)
   - `define-pass` 構文パーサーおよび展開器（`nanopass-expand-define-pass-with-trace`）を拡張し、`(fuse-window-rules ...)` 節の解釈とスライディングウィンドウ走査コードのインライン生成をサポート。
+  - 重複パターン変数（例: `((%mov ,r ,r) . ,rest)`）を純粋関数型アキュムレータで自動線形化・ガード生成する `nanopass-linearize-pattern` を実装。
   - `fuse-window-rules` を `fuse-rules` と同様にホスト/インタプリタ用ダミーマクロとして登録。
-- [ ] [ulisp/compiler/nanopass_meta.scm](../../ulisp/compiler/nanopass_meta.scm)
-  - 線形命令列スライディングウィンドウ走査コア関数 `nanopass-run-window-rules` の実装。
-  - 有界反復固定点収束ドライバ `nanopass-window-fixpoint` および燃料制御パラメータ `*nanopass-window-fixpoint-limit*`（初期値: 16）、`*nanopass-window-step-limit*`（初期値: 1024）の実装。
-  - `%lir-program` および平坦命令列のデュアルモード入力を判別・展開・再構築するラッパー関数 `nanopass-wrap-window-rules-input` の実装。
-- [ ] [ulisp/compiler.scm](../../ulisp/compiler.scm)
+- [x] [ulisp/compiler/nanopass_meta.scm](../../../ulisp/compiler/nanopass_meta.scm)
+  - 線形命令列スライディングウィンドウ走査コア関数 `nanopass-sliding-window-pass` の実装。
+  - 有界反復固定点収束ドライバ `nanopass-sliding-window-fixpoint` および燃料制御パラメータ `*nanopass-window-fixpoint-limit*`（初期値: 16）、`*nanopass-window-step-limit*`（初期値: 1024）の実装。
+  - `%lir-program`, `%lir-function`, `%lir-main` および平坦命令列のマルチグラニュラリティ入力を判別・展開・再構築するラッパー関数 `nanopass-wrap-window-rules-input` の実装。
+- [x] [ulisp/compiler.scm](../../../ulisp/compiler.scm)
   - `make -C ulisp compiler` による再生成、括弧整合性・3-Stage セルフホスティング固定点検証の通過。
-- [ ] [ulisp/tests/test_nanopass_framework.scm](../../ulisp/tests/test_nanopass_framework.scm)
-  - Section 20 として、`fuse-window-rules` の単体テスト群を新規追加（単一命令削除、2〜3命令融合、固定点収束、未マッチ時の窓進行、デュアルモード `%lir-program` 走査、燃料上限検知等 10 件以上）。
+- [x] [ulisp/tests/test_nanopass_framework.scm](../../../ulisp/tests/test_nanopass_framework.scm)
+  - Section 20 として、`fuse-window-rules` の単体テスト群を新規追加（単一命令削除、2〜3命令融合、固定点収束、未マッチ時の窓進行、デュアルモード `%lir-program` 走査、燃料上限検知等 16 件追加、全 176 件 PASS）。
 
 ---
 
@@ -80,21 +81,21 @@ Picopass 定義者は、線形命令列の窓パターンマッチングを `Ins
 ;; 1. 単一の冗長代入を削除する Picopass
 (define-picopass rule-lir-self-mov-elim
   (InstWindow
-    [((%mov ,r ,r) . ,rest) rest]))
+    (((%mov ,r ,r) . ,rest) rest)))
 
 ;; 2. 直前の store からの reload を register move に置き換える Picopass
 (define-picopass rule-lir-store-load-forward
   (InstWindow
-    [((%store %rsp ,off ,src) (%load ,dst %rsp ,off) . ,rest)
+    (((%store %rsp ,off ,src) (%load ,dst %rsp ,off) . ,rest)
      (if (equal? dst src)
-         `((%store %rsp ,off ,src) . ,rest)
-         `((%store %rsp ,off ,src) (%mov ,dst ,src) . ,rest))]))
+         (cons `(%store %rsp ,off ,src) rest)
+         (cons `(%store %rsp ,off ,src) (cons `(%mov ,dst ,src) rest))))))
 
 ;; 3. 0 加算の削除
 (define-picopass rule-lir-zero-add-elim
   (InstWindow
-    [((%add ,r 0) . ,rest) rest]
-    [((%raw-add ,r 0) . ,rest) rest]))
+    (((%add ,r 0) . ,rest) rest)
+    (((%raw-add ,r 0) . ,rest) rest)))
 ```
 
 そして、`define-pass` においてこれらを `fuse-window-rules` で束ねる：
@@ -128,7 +129,7 @@ flowchart TD
 ```
 
 #### (1) Opcode Head-Tag による $O(1)$ ディスパッチ
-- `nanopass-pattern-head-tag` は `((%mov ,r ,r) . ,rest)` のような窓パターンに対して内側の先頭シンボル `%mov` を抽出する設計となっている。
+- `nanopass-window-rule-head-symbol` は `((%mov ,r ,r) . ,rest)` のような窓パターンに対して内側の先頭シンボル `%mov` を抽出する。
 - `fuse-window-rules` は、束ねられた全 Picopass の窓パターンを先頭オペコード（`%mov`, `%store`, `%add` 等）ごとにバケット分類し、`insts` の先頭命令 `(caar insts)` に対する `case` ディスパッチを生成する。
 - 該当オペコードを持たない命令は即座に `else` 節へフォールスルーし、無駄なパターンマッチングを回避する。
 
@@ -147,11 +148,13 @@ flowchart TD
   - `*nanopass-window-step-limit*`: 局所再適用のステップ上限（既定値: 1024）。
 - **固定点反復ループ**:
   ```scheme
-  (define (nanopass-window-fixpoint transform-proc insts)
+  (define (nanopass-sliding-window-fixpoint try-match-proc insts)
     (let loop ((cur insts) (iterations *nanopass-window-fixpoint-limit*))
       (if (<= iterations 0)
           cur
-          (let-values (((next changed?) (transform-proc cur)))
+          (let* ((res (nanopass-sliding-window-pass try-match-proc cur))
+                 (next (car res))
+                 (changed? (cdr res)))
             (if (or (not changed?) (equal? cur next))
                 next
                 (loop next (- iterations 1)))))))
@@ -177,14 +180,14 @@ flowchart TD
    ```scheme
    (list? ir)
    ```
-   - そのまま `nanopass-window-fixpoint` に渡し、最適化された命令リストを返す。
+   - そのまま `nanopass-sliding-window-fixpoint` に渡し、最適化された命令リストを返す。
 
 ---
 
 ## 5. セキュリティ考慮事項 / Security Considerations
 
 - **CWE-400 (Uncontrolled Resource Consumption / CPU 枯渇防止)**:
-  - 相互に命令を書き換え合う Picopass ルール（例: ルール A が `(%mov %rax %rbx)` を `(%add %rax ...)` に変換し、ルール B がそれを逆変換するような循環ルール）が存在した場合の無限コンパイルループを防止する。
+  - 相互に命令を書き換え合う Picopass ルール（例: ルール A が `(%w-ping x)` を `(%w-pong x)` に変換し、ルール B がそれを逆変換するような循環ルール）が存在した場合の無限コンパイルループを防止する。
   - 外側ループは `*nanopass-window-fixpoint-limit*`（16回）、局所再適用は `*nanopass-window-step-limit*`（1024回）の二重燃料ガードによって、安全に停止することを保証する。
 - **CWE-704 / CWE-843 (型・構造の誤認防止)**:
   - 命令列内に不正な形式（アトム、空リスト、不完全な命令形式）が混入していた場合でも、`pair?` および `symbol?` 検査によってクラッシュせず、安全にフォールスルーまたはエラー報告を行う。
@@ -197,49 +200,56 @@ flowchart TD
 
 Target Branch: `feat/761-implement-fuse-window-rules`
 
-- [ ] **Step 1: Feature ブランチ作成と作業環境準備**
-  - `feat/761-implement-fuse-window-rules` ブランチを作成し、現在の `main` から分岐する。
-- [ ] **Step 2: スライディングウィンドウ走査コアの実装 (`ulisp/compiler/nanopass_meta.scm`)**
+- [x] **Step 1: Feature ブランチ作成と作業環境準備**
+  - `feat/761-implement-fuse-window-rules` ブランチを作成し、現在の `main` から分岐。
+- [x] **Step 2: スライディングウィンドウ走査コアの実装 (`ulisp/compiler/nanopass_meta.scm`)**
   - パラメータ `*nanopass-window-fixpoint-limit*`（16）および `*nanopass-window-step-limit*`（1024）を定義。
-  - スライディングウィンドウ反復関数 `nanopass-run-window-rules` を実装。
-  - 有界固定点反復関数 `nanopass-window-fixpoint` を実装。
+  - スライディングウィンドウ反復関数 `nanopass-sliding-window-pass` を実装。
+  - 有界固定点反復関数 `nanopass-sliding-window-fixpoint` を実装。
   - デュアルモード入力ラッパー `nanopass-wrap-window-rules-input` を実装。
-- [ ] **Step 3: `define-pass` への `fuse-window-rules` 構文統合 (`ulisp/compiler/nanopass.scm`)**
+- [x] **Step 3: `define-pass` への `fuse-window-rules` 構文統合 (`ulisp/compiler/nanopass.scm`)**
   - `nanopass-extract-all-pass-rule-specs` に `fuse-window-rules` を追加。
   - `nanopass-expand-define-pass-with-trace` において、`(fuse-window-rules ...)` が指定された場合に、束ねられた Picopass 群を展開・結合し、Opcode $O(1)$ ディスパッチを持つウィンドウ走査器手続きを生成。
+  - 重複パターン変数の純粋関数型線形化器 `nanopass-linearize-pattern` を実装。
   - ホスト用ダミーマクロ `(define-macro (fuse-window-rules . args) ...)` を登録。
-- [ ] **Step 4: コンパイラ統合とセルフホスト再生成 (`ulisp/compiler.scm`)**
+- [x] **Step 4: コンパイラ統合とセルフホスト再生成 (`ulisp/compiler.scm`)**
   - `make -C ulisp compiler` を実行し、結合ソースを再生成。
   - S式の括弧整合性および Scheme コンパイラでのコンパイル・ロード確認。
-- [ ] **Step 5: 単体テストスイートの拡充 (`ulisp/tests/test_nanopass_framework.scm`)**
-  - Section 20 として、`fuse-window-rules` の単体テスト群を新規追加（10件以上）：
+- [x] **Step 5: 単体テストスイートの拡充 (`ulisp/tests/test_nanopass_framework.scm`)**
+  - Section 20 として、`fuse-window-rules` の単体テスト群を新規追加（16件追加、全 176 件 PASS）：
     1. 単一命令消去（自己代入 `%mov %rax %rax` 消去）
-    2. 2命令融合（`%store` 直後の同一オフセット `%load` $\to$ `%mov`）
-    3. 3命令融合（定数ロード＋演算の畳み込み）
-    4. 未マッチ命令の順序維持と窓前進
-    5. 固定点多段収束（中間 `%mov` 消去により新たに隣接した命令の融合）
-    6. 局所 Re-dispatch の動作確認
-    7. 平坦な命令リストに対する実行
-    8. `%lir-program` に対する複数関数＋メインブロックの一括走査・再構築
-    9. 循環ルールに対する Fuel Guard 枯渇・安全停止確認
-    10. `*nanopass-trace*` 連携の動作確認
-- [ ] **Step 6: 品質ゲートおよび 3-Stage セルフホスティング固定点検証**
-  - `make -C ulisp test_nanopass` を実行し全件 PASS を確認。
-  - `make -C ulisp test_passes` を実行し既存 LIR パス等へのリグレッション皆無を確認。
-  - `make -C ulisp bootstrap` を実行し、Stage 1/2/3 の固定点一致（MD5ハッシュ一致）を確認。
-  - `make py_compile` および `make static_analysis` の 0 件エラーを確認。
-- [ ] **Step 7: 台帳更新とコミット (`git-workflow`)**
-  - `docs/issues/761-implement-fuse-window-rules-for-lir-sliding-window.md` の完了チェック。
+    2. 2命令融合（`%store` 直後の同一オフセット `%load` $\to$ 冗長リロード消去）
+    3. 2命令融合（`%store` 直後の同一オフセット `%load` $\to$ レジスタ `%mov` 転送）
+    4. 複数パターン消去（`%add` および `%raw-add` の 0 加算消去）
+    5. 3命令融合（ロード＋加算＋ストアの `%inc-mem` 融合）
+    6. 未マッチ命令の順序維持と窓前進
+    7. 固定点多段収束（中間 `%mov` 消去により新たに隣接した `%store`/`%load` の融合）
+    8. インライン NT 節での `(fuse-window-rules ...)` 適用
+    9. `%lir-program` に対する複数関数＋メインブロックの一括走査・再構築
+    10. `%lir-program` の `strings` および `stackmaps` 保持検証
+    11. `f1` および `f2` の各関数ボディ最適化検証
+    12. メインブロックボディ最適化検証
+    13. 単一 `%lir-function` ノード入力への適用
+    14. 単一 `%lir-main` ノード入力への適用
+    15. 循環ルールに対する Fuel Guard 枯渇・安全停止確認（CWE-400 対策）
+    16. 窓燃料上限の安全復帰確認
+- [x] **Step 6: 品質ゲートおよび 3-Stage セルフホスティング固定点検証**
+  - `make -C ulisp test_nanopass` を実行し全 176 件 PASS を確認。
+  - `make -C ulisp test_passes` を実行し既存 LIR パス等へのリグレッション皆無を確認（全 147 件 PASS）。
+  - `make -C ulisp bootstrap` を実行し、Stage 2 と Stage 3 の bit-for-bit IDENTICAL 一致および実行スモークテスト（42）PASS を確認。
+  - `make py_compile` および `make static_analysis` の 0 件エラーを確認（全 617 ファイル PASS）。
+- [x] **Step 7: 台帳更新とコミット (`git-workflow`)**
+  - `docs/issues/closed/761-implement-fuse-window-rules-for-lir-sliding-window.md` の完了チェック。
   - Conventional Commit 形式でコミット。
 
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-1. **構文の完全性**: `(define-pass pass-name ... (fuse-window-rules r1 r2 ...))` 構文が正常に展開され、実行可能な Scheme 手続きが生成されること。
-2. **$O(1)$ Opcode Head-Tag ディスパッチ**: ウィンドウルールの先頭命令オペコード（`caar insts`）に基づき、`case` ディスパッチによる高速なルール分岐が行われること。
-3. **局所再適用と窓前進**: ルールマッチ時は置換後サフィックスへの局所再適用が行われ、非マッチ時は先頭命令を保持して 1 命令ずつ安全に窓が進むこと。
-4. **有界固定点収束**: `*nanopass-window-fixpoint-limit*`（16回）の範囲内で変更がなくなるまで自動反復し、多段最適化が 1 パスで完全に収束すること。
-5. **デュアルモード対応**: 平坦な命令列 `((%mov ...) ...)` および完全な `%lir-program` の双方が自動判別され、正しく最適化・再構築されること。
-6. **テスト品質**: `ulisp/tests/test_nanopass_framework.scm` の Section 20 において追加したテスト群を含む全テスト（170件以上）が 100% PASS すること。
-7. **セルフホスト整合性**: `make -C ulisp bootstrap` による 3-Stage セルフホスティングブートストラップが完全一致し、Python 静的解析・リンターが 100% PASS すること。
+1. [x] **構文の完全性**: `(define-pass pass-name ... (fuse-window-rules r1 r2 ...))` 構文が正常に展開され、実行可能な Scheme 手続きが生成されること。
+2. [x] **$O(1)$ Opcode Head-Tag ディスパッチ**: ウィンドウルールの先頭命令オペコード（`caar insts`）に基づき、`case` ディスパッチによる高速なルール分岐が行われること。
+3. [x] **局所再適用と窓前進**: ルールマッチ時は置換後サフィックスへの局所再適用が行われ、非マッチ時は先頭命令を保持して 1 命令ずつ安全に窓が進むこと。
+4. [x] **有界固定点収束**: `*nanopass-window-fixpoint-limit*`（16回）の範囲内で変更がなくなるまで自動反復し、多段最適化が 1 パスで完全に収束すること。
+5. [x] **デュアルモード対応**: 平坦な命令列 `((%mov ...) ...)` および完全な `%lir-program` の双方が自動判別され、正しく最適化・再構築されること。
+6. [x] **テスト品質**: `ulisp/tests/test_nanopass_framework.scm` の Section 20 において追加したテスト群を含む全テスト（176件）が 100% PASS すること。
+7. [x] **セルフホスト整合性**: `make -C ulisp bootstrap` による 3-Stage セルフホスティングブートストラップが完全一致し、Python 静的解析・リンターが 100% PASS すること。
