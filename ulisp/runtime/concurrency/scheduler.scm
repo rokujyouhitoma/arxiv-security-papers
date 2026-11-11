@@ -209,12 +209,16 @@
               (vector-ref (%scheduler-node-workers sched) node-id)))))
 
 (define (%make-scheduler-stats)
-  (let ((s (make-vector 4)))
+  (let ((s (make-vector 5)))
     (vector-set! s 0 (make-atomic-box 0))
     (vector-set! s 1 (make-atomic-box 0))
     (vector-set! s 2 (make-atomic-box 0))
     (vector-set! s 3 (make-atomic-box 0))
+    (vector-set! s 4 (make-atomic-box #f))
     s))
+
+(define (%scheduler-native-workers-started-box sched)
+  (vector-ref (%scheduler-stats sched) 4))
 
 (define (%make-scheduler-internal worker-count node-count workers node-workers)
   (let ((gq (make-lock-free-queue))
@@ -743,6 +747,7 @@
       (error "scheduler-stop!: expected <work-stealing-scheduler>" sched)
       (begin
         (atomic-set! (%scheduler-state-box sched) 'stopped)
+        (atomic-set! (%scheduler-native-workers-started-box sched) #f)
         (%memory-fence)
         ;; Wake all workers so they immediately exit their park loop (Issue #676)
         (let ((n (scheduler-worker-count sched)))
@@ -753,13 +758,25 @@
                   (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))
                   (wake-loop (+ i 1)))
                 #t)))
-        ;; Synchronously wait for all active native OS worker threads to exit loop (#799)
+        ;; Synchronously wait for all active native OS worker threads to exit loop (#799, #805)
         (let wait-loop ((spins 0))
-          (if (and (> (atomic-ref *scheduler-native-workers-running-box*) 0)
-                   (< spins 500000))
-              (begin
-                (%sys-cpu-pause 50)
-                (wait-loop (+ spins 1)))
+          (if (> (atomic-ref *scheduler-native-workers-running-box*) 0)
+              (if (< spins 5000000)
+                  (begin
+                    (if (= (modulo spins 2000) 0)
+                        ;; Re-wake workers in case of lost wakeup
+                        (let ((n (scheduler-worker-count sched)))
+                          (let rewake-loop ((i 0))
+                            (if (< i n)
+                                (let* ((w (scheduler-get-worker sched i))
+                                       (cell (worker-futex-cell w)))
+                                  (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))
+                                  (rewake-loop (+ i 1)))
+                                #t)))
+                        #f)
+                    (%sys-cpu-pause 50)
+                    (wait-loop (+ spins 1)))
+                  #t)
               #t))
         #t)))
 
@@ -851,18 +868,21 @@
 (define (scheduler-start-native-workers! sched)
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-start-native-workers!: expected <work-stealing-scheduler>" sched)
-      (let* ((num-workers (scheduler-worker-count sched))
-             (tids-box (vector '())))
-        ;; Spawn workers 1 to num-workers - 1 as OS native threads
-        (let spawn-loop ((w 1))
-          (if (< w num-workers)
-              (let* ((worker-id w)
-                     (tid (spawn-native-thread
-                           (lambda (wid) (%scheduler-worker-native-loop sched wid))
-                           worker-id)))
-                (vector-set! tids-box 0 (cons tid (vector-ref tids-box 0)))
-                (spawn-loop (+ w 1)))
-              (reverse (vector-ref tids-box 0)))))))
+      (let ((box (%scheduler-native-workers-started-box sched)))
+        (if (atomic-cas! box #f #t)
+            (let* ((num-workers (scheduler-worker-count sched))
+                   (tids-box (vector '())))
+              ;; Spawn workers 1 to num-workers - 1 as OS native threads
+              (let spawn-loop ((w 1))
+                (if (< w num-workers)
+                    (let* ((worker-id w)
+                           (tid (spawn-native-thread
+                                 (lambda (wid) (%scheduler-worker-native-loop sched wid))
+                                 worker-id)))
+                      (vector-set! tids-box 0 (cons tid (vector-ref tids-box 0)))
+                      (spawn-loop (+ w 1)))
+                    (reverse (vector-ref tids-box 0)))))
+            '()))))
 
 (define scheduler-run-parallel!
   (case-lambda

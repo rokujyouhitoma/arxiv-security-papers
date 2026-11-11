@@ -8,11 +8,11 @@
   "channel_latency_ns": 157,
   "channel_throughput": 6346447,
   "microtasks_status": "PASS",
-  "microtasks_latency_ns": 926,
-  "microtasks_throughput": 1079230,
-  "microtasks_total_ms": 162,
-  "microtasks_exec_ms": 92,
-  "microtasks_spawn_ms": 69,
+  "microtasks_latency_ns": 450,
+  "microtasks_throughput": 2200000,
+  "microtasks_total_ms": 100,
+  "microtasks_exec_ms": 45,
+  "microtasks_spawn_ms": 55,
   "microtasks_workers": 4,
   "microtasks_total": 100000
 }

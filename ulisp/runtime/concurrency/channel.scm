@@ -482,12 +482,9 @@
      (acquire-task-context! #f))
     ((target-worker-id)
      (let* ((cur-slot (%current-worker-tls-index))
-            (w (cond
-                 ((and (integer? target-worker-id) (>= target-worker-id 0) (< target-worker-id *task-pool-max-workers*))
-                  target-worker-id)
-                 ((and (integer? cur-slot) (>= cur-slot 0) (< cur-slot *task-pool-max-workers*))
-                  cur-slot)
-                 (else 0)))
+            (w (if (and (integer? cur-slot) (>= cur-slot 0) (< cur-slot *task-pool-max-workers*))
+                   cur-slot
+                   0))
             (top (vector-ref *task-context-pool-tops* w)))
        (if (> top 0)
            (let* ((new-top (- top 1))
@@ -495,10 +492,15 @@
                   (ctx (vector-ref pool new-top)))
              (vector-set! *task-context-pool-tops* w new-top)
              (vector-set! pool new-top #f)
-             (atomic-fetch-add! *task-pool-hits* 1)
-             (let ((tid (allocate-task-id!)))
-               (%register-task-in-table!
-                (%reset-task-context! ctx tid 'ready *task-default-reductions* 0))))
+             (if (task-context? ctx)
+                 (begin
+                   (atomic-fetch-add! *task-pool-hits* 1)
+                   (let ((tid (allocate-task-id!)))
+                     (%register-task-in-table!
+                      (%reset-task-context! ctx tid 'ready *task-default-reductions* 0))))
+                 (begin
+                   (atomic-fetch-add! *task-pool-misses* 1)
+                   (make-task-context))))
            (begin
              (atomic-fetch-add! *task-pool-misses* 1)
              (make-task-context)))))))
@@ -515,12 +517,9 @@
              ;; Already pooled or currently executing inside boundary: do not pool yet (CWE-416)
              #f
              (let* ((cur-slot (%current-worker-tls-index))
-                    (w (cond
-                         ((and (integer? worker-id) (>= worker-id 0) (< worker-id *task-pool-max-workers*))
-                          worker-id)
-                         ((and (integer? cur-slot) (>= cur-slot 0) (< cur-slot *task-pool-max-workers*))
-                          cur-slot)
-                         (else 0)))
+                    (w (if (and (integer? cur-slot) (>= cur-slot 0) (< cur-slot *task-pool-max-workers*))
+                           cur-slot
+                           0))
                     (top (vector-ref *task-context-pool-tops* w)))
                ;; Seal state to 'pooled to prevent CWE-416 use-after-free
                (%task-state-set! ctx 'pooled)

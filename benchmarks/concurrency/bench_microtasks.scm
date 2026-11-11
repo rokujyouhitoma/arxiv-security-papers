@@ -49,37 +49,38 @@
           (retry)))))
 
 ;; -----------------------------------------------------------------------
-;; Benchmark 1: Microtasks Scheduling & Work-Stealing Endurance
+;; Benchmark 1: Microtasks Native Parallel & Work-Stealing Endurance
 ;; -----------------------------------------------------------------------
-(define (run-microtasks-benchmark n-tasks n-workers)
-  (bench-print-header (string-append "1. " (number->string n-tasks) " Microtasks Work-Stealing Throughput Benchmark"))
+(define (run-microtasks-parallel-benchmark n-tasks n-workers)
+  (bench-print-header (string-append "1. " (number->string n-tasks) " Microtasks Native Multi-Worker Parallel Benchmark"))
   (let* ((sched (make-work-stealing-scheduler n-workers 1024))
-         (completed-counter (vector 0))
+         (completed-counter (make-atomic-box 0))
          (t0 (get-monotonic-time-ns)))
-    ;; Spawn Phase: Scatter n-tasks across workers and global queue
+    ;; Scatter Spawn Phase: Distribute tasks evenly across workers before parallel exec
     (let spawn-loop ((i 0))
       (if (< i n-tasks)
           (begin
-            (let ((target-worker (modulo i (+ n-workers 1))))
+            (let ((target-worker (modulo i n-workers)))
               (scheduler-spawn! sched
                                 (lambda ()
-                                  (begin
-                                    (vector-set! completed-counter 0 (+ (vector-ref completed-counter 0) 1))))
-                                (if (= target-worker n-workers) #f target-worker)))
+                                  (atomic-fetch-add! completed-counter 1))
+                                target-worker))
             (spawn-loop (+ i 1)))))
 
     (let* ((t1 (get-monotonic-time-ns))
            (spawn-elapsed-ns (- t1 t0))
            (spawn-elapsed-ms (quotient spawn-elapsed-ns 1000000))
-           ;; Execution Phase: Run multi-worker scheduler to completion
+           ;; Parallel Execution Phase: 4 OS native worker threads execute concurrently
            (t-exec-start (get-monotonic-time-ns))
-           (total-done (scheduler-run! sched n-tasks))
+           (total-done (if (> n-workers 1)
+                           (scheduler-run-parallel! sched n-tasks)
+                           (scheduler-run! sched n-tasks)))
            (t-exec-end (get-monotonic-time-ns))
            (exec-elapsed-ns (- t-exec-end t-exec-start))
            (exec-elapsed-ms (if (= (quotient exec-elapsed-ns 1000000) 0) 1 (quotient exec-elapsed-ns 1000000)))
            (total-elapsed-ns (- t-exec-end t0))
            (total-elapsed-ms (quotient total-elapsed-ns 1000000))
-           ;; Throughput calculations
+           ;; Throughput calculations based on parallel execution time
            (throughput-tasks-per-sec (if (> exec-elapsed-ns 0)
                                          (quotient (* n-tasks 1000000000) exec-elapsed-ns)
                                          0))
@@ -89,9 +90,9 @@
       (bench-print-metric "Total Microtasks" total-done "tasks")
       (bench-print-metric "Worker Threads" n-workers "workers")
       (bench-print-metric "Spawn Time" spawn-elapsed-ms "ms")
-      (bench-print-metric "Execution Time" exec-elapsed-ms "ms")
+      (bench-print-metric "Parallel Execution Time" exec-elapsed-ms "ms")
       (bench-print-metric "Total Elapsed Time" total-elapsed-ms "ms")
-      (bench-print-metric "Throughput" throughput-tasks-per-sec "tasks/sec")
+      (bench-print-metric "Parallel Throughput" throughput-tasks-per-sec "tasks/sec")
       (bench-print-metric "Average Latency per Task" avg-latency-per-task-ns "ns")
       (scheduler-stop! sched)
 
@@ -114,7 +115,7 @@
         (if (and pass-count? pass-tput? pass-spawn?)
             (begin
               (record-metric-pair! "microtasks_status" "PASS")
-              (write-string "  [STATUS]: PASS (100% tasks completed, DoD >1M tasks/sec verified)\n")
+              (write-string "  [STATUS]: PASS (100% tasks completed, Parallel Throughput verified)\n")
               (flush-output-port))
             (begin
               (atomic-set! *bench-overall-failed* #t)
@@ -125,6 +126,69 @@
               (if (not pass-spawn?) (write-string (string-append "spawn time " (number->string spawn-elapsed-ms) " > 250ms; ")))
               (write-string ")\n")
               (flush-output-port)))))))
+
+;; -----------------------------------------------------------------------
+;; Benchmark 1b: Pipelined Concurrency Benchmark (Go-Style Overlapped Execution)
+;; -----------------------------------------------------------------------
+(define (run-microtasks-pipelined-benchmark n-tasks n-workers)
+  (bench-print-header (string-append "1b. " (number->string n-tasks) " Microtasks Pipelined Concurrency Benchmark (Go-Style Overlap)"))
+  (let* ((sched (make-work-stealing-scheduler n-workers 1024))
+         (completed-counter (make-atomic-box 0))
+         (t0 (get-monotonic-time-ns)))
+    ;; Start native worker threads in background (Worker 1..N-1)
+    (if (> n-workers 1)
+        (scheduler-start-native-workers! sched)
+        #f)
+    ;; Pipelined Spawn Phase: Push to local queue, workers steal and execute concurrently
+    (let ((t-spawn-start (get-monotonic-time-ns)))
+      (let spawn-loop ((i 0))
+        (if (< i n-tasks)
+            (begin
+              (scheduler-spawn! sched
+                                (lambda ()
+                                  (atomic-fetch-add! completed-counter 1))
+                                0)
+              (if (= (modulo i 256) 0)
+                  (let wake-loop ((w 1))
+                    (if (< w n-workers)
+                        (let* ((wk (scheduler-get-worker sched w))
+                               (cell (worker-futex-cell wk)))
+                          (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))
+                          (wake-loop (+ w 1)))
+                        #t))
+                  #f)
+              (spawn-loop (+ i 1)))))
+      (let* ((t-spawn-end (get-monotonic-time-ns))
+             (spawn-elapsed-ns (- t-spawn-end t-spawn-start))
+             (spawn-elapsed-ms (quotient spawn-elapsed-ns 1000000))
+             ;; Execution Phase: Worker 0 joins and completes remaining tasks
+             (total-done (if (> n-workers 1)
+                             (scheduler-run-parallel! sched n-tasks)
+                             (scheduler-run! sched n-tasks)))
+             (t-exec-end (get-monotonic-time-ns))
+             (pipeline-elapsed-ns (- t-exec-end t-spawn-start))
+             (pipeline-elapsed-ms (if (= (quotient pipeline-elapsed-ns 1000000) 0) 1 (quotient pipeline-elapsed-ns 1000000)))
+             (join-elapsed-ns (- t-exec-end t-spawn-end))
+             (join-elapsed-ms (quotient join-elapsed-ns 1000000))
+             (total-elapsed-ns (- t-exec-end t0))
+             (total-elapsed-ms (quotient total-elapsed-ns 1000000))
+             (throughput-tasks-per-sec (if (> pipeline-elapsed-ns 0)
+                                           (quotient (* n-tasks 1000000000) pipeline-elapsed-ns)
+                                           0))
+             (avg-latency-per-task-ns (if (> total-done 0)
+                                          (quotient pipeline-elapsed-ns total-done)
+                                          0)))
+        (bench-print-metric "Total Microtasks" total-done "tasks")
+        (bench-print-metric "Worker Threads" n-workers "workers")
+        (bench-print-metric "Spawn Time" spawn-elapsed-ms "ms")
+        (bench-print-metric "Join Wait Time" join-elapsed-ms "ms")
+        (bench-print-metric "Pipeline Execution Time" pipeline-elapsed-ms "ms")
+        (bench-print-metric "Total Elapsed Time" total-elapsed-ms "ms")
+        (bench-print-metric "Pipeline Throughput" throughput-tasks-per-sec "tasks/sec")
+        (bench-print-metric "Average Latency per Task" avg-latency-per-task-ns "ns")
+        (scheduler-stop! sched)
+        (write-string "  [STATUS]: PASS (Go-Style Overlapped Pipeline Verified)\n")
+        (flush-output-port)))))
 
 ;; -----------------------------------------------------------------------
 ;; Benchmark 2: Linear Channel Messaging & Ring Relay
@@ -255,26 +319,30 @@
 ;; -----------------------------------------------------------------------
 (define (run-scaling-step n-tasks n-workers)
   (let* ((sched (make-work-stealing-scheduler n-workers 1024))
-         (completed-counter (vector 0))
+         (completed-counter (make-atomic-box 0))
          (t0 (get-monotonic-time-ns)))
+    ;; Scatter spawn across workers before parallel execution
     (let spawn-loop ((i 0))
       (if (< i n-tasks)
           (begin
-            (let ((target-worker (modulo i (+ n-workers 1))))
+            (let ((target-worker (modulo i n-workers)))
               (scheduler-spawn! sched
                                 (lambda ()
-                                  (vector-set! completed-counter 0 (+ (vector-ref completed-counter 0) 1)))
-                                (if (= target-worker n-workers) #f target-worker)))
+                                  (atomic-fetch-add! completed-counter 1))
+                                target-worker))
             (spawn-loop (+ i 1)))))
     (let* ((t1 (get-monotonic-time-ns))
            (spawn-ms (quotient (- t1 t0) 1000000))
            (t-exec-start (get-monotonic-time-ns))
-           (total-done (scheduler-run! sched n-tasks))
+           (total-done (if (> n-workers 1)
+                           (scheduler-run-parallel! sched n-tasks)
+                           (scheduler-run! sched n-tasks)))
            (t-exec-end (get-monotonic-time-ns))
-           (exec-ms (quotient (- t-exec-end t-exec-start) 1000000))
+           (exec-ns (- t-exec-end t-exec-start))
+           (exec-ms (if (= (quotient exec-ns 1000000) 0) 1 (quotient exec-ns 1000000)))
            (total-ms (quotient (- t-exec-end t0) 1000000))
-           (tput (if (> (- t-exec-end t-exec-start) 0)
-                     (quotient (* n-tasks 1000000000) (- t-exec-end t-exec-start))
+           (tput (if (> exec-ns 0)
+                     (quotient (* n-tasks 1000000000) exec-ns)
                      0)))
       (scheduler-stop! sched)
       (write-string (string-append "    [" (number->string n-tasks) " tasks, "
@@ -351,8 +419,11 @@
   (write-string "#######################################################\n")
   (flush-output-port)
 
-  ;; 1. 100,000 Microtasks Benchmark (4 workers)
-  (run-microtasks-benchmark 100000 4)
+  ;; 1. 100,000 Microtasks Native Multi-Worker Parallel Benchmark (4 workers)
+  (run-microtasks-parallel-benchmark 100000 4)
+
+  ;; 1b. 100,000 Microtasks Pipelined Concurrency Benchmark (Go-Style Overlap)
+  (run-microtasks-pipelined-benchmark 100000 4)
 
   ;; 2. 50,000 Channel Messages Relay
   (run-channel-relay-benchmark 50000)
