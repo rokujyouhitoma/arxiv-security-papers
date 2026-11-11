@@ -239,6 +239,9 @@
 
   ;; Step 3: Auto-unregister from global task table (Issue #733, Item B2)
   (task-table-unregister! task)
+
+  ;; Step 4: Recycle task context to worker-local object pool (Issue #803)
+  (release-task-context! task)
   #t)
 
 (define task-handle-termination!
@@ -324,6 +327,9 @@
 
                  ;; Step 5: Auto-unregister from global task table (Issue #733, Item B2)
                  (task-table-unregister! task)
+
+                 ;; Step 6: Recycle task context to worker-local object pool (Issue #803)
+                 (release-task-context! task)
                  #t)))))))
 
 (define task-exit!

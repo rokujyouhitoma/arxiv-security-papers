@@ -126,14 +126,14 @@
                       reduction-exhaustions steals-count
                       escape-k handler-chain executing meta-box)
   task-context?
-  (tid                   %task-tid)
+  (tid                   %task-tid                   %task-tid-set!)
   (state                 %task-state                 %task-state-set!)
   (reductions            %task-reductions            %task-reductions-set!)
   (continuation-pc       %task-continuation-pc       %task-continuation-pc-set!)
   (stack-pointer         %task-stack-pointer         %task-stack-pointer-set!)
-  (arena-base            %task-arena-base)
+  (arena-base            %task-arena-base            %task-arena-base-set!)
   (arena-offset          %task-arena-offset          %task-arena-offset-set!)
-  (arena-capacity        %task-arena-capacity)
+  (arena-capacity        %task-arena-capacity        %task-arena-capacity-set!)
   (blocked-on            %task-blocked-on            %task-blocked-on-set!)
   (epoch                 %task-epoch                 %task-epoch-set!)
   (next-run              %task-next-run              %task-next-run-set!)
@@ -390,9 +390,165 @@
       (error "task-tid: expected <task-context>" t)
       (%task-tid t)))
 
+(define (task-tid-set! t new-tid)
+  (if (not (task-context? t))
+      (error "task-tid-set!: expected <task-context>" t)
+      (begin
+        (%task-tid-set! t new-tid)
+        new-tid)))
+
+;; -----------------------------------------------------------------------
+;; Task Context Object Pool (Free List Cache, Issue #803)
+;; Conforms to DSN-37 Section 7.3 & Go gfget/gfput Zero-Allocation Pattern
+;; -----------------------------------------------------------------------
+
+(define *task-pool-max-workers* 64)
+(define *task-pool-capacity-per-worker* 512)
+
+;; Vector of pools (each slot is a vector of capacity 512)
+(define *task-context-pools*
+  (let ((vec (make-vector *task-pool-max-workers* #f)))
+    (let loop ((i 0))
+      (if (< i *task-pool-max-workers*)
+          (begin
+            (vector-set! vec i (make-vector *task-pool-capacity-per-worker* #f))
+            (loop (+ i 1)))
+          vec))))
+
+;; Vector of pool top pointers (each slot is an integer index, initially 0)
+(define *task-context-pool-tops*
+  (make-vector *task-pool-max-workers* 0))
+
+;; Metrics tracking
+(define *task-pool-hits* (make-atomic-box 0))
+(define *task-pool-misses* (make-atomic-box 0))
+
+(define (task-pool-stats)
+  (list (cons 'hits (atomic-ref *task-pool-hits*))
+        (cons 'misses (atomic-ref *task-pool-misses*))))
+
+(define (task-pool-hits)
+  (atomic-ref *task-pool-hits*))
+
+(define (task-pool-misses)
+  (atomic-ref *task-pool-misses*))
+
+(define (task-pool-reset-stats!)
+  (atomic-set! *task-pool-hits* 0)
+  (atomic-set! *task-pool-misses* 0))
+
+(define (task-pool-clear!)
+  (let loop ((w 0))
+    (if (< w *task-pool-max-workers*)
+        (let ((pool (vector-ref *task-context-pools* w))
+              (top (vector-ref *task-context-pool-tops* w)))
+          (let clear-slots ((i 0))
+            (if (< i top)
+                (begin
+                  (vector-set! pool i #f)
+                  (clear-slots (+ i 1)))
+                #f))
+          (vector-set! *task-context-pool-tops* w 0)
+          (loop (+ w 1)))
+        #t)))
+
+(define (%reset-task-context! ctx tid state reductions epoch)
+  (%task-tid-set! ctx tid)
+  (%task-state-set! ctx state)
+  (%task-reductions-set! ctx reductions)
+  (%task-continuation-pc-set! ctx 0)
+  (%task-stack-pointer-set! ctx 0)
+  (%task-arena-base-set! ctx 0)
+  (%task-arena-offset-set! ctx 0)
+  (%task-arena-capacity-set! ctx 4096)
+  (%task-blocked-on-set! ctx #f)
+  (%task-epoch-set! ctx epoch)
+  (%task-next-run-set! ctx #f)
+  (%task-reduction-exhaustions-set! ctx 0)
+  (%task-steals-count-set! ctx 0)
+  (%task-escape-k-set! ctx #f)
+  (%task-handler-chain-set! ctx 0)
+  (%task-executing-set! ctx #f)
+  ;; Reset meta-box without reallocating atomic-box
+  (let ((mb (%task-meta-box ctx)))
+    (if mb
+        (atomic-set! mb #f)
+        #f))
+  ctx)
+
+(define acquire-task-context!
+  (case-lambda
+    (()
+     (acquire-task-context! #f))
+    ((target-worker-id)
+     (let* ((cur-slot (%current-worker-tls-index))
+            (w (cond
+                 ((and (integer? target-worker-id) (>= target-worker-id 0) (< target-worker-id *task-pool-max-workers*))
+                  target-worker-id)
+                 ((and (integer? cur-slot) (>= cur-slot 0) (< cur-slot *task-pool-max-workers*))
+                  cur-slot)
+                 (else 0)))
+            (top (vector-ref *task-context-pool-tops* w)))
+       (if (> top 0)
+           (let* ((new-top (- top 1))
+                  (pool (vector-ref *task-context-pools* w))
+                  (ctx (vector-ref pool new-top)))
+             (vector-set! *task-context-pool-tops* w new-top)
+             (vector-set! pool new-top #f)
+             (atomic-fetch-add! *task-pool-hits* 1)
+             (let ((tid (allocate-task-id!)))
+               (%register-task-in-table!
+                (%reset-task-context! ctx tid 'ready *task-default-reductions* 0))))
+           (begin
+             (atomic-fetch-add! *task-pool-misses* 1)
+             (make-task-context)))))))
+
+(define release-task-context!
+  (case-lambda
+    ((ctx)
+     (release-task-context! ctx #f))
+    ((ctx worker-id)
+     (if (not (task-context? ctx))
+         #f
+         (if (or (eq? (%task-state ctx) 'pooled)
+                 (task-executing? ctx))
+             ;; Already pooled or currently executing inside boundary: do not pool yet (CWE-416)
+             #f
+             (let* ((cur-slot (%current-worker-tls-index))
+                    (w (cond
+                         ((and (integer? worker-id) (>= worker-id 0) (< worker-id *task-pool-max-workers*))
+                          worker-id)
+                         ((and (integer? cur-slot) (>= cur-slot 0) (< cur-slot *task-pool-max-workers*))
+                          cur-slot)
+                         (else 0)))
+                    (top (vector-ref *task-context-pool-tops* w)))
+               ;; Seal state to 'pooled to prevent CWE-416 use-after-free
+               (%task-state-set! ctx 'pooled)
+               (%task-next-run-set! ctx #f)
+               (%task-blocked-on-set! ctx #f)
+               (if (< top *task-pool-capacity-per-worker*)
+                   (let ((pool (vector-ref *task-context-pools* w)))
+                     (vector-set! pool top ctx)
+                     (vector-set! *task-context-pool-tops* w (+ top 1))
+                     #t)
+                   ;; Pool is full: let host GC collect
+                   #f)))))))
+
+(define (task-pooled? ctx)
+  (and (task-context? ctx)
+       (eq? (%task-state ctx) 'pooled)))
+
 (define (task-state t)
   (if (not (task-context? t))
       (error "task-state: expected <task-context>" t)
+      (let ((s (%task-state t)))
+        (if (eq? s 'pooled)
+            'terminated
+            s))))
+
+(define (task-internal-state t)
+  (if (not (task-context? t))
+      (error "task-internal-state: expected <task-context>" t)
       (%task-state t)))
 
 (define (task-state-set! t new-state)
@@ -1027,18 +1183,42 @@
     ((task thunk secure-scrub?)
      ((atomic-ref *synapse-task-boundary-hook-box*) task thunk secure-scrub?))))
 
-;; Global hook for task normal termination cleanup (#741)
+;; Global hook for task normal termination cleanup (#741, #803)
 (define *task-exit-hook-box*
   (vector (lambda (t reason)
             (if (task-context? t)
-                (task-state-set! t 'terminated)
+                (begin
+                  (task-state-set! t 'terminated)
+                  (task-reductions-set! t 0)
+                  (task-table-unregister! t)
+                  (release-task-context! t)
+                  #t)
                 #f))))
 
-(define (task-exit! task reason)
-  (let ((hook (vector-ref *task-exit-hook-box* 0)))
-    (if (procedure? hook)
-        (hook task reason)
-        #f)))
+(define task-exit!
+  (case-lambda
+    ((task)
+     (task-exit! task 'normal))
+    ((task reason)
+     (let ((hook (vector-ref *task-exit-hook-box* 0)))
+       (if (procedure? hook)
+           (hook task reason)
+           (begin
+             (task-state-set! task 'terminated)
+             (task-reductions-set! task 0)
+             (task-table-unregister! task)
+             (release-task-context! task)
+             #t))))
+    ((task reason wake-hook)
+     (let ((hook (vector-ref *task-exit-hook-box* 0)))
+       (if (procedure? hook)
+           (hook task reason wake-hook)
+           (begin
+             (task-state-set! task 'terminated)
+             (task-reductions-set! task 0)
+             (task-table-unregister! task)
+             (release-task-context! task)
+             #t))))))
 
 ;; Optional scheduler spawn hook for supervisor restart auto-enqueue (Issue #742)
 (define *supervisor-scheduler-spawn-hook-box*

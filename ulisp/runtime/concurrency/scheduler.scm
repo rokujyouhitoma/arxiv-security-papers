@@ -375,27 +375,32 @@
       (vector-ref (vector-ref task 3) 0)
       *task-default-reductions*))
 
-(define (%normalize-task-context task)
-  (cond
-    ((task-context? task)
-     task)
-    ((coroutine-context? task)
-     (let ((ctx (make-task-context)))
-       (task-next-run-set! ctx task)
-       ctx))
-    ((%is-budgeted-task? task)
-     (let ((tid (%budgeted-task-id-safe task))
-           (reds (%budgeted-task-reductions-safe task)))
-       (let ((ctx (if (> tid 0) (make-task-context tid) (make-task-context))))
-         (task-reductions-set! ctx reds)
-         (task-next-run-set! ctx task)
-         ctx)))
-    ((and (not (vector? task)) (procedure? task))
-     (let ((ctx (make-task-context)))
-       (task-next-run-set! ctx task)
-       ctx))
-    (else
-     (error "scheduler-spawn!: task must be procedure, coroutine, or task-context (CWE-843)" task))))
+(define %normalize-task-context
+  (case-lambda
+    ((task)
+     (%normalize-task-context task #f))
+    ((task target-worker-id)
+     (cond
+       ((task-context? task)
+        task)
+       ((coroutine-context? task)
+        (let ((ctx (acquire-task-context! target-worker-id)))
+          (task-next-run-set! ctx task)
+          ctx))
+       ((%is-budgeted-task? task)
+        (let ((tid (%budgeted-task-id-safe task))
+              (reds (%budgeted-task-reductions-safe task)))
+          (let ((ctx (acquire-task-context! target-worker-id)))
+            (if (> tid 0) (task-tid-set! ctx tid) #f)
+            (task-reductions-set! ctx reds)
+            (task-next-run-set! ctx task)
+            ctx)))
+       ((and (not (vector? task)) (procedure? task))
+        (let ((ctx (acquire-task-context! target-worker-id)))
+          (task-next-run-set! ctx task)
+          ctx))
+       (else
+        (error "scheduler-spawn!: task must be procedure, coroutine, or task-context (CWE-843)" task))))))
 
 (define (scheduler-execute-task! task)
   (let ((ctx (cond
@@ -404,7 +409,8 @@
                 (%normalize-task-context task))
                (else
                 (error "scheduler-execute-task!: invalid task object (CWE-843)" task)))))
-    (if (eq? (task-state ctx) 'terminated)
+    (if (or (eq? (task-state ctx) 'terminated)
+            (eq? (task-state ctx) 'pooled))
         #f
         (begin
           (if (eq? (task-state ctx) 'ready)
@@ -491,7 +497,7 @@
                  (let ((live-cnt (scheduler-live-tasks sched)))
                    (if (>= live-cnt (vector-ref *scheduler-max-tasks-box* 0))
                        (error "scheduler-spawn!: maximum spawned tasks limit exceeded (CWE-400)" live-cnt)
-                       (let ((normalized (%normalize-task-context task)))
+                       (let ((normalized (%normalize-task-context task target-worker-id)))
                          (%scheduler-tasks-spawned-inc! sched)
                          (%scheduler-live-tasks-inc! sched)
                          (if (and target-worker-id

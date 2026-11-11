@@ -647,6 +647,74 @@
   (scheduler-stop! sched))
 
 ;; -----------------------------------------------------------------------
+;; Group 18: Task Context Object Pool & Recycling Verification (#803)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 18: Task Context Object Pool & Recycling Verification (#803) ---\n")
+(flush-output-port)
+
+(let ()
+  ;; Step 1: Initialize pool and reset stats
+  (task-pool-clear!)
+  (task-pool-reset-stats!)
+  (assert-equal (task-pool-hits) 0 "initial pool hits is 0")
+  (assert-equal (task-pool-misses) 0 "initial pool misses is 0")
+
+  ;; Step 2: Acquire from empty pool -> Miss & Allocate
+  (let ((t1 (acquire-task-context! 0)))
+    (assert-true (task-context? t1) "acquire-task-context! returns <task-context>")
+    (assert-equal (task-state t1) 'ready "initial task state is 'ready")
+    (assert-true (not (task-pooled? t1)) "t1 is not pooled")
+    (assert-equal (task-pool-hits) 0 "pool hits still 0")
+    (assert-equal (task-pool-misses) 1 "pool misses incremented to 1")
+
+    (let ((tid1 (task-tid t1)))
+      ;; Step 3: Release task back to worker 0 pool
+      (assert-true (release-task-context! t1 0) "release-task-context! succeeds")
+      (assert-true (task-pooled? t1) "t1 is marked pooled")
+      (assert-equal (task-state t1) 'terminated "t1 task-state returns 'terminated for DSN-37 compatibility")
+
+      ;; CWE-416 Defense: Double-free prevention
+      (assert-equal (release-task-context! t1 0) #f "double release-task-context! is rejected (CWE-416)")
+
+      ;; CWE-416 Defense: Execute rejected on pooled task
+      (assert-equal (scheduler-execute-task! t1) #f "scheduler-execute-task! rejects execution of pooled task (CWE-416)")
+
+      ;; Step 4: Re-acquire from pool -> Hit & Recycling
+      (let ((t2 (acquire-task-context! 0)))
+        (assert-true (task-context? t2) "re-acquired task is valid <task-context>")
+        (assert-true (eq? t1 t2) "re-acquired task reuses identical context vector (zero heap allocation)")
+        (assert-true (not (task-pooled? t2)) "t2 state is unsealed from 'pooled")
+        (assert-equal (task-state t2) 'ready "t2 state is reset to 'ready")
+        (assert-true (> (task-tid t2) tid1) "re-acquired task has newly allocated monotonic TID")
+        (assert-equal (task-meta-fast t2) #f "t2 meta-box fast slot is #f")
+        (assert-equal (task-pool-hits) 1 "pool hits incremented to 1 (Hit!)")
+        (assert-equal (task-pool-misses) 1 "pool misses unchanged at 1")
+
+        ;; Clean up t2
+        (release-task-context! t2 0))))
+
+  ;; Step 5: High-throughput task recycling verification (1,000 tasks)
+  (task-pool-clear!)
+  (task-pool-reset-stats!)
+  (let* ((sched (make-work-stealing-scheduler 1))
+         (cnt (make-atomic-box 0)))
+    ;; Repeatedly spawn and execute tasks sequentially
+    (let loop ((i 0))
+      (if (< i 1000)
+          (begin
+            (scheduler-spawn! sched (lambda () (atomic-fetch-add! cnt 1)) 0)
+            (scheduler-run! sched 1)
+            (loop (+ i 1)))
+          #t))
+    (assert-equal (atomic-ref cnt) 1000 "all 1000 microtasks executed cleanly")
+    (let ((hits (task-pool-hits))
+          (misses (task-pool-misses)))
+      ;; Almost all spawns (after the very first warm-up) should hit the pool (> 95% hit rate)
+      (assert-true (> hits 950) "high-throughput pool hits > 950 (>95% hit rate)")
+      (assert-true (<= misses 50) "high-throughput pool misses <= 50"))
+    (scheduler-stop! sched)))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")
