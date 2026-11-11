@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | Medium | New | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
+| **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | High | In Progress | [617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
