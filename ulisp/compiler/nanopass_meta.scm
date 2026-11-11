@@ -1727,3 +1727,78 @@
                 (if matched
                     (nanopass-schema-transform-node (cdr matched) ir lang (car matched) call-recurse)
                     (nanopass-fallback-transform-node ir call-recurse))))))))
+
+;;; -----------------------------------------------------------------------
+;;; Part 10: Local Re-dispatch Parameters & Schema Coverage Validation (DSN-33-01 T3.2)
+;;; -----------------------------------------------------------------------
+
+;;; Bounded fuel counter for Local Re-dispatch on a single AST node position.
+;;; Prevents infinite rewrite cycles (e.g. A -> B -> A) and ensures terminating execution (CWE-400 mitigation).
+(define *nanopass-redispatch-limit* 64)
+
+;;; Collect all eliminated syntax tags and head tags from rule descriptors or names
+(define (nanopass-collect-rule-eliminates rule-specs)
+  (let ((flat-specs (if (and (= (length rule-specs) 1) (list? (car rule-specs)))
+                        (car rule-specs)
+                        rule-specs)))
+    (let loop ((rem flat-specs) (acc '()))
+      (if (null? rem)
+          acc
+          (let* ((spec (car rem))
+                 (desc (nanopass-resolve-rule-descriptor spec)))
+            (if (not desc)
+                (loop (cdr rem) acc)
+                (let* ((elims (rule-eliminates desc))
+                       (heads (rule-head-tags desc))
+                       (acc1 (cond
+                               ((list? elims) (nanopass-combine-sets acc elims))
+                               ((and (symbol? elims) (not (eq? elims '*))) (nanopass-combine-sets acc (list elims)))
+                               (else acc)))
+                       (acc2 (cond
+                               ((list? heads) (nanopass-combine-sets acc1 heads))
+                               ((and (symbol? heads) (not (eq? heads '*))) (nanopass-combine-sets acc1 (list heads)))
+                               (else acc1))))
+                  (loop (cdr rem) acc2))))))))
+
+;;; Extract removed production head symbols from language definition or language-diff
+(define (nanopass-get-language-removed-tags l-in l-out)
+  (if (or (eq? l-in l-out) (eq? l-out '*))
+      '()
+      (let* ((out-lang (nanopass-lookup-language-opt l-out))
+             (in-lang (nanopass-lookup-language-opt l-in)))
+        (if (and in-lang out-lang)
+            (let* ((diff (language-diff l-in l-out))
+                   (diff-removed-entry (assq 'removed diff))
+                   (diff-prods (if diff-removed-entry (cadr diff-removed-entry) '()))
+                   (diff-heads (let loop ((ps diff-prods) (acc '()))
+                                 (cond
+                                   ((null? ps) (reverse acc))
+                                   ((and (pair? (car ps)) (symbol? (caar ps)))
+                                    (if (memq (caar ps) acc)
+                                        (loop (cdr ps) acc)
+                                        (loop (cdr ps) (cons (caar ps) acc))))
+                                   (else (loop (cdr ps) acc)))))
+                   (direct-removed (nanopass-lang-removed-prods out-lang))
+                   (parents (language-parent-chain l-out)))
+              (if (memq l-in parents)
+                  (nanopass-combine-sets diff-heads direct-removed)
+                  diff-heads))
+            '()))))
+
+;;; Verify that all syntax constructs removed in l-out (- ...) are covered
+;;; by the eliminates/head-tags of the fused rules in rule-specs.
+;;; Returns a list of missing tags (empty list '() on 100% coverage).
+(define (nanopass-verify-fusion-coverage l-in l-out rule-specs)
+  (let ((removed-tags (nanopass-get-language-removed-tags l-in l-out)))
+    (if (null? removed-tags)
+        '()
+        (let* ((covered-tags (nanopass-collect-rule-eliminates rule-specs))
+               (missing (let loop ((rem removed-tags) (acc '()))
+                          (cond
+                            ((null? rem) (reverse acc))
+                            ((memq (car rem) covered-tags)
+                             (loop (cdr rem) acc))
+                            (else
+                             (loop (cdr rem) (cons (car rem) acc)))))))
+          missing))))
+

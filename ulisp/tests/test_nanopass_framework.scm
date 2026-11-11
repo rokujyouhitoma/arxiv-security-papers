@@ -1136,6 +1136,123 @@
               '(second-match 42)
               (test-pass-bucket-order '(same-tag 42)))
 
+;;; =======================================================================
+;;; Section 19: Local Re-dispatch and Schema Coverage Validation (DSN-33-01 T3.2)
+;;; =======================================================================
+
+(display "\n--- [Section 19: Local Re-dispatch & Schema Coverage Validation] ---") (newline)
+
+;; 19.1 Schema Coverage API: nanopass-get-language-removed-tags
+(assert-equal "intra-language (L_src -> L_src) has no removed tags"
+              '()
+              (nanopass-get-language-removed-tags 'L_src 'L_src))
+
+(assert-equal "nanopass-get-language-removed-tags detects removed cond in L_test_core"
+              '(cond)
+              (nanopass-get-language-removed-tags 'L_test_src 'L_test_core))
+
+;; 19.2 Schema Coverage API: nanopass-collect-rule-eliminates
+(define-picopass rule-test-elim-cond
+  (Expr
+    ((cond (else ,b)) b))
+  :eliminates (cond))
+
+(define-picopass rule-test-elim-case
+  (Expr
+    ((case ,k ((,c) ,b)) b))
+  :eliminates (case))
+
+(let ((elims (nanopass-collect-rule-eliminates (list rule-test-elim-cond rule-test-elim-case))))
+  (assert-true "collect-rule-eliminates contains cond" (memq 'cond elims))
+  (assert-true "collect-rule-eliminates contains case" (memq 'case elims)))
+
+;; 19.3 Schema Coverage API: nanopass-verify-fusion-coverage
+(let ((missing (nanopass-verify-fusion-coverage 'L_test_src 'L_test_core (list rule-test-elim-cond))))
+  (assert-equal "verify-fusion-coverage returns empty on 100% coverage of removed cond"
+                '()
+                missing))
+
+(let ((missing (nanopass-verify-fusion-coverage 'L_test_src 'L_test_core (list rule-test-elim-case))))
+  (assert-equal "verify-fusion-coverage detects missing cond when only case is provided"
+                '(cond)
+                missing))
+
+;; 19.4 Multi-Stage Desugaring via Local Re-dispatch
+;; rule-stage-case produces a template containing (stage-or ...)
+;; rule-stage-or desugars (stage-or ...) into (if ...)
+;; Neither rule manually recurses or calls (Expr ...)
+(define-picopass rule-stage-case
+  (Expr
+    ((stage-case ,key ((,c) ,b))
+     (list 'if (list 'stage-or (list 'eqv? key (list 'quote c))) b (list 'void)))))
+
+(define-picopass rule-stage-or
+  (Expr
+    ((stage-or ,e) e)
+    ((stage-or ,e1 ,e2 ...)
+     (list 'if e1 #t (cons 'stage-or e2)))))
+
+(define-pass test-pass-multistage-desugar : L_src (ir) -> L_src ()
+  (fuse-rules rule-stage-case rule-stage-or))
+
+(assert-equal "multistage desugaring completely lowers stage-case through stage-or in 1 pass"
+              '(if (eqv? x '1) 100 (void))
+              (test-pass-multistage-desugar '(stage-case x ((1) 100))))
+
+;; 19.5 Repeated Rewriting on Same Node Position (Peeling)
+(define-picopass rule-stage-peel
+  (Expr
+    ((peel (peel . ,rest)) (cons 'peel rest))))
+
+(define-pass test-pass-peel-fusion : L_src (ir) -> L_src ()
+  (fuse-rules rule-stage-peel))
+
+(assert-equal "local re-dispatch peels nested 3-deep construct on same node position down to 1"
+              '(peel 999)
+              (test-pass-peel-fusion '(peel (peel (peel 999)))))
+
+;; 19.6 NT clause with explicit (redispatch) directive
+(define-pass test-pass-inline-redispatch : L_src (ir) -> L_src ()
+  (Expr : Expr (ir) -> Expr ()
+    (redispatch)
+    ((inline-peel (inline-peel . ,rest)) (cons 'inline-peel rest))))
+
+(assert-equal "inline NT clause with explicit (redispatch) directive performs multi-step peeling"
+              '(inline-peel 555)
+              (test-pass-inline-redispatch '(inline-peel (inline-peel 555))))
+
+;; 19.7 Fuel Guard: Infinite Rewrite Cycle Detection (CWE-400 mitigation)
+(define-picopass rule-cycle-ping
+  (Expr
+    ((ping ,x) (list 'pong x))))
+
+(define-picopass rule-cycle-pong
+  (Expr
+    ((pong ,x) (list 'ping x))))
+
+(define-pass test-pass-infinite-cycle : L_src (ir) -> L_src ()
+  (fuse-rules rule-cycle-ping rule-cycle-pong))
+
+(let ((caught-fuel-error
+       (guard (ex (else 'fuel-exhausted-caught))
+         (test-pass-infinite-cycle '(ping 12345)))))
+  (assert-equal "fuel guard aborts infinite cyclic rewrite loop cleanly and terminates"
+                'fuel-exhausted-caught
+                caught-fuel-error))
+
+;; 19.8 Dynamic Fuel Limit Reconfiguration
+(let* ((orig-limit *nanopass-redispatch-limit*)
+       (caught-early-fuel
+        (begin
+          (set! *nanopass-redispatch-limit* 4)
+          (let ((res (guard (ex (else 'fuel-limit-4-caught))
+                       (test-pass-infinite-cycle '(ping 99)))))
+            (set! *nanopass-redispatch-limit* orig-limit)
+            res))))
+  (assert-equal "reconfigured fuel limit of 4 traps infinite cycle at 4 steps"
+                'fuel-limit-4-caught
+                caught-early-fuel))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)
