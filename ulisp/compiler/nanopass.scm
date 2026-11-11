@@ -384,28 +384,12 @@
          (cascade (nanopass-build-rule-cascade expanded-rules rule-kind nt-name 'ir))
          (proc-body
           (if (eq? rule-kind 'femto)
-              (let* ((attr-bindings
-                      (if (null? in-attrs)
-                          '()
-                          (let b-loop ((attrs in-attrs) (idx 0) (acc '()))
-                            (if (null? attrs)
-                                (reverse acc)
-                                (b-loop (cdr attrs) (+ idx 1)
-                                        (cons (list (car attrs)
-                                                    (list 'if (list '> (list 'length '__extra_args) idx)
-                                                          (list 'list-ref '__extra_args idx)
-                                                          '#f))
-                                              acc))))))
+              (let* ((recurse-params (cons 'sub-node in-attrs))
                      (recurse-binding
                       (list 'femto-recurse
-                            (list 'lambda (cons 'sub-node 'sub-extra)
-                                  (list 'apply name (list 'cons 'sub-node
-                                                          (if (null? in-attrs)
-                                                              'sub-extra
-                                                              (list 'if (list 'null? 'sub-extra)
-                                                                    (cons 'list in-attrs)
-                                                                    'sub-extra))))))))
-                (list 'letrec (cons recurse-binding attr-bindings)
+                            (list 'lambda recurse-params
+                                  (cons name recurse-params)))))
+                (list 'letrec (list recurse-binding)
                       cascade))
               cascade)))
     (list 'begin
@@ -420,7 +404,7 @@
                       (list 'quote eliminates)
                       (list 'quote expanded-rules)
                       #f))
-          (list 'define (cons name (cons 'ir '__extra_args))
+          (list 'define (cons name (if (null? in-attrs) '(ir) (cons 'ir in-attrs)))
                 proc-body)
           (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
           (list (string->symbol "nanopass-register-rule!") desc-var)

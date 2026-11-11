@@ -1039,8 +1039,8 @@
   (nanopass-lookup-rule name-or-proc))
 
 ;;; Structured Assertion Failure Helper
-(define (picopass-fail message ir . extra)
-  (error "[PICOPASS ASSERTION FAILED]" message ir))
+(define (picopass-fail message ir)
+  (raise (list 'picopass-assertion-failed message ir)))
 
 ;;; Static Analysis Helpers for Rule Descriptors
 (define (nanopass-pattern-head-tag pat)

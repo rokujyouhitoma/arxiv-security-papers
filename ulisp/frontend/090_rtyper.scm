@@ -309,9 +309,12 @@
                        (lbody (caddr c)))
                   (if (and (pair? params)
                            (let occ-loop ((ps params))
-                             (if (null? ps) #t
-                                 (and (occurs-in? (car ps) lbody)
-                                      (occ-loop (cdr ps)))))
+                             (cond
+                               ((null? ps) #t)
+                               ((not (pair? ps)) #f)
+                               (else
+                                (and (occurs-in? (car ps) lbody)
+                                     (occ-loop (cdr ps))))))
                            (not (fn-escapes-in-expr? fn-name lbody))
                            (not (let esc-loop ((es scope-exprs))
                                   (if (null? es) #f

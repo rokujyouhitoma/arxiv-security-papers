@@ -3043,8 +3043,8 @@
   (nanopass-lookup-rule name-or-proc))
 
 ;;; Structured Assertion Failure Helper
-(define (picopass-fail message ir . extra)
-  (error "[PICOPASS ASSERTION FAILED]" message ir))
+(define (picopass-fail message ir)
+  (raise (list 'picopass-assertion-failed message ir)))
 
 ;;; Static Analysis Helpers for Rule Descriptors
 (define (nanopass-pattern-head-tag pat)
@@ -3913,28 +3913,12 @@
          (cascade (nanopass-build-rule-cascade expanded-rules rule-kind nt-name 'ir))
          (proc-body
           (if (eq? rule-kind 'femto)
-              (let* ((attr-bindings
-                      (if (null? in-attrs)
-                          '()
-                          (let b-loop ((attrs in-attrs) (idx 0) (acc '()))
-                            (if (null? attrs)
-                                (reverse acc)
-                                (b-loop (cdr attrs) (+ idx 1)
-                                        (cons (list (car attrs)
-                                                    (list 'if (list '> (list 'length '__extra_args) idx)
-                                                          (list 'list-ref '__extra_args idx)
-                                                          '#f))
-                                              acc))))))
+              (let* ((recurse-params (cons 'sub-node in-attrs))
                      (recurse-binding
                       (list 'femto-recurse
-                            (list 'lambda (cons 'sub-node 'sub-extra)
-                                  (list 'apply name (list 'cons 'sub-node
-                                                          (if (null? in-attrs)
-                                                              'sub-extra
-                                                              (list 'if (list 'null? 'sub-extra)
-                                                                    (cons 'list in-attrs)
-                                                                    'sub-extra))))))))
-                (list 'letrec (cons recurse-binding attr-bindings)
+                            (list 'lambda recurse-params
+                                  (cons name recurse-params)))))
+                (list 'letrec (list recurse-binding)
                       cascade))
               cascade)))
     (list 'begin
@@ -3949,7 +3933,7 @@
                       (list 'quote eliminates)
                       (list 'quote expanded-rules)
                       #f))
-          (list 'define (cons name (cons 'ir '__extra_args))
+          (list 'define (cons name (if (null? in-attrs) '(ir) (cons 'ir in-attrs)))
                 proc-body)
           (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
           (list (string->symbol "nanopass-register-rule!") desc-var)
@@ -5685,12 +5669,21 @@
                  (child-scope (scope-enter scope 'lambda))
                  (alpha-params
                   (let loop ((ps params) (acc '()))
-                    (if (null? ps)
-                        (reverse acc)
-                        (let* ((p (car ps))
-                               (a-p (make-alpha-symbol p)))
-                          (scope-bind! child-scope p a-p)
-                          (loop (cdr ps) (cons a-p acc))))))
+                    (cond
+                      ((null? ps)
+                       (reverse acc))
+                      ((symbol? ps)
+                       (let ((a-p (make-alpha-symbol ps)))
+                         (scope-bind! child-scope ps a-p)
+                         (let append-dotted ((lst (reverse acc)))
+                           (if (null? lst)
+                               a-p
+                               (cons (car lst) (append-dotted (cdr lst)))))))
+                      (else
+                       (let* ((p (car ps))
+                              (a-p (make-alpha-symbol p)))
+                         (scope-bind! child-scope p a-p)
+                         (loop (cdr ps) (cons a-p acc)))))))
                  (converted-body (alpha-convert-expr body child-scope globals)))
             (list 'lambda alpha-params converted-body)))
 
@@ -10152,14 +10145,20 @@
           (let* ((params (cadr expr))
                  (body (caddr expr))
                  (child-env (let loop ((ps params) (cur-env (make-lvn-env)))
-                              (if (null? ps)
-                                  cur-env
-                                  (let* ((p (car ps))
-                                         (alloc (lvn-alloc-vn cur-env p '()))
-                                         (vn (car alloc))
-                                         (e1 (cdr alloc))
-                                         (e2 (lvn-bind-var e1 p vn)))
-                                    (loop (cdr ps) e2)))))
+                              (cond
+                                ((null? ps) cur-env)
+                                ((symbol? ps)
+                                 (let* ((alloc (lvn-alloc-vn cur-env ps '()))
+                                        (vn (car alloc))
+                                        (e1 (cdr alloc)))
+                                   (lvn-bind-var e1 ps vn)))
+                                (else
+                                 (let* ((p (car ps))
+                                        (alloc (lvn-alloc-vn cur-env p '()))
+                                        (vn (car alloc))
+                                        (e1 (cdr alloc))
+                                        (e2 (lvn-bind-var e1 p vn)))
+                                   (loop (cdr ps) e2))))))
                  (body-res (lvn-eval body child-env))
                  (opt-body (car body-res))
                  (alloc-lam (lvn-alloc-vn env 'lambda-closure '()))
@@ -11323,9 +11322,12 @@
                        (lbody (caddr c)))
                   (if (and (pair? params)
                            (let occ-loop ((ps params))
-                             (if (null? ps) #t
-                                 (and (occurs-in? (car ps) lbody)
-                                      (occ-loop (cdr ps)))))
+                             (cond
+                               ((null? ps) #t)
+                               ((not (pair? ps)) #f)
+                               (else
+                                (and (occurs-in? (car ps) lbody)
+                                     (occ-loop (cdr ps))))))
                            (not (fn-escapes-in-expr? fn-name lbody))
                            (not (let esc-loop ((es scope-exprs))
                                   (if (null? es) #f

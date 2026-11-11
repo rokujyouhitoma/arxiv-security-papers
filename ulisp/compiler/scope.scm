@@ -290,12 +290,21 @@
                  (child-scope (scope-enter scope 'lambda))
                  (alpha-params
                   (let loop ((ps params) (acc '()))
-                    (if (null? ps)
-                        (reverse acc)
-                        (let* ((p (car ps))
-                               (a-p (make-alpha-symbol p)))
-                          (scope-bind! child-scope p a-p)
-                          (loop (cdr ps) (cons a-p acc))))))
+                    (cond
+                      ((null? ps)
+                       (reverse acc))
+                      ((symbol? ps)
+                       (let ((a-p (make-alpha-symbol ps)))
+                         (scope-bind! child-scope ps a-p)
+                         (let append-dotted ((lst (reverse acc)))
+                           (if (null? lst)
+                               a-p
+                               (cons (car lst) (append-dotted (cdr lst)))))))
+                      (else
+                       (let* ((p (car ps))
+                              (a-p (make-alpha-symbol p)))
+                         (scope-bind! child-scope p a-p)
+                         (loop (cdr ps) (cons a-p acc)))))))
                  (converted-body (alpha-convert-expr body child-scope globals)))
             (list 'lambda alpha-params converted-body)))
 
