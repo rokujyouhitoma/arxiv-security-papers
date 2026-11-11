@@ -25,7 +25,23 @@
     ;; Constants
     *deque-min-capacity*
     *deque-default-capacity*
-    *deque-max-capacity*)
+    *deque-max-capacity*
+
+    ;; L1 Bounded Ring Buffer (Go-Style 256-Entry CAS-Free Queue, Issue #804)
+    <l1-ring-buffer>
+    l1-ring-buffer?
+    make-l1-ring-buffer
+    l1-ring-push!
+    l1-ring-pop!
+    l1-ring-steal!
+    l1-ring-empty?
+    l1-ring-full?
+    l1-ring-count
+    l1-ring-runnext
+    l1-ring-drain-all!
+    *l1-ring-capacity*
+    *l1-ring-mask*
+    *l1-batch-size*)
 
   (import
     (scheme base)

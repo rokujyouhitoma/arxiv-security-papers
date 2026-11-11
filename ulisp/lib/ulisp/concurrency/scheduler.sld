@@ -16,6 +16,7 @@
     worker-id
     worker-node-id
     worker-deque
+    worker-l1-queue
     worker-current-task
     worker-tasks-executed
     worker-steals-attempted

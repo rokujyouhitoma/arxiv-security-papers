@@ -186,3 +186,224 @@
                 (if (atomic-cas! top-box t (+ t 1))
                     val
                     'abort)))))))
+
+;; -----------------------------------------------------------------------
+;; 6. L1 Bounded Ring Buffer (Go-Style 256-Entry Circular Queue, Issue #804)
+;; -----------------------------------------------------------------------
+;; Fields:
+;;   buffer  : fixed-length 256-element vector
+;;   head    : fixnum read index
+;;   tail    : fixnum write index
+;;   runnext : single priority task slot for instant zero-overhead execution
+(define *l1-ring-capacity* 256)
+(define *l1-ring-mask* 255)
+(define *l1-batch-size* 128)
+
+(define-record-type <l1-ring-buffer>
+  (%make-l1-ring-buffer buffer head-box tail runnext)
+  l1-ring-buffer?
+  (buffer   %l1-ring-buffer)
+  (head-box %l1-ring-head-box)
+  (tail     %l1-ring-tail     %l1-ring-tail-set!)
+  (runnext  %l1-ring-runnext  %l1-ring-runnext-set!))
+
+(define (make-l1-ring-buffer)
+  (%make-l1-ring-buffer (make-vector *l1-ring-capacity* #f) (make-atomic-box 0) 0 #f))
+
+(define (%l1-ring-head l1)
+  (atomic-ref (%l1-ring-head-box l1)))
+
+(define (%l1-ring-head-set! l1 val)
+  (atomic-set! (%l1-ring-head-box l1) val))
+
+(define (l1-ring-count l1)
+  (if (not (l1-ring-buffer? l1))
+      (error "l1-ring-count: expected <l1-ring-buffer>" l1)
+      (let* ((h (%l1-ring-head l1))
+             (t (%l1-ring-tail l1))
+             (diff (- t h))
+             (nxt (if (%l1-ring-runnext l1) 1 0)))
+        (+ (if (> diff 0) diff 0) nxt))))
+
+(define (l1-ring-empty? l1)
+  (if (not (l1-ring-buffer? l1))
+      (error "l1-ring-empty?: expected <l1-ring-buffer>" l1)
+      (and (not (%l1-ring-runnext l1))
+           (>= (%l1-ring-head l1) (%l1-ring-tail l1)))))
+
+(define (l1-ring-full? l1)
+  (if (not (l1-ring-buffer? l1))
+      (error "l1-ring-full?: expected <l1-ring-buffer>" l1)
+      (>= (- (%l1-ring-tail l1) (%l1-ring-head l1)) *l1-ring-capacity*)))
+
+(define (l1-ring-runnext l1)
+  (if (not (l1-ring-buffer? l1))
+      (error "l1-ring-runnext: expected <l1-ring-buffer>" l1)
+      (%l1-ring-runnext l1)))
+
+;; Batch offload: transfer oldest 128 tasks from L1 ring to L2 Chase-Lev deque
+(define (%l1-ring-batch-offload! l1 l2-deque)
+  (let* ((h (%l1-ring-head l1))
+         (buf (%l1-ring-buffer l1))
+         (cnt (min *l1-batch-size* (- (%l1-ring-tail l1) h))))
+    (if (and l2-deque (chase-lev-deque? l2-deque))
+        (let loop ((i 0))
+          (if (< i cnt)
+              (let* ((idx (+ h i))
+                     (slot (bitwise-and idx *l1-ring-mask*))
+                     (task (vector-ref buf slot)))
+                (vector-set! buf slot #f) ; Clear slot for GC (CWE-416)
+                (if task
+                    (deque-push! l2-deque task)
+                    #f)
+                (loop (+ i 1)))
+              (begin
+                (%l1-ring-head-set! l1 (+ h cnt))
+                cnt)))
+        0)))
+
+;; Batch refill: transfer up to 128 tasks from L2 Chase-Lev deque into L1 ring
+(define (%l1-ring-batch-refill! l1 l2-deque)
+  (if (and l2-deque (chase-lev-deque? l2-deque))
+      (let* ((buf (%l1-ring-buffer l1))
+             (t (%l1-ring-tail l1)))
+        (let loop ((count 0) (cur-tail t))
+          (if (< count *l1-batch-size*)
+              (let ((task (deque-pop! l2-deque)))
+                (if task
+                    (begin
+                      (vector-set! buf (bitwise-and cur-tail *l1-ring-mask*) task)
+                      (loop (+ count 1) (+ cur-tail 1)))
+                    (begin
+                      (%l1-ring-tail-set! l1 cur-tail)
+                      count)))
+              (begin
+                (%l1-ring-tail-set! l1 cur-tail)
+                count))))
+      0))
+
+(define l1-ring-push!
+  (case-lambda
+    ((l1 val)
+     (l1-ring-push! l1 val #f))
+    ((l1 val l2-deque)
+     (if (not (l1-ring-buffer? l1))
+         (error "l1-ring-push!: expected <l1-ring-buffer>" l1)
+         (if (not val)
+             (error "l1-ring-push!: task payload cannot be #f (CWE-20)" val)
+             (let ((rn (%l1-ring-runnext l1)))
+               (if (not rn)
+                   ;; Fast-path: runnext slot is empty -> 1-instruction direct handoff
+                   (begin
+                     (%l1-ring-runnext-set! l1 val)
+                     #t)
+                   ;; Slow-path: runnext occupied -> put old runnext into ring, update runnext to val
+                   (let* ((to-insert rn)
+                          (h (%l1-ring-head l1))
+                          (t (%l1-ring-tail l1))
+                          (size (- t h)))
+                     ;; If ring buffer is full (256 items), offload oldest 128 to L2 deque
+                     (if (>= (+ size 1) *l1-ring-capacity*)
+                         (%l1-ring-batch-offload! l1 l2-deque)
+                         #f)
+                     (let* ((new-h (%l1-ring-head l1))
+                            (new-t (%l1-ring-tail l1))
+                            (buf (%l1-ring-buffer l1))
+                            (slot (bitwise-and new-t *l1-ring-mask*)))
+                       (vector-set! buf slot to-insert)
+                       (%l1-ring-tail-set! l1 (+ new-t 1))
+                       (%l1-ring-runnext-set! l1 val)
+                       #t)))))))))
+
+(define l1-ring-pop!
+  (case-lambda
+    ((l1)
+     (l1-ring-pop! l1 #f))
+    ((l1 l2-deque)
+     (if (not (l1-ring-buffer? l1))
+         (error "l1-ring-pop!: expected <l1-ring-buffer>" l1)
+         (let ((rn (%l1-ring-runnext l1)))
+           (if rn
+               ;; Fast-path: take from runnext (1 instruction, CAS-free)
+               (begin
+                 (%l1-ring-runnext-set! l1 #f)
+                 rn)
+               ;; Second-path: take LIFO from ring buffer tail
+               (let* ((h-box (%l1-ring-head-box l1))
+                      (h (atomic-ref h-box))
+                      (t (%l1-ring-tail l1))
+                      (diff (- t h)))
+                 (cond
+                   ((> diff 1)
+                    ;; Non-empty and >= 2 items: owner safely takes item at t-1 without CAS
+                    (let* ((new-t (- t 1))
+                           (buf (%l1-ring-buffer l1))
+                           (slot (bitwise-and new-t *l1-ring-mask*))
+                           (val (vector-ref buf slot)))
+                      (vector-set! buf slot #f) ; Clear slot for GC (CWE-416)
+                      (%l1-ring-tail-set! l1 new-t)
+                      val))
+                   ((= diff 1)
+                    ;; Exactly 1 item left: owner races against concurrent thief CAS on head-box
+                    (let* ((buf (%l1-ring-buffer l1))
+                           (slot (bitwise-and h *l1-ring-mask*))
+                           (val (vector-ref buf slot)))
+                      (if (atomic-cas! h-box h (+ h 1))
+                          (begin
+                            (vector-set! buf slot #f)
+                            (%l1-ring-tail-set! l1 (+ h 1))
+                            val)
+                          (begin
+                            ;; Lost race to thief
+                            (%l1-ring-tail-set! l1 (+ h 1))
+                            #f))))
+                   (else
+                    ;; Third-path: L1 is empty -> try refill from L2 deque
+                    (if (and l2-deque (chase-lev-deque? l2-deque))
+                        (let ((refilled (%l1-ring-batch-refill! l1 l2-deque)))
+                          (if (> refilled 0)
+                              (let* ((t-refilled (%l1-ring-tail l1))
+                                     (new-t (- t-refilled 1))
+                                     (buf (%l1-ring-buffer l1))
+                                     (slot (bitwise-and new-t *l1-ring-mask*))
+                                     (val (vector-ref buf slot)))
+                                (vector-set! buf slot #f)
+                                (%l1-ring-tail-set! l1 new-t)
+                                val)
+                              #f))
+                        #f))))))))))
+
+(define (l1-ring-steal! l1)
+  (if (not (l1-ring-buffer? l1))
+      (error "l1-ring-steal!: expected <l1-ring-buffer>" l1)
+      (let* ((h-box (%l1-ring-head-box l1))
+             (h (atomic-ref h-box))
+             (t (%l1-ring-tail l1))
+             (diff (- t h)))
+        (if (<= diff 0)
+            'empty
+            (let* ((buf (%l1-ring-buffer l1))
+                   (slot (bitwise-and h *l1-ring-mask*))
+                   (task (vector-ref buf slot)))
+              (if (not task)
+                  'empty
+                  (if (atomic-cas! h-box h (+ h 1))
+                      (begin
+                        (vector-set! buf slot #f) ; Clear slot for GC (CWE-416)
+                        task)
+                      'abort)))))))
+
+(define (l1-ring-drain-all! l1)
+  (if (not (l1-ring-buffer? l1))
+      (error "l1-ring-drain-all!: expected <l1-ring-buffer>" l1)
+      (let* ((rn (%l1-ring-runnext l1))
+             (init-res (if rn
+                           (begin
+                             (%l1-ring-runnext-set! l1 #f)
+                             (list rn))
+                           '())))
+        (let loop ((acc init-res))
+          (let ((item (l1-ring-pop! l1 #f)))
+            (if item
+                (loop (cons item acc))
+                (reverse acc)))))))

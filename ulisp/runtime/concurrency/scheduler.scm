@@ -51,11 +51,12 @@
 ;;   futex-cell       : <futex-cell> or #f for parking idle workers (Issue #676)
 
 (define-record-type <worker-context>
-  (%make-worker-context id node-id deque current-task-box rng-state-box stats futex-cell)
+  (%make-worker-context id node-id deque l1-queue current-task-box rng-state-box stats futex-cell)
   worker-context?
   (id               worker-id)
   (node-id          worker-node-id)
   (deque            worker-deque)
+  (l1-queue         worker-l1-queue)
   (current-task-box %worker-current-task-box)
   (rng-state-box    %worker-rng-state-box)
   (stats            %worker-stats)
@@ -84,13 +85,14 @@
      (make-worker-context id 0 initial-cap))
     ((id node-id initial-cap)
      (let* ((dq (make-chase-lev-deque initial-cap))
+            (l1 (make-l1-ring-buffer))
             (seed (+ 123456789 (* (+ id 1) 1103515245)))
             (seed-clamped (if (= seed 0) 987654321 seed))
             (cur-box (%make-worker-box #f))
             (rng-box (%make-worker-box seed-clamped))
             (stats (%make-worker-stats))
             (futex-cell ((vector-ref *scheduler-make-futex-cell-box* 0))))
-       (%make-worker-context id node-id dq cur-box rng-box stats futex-cell)))))
+       (%make-worker-context id node-id dq l1 cur-box rng-box stats futex-cell)))))
 
 (define (worker-current-task worker)
   (vector-ref (%worker-current-task-box worker) 0))
@@ -508,8 +510,12 @@
                                    (native-running (> (atomic-ref *scheduler-native-workers-running-box*) 0)))
                                (if (or (not native-running) (= target-worker-id cur-slot))
                                    ;; Single-thread test setup OR local worker: safe to push to worker deque
-                                   (let ((w (scheduler-get-worker sched target-worker-id)))
-                                     (deque-push! (worker-deque w) normalized)
+                                   (let* ((w (scheduler-get-worker sched target-worker-id))
+                                          (l1 (worker-l1-queue w))
+                                          (dq (worker-deque w)))
+                                     (if (worker-current-task w)
+                                         (l1-ring-push! l1 normalized dq)
+                                         (deque-push! dq normalized))
                                      (let ((cell (worker-futex-cell w)))
                                        (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))))
                                    ;; Multi-worker running & cross-worker spawn: enqueue to thread-safe Michael-Scott global queue (CWE-362)
@@ -536,9 +542,10 @@
       (error "scheduler-worker-step!: expected <work-stealing-scheduler>" sched)
       (let* ((num-workers (scheduler-worker-count sched))
              (w (scheduler-get-worker sched worker-id))
-             (dq (worker-deque w)))
-        ;; Phase 1: Local Deque (LIFO)
-        (let ((local-task (deque-pop! dq)))
+             (dq (worker-deque w))
+             (l1 (worker-l1-queue w)))
+        ;; Phase 1: Local L1 Bounded Ring Buffer + L2 Deque Refill
+        (let ((local-task (l1-ring-pop! l1 dq)))
           (if local-task
               (%scheduler-run-and-record! sched w local-task)
               ;; Phase 2: Global Michael-Scott Queue (FIFO)
@@ -560,6 +567,10 @@
           i
           (%find-worker-index vec wid (+ i 1) len))))
 
+;; Helper to steal from victim: steals from thread-safe L2 Chase-Lev deque
+(define (%victim-steal! victim)
+  (deque-steal! (worker-deque victim)))
+
 ;; Tier 1: Intra-Node Steal
 ;; Attempts to steal from peer workers located on the same NUMA node.
 (define (%tier1-steal-loop sched worker local-workers local-len my-idx start-offset attempts max-attempts)
@@ -568,10 +579,9 @@
       (let* ((step (+ 1 (modulo (+ start-offset attempts) (- local-len 1))))
              (victim-idx (modulo (+ my-idx step) local-len))
              (victim-id (vector-ref local-workers victim-idx))
-             (victim (scheduler-get-worker sched victim-id))
-             (victim-dq (worker-deque victim)))
+             (victim (scheduler-get-worker sched victim-id)))
         (%worker-local-steals-att-inc! worker)
-        (let ((stolen (deque-steal! victim-dq)))
+        (let ((stolen (%victim-steal! victim)))
           (cond
             ((eq? stolen 'empty)
              (%tier1-steal-loop sched worker local-workers local-len my-idx start-offset (+ attempts 1) max-attempts))
@@ -594,10 +604,9 @@
             (%tier2-steal-loop sched worker node-count my-node node-workers rand-node-seed rand-w-seed (+ attempts 1) max-attempts)
             (let* ((w-offset (modulo (+ rand-w-seed attempts) rem-len))
                    (victim-id (vector-ref remote-workers w-offset))
-                   (victim (scheduler-get-worker sched victim-id))
-                   (victim-dq (worker-deque victim)))
+                   (victim (scheduler-get-worker sched victim-id)))
               (%worker-remote-steals-att-inc! worker)
-              (let ((stolen (deque-steal! victim-dq)))
+              (let ((stolen (%victim-steal! victim)))
                 (cond
                   ((eq? stolen 'empty)
                    (%tier2-steal-loop sched worker node-count my-node node-workers rand-node-seed rand-w-seed (+ attempts 1) max-attempts))
@@ -789,7 +798,8 @@
                      (cons 'remote-steals-attempted (worker-remote-steals-attempted w))
                      (cons 'remote-steals-succeeded (worker-remote-steals-succeeded w))
                      (cons 'yields (worker-yields w))
-                     (cons 'deque-count (deque-count (worker-deque w))))
+                     (cons 'deque-count (deque-count (worker-deque w)))
+                     (cons 'l1-count (l1-ring-count (worker-l1-queue w))))
                acc)))))
 
 (define (scheduler-stats sched)

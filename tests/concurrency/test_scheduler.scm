@@ -313,8 +313,10 @@
           (loop (+ i 1)))))
 
   (assert-equal (scheduler-total-spawned sched) 1000 "all 1,000 tasks spawned into worker 0")
-  (assert-equal (deque-count (worker-deque (scheduler-get-worker sched 0))) 1000 "worker 0 deque holds 1,000 tasks")
-  (assert-equal (deque-count (worker-deque (scheduler-get-worker sched 1))) 0 "worker 1 deque is initially empty")
+  (let ((w0 (scheduler-get-worker sched 0))
+        (w1 (scheduler-get-worker sched 1)))
+    (assert-equal (+ (l1-ring-count (worker-l1-queue w0)) (deque-count (worker-deque w0))) 1000 "worker 0 holds 1,000 tasks across L1 and L2")
+    (assert-equal (+ (l1-ring-count (worker-l1-queue w1)) (deque-count (worker-deque w1))) 0 "worker 1 is initially empty"))
 
   ;; Run multi-worker scheduler loop
   (let ((completed (scheduler-run! sched)))
@@ -712,6 +714,126 @@
       ;; Almost all spawns (after the very first warm-up) should hit the pool (> 95% hit rate)
       (assert-true (> hits 950) "high-throughput pool hits > 950 (>95% hit rate)")
       (assert-true (<= misses 50) "high-throughput pool misses <= 50"))
+    (scheduler-stop! sched)))
+
+;; -----------------------------------------------------------------------
+;; Group 19: L1 Bounded Ring Buffer & Two-Tier Work-Stealing (#804)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 19: L1 Bounded Ring Buffer & Two-Tier Work-Stealing (#804) ---\n")
+(flush-output-port)
+
+;; 19a. Basic L1 Ring Buffer Construction & Initial State
+(let ((l1 (make-l1-ring-buffer)))
+  (assert-true (l1-ring-buffer? l1) "make-l1-ring-buffer returns <l1-ring-buffer>")
+  (assert-true (l1-ring-empty? l1) "l1-ring-buffer is initially empty")
+  (assert-equal (l1-ring-count l1) 0 "initial count is 0")
+  (assert-true (not (l1-ring-full? l1)) "initial l1-ring is not full")
+  (assert-true (not (l1-ring-runnext l1)) "runnext slot is initially #f")
+
+  ;; 19b. Fast-Path: runnext Single Task Execution
+  (l1-ring-push! l1 'task-fast)
+  (assert-equal (l1-ring-count l1) 1 "l1 count is 1 after fast-path push")
+  (assert-equal (l1-ring-runnext l1) 'task-fast "runnext holds 'task-fast")
+  (assert-true (not (l1-ring-empty? l1)) "l1-ring is not empty with runnext")
+  (let ((popped (l1-ring-pop! l1)))
+    (assert-equal popped 'task-fast "l1-ring-pop! takes from runnext")
+    (assert-true (l1-ring-empty? l1) "l1-ring is empty after taking runnext")
+    (assert-equal (l1-ring-count l1) 0 "l1 count returns to 0"))
+
+  ;; 19c. LIFO Ordering within L1 Ring Buffer
+  (l1-ring-push! l1 't1)
+  (l1-ring-push! l1 't2)
+  (l1-ring-push! l1 't3)
+  (assert-equal (l1-ring-count l1) 3 "l1 count is 3")
+  ;; Pop order: runnext is 't3, then ring buffer LIFO 't2, then 't1
+  (assert-equal (l1-ring-pop! l1) 't3 "first pop takes latest runnext 't3")
+  (assert-equal (l1-ring-pop! l1) 't2 "second pop takes LIFO 't2 from ring")
+  (assert-equal (l1-ring-pop! l1) 't1 "third pop takes LIFO 't1 from ring")
+  (assert-true (l1-ring-empty? l1) "l1 is empty after popping all 3")
+
+  ;; 19d. 256-Entry Capacity & Batch Offload to L2 Chase-Lev Deque
+  (let ((l2 (make-chase-lev-deque 256)))
+    ;; Fill L1 with 256 tasks (1 in runnext, 255 in ring buffer)
+    (let fill-loop ((i 0))
+      (if (< i 256)
+          (begin
+            (l1-ring-push! l1 (cons 'item i) l2)
+            (fill-loop (+ i 1)))
+          #t))
+    (assert-equal (l1-ring-count l1) 256 "l1 has 256 tasks")
+    (assert-equal (deque-count l2) 0 "l2 deque is still empty (threshold is 256)")
+
+    ;; Push 257th task: triggers %l1-ring-batch-offload! of 128 tasks into L2 deque!
+    (l1-ring-push! l1 'item-256 l2)
+    (assert-equal (deque-count l2) 128 "128 tasks batch offloaded to L2 deque")
+    (assert-equal (l1-ring-count l1) 129 "l1 holds remaining 129 tasks (257 - 128)")
+
+    ;; 19e. L1 Exhaustion & Automatic Batch Refill from L2 Deque
+    ;; Drain L1 ring buffer completely
+    (let drain-l1 ((drained 0))
+      (if (< drained 129)
+          (let ((item (l1-ring-pop! l1 #f)))
+            (assert-true (not (not item)) "item popped from L1")
+            (drain-l1 (+ drained 1)))
+          #t))
+    (assert-true (l1-ring-empty? l1) "l1 is now completely empty")
+    (assert-equal (deque-count l2) 128 "l2 still holds 128 offloaded tasks")
+
+    ;; Next pop with L2 passes: should automatically refill up to 128 tasks from L2 into L1!
+    (let ((refilled-item (l1-ring-pop! l1 l2)))
+      (assert-true (not (not refilled-item)) "item popped via automatic L2 refill")
+      (assert-equal (deque-count l2) 0 "l2 deque completely drained into L1")
+      (assert-equal (l1-ring-count l1) 127 "l1 has 127 remaining refilled tasks"))
+
+    ;; Drain remaining 127 refilled items
+    (let ((all-drained (l1-ring-drain-all! l1)))
+      (assert-equal (length all-drained) 127 "l1-ring-drain-all! drained exactly 127 tasks")
+      (assert-true (l1-ring-empty? l1) "l1 is empty after drain-all!")))
+
+  ;; 19f. FIFO Work-Stealing via l1-ring-steal!
+  (let ((l1-victim (make-l1-ring-buffer)))
+    (l1-ring-push! l1-victim 'victim-t0)
+    (l1-ring-push! l1-victim 'victim-t1)
+    (l1-ring-push! l1-victim 'victim-t2)
+    ;; Thief steals from head (FIFO order: 'victim-t0 was moved to ring first)
+    (let ((stolen (l1-ring-steal! l1-victim)))
+      (assert-equal stolen 'victim-t0 "thief steals oldest 'victim-t0 from head (FIFO)"))
+    (let ((stolen2 (l1-ring-steal! l1-victim)))
+      (assert-equal stolen2 'victim-t1 "thief steals second 'victim-t1 from head"))
+    (assert-equal (l1-ring-steal! l1-victim) 'empty "thief gets 'empty when ring is empty"))
+
+  ;; 19g. High-Throughput 10,000 Tasks End-to-End Execution with L1 Integration
+  (let* ((sched (make-work-stealing-scheduler 4 256))
+         (done-counter (make-atomic-box 0))
+         (n-tasks 10000))
+    ;; Spawn 10,000 tasks across all 4 workers
+    (let loop ((i 0))
+      (if (< i n-tasks)
+          (let ((target-wid (modulo i 4)))
+            (scheduler-spawn! sched (lambda () (atomic-fetch-add! done-counter 1)) target-wid)
+            (loop (+ i 1)))
+          #t))
+    (assert-equal (scheduler-total-spawned sched) n-tasks "10,000 tasks spawned")
+    ;; Run multi-worker scheduler to completion
+    (let ((completed (scheduler-run! sched n-tasks)))
+      (assert-equal completed n-tasks "scheduler-run! completed all 10,000 tasks")
+      (assert-equal (atomic-ref done-counter) n-tasks "all 10,000 tasks executed with zero loss")
+      (assert-equal (scheduler-total-completed sched) n-tasks "scheduler total-completed is 10,000")
+      (assert-equal (scheduler-live-tasks sched) 0 "zero live tasks remaining"))
+
+    ;; Inspect stats to verify L1 metrics
+    (let* ((stats (scheduler-stats sched))
+           (w-stats (cdr (assq 'workers stats))))
+      (assert-equal (length w-stats) 4 "4 worker stats entries")
+      (let check-w ((i 0))
+        (if (< i 4)
+            (let* ((ws (list-ref w-stats i))
+                   (l1-cnt (cdr (assq 'l1-count ws)))
+                   (dq-cnt (cdr (assq 'deque-count ws))))
+              (assert-equal l1-cnt 0 "worker L1 queue is empty after completion")
+              (assert-equal dq-cnt 0 "worker L2 deque is empty after completion")
+              (check-w (+ i 1)))
+            #t)))
     (scheduler-stop! sched)))
 
 ;; -----------------------------------------------------------------------

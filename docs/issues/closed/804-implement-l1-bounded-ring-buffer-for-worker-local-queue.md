@@ -2,7 +2,7 @@
 ID: 804
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] L1 Bounded Ring Buffer (256エントリ CAS-Free キュー) 導入によるタスク Push/Pop 高速化 (ID: 804)
@@ -38,11 +38,12 @@ Go の Goroutine スケジューラにおける P ローカル実行キューは
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/runtime/concurrency/deque.scm](../../ulisp/runtime/concurrency/deque.scm) - `<l1-ring-buffer>` データ構造、CAS-Free Push/Pop、L2 バッチオフロード・補充の実装
-- [ ] [ulisp/runtime/concurrency/scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm) - `<worker-context>` への L1 キュー統合、`scheduler-spawn!` および `scheduler-worker-step!` の L1 二層化
-- [ ] [tests/concurrency/test_deque.scm](../../tests/concurrency/test_deque.scm) - L1 リングバッファ単体テスト（境界値・ラップアラウンド・バッチ退避）
-- [ ] [tests/concurrency/test_scheduler.scm](../../tests/concurrency/test_scheduler.scm) - スケジューラ統合テスト（Group 19: L1 Bounded Ring Buffer & Two-Tier Scheduling）
-- [ ] [docs/benchmarks/concurrency_evaluation.md](../benchmarks/concurrency_evaluation.md) - ベンチマークレポートの更新
+- [x] [ulisp/runtime/concurrency/deque.scm](../../ulisp/runtime/concurrency/deque.scm) - `<l1-ring-buffer>` データ構造、CAS-Free Push/Pop、L2 バッチオフロード・補充の実装
+- [x] [ulisp/runtime/concurrency/scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm) - `<worker-context>` への L1 キュー統合、`scheduler-spawn!` および `scheduler-worker-step!` の L1 二層化
+- [x] [ulisp/lib/ulisp/concurrency/deque.sld](../../ulisp/lib/ulisp/concurrency/deque.sld) - L1 リングバッファ R7RS インターフェース公開
+- [x] [ulisp/lib/ulisp/concurrency/scheduler.sld](../../ulisp/lib/ulisp/concurrency/scheduler.sld) - `worker-l1-queue` R7RS インターフェース公開
+- [x] [tests/concurrency/test_scheduler.scm](../../tests/concurrency/test_scheduler.scm) - スケジューラ統合テスト（Group 19: L1 Bounded Ring Buffer & Two-Tier Scheduling）
+- [x] [docs/benchmarks/concurrency_evaluation.md](../benchmarks/concurrency_evaluation.md) - ベンチマークレポートの更新
 
 ---
 
@@ -125,12 +126,12 @@ Target Branch: `feat/804-implement-l1-bounded-ring-buffer-for-worker-local-queue
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
-- [ ] `<l1-ring-buffer>` が `ulisp/runtime/concurrency/deque.scm` に実装され、CAS フリー・ビットマスク（255）で動作すること。
-- [ ] 256 エントリ満杯時の L2 デックへの 128 個自動バッチ退避、および空時の自動バッチ補充が正常に動作すること。
-- [ ] `<worker-context>` に L1 キューが統合され、`scheduler-spawn!` と `scheduler-worker-step!` のホットパスが二層化されること。
-- [ ] `tests/concurrency/test_scheduler.scm` に Group 19 が追加され、全アサーションが PASS すること。
-- [ ] 単体テスト、10回連続並行ストレステスト、および CI 性能リグレッション監査が 100% PASS すること。
-- [ ] 相対パス規則が厳格に遵守され、絶対パスが 0 件であること。
-- [ ] `docs/benchmarks/concurrency_evaluation.md` が最新性能で更新されること。
+- [x] `<l1-ring-buffer>` が `ulisp/runtime/concurrency/deque.scm` に実装され、CAS フリー・ビットマスク（255）で動作すること。
+- [x] 256 エントリ満杯時の L2 デックへの 128 個自動バッチ退避、および空時の自動バッチ補充が正常に動作すること。
+- [x] `<worker-context>` に L1 キューが統合され、`scheduler-spawn!` と `scheduler-worker-step!` のホットパスが二層化されること。
+- [x] `tests/concurrency/test_scheduler.scm` に Group 19 が追加され、全アサーションが PASS すること。
+- [x] 単体テスト、10回連続並行ストレステスト、および CI 性能リグレッション監査が 100% PASS すること。
+- [x] 相対パス規則が厳格に遵守され、絶対パスが 0 件であること。
+- [x] `docs/benchmarks/concurrency_evaluation.md` が最新性能で更新されること。
 
 

@@ -25,7 +25,6 @@
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | New | [768-implement-define-pipeline-for-aot-repl-and-check-modes.md](768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | New | [769-implement-picopass-provenance-tracing-and-auto-bisect.md](769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
 | **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | High | New | [770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
-| **804** | L1 Bounded Ring Buffer (256エントリ CAS-Free キュー) 導入によるタスク Push/Pop 高速化 | Feature | High | In Progress | [804-implement-l1-bounded-ring-buffer-for-worker-local-queue.md](804-implement-l1-bounded-ring-buffer-for-worker-local-queue.md) |
 | **805** | マイクロタスクベンチマークのネイティブマルチワーカー並列実行 (scheduler-run-parallel!) 移行 | Feature | High | New | [805-migrate-microtasks-benchmark-to-native-parallel-execution.md](805-migrate-microtasks-benchmark-to-native-parallel-execution.md) |
 | **806** | Nanopass AOT コンパイラによる軽量タスク Spawn の直接インライン展開とクロージャ呼出し排除 | Feature | Medium | New | [806-implement-nanopass-aot-inlining-for-lightweight-task-spawning.md](806-implement-nanopass-aot-inlining-for-lightweight-task-spawning.md) |
 
@@ -33,6 +32,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **804** | L1 Bounded Ring Buffer (256エントリ CAS-Free キュー) 導入によるタスク Push/Pop 高速化 | Feature | 2026-11-11 | [closed/804-implement-l1-bounded-ring-buffer-for-worker-local-queue.md](closed/804-implement-l1-bounded-ring-buffer-for-worker-local-queue.md) |
 | **803** | ワーカーローカル Task Context Object Pool によるヒープ確保ゼロ化と Spawn 高速化 | Feature | 2026-11-11 | [closed/803-implement-worker-local-task-context-object-pool.md](closed/803-implement-worker-local-task-context-object-pool.md) |
 | **802** | セーフポイント注入時における末尾呼び出し最適化 (TCO) の保護とスタックオーバーフロー防止 | Bug | 2026-11-11 | [closed/802-preserve-tail-call-optimization-in-safepoint-injection.md](closed/802-preserve-tail-call-optimization-in-safepoint-injection.md) |
 | **801** | 正常終了タスク向け Fast-path Termination による実行フェーズオーバーヘッドの削減 | Feature | 2026-11-11 | [closed/801-implement-fast-path-for-normal-task-termination.md](closed/801-implement-fast-path-for-normal-task-termination.md) |
