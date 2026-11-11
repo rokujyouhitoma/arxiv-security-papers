@@ -1802,3 +1802,98 @@
                              (loop (cdr rem) (cons (car rem) acc)))))))
           missing))))
 
+;;; =======================================================================
+;;; Sliding Window Traversal & Convergence Driver for Linear IR (InstWindow)
+;;; Conforms to DSN-33-01 Section 4.4 & 6.3 (fuse-window-rules, T3.3)
+;;; =======================================================================
+
+(define *nanopass-window-fixpoint-limit* 16)
+(define *nanopass-window-step-limit* 1024)
+
+;;; Single-pass sliding window traversal:
+;;; Evaluates try-match-proc at each instruction boundary.
+;;; If matched, replaces prefix and performs local re-dispatch.
+;;; If no match, advances window by 1 instruction.
+;;; Returns (cons transformed-insts changed-boolean)
+(define (nanopass-sliding-window-pass try-match-proc insts)
+  (let loop ((rest insts)
+             (acc '())
+             (changed? #f)
+             (step-fuel *nanopass-window-step-limit*))
+    (cond
+      ((null? rest)
+       (cons (reverse acc) changed?))
+      ((<= step-fuel 0)
+       (cons (append (reverse acc) rest) changed?))
+      (else
+       (let ((m (try-match-proc rest)))
+         (if (and (pair? m) (car m))
+             (let ((new-suffix (cdr m)))
+               (if (equal? new-suffix rest)
+                   (loop (cdr rest) (cons (car rest) acc) changed? step-fuel)
+                   (loop new-suffix acc #t (- step-fuel 1))))
+             (loop (cdr rest) (cons (car rest) acc) changed? step-fuel)))))))
+
+;;; Bounded fixpoint loop for sliding window optimizations
+(define (nanopass-sliding-window-fixpoint try-match-proc insts)
+  (let loop ((cur insts)
+             (iterations *nanopass-window-fixpoint-limit*))
+    (if (<= iterations 0)
+        cur
+        (let* ((res (nanopass-sliding-window-pass try-match-proc cur))
+               (next (car res))
+               (changed? (cdr res)))
+          (if (or (not changed?) (equal? cur next))
+              next
+              (loop next (- iterations 1)))))))
+
+;;; Optimize body instructions inside %lir-function
+(define (nanopass-optimize-function-body opt-proc f)
+  (if (and (pair? f) (eq? (car f) '%lir-function))
+      (let* ((lbl (cadr f))
+             (params (caddr f))
+             (frame-size (cadddr f))
+             (body-clause (car (cddddr f)))
+             (insts (if (and (pair? body-clause) (eq? (car body-clause) 'body))
+                        (cdr body-clause)
+                        '()))
+             (opt-insts (opt-proc insts)))
+        (list '%lir-function lbl params frame-size (cons 'body opt-insts)))
+      f))
+
+;;; Optimize body instructions inside %lir-main
+(define (nanopass-optimize-main-body opt-proc m)
+  (if (and (pair? m) (eq? (car m) '%lir-main))
+      (let* ((frame-size (cadr m))
+             (body-clause (caddr m))
+             (insts (if (and (pair? body-clause) (eq? (car body-clause) 'body))
+                        (cdr body-clause)
+                        '()))
+             (opt-insts (opt-proc insts)))
+        (list '%lir-main frame-size (cons 'body opt-insts)))
+      m))
+
+;;; Dual-mode wrapper: handles %lir-program, %lir-function, %lir-main, or flat instruction lists
+(define (nanopass-wrap-window-rules-input opt-proc ir)
+  (cond
+    ((and (pair? ir) (eq? (car ir) '%lir-program))
+     (let* ((rest (cdr ir))
+            (strings-entry (if (pair? rest) (car rest) '(strings ())))
+            (stackmaps-entry (if (and (pair? rest) (pair? (cdr rest))) (cadr rest) '(stackmaps ())))
+            (functions-clause (if (and (pair? rest) (pair? (cdr rest)) (pair? (cddr rest))) (caddr rest) '(%lir-functions)))
+            (main-clause (if (and (pair? rest) (pair? (cdr rest)) (pair? (cddr rest)) (pair? (cdddr rest))) (cadddr rest) '(%lir-main (frame-size 0) (body))))
+            (raw-funcs (if (and (pair? functions-clause) (eq? (car functions-clause) '%lir-functions))
+                           (cdr functions-clause)
+                           '()))
+            (opt-funcs (map (lambda (f) (nanopass-optimize-function-body opt-proc f)) raw-funcs))
+            (opt-main (nanopass-optimize-main-body opt-proc main-clause)))
+       (list '%lir-program strings-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main)))
+    ((and (pair? ir) (eq? (car ir) '%lir-function))
+     (nanopass-optimize-function-body opt-proc ir))
+    ((and (pair? ir) (eq? (car ir) '%lir-main))
+     (nanopass-optimize-main-body opt-proc ir))
+    ((list? ir)
+     (opt-proc ir))
+    (else ir)))
+
+

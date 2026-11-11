@@ -1253,6 +1253,152 @@
                 'fuel-limit-4-caught
                 caught-early-fuel))
 
+;;; =======================================================================
+;;; 20. LIR Sliding Window Rules & Fixpoint Convergence (DSN-33-01 T3.3)
+;;; =======================================================================
+(display (string-append (string #\newline) "--- [Section 20: LIR fuse-window-rules & Sliding Window Convergence] ---" (string #\newline)))
+
+;; 20.1 InstWindow Picopass Definitions
+(define-picopass rule-lir-self-mov-elim
+  (InstWindow
+    (((%mov ,r ,r) . ,rest) rest)))
+
+(define-picopass rule-lir-store-load-forward
+  (InstWindow
+    (((%store %rsp ,off ,src) (%load ,dst %rsp ,off) . ,rest)
+     (if (equal? dst src)
+         (cons `(%store %rsp ,off ,src) rest)
+         (cons `(%store %rsp ,off ,src) (cons `(%mov ,dst ,src) rest))))))
+
+(define-picopass rule-lir-zero-add-elim
+  (InstWindow
+    (((%add ,r 0) . ,rest) rest)
+    (((%raw-add ,r 0) . ,rest) rest)))
+
+(define-picopass rule-lir-load-add-store
+  (InstWindow
+    (((%load ,r %rsp ,off) (%add ,r 1) (%store %rsp ,off ,r) . ,rest)
+     (cons `(%inc-mem %rsp ,off) rest))))
+
+;; 20.2 Top-level (fuse-window-rules ...) in define-pass
+(define-pass test-pass-lir-peephole : L_lir_raw (lir) -> L_lir_canonical ()
+  (entry InstructionList)
+  (fuse-window-rules
+    rule-lir-self-mov-elim
+    rule-lir-store-load-forward
+    rule-lir-zero-add-elim
+    rule-lir-load-add-store))
+
+;; Test 1: Single instruction elimination (%mov %rax %rax)
+(assert-equal "fuse-window-rules eliminates redundant self-move (%mov %rax %rax)"
+              '((%mov %rbx %rcx))
+              (test-pass-lir-peephole '((%mov %rax %rax) (%mov %rbx %rcx))))
+
+;; Test 2: Store-Load forwarding (same register)
+(assert-equal "fuse-window-rules eliminates reload into same register"
+              '((%store %rsp 8 %rax))
+              (test-pass-lir-peephole '((%store %rsp 8 %rax) (%load %rax %rsp 8))))
+
+;; Test 3: Store-Load forwarding (different register -> %mov)
+(assert-equal "fuse-window-rules forwards store to mov into different register"
+              '((%store %rsp 16 %rax) (%mov %rbx %rax))
+              (test-pass-lir-peephole '((%store %rsp 16 %rax) (%load %rbx %rsp 16))))
+
+;; Test 4: Multi-pattern rule (%add and %raw-add by 0)
+(assert-equal "fuse-window-rules eliminates %add and %raw-add by 0"
+              '((%sub %rcx 1))
+              (test-pass-lir-peephole '((%add %rax 0) (%raw-add %rbx 0) (%sub %rcx 1))))
+
+;; Test 5: 3-instruction peephole fusion
+(assert-equal "fuse-window-rules fuses 3-instruction load-add-store into %inc-mem"
+              '((%inc-mem %rsp 24))
+              (test-pass-lir-peephole '((%load %rax %rsp 24) (%add %rax 1) (%store %rsp 24 %rax))))
+
+;; Test 6: Sliding window advancement without match
+(assert-equal "fuse-window-rules preserves unmatched instructions in order"
+              '((%jump L1) (%sub %rax 5) (%direct-call foo 0))
+              (test-pass-lir-peephole '((%jump L1) (%sub %rax 5) (%direct-call foo 0))))
+
+;; Test 7: Multistage Fixpoint Cascading (Pass 1 enables Pass 2)
+(assert-equal "fuse-window-rules cascades multiple iterations to fixed-point"
+              '((%store %rsp 8 %rax) (%mov %rbx %rax))
+              (test-pass-lir-peephole '((%store %rsp 8 %rax)
+                                        (%mov %rdi %rdi)
+                                        (%load %rbx %rsp 8))))
+
+;; 20.3 Inline NT clause with (fuse-window-rules ...)
+(define-pass test-pass-inline-window : L_lir_raw (lir) -> L_lir_canonical ()
+  (InstructionList (insts)
+    (fuse-window-rules
+      rule-lir-self-mov-elim
+      rule-lir-zero-add-elim)))
+
+(assert-equal "inline NT clause with fuse-window-rules performs peephole pass"
+              '((%return))
+              (test-pass-inline-window '((%mov %r12 %r12) (%add %r13 0) (%return))))
+
+;; 20.4 Dual-Mode %lir-program Traversal & Reconstruction
+(let* ((orig-prog
+        (list '%lir-program
+              '(strings ((s1 "hello")))
+              '(stackmaps ())
+              (list '%lir-functions
+                    '(%lir-function f1 (params (%rdi)) (frame-size 16)
+                                    (body (%mov %rax %rax) (%add %rax 0) (%return %rax)))
+                    '(%lir-function f2 (params ()) (frame-size 32)
+                                    (body (%store %rsp 8 %rdx) (%load %rdx %rsp 8) (%return))))
+              '(%lir-main (frame-size 8)
+                          (body (%raw-add %rsi 0) (%mov %rcx %rcx) (%return)))))
+       (opt-prog (test-pass-lir-peephole orig-prog)))
+  (assert-equal "fuse-window-rules preserves %lir-program header"
+                '%lir-program
+                (car opt-prog))
+  (assert-equal "fuse-window-rules preserves strings and stackmaps entries"
+                '((strings ((s1 "hello"))) (stackmaps ()))
+                (list (cadr opt-prog) (caddr opt-prog)))
+  (assert-equal "fuse-window-rules optimizes f1 body"
+                '(body (%return %rax))
+                (car (cddddr (car (cdr (cadddr opt-prog))))))
+  (assert-equal "fuse-window-rules optimizes f2 body"
+                '(body (%store %rsp 8 %rdx) (%return))
+                (car (cddddr (cadr (cdr (cadddr opt-prog))))))
+  (assert-equal "fuse-window-rules optimizes main body"
+                '(body (%return))
+                (caddr (car (cddddr opt-prog)))))
+
+;; 20.5 Single %lir-function input
+(assert-equal "fuse-window-rules handles single %lir-function node"
+              '(%lir-function fn_test (params ()) (frame-size 0) (body))
+              (test-pass-lir-peephole '(%lir-function fn_test (params ()) (frame-size 0) (body (%mov %rax %rax)))))
+
+;; 20.6 Single %lir-main input
+(assert-equal "fuse-window-rules handles single %lir-main node"
+              '(%lir-main (frame-size 0) (body))
+              (test-pass-lir-peephole '(%lir-main (frame-size 0) (body (%mov %rbx %rbx)))))
+
+;; 20.7 Bounded Fixpoint Loop terminates safely on circular rewrite rules (CWE-400 mitigation)
+(define-picopass rule-win-ping
+  (InstWindow
+    (((%w-ping ,x) . ,rest) (cons (list '%w-pong x) rest))))
+
+(define-picopass rule-win-pong
+  (InstWindow
+    (((%w-pong ,x) . ,rest) (cons (list '%w-ping x) rest))))
+
+(define-pass test-pass-win-loop : L_lir_raw (lir) -> L_lir_canonical ()
+  (fuse-window-rules rule-win-ping rule-win-pong))
+
+;; Test circular rewrite termination: must finish without hang
+(let* ((orig-limit *nanopass-window-step-limit*)
+       (res (begin
+              (set! *nanopass-window-step-limit* 10)
+              (let ((out (test-pass-win-loop '((%w-ping 42)))))
+                (set! *nanopass-window-step-limit* orig-limit)
+                out))))
+  (assert-equal "window fuel guard terminates circular rewrite safely without hang"
+                #t
+                (pair? res)))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)

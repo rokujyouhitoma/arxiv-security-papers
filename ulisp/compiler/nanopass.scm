@@ -25,17 +25,59 @@
                (clauses (cdr rest)))
           (list name 'L_src in-arg-list 'L_core '() clauses)))))
 
+;;; Linearize pattern to handle duplicate variables (e.g. ((%mov ,r ,r) . ,rest))
+(define (nanopass-linearize-pattern pat)
+  (letrec ((walk
+            (lambda (p seen extra-guards)
+              (cond
+                ((pair? p)
+                 (if (eq? (car p) 'unquote)
+                     (let ((sub (cadr p)))
+                       (cond
+                         ((symbol? sub)
+                          (if (memq sub seen)
+                              (let ((fresh (unique-symbol (string-append (symbol->raw-name sub) "_dup_"))))
+                                (list (list 'unquote fresh)
+                                      seen
+                                      (cons (list 'equal? sub fresh) extra-guards)))
+                              (list p (cons sub seen) extra-guards)))
+                         (else (list p seen extra-guards))))
+                     (let* ((car-res (walk (car p) seen extra-guards))
+                            (new-car (car car-res))
+                            (seen-car (cadr car-res))
+                            (guards-car (caddr car-res))
+                            (cdr-res (walk (cdr p) seen-car guards-car))
+                            (new-cdr (car cdr-res))
+                            (seen-cdr (cadr cdr-res))
+                            (guards-cdr (caddr cdr-res)))
+                       (list (cons new-car new-cdr) seen-cdr guards-cdr))))
+                (else
+                 (list p seen extra-guards))))))
+    (let ((res (walk pat '() '())))
+      (list (car res) (reverse (caddr res))))))
+
 ;;; Expand a single rule in a nonterminal transformer
 (define (nanopass-expand-rule rule nt-name)
-  (let* ((pat (car rule))
+  (let* ((orig-pat (car rule))
          (rest (cdr rule))
          (has-guard? (and (pair? rest)
                           (pair? (car rest))
                           (eq? (car (car rest)) 'guard)))
-         (guard-expr (if has-guard? (cadr (car rest)) #t))
+         (orig-guard (if has-guard? (cadr (car rest)) #t))
          (raw-body (if has-guard?
                        (if (null? (cddr rest)) (cadr rest) (cons 'begin (cdr rest)))
                        (if (null? (cdr rest)) (car rest) (cons 'begin rest))))
+         (lin (nanopass-linearize-pattern orig-pat))
+         (pat (car lin))
+         (extra-guards (cadr lin))
+         (guard-expr
+          (if (null? extra-guards)
+              orig-guard
+              (if (eq? orig-guard #t)
+                  (if (= (length extra-guards) 1)
+                      (car extra-guards)
+                      (cons 'and extra-guards))
+                  (cons 'and (append extra-guards (list orig-guard))))))
          (vars (nanopass-extract-pattern-vars pat))
          (body-expr (nanopass-expand-template raw-body vars)))
     (list pat vars guard-expr body-expr)))
@@ -214,6 +256,137 @@
                  (clauses (rule-clauses desc)))
             (loop (cdr rem) (append (reverse clauses) acc)))))))
 
+;;; Extract head opcode from a window pattern, e.g. ((%mov ...) . ,rest) -> '%mov
+(define (nanopass-window-rule-head-symbol pat)
+  (cond
+    ((not (pair? pat)) #f)
+    ((pair? (car pat))
+     (let ((first-inst (car pat)))
+       (cond
+         ((not (pair? first-inst)) #f)
+         ((eq? (car first-inst) 'unquote) #f)
+         ((eq? (car first-inst) '_) #f)
+         ((symbol? (car first-inst)) (car first-inst))
+         (else #f))))
+    (else #f)))
+
+;;; Extract expanded clauses for window rules from specs
+(define (nanopass-extract-fused-window-rules specs)
+  (let ((flat-specs (if (and (= (length specs) 1) (list? (car specs)))
+                        (car specs)
+                        specs)))
+    (let loop ((rem flat-specs) (acc '()))
+      (if (null? rem)
+          (reverse acc)
+          (let ((spec (car rem)))
+            (cond
+              ((symbol? spec)
+               (let* ((desc (nanopass-lookup-rule spec))
+                      (cls (rule-clauses desc)))
+                 (loop (cdr rem) (append (reverse cls) acc))))
+              ((pair? spec)
+               (let ((expanded (nanopass-expand-rule spec 'InstWindow)))
+                 (loop (cdr rem) (cons expanded acc))))
+              (else
+               (loop (cdr rem) acc))))))))
+
+;;; Partition window rules by head opcode symbol
+(define (nanopass-partition-window-rules rules)
+  (let loop ((rem rules)
+             (buckets '())
+             (fallbacks '()))
+    (if (null? rem)
+        (list buckets (reverse fallbacks))
+        (let* ((r (car rem))
+               (pat (car r))
+               (tag (nanopass-window-rule-head-symbol pat)))
+          (if tag
+              (loop (cdr rem)
+                    (nanopass-add-rule-to-bucket tag r buckets)
+                    fallbacks)
+              (loop (cdr rem)
+                    buckets
+                    (cons r fallbacks)))))))
+
+;;; Compile a list of window rules into an if-check chain returning (cons #t new-insts) or fallback
+(define (nanopass-compile-window-rule-chain rules insts-var fallback-expr)
+  (if (null? rules)
+      fallback-expr
+      (let* ((r (car rules))
+             (pat (car r))
+             (vars (cadr r))
+             (guard-expr (caddr r))
+             (body-expr (cadddr r))
+             (rest-chain (nanopass-compile-window-rule-chain (cdr rules) insts-var fallback-expr))
+             (m-var (unique-symbol "__wm_")))
+        (if (eq? guard-expr #t)
+            (list 'let (list (list m-var
+                                   (list (string->symbol "nanopass-match-clause")
+                                         (list 'quote pat)
+                                         insts-var
+                                         (list 'quote vars)
+                                         '(lambda (x) x))))
+                  (list 'if m-var
+                        (nanopass-bind-matched-vars vars m-var (list 'cons #t body-expr))
+                        rest-chain))
+            (list 'let (list (list m-var
+                                   (list (string->symbol "nanopass-match-clause")
+                                         (list 'quote pat)
+                                         insts-var
+                                         (list 'quote vars)
+                                         '(lambda (x) x))))
+                  (list 'if m-var
+                        (nanopass-bind-matched-vars
+                         vars m-var
+                         (list 'if guard-expr
+                               (list 'cons #t body-expr)
+                               rest-chain))
+                        rest-chain))))))
+
+;;; Build cascaded dispatch expression for window rules
+(define (nanopass-build-window-rules-cascade rules insts-var)
+  (let* ((partitioned (nanopass-partition-window-rules rules))
+         (buckets (car partitioned))
+         (fallbacks (cadr partitioned))
+         (fallback-expr (nanopass-compile-window-rule-chain fallbacks insts-var #f)))
+    (if (null? buckets)
+        fallback-expr
+        (let* ((first-inst-var (unique-symbol "__w_first_"))
+               (op-var (unique-symbol "__w_op_"))
+               (case-expr
+                (cons 'case
+                      (cons op-var
+                            (append (map (lambda (b)
+                                           (list (list (car b))
+                                                 (nanopass-compile-window-rule-chain (cdr b) insts-var fallback-expr)))
+                                         buckets)
+                                    (list (list 'else fallback-expr)))))))
+          (list 'if (list 'pair? insts-var)
+                (list 'let (list (list first-inst-var (list 'car insts-var)))
+                      (list 'if (list 'pair? first-inst-var)
+                            (list 'let (list (list op-var (list 'car first-inst-var)))
+                                  (list 'if (list 'symbol? op-var)
+                                        case-expr
+                                        fallback-expr))
+                            fallback-expr))
+                #f)))))
+
+;;; Build procedure binding for window pass (InstructionList / Program transformer)
+(define (nanopass-build-window-pass-binding specs entry-name in-arg-list)
+  (let* ((rules (nanopass-extract-fused-window-rules specs))
+         (ir-var (car in-arg-list))
+         (insts-var (unique-symbol "__insts_"))
+         (try-match-body (nanopass-build-window-rules-cascade rules insts-var))
+         (try-match-proc (list 'lambda (list insts-var) try-match-body))
+         (fixpoint-call (list (string->symbol "nanopass-sliding-window-fixpoint")
+                              try-match-proc
+                              insts-var))
+         (opt-core-proc (list 'lambda (list insts-var) fixpoint-call))
+         (body-expr (list (string->symbol "nanopass-wrap-window-rules-input")
+                          opt-core-proc
+                          ir-var)))
+    (list entry-name (list 'lambda in-arg-list body-expr))))
+
 ;;; Flatten NT rules: inline (fuse-rules ...) and (fuse-tree-rules ...),
 ;;; and expand regular rules
 (define (nanopass-flatten-nt-rules raw-rules nt-name)
@@ -224,6 +397,10 @@
       ((and (pair? (car rem)) (memq (caar rem) '(fuse-rules fuse-tree-rules)))
        (let* ((specs (cdar rem))
               (fused-clauses (nanopass-extract-fused-clauses specs nt-name)))
+         (loop (cdr rem) (append (reverse fused-clauses) acc))))
+      ((and (pair? (car rem)) (eq? (caar rem) 'fuse-window-rules))
+       (let* ((specs (cdar rem))
+              (fused-clauses (nanopass-extract-fused-window-rules specs)))
          (loop (cdr rem) (append (reverse fused-clauses) acc))))
       ((and (pair? (car rem)) (memq (caar rem) '(redispatch :redispatch)))
        (loop (cdr rem) acc))
@@ -369,7 +546,7 @@
         (reverse acc)
         (let ((c (car rem)))
           (cond
-            ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules)))
+            ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules fuse-window-rules)))
              (let* ((specs (cdr c))
                     (flat (if (and (= (length specs) 1) (list? (car specs))) (car specs) specs)))
                (loop (cdr rem) (append (reverse flat) acc))))
@@ -379,7 +556,7 @@
                (let in-loop ((rs raw-rules) (in-acc acc))
                  (cond
                    ((null? rs) (loop (cdr rem) in-acc))
-                   ((and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules)))
+                   ((and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules fuse-window-rules)))
                     (let* ((sp (cdar rs))
                            (fl (if (and (= (length sp) 1) (list? (car sp))) (car sp) sp)))
                       (in-loop (cdr rs) (append (reverse fl) in-acc))))
@@ -477,6 +654,13 @@
                          (group-loop (cdr gs)
                                      (cons proc-binding cur-procs)
                                      (if cur-entry cur-entry g-nt)))))))
+              ;; (fuse-window-rules r1 r2 ...) at top-level
+              ((and (pair? c) (eq? (car c) 'fuse-window-rules))
+               (let* ((specs (cdr c))
+                      (flat-specs (if (and (= (length specs) 1) (list? (car specs))) (car specs) specs))
+                      (entry-name (if entry-nt entry-nt 'InstructionList))
+                      (proc-binding (nanopass-build-window-pass-binding flat-specs entry-name in-arg-list)))
+                 (loop (cdr rest) defs (cons proc-binding nt-procs) (if entry-nt entry-nt entry-name))))
               ;; (NT : NT_in (ir extra ...) -> NT_out (extra_out ...) rules ...)
               ;; or (NT (ir extra ...) rules ...)
               ((and (pair? c) (symbol? (car c)))
@@ -486,18 +670,37 @@
                       (nt-out (caddr parsed-nt))
                       (nt-extra-out (cadddr parsed-nt))
                       (raw-rules (car (cddddr parsed-nt)))
-                      (has-fused?
+                      (has-window-fused?
                        (let check ((rs raw-rules))
                          (and (pair? rs)
-                              (or (and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules redispatch :redispatch)))
-                                  (check (cdr rs))))))
-                      (expanded-rules (nanopass-flatten-nt-rules raw-rules nt-name))
-                      (body-expr (nanopass-build-rules-cascade expanded-rules l-in nt-out nt-name nt-in-args (if (pair? nt-extra-out) nt-extra-out extra-out) has-fused?))
-                      (proc-binding (list nt-name (list 'lambda nt-in-args body-expr))))
-                 (loop (cdr rest)
-                       defs
-                       (cons proc-binding nt-procs)
-                       (if entry-nt entry-nt nt-name))))
+                              (or (and (pair? (car rs)) (eq? (caar rs) 'fuse-window-rules))
+                                  (check (cdr rs)))))))
+                 (if has-window-fused?
+                     (let* ((window-specs
+                             (let extract ((rs raw-rules) (wacc '()))
+                               (cond
+                                 ((null? rs) (reverse wacc))
+                                 ((and (pair? (car rs)) (eq? (caar rs) 'fuse-window-rules))
+                                  (let ((sp (cdar rs)))
+                                    (extract (cdr rs) (append (reverse (if (and (= (length sp) 1) (list? (car sp))) (car sp) sp)) wacc))))
+                                 (else (extract (cdr rs) (cons (car rs) wacc))))))
+                            (proc-binding (nanopass-build-window-pass-binding window-specs nt-name nt-in-args)))
+                       (loop (cdr rest)
+                             defs
+                             (cons proc-binding nt-procs)
+                             (if entry-nt entry-nt nt-name)))
+                     (let* ((has-fused?
+                             (let check ((rs raw-rules))
+                               (and (pair? rs)
+                                    (or (and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules redispatch :redispatch)))
+                                        (check (cdr rs))))))
+                            (expanded-rules (nanopass-flatten-nt-rules raw-rules nt-name))
+                            (body-expr (nanopass-build-rules-cascade expanded-rules l-in nt-out nt-name nt-in-args (if (pair? nt-extra-out) nt-extra-out extra-out) has-fused?))
+                            (proc-binding (list nt-name (list 'lambda nt-in-args body-expr))))
+                       (loop (cdr rest)
+                             defs
+                             (cons proc-binding nt-procs)
+                             (if entry-nt entry-nt nt-name))))))
               (else
                (loop (cdr rest) defs nt-procs entry-nt))))))))
 
@@ -749,3 +952,7 @@
 
 (define-macro (fuse-tree-rules . args)
   (error "fuse-tree-rules: cannot be used outside of define-pass" args))
+
+(define-macro (fuse-window-rules . args)
+  (error "fuse-window-rules: cannot be used outside of define-pass" args))
+
