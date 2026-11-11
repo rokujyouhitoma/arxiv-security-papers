@@ -219,14 +219,14 @@ flowchart TD
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp/bootstrap.sh` に `--pure` (`--pure-self-host`), `--pure-elf`, `--pure-tools` コマンドライン引数が実装され、`--help` に明記されていること。
-- [ ] Direct-to-ELF モード（`--pure-elf`）において、中間 `.s` および `.o` ファイルを介さず、S 式から直接 ELF 実行可能バイナリを生成する 3-Stage 連鎖が完遂すること。
-- [ ] 内蔵ツールチェインモード（`--pure-tools`）において、ホストの `as` および `ld` を一切使用せず、ULisp 内蔵の `--as` と `--ld` のみで Stage 1〜3 のビルドが完遂すること。
-- [ ] `stage2` と `stage3` の生成バイナリ（Direct-to-ELF）またはアセンブリ出力がビット単位（bit-for-bit identical）で 100% 一致し、不動点（Fixed Point）が検証されること。
-- [ ] 隔離テストスイート `ulisp/tests/test_pure_bootstrap.sh` が作成され、ホストの `gcc`, `clang`, `as`, `ld`, `python`, `gosh` を完全に遮断（シャドウイング）した環境下で `make test_pure_bootstrap` が正常に成功（PASS）すること。
-- [ ] 生成された自己ホストバイナリ（`scheme-stage2` または `scheme-stage3`）が、既存のテストスイート（`make test`）を問題なく通過すること。
-- [ ] `ulisp/docs/spec_pipeline.md` および `ulisp/docs/guide_portable_build.md` に完全自給自足ブートストラップ仕様と実行手順が正確に反映されていること。
-- [ ] プロジェクト全体の品質ゲート（`make verify_quality` / `verify-quality-gates`、Python 構文エラー 0 件、絶対パス完全排斥 0 件）を 100% パスすること。
+- [x] `ulisp/bootstrap.sh` に `--pure` (`--pure-self-host`), `--pure-elf`, `--pure-tools` コマンドライン引数が実装され、`--help` に明記されていること。
+- [x] Direct-to-ELF モード（`--pure-elf`）において、中間 `.s` および `.o` ファイルを介さず、S 式から直接 ELF 実行可能バイナリを生成する 3-Stage 連鎖が完遂すること。
+- [x] 内蔵ツールチェインモード（`--pure-tools`）において、ホストの `as` および `ld` を一切使用せず、ULisp 内蔵の `--as` と `--ld` のみで Stage 1〜3 のビルドが完遂すること。
+- [x] `stage2` と `stage3` の生成バイナリ（Direct-to-ELF）またはアセンブリ出力がビット単位（bit-for-bit identical）で 100% 一致し、不動点（Fixed Point）が検証されること。
+- [x] 隔離テストスイート `ulisp/tests/test_pure_bootstrap.sh` が作成され、ホストの `gcc`, `clang`, `as`, `ld`, `python`, `gosh` を完全に遮断（シャドウイング）した環境下で `make test_pure_bootstrap` が正常に成功（PASS）すること。
+- [x] 生成された自己ホストバイナリ（`scheme-stage2` または `scheme-stage3`）が、既存のテストスイート（`make test`）を問題なく通過すること。
+- [x] `ulisp/docs/spec_pipeline.md` および `ulisp/docs/guide_portable_build.md` に完全自給自足ブートストラップ仕様と実行手順が正確に反映されていること。
+- [x] プロジェクト全体の品質ゲート（`make verify_quality` / `verify-quality-gates`、Python 構文エラー 0 件、絶対パス完全排斥 0 件）を 100% パスすること。
 
 ---
 

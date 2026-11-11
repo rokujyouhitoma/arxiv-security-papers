@@ -133,6 +133,25 @@ make bootstrap
 # => 検証ログ: "Stage 2 and Stage 3 outputs are IDENTICAL (diff == 0). Fixed-point reached!"
 ```
 
+### ステップ 3-4: 外部ツール完全非依存ブートストラップ (Self-Contained Bootstrap - Issue #617)
+ホスト環境に GNU `ld`, `as`, `gcc`, `clang`, `python`, `gosh` が存在しない（または隔離・遮断されている）環境下でも、ULisp 単体で 3-Stage セルフホスティング連鎖を完遂するモードです。
+
+```bash
+# 1. 内蔵静的リンカ (--ld) による純粋自己ホストブートストラップ
+./bootstrap.sh --pure
+# または Makefile 経由:
+make bootstrap_pure
+
+# 2. 外部ツール完全遮断・隔離環境テストスイートの実行
+# (gcc, clang, ld, python, python3, gosh を exit 99 のスタブで完全にマスキングして検証)
+make test_pure_bootstrap
+# または直接スクリプト実行:
+bash tests/test_pure_bootstrap.sh
+
+# 3. Direct-to-ELF モード (中間 .s を介さず直接 ELF バイナリを生成)
+./bootstrap.sh --pure-elf
+```
+
 ---
 
 ## 4. 任意の Scheme プログラムのコンパイル手順 (Compiling Arbitrary Scheme Programs)

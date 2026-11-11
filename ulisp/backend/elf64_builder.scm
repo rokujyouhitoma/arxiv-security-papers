@@ -837,6 +837,11 @@
          (bucket (vector-ref sm h)))
     (assoc key bucket)))
 
+(define (symbol-map-contains? sm key)
+  (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
+         (bucket (vector-ref sm h)))
+    (if (assoc key bucket) #t #f)))
+
 (define (symbol-map-set! sm key val)
   (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
          (bucket (vector-ref sm h))

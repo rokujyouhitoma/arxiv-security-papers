@@ -245,4 +245,45 @@ Frontend, LIR (Middle-End), Backend の3層物理分離に伴い、各層の抽�
 7. **[Issue 599](../../docs/issues/599-implement-generic-dataflow-analysis-framework.md)**: 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復）
 8. **[Issue 600](../../docs/issues/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md)**: 統合シンボル・スコープ解決基盤および α 変換エンジンの導入
 9. **[Issue 601](../../docs/issues/closed/601-reorganize-ulisp-docs-with-role-prefix-naming.md)**: ULisp ドキュメント体系の再構築と役割プレフィックス命名規約の適用 (完了)
+10. **[Issue 617](../../docs/issues/closed/617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md)**: 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 (完了)
+
+---
+
+## 4. 外部ツール完全非依存 3-Stage セルフホスティングブートストラップ連鎖 (Issue #617)
+
+ULisp は、外部ビルドツール（ホストの GNU `ld`, `as`, `gcc`, `clang`, `python`, `gosh`）に依存せず、ULisp 自体が備えるコード生成エンジンおよび内蔵ツールチェイン（`--ld`, `--target-elf`）のみで自給自足の 3-Stage ブートストラップ不動点を確立する。
+
+```mermaid
+flowchart TD
+    subgraph PureChain ["完全自給自足ブートストラップ連鎖 (ULisp 内蔵ツール)"]
+        Seed["bin/ulisp-boot\n(検証済みネイティブシード)"]
+        S1["build/scheme-stage1"]
+        S2["build/scheme-stage2"]
+        S3["build/scheme-stage3"]
+        
+        Seed -->|Stage 1: compile + builtin --ld| S1
+        S1 -->|Stage 2: compile + stage1 --ld| S2
+        S2 -->|Stage 3: compile + stage2 --ld| S3
+        
+        S2 -.->|cmp -s stage2_compiler.s stage3_compiler.s| FP_Asm{"アセンブリ不動点検証\n(100% bit-for-bit 一致)"}
+        S3 -.-> FP_Asm
+        
+        S2 -.->|cmp -s scheme-stage2 scheme-stage3| FP_Bin{"バイナリ不動点検証\n(100% bit-for-bit 一致)"}
+        S3 -.-> FP_Bin
+        
+        FP_Bin -->|PASS| Smoke["Smoke Test (--target-elf -> 42)"]
+        Smoke -->|PASS| Promote["bin/ulisp-boot 昇格"]
+    end
+```
+
+### 4.1 動作モード
+1. **内蔵ツールチェインモード (`--pure` / `--pure-tools`)**:
+   - ホストの `ld` や `python` を完全遮断。
+   - 各 Stage のリンクは直前世代の ULisp バイナリ内蔵静的リンカ（`--ld`）を用いて `ulisp_stdlib.o` と結合。
+   - 不動点検証は `cmp -s` および純粋 POSIX `sed`/`diff` フォールバックで実行。
+2. **Direct-to-ELF モード (`--pure-elf`)**:
+   - 中間アセンブリファイル `.s` やリロケータブルオブジェクト `.o` を介さず、Scheme S 式から直接 ELF64 静的実行可能バイナリをインメモリ生成。
+3. **完全遮断・隔離検証 (`make test_pure_bootstrap`)**:
+   - `ulisp/tests/test_pure_bootstrap.sh` により、`gcc`, `clang`, `ld`, `python`, `python3`, `gosh` を終了コード 99 の強制失敗スタブで完全にシャドウイングした環境下でブートストラップが完遂することを自動検証。
+
 

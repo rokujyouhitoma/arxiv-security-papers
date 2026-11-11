@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ULISP_DIR="$ROOT_DIR/ulisp"
 BUILD_DIR="$ULISP_DIR/build"
 
-# Configuration Flags (Issue #776, Issue #777, Issue #778 & Issue #779)
+# Configuration Flags (Issue #776, Issue #777, Issue #778, Issue #779 & Issue #617)
 BOOTSTRAP_QUICK="${BOOTSTRAP_QUICK:-0}"
 BOOTSTRAP_RUN_TESTS="${BOOTSTRAP_RUN_TESTS:-0}"
 BOOTSTRAP_FAST="${BOOTSTRAP_FAST:-0}"
@@ -17,6 +17,9 @@ BOOTSTRAP_WITH_GOSH="${BOOTSTRAP_WITH_GOSH:-0}"
 BOOTSTRAP_SPLIT_LINK="${BOOTSTRAP_SPLIT_LINK:-1}"
 BOOTSTRAP_MODULAR="${BOOTSTRAP_MODULAR:-0}"
 BOOTSTRAP_EMIT_ELF="${BOOTSTRAP_EMIT_ELF:-0}"
+BOOTSTRAP_PURE="${BOOTSTRAP_PURE:-0}"
+BOOTSTRAP_PURE_ELF="${BOOTSTRAP_PURE_ELF:-0}"
+USE_BUILTIN_TOOLS="${USE_BUILTIN_TOOLS:-0}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -68,11 +71,30 @@ while [ $# -gt 0 ]; do
             BOOTSTRAP_FROM_ILISP=1
             shift
             ;;
+        --pure|--pure-self-host)
+            BOOTSTRAP_PURE=1
+            USE_BUILTIN_TOOLS=1
+            shift
+            ;;
+        --pure-elf)
+            BOOTSTRAP_PURE=1
+            BOOTSTRAP_PURE_ELF=1
+            BOOTSTRAP_EMIT_ELF=1
+            shift
+            ;;
+        --pure-tools)
+            BOOTSTRAP_PURE=1
+            USE_BUILTIN_TOOLS=1
+            shift
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo "Options:"
             echo "  --quick, -q, --stage1-only  Stop after Stage 1 smoke test (fast dev cycle)"
             echo "  --full                      Run full 3-stage bootstrap fixed-point verification"
+            echo "  --pure, --pure-self-host    Run self-contained bootstrap using ULisp builtin tools (no host ld/python)"
+            echo "  --pure-elf                  Run Direct-to-ELF bootstrap mode (--target-elf) without intermediate .s files"
+            echo "  --pure-tools                Run builtin toolchain bootstrap using ULisp --as and --ld"
             echo "  --modular                   Run 5-module parallel incremental bootstrap (make -j)"
             echo "  --split-link                Bootstrap compiler_entry.scm linked with ulisp_stdlib.o (default)"
             echo "  --monolithic                Bootstrap monolithic ulisp_core.scm (stdlib + runtime + compiler)"
@@ -101,7 +123,7 @@ export ULISP_GC_PROFILE=compiler
 if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
     echo "[0/4] Preparing split-linked bootstrap (compiler_entry.scm + build/ulisp_stdlib.o)..."
     make -C "$ULISP_DIR" compiler build/ulisp_stdlib.o
-    echo "(!gc none) (!allow-extern #t)" > "$BUILD_DIR/compiler_input.scm"
+    echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > "$BUILD_DIR/compiler_input.scm"
     cat "$ULISP_DIR/compiler_entry.scm" >> "$BUILD_DIR/compiler_input.scm"
     BOOTSTRAP_INPUT="$BUILD_DIR/compiler_input.scm"
     BOOTSTRAP_TARGET_NAME="compiler_entry.scm"
@@ -124,11 +146,16 @@ else
 fi
 
 PYTHON_BIN="python3"
-if [ -x "$ROOT_DIR/.venv/bin/python" ]; then
+if [ "${BOOTSTRAP_PURE:-0}" = "1" ]; then
+    PYTHON_BIN=""
+elif [ -x "$ROOT_DIR/.venv/bin/python" ]; then
     PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
 fi
 BOOT_BIN="$ULISP_DIR/bin/ulisp-boot"
-GOSH_BIN="$(command -v gosh 2>/dev/null || true)"
+GOSH_BIN=""
+if [ "${BOOTSTRAP_PURE:-0}" != "1" ]; then
+    GOSH_BIN="$(command -v gosh 2>/dev/null || true)"
+fi
 
 # Diagnostic mode configuration (Issue #605)
 BOOTSTRAP_DIAGNOSE="${BOOTSTRAP_DIAGNOSE:-1}"
@@ -288,10 +315,24 @@ compile_asm() {
     local asm_file="$2"
     local bin_file="$3"
     local in_file="${4:-"$BOOTSTRAP_INPUT"}"
+    local compiler_bin="${5:-"$BOOT_BIN"}"
     local obj_file="${asm_file%.s}.o"
     local tool_err="$BUILD_DIR/as_ld_err.log"
     local rc=0
-    as --64 "$asm_file" -o "$obj_file" > "$tool_err" 2>&1 || rc=$?
+
+    # 1. Assembler step
+    if [ "${USE_BUILTIN_TOOLS:-0}" = "1" ] && [ -n "$compiler_bin" ] && [ -x "$compiler_bin" ] && ! command -v as >/dev/null 2>&1; then
+        "$compiler_bin" --as --64 "$asm_file" -o "$obj_file" > "$tool_err" 2>&1 || rc=$?
+    elif command -v as >/dev/null 2>&1; then
+        as --64 "$asm_file" -o "$obj_file" > "$tool_err" 2>&1 || rc=$?
+    elif [ -n "$compiler_bin" ] && [ -x "$compiler_bin" ]; then
+        "$compiler_bin" --as --64 "$asm_file" -o "$obj_file" > "$tool_err" 2>&1 || rc=$?
+    elif [ -x "$BOOT_BIN" ]; then
+        "$BOOT_BIN" --as --64 "$asm_file" -o "$obj_file" > "$tool_err" 2>&1 || rc=$?
+    else
+        echo -e "\033[1;31m[ERROR] $stage_name: no assembler available (as command not found and no compiler --as)\033[0m" >&2
+        exit 1
+    fi
     if [ "$rc" -ne 0 ]; then
         echo -e "\033[1;31m[ERROR] $stage_name: as (assembler) failed with exit code $rc:\033[0m" >&2
         cat "$tool_err" >&2
@@ -299,10 +340,25 @@ compile_asm() {
         rm -f "$tool_err"
         exit 1
     fi
-    if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
-        ld -m elf_x86_64 -static "$BUILD_DIR/ulisp_stdlib.o" "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+
+    # 2. Linker step
+    rc=0
+    if [ "${USE_BUILTIN_TOOLS:-0}" = "1" ] || [ "${BOOTSTRAP_PURE:-0}" = "1" ] || ! command -v ld >/dev/null 2>&1; then
+        local linker="$compiler_bin"
+        if [ ! -x "$linker" ]; then
+            linker="$BOOT_BIN"
+        fi
+        if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
+            "$linker" --ld "$BUILD_DIR/ulisp_stdlib.o" "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+        else
+            "$linker" --ld "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+        fi
     else
-        ld -m elf_x86_64 -static "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+        if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
+            ld -m elf_x86_64 -static "$BUILD_DIR/ulisp_stdlib.o" "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+        else
+            ld -m elf_x86_64 -static "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+        fi
     fi
     if [ "$rc" -ne 0 ]; then
         echo -e "\033[1;31m[ERROR] $stage_name: ld (linker) failed with exit code $rc:\033[0m" >&2
@@ -333,7 +389,11 @@ run_stage_try() {
 check_label_only_diff() {
     local file1="$1"
     local file2="$2"
-    "$PYTHON_BIN" -c '
+    if cmp -s "$file1" "$file2"; then
+        return 0
+    fi
+    if [ -n "${PYTHON_BIN:-}" ] && command -v "$PYTHON_BIN" >/dev/null 2>&1 && "$PYTHON_BIN" -c 'import sys; sys.exit(0)' 2>/dev/null; then
+        "$PYTHON_BIN" -c '
 import re, sys
 def norm(t):
     t = re.sub(r"\.L_([a-zA-Z0-9_]+)_[0-9]+", r".L_\1_#", t)
@@ -344,6 +404,11 @@ with open(sys.argv[1]) as f1, open(sys.argv[2]) as f2:
         sys.exit(0)
     sys.exit(1)
 ' "$file1" "$file2" 2>/dev/null
+    else
+        # POSIX sed/diff fallback without Python dependency
+        diff -u <(sed -E 's/\.L_([a-zA-Z0-9_]+)_[0-9]+/\.L_\1_#/g; s/__safepoint_[0-9]+/__safepoint_#/g' "$file1") \
+                <(sed -E 's/\.L_([a-zA-Z0-9_]+)_[0-9]+/\.L_\1_#/g; s/__safepoint_[0-9]+/__safepoint_#/g' "$file2") >/dev/null 2>&1
+    fi
 }
 
 verify_and_promote() {
@@ -353,7 +418,7 @@ verify_and_promote() {
 
     echo "=== Running Smoke Test on $final_stage_name Binary ==="
     rm -f "$BUILD_DIR/smoke_test.s" "$BUILD_DIR/smoke_test"
-    if [ "${BOOTSTRAP_EMIT_ELF:-0}" = "1" ]; then
+    if [ "${BOOTSTRAP_EMIT_ELF:-0}" = "1" ] || [ "${BOOTSTRAP_PURE:-0}" = "1" ] || ! command -v as >/dev/null 2>&1; then
         echo "42" > "$BUILD_DIR/smoke_in.scm"
         "$final_compiler" --target-elf -o "$BUILD_DIR/smoke_test" "$BUILD_DIR/smoke_in.scm" 2>/dev/null || true
         if [ ! -s "$BUILD_DIR/smoke_test" ]; then
@@ -447,25 +512,25 @@ if [ "${BOOTSTRAP_FAST:-0}" = "1" ] && [ -x "$BUILD_DIR/scheme-stage1" ] && [ "$
     echo "[1/3] Stage 1: Skipping compilation (BOOTSTRAP_FAST=1, reusing existing scheme-stage1)..."
 elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" ] && [ "${BOOTSTRAP_WITH_GOSH:-0}" != "1" ] && [ -x "$BOOT_BIN" ]; then
     echo "[1/3] Stage 1: Fast compiling $BOOTSTRAP_TARGET_NAME using native seed ($BOOT_BIN)..."
-    if run_stage_try "Stage 1 ($BOOT_BIN)" "$STAGE1_ASM" "$BOOT_BIN" "$BOOTSTRAP_INPUT" && compile_asm "Stage 1 ($BOOT_BIN)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"; then
+    if run_stage_try "Stage 1 ($BOOT_BIN)" "$STAGE1_ASM" "$BOOT_BIN" "$BOOTSTRAP_INPUT" && compile_asm "Stage 1 ($BOOT_BIN)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT" "$BOOT_BIN"; then
         echo "  -> Stage 1 successfully compiled with native seed."
     elif [ -n "$GOSH_BIN" ]; then
         echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed (e.g. exit code 139 / timeout / ABI drift). Automatically falling back to Gauche ($GOSH_BIN)...\033[0m"
         run_stage "Stage 1 (Gauche)" "$STAGE1_ASM" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
-        compile_asm "Stage 1 (Gauche)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
+        compile_asm "Stage 1 (Gauche)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT" "$BOOT_BIN"
     else
         echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed. Automatically falling back to ILisp ($PYTHON_BIN)...\033[0m"
         run_stage "Stage 1 (ILisp)" "$STAGE1_ASM" env PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm"
-        compile_asm "Stage 1 (ILisp)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
+        compile_asm "Stage 1 (ILisp)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT" "$BOOT_BIN"
     fi
 elif [ "${BOOTSTRAP_WITH_GOSH:-0}" = "1" ] && [ -n "$GOSH_BIN" ]; then
     echo "[1/3] Stage 1: Fast compiling $BOOTSTRAP_TARGET_NAME using Gauche ($GOSH_BIN)..."
     run_stage "Stage 1 (Gauche)" "$STAGE1_ASM" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
-    compile_asm "Stage 1 (Gauche)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
+    compile_asm "Stage 1 (Gauche)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT" "$BOOT_BIN"
 else
     echo "[1/3] Stage 1: Compiling $BOOTSTRAP_TARGET_NAME with ILisp ($PYTHON_BIN)..."
     run_stage "Stage 1 (ILisp)" "$STAGE1_ASM" env PYTHONPATH="$ROOT_DIR" "$PYTHON_BIN" -m ilisp "$ULISP_DIR/compiler.scm"
-    compile_asm "Stage 1 (ILisp)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
+    compile_asm "Stage 1 (ILisp)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT" "$BOOT_BIN"
 fi
 [ "$STAGE1_ASM" != "$BUILD_DIR/stage1.s" ] && cp -f "$STAGE1_ASM" "$BUILD_DIR/stage1.s"
 
@@ -478,12 +543,12 @@ fi
 
 echo "[2/3] Stage 2: Compiling $BOOTSTRAP_TARGET_NAME with Stage 1 compiler..."
 run_stage "Stage 2 (scheme-stage1)" "$STAGE2_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT"
-compile_asm "Stage 2 (scheme-stage1)" "$STAGE2_ASM" "$BUILD_DIR/scheme-stage2" "$BOOTSTRAP_INPUT"
+compile_asm "Stage 2 (scheme-stage1)" "$STAGE2_ASM" "$BUILD_DIR/scheme-stage2" "$BOOTSTRAP_INPUT" "$BUILD_DIR/scheme-stage1"
 [ "$STAGE2_ASM" != "$BUILD_DIR/stage2.s" ] && cp -f "$STAGE2_ASM" "$BUILD_DIR/stage2.s"
 
 echo "[3/3] Stage 3: Compiling $BOOTSTRAP_TARGET_NAME with Stage 2 compiler..."
 run_stage "Stage 3 (scheme-stage2)" "$STAGE3_ASM" "$BUILD_DIR/scheme-stage2" "$BOOTSTRAP_INPUT"
-compile_asm "Stage 3 (scheme-stage2)" "$STAGE3_ASM" "$BUILD_DIR/scheme-stage3" "$BOOTSTRAP_INPUT"
+compile_asm "Stage 3 (scheme-stage2)" "$STAGE3_ASM" "$BUILD_DIR/scheme-stage3" "$BOOTSTRAP_INPUT" "$BUILD_DIR/scheme-stage2"
 [ "$STAGE3_ASM" != "$BUILD_DIR/stage3.s" ] && cp -f "$STAGE3_ASM" "$BUILD_DIR/stage3.s"
 
 STAGE2_BASE="$(basename "$STAGE2_ASM")"
