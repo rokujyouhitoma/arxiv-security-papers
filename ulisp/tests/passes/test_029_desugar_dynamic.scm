@@ -58,6 +58,64 @@
   (assert-true "desugar-dynamic expands begin define-values" (pair? dyn-res))
   (assert-equal "desugar-dynamic expands to call-with-values" 'call-with-values (car dyn-res)))
 
+;;; -----------------------------------------------------------------------
+;;; Section 6: Pass 029 1-Line Picopass Direct S-Expression Unit Tests (DSN-33-01 T4.1)
+;;; -----------------------------------------------------------------------
+
+;; 6. rule-desugar-let-values
+(let ((res (rule-desugar-let-values '(let-values (((a b) (values 1 2))) (+ a b)))))
+  (assert-true "rule-desugar-let-values produces call-with-values" (pair? res))
+  (assert-equal "rule-desugar-let-values root" 'call-with-values (car res)))
+
+;; 7. rule-desugar-define-values
+(let ((res (rule-desugar-define-values '(define-values (x y) (values 1 2)))))
+  (assert-true "rule-desugar-define-values produces call-with-values" (pair? res))
+  (assert-equal "rule-desugar-define-values root" 'call-with-values (car res)))
+
+;; 8. rule-desugar-guard
+(let ((res (rule-desugar-guard '(guard (e (else 0)) (/ 1 0)))))
+  (assert-true "rule-desugar-guard produces %with-handler" (pair? res))
+  (assert-equal "rule-desugar-guard root" '%with-handler (car res)))
+
+;; 9. rule-desugar-parameterize
+(let ((res (rule-desugar-parameterize '(parameterize ((p 1)) (p)))))
+  (assert-true "rule-desugar-parameterize produces let" (pair? res))
+  (assert-equal "rule-desugar-parameterize root" 'let (car res)))
+
+;; 10. rule-desugar-delay
+(let ((res (rule-desugar-delay '(delay (+ 1 2)))))
+  (assert-true "rule-desugar-delay produces promise" (pair? res))
+  (assert-equal "rule-desugar-delay root" '%%make-promise (car res)))
+
+;; 11. rule-desugar-parameter-ops
+(assert-equal "rule-desugar-parameter-ops 1 arg"
+              '(make-parameter-1 100)
+              (rule-desugar-parameter-ops '(make-parameter 100)))
+
+;; 12. rule-desugar-values
+(assert-equal "rule-desugar-values 2 args"
+              '(%values 1 2)
+              (rule-desugar-values '(values 1 2)))
+
+(assert-equal "rule-desugar-values 1 arg is identity"
+              42
+              (rule-desugar-values '(values 42)))
+
+;; 13. rule-desugar-error-assume
+(let ((res (rule-desugar-error-assume '(error "msg" 1 2))))
+  (assert-true "rule-desugar-error-assume produces raise" (pair? res))
+  (assert-equal "rule-desugar-error-assume root" 'raise (car res)))
+
+;; 14. atto-no-unexpanded-let-syntax (invariant verification)
+(assert-equal "atto-no-unexpanded-let-syntax passes normal expr"
+              #t
+              (atto-no-unexpanded-let-syntax '(+ 1 2)))
+
+;; 15. Full Nanopass desugar-dynamic with fuse-rules
+(let ((res (desugar-dynamic '(delay (+ 1 2)))))
+  (assert-true "desugar-dynamic on delay produces promise" (pair? res))
+  (assert-equal "desugar-dynamic on delay root" '%%make-promise (car res)))
+
 (display "=======================================================") (newline)
 (display " Pass 029: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

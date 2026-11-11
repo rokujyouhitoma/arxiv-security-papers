@@ -1,7 +1,8 @@
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 027: Conditionals Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
-;;; Desugars conditional branching constructs (cond, case, and, or, chain comparisons)
+;;; Desugars conditional branching constructs (cond, case, and, or, chain comparisons, cond-expand)
+;;; Refactored to define-picopass + fuse-rules per Issue #762 (DSN-33-01 T4.1)
 ;;; =======================================================================
 
 (define (desugar-cond clauses)
@@ -73,13 +74,13 @@
     ((not (pair? args)) #t)
     ((null? (cdr args)) #t)
     ((null? (cddr args))
-     (cons op (map desugar-all args)))
+     (cons op args))
     (else
      (let* ((vars (map (lambda (a) (unique-symbol "cmp_")) args))
             (bindings (let b-loop ((vs vars) (as args))
                         (if (or (null? vs) (not (pair? vs)))
                             '()
-                            (cons (list (car vs) (desugar-all (car as)))
+                            (cons (list (car vs) (car as))
                                   (b-loop (cdr vs) (cdr as))))))
             (pairs (let loop ((vs vars))
                      (if (or (null? (cdr vs)) (not (pair? (cdr vs))))
@@ -97,17 +98,65 @@
       (else (cons 'begin matched)))))
 
 ;;; -----------------------------------------------------------------------
-;;; Nanopass DSL Pass Definition: Desugar Conditionals
+;;; Pass 027 Picopass Rule Definitions (DSN-33-01 T4.1)
+;;; -----------------------------------------------------------------------
+
+(define-picopass rule-desugar-cond-expand
+  (Expr
+    ((cond-expand ,clauses ...) (desugar-cond-expand clauses))
+    ((cond-expand . ,clauses) (desugar-cond-expand clauses))))
+
+(define-picopass rule-desugar-cond
+  (Expr
+    ((cond ,clauses ...) (desugar-cond clauses))
+    ((cond . ,clauses) (desugar-cond clauses))))
+
+(define-picopass rule-desugar-case
+  (Expr
+    ((case ,key ,clauses ...) (desugar-case key clauses))
+    ((case ,key . ,clauses) (desugar-case key clauses))))
+
+(define-picopass rule-desugar-and
+  (Expr
+    ((and ,args ...) (desugar-and args))
+    ((and . ,args) (desugar-and args))))
+
+(define-picopass rule-desugar-or
+  (Expr
+    ((or ,args ...) (desugar-or args))
+    ((or . ,args) (desugar-or args))))
+
+(define-picopass rule-desugar-chain-cmp
+  (Expr
+    ((char<? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char<? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char<=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char<=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char>? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char>? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char>=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci<? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci<? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci<=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci<=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci>? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci>? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci>=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string<? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string<? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string<=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string<=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string>? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string>? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string>=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci<? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci<? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci<=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci<=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci>? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci>? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci>=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci=? (cons a1 (cons a2 (cons a3 rest)))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Conditionals (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-conditionals : L_src (ir) -> L_core ()
-  (Expr : Expr (ir) -> Expr ()
-    ((cond-expand ,clauses ...) (Expr (desugar-cond-expand clauses)))
-    ((cond-expand . ,clauses) (Expr (desugar-cond-expand clauses)))
-    ((cond ,clauses ...) (Expr (desugar-cond clauses)))
-    ((cond . ,clauses) (Expr (desugar-cond clauses)))
-    ((case ,key ,clauses ...) (Expr (desugar-case key clauses)))
-    ((case ,key . ,clauses) (Expr (desugar-case key clauses)))
-    ((and ,args ...) (Expr (desugar-and args)))
-    ((and . ,args) (Expr (desugar-and args)))
-    ((or ,args ...) (Expr (desugar-or args)))
-    ((or . ,args) (Expr (desugar-or args)))))
+  (fuse-rules
+    rule-desugar-cond-expand
+    rule-desugar-cond
+    rule-desugar-case
+    rule-desugar-and
+    rule-desugar-or
+    rule-desugar-chain-cmp))
