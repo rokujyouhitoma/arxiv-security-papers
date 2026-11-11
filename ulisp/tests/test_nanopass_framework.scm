@@ -60,6 +60,26 @@
 (define-macro (nanopass-template . args)
   (nanopass-expand-template (car args) '()))
 
+(define-macro (picopass-seq* . rules)
+  (if (null? rules)
+      '(lambda (ir) #f)
+      (if (null? (cdr rules))
+          (car rules)
+          (let loop ((rem (cdr rules)) (acc (car rules)))
+            (if (null? rem)
+                acc
+                (loop (cdr rem) (list 'picopass-seq acc (car rem))))))))
+
+(define-macro (picopass-choice* . rules)
+  (if (null? rules)
+      '(lambda (ir) #f)
+      (if (null? (cdr rules))
+          (car rules)
+          (let loop ((rem (cdr rules)) (acc (car rules)))
+            (if (null? rem)
+                acc
+                (loop (cdr rem) (list 'picopass-choice acc (car rem))))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; 1. define-language & Language Reflection
 ;;; -----------------------------------------------------------------------
@@ -800,6 +820,191 @@
                 ((rule-proc desc-and) '(and a b)))
   (assert-true "nanopass-get-all-rules contains rule-test-and"
                (if (memq desc-and (nanopass-get-all-rules)) #t #f)))
+
+;;; -----------------------------------------------------------------------
+;;; 17. Picopass Strategy Combinators (DSN-33-01 T2.2)
+;;; -----------------------------------------------------------------------
+
+;; 17.1 picopass-seq: sequential composition (p1 ▷ p2)
+(define-picopass rule-seq-step1
+  (Expr
+    ((inc-double ,x)
+     (list 'double (list '+ x 1)))))
+
+(define-picopass rule-seq-step2
+  (Expr
+    ((double ,y)
+     (list '* y 2))))
+
+(define-picopass rule-seq-step3
+  (Expr
+    ((* ,a 2)
+     (list 'half-shift a))))
+
+(define seq-step1-2 (picopass-seq rule-seq-step1 rule-seq-step2))
+
+(assert-equal "picopass-seq applies p1 then p2 on matching input"
+              '(* (+ 5 1) 2)
+              (seq-step1-2 '(inc-double 5)))
+
+(assert-equal "picopass-seq returns #f if p1 does not match"
+              #f
+              (seq-step1-2 '(other-tag 5)))
+
+(define-picopass rule-only-literal
+  (Expr
+    ((double 999) 12345)))
+
+(define seq-partial (picopass-seq rule-seq-step1 rule-only-literal))
+
+(assert-equal "picopass-seq preserves p1 result if p2 falls through"
+              '(double (+ 10 1))
+              (seq-partial '(inc-double 10)))
+
+(define seq-list-3 (picopass-compose-list (list rule-seq-step1 rule-seq-step2 rule-seq-step3)))
+
+(assert-equal "picopass-compose-list chains 3 rules sequentially"
+              '(half-shift (+ 3 1))
+              (seq-list-3 '(inc-double 3)))
+
+(define seq-macro-3 (picopass-seq* rule-seq-step1 rule-seq-step2 rule-seq-step3))
+
+(assert-equal "picopass-seq* macro chains multiple rules"
+              '(half-shift (+ 7 1))
+              (seq-macro-3 '(inc-double 7)))
+
+;; 17.2 picopass-choice: deterministic priority choice (p1 ⊕ p2)
+(define-picopass rule-choice-zero
+  (Expr
+    ((fast-add 0 ,x)
+     x)))
+
+(define-picopass rule-choice-general
+  (Expr
+    ((fast-add ,x ,y)
+     (list '+ x y))))
+
+(define-picopass rule-choice-fallback
+  (Expr
+    ((fallback-op ,x)
+     (list 'fallback x))))
+
+(define choice-combined (picopass-choice rule-choice-zero rule-choice-general))
+
+(assert-equal "picopass-choice selects specialized rule when matched"
+              'foo
+              (choice-combined '(fast-add 0 foo)))
+
+(assert-equal "picopass-choice falls through to general rule when special fails"
+              '(+ 3 4)
+              (choice-combined '(fast-add 3 4)))
+
+(assert-equal "picopass-choice returns #f when neither rule matches"
+              #f
+              (choice-combined '(unrelated-op 1 2)))
+
+(define choice-list-3 (picopass-choice-list (list rule-choice-zero rule-choice-general rule-choice-fallback)))
+
+(assert-equal "picopass-choice-list selects third rule in chain"
+              '(fallback 99)
+              (choice-list-3 '(fallback-op 99)))
+
+(define choice-macro-3 (picopass-choice* rule-choice-zero rule-choice-general rule-choice-fallback))
+
+(assert-equal "picopass-choice* macro matches first rule"
+              'bar
+              (choice-macro-3 '(fast-add 0 bar)))
+
+(assert-equal "picopass-choice* macro matches third rule"
+              '(fallback 77)
+              (choice-macro-3 '(fallback-op 77)))
+
+;; 17.3 picopass-fixpoint: local fixpoint iteration (p*)
+(define-picopass rule-peel-nest
+  (Expr
+    ((nest (nest ,x))
+     (list 'nest x))))
+
+(define fp-peel (picopass-fixpoint rule-peel-nest))
+
+(assert-equal "picopass-fixpoint iteratively peels nested constructs"
+              '(nest 42)
+              (fp-peel '(nest (nest (nest (nest 42))))))
+
+(assert-equal "picopass-fixpoint returns #f when rule never matches"
+              #f
+              (fp-peel '(nest 42)))
+
+;; Infinite rewrite loop detection and fail-closed termination
+(define-picopass rule-infinite-cycle
+  (Expr
+    ((flip ,x) (list 'flop x))
+    ((flop ,x) (list 'flip x))))
+
+(let ((caught-cycle
+       (guard (ex (else 'caught-cycle-error))
+         ((picopass-fixpoint-limit rule-infinite-cycle 16) '(flip 100)))))
+  (assert-equal "picopass-fixpoint aborts with picopass-fail on infinite cycle"
+                'caught-cycle-error
+                caught-cycle))
+
+;; 17.4 picopass-when: guarded rule application (guard ⇒ pico)
+(define (test-guard-predicate expr)
+  (and (pair? expr)
+       (pair? (cdr expr))
+       (number? (cadr expr))
+       (> (cadr expr) 10)))
+
+(define-picopass rule-guarded-target
+  (Expr
+    ((scale ,n)
+     (list '* n 100))))
+
+(define when-rule (picopass-when test-guard-predicate rule-guarded-target))
+
+(assert-equal "picopass-when applies rule when guard predicate is satisfied"
+              '(* 25 100)
+              (when-rule '(scale 25)))
+
+(assert-equal "picopass-when returns #f when guard predicate is not satisfied"
+              #f
+              (when-rule '(scale 5)))
+
+(assert-equal "picopass-when returns #f on non-matching AST tag"
+              #f
+              (when-rule '(unrelated 50)))
+
+;; 17.5 Metadata retention & Reflection on combined rules
+(let ((desc-seq (rule-descriptor seq-step1-2))
+      (desc-choice (rule-descriptor choice-combined))
+      (desc-fp (rule-descriptor fp-peel))
+      (desc-when (rule-descriptor when-rule)))
+  (assert-true "rule-descriptor? returns #t for picopass-seq"
+               (rule-descriptor? desc-seq))
+  (assert-equal "rule-kind is 'pico for picopass-seq"
+                'pico
+                (rule-kind desc-seq))
+  (assert-equal "rule-head-tags for picopass-seq matches initial rule head-tags"
+                '(inc-double)
+                (rule-head-tags desc-seq))
+  (assert-true "rule-reads for picopass-seq contains inc-double and double"
+               (and (memq 'inc-double (rule-reads desc-seq))
+                    (memq 'double (rule-reads desc-seq))))
+  (assert-true "rule-descriptor? returns #t for picopass-choice"
+               (rule-descriptor? desc-choice))
+  (assert-equal "rule-head-tags for picopass-choice contains fast-add"
+                '(fast-add)
+                (rule-head-tags desc-choice))
+  (assert-true "rule-descriptor? returns #t for picopass-fixpoint"
+               (rule-descriptor? desc-fp))
+  (assert-equal "rule-head-tags for picopass-fixpoint is '(nest)"
+                '(nest)
+                (rule-head-tags desc-fp))
+  (assert-true "rule-descriptor? returns #t for picopass-when"
+               (rule-descriptor? desc-when))
+  (assert-equal "rule-head-tags for picopass-when is '(scale)"
+                '(scale)
+                (rule-head-tags desc-when)))
 
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")

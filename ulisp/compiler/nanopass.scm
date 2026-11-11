@@ -454,3 +454,23 @@
 (define-macro (nanopass-template . args)
   (nanopass-expand-template (car args) '()))
 
+(define-macro (picopass-seq* . rules)
+  (if (null? rules)
+      '(lambda (ir) #f)
+      (if (null? (cdr rules))
+          (car rules)
+          (let loop ((rem (cdr rules)) (acc (car rules)))
+            (if (null? rem)
+                acc
+                (loop (cdr rem) (list 'picopass-seq acc (car rem))))))))
+
+(define-macro (picopass-choice* . rules)
+  (if (null? rules)
+      '(lambda (ir) #f)
+      (if (null? (cdr rules))
+          (car rules)
+          (let loop ((rem (cdr rules)) (acc (car rules)))
+            (if (null? rem)
+                acc
+                (loop (cdr rem) (list 'picopass-choice acc (car rem))))))))
+

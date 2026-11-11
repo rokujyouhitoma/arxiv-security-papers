@@ -3156,6 +3156,210 @@
           ((memq (car tags) writes) (loop (cdr tags) acc))
           (else (loop (cdr tags) (cons (car tags) acc)))))))
 
+;;; -----------------------------------------------------------------------
+;;; Part 8: Picopass Strategy Combinators (DSN-33-01 T2.2)
+;;; -----------------------------------------------------------------------
+
+(define (nanopass-resolve-rule-proc r)
+  (cond
+    ((rule-descriptor? r)
+     (rule-proc r))
+    ((symbol? r)
+     (let ((desc (nanopass-lookup-rule-opt r)))
+       (if (and desc (rule-proc desc))
+           (rule-proc desc)
+           #f)))
+    ((procedure? r)
+     r)
+    (else #f)))
+
+(define (nanopass-resolve-rule-descriptor r)
+  (cond
+    ((rule-descriptor? r) r)
+    ((symbol? r) (nanopass-lookup-rule-opt r))
+    ((procedure? r) (nanopass-lookup-rule-opt r))
+    (else #f)))
+
+(define (nanopass-combine-sets s1 s2)
+  (let ((l1 (if (list? s1) s1 '()))
+        (l2 (if (list? s2) s2 '())))
+    (let loop ((items l2) (acc l1))
+      (cond
+        ((null? items) acc)
+        ((memq (car items) acc) (loop (cdr items) acc))
+        (else (loop (cdr items) (append acc (list (car items)))))))))
+
+(define (nanopass-combine-head-tags t1 t2)
+  (cond
+    ((or (eq? t1 '*) (eq? t2 '*)) '*)
+    ((and (list? t1) (list? t2)) (nanopass-combine-sets t1 t2))
+    ((list? t1) t1)
+    ((list? t2) t2)
+    (else '*)))
+
+;;; 1. Sequential Composition: (picopass-seq r1 r2)  (p1 ▷ p2)
+(define (picopass-seq r1 r2)
+  (let ((p1 (nanopass-resolve-rule-proc r1))
+        (p2 (nanopass-resolve-rule-proc r2))
+        (d1 (nanopass-resolve-rule-descriptor r1))
+        (d2 (nanopass-resolve-rule-descriptor r2)))
+    (if (not (procedure? p1))
+        (error "picopass-seq: first argument is not a valid rule or procedure" r1)
+        (if (not (procedure? p2))
+            (error "picopass-seq: second argument is not a valid rule or procedure" r2)
+            (let* ((name (unique-symbol "picopass_seq_"))
+                   (nt-name (if d1 (rule-nt-name d1) (if d2 (rule-nt-name d2) 'Expr)))
+                   (head-tags (if d1 (rule-head-tags d1) '*))
+                   (reads (nanopass-combine-sets (if d1 (rule-reads d1) '())
+                                                (if d2 (rule-reads d2) '())))
+                   (writes (if (and d2 (pair? (rule-writes d2)))
+                               (rule-writes d2)
+                               (if d1 (rule-writes d1) '())))
+                   (eliminates (nanopass-combine-sets (if d1 (rule-eliminates d1) '())
+                                                      (if d2 (rule-eliminates d2) '())))
+                   (clauses (append (if d1 (rule-clauses d1) '())
+                                    (if d2 (rule-clauses d2) '())))
+                   (composite
+                    (lambda (ir)
+                      (let ((res1 (p1 ir)))
+                        (if res1
+                            (let ((res2 (p2 res1)))
+                              (if res2 res2 res1))
+                            #f))))
+                   (desc (nanopass-make-rule-descriptor
+                          name 'pico nt-name head-tags reads writes eliminates clauses composite)))
+              (nanopass-register-rule! desc)
+              composite)))))
+
+(define (picopass-compose-list rules)
+  (cond
+    ((null? rules)
+     (let* ((name (unique-symbol "picopass_empty_seq_"))
+            (composite (lambda (ir) #f))
+            (desc (nanopass-make-rule-descriptor name 'pico 'Expr '() '() '() '() '() composite)))
+       (nanopass-register-rule! desc)
+       composite))
+    ((null? (cdr rules))
+     (let ((p (nanopass-resolve-rule-proc (car rules))))
+       (if p p (error "picopass-compose-list: invalid rule" (car rules)))))
+    (else
+     (let loop ((rem (cdr rules)) (acc (car rules)))
+       (if (null? rem)
+           acc
+           (loop (cdr rem) (picopass-seq acc (car rem))))))))
+
+;;; 2. Deterministic Choice: (picopass-choice r1 r2)  (p1 ⊕ p2)
+(define (picopass-choice r1 r2)
+  (let ((p1 (nanopass-resolve-rule-proc r1))
+        (p2 (nanopass-resolve-rule-proc r2))
+        (d1 (nanopass-resolve-rule-descriptor r1))
+        (d2 (nanopass-resolve-rule-descriptor r2)))
+    (if (not (procedure? p1))
+        (error "picopass-choice: first argument is not a valid rule or procedure" r1)
+        (if (not (procedure? p2))
+            (error "picopass-choice: second argument is not a valid rule or procedure" r2)
+            (let* ((name (unique-symbol "picopass_choice_"))
+                   (nt-name (if d1 (rule-nt-name d1) (if d2 (rule-nt-name d2) 'Expr)))
+                   (head-tags (nanopass-combine-head-tags (if d1 (rule-head-tags d1) '*)
+                                                         (if d2 (rule-head-tags d2) '*)))
+                   (reads (nanopass-combine-sets (if d1 (rule-reads d1) '())
+                                                (if d2 (rule-reads d2) '())))
+                   (writes (nanopass-combine-sets (if d1 (rule-writes d1) '())
+                                                 (if d2 (rule-writes d2) '())))
+                   (eliminates (nanopass-combine-sets (if d1 (rule-eliminates d1) '())
+                                                      (if d2 (rule-eliminates d2) '())))
+                   (clauses (append (if d1 (rule-clauses d1) '())
+                                    (if d2 (rule-clauses d2) '())))
+                   (composite
+                    (lambda (ir)
+                      (let ((res1 (p1 ir)))
+                        (if res1
+                            res1
+                            (p2 ir)))))
+                   (desc (nanopass-make-rule-descriptor
+                          name 'pico nt-name head-tags reads writes eliminates clauses composite)))
+              (nanopass-register-rule! desc)
+              composite)))))
+
+(define (picopass-choice-list rules)
+  (cond
+    ((null? rules)
+     (let* ((name (unique-symbol "picopass_empty_choice_"))
+            (composite (lambda (ir) #f))
+            (desc (nanopass-make-rule-descriptor name 'pico 'Expr '() '() '() '() '() composite)))
+       (nanopass-register-rule! desc)
+       composite))
+    ((null? (cdr rules))
+     (let ((p (nanopass-resolve-rule-proc (car rules))))
+       (if p p (error "picopass-choice-list: invalid rule" (car rules)))))
+    (else
+     (let loop ((rem (cdr rules)) (acc (car rules)))
+       (if (null? rem)
+           acc
+           (loop (cdr rem) (picopass-choice acc (car rem))))))))
+
+;;; 3. Local Fixpoint Iteration: (picopass-fixpoint rule) / (picopass-fixpoint-limit rule max-steps)  (p*)
+(define (picopass-fixpoint-limit rule max-steps)
+  (let ((p (nanopass-resolve-rule-proc rule))
+        (d (nanopass-resolve-rule-descriptor rule)))
+    (if (not (procedure? p))
+        (error "picopass-fixpoint-limit: argument is not a valid rule or procedure" rule)
+        (let* ((name (unique-symbol "picopass_fixpoint_"))
+               (nt-name (if d (rule-nt-name d) 'Expr))
+               (head-tags (if d (rule-head-tags d) '*))
+               (reads (if d (rule-reads d) '()))
+               (writes (if d (rule-writes d) '()))
+               (eliminates (if d (rule-eliminates d) '()))
+               (clauses (if d (rule-clauses d) '()))
+               (composite
+                (lambda (ir)
+                  (let ((first-res (p ir)))
+                    (if (or (not first-res) (equal? first-res ir))
+                        #f
+                        (let loop ((curr first-res) (step 1))
+                          (if (>= step max-steps)
+                              (picopass-fail "picopass-fixpoint: step limit exceeded (infinite rewrite loop)" ir)
+                              (let ((next (p curr)))
+                                (if (or (not next) (equal? next curr))
+                                    curr
+                                    (loop next (+ step 1))))))))))
+               (desc (nanopass-make-rule-descriptor
+                      name 'pico nt-name head-tags reads writes eliminates clauses composite)))
+          (nanopass-register-rule! desc)
+          composite))))
+
+(define (picopass-fixpoint rule)
+  (picopass-fixpoint-limit rule 64))
+
+;;; 4. Guarded Composition: (picopass-when guard-rule pico-rule)  (guard ⇒ pico)
+(define (picopass-when guard-rule pico-rule)
+  (let ((gp (nanopass-resolve-rule-proc guard-rule))
+        (pp (nanopass-resolve-rule-proc pico-rule))
+        (gd (nanopass-resolve-rule-descriptor guard-rule))
+        (pd (nanopass-resolve-rule-descriptor pico-rule)))
+    (if (not (procedure? gp))
+        (error "picopass-when: first argument is not a valid guard procedure" guard-rule)
+        (if (not (procedure? pp))
+            (error "picopass-when: second argument is not a valid rule procedure" pico-rule)
+            (let* ((name (unique-symbol "picopass_when_"))
+                   (nt-name (if pd (rule-nt-name pd) (if gd (rule-nt-name gd) 'Expr)))
+                   (head-tags (if pd (rule-head-tags pd) '*))
+                   (reads (nanopass-combine-sets (if gd (rule-reads gd) '())
+                                                (if pd (rule-reads pd) '())))
+                   (writes (if pd (rule-writes pd) '()))
+                   (eliminates (if pd (rule-eliminates pd) '()))
+                   (clauses (if pd (rule-clauses pd) '()))
+                   (composite
+                    (lambda (ir)
+                      (let ((g-res (gp ir)))
+                        (if g-res
+                            (pp ir)
+                            #f))))
+                   (desc (nanopass-make-rule-descriptor
+                          name 'pico nt-name head-tags reads writes eliminates clauses composite)))
+              (nanopass-register-rule! desc)
+              composite)))))
+
 ;;; Catamorphism Automatic Traversal Code Synthesizer (DSN-33-01 T1.2)
 ;;; Automatically traverses non-matching AST nodes recursively according to
 ;;; `define-language` production schemas.
@@ -3982,6 +4186,26 @@
 
 (define-macro (nanopass-template . args)
   (nanopass-expand-template (car args) '()))
+
+(define-macro (picopass-seq* . rules)
+  (if (null? rules)
+      '(lambda (ir) #f)
+      (if (null? (cdr rules))
+          (car rules)
+          (let loop ((rem (cdr rules)) (acc (car rules)))
+            (if (null? rem)
+                acc
+                (loop (cdr rem) (list 'picopass-seq acc (car rem))))))))
+
+(define-macro (picopass-choice* . rules)
+  (if (null? rules)
+      '(lambda (ir) #f)
+      (if (null? (cdr rules))
+          (car rules)
+          (let loop ((rem (cdr rules)) (acc (car rules)))
+            (if (null? rem)
+                acc
+                (loop (cdr rem) (list 'picopass-choice acc (car rem))))))))
 
 ;;; =======================================================================
 ;;; ULisp Compiler: Lightweight IR Verifier & Invariant Pass Checker
