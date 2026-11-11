@@ -10,7 +10,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **758** | Pass 015 (015_dsl_expander.scm) 先行 DSL 展開器への pico / femto / atto 構文統合 (DSN-33-01 T2.3) | Feature | High | In Progress | [758-integrate-picopass-dsl-into-pass-015-expander.md](758-integrate-picopass-dsl-into-pass-015-expander.md) |
 | **759** | define-pass 内 fuse-rules 構文と先頭タグ (Head-Tag) 別 O(1) case ディスパッチ生成エンジンの実装 (DSN-33-01 T3.1) | Feature | High | New | [759-implement-fuse-rules-and-head-tag-o1-dispatch.md](759-implement-fuse-rules-and-head-tag-o1-dispatch.md) |
 | **760** | 5ステップ融合サイクルの局所再適用 (Local Re-dispatch) と extends (-) 対 eliminates 自動整合性検証の実装 (DSN-33-01 T3.2) | Feature | High | New | [760-implement-local-redispatch-and-extends-eliminates-validation.md](760-implement-local-redispatch-and-extends-eliminates-validation.md) |
 | **761** | LIR 命令列向け fuse-window-rules スライディングウィンドウ走査および収束ドライバの実装 (DSN-33-01 T3.3) | Feature | High | New | [761-implement-fuse-window-rules-for-lir-sliding-window.md](761-implement-fuse-window-rules-for-lir-sliding-window.md) |
@@ -28,6 +27,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **758** | Pass 015 (015_dsl_expander.scm) 先行 DSL 展開器への pico / femto / atto 構文統合 (DSN-33-01 T2.3) | Feature | 2026-11-11 | [closed/758-integrate-picopass-dsl-into-pass-015-expander.md](closed/758-integrate-picopass-dsl-into-pass-015-expander.md) |
 | **757** | Picopass 関数合成コンビネータ群 (picopass-seq / choice / fixpoint / when) の実装と単体テスト整備 (DSN-33-01 T2.2) | Feature | 2026-11-11 | [closed/757-implement-picopass-strategy-combinators.md](closed/757-implement-picopass-strategy-combinators.md) |
 | **756** | 第一級ルール記述子 (Rule Descriptor) と define-picopass / define-femtopass / define-attopass DSL の実装 (DSN-33-01 T2.1) | Feature | 2026-11-11 | [closed/756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md](closed/756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) |
 | **806** | Nanopass AOT コンパイラによる軽量タスク Spawn の直接インライン展開とクロージャ呼出し排除 | Feature | 2026-11-11 | [closed/806-implement-nanopass-aot-inlining-for-lightweight-task-spawning.md](closed/806-implement-nanopass-aot-inlining-for-lightweight-task-spawning.md) |

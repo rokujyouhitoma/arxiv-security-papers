@@ -2,14 +2,14 @@
 ID: 758
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] Pass 015 (015_dsl_expander.scm) 先行 DSL 展開器への pico / femto / atto 構文統合 (DSN-33-01 T2.3) (ID: 758)
 
 ## 1. 概要 / Summary
 
-[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 8.1 節（領域⑥: DSL ブートストラップ展開）およびタスク **T2.3** に基づき、ULisp コンパイラ自身のセルフホスティング AOT ビルド時に Nanopass DSL 構文を先行展開する Pass 015（`ulisp/frontend/015_dsl_expander.scm`）を拡張し、先行タスクで導入された微細粒度ルール構文（`define-picopass`, `define-femtopass`, `define-attopass`）を正準 Scheme 定義群へと手続き的に展開可能にする。
+[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 8.1 節（領域⑥: DSL ブートストラップ展開）およびタスク **T2.3** に基づき、ULisp コンパイラ自身のセルフホスティング AOT ビルド時に Nanopass DSL 構文を先行展開する Pass 015（`ulisp/frontend/015_dsl_expander.scm`）を拡張し、先行タスクで導入された微細粒度ルール構文（`define-picopass`, `define-femtopass`, `define-attopass`）を正準 Scheme 定義群へと手続き的に展開可能にする。
 
 ### 1.1 背景とアーキテクチャ上の位置づけ
 
@@ -17,41 +17,41 @@ ULisp コンパイラ基盤は、2系統の実行パスで Nanopass DSL を解�
 1. **インタプリタ／対話環境（ILisp / Gauche ホスト）**: `ulisp/compiler/nanopass.scm` 内の `define-macro` 群を通じて展開・実行される。
 2. **AOT コンパイラパイプライン ＆ 3-Stage セルフホスティング**: Pass 010（ライブラリ読み込み）直後の **Pass 015 (`expand-dsl-forms`)** において、構文マクロ展開（Pass 020 `syntax-rules`）より前にすべての Nanopass DSL フォームを手続き的（Procedural AST Rewriting）に正準 Scheme 定義（`define` 等）へと脱糖し、ホスト専用の `define-macro` を完全に除去（フィルタリング）する。
 
-先行タスク [Issue #756](closed/756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) および [Issue #757](closed/757-implement-picopass-strategy-combinators.md) により、`define-picopass` / `define-femtopass` / `define-attopass` の手続き型展開器（`nanopass-expand-define-picopass` 等）および関数合成コンビネータ群が確立された。
-しかし現行の Pass 015 は `define-language`, `define-pass`, `trace-define-pass`, `define-parser`, `define-unparser` のみを受け付けており、AOT コンパイル対象コード内に `define-picopass` 等が直接現れると、後続の Pass 020 以降で未定義シンボル／構文エラーとして拒絶される。
+先行タスク [Issue #756](756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) および [Issue #757](757-implement-picopass-strategy-combinators.md) により、`define-picopass` / `define-femtopass` / `define-attopass` の手続き型展開器（`nanopass-expand-define-picopass` 等）および関数合成コンビネータ群が確立された。
+しかし従来の Pass 015 は `define-language`, `define-pass`, `trace-define-pass`, `define-parser`, `define-unparser` のみを受け付けており、AOT コンパイル対象コード内に `define-picopass` 等が直接現れると、後続の Pass 020 以降で未定義シンボル／構文エラーとして拒絶される課題があった。
 
-本タスクにより Pass 015 が `define-picopass` / `define-femtopass` / `define-attopass` を完全サポートすることで、後続の [Issue #759 (T3.1: fuse-rules)](759-implement-fuse-rules-and-head-tag-o1-dispatch.md) および [Issue #762 (T4.1: 脱糖パス 026〜029 の Picopass 移行)](762-migrate-desugar-passes-026-to-029-to-picopass.md) において、フロントエンドのコアパス群が純粋な微細 DSL で記述され、完全自動でセルフホスティング AOT コンパイルされる基盤を完成させる。
+本タスクにより Pass 015 が `define-picopass` / `define-femtopass` / `define-attopass` を完全サポートし、後続の [Issue #759 (T3.1: fuse-rules)](../759-implement-fuse-rules-and-head-tag-o1-dispatch.md) および [Issue #762 (T4.1: 脱糖パス 026〜029 の Picopass 移行)](../762-migrate-desugar-passes-026-to-029-to-picopass.md) において、フロントエンドのコアパス群が純粋な微細 DSL で記述され、完全自動でセルフホスティング AOT コンパイルされる基盤を確立した。
 
 ---
 
 ## 2. トレーサビリティ / Traceability
 
 - **関連設計書**:
-  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
     - 第 3.1 節（三権分立 DSL: `pico`, `femto`, `atto`）
     - 第 8.1 節（既存 Nanopass 全機能インベントリ 領域⑥: DSL ブートストラップ展開）
     - 第 9.2 節（Phase 2 タスク **T2.3**）
 - **依存関係**:
   - **先行 Issue**:
-    - [Issue #756 (T2.1: Rule Descriptor と Picopass DSL 実装)](closed/756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) (Closed)
-    - [Issue #757 (T2.2: 関数合成コンビネータ群の実装)](closed/757-implement-picopass-strategy-combinators.md) (Closed)
+    - [Issue #756 (T2.1: Rule Descriptor と Picopass DSL 実装)](756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) (Closed)
+    - [Issue #757 (T2.2: 関数合成コンビネータ群の実装)](757-implement-picopass-strategy-combinators.md) (Closed)
   - **後続 Issue**:
-    - [Issue #759 (T3.1: define-pass 内 fuse-rules 構文と Head-Tag O(1) ディスパッチ)](759-implement-fuse-rules-and-head-tag-o1-dispatch.md)
-    - [Issue #762 (T4.1: フロントエンド脱糖パス 026〜029 の Picopass 化)](762-migrate-desugar-passes-026-to-029-to-picopass.md)
+    - [Issue #759 (T3.1: define-pass 内 fuse-rules 構文と Head-Tag O(1) ディスパッチ)](../759-implement-fuse-rules-and-head-tag-o1-dispatch.md)
+    - [Issue #762 (T4.1: フロントエンド脱糖パス 026〜029 の Picopass 化)](../762-migrate-desugar-passes-026-to-029-to-picopass.md)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/frontend/015_dsl_expander.scm](../../ulisp/frontend/015_dsl_expander.scm)
+- [x] [ulisp/frontend/015_dsl_expander.scm](../../../ulisp/frontend/015_dsl_expander.scm)
   - `expand-dsl-forms` 内の `%source-loc` 検査対象リストに `define-picopass`, `define-femtopass`, `define-attopass` を追加。
   - トップレベルフォーム走査 `cond` 分岐に `define-picopass`, `define-femtopass`, `define-attopass` の展開・フラット化（`begin` 分解）処理を追加。
-- [ ] [ulisp/compiler/nanopass.scm](../../ulisp/compiler/nanopass.scm)
+- [x] [ulisp/compiler/nanopass.scm](../../../ulisp/compiler/nanopass.scm)
   - `nanopass-expand-rule-dsl` 実行時に、コンパイル時ルールレジストリ（`*nanopass-rules*`）へのコンパイル時登録（`nanopass-register-rule!`）を連動させ、同一コンパイル単位内の後続 `define-pass` が即座にルール記述子を参照可能にする。
-- [ ] [ulisp/compiler.scm](../../ulisp/compiler.scm)
+- [x] [ulisp/compiler.scm](../../../ulisp/compiler.scm)
   - `make -C ulisp compiler` による結合ソース再生成と括弧バランス検証。
-- [ ] [ulisp/tests/passes/test_015_dsl_expander.scm](../../ulisp/tests/passes/test_015_dsl_expander.scm)
-  - Pass 015 単体テストスイートに、`define-picopass`, `define-femtopass`, `define-attopass` の展開検証、`%source-loc` ラッパー付与時の行番号維持検証、および展開時ルールレジストリ登録の検証テストを追加。
+- [x] [ulisp/tests/passes/test_015_dsl_expander.scm](../../../ulisp/tests/passes/test_015_dsl_expander.scm)
+  - Pass 015 単体テストスイートに、`define-picopass`, `define-femtopass`, `define-attopass` の展開検証、`%source-loc` ラッパー付与時の行番号維持検証、および展開時ルールレジストリ登録の検証テストを追加（全27件 PASS）。
 
 ---
 
@@ -197,10 +197,48 @@ Target Branch: `feat/758-integrate-picopass-into-pass-015`
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp/frontend/015_dsl_expander.scm` が `define-picopass`, `define-femtopass`, `define-attopass` を認識し、正準 Scheme 定義群へ展開できること。
-- [ ] `%source-loc` ラッパーが付与された上記 DSL フォームが、展開後のすべての定義・式に対して位置情報を保持して再包装されること。
-- [ ] `nanopass-expand-define-picopass` 等の展開処理中に、コンパイル時ルール記述子がインメモリの `*nanopass-rules*` に自動登録されること。
-- [ ] `ulisp/tests/passes/test_015_dsl_expander.scm` に新規テストケースが追加され、全件 PASS すること。
-- [ ] `make -C ulisp test_passes` および `make -C ulisp test_nanopass` が 100% PASS すること。
-- [ ] `make -C ulisp bootstrap` が Stage 1 から Stage 3 まで成功し、ビット完全一致の固定小数点検証を通過すること。
-- [ ] `docs/issues/README.md` および本 Issue ファイルのステータスが `Closed` に更新され、コミットログが Conventional Commit 形式に従っていること。
+- [x] `ulisp/frontend/015_dsl_expander.scm` が `define-picopass`, `define-femtopass`, `define-attopass` を認識し、正準 Scheme 定義群へ展開できること。
+- [x] `%source-loc` ラッパーが付与された上記 DSL フォームが、展開後のすべての定義・式に対して位置情報を保持して再包装されること。
+- [x] `nanopass-expand-define-picopass` 等の展開処理中に、コンパイル時ルール記述子がインメモリの `*nanopass-rules*` に自動登録されること。
+- [x] `ulisp/tests/passes/test_015_dsl_expander.scm` に新規テストケースが追加され、全件 PASS すること（27 / 27 PASS）。
+- [x] `make -C ulisp test_passes` および `make -C ulisp test_nanopass` が 100% PASS すること。
+- [x] `make -C ulisp bootstrap` が Stage 1 から Stage 3 まで成功し、ビット完全一致の固定小数点検証を通過すること。
+- [x] `docs/issues/README.md` および本 Issue ファイルのステータスが `Closed` に更新され、コミットログが Conventional Commit 形式に従っていること。
+
+---
+
+## 8. 完了報告 / Implementation & Verification Report
+
+### 8.1 実装内容サマリー
+1. **Pass 015 手続き的展開器の拡張 (`ulisp/frontend/015_dsl_expander.scm`)**:
+   - `%source-loc` ラッパー判定リストに `define-picopass`, `define-femtopass`, `define-attopass` を追加し、ソース位置情報（ファイル名・行・列）を展開後の各定義・式へ完全に伝播。
+   - トップレベル走査ループ `expand-dsl-forms` に上記 3 DSL フォームの展開分岐を追加。展開された `begin` ブロックをフラットにアンパックして後続パスへ供給。
+2. **コンパイル時ルール自動登録の連動 (`ulisp/compiler/nanopass.scm`)**:
+   - `nanopass-expand-rule-dsl` 内で、AST 返却に先立ちコンパイル時記述子を作成し `(nanopass-register-rule! compile-time-desc)` を呼び出すよう拡張。
+   - 同一コンパイル単位内に定義された Picopass 群を、後続の `define-pass`（将来の `fuse-rules`）が AOT コンパイル展開時にインメモリ参照可能に整備。
+3. **単体テストスイートの拡充 (`ulisp/tests/passes/test_015_dsl_expander.scm`)**:
+   - 既存 8 テストから 27 テストへと大幅拡充。
+   - `define-picopass`, `define-femtopass`, `define-attopass` の Scheme 正準形式（記述子定義、手続き定義）への展開検証。
+   - 展開直後の `nanopass-lookup-rule` によるインメモリ `*nanopass-rules*` 登録検証（`kind`, `head-tags` 照合）。
+   - `%source-loc` ラッパー付きフォームの位置情報保持・再包装の検証。
+
+### 8.2 検証結果
+- **Pass 015 Unit Tests**:
+  - `cat ulisp/build/compiler_passes.scm ulisp/tests/passes/test_015_dsl_expander.scm | gosh`: **27 / 27 assertions PASSED** (100%)
+- **全 Nanopass 1:1 単体テスト**:
+  - `make -C ulisp test_passes`: **39 / 39 passes, 147 / 147 assertions PASSED** (100%)
+- **Nanopass フレームワーク総合テスト**:
+  - `make -C ulisp test_nanopass`: **130 / 130 tests PASSED** (100%)
+  - `make -C ulisp test_nanopass_tracer`: **31 / 31 tests PASSED** (100%)
+- **パスマネージャ・ベリファイア検証**:
+  - `make -C ulisp test_pass_manager`: **61 / 61 assertions PASSED** (100%)
+  - `make -C ulisp test_lir_verifier`: **46 / 46 tests PASSED** (100%)
+  - `make -C ulisp test_verifier`: **27 / 27 tests PASSED** (100%)
+- **3-Stage セルフホスティングブートストラップ**:
+  - `make -C ulisp bootstrap`:
+    - Stage 1 (Native Seed) $\to$ Stage 2 $\to$ Stage 3 正常終了。
+    - Stage 2 と Stage 3 の出力アセンブリは**ビット完全一致**（固定小数点到達）。
+    - Stage 3 バイナリによるスモークテスト実行成功 (exit code 42)。
+    - `ulisp/bin/ulisp-boot` シードバイナリの更新を完了。
+- **リポジトリ静的解析 & コード品質**:
+  - `make py_compile static_analysis`: 617 files scanned, 0 issues, Radon/Xenon ランク A (100% PASS)。
