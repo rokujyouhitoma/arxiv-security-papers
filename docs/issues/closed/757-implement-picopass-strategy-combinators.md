@@ -2,16 +2,16 @@
 ID: 757
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] Picopass 関数合成コンビネータ群 (picopass-seq / choice / fixpoint / when) の実装と単体テスト整備 (DSN-33-01 T2.2) (ID: 757)
 
 ## 1. 概要 / Summary
 
-[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 3.3 節、第 7.1 節、およびタスク **T2.2** に基づき、第一級ルール（`Rule Descriptor`）同士を関数合成して新たな複合ルールを構築する **4つの戦略コンビネータ（Strategy Combinators）** を実装する。
+[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 3.3 節、第 7.1 節、およびタスク **T2.2** に基づき、第一級ルール（`Rule Descriptor`）同士を関数合成して新たな複合ルールを構築する **4つの戦略コンビネータ（Strategy Combinators）** を実装する。
 
-先行タスク [Issue #756](closed/756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) で確立された第一級ルール記述子（`nanopass-make-rule-descriptor`）および三権分立 DSL（`define-picopass`, `define-femtopass`, `define-attopass`）を基礎とし、個別の局所規則を疎結合のまま組み合わせることで、高階な脱糖規則・最適化パイプライン・契約検証規則を宣言的に構築可能にする。
+先行タスク [Issue #756](756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) で確立された第一級ルール記述子（`nanopass-make-rule-descriptor`）および三権分立 DSL（`define-picopass`, `define-femtopass`, `define-attopass`）を基礎とし、個別の局所規則を疎結合のまま組み合わせることで、高階な脱糖規則・最適化パイプライン・契約検証規則を宣言的に構築可能にする。
 
 ### 提供する4大コンビネータ
 
@@ -38,27 +38,27 @@ ID: 757
 ## 2. トレーサビリティ / Traceability
 
 - **関連設計書**:
-  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 3.3 節, 第 7.1 節, 第 9.2 節 タスク **T2.2**)
+  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 3.3 節, 第 7.1 節, 第 9.2 節 タスク **T2.2**)
 - **依存関係**:
-  - **先行 Issue**: [Issue #756 (T2.1: Rule Descriptor と Picopass DSL 実装)](closed/756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) (Closed)
+  - **先行 Issue**: [Issue #756 (T2.1: Rule Descriptor と Picopass DSL 実装)](756-implement-rule-descriptor-and-picopass-femtopass-attopass-dsl.md) (Closed)
   - **後続 Issue**:
-    - [Issue #758 (T2.3: Pass 015 への新 DSL 統合)](758-integrate-picopass-dsl-into-pass-015-expander.md)
-    - [Issue #759 (T3.1: fuse-rules と O(1) ディスパッチ)](759-implement-fuse-rules-and-head-tag-o1-dispatch.md)
+    - [Issue #758 (T2.3: Pass 015 への新 DSL 統合)](../758-integrate-picopass-dsl-into-pass-015-expander.md)
+    - [Issue #759 (T3.1: fuse-rules と O(1) ディスパッチ)](../759-implement-fuse-rules-and-head-tag-o1-dispatch.md)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/compiler/nanopass_meta.scm](../../ulisp/compiler/nanopass_meta.scm)
+- [x] [ulisp/compiler/nanopass_meta.scm](../../../ulisp/compiler/nanopass_meta.scm)
   - ルールメタデータ合成ヘルパー群（`nanopass-combine-head-tags`, `nanopass-combine-sets`）。
   - 基本コンビネータ実装（`picopass-seq`, `picopass-choice`, `picopass-fixpoint`, `picopass-fixpoint-limit`, `picopass-when`）。
   - リスト版コンビネータ実装（`picopass-compose-list`, `picopass-choice-list`）。
   - 合成された規則への第一級 `Rule Descriptor` 付与およびレジストリ自動登録。
-- [ ] [ulisp/compiler/nanopass.scm](../../ulisp/compiler/nanopass.scm)
+- [x] [ulisp/compiler/nanopass.scm](../../../ulisp/compiler/nanopass.scm)
   - ホスト・インタプリタ向けマクロ定義（`picopass-seq*`, `picopass-choice*`）。
-- [ ] [ulisp/tests/test_nanopass_framework.scm](../../ulisp/tests/test_nanopass_framework.scm)
+- [x] [ulisp/tests/test_nanopass_framework.scm](../../../ulisp/tests/test_nanopass_framework.scm)
   - Section 17 として各コンビネータ（`seq`, `choice`, `fixpoint`, `when`）の単体テストおよび合成ルールのリフレクション検査を追加。
-- [ ] [ulisp/compiler.scm](../../ulisp/compiler.scm)
+- [x] [ulisp/compiler.scm](../../../ulisp/compiler.scm)
   - `make -C ulisp compiler` による結合コンパイラソース更新。
 
 ---
@@ -161,10 +161,44 @@ Target Branch: `feat/757-implement-picopass-combinators`
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp/compiler/nanopass_meta.scm` に `picopass-seq`, `picopass-compose-list`, `picopass-choice`, `picopass-choice-list`, `picopass-fixpoint`, `picopass-fixpoint-limit`, `picopass-when` がすべて固定アリティで実装されていること。
-- [ ] 各コンビネータで生成された複合ルールが、単一 S 式引数を取り直接適用可能であること。
-- [ ] 各コンビネータで生成された複合ルールが有効な `Rule Descriptor` を保持し、`head-tags`, `reads`, `writes`, `eliminates` が正しく引き継がれること。
-- [ ] `picopass-fixpoint` が発散規則に対して `max-steps`（既定 64）で安全にフェイルクローズ停止すること。
-- [ ] `ulisp/tests/test_nanopass_framework.scm` に Section 17 単体テストが追加され、全件 PASS すること（`make -C ulisp test_nanopass`）。
-- [ ] `make -C ulisp bootstrap` が Stage 1 から Stage 3 まで 100% 成功し、ビット完全一致の固定小数点検証を通過すること。
-- [ ] `docs/issues/README.md` および本 Issue ファイルのステータスが整合して更新されていること。
+- [x] `ulisp/compiler/nanopass_meta.scm` に `picopass-seq`, `picopass-compose-list`, `picopass-choice`, `picopass-choice-list`, `picopass-fixpoint`, `picopass-fixpoint-limit`, `picopass-when` がすべて固定アリティで実装されていること。
+- [x] 各コンビネータで生成された複合ルールが、単一 S 式引数を取り直接適用可能であること。
+- [x] 各コンビネータで生成された複合ルールが有効な `Rule Descriptor` を保持し、`head-tags`, `reads`, `writes`, `eliminates` が正しく引き継がれること。
+- [x] `picopass-fixpoint` が発散規則に対して `max-steps`（既定 64）で安全にフェイルクローズ停止すること。
+- [x] `ulisp/tests/test_nanopass_framework.scm` に Section 17 単体テストが追加され、全件 PASS すること（`make -C ulisp test_nanopass`）。
+- [x] `make -C ulisp bootstrap` が Stage 1 から Stage 3 まで 100% 成功し、ビット完全一致の固定小数点検証を通過すること。
+- [x] `docs/issues/README.md` および本 Issue ファイルのステータスが整合して更新されていること。
+
+---
+
+## 8. 完了報告 / Implementation & Verification Report
+
+### 8.1 実装内容サマリー
+1. **メタデータ合成代数ヘルパー群の実装 (`ulisp/compiler/nanopass_meta.scm`)**:
+   - `nanopass-resolve-rule-proc`, `nanopass-resolve-rule-descriptor`: シンボル・手続き・記述子からのルール正規化解決。
+   - `nanopass-combine-sets`: 重複を排除したシンボル集合の和集合。
+   - `nanopass-combine-head-tags`: ワイルドカード `'*` を考慮した先頭タグ集合の安全な融合。
+2. **戦略コンビネータ群の提供 (`ulisp/compiler/nanopass_meta.scm`, `ulisp/compiler/nanopass.scm`)**:
+   - `picopass-seq`, `picopass-compose-list`: 部分適用の安全保持と直列パイプライン実行。
+   - `picopass-choice`, `picopass-choice-list`: 特殊規則優先・フォールスルー選択実行。
+   - `picopass-fixpoint`, `picopass-fixpoint-limit`: 不動点反復およびステップ上限超過時の `picopass-fail` 構造化例外送出によるフェイルクローズ。
+   - `picopass-when`: アトミック契約検証ガードによる条件付きルール実行。
+   - ホスト環境用マクロ構文 `picopass-seq*`, `picopass-choice*` を整備。
+   - すべての手続きを ULisp 自己ホスト制約に準拠した完全固定アリティで定義。
+3. **単体テストスイートの整備 (`ulisp/tests/test_nanopass_framework.scm`)**:
+   - Section 17 として全 27 アサーションの包括的テストを追加。全 130 件の Nanopass フレームワークテストを 100% PASS。
+
+### 8.2 検証結果
+- **Nanopass Unit Tests**:
+  - `make -C ulisp test_nanopass`: 130 / 130 PASSED (100%)
+  - `make -C ulisp test_nanopass_tracer`: 31 / 31 PASSED (100%)
+  - `make -C ulisp test_pass_manager`: 61 / 61 assertions PASSED (100%)
+  - `make -C ulisp test_lir_verifier`: 46 / 46 PASSED (100%)
+  - `make -C ulisp test_verifier`: 27 / 27 PASSED (100%)
+- **Self-Hosting Bootstrap**:
+  - `make -C ulisp bootstrap`: Stage 1 (Native Seed) $\to$ Stage 2 $\to$ Stage 3 すべて成功。
+  - Stage 2 (`stage2_compiler.s`) と Stage 3 (`stage3_compiler.s`) の出力アセンブリは**ビット完全一致**（固定小数点到達）。
+  - 生成されたネイティブバイナリによるスモークテスト (`smoke_test_bootstrap.bin`) 実行成功 (exit code 42)。
+  - `ulisp/bin/ulisp-boot` シードバイナリの更新を完了。
+- **リポジトリ静的解析 & 品質ゲート**:
+  - `make py_compile static_analysis`: 617 files scanned, 0 issues, Radon/Xenon 複雑度ランク A (100% PASS)。
