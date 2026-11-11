@@ -206,5 +206,6 @@ Pass Fusion（T3.1）およびルール依存関係 DAG（T5.1）が利用する
    - `make -C ulisp test_nanopass_tracer`: 全 31 テスト 100% PASS。
    - `make -C ulisp test_pass_manager`: 全 61 アサーション 100% PASS。
    - `make -C ulisp test_verifier test_lir_verifier`: 全 73 テスト（46 LIR Verifier + 27 IR Verifier）100% PASS。
+   - `make -C ulisp bootstrap`: Stage 1 (Native Seed) -> Stage 2 -> Stage 3 固定小数点検証 (Stage 2/3 出力が bit-for-bit で完全一致) および Stage 3 実行スモークテスト (output: 42) を 100% PASS。
    - `make py_compile static_analysis`: Python 構文・Xenon 複雑度・Mypy 型検査 0 エラーで PASS。
 
