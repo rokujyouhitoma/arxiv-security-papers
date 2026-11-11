@@ -176,6 +176,54 @@
              (verify-pass-output 'desugar '(cond (else 1))))
 (enable-verifier!)
 
+;;; -----------------------------------------------------------------------
+;;; Group 7: Direct Attopass Descriptors & Verification Cache (DSN-33-01 T4.3)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 7: Direct Attopass Descriptors & Verification Cache ---\n")
+
+;; 7.1 Direct Attopass invocation
+(assert-true "atto-no-desugar-sugar returns #t for valid core form"
+             (atto-no-desugar-sugar '(let ((x 1)) x)))
+
+(assert-false "atto-no-desugar-sugar returns #f for cond keyword"
+              (atto-no-desugar-sugar '(cond (else 1))))
+
+(assert-false "atto-no-desugar-sugar returns #f for named-let"
+              (atto-no-desugar-sugar '(let loop ((x 1)) x)))
+
+;; 7.2 Attopass Rule Descriptors registration
+(let ((desc-desugar (nanopass-lookup-rule 'atto-no-desugar-sugar))
+      (desc-anf (nanopass-lookup-rule 'atto-anf-invariants))
+      (desc-closure (nanopass-lookup-rule 'atto-closure-invariants))
+      (desc-safepoint (nanopass-lookup-rule 'atto-safepoint-invariants))
+      (desc-ssa (nanopass-lookup-rule 'atto-ssa-invariants)))
+  (assert-true "atto-no-desugar-sugar is registered rule descriptor"
+               (rule-descriptor? desc-desugar))
+  (assert-true "atto-no-desugar-sugar rule-kind is 'atto"
+               (eq? (rule-kind desc-desugar) 'atto))
+  (assert-true "atto-anf-invariants is registered rule descriptor"
+               (rule-descriptor? desc-anf))
+  (assert-true "atto-closure-invariants is registered rule descriptor"
+               (rule-descriptor? desc-closure))
+  (assert-true "atto-safepoint-invariants is registered rule descriptor"
+               (rule-descriptor? desc-safepoint))
+  (assert-true "atto-ssa-invariants is registered rule descriptor"
+               (rule-descriptor? desc-ssa)))
+
+;; 7.3 AST Verification Cache
+(let ((sample-ast '(let ((x 1)) x)))
+  (reset-nanopass-verification-cache!)
+  (assert-false "cache misses on unverified AST"
+                (nanopass-ast-already-verified? 'L_core sample-ast))
+  (nanopass-record-verified-ast! 'L_core sample-ast)
+  (assert-true "cache hits on verified AST and same language"
+               (nanopass-ast-already-verified? 'L_core sample-ast))
+  (assert-false "cache misses on different language"
+                (nanopass-ast-already-verified? 'L_anf sample-ast))
+  (reset-nanopass-verification-cache!)
+  (assert-false "cache cleared after reset"
+                (nanopass-ast-already-verified? 'L_core sample-ast)))
+
 (display "\n=======================================================\n")
 (display " All IR Verifier Tests PASSED: ")
 (display (car *pass-count*))

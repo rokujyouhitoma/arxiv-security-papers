@@ -660,6 +660,22 @@
 (define (enable-nanopass-verifier!) (set-car! *nanopass-verifier-enabled* #t))
 (define (disable-nanopass-verifier!) (set-car! *nanopass-verifier-enabled* #f))
 
+;;; Verification Cache to eliminate redundant full-tree traversals (DSN-33-01 T4.3)
+(define *nanopass-last-verified-ast* (cons #f '()))
+(define *nanopass-last-verified-lang* (cons #f '()))
+
+(define (reset-nanopass-verification-cache!)
+  (set-car! *nanopass-last-verified-ast* #f)
+  (set-car! *nanopass-last-verified-lang* #f))
+
+(define (nanopass-ast-already-verified? lang-name expr)
+  (and (eq? expr (car *nanopass-last-verified-ast*))
+       (eq? lang-name (car *nanopass-last-verified-lang*))))
+
+(define (nanopass-record-verified-ast! lang-name expr)
+  (set-car! *nanopass-last-verified-ast* expr)
+  (set-car! *nanopass-last-verified-lang* lang-name))
+
 (define (nanopass-verification-failure pass-name lang-name expr phase)
   (display "\n*** [NANOPASS VERIFIER ERROR] Pass: ")
   (display pass-name)
@@ -675,12 +691,16 @@
 (define (nanopass-verify-ast pass-name lang-name val phase)
   (if (or (eq? lang-name '*) (not (symbol? lang-name)))
       #t
-      (let ((lang-entry (assq lang-name (car *nanopass-languages*))))
-        (if (not lang-entry)
-            #t
-            (if (not (nanopass-ast-valid? lang-name val))
-                (nanopass-verification-failure pass-name lang-name val phase)
-                #t)))))
+      (if (nanopass-ast-already-verified? lang-name val)
+          #t  ; AST was already verified against lang-name, skip traversal in O(1)!
+          (let ((lang-entry (assq lang-name (car *nanopass-languages*))))
+            (if (not lang-entry)
+                #t
+                (if (not (nanopass-ast-valid? lang-name val))
+                    (nanopass-verification-failure pass-name lang-name val phase)
+                    (begin
+                      (nanopass-record-verified-ast! lang-name val)
+                      #t)))))))
 
 
 (define (nanopass-proper-list? x)

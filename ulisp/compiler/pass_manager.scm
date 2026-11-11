@@ -496,6 +496,7 @@
 (define (run-pass-pipeline forms verify-mode trace-mode)
   (if (null? (car *pass-registry*))
       (init-default-pass-registry!))
+  (reset-nanopass-verification-cache!)
   (if verify-mode
       (begin
         (enable-verifier!)
