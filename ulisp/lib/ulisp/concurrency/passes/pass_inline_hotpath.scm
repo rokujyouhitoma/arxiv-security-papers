@@ -97,6 +97,16 @@
             (%str-starts-with? "task" s)
             (%str-ends-with? "-task" s)))))
 
+(define (scheduler-var-name? sym)
+  (if (not (symbol? sym))
+      #f
+      (let ((s (symbol->string sym)))
+        (or (string=? s "sched")
+            (string=? s "scheduler")
+            (%str-starts-with? "sched" s)
+            (%str-ends-with? "-sched" s)
+            (%str-ends-with? "-scheduler" s)))))
+
 (define (eliminated-assertion? expr)
   (eq? expr '%eliminated-assertion%))
 
@@ -159,6 +169,8 @@
      'padded-atomic-box)
     ((memq (car rhs) '(make-task-context %make-task-context))
      'task-context)
+    ((memq (car rhs) '(make-work-stealing-scheduler %make-work-stealing-scheduler))
+     'scheduler)
     (else #f)))
 
 ;;; -----------------------------------------------------------------------
@@ -180,6 +192,8 @@
          'unknown))
     ((memq op '(task-context? %task-context?))
      (if (statically-typed? env v 'task-context) 'always-true 'unknown))
+    ((memq op '(work-stealing-scheduler? %work-stealing-scheduler?))
+     (if (statically-typed? env v 'scheduler) 'always-true 'unknown))
     (else 'unknown)))
 
 (define (evaluate-statically-checked-test test-expr env)
@@ -390,6 +404,48 @@
                     spsc-branch
                     '(let ((%%res (%channel-recv-core! %%ch #f #f #f #f)))
                        (if (car %%res) (cdr %%res) #f)))))))
+
+(define (inline-scheduler-spawn-expr sched-expr task-expr target-worker-expr)
+  ;; Direct L1 Ring Buffer & Work-Stealing scheduler-spawn! AOT Inlining (Issue #806)
+  (let* ((has-target? (not (eq? target-worker-expr #f)))
+         (spawn-body
+           '(if (>= (scheduler-live-tasks %%sched) (vector-ref *scheduler-max-tasks-box* 0))
+                (error "scheduler-spawn!: maximum spawned tasks limit exceeded (CWE-400)" (scheduler-live-tasks %%sched))
+                (let ((%%ctx (%normalize-task-context %%task %%target-id)))
+                  (%scheduler-tasks-spawned-inc! %%sched)
+                  (%scheduler-live-tasks-inc! %%sched)
+                  (if (and %%target-id
+                           (integer? %%target-id)
+                           (>= %%target-id 0)
+                           (< %%target-id (scheduler-worker-count %%sched)))
+                      (let* ((%%w (scheduler-get-worker %%sched %%target-id))
+                             (%%l1 (worker-l1-queue %%w))
+                             (%%dq (worker-deque %%w))
+                             (%%cur-slot (%asm-current-worker-slot))
+                             (%%native-running (> (atomic-ref *scheduler-native-workers-running-box*) 0)))
+                        (if (or (not %%native-running) (= %%target-id %%cur-slot))
+                            (begin
+                              (if (worker-current-task %%w)
+                                  (l1-ring-push! %%l1 %%ctx %%dq)
+                                  (deque-push! %%dq %%ctx))
+                              (let ((%%cell (worker-futex-cell %%w)))
+                                (if %%cell ((vector-ref *scheduler-futex-unpark-box* 0) %%cell))))
+                            (begin
+                              (queue-enqueue! (scheduler-global-queue %%sched) %%ctx)
+                              (let ((%%cell (worker-futex-cell %%w)))
+                                (if %%cell ((vector-ref *scheduler-futex-unpark-box* 0) %%cell))))))
+                      (begin
+                        (queue-enqueue! (scheduler-global-queue %%sched) %%ctx)
+                        (if (> (scheduler-worker-count %%sched) 1)
+                            (let* ((%%w (scheduler-get-worker %%sched 1))
+                                   (%%cell (worker-futex-cell %%w)))
+                              (if %%cell ((vector-ref *scheduler-futex-unpark-box* 0) %%cell))))))
+                  #t))))
+    (list 'let (append (list (list '%%sched sched-expr)
+                             (list '%%task task-expr))
+                       (if has-target? (list (list '%%target target-worker-expr)) '()))
+          (list 'let (list (list '%%target-id (if has-target? '%%target #f)))
+                spawn-body))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Recursive AST Rewriter & Pass Engine
@@ -668,6 +724,21 @@
                  (inline-hotpath-expr chan-arg env))
            (map (lambda (e) (inline-hotpath-expr e env)) expr))))
 
+    ;; l) scheduler-spawn! (Issue #806)
+    ((and (eq? (car expr) 'scheduler-spawn!)
+          (pair? (cdr expr))
+          (pair? (cddr expr))
+          (or (null? (cdddr expr))
+              (and (pair? (cdddr expr)) (null? (cddddr expr)))))
+     (let ((sched-arg (cadr expr))
+           (task-arg (caddr expr))
+           (target-arg (if (pair? (cdddr expr)) (cadddr expr) #f)))
+       (if (and (symbol? sched-arg) (statically-typed? env sched-arg 'scheduler))
+           (inline-scheduler-spawn-expr (inline-hotpath-expr sched-arg env)
+                                        (inline-hotpath-expr task-arg env)
+                                        (if target-arg (inline-hotpath-expr target-arg env) #f))
+           (map (lambda (e) (inline-hotpath-expr e env)) expr))))
+
     ;; General application / recursive walk
     (else
      (map (lambda (e) (inline-hotpath-expr e env)) expr))))
@@ -693,6 +764,7 @@
                                             ((arena-var-name? p) 'ephemeral-arena)
                                             ((atomic-box-var-name? p) 'atomic-box)
                                             ((task-var-name? p) 'task-context)
+                                            ((scheduler-var-name? p) 'scheduler)
                                             (else #f))))
                                (p-loop (cdr ps)
                                        (if type (type-env-extend cur-env p type) cur-env))))))

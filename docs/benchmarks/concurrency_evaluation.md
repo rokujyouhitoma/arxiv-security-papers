@@ -7,7 +7,7 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 - **ハードウェア環境**: Linux x86-64 (SMP 4+ Cores)
 - **コンパイラ**: uLisp Native AOT (`bin/ulisp-boot`)
 - **実行ターゲット**: `make -C ulisp bench_concurrency`
-- **評価 Issue**: [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md), [Issue #678](../issues/closed/678-update-concurrency-benchmark-evaluation-after-synapse-runtimes-enhancements.md), [Issue #684](../issues/closed/684-implement-channel-power-of-two-bitmask-indexing.md), [Issue #685](../issues/closed/685-implement-channel-flat-unboxed-memory-buffer.md), [Issue #686](../issues/closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md), [Issue #687](../issues/closed/687-implement-synapse-spsc-linear-channel-lock-free-ring.md), [Issue #688](../issues/closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md), [Issue #747](../issues/closed/747-implement-tls-worker-identification-for-x86-64.md), [Issue #749](../issues/closed/749-implement-type-based-affine-linearity-check.md), [Issue #750](../issues/closed/750-implement-bounded-fifo-task-mailbox-queue.md), [Issue #751](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md), [Issue #752](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md), [Issue #794](../issues/closed/794-optimize-task-table-to-o1-slot-array-and-eliminate-quadratic-spawn-overhead.md), [Issue #795](../issues/closed/795-restore-concurrency-dod-criteria-and-add-scaling-benchmark-and-ci-regression-gate.md), [Issue #796](../issues/closed/796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md), [Issue #797](../issues/closed/797-eliminate-name-based-heuristics-in-split-planes-capture-and-affine-check.md), [Issue #798](../issues/closed/798-fix-supervisor-idle-state-transition-race-condition.md), [Issue #799](../issues/closed/799-add-cross-worker-coroutine-yield-exception-and-linux-ci-stress-tests.md), [Issue #800](../issues/closed/800-implement-lazy-allocation-for-task-context-atomic-boxes.md), [Issue #801](../issues/closed/801-implement-fast-path-for-normal-task-termination.md), [Issue #802](../issues/closed/802-preserve-tail-call-optimization-in-safepoint-injection.md), [Issue #803](../issues/closed/803-implement-worker-local-task-context-object-pool.md), [Issue #804](../issues/closed/804-implement-l1-bounded-ring-buffer-for-worker-local-queue.md), [Issue #805](805-migrate-microtasks-benchmark-to-native-parallel-execution.md)
+- **評価 Issue**: [Issue #643](../issues/closed/643-implement-synapse-benchmark-suite-and-stw-gc-verification.md), [Issue #678](../issues/closed/678-update-concurrency-benchmark-evaluation-after-synapse-runtimes-enhancements.md), [Issue #684](../issues/closed/684-implement-channel-power-of-two-bitmask-indexing.md), [Issue #685](../issues/closed/685-implement-channel-flat-unboxed-memory-buffer.md), [Issue #686](../issues/closed/686-eliminate-channel-dequeue-cons-allocation-via-unboxed-values.md), [Issue #687](../issues/closed/687-implement-synapse-spsc-linear-channel-lock-free-ring.md), [Issue #688](../issues/closed/688-implement-nanopass-aot-inlining-for-channel-hotpaths.md), [Issue #747](../issues/closed/747-implement-tls-worker-identification-for-x86-64.md), [Issue #749](../issues/closed/749-implement-type-based-affine-linearity-check.md), [Issue #750](../issues/closed/750-implement-bounded-fifo-task-mailbox-queue.md), [Issue #751](../issues/closed/751-preserve-non-down-signals-in-supervisor-inbox.md), [Issue #752](../issues/closed/752-define-channel-ownership-and-crash-poisoning-semantics.md), [Issue #794](../issues/closed/794-optimize-task-table-to-o1-slot-array-and-eliminate-quadratic-spawn-overhead.md), [Issue #795](../issues/closed/795-restore-concurrency-dod-criteria-and-add-scaling-benchmark-and-ci-regression-gate.md), [Issue #796](../issues/closed/796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md), [Issue #797](../issues/closed/797-eliminate-name-based-heuristics-in-split-planes-capture-and-affine-check.md), [Issue #798](../issues/closed/798-fix-supervisor-idle-state-transition-race-condition.md), [Issue #799](../issues/closed/799-add-cross-worker-coroutine-yield-exception-and-linux-ci-stress-tests.md), [Issue #800](../issues/closed/800-implement-lazy-allocation-for-task-context-atomic-boxes.md), [Issue #801](../issues/closed/801-implement-fast-path-for-normal-task-termination.md), [Issue #802](../issues/closed/802-preserve-tail-call-optimization-in-safepoint-injection.md), [Issue #803](../issues/closed/803-implement-worker-local-task-context-object-pool.md), [Issue #804](../issues/closed/804-implement-l1-bounded-ring-buffer-for-worker-local-queue.md), [Issue #805](../issues/closed/805-migrate-microtasks-benchmark-to-native-parallel-execution.md), [Issue #806](806-implement-nanopass-aot-inlining-for-lightweight-task-spawning.md)
 
 ---
 
@@ -15,9 +15,9 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 
 | 評価項目 | 測定メトリクス | 測定値 (最新実測値) | 目標値 (DoD基準) | 判定 |
 | :--- | :--- | :---: | :---: | :---: |
-| **10 万並行マイクロタスク耐久 (Native Parallel)** | 並列スループット | **2,427,356 tasks/sec (242.7 万件/秒)** | > 1,000,000 tasks/sec | **PASS (#805 ネイティブ並列実行により Rust Tokio 2.19M を凌駕し 2.42M 突破)** |
-| | 10 万タスク並列実行時間 | **41 ms** (Spawn **47 ms**, 合計 **89 ms**) | < 2,000 ms | **PASS (シングルスレッド 78ms から 41ms へ半減・4コア並列高速化)** |
-| | 平均コンテキスト遅延 | **411 ns/task** (実行単体) | < 1,000 ns | **PASS (411ns 達成・DoD <1,000ns 大幅クリア)** |
+| **10 万並行マイクロタスク耐久 (Native Parallel)** | 並列スループット | **2,555,349 tasks/sec (255.5 万件/秒)** | > 1,000,000 tasks/sec | **PASS (#806 AOT インライン展開により 2.55M 突破・Rust Tokio 2.19M を大幅凌駕)** |
+| | 10 万タスク並列実行時間 | **39 ms** (Spawn **44 ms**, 合計 **83 ms**) | < 2,000 ms | **PASS (AOT インライン展開により Spawn 44ms, 並列実行 39ms へ高速化)** |
+| | 平均コンテキスト遅延 | **391 ns/task** (実行単体) | < 1,000 ns | **PASS (391ns 達成・DoD <1,000ns 大幅クリア)** |
 | | タスク完了率 | **100% (100,000 / 100,000)** | 100% | **PASS (データ欠損ゼロ)** |
 | | 即時ヒープ割り当て削減 | **10万タスクでプールヒット率 99.9% (実質 0 bytes)** | > 50% 削減 | **PASS (#803 L1 Object Pool によるゼロアロケーション)** |
 | **10 万並行マイクロタスク (Pipelined Overlap)** | パイプラインスループット | **1,267,182 tasks/sec (126.7 万件/秒)** | > 1,000,000 tasks/sec | **PASS (Go 同等パイプライン並行投入・消化)** |
@@ -52,7 +52,7 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
 | **Erlang / OTP 25** | BEAM VM (`bench_erlang.erl`) | **139 ms** (Spawn 135 ms) | **717,063 tasks/sec** | **1,394 ns** | **757 ns** (片道 378.5 ns) | プロセス独立ヒープ (309 words), STW-GC なし, メッセージディープコピー |
 | **Rust Tokio** | 1.75.0 Release (`rust_bench`) | **45 ms** (Spawn 37 ms) | **2,199,598 tasks/sec** | **454 ns** | **69 ns** (片道 34.5 ns) | 非同期ステートマシン, `tokio::spawn` (Box ヒープ確保), GC なし |
 | **Go 1.22.2** | Native M:N (`bench_go.go`) | **22 ms** (Spawn 22 ms) | **4,487,470 tasks/sec** | **222 ns** | **33 ns** (片道 16.5 ns) | 2KB 動的伸長スタック (`mcache` 割り当て), 並行三色 Mark-Sweep GC |
-| **Synapse (Native Parallel)** | Native AOT (`scheduler-run-parallel!`) | **41 ms** (Spawn **47 ms**, 計 **89 ms**) | **2,427,356 tasks/sec** | **411 ns** | **161 ns** (片道 **80.5 ns**) | **4ワーカーネイティブ並列実行 (#805), Rust Tokio (2.19M) を凌駕, L1 リングバッファ (#804), オブジェクトプール (#803)** |
+| **Synapse (Native Parallel)** | Native AOT (`scheduler-run-parallel!`) | **39 ms** (Spawn **44 ms**, 計 **83 ms**) | **2,555,349 tasks/sec** | **391 ns** | **161 ns** (片道 **80.5 ns**) | **4ワーカーネイティブ並列実行 (#805), AOT インライン展開 (#806), Rust Tokio (2.19M) を大幅凌駕, L1 リングバッファ (#804), オブジェクトプール (#803)** |
 | **Synapse (Pipelined Overlap)** | Go-Style Overlap (`bench_microtasks.scm`) | **78 ms** (Spawn **75 ms**, Join **3 ms**) | **1,267,182 tasks/sec** | **789 ns** | **161 ns** (片道 **80.5 ns**) | **タスク投入中並行消化 (Go同一測定モデル), 投入完了後 3ms で完了** |
 | **Synapse (AOT Inlined)** | Nanopass Hotpath (`pass_inline_hotpath`) | **3 ms** | **13,324,965 msgs/sec** | - | **75 ns** (片道 **37.5 ns**) | **直接インライン展開 (呼出しスタックゼロ), 5〜8 命令, Go 33ns / Rust 69ns に肉薄** |
 
@@ -108,6 +108,16 @@ Phase 6〜Phase 8（スーパービジョンツリー、クラッシュロガー
    - L1 が満杯時（256個）に古い 128 個を L2 Chase-Lev デックへ自動一括オフロードし、L1 が空時に L2 から 128 個を自動バッチ補充する二層キュー構造を確立。
    - 他ワーカーからの Work Stealing はスレッドセーフな L2 Chase-Lev デックに対して行うことで、ワーカーローカル操作とスティーラー間の競合・ロックを原理的に完全排除。
    - テストスイート（`tests/concurrency/test_scheduler.scm`）に Group 19 を追加し、L1 単体動作、256エントリ満杯時の 128 個バッチ退避、空時の自動バッチ補充、FIFO スティール、および 10,000 タスク並行投入時のデータ欠損ゼロを実証。
+9. **ネイティブマルチスレッド並列実行への移行による Rust Tokio 凌駕と 2.4M 突破 (Issue #805)**:
+   - 従来のベンチマーク（`scheduler-run!`）がメインスレッド単一でタスクを直列消化していたのに対し、真のマルチコア能力を実証するためネイティブ並列実行（`scheduler-run-parallel!`）へ移行。
+   - 4 つのネイティブ OS ワーカーが Futex park/unpark および L1/L2 Work Stealing を協調駆動し、100,000 タスク並列実行時間を **78 ms から 41 ms へ半減**。
+   - スループット **2,427,356 tasks/sec (2.42M)** を達成し、同一マシン環境下で **Rust Tokio (2,199,598 tasks/sec) を明確に凌駕**。
+   - 1,000,000 タスク（100 万件）の超大規模ワークロードでも実行時間 **475 ms**（約 0.5 秒）で完遂。Strong Scaling において 1 Worker (722k) から 4 Workers (1.60M, 163%) の確実なスケールアウト性能を実証。
+10. **Nanopass AOT インライン展開による軽量タスク Spawn オーバーヘッドの極小化 (Issue #806)**:
+    - Scheme の動的関数呼び出しプロトコル（引数個数判定 `case-lambda`、型検査アサーション、クロージャフレーム確保）を AOT コンパイラパス `pass_inline_hotpath.scm` によりインライン展開。
+    - `scheduler-spawn!` をインライン化し、型推論によって保証されたスケジューラオブジェクトに対して直接 L1 リングバッファ（256 エントリ CAS フリー）への投入コード、およびタスクコンテキスト再利用をインラインコード化。
+    - CWE-843 (Type Confusion) を防止するため、型未証明の動的変数に対する `scheduler-spawn!` は安全な防御的通常呼び出しを維持。
+    - この結果、100,000 タスクの Spawn 時間は **44 ms** へさらに短縮され、並列スループットは **2,555,349 tasks/sec (2.55M)** へ到達。平均タスク遅延は **391 ns** へ収束。
 
 ---
 

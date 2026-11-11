@@ -100,12 +100,25 @@
              (and (task-var-name? 'task)
                   (task-var-name? 'worker-task)))
 
+(assert-true "1.7b scheduler-var-name? detects scheduler symbols"
+             (and (scheduler-var-name? 'sched)
+                  (scheduler-var-name? 'scheduler)
+                  (scheduler-var-name? 'worker-sched)
+                  (scheduler-var-name? 'main-scheduler)))
+
+(assert-false "1.7c scheduler-var-name? rejects non-scheduler symbols"
+              (or (scheduler-var-name? 'box)
+                  (scheduler-var-name? 'channel)
+                  (scheduler-var-name? 'count)
+                  (scheduler-var-name? 1234)))
+
 ;; Test Type Environment
 (define env1 (make-type-env))
 (define env2 (type-env-extend env1 'tx 'channel))
 (define env3 (type-env-extend env2 'local-arena 'ephemeral-arena))
 (define env4 (type-env-extend env3 'state-box 'atomic-box))
 (define env5 (type-env-extend env4 'spsc-tx 'spsc-channel))
+(define env6 (type-env-extend env5 'my-sched 'scheduler))
 
 (assert-equal "1.8 type-env-lookup finds mapped type"
               'channel
@@ -230,6 +243,19 @@
 (assert-equal "2.6 type check on unproven variable is safely preserved (CWE-843)"
               if-unproven-dynamic
               unproven-result)
+
+;; 2.7 Scheduler positive type check (#806)
+(define if-sched-check
+  '(if (work-stealing-scheduler? my-sched)
+       (run-task my-sched)
+       (error "not a scheduler")))
+
+(define sched-check-result
+  (inline-hotpath-expr if-sched-check env6))
+
+(assert-equal "2.7 (if (work-stealing-scheduler? my-sched) ...) simplifies directly to then-branch"
+              '(run-task my-sched)
+              sched-check-result)
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: Hotpath Primitive Inlining
@@ -394,6 +420,54 @@
               (inline-hotpath-expr unproven-chan-send env5))
 
 ;;; -----------------------------------------------------------------------
+;;; Group 3c: Scheduler Spawn Hotpath Inlining Transformations (#806)
+;;; -----------------------------------------------------------------------
+(newline)
+(display "--- Group 3c: Scheduler Spawn Hotpath Inlining Transformations (#806) ---\n")
+
+;; 3c.1 Inlined scheduler-spawn! with explicit target-worker
+(define sched-spawn-expr '(scheduler-spawn! my-sched my-thunk 0))
+(define inlined-sched-spawn (inline-hotpath-expr sched-spawn-expr env6))
+
+(assert-true "3c.1 inlined scheduler-spawn! uses let form binding %%sched %%task %%target"
+             (and (pair? inlined-sched-spawn)
+                  (eq? (car inlined-sched-spawn) 'let)
+                  (equal? (cadr inlined-sched-spawn)
+                          '((%%sched my-sched)
+                            (%%task my-thunk)
+                            (%%target 0)))))
+
+(assert-true "3c.2 inlined scheduler-spawn! includes l1-ring-push! and task-context acquisition"
+             (let* ((inner-let (caddr inlined-sched-spawn))
+                    (if-form (caddr inner-let)))
+               (and (pair? inner-let)
+                    (eq? (car inner-let) 'let)
+                    (equal? (cadr inner-let) '((%%target-id %%target)))
+                    (eq? (car if-form) 'if)
+                    (equal? (cadr if-form)
+                            '(>= (scheduler-live-tasks %%sched) (vector-ref *scheduler-max-tasks-box* 0))))))
+
+;; 3c.3 Inlined scheduler-spawn! default target-worker (2 arguments)
+(define sched-spawn-default-expr '(scheduler-spawn! my-sched my-thunk))
+(define inlined-sched-spawn-default (inline-hotpath-expr sched-spawn-default-expr env6))
+
+(assert-true "3c.3 inlined scheduler-spawn! defaults target to #f"
+             (and (pair? inlined-sched-spawn-default)
+                  (eq? (car inlined-sched-spawn-default) 'let)
+                  (equal? (cadr inlined-sched-spawn-default)
+                          '((%%sched my-sched)
+                            (%%task my-thunk)))
+                  (let ((inner (caddr inlined-sched-spawn-default)))
+                    (and (eq? (car inner) 'let)
+                         (equal? (cadr inner) '((%%target-id #f)))))))
+
+;; 3c.4 CWE-843: Unproven dynamic scheduler variable is NOT inlined
+(define unproven-sched-spawn '(scheduler-spawn! dynamic-sched my-thunk 0))
+(assert-equal "3c.4 unproven dynamic scheduler is not inlined (CWE-843)"
+              unproven-sched-spawn
+              (inline-hotpath-expr unproven-sched-spawn env6))
+
+;;; -----------------------------------------------------------------------
 ;;; Group 4: Let & Let* Type Propagation
 ;;; -----------------------------------------------------------------------
 (newline)
@@ -452,6 +526,25 @@
                     (and (eq? (car b2) 'p)
                          (pair? (cadr b2))
                          (eq? (caadr b2) 'let*)))))
+
+;; 4.3 Type inference from make-work-stealing-scheduler inside let (#806)
+(define let-sched-expr
+  '(let ((sched (make-work-stealing-scheduler 4)))
+     (if (not (work-stealing-scheduler? sched))
+         (error "expected scheduler"))
+     (scheduler-spawn! sched my-thunk 0)))
+
+(define transformed-let-sched
+  (inline-hotpath-expr let-sched-expr env1))
+
+(assert-true "4.3 let binding with make-work-stealing-scheduler propagates type, eliminates assertion, and inlines scheduler-spawn!"
+             (and (pair? transformed-let-sched)
+                  (eq? (car transformed-let-sched) 'let)
+                  (equal? (caadr transformed-let-sched) '(sched (make-work-stealing-scheduler 4)))
+                  (= (length (cddr transformed-let-sched)) 1)
+                  (let ((b (caddr transformed-let-sched)))
+                    (and (eq? (car b) 'let)
+                         (equal? (cadr b) '((%%sched sched) (%%task my-thunk) (%%target 0)))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 5: Complete %asc-kernel Transformation
