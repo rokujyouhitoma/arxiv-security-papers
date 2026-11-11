@@ -4503,12 +4503,15 @@
              (not (eq? l-out '*)))
         (let ((missing (nanopass-verify-fusion-coverage l-in l-out all-fused-specs)))
           (if (pair? missing)
-              (begin
-                (display "[WARN] define-pass ")
-                (display name)
-                (display ": missing desugar rules for eliminated forms: ")
-                (display missing)
-                (newline)))))
+              (let ((port (cond
+                            ((and (procedure? current-error-port) (not (null? (current-error-port))))
+                             (current-error-port))
+                            (else (current-output-port)))))
+                (display "[WARN] define-pass " port)
+                (display (if (symbol? name) (symbol->string name) name) port)
+                (display ": missing desugar rules for eliminated forms: " port)
+                (write missing port)
+                (newline port)))))
     (let loop ((rest clauses)
                (defs '())
                (nt-procs '())
@@ -9536,8 +9539,6 @@
   (Expr
     ((values . ,args) (desugar-values args))
     ((call-with-values ,producer ,consumer)
-      (list '%call-with-values producer consumer))
-    ((%call-with-values ,producer ,consumer)
       (list '%call-with-values producer consumer))))
 
 (define-picopass rule-desugar-error-assume
@@ -9547,11 +9548,7 @@
     ((assert . ,args) (desugar-assume (cons 'assert args)))
     ((syntax-error . ,args) (desugar-syntax-error (cons 'syntax-error args)))
     ((with-exception-handler ,handler ,thunk)
-      (list '%with-handler handler thunk))
-    ((%with-handler ,handler ,thunk)
-      (list '%with-handler handler thunk))
-    ((%raw-call/cc ,arg)
-      (list '%raw-call/cc arg))))
+      (list '%with-handler handler thunk))))
 
 ;; 未展開の let-syntax / letrec-syntax を拒絶する不変条件 Attopass
 (define-attopass atto-no-unexpanded-let-syntax
@@ -9578,6 +9575,7 @@
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 030: Core Syntax Desugaring & Normalization Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Framework Standard
+;;; Implements derived expression lowering per [R7RS §4.2] and [R7RS §7.3].
 ;;; Migrated to Declarative Pass Fusion (fuse-rules) per Issue #763 (DSN-33-01 T4.2).
 ;;; Automatically combines all 31 Picopasses/Attopasses from Passes 026-029 into
 ;;; a single O(1) Head-Tag dispatch traversal with local re-dispatch.

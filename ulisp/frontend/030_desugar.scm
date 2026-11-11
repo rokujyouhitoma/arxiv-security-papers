@@ -1,6 +1,7 @@
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 030: Core Syntax Desugaring & Normalization Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Framework Standard
+;;; Implements derived expression lowering per [R7RS §4.2] and [R7RS §7.3].
 ;;; Migrated to Declarative Pass Fusion (fuse-rules) per Issue #763 (DSN-33-01 T4.2).
 ;;; Automatically combines all 31 Picopasses/Attopasses from Passes 026-029 into
 ;;; a single O(1) Head-Tag dispatch traversal with local re-dispatch.

@@ -171,8 +171,6 @@
   (Expr
     ((values . ,args) (desugar-values args))
     ((call-with-values ,producer ,consumer)
-      (list '%call-with-values producer consumer))
-    ((%call-with-values ,producer ,consumer)
       (list '%call-with-values producer consumer))))
 
 (define-picopass rule-desugar-error-assume
@@ -182,11 +180,7 @@
     ((assert . ,args) (desugar-assume (cons 'assert args)))
     ((syntax-error . ,args) (desugar-syntax-error (cons 'syntax-error args)))
     ((with-exception-handler ,handler ,thunk)
-      (list '%with-handler handler thunk))
-    ((%with-handler ,handler ,thunk)
-      (list '%with-handler handler thunk))
-    ((%raw-call/cc ,arg)
-      (list '%raw-call/cc arg))))
+      (list '%with-handler handler thunk))))
 
 ;; 未展開の let-syntax / letrec-syntax を拒絶する不変条件 Attopass
 (define-attopass atto-no-unexpanded-let-syntax
