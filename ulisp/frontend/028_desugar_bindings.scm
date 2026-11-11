@@ -1,7 +1,9 @@
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 028: Local Bindings Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
-;;; Desugars local binding constructs (let*, named let) and body sequences
+;;; Desugars local binding constructs (let*, named let, letrec*, case-lambda, do, internal define)
+;;; and normalizes 0/multi-body expressions
+;;; Refactored to define-picopass + fuse-rules per Issue #762 (DSN-33-01 T4.1)
 ;;; =======================================================================
 
 (define (make-body-expr bodies)
@@ -226,33 +228,65 @@
                           dispatch-expr))))))
 
 ;;; -----------------------------------------------------------------------
-;;; Nanopass DSL Pass Definition: Desugar Bindings
+;;; Pass 028 Picopass Rule Definitions (DSN-33-01 T4.1)
+;;; -----------------------------------------------------------------------
+
+(define-picopass rule-desugar-case-lambda
+  (Expr
+    ((case-lambda . ,clauses) (desugar-case-lambda clauses))))
+
+(define-picopass rule-desugar-let*
+  (Expr
+    ((let* ,bindings . ,bodies) (desugar-let* bindings bodies))))
+
+(define-picopass rule-desugar-letrec*
+  (Expr
+    ((letrec* ,bindings . ,bodies) (guard (list? bindings))
+     (desugar-letrec* bindings bodies))))
+
+(define-picopass rule-desugar-named-let
+  (Expr
+    ((let ,name ,bindings . ,bodies) (guard (symbol? name))
+     (desugar-named-let (cons 'let (cons name (cons bindings bodies)))))))
+
+(define-picopass rule-desugar-multi-body
+  (Expr
+    ((let ,bindings) (guard (list? bindings))
+     (list 'let bindings '(begin)))
+    ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
+     (list 'let bindings (cons 'begin (cons b1 (cons b2 rest)))))
+    ((letrec ,bindings) (guard (list? bindings))
+     (list 'letrec bindings '(begin)))
+    ((letrec ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
+     (list 'letrec bindings (cons 'begin (cons b1 (cons b2 rest)))))
+    ((lambda ,params)
+     (list 'lambda params '(begin)))
+    ((lambda ,params ,b1 ,b2 . ,rest)
+     (list 'lambda params (cons 'begin (cons b1 (cons b2 rest)))))))
+
+(define-picopass rule-desugar-do
+  (Expr
+    ((do ,bindings ,exit-clause . ,commands)
+     (desugar-do bindings exit-clause commands))))
+
+(define-picopass rule-desugar-internal-define
+  (Expr
+    ((begin (begin . ,inner) . ,rest)
+     (cons 'begin (append inner rest)))
+    ((begin (define ,spec . ,rest-def) . ,rest)
+     (desugar-internal-define spec rest-def rest))
+    ((define ,spec . ,rest-def)
+     (desugar-internal-define spec rest-def '()))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Bindings (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-bindings : L_src (ir) -> L_core ()
-  (Expr : Expr (ir) -> Expr ()
-    ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))
-    ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
-    ((letrec* ,bindings . ,bodies) (guard (list? bindings))
-     (Expr (desugar-letrec* bindings bodies)))
-    ((let ,name ,bindings . ,bodies) (guard (symbol? name))
-     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
-    ((let ,bindings) (guard (list? bindings))
-     (Expr (list 'let bindings '(begin))))
-    ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
-     (Expr (list 'let bindings (cons 'begin (cons b1 (cons b2 rest))))))
-    ((letrec ,bindings) (guard (list? bindings))
-     (Expr (list 'letrec bindings '(begin))))
-    ((letrec ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
-     (Expr (list 'letrec bindings (cons 'begin (cons b1 (cons b2 rest))))))
-    ((lambda ,params)
-     (Expr (list 'lambda params '(begin))))
-    ((lambda ,params ,b1 ,b2 . ,rest)
-     (Expr (list 'lambda params (cons 'begin (cons b1 (cons b2 rest))))))
-    ((do ,bindings ,exit-clause . ,commands)
-     (Expr (desugar-do bindings exit-clause commands)))
-    ((begin (begin . ,inner) . ,rest)
-     (Expr (cons 'begin (append inner rest))))
-    ((begin (define ,spec . ,rest-def) . ,rest)
-     (Expr (desugar-internal-define spec rest-def rest)))
-    ((define ,spec . ,rest-def)
-     (Expr (desugar-internal-define spec rest-def '())))))
+  (fuse-rules
+    rule-desugar-case-lambda
+    rule-desugar-let*
+    rule-desugar-letrec*
+    rule-desugar-named-let
+    rule-desugar-multi-body
+    rule-desugar-do
+    rule-desugar-internal-define))

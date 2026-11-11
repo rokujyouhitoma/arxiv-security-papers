@@ -141,6 +141,69 @@
                                 (even? 10)))))
   (assert-equal "desugar-bindings on letrec* mutual procs is letrec" 'letrec (car res)))
 
+;;; -----------------------------------------------------------------------
+;;; Section 19: Pass 028 1-Line Picopass Direct S-Expression Unit Tests (DSN-33-01 T4.1)
+;;; -----------------------------------------------------------------------
+
+;; 19. rule-desugar-case-lambda
+(let ((res (rule-desugar-case-lambda '(case-lambda ((x) x)))))
+  (assert-equal "rule-desugar-case-lambda root" 'lambda (car res)))
+
+;; 20. rule-desugar-let*
+(assert-equal "rule-desugar-let* direct call"
+              '(let ((x 1)) (let ((y 2)) (+ x y)))
+              (rule-desugar-let* '(let* ((x 1) (y 2)) (+ x y))))
+
+(assert-equal "rule-desugar-let* unmatching returns #f"
+              #f
+              (rule-desugar-let* '(let ((x 1)) x)))
+
+;; 20. rule-desugar-letrec*
+(assert-equal "rule-desugar-letrec* direct call"
+              '(letrec ((x 1)) (+ x 1))
+              (rule-desugar-letrec* '(letrec* ((x 1)) (+ x 1))))
+
+;; 21. rule-desugar-named-let
+(let ((res (rule-desugar-named-let '(let loop ((n 10)) (if (= n 0) 0 (loop (- n 1)))))))
+  (assert-true "rule-desugar-named-let produces letrec" (pair? res))
+  (assert-equal "rule-desugar-named-let root is letrec" 'letrec (car res)))
+
+;; 22. rule-desugar-multi-body
+(assert-equal "rule-desugar-multi-body let"
+              '(let ((x 1)) (begin 10 20))
+              (rule-desugar-multi-body '(let ((x 1)) 10 20)))
+
+(assert-equal "rule-desugar-multi-body lambda"
+              '(lambda (x) (begin 10 20))
+              (rule-desugar-multi-body '(lambda (x) 10 20)))
+
+(assert-equal "rule-desugar-multi-body let empty body"
+              '(let ((x 1)) (begin))
+              (rule-desugar-multi-body '(let ((x 1)))))
+
+;; 23. rule-desugar-do
+(let ((res (rule-desugar-do '(do ((i 0 (+ i 1))) ((= i 10) i)))))
+  (assert-true "rule-desugar-do produces named let" (pair? res))
+  (assert-equal "rule-desugar-do root is let" 'let (car res)))
+
+;; 24. rule-desugar-internal-define
+(assert-equal "rule-desugar-internal-define flatten begin"
+              '(begin 1 2 3)
+              (rule-desugar-internal-define '(begin (begin 1 2) 3)))
+
+(let ((res (rule-desugar-internal-define '(define x 42))))
+  (assert-true "rule-desugar-internal-define var produces let" (pair? res))
+  (assert-equal "rule-desugar-internal-define var root is let" 'let (car res)))
+
+;; 25. Full Nanopass desugar-bindings with fuse-rules
+(assert-equal "desugar-bindings on let*"
+              '(let ((a 1)) (let ((b 2)) (+ a b)))
+              (desugar-bindings '(let* ((a 1) (b 2)) (+ a b))))
+
+(assert-equal "desugar-bindings on multi-body lambda"
+              '(lambda (p) (begin 1 2))
+              (desugar-bindings '(lambda (p) 1 2)))
+
 (display "=======================================================") (newline)
 (display " Pass 028: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

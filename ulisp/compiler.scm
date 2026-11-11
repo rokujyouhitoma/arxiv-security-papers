@@ -8461,7 +8461,9 @@
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 026: Constructor Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
-;;; Desugars composite literal constructors (list, vector, bytevector, string-append)
+;;; Desugars composite literal constructors (list, vector, bytevector,
+;;; string operations, math variadics, format, CxR accessors)
+;;; Refactored to define-picopass + fuse-rules per Issue #762 (DSN-33-01 T4.1)
 ;;; =======================================================================
 
 (define (desugar-list args)
@@ -8496,6 +8498,80 @@
                    (desugar-string-append (reverse left))
                    (desugar-string-append rest))))))))
 
+(define (desugar-string-copy args)
+  (cond
+    ((null? (cdr args))
+     (let ((s-sym (unique-symbol "s_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string-copy-range s-sym 0 (list 'string-length s-sym)))))
+    ((null? (cddr args))
+     (let ((s-sym (unique-symbol "s_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string-copy-range s-sym (cadr args) (list 'string-length s-sym)))))
+    (else
+     (cons 'string-copy-range args))))
+
+(define (desugar-string-copy! args)
+  (if (null? (cdddr args))
+      (let ((from-sym (unique-symbol "from_")))
+        (list 'let (list (list from-sym (caddr args)))
+              (list 'string-copy-range! (car args) (cadr args)
+                    from-sym 0 (list 'string-length from-sym))))
+      (cons 'string-copy-range! args)))
+
+(define (desugar-string-fill! args)
+  (cond
+    ((null? (cddr args))
+     (let ((s-sym (unique-symbol "s_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string-fill-range! s-sym (cadr args) 0 (list 'string-length s-sym)))))
+    ((null? (cdddr args))
+     (let ((s-sym (unique-symbol "s_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string-fill-range! s-sym (cadr args) (caddr args) (list 'string-length s-sym)))))
+    (else
+     (cons 'string-fill-range! args))))
+
+(define (desugar-string->utf8 args)
+  (if (null? (cdr args))
+      (let ((str-sym (unique-symbol "str_")))
+        (list 'let (list (list str-sym (car args)))
+              (list 'string->utf8-range str-sym 0 (list 'string-length str-sym))))
+      (cons 'string->utf8-range args)))
+
+(define (desugar-utf8->string args)
+  (if (null? (cdr args))
+      (let ((bv-sym (unique-symbol "bv_")))
+        (list 'let (list (list bv-sym (car args)))
+              (list 'utf8->string-range bv-sym 0 (list 'bytevector-length bv-sym))))
+      (cons 'utf8->string-range args)))
+
+(define (desugar-string->list args)
+  (cond
+    ((null? (cdr args))
+     (let ((s-sym (unique-symbol "str_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string->list-range s-sym 0 (list 'string-length s-sym)))))
+    ((null? (cddr args))
+     (let ((s-sym (unique-symbol "str_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string->list-range s-sym (cadr args) (list 'string-length s-sym)))))
+    (else
+     (cons 'string->list-range args))))
+
+(define (desugar-string->vector args)
+  (cond
+    ((null? (cdr args))
+     (let ((s-sym (unique-symbol "str_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string->vector-range s-sym 0 (list 'string-length s-sym)))))
+    ((null? (cddr args))
+     (let ((s-sym (unique-symbol "str_")))
+       (list 'let (list (list s-sym (car args)))
+             (list 'string->vector-range s-sym (cadr args) (list 'string-length s-sym)))))
+    (else
+     (cons 'string->vector-range args))))
+
 (define (desugar-bytevector args)
   (let* ((len (length args))
          (bv-sym (unique-symbol "bv_")))
@@ -8521,6 +8597,32 @@
              (list (string->symbol "bytevector-append2")
                    (desugar-bytevector-append (reverse left))
                    (desugar-bytevector-append rest))))))))
+
+(define (desugar-make-bytevector args)
+  (if (null? (cdr args))
+      (list '%make-bytevector (car args))
+      (list 'make-bytevector-fill (car args) (cadr args))))
+
+(define (desugar-bytevector-copy args)
+  (cond
+    ((null? (cdr args))
+     (let ((bv-sym (unique-symbol "bv_")))
+       (list 'let (list (list bv-sym (car args)))
+             (list 'bytevector-copy-range bv-sym 0 (list 'bytevector-length bv-sym)))))
+    ((null? (cddr args))
+     (let ((bv-sym (unique-symbol "bv_")))
+       (list 'let (list (list bv-sym (car args)))
+             (list 'bytevector-copy-range bv-sym (cadr args) (list 'bytevector-length bv-sym)))))
+    (else
+     (cons 'bytevector-copy-range args))))
+
+(define (desugar-bytevector-copy! args)
+  (if (null? (cdddr args))
+      (let ((from-sym (unique-symbol "from_")))
+        (list 'let (list (list from-sym (caddr args)))
+              (list 'bytevector-copy-range! (car args) (cadr args)
+                    from-sym 0 (list 'bytevector-length from-sym))))
+      (cons 'bytevector-copy-range! args)))
 
 (define (desugar-vector args)
   (let* ((len (length args))
@@ -8548,22 +8650,215 @@
                    (desugar-vector-append (reverse left))
                    (desugar-vector-append rest))))))))
 
+(define (desugar-make-vector args)
+  (if (null? (cdr args))
+      (list '%make-vector (car args))
+      (list 'make-vector-fill (car args) (cadr args))))
+
+(define (desugar-vector-copy args)
+  (cond
+    ((null? (cdr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector-copy-range v-sym 0 (list 'vector-length v-sym)))))
+    ((null? (cddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector-copy-range v-sym (cadr args) (list 'vector-length v-sym)))))
+    (else
+     (cons 'vector-copy-range args))))
+
+(define (desugar-vector-copy! args)
+  (if (null? (cdddr args))
+      (let ((from-sym (unique-symbol "from_")))
+        (list 'let (list (list from-sym (caddr args)))
+              (list 'vector-copy-range! (car args) (cadr args)
+                    from-sym 0 (list 'vector-length from-sym))))
+      (cons 'vector-copy-range! args)))
+
+(define (desugar-vector-fill! args)
+  (cond
+    ((null? (cddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector-fill-range! v-sym (cadr args) 0 (list 'vector-length v-sym)))))
+    ((null? (cdddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector-fill-range! v-sym (cadr args) (caddr args) (list 'vector-length v-sym)))))
+    (else
+     (cons 'vector-fill-range! args))))
+
+(define (desugar-vector->list args)
+  (cond
+    ((null? (cdr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector->list-range v-sym 0 (list 'vector-length v-sym)))))
+    ((null? (cddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector->list-range v-sym (cadr args) (list 'vector-length v-sym)))))
+    (else
+     (cons 'vector->list-range args))))
+
+(define (desugar-vector->string args)
+  (cond
+    ((null? (cdr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector->string-range v-sym 0 (list 'vector-length v-sym)))))
+    ((null? (cddr args))
+     (let ((v-sym (unique-symbol "v_")))
+       (list 'let (list (list v-sym (car args)))
+             (list 'vector->string-range v-sym (cadr args) (list 'vector-length v-sym)))))
+    (else
+     (cons 'vector->string-range args))))
+
+(define (desugar-make-list args)
+  (if (null? (cdr args))
+      (list 'make-list-fill (car args) #f)
+      (list 'make-list-fill (car args) (cadr args))))
+
+(define (desugar-gcd args)
+  (cond
+    ((null? args) 0)
+    ((null? (cdr args)) (list '%math-abs (car args)))
+    ((null? (cddr args)) (list 'gcd-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'gcd-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'gcd-2 curr (car rest)) (cdr rest)))))))
+
+(define (desugar-lcm args)
+  (cond
+    ((null? args) 1)
+    ((null? (cdr args)) (list '%math-abs (car args)))
+    ((null? (cddr args)) (list 'lcm-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'lcm-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'lcm-2 curr (car rest)) (cdr rest)))))))
+
+(define (desugar-max args)
+  (cond
+    ((null? args) (error "max [R7RS §6.2.6]: requires at least one argument"))
+    ((null? (cdr args)) (car args))
+    ((null? (cddr args)) (list 'max-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'max-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'max-2 curr (car rest)) (cdr rest)))))))
+
+(define (desugar-min args)
+  (cond
+    ((null? args) (error "min [R7RS §6.2.6]: requires at least one argument"))
+    ((null? (cdr args)) (car args))
+    ((null? (cddr args)) (list 'min-2 (car args) (cadr args)))
+    (else
+     (let loop ((curr (list 'min-2 (car args) (cadr args)))
+                (rest (cddr args)))
+       (if (null? rest)
+           curr
+           (loop (list 'min-2 curr (car rest)) (cdr rest)))))))
+
+(define (desugar-format args)
+  (if (null? args)
+      (error "format [SRFI 28]: too few arguments (requires format-string)")
+      (list '%format (car args) (cons 'list (cdr args)))))
+
 ;;; -----------------------------------------------------------------------
-;;; Nanopass DSL Pass Definition: Desugar Constructors
+;;; Pass 026 Picopass Rule Definitions (DSN-33-01 T4.1)
+;;; -----------------------------------------------------------------------
+
+(define-picopass rule-desugar-list
+  (Expr
+    ((list . ,args) (desugar-list args))))
+
+(define-picopass rule-desugar-vector
+  (Expr
+    ((vector . ,args) (desugar-vector args))
+    ((vector-append . ,args) (desugar-vector-append args))
+    ((make-vector . ,args) (desugar-make-vector args))))
+
+(define-picopass rule-desugar-bytevector
+  (Expr
+    ((bytevector . ,args) (desugar-bytevector args))
+    ((bytevector-append . ,args) (desugar-bytevector-append args))
+    ((make-bytevector . ,args) (desugar-make-bytevector args))))
+
+(define-picopass rule-desugar-string-ops
+  (Expr
+    ((string . ,args) (desugar-string args))
+    ((string-append . ,args) (desugar-string-append args))
+    ((string-copy . ,args) (desugar-string-copy args))
+    ((string-copy! . ,args) (desugar-string-copy! args))
+    ((string-fill! . ,args) (desugar-string-fill! args))
+    ((string->utf8 . ,args) (desugar-string->utf8 args))
+    ((utf8->string . ,args) (desugar-utf8->string args))
+    ((string->list . ,args) (desugar-string->list args))
+    ((string->vector . ,args) (desugar-string->vector args))))
+
+(define-picopass rule-desugar-vector-ops
+  (Expr
+    ((vector-copy . ,args) (desugar-vector-copy args))
+    ((vector-copy! . ,args) (desugar-vector-copy! args))
+    ((vector-fill! . ,args) (desugar-vector-fill! args))
+    ((vector->list . ,args) (desugar-vector->list args))
+    ((vector->string . ,args) (desugar-vector->string args))
+    ((make-list . ,args) (desugar-make-list args))))
+
+(define-picopass rule-desugar-bytevector-ops
+  (Expr
+    ((bytevector-copy . ,args) (desugar-bytevector-copy args))
+    ((bytevector-copy! . ,args) (desugar-bytevector-copy! args))))
+
+(define-picopass rule-desugar-math-variadic
+  (Expr
+    ((gcd . ,args) (desugar-gcd args))
+    ((lcm . ,args) (desugar-lcm args))
+    ((max . ,args) (desugar-max args))
+    ((min . ,args) (desugar-min args))))
+
+(define-picopass rule-desugar-format
+  (Expr
+    ((format . ,args) (desugar-format args))))
+
+(define-picopass rule-desugar-cxr
+  (Expr
+    ((caar ,x) (list 'car (list 'car x)))
+    ((cadr ,x) (list 'car (list 'cdr x)))
+    ((cdar ,x) (list 'cdr (list 'car x)))
+    ((cddr ,x) (list 'cdr (list 'cdr x)))
+    ((caddr ,x) (list 'car (list 'cdr (list 'cdr x))))
+    ((cdddr ,x) (list 'cdr (list 'cdr (list 'cdr x))))
+    ((cadddr ,x) (list 'car (list 'cdr (list 'cdr (list 'cdr x)))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Constructors (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-constructors : L_src (ir) -> L_core ()
-  (Expr : Expr (ir) -> Expr ()
-    ((list . ,args) (desugar-list (map Expr args)))
-    ((string . ,args) (desugar-string (map Expr args)))
-    ((string-append . ,args) (desugar-string-append (map Expr args)))
-    ((vector . ,args) (desugar-vector (map Expr args)))
-    ((vector-append . ,args) (desugar-vector-append (map Expr args)))
-    ((bytevector . ,args) (desugar-bytevector (map Expr args)))
-    ((bytevector-append . ,args) (desugar-bytevector-append (map Expr args)))))
+  (fuse-rules
+    rule-desugar-list
+    rule-desugar-vector
+    rule-desugar-bytevector
+    rule-desugar-string-ops
+    rule-desugar-vector-ops
+    rule-desugar-bytevector-ops
+    rule-desugar-math-variadic
+    rule-desugar-format
+    rule-desugar-cxr))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 027: Conditionals Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
-;;; Desugars conditional branching constructs (cond, case, and, or, chain comparisons)
+;;; Desugars conditional branching constructs (cond, case, and, or, chain comparisons, cond-expand)
+;;; Refactored to define-picopass + fuse-rules per Issue #762 (DSN-33-01 T4.1)
 ;;; =======================================================================
 
 (define (desugar-cond clauses)
@@ -8635,13 +8930,13 @@
     ((not (pair? args)) #t)
     ((null? (cdr args)) #t)
     ((null? (cddr args))
-     (cons op (map desugar-all args)))
+     (cons op args))
     (else
      (let* ((vars (map (lambda (a) (unique-symbol "cmp_")) args))
             (bindings (let b-loop ((vs vars) (as args))
                         (if (or (null? vs) (not (pair? vs)))
                             '()
-                            (cons (list (car vs) (desugar-all (car as)))
+                            (cons (list (car vs) (car as))
                                   (b-loop (cdr vs) (cdr as))))))
             (pairs (let loop ((vs vars))
                      (if (or (null? (cdr vs)) (not (pair? (cdr vs))))
@@ -8659,24 +8954,74 @@
       (else (cons 'begin matched)))))
 
 ;;; -----------------------------------------------------------------------
-;;; Nanopass DSL Pass Definition: Desugar Conditionals
+;;; Pass 027 Picopass Rule Definitions (DSN-33-01 T4.1)
+;;; -----------------------------------------------------------------------
+
+(define-picopass rule-desugar-cond-expand
+  (Expr
+    ((cond-expand ,clauses ...) (desugar-cond-expand clauses))
+    ((cond-expand . ,clauses) (desugar-cond-expand clauses))))
+
+(define-picopass rule-desugar-cond
+  (Expr
+    ((cond ,clauses ...) (desugar-cond clauses))
+    ((cond . ,clauses) (desugar-cond clauses))))
+
+(define-picopass rule-desugar-case
+  (Expr
+    ((case ,key ,clauses ...) (desugar-case key clauses))
+    ((case ,key . ,clauses) (desugar-case key clauses))))
+
+(define-picopass rule-desugar-and
+  (Expr
+    ((and ,args ...) (desugar-and args))
+    ((and . ,args) (desugar-and args))))
+
+(define-picopass rule-desugar-or
+  (Expr
+    ((or ,args ...) (desugar-or args))
+    ((or . ,args) (desugar-or args))))
+
+(define-picopass rule-desugar-chain-cmp
+  (Expr
+    ((char<? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char<? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char<=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char<=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char>? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char>? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char>=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci<? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci<? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci<=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci<=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci>? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci>? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci>=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((char-ci=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'char-ci=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string<? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string<? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string<=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string<=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string>? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string>? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string>=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci<? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci<? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci<=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci<=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci>? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci>? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci>=? (cons a1 (cons a2 (cons a3 rest)))))
+    ((string-ci=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci=? (cons a1 (cons a2 (cons a3 rest)))))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Conditionals (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-conditionals : L_src (ir) -> L_core ()
-  (Expr : Expr (ir) -> Expr ()
-    ((cond-expand ,clauses ...) (Expr (desugar-cond-expand clauses)))
-    ((cond-expand . ,clauses) (Expr (desugar-cond-expand clauses)))
-    ((cond ,clauses ...) (Expr (desugar-cond clauses)))
-    ((cond . ,clauses) (Expr (desugar-cond clauses)))
-    ((case ,key ,clauses ...) (Expr (desugar-case key clauses)))
-    ((case ,key . ,clauses) (Expr (desugar-case key clauses)))
-    ((and ,args ...) (Expr (desugar-and args)))
-    ((and . ,args) (Expr (desugar-and args)))
-    ((or ,args ...) (Expr (desugar-or args)))
-    ((or . ,args) (Expr (desugar-or args)))))
+  (fuse-rules
+    rule-desugar-cond-expand
+    rule-desugar-cond
+    rule-desugar-case
+    rule-desugar-and
+    rule-desugar-or
+    rule-desugar-chain-cmp))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 028: Local Bindings Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
-;;; Desugars local binding constructs (let*, named let) and body sequences
+;;; Desugars local binding constructs (let*, named let, letrec*, case-lambda, do, internal define)
+;;; and normalizes 0/multi-body expressions
+;;; Refactored to define-picopass + fuse-rules per Issue #762 (DSN-33-01 T4.1)
 ;;; =======================================================================
 
 (define (make-body-expr bodies)
@@ -8901,40 +9246,74 @@
                           dispatch-expr))))))
 
 ;;; -----------------------------------------------------------------------
-;;; Nanopass DSL Pass Definition: Desugar Bindings
+;;; Pass 028 Picopass Rule Definitions (DSN-33-01 T4.1)
+;;; -----------------------------------------------------------------------
+
+(define-picopass rule-desugar-case-lambda
+  (Expr
+    ((case-lambda . ,clauses) (desugar-case-lambda clauses))))
+
+(define-picopass rule-desugar-let*
+  (Expr
+    ((let* ,bindings . ,bodies) (desugar-let* bindings bodies))))
+
+(define-picopass rule-desugar-letrec*
+  (Expr
+    ((letrec* ,bindings . ,bodies) (guard (list? bindings))
+     (desugar-letrec* bindings bodies))))
+
+(define-picopass rule-desugar-named-let
+  (Expr
+    ((let ,name ,bindings . ,bodies) (guard (symbol? name))
+     (desugar-named-let (cons 'let (cons name (cons bindings bodies)))))))
+
+(define-picopass rule-desugar-multi-body
+  (Expr
+    ((let ,bindings) (guard (list? bindings))
+     (list 'let bindings '(begin)))
+    ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
+     (list 'let bindings (cons 'begin (cons b1 (cons b2 rest)))))
+    ((letrec ,bindings) (guard (list? bindings))
+     (list 'letrec bindings '(begin)))
+    ((letrec ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
+     (list 'letrec bindings (cons 'begin (cons b1 (cons b2 rest)))))
+    ((lambda ,params)
+     (list 'lambda params '(begin)))
+    ((lambda ,params ,b1 ,b2 . ,rest)
+     (list 'lambda params (cons 'begin (cons b1 (cons b2 rest)))))))
+
+(define-picopass rule-desugar-do
+  (Expr
+    ((do ,bindings ,exit-clause . ,commands)
+     (desugar-do bindings exit-clause commands))))
+
+(define-picopass rule-desugar-internal-define
+  (Expr
+    ((begin (begin . ,inner) . ,rest)
+     (cons 'begin (append inner rest)))
+    ((begin (define ,spec . ,rest-def) . ,rest)
+     (desugar-internal-define spec rest-def rest))
+    ((define ,spec . ,rest-def)
+     (desugar-internal-define spec rest-def '()))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Bindings (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-bindings : L_src (ir) -> L_core ()
-  (Expr : Expr (ir) -> Expr ()
-    ((case-lambda . ,clauses) (Expr (desugar-case-lambda clauses)))
-    ((let* ,bindings . ,bodies) (Expr (desugar-let* bindings bodies)))
-    ((letrec* ,bindings . ,bodies) (guard (list? bindings))
-     (Expr (desugar-letrec* bindings bodies)))
-    ((let ,name ,bindings . ,bodies) (guard (symbol? name))
-     (Expr (desugar-named-let (cons 'let (cons name (cons bindings bodies))))))
-    ((let ,bindings) (guard (list? bindings))
-     (Expr (list 'let bindings '(begin))))
-    ((let ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
-     (Expr (list 'let bindings (cons 'begin (cons b1 (cons b2 rest))))))
-    ((letrec ,bindings) (guard (list? bindings))
-     (Expr (list 'letrec bindings '(begin))))
-    ((letrec ,bindings ,b1 ,b2 . ,rest) (guard (list? bindings))
-     (Expr (list 'letrec bindings (cons 'begin (cons b1 (cons b2 rest))))))
-    ((lambda ,params)
-     (Expr (list 'lambda params '(begin))))
-    ((lambda ,params ,b1 ,b2 . ,rest)
-     (Expr (list 'lambda params (cons 'begin (cons b1 (cons b2 rest))))))
-    ((do ,bindings ,exit-clause . ,commands)
-     (Expr (desugar-do bindings exit-clause commands)))
-    ((begin (begin . ,inner) . ,rest)
-     (Expr (cons 'begin (append inner rest))))
-    ((begin (define ,spec . ,rest-def) . ,rest)
-     (Expr (desugar-internal-define spec rest-def rest)))
-    ((define ,spec . ,rest-def)
-     (Expr (desugar-internal-define spec rest-def '())))))
+  (fuse-rules
+    rule-desugar-case-lambda
+    rule-desugar-let*
+    rule-desugar-letrec*
+    rule-desugar-named-let
+    rule-desugar-multi-body
+    rule-desugar-do
+    rule-desugar-internal-define))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 029: Dynamic Environment & Multiple Values Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
-;;; Desugars let-values, let*-values, guard, and parameterize constructs
+;;; Desugars let-values, let*-values, define-values, guard, parameterize,
+;;; delay, delay-force, make-parameter, values, error, assume, syntax-error
+;;; Refactored to define-picopass + fuse-rules per Issue #762 (DSN-33-01 T4.1)
 ;;; =======================================================================
 
 (define (desugar-guard-clauses var clauses)
@@ -9016,198 +9395,6 @@
             (list (list formals expr))
             (make-body-expr rest))))
 
-;;; -----------------------------------------------------------------------
-;;; Nanopass DSL Pass Definition: Desugar Dynamic
-;;; -----------------------------------------------------------------------
-(define-pass desugar-dynamic : L_src (ir) -> L_core ()
-  (Expr : Expr (ir) -> Expr ()
-    ((let-values ,bindings . ,bodies) (Expr (desugar-let-values bindings bodies)))
-    ((let*-values ,bindings . ,bodies) (Expr (desugar-let*-values bindings bodies)))
-    ((begin (define-values ,formals ,expr) . ,rest)
-     (Expr (desugar-define-values formals expr rest)))
-    ((define-values ,formals ,expr)
-     (Expr (desugar-define-values formals expr '())))
-    ((guard ,spec . ,bodies) (Expr (desugar-guard spec bodies)))
-    ((parameterize ,bindings . ,bodies) (Expr (desugar-parameterize bindings bodies)))))
-;;; =======================================================================
-;;; ULisp Compiler Pass 030: Core Syntax Desugaring & Normalization Pass
-;;; Conforms to DSN-33 Architecture Specification & Nanopass Framework Standard
-;;; Migrated to Nanopass DSL (Phase 1) per Issue #581.
-;;; Eliminates manual Catamorphism recursion boilerplate for Core constructs
-;;; (if, begin, lambda, let, letrec, quote, set!, %program, applications).
-;;; =======================================================================
-
-;;; Helper transformations for composite types and runtime forms
-(define (desugar-string-copy args)
-  (cond
-    ((null? (cdr args))
-     (let ((s-sym (unique-symbol "s_")))
-       (list 'let (list (list s-sym (car args)))
-             (list 'string-copy-range s-sym 0 (list 'string-length s-sym)))))
-    ((null? (cddr args))
-     (let ((s-sym (unique-symbol "s_")))
-       (list 'let (list (list s-sym (car args)))
-             (list 'string-copy-range s-sym (cadr args) (list 'string-length s-sym)))))
-    (else
-     (cons 'string-copy-range args))))
-
-(define (desugar-string-copy! args)
-  (if (null? (cdddr args))
-      (let ((from-sym (unique-symbol "from_")))
-        (list 'let (list (list from-sym (caddr args)))
-              (list 'string-copy-range! (car args) (cadr args)
-                    from-sym 0 (list 'string-length from-sym))))
-      (cons 'string-copy-range! args)))
-
-(define (desugar-string-fill! args)
-  (cond
-    ((null? (cddr args))
-     (let ((s-sym (unique-symbol "s_")))
-       (list 'let (list (list s-sym (car args)))
-             (list 'string-fill-range! s-sym (cadr args) 0 (list 'string-length s-sym)))))
-    ((null? (cdddr args))
-     (let ((s-sym (unique-symbol "s_")))
-       (list 'let (list (list s-sym (car args)))
-             (list 'string-fill-range! s-sym (cadr args) (caddr args) (list 'string-length s-sym)))))
-    (else
-     (cons 'string-fill-range! args))))
-
-(define (desugar-make-bytevector args)
-  (if (null? (cdr args))
-      (list '%make-bytevector (car args))
-      (list 'make-bytevector-fill (car args) (cadr args))))
-
-(define (desugar-bytevector-copy args)
-  (cond
-    ((null? (cdr args))
-     (let ((bv-sym (unique-symbol "bv_")))
-       (list 'let (list (list bv-sym (car args)))
-             (list 'bytevector-copy-range bv-sym 0 (list 'bytevector-length bv-sym)))))
-    ((null? (cddr args))
-     (let ((bv-sym (unique-symbol "bv_")))
-       (list 'let (list (list bv-sym (car args)))
-             (list 'bytevector-copy-range bv-sym (cadr args) (list 'bytevector-length bv-sym)))))
-    (else
-     (cons 'bytevector-copy-range args))))
-
-(define (desugar-bytevector-copy! args)
-  (if (null? (cdddr args))
-      (let ((from-sym (unique-symbol "from_")))
-        (list 'let (list (list from-sym (caddr args)))
-              (list 'bytevector-copy-range! (car args) (cadr args)
-                    from-sym 0 (list 'bytevector-length from-sym))))
-      (cons 'bytevector-copy-range! args)))
-
-(define (desugar-string->utf8 args)
-  (if (null? (cdr args))
-      (let ((str-sym (unique-symbol "str_")))
-        (list 'let (list (list str-sym (car args)))
-              (list 'string->utf8-range str-sym 0 (list 'string-length str-sym))))
-      (cons 'string->utf8-range args)))
-
-(define (desugar-utf8->string args)
-  (if (null? (cdr args))
-      (let ((bv-sym (unique-symbol "bv_")))
-        (list 'let (list (list bv-sym (car args)))
-              (list 'utf8->string-range bv-sym 0 (list 'bytevector-length bv-sym))))
-      (cons 'utf8->string-range args)))
-
-(define (desugar-make-vector args)
-  (if (null? (cdr args))
-      (list '%make-vector (car args))
-      (list 'make-vector-fill (car args) (cadr args))))
-
-(define (desugar-vector-copy args)
-  (cond
-    ((null? (cdr args))
-     (let ((v-sym (unique-symbol "v_")))
-       (list 'let (list (list v-sym (car args)))
-             (list 'vector-copy-range v-sym 0 (list 'vector-length v-sym)))))
-    ((null? (cddr args))
-     (let ((v-sym (unique-symbol "v_")))
-       (list 'let (list (list v-sym (car args)))
-             (list 'vector-copy-range v-sym (cadr args) (list 'vector-length v-sym)))))
-    (else
-     (cons 'vector-copy-range args))))
-
-(define (desugar-vector-copy! args)
-  (if (null? (cdddr args))
-      (let ((from-sym (unique-symbol "from_")))
-        (list 'let (list (list from-sym (caddr args)))
-              (list 'vector-copy-range! (car args) (cadr args)
-                    from-sym 0 (list 'vector-length from-sym))))
-      (cons 'vector-copy-range! args)))
-
-(define (desugar-vector-fill! args)
-  (cond
-    ((null? (cddr args))
-     (let ((v-sym (unique-symbol "v_")))
-       (list 'let (list (list v-sym (car args)))
-             (list 'vector-fill-range! v-sym (cadr args) 0 (list 'vector-length v-sym)))))
-    ((null? (cdddr args))
-     (let ((v-sym (unique-symbol "v_")))
-       (list 'let (list (list v-sym (car args)))
-             (list 'vector-fill-range! v-sym (cadr args) (caddr args) (list 'vector-length v-sym)))))
-    (else
-     (cons 'vector-fill-range! args))))
-
-(define (desugar-vector->list args)
-  (cond
-    ((null? (cdr args))
-     (let ((v-sym (unique-symbol "v_")))
-       (list 'let (list (list v-sym (car args)))
-             (list 'vector->list-range v-sym 0 (list 'vector-length v-sym)))))
-    ((null? (cddr args))
-     (let ((v-sym (unique-symbol "v_")))
-       (list 'let (list (list v-sym (car args)))
-             (list 'vector->list-range v-sym (cadr args) (list 'vector-length v-sym)))))
-    (else
-     (cons 'vector->list-range args))))
-
-(define (desugar-string->list args)
-  (cond
-    ((null? (cdr args))
-     (let ((s-sym (unique-symbol "str_")))
-       (list 'let (list (list s-sym (car args)))
-             (list 'string->list-range s-sym 0 (list 'string-length s-sym)))))
-    ((null? (cddr args))
-     (let ((s-sym (unique-symbol "str_")))
-       (list 'let (list (list s-sym (car args)))
-             (list 'string->list-range s-sym (cadr args) (list 'string-length s-sym)))))
-    (else
-     (cons 'string->list-range args))))
-
-(define (desugar-string->vector args)
-  (cond
-    ((null? (cdr args))
-     (let ((s-sym (unique-symbol "str_")))
-       (list 'let (list (list s-sym (car args)))
-             (list 'string->vector-range s-sym 0 (list 'string-length s-sym)))))
-    ((null? (cddr args))
-     (let ((s-sym (unique-symbol "str_")))
-       (list 'let (list (list s-sym (car args)))
-             (list 'string->vector-range s-sym (cadr args) (list 'string-length s-sym)))))
-    (else
-     (cons 'string->vector-range args))))
-
-(define (desugar-vector->string args)
-  (cond
-    ((null? (cdr args))
-     (let ((v-sym (unique-symbol "v_")))
-       (list 'let (list (list v-sym (car args)))
-             (list 'vector->string-range v-sym 0 (list 'vector-length v-sym)))))
-    ((null? (cddr args))
-     (let ((v-sym (unique-symbol "v_")))
-       (list 'let (list (list v-sym (car args)))
-             (list 'vector->string-range v-sym (cadr args) (list 'vector-length v-sym)))))
-    (else
-     (cons 'vector->string-range args))))
-
-(define (desugar-make-list args)
-  (if (null? (cdr args))
-      (list 'make-list-fill (car args) #f)
-      (list 'make-list-fill (car args) (cadr args))))
-
 (define (desugar-delay expr)
   (let ((body (if (null? (cddr expr))
                   (cadr expr)
@@ -9257,58 +9444,85 @@
                     tmp
                     err-call))))))
 
-(define (desugar-gcd args)
-  (cond
-    ((null? args) 0)
-    ((null? (cdr args)) (list '%math-abs (car args)))
-    ((null? (cddr args)) (list 'gcd-2 (car args) (cadr args)))
-    (else
-     (let loop ((curr (list 'gcd-2 (car args) (cadr args)))
-                (rest (cddr args)))
-       (if (null? rest)
-           curr
-           (loop (list 'gcd-2 curr (car rest)) (cdr rest)))))))
+;;; -----------------------------------------------------------------------
+;;; Pass 029 Picopass & Attopass Rule Definitions (DSN-33-01 T4.1)
+;;; -----------------------------------------------------------------------
 
-(define (desugar-lcm args)
-  (cond
-    ((null? args) 1)
-    ((null? (cdr args)) (list '%math-abs (car args)))
-    ((null? (cddr args)) (list 'lcm-2 (car args) (cadr args)))
-    (else
-     (let loop ((curr (list 'lcm-2 (car args) (cadr args)))
-                (rest (cddr args)))
-       (if (null? rest)
-           curr
-           (loop (list 'lcm-2 curr (car rest)) (cdr rest)))))))
+(define-picopass rule-desugar-let-values
+  (Expr
+    ((let-values ,bindings . ,bodies) (desugar-let-values bindings bodies))
+    ((let*-values ,bindings . ,bodies) (desugar-let*-values bindings bodies))))
 
-(define (desugar-max args)
-  (cond
-    ((null? args) (error "max [R7RS §6.2.6]: requires at least one argument"))
-    ((null? (cdr args)) (car args))
-    ((null? (cddr args)) (list 'max-2 (car args) (cadr args)))
-    (else
-     (let loop ((curr (list 'max-2 (car args) (cadr args)))
-                (rest (cddr args)))
-       (if (null? rest)
-           curr
-           (loop (list 'max-2 curr (car rest)) (cdr rest)))))))
+(define-picopass rule-desugar-define-values
+  (Expr
+    ((begin (define-values ,formals ,expr) . ,rest)
+      (desugar-define-values formals expr rest))
+    ((define-values ,formals ,expr)
+      (desugar-define-values formals expr '()))))
 
-(define (desugar-min args)
-  (cond
-    ((null? args) (error "min [R7RS §6.2.6]: requires at least one argument"))
-    ((null? (cdr args)) (car args))
-    ((null? (cddr args)) (list 'min-2 (car args) (cadr args)))
-    (else
-     (let loop ((curr (list 'min-2 (car args) (cadr args)))
-                (rest (cddr args)))
-       (if (null? rest)
-           curr
-           (loop (list 'min-2 curr (car rest)) (cdr rest)))))))
+(define-picopass rule-desugar-guard
+  (Expr
+    ((guard ,spec . ,bodies) (desugar-guard spec bodies))))
 
-(define (desugar-format args)
-  (if (null? args)
-      (error "format [SRFI 28]: too few arguments (requires format-string)")
-      (list '%format (car args) (cons 'list (cdr args)))))
+(define-picopass rule-desugar-parameterize
+  (Expr
+    ((parameterize ,bindings . ,bodies) (desugar-parameterize bindings bodies))))
+
+(define-picopass rule-desugar-delay
+  (Expr
+    ((delay . ,args) (desugar-delay (cons 'delay args)))
+    ((delay-force . ,args) (desugar-delay-force (cons 'delay-force args)))))
+
+(define-picopass rule-desugar-parameter-ops
+  (Expr
+    ((make-parameter . ,args) (desugar-make-parameter args))))
+
+(define-picopass rule-desugar-values
+  (Expr
+    ((values . ,args) (desugar-values args))))
+
+(define-picopass rule-desugar-error-assume
+  (Expr
+    ((error . ,args) (desugar-error (cons 'error args)))
+    ((assume . ,args) (desugar-assume (cons 'assume args)))
+    ((assert . ,args) (desugar-assume (cons 'assert args)))
+    ((syntax-error . ,args) (desugar-syntax-error (cons 'syntax-error args)))))
+
+;; 未展開の let-syntax / letrec-syntax を拒絶する不変条件 Attopass
+(define-attopass atto-no-unexpanded-let-syntax
+  (Expr
+    ((let-syntax . ,args)
+      (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))
+    ((letrec-syntax . ,args)
+      (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass Definition: Desugar Dynamic (fuse-rules)
+;;; -----------------------------------------------------------------------
+(define-pass desugar-dynamic : L_src (ir) -> L_core ()
+  (fuse-rules
+    rule-desugar-let-values
+    rule-desugar-define-values
+    rule-desugar-guard
+    rule-desugar-parameterize
+    rule-desugar-delay
+    rule-desugar-parameter-ops
+    rule-desugar-values
+    rule-desugar-error-assume
+    atto-no-unexpanded-let-syntax))
+;;; =======================================================================
+;;; ULisp Compiler Pass 030: Core Syntax Desugaring & Normalization Pass
+;;; Conforms to DSN-33 Architecture Specification & Nanopass Framework Standard
+;;; Migrated to Nanopass DSL (Phase 1) per Issue #581.
+;;; Eliminates manual Catamorphism recursion boilerplate for Core constructs
+;;; (if, begin, lambda, let, letrec, quote, set!, %program, applications).
+;;; =======================================================================
+
+;;; Helper transformations for composite types, constructors, math variadics,
+;;; format, dynamic environment, and promises are now canonically provided by
+;;; Pass 026 (026_desugar_constructors.scm) and Pass 029 (029_desugar_dynamic.scm)
+;;; per Issue #762 (DSN-33-01 T4.1).
+
 
 ;;; =======================================================================
 ;;; Canonical Nanopass DSL Pass: desugar-all
