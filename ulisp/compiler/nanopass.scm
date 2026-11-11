@@ -275,6 +275,166 @@
     (list 'define (list proc-name 'ir)
           (list (string->symbol "nanopass-unparse") (list 'quote lang-name) 'ir))))
 
+;;; =======================================================================
+;;; Picopass / Femtopass / Attopass DSL Expanders (DSN-33-01 T2.1)
+;;; =======================================================================
+
+(define (nanopass-keyword-symbol? s)
+  (if (not (symbol? s))
+      #f
+      (let ((str (symbol->raw-name s)))
+        (and (> (string-length str) 1)
+             (char=? (string-ref str 0) #\:)))))
+
+(define (nanopass-parse-rule-spec form default-kind)
+  (let ((name (cadr form))
+        (rest (cddr form)))
+    (let loop ((rem rest)
+               (opts '())
+               (nt-name 'Expr)
+               (in-attrs '())
+               (out-attrs '())
+               (clauses '()))
+      (cond
+        ((null? rem)
+         (list name default-kind nt-name in-attrs out-attrs clauses opts))
+        ;; Keyword options: :reads, :writes, :eliminates, :head-tags, :nt
+        ((and (nanopass-keyword-symbol? (car rem)) (pair? (cdr rem)))
+         (loop (cddr rem) (cons (cons (car rem) (cadr rem)) opts) nt-name in-attrs out-attrs clauses))
+        ((and (pair? (car rem)) (nanopass-keyword-symbol? (caar rem)))
+         (loop (cdr rem) (cons (car rem) opts) nt-name in-attrs out-attrs clauses))
+        ;; NT clause: (Expr ...) or (Expr : (in) -> (out) ...)
+        ((pair? (car rem))
+         (let ((spec (car rem)))
+           (cond
+             ((and (pair? spec) (symbol? (car spec)) (pair? (cdr spec)) (eq? (cadr spec) ':))
+              ;; (NT : (in-attrs ...) -> (out-attrs ...) clauses ...)
+              (let* ((parsed-nt (car spec))
+                     (after-colon (cddr spec))
+                     (ins (if (pair? after-colon) (car after-colon) '()))
+                     (after-arrow (if (and (pair? after-colon) (pair? (cdr after-colon)))
+                                      (cddr after-colon)
+                                      '()))
+                     (outs (if (and (pair? after-arrow) (eq? (car after-arrow) '->) (pair? (cdr after-arrow)))
+                               (cadr after-arrow)
+                               '()))
+                     (cs (if (and (pair? after-arrow) (eq? (car after-arrow) '->) (pair? (cdr after-arrow)))
+                             (cddr after-arrow)
+                             (if (pair? after-arrow) (cdr after-arrow) '()))))
+                (loop (cdr rem) opts parsed-nt ins outs cs)))
+             ((and (pair? spec) (symbol? (car spec)))
+              ;; (NT clauses ...)
+              (loop (cdr rem) opts (car spec) in-attrs out-attrs (cdr spec)))
+             (else
+              ;; List of clauses directly
+              (loop (cdr rem) opts nt-name in-attrs out-attrs spec)))))
+        ((symbol? (car rem))
+         ;; (define-picopass name NT clauses ...)
+         (loop (cddr rem) opts (car rem) in-attrs out-attrs (cadr rem)))
+        (else
+         (loop (cdr rem) opts nt-name in-attrs out-attrs clauses))))))
+
+(define (nanopass-build-rule-cascade rules kind nt-name ir-var)
+  (let loop ((rs rules))
+    (if (null? rs)
+        (cond
+          ((eq? kind 'pico) #f)
+          ((eq? kind 'femto) #f)
+          ((eq? kind 'atto) #t)
+          (else #f))
+        (let* ((r (car rs))
+               (pat (car r))
+               (vars (cadr r))
+               (guard-expr (caddr r))
+               (body-expr (cadddr r))
+               (m-var (unique-symbol "__m_")))
+          (list 'let (list (list m-var
+                                 (list (string->symbol "nanopass-match-clause")
+                                       (list 'quote pat)
+                                       ir-var
+                                       (list 'quote vars)
+                                       (list 'quote nt-name))))
+                (list 'if m-var
+                      (if (eq? guard-expr #t)
+                          (nanopass-bind-matched-vars vars m-var body-expr)
+                          (nanopass-bind-matched-vars vars m-var
+                                                      (list 'if guard-expr
+                                                            body-expr
+                                                            (loop (cdr rs)))))
+                      (loop (cdr rs))))))))
+
+(define (nanopass-expand-rule-dsl form default-kind)
+  (let* ((parsed (nanopass-parse-rule-spec form default-kind))
+         (name (car parsed))
+         (rule-kind (cadr parsed))
+         (nt-name (caddr parsed))
+         (in-attrs (cadddr parsed))
+         (raw-clauses (car (cddddr (cdr parsed))))
+         (opts (cadr (cddddr (cdr parsed))))
+         (expanded-rules (map (lambda (r) (nanopass-expand-rule r nt-name)) raw-clauses))
+         (opt-head-tags (let ((e (assq ':head-tags opts))) (if e (cdr e) #f)))
+         (opt-reads (let ((e (assq ':reads opts))) (if e (cdr e) #f)))
+         (opt-writes (let ((e (assq ':writes opts))) (if e (cdr e) #f)))
+         (opt-eliminates (let ((e (assq ':eliminates opts))) (if e (cdr e) #f)))
+         (head-tags (if opt-head-tags opt-head-tags (nanopass-extract-head-tags expanded-rules)))
+         (reads (if opt-reads opt-reads (nanopass-extract-pattern-reads expanded-rules)))
+         (writes (if opt-writes opt-writes (nanopass-extract-template-writes expanded-rules)))
+         (eliminates (if opt-eliminates opt-eliminates (nanopass-infer-eliminates head-tags writes)))
+         (desc-var (unique-symbol (string-append "__desc_" (symbol->raw-name name))))
+         (cascade (nanopass-build-rule-cascade expanded-rules rule-kind nt-name 'ir))
+         (proc-body
+          (if (eq? rule-kind 'femto)
+              (let* ((attr-bindings
+                      (if (null? in-attrs)
+                          '()
+                          (let b-loop ((attrs in-attrs) (idx 0) (acc '()))
+                            (if (null? attrs)
+                                (reverse acc)
+                                (b-loop (cdr attrs) (+ idx 1)
+                                        (cons (list (car attrs)
+                                                    (list 'if (list '> (list 'length '__extra_args) idx)
+                                                          (list 'list-ref '__extra_args idx)
+                                                          '#f))
+                                              acc))))))
+                     (recurse-binding
+                      (list 'femto-recurse
+                            (list 'lambda (cons 'sub-node 'sub-extra)
+                                  (list 'apply name (list 'cons 'sub-node
+                                                          (if (null? in-attrs)
+                                                              'sub-extra
+                                                              (list 'if (list 'null? 'sub-extra)
+                                                                    (cons 'list in-attrs)
+                                                                    'sub-extra))))))))
+                (list 'letrec (cons recurse-binding attr-bindings)
+                      cascade))
+              cascade)))
+    (list 'begin
+          (list 'define desc-var
+                (list (string->symbol "nanopass-make-rule-descriptor")
+                      (list 'quote name)
+                      (list 'quote rule-kind)
+                      (list 'quote nt-name)
+                      (list 'quote head-tags)
+                      (list 'quote reads)
+                      (list 'quote writes)
+                      (list 'quote eliminates)
+                      (list 'quote expanded-rules)
+                      #f))
+          (list 'define (cons name (cons 'ir '__extra_args))
+                proc-body)
+          (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
+          (list (string->symbol "nanopass-register-rule!") desc-var)
+          (list 'quote name))))
+
+(define (nanopass-expand-define-picopass form)
+  (nanopass-expand-rule-dsl form 'pico))
+
+(define (nanopass-expand-define-femtopass form)
+  (nanopass-expand-rule-dsl form 'femto))
+
+(define (nanopass-expand-define-attopass form)
+  (nanopass-expand-rule-dsl form 'atto))
+
 ;;; -----------------------------------------------------------------------
 ;;; Host / Interpreter Macros (for ilisp and interactive environments)
 ;;; -----------------------------------------------------------------------
@@ -292,6 +452,15 @@
 
 (define-macro (define-unparser . args)
   (nanopass-expand-define-unparser (cons 'define-unparser args)))
+
+(define-macro (define-picopass . args)
+  (nanopass-expand-define-picopass (cons 'define-picopass args)))
+
+(define-macro (define-femtopass . args)
+  (nanopass-expand-define-femtopass (cons 'define-femtopass args)))
+
+(define-macro (define-attopass . args)
+  (nanopass-expand-define-attopass (cons 'define-attopass args)))
 
 (define-macro (in-context . args)
   (if (= (length args) 2)

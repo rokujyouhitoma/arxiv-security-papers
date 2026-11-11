@@ -43,6 +43,15 @@
 (define-macro (define-unparser . args)
   (nanopass-expand-define-unparser (cons 'define-unparser args)))
 
+(define-macro (define-picopass . args)
+  (nanopass-expand-define-picopass (cons 'define-picopass args)))
+
+(define-macro (define-femtopass . args)
+  (nanopass-expand-define-femtopass (cons 'define-femtopass args)))
+
+(define-macro (define-attopass . args)
+  (nanopass-expand-define-attopass (cons 'define-attopass args)))
+
 (define-macro (in-context . args)
   (if (= (length args) 2)
       (list (car args) (cadr args))
@@ -645,6 +654,152 @@
        (asm-noop-out (test-asm-x86-rewrite asm-noop-in)))
   (assert-true "L_asm_x86 pass with no matching instructions returns eq? root AST"
                (eq? asm-noop-in asm-noop-out)))
+
+;;; -----------------------------------------------------------------------
+;;; 16. Picopass / Femtopass / Attopass DSL & First-Class Rule Descriptors (DSN-33-01 T2.1)
+;;; -----------------------------------------------------------------------
+
+;; 16.1 define-picopass: local syntax rewriting with 1-line standalone execution
+(define-picopass rule-test-and
+  (Expr
+    ((and) #t)
+    ((and ,e) e)
+    ((and ,e1 ,e2 ...) `(if ,e1 (and ,e2 ...) #f))))
+
+(assert-equal "define-picopass rule-test-and on (and) returns #t"
+              #t
+              (rule-test-and '(and)))
+
+(assert-equal "define-picopass rule-test-and on single-arg (and x) returns x"
+              'x
+              (rule-test-and '(and x)))
+
+(assert-equal "define-picopass rule-test-and on (and a b) desugars to 1-step if"
+              '(if a (and b) #f)
+              (rule-test-and '(and a b)))
+
+(assert-equal "define-picopass rule-test-and on unmatched form returns #f (fall-through)"
+              #f
+              (rule-test-and '(or a b)))
+
+(define-picopass rule-test-letrec
+  (Expr
+    ((letrec ((,x ,e1) ...) ,body ...)
+     `(let ((,x (void)) ...)
+        (begin (set! ,x ,e1) ... ,body ...)))))
+
+(assert-equal "define-picopass rule-test-letrec rewrites to let with void bindings"
+              '(let ((f (void))) (begin (set! f (lambda (x) x)) (f 1)))
+              (rule-test-letrec '(letrec ((f (lambda (x) x))) (f 1))))
+
+;; 16.2 define-femtopass: non-destructive attribute computation
+(define-femtopass femto-test-free-vars
+  (Expr : (bound-env) -> (free-set)
+    (,x (guard (symbol? x))
+        (if (memq x bound-env) '() (list x)))
+    ((lambda (,params ...) ,body)
+     (femto-recurse body (append params bound-env)))))
+
+(assert-equal "define-femtopass on unbound symbol returns singleton list"
+              '(x)
+              (femto-test-free-vars 'x '()))
+
+(assert-equal "define-femtopass on bound symbol returns empty list"
+              '()
+              (femto-test-free-vars 'x '(x)))
+
+(assert-equal "define-femtopass on bound lambda returns empty list"
+              '()
+              (femto-test-free-vars '(lambda (x) x) '()))
+
+(assert-equal "define-femtopass on lambda with free variable returns free var"
+              '(y)
+              (femto-test-free-vars '(lambda (x) y) '()))
+
+(assert-equal "define-femtopass on unmatched constant returns #f"
+              #f
+              (femto-test-free-vars 42 '()))
+
+;; 16.3 define-attopass: atomic proposition assertions
+(define-attopass atto-test-no-raw-syntax
+  (Expr
+    ((let-syntax ,_ ...)
+     (picopass-fail "unexpanded let-syntax encountered" ir))
+    ((letrec-syntax ,_ ...)
+     (picopass-fail "unexpanded letrec-syntax encountered" ir))))
+
+(assert-equal "define-attopass on valid AST returns #t"
+              #t
+              (atto-test-no-raw-syntax '(if a b c)))
+
+(let ((caught-let-syntax
+       (guard (ex (else 'caught-let-syntax-error))
+         (atto-test-no-raw-syntax '(let-syntax ((m (syntax-rules ()))) 42)))))
+  (assert-equal "define-attopass raises picopass-fail on let-syntax violation"
+                'caught-let-syntax-error
+                caught-let-syntax))
+
+(let ((caught-letrec-syntax
+       (guard (ex (else 'caught-letrec-syntax-error))
+         (atto-test-no-raw-syntax '(letrec-syntax ((m (syntax-rules ()))) 42)))))
+  (assert-equal "define-attopass raises picopass-fail on letrec-syntax violation"
+                'caught-letrec-syntax-error
+                caught-letrec-syntax))
+
+;; 16.4 First-Class Rule Descriptor Reflection & Global Registry Lookup
+(let* ((desc-and (nanopass-lookup-rule 'rule-test-and))
+       (desc-by-proc (nanopass-lookup-rule rule-test-and))
+       (desc-letrec (nanopass-lookup-rule 'rule-test-letrec))
+       (desc-femto (nanopass-lookup-rule 'femto-test-free-vars))
+       (desc-atto (nanopass-lookup-rule 'atto-test-no-raw-syntax)))
+  (assert-true "rule-descriptor? returns #t for registered picopass"
+               (rule-descriptor? desc-and))
+  (assert-true "nanopass-lookup-rule resolves identical descriptor by symbol and by proc"
+               (eq? desc-and desc-by-proc))
+  (assert-true "rule-descriptor alias resolves descriptor"
+               (eq? desc-and (rule-descriptor 'rule-test-and)))
+  (assert-equal "rule-name matches defined symbol"
+                'rule-test-and
+                (rule-name desc-and))
+  (assert-equal "rule-kind is 'pico for define-picopass"
+                'pico
+                (rule-kind desc-and))
+  (assert-equal "rule-nt-name is 'Expr"
+                'Expr
+                (rule-nt-name desc-and))
+  (assert-equal "rule-head-tags for rule-test-and is '(and)"
+                '(and)
+                (rule-head-tags desc-and))
+  (assert-equal "rule-reads for rule-test-and contains 'and"
+                '(and)
+                (rule-reads desc-and))
+  (assert-true "rule-writes for rule-test-and contains 'if"
+               (if (memq 'if (rule-writes desc-and)) #t #f))
+  (assert-equal "rule-head-tags for rule-test-letrec is '(letrec)"
+                '(letrec)
+                (rule-head-tags desc-letrec))
+  (assert-equal "rule-eliminates for rule-test-letrec is '(letrec)"
+                '(letrec)
+                (rule-eliminates desc-letrec))
+  (assert-equal "rule-kind is 'femto for define-femtopass"
+                'femto
+                (rule-kind desc-femto))
+  (assert-equal "rule-head-tags for femto-test-free-vars is wildcard '*"
+                '*
+                (rule-head-tags desc-femto))
+  (assert-equal "rule-kind is 'atto for define-attopass"
+                'atto
+                (rule-kind desc-atto))
+  (assert-equal "rule-head-tags for atto-test-no-raw-syntax is '(let-syntax letrec-syntax)"
+                '(let-syntax letrec-syntax)
+                (rule-head-tags desc-atto))
+  (assert-true "rule-proc returns executable procedure"
+               (procedure? (rule-proc desc-and)))
+  (assert-equal "executing (rule-proc desc) produces same result as direct call"
+                '(if a (and b) #f)
+                ((rule-proc desc-and) '(and a b)))
+  (assert-true "nanopass-get-all-rules contains rule-test-and"
+               (if (memq desc-and (nanopass-get-all-rules)) #t #f)))
 
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
