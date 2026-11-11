@@ -1399,6 +1399,196 @@
                 #t
                 (pair? res)))
 
+;;; =======================================================================
+;;; 21. Rule Dependency DAG & Graph Analysis (DSN-33-01 T5.1)
+;;; =======================================================================
+
+(define-picopass rule-test-dag-a
+  (Expr
+    ((tag-a ,x) (list 'tag-b x))))
+;; Manually attach reads/writes to rule descriptors for DAG testing
+(let ((desc-a (rule-descriptor 'rule-test-dag-a)))
+  (nanopass-register-rule!
+   (nanopass-make-rule-descriptor 'rule-test-dag-a 'pico 'Expr '(tag-a) '(rx) '(ry) '()
+                                  (rule-clauses desc-a) (rule-proc desc-a))))
+
+(define-picopass rule-test-dag-b
+  (Expr
+    ((tag-b ,x) (list 'tag-c x))))
+(let ((desc-b (rule-descriptor 'rule-test-dag-b)))
+  (nanopass-register-rule!
+   (nanopass-make-rule-descriptor 'rule-test-dag-b 'pico 'Expr '(tag-b) '(ry) '(rz) '()
+                                  (rule-clauses desc-b) (rule-proc desc-b))))
+
+(define-picopass rule-test-dag-c
+  (Expr
+    ((tag-c ,x) (list 'tag-c x))))
+(let ((desc-c (rule-descriptor 'rule-test-dag-c)))
+  (nanopass-register-rule!
+   (nanopass-make-rule-descriptor 'rule-test-dag-c 'pico 'Expr '(tag-c) '(rw) '(rv) '()
+                                  (rule-clauses desc-c) (rule-proc desc-c))))
+
+;; 21.1 DAG Construction and Edge Detection
+(let ((dag (nanopass-build-rule-dag '(rule-test-dag-a rule-test-dag-b rule-test-dag-c))))
+  (assert-equal "rule-dag? predicate" #t (rule-dag? dag))
+  (assert-equal "rule-dag nodes count" 3 (length (nanopass-rule-dag-nodes dag)))
+  ;; Edge A -> B exists because A writes ry and B reads ry
+  (assert-equal "rule-dag edges contains A -> B"
+                #t
+                (let ((edges (nanopass-rule-dag-edges dag)))
+                  (and (pair? (member '(rule-test-dag-a . rule-test-dag-b) edges)) #t)))
+  ;; In-degree and out-degree check
+  (assert-equal "rule-dag in-degree of A is 0"
+                0
+                (cdr (assq 'rule-test-dag-a (nanopass-rule-dag-in-degrees dag))))
+  (assert-equal "rule-dag in-degree of B is 1"
+                1
+                (cdr (assq 'rule-test-dag-b (nanopass-rule-dag-in-degrees dag))))
+  (assert-equal "rule-dag in-degree of C is 0"
+                0
+                (cdr (assq 'rule-test-dag-c (nanopass-rule-dag-in-degrees dag))))
+
+  ;; 21.2 Topological Sorting & Stratified Levels
+  (let ((topo (nanopass-rule-dag-topological-sort dag))
+        (levels (nanopass-rule-dag-stratify-levels dag)))
+    (assert-equal "topological sort succeeds" #t (list? topo))
+    (assert-equal "topological sort length" 3 (length topo))
+    ;; A must appear before B in topological sort
+    (let ((pos-a (length (member 'rule-test-dag-a topo)))
+          (pos-b (length (member 'rule-test-dag-b topo))))
+      (assert-equal "A precedes B in topological order" #t (> pos-a pos-b)))
+    (assert-equal "stratify-levels returns 2 levels" 2 (length levels))
+    (assert-equal "level 0 contains A and C" #t
+                  (and (memq 'rule-test-dag-a (car levels))
+                       (memq 'rule-test-dag-c (car levels))
+                       #t))
+    (assert-equal "level 1 contains B" '(rule-test-dag-b) (cadr levels)))
+
+  ;; 21.3 Antichains & Independent Pairs
+  (let ((antichains (nanopass-rule-dag-antichains dag)))
+    (assert-equal "antichains count" 2 (length antichains))
+    (assert-equal "A and C are independent pair"
+                  #t
+                  (nanopass-rule-dag-independent-pair? dag 'rule-test-dag-a 'rule-test-dag-c))
+    (assert-equal "A and B are NOT independent pair (dependency path exists)"
+                  #f
+                  (nanopass-rule-dag-independent-pair? dag 'rule-test-dag-a 'rule-test-dag-b))))
+
+;; 21.4 Cyclic Dependency Detection (SCC)
+(define-picopass rule-test-cyc-1 (Expr ((cyc-1 ,x) x)))
+(let ((desc-c1 (rule-descriptor 'rule-test-cyc-1)))
+  (nanopass-register-rule!
+   (nanopass-make-rule-descriptor 'rule-test-cyc-1 'pico 'Expr '(cyc-1) '(tag-p) '(tag-q) '()
+                                  (rule-clauses desc-c1) (rule-proc desc-c1))))
+
+(define-picopass rule-test-cyc-2 (Expr ((cyc-2 ,x) x)))
+(let ((desc-c2 (rule-descriptor 'rule-test-cyc-2)))
+  (nanopass-register-rule!
+   (nanopass-make-rule-descriptor 'rule-test-cyc-2 'pico 'Expr '(cyc-2) '(tag-q) '(tag-p) '()
+                                  (rule-clauses desc-c2) (rule-proc desc-c2))))
+
+(define-picopass rule-test-cyc-3 (Expr ((cyc-3 ,x) x)))
+(let ((desc-c3 (rule-descriptor 'rule-test-cyc-3)))
+  (nanopass-register-rule!
+   (nanopass-make-rule-descriptor 'rule-test-cyc-3 'pico 'Expr '(cyc-3) '(tag-p) '(tag-r) '()
+                                  (rule-clauses desc-c3) (rule-proc desc-c3))))
+
+(let ((cyc-dag (nanopass-build-rule-dag '(rule-test-cyc-1 rule-test-cyc-2 rule-test-cyc-3))))
+  ;; Topological sort must return #f due to cycle
+  (assert-equal "topological sort detects cycle and returns #f"
+                #f
+                (nanopass-rule-dag-topological-sort cyc-dag))
+  ;; Tarjan SCC finds the cyclic component
+  (let ((sccs (nanopass-rule-dag-scc cyc-dag))
+        (cycles (nanopass-rule-dag-cycles cyc-dag)))
+    (assert-equal "SCC finds components" #t (> (length sccs) 0))
+    (assert-equal "cycles identifies 1 cycle group" 1 (length cycles))
+    (let ((c (car cycles)))
+      (assert-equal "cycle group has length 2" 2 (length c))
+      (assert-equal "cycle group contains cyc-1" #t (and (memq 'rule-test-cyc-1 c) #t))
+      (assert-equal "cycle group contains cyc-2" #t (and (memq 'rule-test-cyc-2 c) #t)))))
+
+;;; =======================================================================
+;;; 22. Femtopass Analysis Cache & Invalidation Protocol (DSN-33-01 T5.1)
+;;; =======================================================================
+
+;; 22.1 Basic Cache Hit, Miss, and Counting
+(femto-cache-reset!)
+(let* ((node-fn1 (list 'lambda '(x) '(+ x 1)))
+       (node-fn2 (list 'define 'foo 42))
+       (compute-count 0)
+       (thunk (lambda ()
+                (set! compute-count (+ compute-count 1))
+                '(x))))
+  ;; First call: miss
+  (let ((res1 (femto-get-cached-attr 'free-vars node-fn1 thunk)))
+    (assert-equal "femto cache returns computed value" '(x) res1)
+    (assert-equal "compute count after miss is 1" 1 compute-count))
+  ;; Second call on same node: hit!
+  (let ((res2 (femto-get-cached-attr 'free-vars node-fn1 thunk)))
+    (assert-equal "femto cache returns cached value" '(x) res2)
+    (assert-equal "compute count after hit is still 1" 1 compute-count))
+
+  ;; Stats inspection
+  (let ((stats (femto-cache-stats)))
+    (assert-equal "femto cache hits count is 1" 1 (cdr (assq 'hits stats)))
+    (assert-equal "femto cache misses count is 1" 1 (cdr (assq 'misses stats)))
+    (assert-equal "femto cache entries count is 1" 1 (cdr (assq 'entries stats))))
+  (assert-equal "femto cache hit rate is 50%" 50 (femto-cache-hit-rate))
+
+  ;; Distinct attribute on same node
+  (let ((res-use (femto-get-cached-attr 'use-counts node-fn1 (lambda () 5))))
+    (assert-equal "second attr on same node" 5 res-use))
+
+  ;; Distinct node
+  (let ((res-fn2 (femto-get-cached-attr 'free-vars node-fn2 (lambda () '()))))
+    (assert-equal "attr on distinct node" '() res-fn2))
+
+  ;; 22.2 Node-based Invalidation
+  (femto-cache-invalidate-node! node-fn1)
+  ;; node-fn2 is still cached
+  (let ((old-compute compute-count))
+    (femto-get-cached-attr 'free-vars node-fn2 (lambda () (set! compute-count (+ compute-count 1)) '()))
+    (assert-equal "node-fn2 survives node-fn1 invalidation" old-compute compute-count)
+    ;; node-fn1 was invalidated, so it must recompute
+    (femto-get-cached-attr 'free-vars node-fn1 thunk)
+    (assert-equal "node-fn1 recomputed after invalidation" (+ old-compute 1) compute-count)))
+
+;; 22.3 Tag-based Selective Invalidation
+(femto-cache-reset!)
+(femto-register-attr-dependencies! 'free-vars '(lambda let letrec set!))
+(femto-register-attr-dependencies! 'type-sig '(define :type))
+
+(let ((node (list 'lambda '(a b) '(+ a b))))
+  ;; Populate both attributes
+  (femto-get-cached-attr 'free-vars node (lambda () '(a b)))
+  (femto-get-cached-attr 'type-sig node (lambda () '(-> (int int) int)))
+
+  (let ((misses-before (cdr (assq 'misses (femto-cache-stats)))))
+    ;; Invalidate unrelated tags (e.g. vector bytevector) -> neither attribute invalidated!
+    (femto-cache-invalidate-tags! '(vector bytevector))
+    (femto-get-cached-attr 'free-vars node (lambda () (error "should not recompute")))
+    (femto-get-cached-attr 'type-sig node (lambda () (error "should not recompute")))
+    (assert-equal "unrelated tag invalidation preserves cache"
+                  misses-before
+                  (cdr (assq 'misses (femto-cache-stats))))
+
+    ;; Invalidate 'lambda tag -> free-vars must be invalidated, but type-sig remains cached!
+    (femto-cache-invalidate-tags! '(lambda))
+    (let ((recomputed-free #f))
+      (femto-get-cached-attr 'free-vars node (lambda () (set! recomputed-free #t) '(a b)))
+      (assert-equal "free-vars recomputed after lambda tag invalidation" #t recomputed-free))
+    ;; type-sig still cached (should not recompute)
+    (let ((recomputed-type #f))
+      (femto-get-cached-attr 'type-sig node (lambda () (set! recomputed-type #t) '(-> (int int) int)))
+      (assert-equal "type-sig not recomputed because disjoint tags" #f recomputed-type))
+
+    ;; Wildcard invalidation -> clears all
+    (femto-cache-invalidate-tags! '*)
+    (assert-equal "wildcard invalidation clears all entries"
+                  0
+                  (cdr (assq 'entries (femto-cache-stats))))))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)

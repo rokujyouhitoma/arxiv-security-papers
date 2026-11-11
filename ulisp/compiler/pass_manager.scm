@@ -497,6 +497,7 @@
   (if (null? (car *pass-registry*))
       (init-default-pass-registry!))
   (reset-nanopass-verification-cache!)
+  (femto-cache-reset!)
   (if verify-mode
       (begin
         (enable-verifier!)
