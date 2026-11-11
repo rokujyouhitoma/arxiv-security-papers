@@ -456,9 +456,11 @@
           (lambda ()
             (let ((prev-in-runner (nanopass-in-pipeline-runner?)))
               (set-nanopass-in-pipeline-runner! #t)
-              (let ((res (fn input-ast)))
-                (set-nanopass-in-pipeline-runner! prev-in-runner)
-                res)))))
+              (with-nanopass-term-memo
+                (lambda ()
+                  (let ((res (fn input-ast)))
+                    (set-nanopass-in-pipeline-runner! prev-in-runner)
+                    res)))))))
     (set-current-pass! id)
     (with-call-frame id input-ast
       (lambda ()
@@ -498,6 +500,8 @@
       (init-default-pass-registry!))
   (reset-nanopass-verification-cache!)
   (femto-cache-reset!)
+  (nanopass-term-memo-reset!)
+  (nanopass-hash-cons-reset!)
   (if verify-mode
       (begin
         (enable-verifier!)

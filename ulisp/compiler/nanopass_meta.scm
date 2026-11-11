@@ -1738,9 +1738,24 @@
         ;; Transform mode: reconstruct AST according to define-language schema while propagating inherited attributes
         (let ((call-recurse
                (lambda (node)
-                 (if (null? extra-args)
-                     (recurse-fn node)
-                     (nanopass-apply-list recurse-fn (cons node extra-args))))))
+                 (if (or (not (car *nanopass-term-memo-enabled?*))
+                         (not (car *nanopass-term-memo-active?*))
+                         (not (pair? node))
+                         (pair? extra-args))
+                     (if (null? extra-args)
+                         (recurse-fn node)
+                         (nanopass-apply-list recurse-fn (cons node extra-args)))
+                     (let ((hit (assq node (car *nanopass-term-memo*))))
+                       (if hit
+                           (begin
+                             (set-car! *nanopass-term-memo-stats* (+ (car *nanopass-term-memo-stats*) 1))
+                             (cdr hit))
+                           (begin
+                             (set-cdr! *nanopass-term-memo-stats* (+ (cdr *nanopass-term-memo-stats*) 1))
+                             (let ((res (recurse-fn node)))
+                               (set-car! *nanopass-term-memo*
+                                         (cons (cons node res) (car *nanopass-term-memo*)))
+                               res))))))))
           (if (not (pair? ir))
               ir
               (let ((matched (if lang (nanopass-find-matching-production ir nt-name lang) #f)))
@@ -2217,6 +2232,94 @@
       (if (= total 0)
           0
           (/ (* hits 100) total)))))
+
+;;; -----------------------------------------------------------------------
+;;; Part 14: Hash-Consing Term DAG and Memoized Catamorphism (DSN-33-01 T5.2)
+;;; -----------------------------------------------------------------------
+
+;;; 14.1 Hash-Consing Constructor for Immutable S-expression Subterms
+(define *nanopass-hash-cons-table* (cons '() '()))
+
+(define (nanopass-hash-cons-reset!)
+  (set-car! *nanopass-hash-cons-table* '()))
+
+(define (nanopass-hash-cons a d)
+  (let ((key (cons a d))
+        (table (car *nanopass-hash-cons-table*)))
+    (let ((existing (assoc key table)))
+      (if existing
+          (cdr existing)
+          (let ((new-pair (cons a d)))
+            (set-car! *nanopass-hash-cons-table*
+                      (cons (cons key new-pair) table))
+            new-pair)))))
+
+(define (nanopass-hash-cons-list es)
+  (if (null? es)
+      '()
+      (nanopass-hash-cons (car es) (nanopass-hash-cons-list (cdr es)))))
+
+;;; 14.2 Scoped Term DAG Catamorphism Memoization
+(define *nanopass-term-memo* (cons '() '()))
+(define *nanopass-term-memo-enabled?* (cons #t '()))
+(define *nanopass-term-memo-active?* (cons #f '()))
+(define *nanopass-term-memo-stats* (cons 0 0)) ; (cons hits misses)
+
+(define (enable-nanopass-term-memo!)
+  (set-car! *nanopass-term-memo-enabled?* #t))
+
+(define (disable-nanopass-term-memo!)
+  (set-car! *nanopass-term-memo-enabled?* #f))
+
+(define (nanopass-term-memo-reset!)
+  (set-car! *nanopass-term-memo* '())
+  (set-car! *nanopass-term-memo-stats* 0)
+  (set-cdr! *nanopass-term-memo-stats* 0))
+
+(define (nanopass-term-memo-stats)
+  (list (cons 'hits (car *nanopass-term-memo-stats*))
+        (cons 'misses (cdr *nanopass-term-memo-stats*))
+        (cons 'entries (length (car *nanopass-term-memo*)))))
+
+(define (nanopass-term-memo-hit-rate)
+  (let ((hits (car *nanopass-term-memo-stats*))
+        (misses (cdr *nanopass-term-memo-stats*)))
+    (let ((total (+ hits misses)))
+      (if (= total 0)
+          0
+          (quotient (* hits 100) total)))))
+
+(define (with-nanopass-term-memo thunk)
+  (let ((old-memo (car *nanopass-term-memo*))
+        (old-active (car *nanopass-term-memo-active?*)))
+    (set-car! *nanopass-term-memo* '())
+    (set-car! *nanopass-term-memo-active?* #t)
+    (let ((res (guard (ex (else
+                            (set-car! *nanopass-term-memo* old-memo)
+                            (set-car! *nanopass-term-memo-active?* old-active)
+                            (raise ex)))
+                 (thunk))))
+      (set-car! *nanopass-term-memo* old-memo)
+      (set-car! *nanopass-term-memo-active?* old-active)
+      res)))
+
+(define (nanopass-memoize-step node transform-fn)
+  (if (or (not (car *nanopass-term-memo-enabled?*))
+          (not (car *nanopass-term-memo-active?*))
+          (not (pair? node)))
+      (transform-fn node)
+      (let ((hit (assq node (car *nanopass-term-memo*))))
+        (if hit
+            (begin
+              (set-car! *nanopass-term-memo-stats* (+ (car *nanopass-term-memo-stats*) 1))
+              (cdr hit))
+            (begin
+              (set-cdr! *nanopass-term-memo-stats* (+ (cdr *nanopass-term-memo-stats*) 1))
+              (let ((res (transform-fn node)))
+                (set-car! *nanopass-term-memo*
+                          (cons (cons node res) (car *nanopass-term-memo*)))
+                res))))))
+
 
 
 

@@ -1589,6 +1589,124 @@
                   0
                   (cdr (assq 'entries (femto-cache-stats))))))
 
+;;; =======================================================================
+;;; Section 23: Term DAG Hash-Consing & Memoized Catamorphism (DSN-33-01 T5.2)
+;;; =======================================================================
+(display "--- [Section 23: Term DAG Hash-Consing & Memoized Catamorphism] ---") (newline)
+
+;; 23.1 Hash-Consing Constructor
+(nanopass-hash-cons-reset!)
+(let* ((p1 (nanopass-hash-cons 'a 'b))
+       (p2 (nanopass-hash-cons 'a 'b))
+       (p3 (nanopass-hash-cons 'a 'c)))
+  (assert-equal "nanopass-hash-cons returns eq? pair for identical components"
+                #t
+                (eq? p1 p2))
+  (assert-equal "nanopass-hash-cons returns different pair for different components"
+                #f
+                (eq? p1 p3)))
+
+(let* ((l1 (nanopass-hash-cons-list '(1 2 3)))
+       (l2 (nanopass-hash-cons-list '(1 2 3))))
+  (assert-equal "nanopass-hash-cons-list returns eq? list for identical elements"
+                #t
+                (eq? l1 l2)))
+
+;; 23.2 Scoped Term DAG Catamorphism Memoization
+(nanopass-term-memo-reset!)
+(let* ((shared-term (list '+ 1 2))
+       (compound-ast (list 'begin shared-term shared-term shared-term))
+       (visit-count 0)
+       (transform-node
+        (lambda (node)
+          (set! visit-count (+ visit-count 1))
+          (if (equal? node '(+ 1 2))
+              3
+              node))))
+  (let* ((stats #f)
+         (memo-res
+          (with-nanopass-term-memo
+            (lambda ()
+              (let ((res (map (lambda (n) (nanopass-memoize-step n transform-node))
+                              (cdr compound-ast))))
+                (set! stats (nanopass-term-memo-stats))
+                res)))))
+    (assert-equal "shared node transformed once across 3 occurrences" 1 visit-count)
+    (assert-equal "memoized results match expected" '(3 3 3) memo-res)
+    (assert-equal "term memo hits count is 2" 2 (cdr (assq 'hits stats)))
+    (assert-equal "term memo misses count is 1" 1 (cdr (assq 'misses stats)))
+    (assert-equal "term memo entries count is 1" 1 (cdr (assq 'entries stats)))
+    (assert-equal "term memo hit rate is 66%" 66 (nanopass-term-memo-hit-rate))))
+
+;; 23.3 Scope Isolation & Cleanup
+(let ((stats-after (nanopass-term-memo-stats)))
+  (assert-equal "memo table is empty outside with-nanopass-term-memo scope"
+                0
+                (cdr (assq 'entries stats-after))))
+
+;; 23.4 Catamorphism Integration with Shared Subtree in define-pass
+(define-language L_test_memo
+  (terminals
+    (symbol (x))
+    (number (n)))
+  (Expr (e)
+    x
+    n
+    (+ e1 e2)
+    (begin e* ...)))
+
+(define *memo-pass-visit-count* 0)
+
+(define-pass test-pass-memo-count : L_test_memo (ir) -> L_test_memo ()
+  (Expr : Expr (ir) -> Expr ()
+    ((+ ,e1 ,e2)
+     (begin
+       (set! *memo-pass-visit-count* (+ *memo-pass-visit-count* 1))
+       (list '+ (Expr e1) (Expr e2))))))
+
+(let* ((shared-add (list '+ 10 20))
+       (dag-ast (list 'begin shared-add shared-add shared-add)))
+  (with-nanopass-term-memo
+    (lambda ()
+      (set! *memo-pass-visit-count* 0)
+      (let ((res (test-pass-memo-count dag-ast)))
+        (assert-equal "catamorphism visits shared add node once"
+                      1
+                      *memo-pass-visit-count*)
+        (assert-equal "catamorphism result preserves begin structure"
+                      '(begin (+ 10 20) (+ 10 20) (+ 10 20))
+                      res)))))
+
+;; 23.5 CP0 & Contify First-Class Picopass / Femtopass Rules Verification
+(assert-equal "rule-cp0-prune-if-3 simplifies true condition"
+              10
+              (rule-cp0-prune-if-3 '(if #t 10 20)))
+
+(assert-equal "rule-cp0-prune-if-3 simplifies false condition"
+              20
+              (rule-cp0-prune-if-3 '(if #f 10 20)))
+
+(assert-equal "rule-cp0-flatten-begin inlines nested begin"
+              '(begin 1 2 3)
+              (rule-cp0-flatten-begin '(begin 1 (begin 2 3))))
+
+(assert-equal "rule-cp0-const-fold computes addition"
+              30
+              (rule-cp0-const-fold '(+ 10 20)))
+
+(assert-equal "rule-cp0-dead-let eliminates pure dead binding"
+              '(let ((x 1)) x)
+              (rule-cp0-dead-let '(let ((x 1) (y (+ 2 3))) x)))
+
+(assert-equal "rule-contify-letrec converts tail loop to %cont-fun"
+              '(%cont-fun loop (n acc)
+                          (if (= n 0) acc (%cont-call loop (- n 1) (+ acc n)))
+                          (%cont-call loop 10 0))
+              (rule-contify-letrec
+                '(letrec ((loop (lambda (n acc)
+                                  (if (= n 0) acc (loop (- n 1) (+ acc n))))))
+                   (loop 10 0))))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)

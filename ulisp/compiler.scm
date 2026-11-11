@@ -3742,9 +3742,24 @@
         ;; Transform mode: reconstruct AST according to define-language schema while propagating inherited attributes
         (let ((call-recurse
                (lambda (node)
-                 (if (null? extra-args)
-                     (recurse-fn node)
-                     (nanopass-apply-list recurse-fn (cons node extra-args))))))
+                 (if (or (not (car *nanopass-term-memo-enabled?*))
+                         (not (car *nanopass-term-memo-active?*))
+                         (not (pair? node))
+                         (pair? extra-args))
+                     (if (null? extra-args)
+                         (recurse-fn node)
+                         (nanopass-apply-list recurse-fn (cons node extra-args)))
+                     (let ((hit (assq node (car *nanopass-term-memo*))))
+                       (if hit
+                           (begin
+                             (set-car! *nanopass-term-memo-stats* (+ (car *nanopass-term-memo-stats*) 1))
+                             (cdr hit))
+                           (begin
+                             (set-cdr! *nanopass-term-memo-stats* (+ (cdr *nanopass-term-memo-stats*) 1))
+                             (let ((res (recurse-fn node)))
+                               (set-car! *nanopass-term-memo*
+                                         (cons (cons node res) (car *nanopass-term-memo*)))
+                               res))))))))
           (if (not (pair? ir))
               ir
               (let ((matched (if lang (nanopass-find-matching-production ir nt-name lang) #f)))
@@ -4221,6 +4236,94 @@
       (if (= total 0)
           0
           (/ (* hits 100) total)))))
+
+;;; -----------------------------------------------------------------------
+;;; Part 14: Hash-Consing Term DAG and Memoized Catamorphism (DSN-33-01 T5.2)
+;;; -----------------------------------------------------------------------
+
+;;; 14.1 Hash-Consing Constructor for Immutable S-expression Subterms
+(define *nanopass-hash-cons-table* (cons '() '()))
+
+(define (nanopass-hash-cons-reset!)
+  (set-car! *nanopass-hash-cons-table* '()))
+
+(define (nanopass-hash-cons a d)
+  (let ((key (cons a d))
+        (table (car *nanopass-hash-cons-table*)))
+    (let ((existing (assoc key table)))
+      (if existing
+          (cdr existing)
+          (let ((new-pair (cons a d)))
+            (set-car! *nanopass-hash-cons-table*
+                      (cons (cons key new-pair) table))
+            new-pair)))))
+
+(define (nanopass-hash-cons-list es)
+  (if (null? es)
+      '()
+      (nanopass-hash-cons (car es) (nanopass-hash-cons-list (cdr es)))))
+
+;;; 14.2 Scoped Term DAG Catamorphism Memoization
+(define *nanopass-term-memo* (cons '() '()))
+(define *nanopass-term-memo-enabled?* (cons #t '()))
+(define *nanopass-term-memo-active?* (cons #f '()))
+(define *nanopass-term-memo-stats* (cons 0 0)) ; (cons hits misses)
+
+(define (enable-nanopass-term-memo!)
+  (set-car! *nanopass-term-memo-enabled?* #t))
+
+(define (disable-nanopass-term-memo!)
+  (set-car! *nanopass-term-memo-enabled?* #f))
+
+(define (nanopass-term-memo-reset!)
+  (set-car! *nanopass-term-memo* '())
+  (set-car! *nanopass-term-memo-stats* 0)
+  (set-cdr! *nanopass-term-memo-stats* 0))
+
+(define (nanopass-term-memo-stats)
+  (list (cons 'hits (car *nanopass-term-memo-stats*))
+        (cons 'misses (cdr *nanopass-term-memo-stats*))
+        (cons 'entries (length (car *nanopass-term-memo*)))))
+
+(define (nanopass-term-memo-hit-rate)
+  (let ((hits (car *nanopass-term-memo-stats*))
+        (misses (cdr *nanopass-term-memo-stats*)))
+    (let ((total (+ hits misses)))
+      (if (= total 0)
+          0
+          (quotient (* hits 100) total)))))
+
+(define (with-nanopass-term-memo thunk)
+  (let ((old-memo (car *nanopass-term-memo*))
+        (old-active (car *nanopass-term-memo-active?*)))
+    (set-car! *nanopass-term-memo* '())
+    (set-car! *nanopass-term-memo-active?* #t)
+    (let ((res (guard (ex (else
+                            (set-car! *nanopass-term-memo* old-memo)
+                            (set-car! *nanopass-term-memo-active?* old-active)
+                            (raise ex)))
+                 (thunk))))
+      (set-car! *nanopass-term-memo* old-memo)
+      (set-car! *nanopass-term-memo-active?* old-active)
+      res)))
+
+(define (nanopass-memoize-step node transform-fn)
+  (if (or (not (car *nanopass-term-memo-enabled?*))
+          (not (car *nanopass-term-memo-active?*))
+          (not (pair? node)))
+      (transform-fn node)
+      (let ((hit (assq node (car *nanopass-term-memo*))))
+        (if hit
+            (begin
+              (set-car! *nanopass-term-memo-stats* (+ (car *nanopass-term-memo-stats*) 1))
+              (cdr hit))
+            (begin
+              (set-cdr! *nanopass-term-memo-stats* (+ (cdr *nanopass-term-memo-stats*) 1))
+              (let ((res (transform-fn node)))
+                (set-car! *nanopass-term-memo*
+                          (cons (cons node res) (car *nanopass-term-memo*)))
+                res))))))
+
 
 
 
@@ -5999,9 +6102,11 @@
           (lambda ()
             (let ((prev-in-runner (nanopass-in-pipeline-runner?)))
               (set-nanopass-in-pipeline-runner! #t)
-              (let ((res (fn input-ast)))
-                (set-nanopass-in-pipeline-runner! prev-in-runner)
-                res)))))
+              (with-nanopass-term-memo
+                (lambda ()
+                  (let ((res (fn input-ast)))
+                    (set-nanopass-in-pipeline-runner! prev-in-runner)
+                    res)))))))
     (set-current-pass! id)
     (with-call-frame id input-ast
       (lambda ()
@@ -6041,6 +6146,8 @@
       (init-default-pass-registry!))
   (reset-nanopass-verification-cache!)
   (femto-cache-reset!)
+  (nanopass-term-memo-reset!)
+  (nanopass-hash-cons-reset!)
   (if verify-mode
       (begin
         (enable-verifier!)
@@ -10825,23 +10932,116 @@
             (list 'letrec kept-bindings body))))))
 
 ;;; -----------------------------------------------------------------------
+;;; Top-level helpers for CP0 optimization
+;;; -----------------------------------------------------------------------
+(define (cp0-flatten-begin-list es)
+  (let loop ((rest es) (acc '()))
+    (cond
+      ((null? rest) (reverse acc))
+      ((and (pair? (car rest)) (eq? (caar rest) 'begin))
+       (loop (append (cdar rest) (cdr rest)) acc))
+      (else (loop (cdr rest) (cons (car rest) acc))))))
+
+(define (cp0-zip-bindings xs es)
+  (let loop ((x xs) (e es) (acc '()))
+    (if (or (null? x) (null? e))
+        (reverse acc)
+        (loop (cdr x) (cdr e) (cons (list (car x) (car e)) acc)))))
+
+;;; -----------------------------------------------------------------------
+;;; First-Class Picopass Rules for CP0 Optimization (DSN-33-01 T5.2)
+;;; -----------------------------------------------------------------------
+
+(define-picopass rule-cp0-prune-if-3
+  :reads '(if) :writes '(if)
+  (Expr
+    ((if ,test ,then ,else-val)
+     (if (const? test)
+         (let ((v (extract-const-val test)))
+           (if (eq? v #f) else-val then))
+         #f))))
+
+(define-picopass rule-cp0-prune-if-2
+  :reads '(if) :writes '(if)
+  (Expr
+    ((if ,test ,then)
+     (if (const? test)
+         (let ((v (extract-const-val test)))
+           (if (eq? v #f) #f then))
+         #f))))
+
+(define-picopass rule-cp0-flatten-begin
+  :reads '(begin) :writes '(begin)
+  (Expr
+    ((begin ,es ...)
+     (let ((flat (cp0-flatten-begin-list es)))
+       (cond
+         ((null? flat) #f)
+         ((null? (cdr flat)) (car flat))
+         ((equal? flat es) #f)
+         (else (cons 'begin flat)))))))
+
+(define-picopass rule-cp0-dead-let
+  :reads '(let) :writes '(let)
+  (Expr
+    ((let ((,x* ,e*) ...) ,body)
+     (let* ((bindings (cp0-zip-bindings x* e*))
+            (body-frees (free-vars body '()))
+            (kept (filter (lambda (b)
+                            (or (not (pure-expr? (cadr b)))
+                                (memq (car b) body-frees)))
+                          bindings)))
+       (if (null? kept)
+           body
+           (if (= (length kept) (length bindings))
+               (list 'let bindings body)
+               (list 'let kept body)))))))
+
+(define-picopass rule-cp0-dead-letrec
+  :reads '(letrec) :writes '(letrec)
+  (Expr
+    ((letrec ((,x* ,e*) ...) ,body)
+     (let ((bindings (cp0-zip-bindings x* e*)))
+       (dce-letrec bindings body)))))
+
+(define-picopass rule-cp0-call-values
+  :reads '(%call-with-values) :writes '(let)
+  (Expr
+    ((%call-with-values ,producer ,consumer)
+     (let ((p producer) (c consumer))
+       (cond
+         ((and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
+               (pair? (caddr p)) (memq (car (caddr p)) '(%values values))
+               (pair? c) (eq? (car c) 'lambda) (list? (cadr c))
+               (= (length (cdr (caddr p))) (length (cadr c))))
+          (let* ((vals (cdr (caddr p)))
+                 (vars (cadr c))
+                 (cbody (caddr c))
+                 (bindings (cp0-zip-bindings vars vals)))
+            (list 'let bindings cbody)))
+         ((and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
+               (not (and (pair? (caddr p)) (memq (car (caddr p)) '(%values values))))
+               (pair? c) (eq? (car c) 'lambda) (list? (cadr c))
+               (= (length (cadr c)) 1))
+          (let ((val (caddr p))
+                (var (car (cadr c)))
+                (cbody (caddr c)))
+            (list 'let (list (list var val)) cbody)))
+         (else #f))))))
+
+(define-picopass rule-cp0-const-fold
+  :reads '() :writes '()
+  (Expr
+    ((,op ,args ...)
+     (if (symbol? op)
+         (fold-const-op op args)
+         #f))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: cp0-opt
 ;;; Bottom-up CP0 optimization: Constant Folding, Branch Pruning, and DCE
 ;;; -----------------------------------------------------------------------
 (define-pass cp0-opt : L_core (ir) -> L_core ()
-  (definitions
-    (define (flatten-begin-list es)
-      (let loop ((rest es) (acc '()))
-        (cond
-          ((null? rest) (reverse acc))
-          ((and (pair? (car rest)) (eq? (caar rest) 'begin))
-           (loop (append (cdar rest) (cdr rest)) acc))
-          (else (loop (cdr rest) (cons (car rest) acc))))))
-    (define (zip-bindings xs es)
-      (let loop ((x xs) (e es) (acc '()))
-        (if (or (null? x) (null? e))
-            (reverse acc)
-            (loop (cdr x) (cdr e) (cons (list (car x) (car e)) acc))))))
   (Expr : Expr (ir) -> Expr ()
     ((quote ,datum)
      ir)
@@ -10849,42 +11049,27 @@
      (let ((opt-test (Expr test))
            (opt-then (Expr then))
            (opt-else (Expr else-val)))
-       (if (const? opt-test)
-           (let ((v (extract-const-val opt-test)))
-             (if (eq? v #f) opt-else opt-then))
+       (or (rule-cp0-prune-if-3 (list 'if opt-test opt-then opt-else))
            (list 'if opt-test opt-then opt-else))))
     ((if ,test ,then)
      (let ((opt-test (Expr test))
            (opt-then (Expr then)))
-       (if (const? opt-test)
-           (let ((v (extract-const-val opt-test)))
-             (if (eq? v #f) #f opt-then))
+       (or (rule-cp0-prune-if-2 (list 'if opt-test opt-then))
            (list 'if opt-test opt-then #f))))
     ((begin ,es ...)
-     (let* ((opt-es (map Expr es))
-            (flat (flatten-begin-list opt-es)))
-       (cond
-         ((null? flat) #f)
-         ((null? (cdr flat)) (car flat))
-         (else (cons 'begin flat)))))
+     (let* ((opt-es (map Expr es)))
+       (or (rule-cp0-flatten-begin (cons 'begin opt-es))
+           (cons 'begin opt-es))))
     ((let ((,x* ,e*) ...) ,body)
      (let* ((opt-e* (map Expr e*))
-            (opt-body (Expr body))
-            (opt-bindings (zip-bindings x* opt-e*))
-            (body-frees (free-vars opt-body '()))
-            (kept-bindings
-             (filter (lambda (b)
-                       (or (not (pure-expr? (cadr b)))
-                           (memq (car b) body-frees)))
-                     opt-bindings)))
-       (if (null? kept-bindings)
-           opt-body
-           (list 'let kept-bindings opt-body))))
+            (opt-body (Expr body)))
+       (or (rule-cp0-dead-let (list 'let (cp0-zip-bindings x* opt-e*) opt-body))
+           (list 'let (cp0-zip-bindings x* opt-e*) opt-body))))
     ((letrec ((,x* ,e*) ...) ,body)
      (let* ((opt-e* (map Expr e*))
-            (opt-body (Expr body))
-            (opt-bindings (zip-bindings x* opt-e*)))
-       (dce-letrec opt-bindings opt-body)))
+            (opt-body (Expr body)))
+       (or (rule-cp0-dead-letrec (list 'letrec (cp0-zip-bindings x* opt-e*) opt-body))
+           (list 'letrec (cp0-zip-bindings x* opt-e*) opt-body))))
     ((lambda (,params ...) ,body)
      (list 'lambda params (Expr body)))
     ((%make-closure ,tag ,es ...)
@@ -10898,32 +11083,15 @@
     ((%call-with-values ,producer ,consumer)
      (let ((p (Expr producer))
            (c (Expr consumer)))
-       (cond
-         ((and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
-               (pair? (caddr p)) (memq (car (caddr p)) '(%values values))
-               (pair? c) (eq? (car c) 'lambda) (list? (cadr c))
-               (= (length (cdr (caddr p))) (length (cadr c))))
-          (let* ((vals (cdr (caddr p)))
-                 (vars (cadr c))
-                 (cbody (caddr c))
-                 (bindings (zip-bindings vars vals)))
-            (Expr (list 'let bindings cbody))))
-         ((and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
-               (not (and (pair? (caddr p)) (memq (car (caddr p)) '(%values values))))
-               (pair? c) (eq? (car c) 'lambda) (list? (cadr c))
-               (= (length (cadr c)) 1))
-          (let ((val (caddr p))
-                (var (car (cadr c)))
-                (cbody (caddr c)))
-            (Expr (list 'let (list (list var val)) cbody))))
-         (else
-          (list '%call-with-values p c)))))
+       (or (let ((v-res (rule-cp0-call-values (list '%call-with-values p c))))
+             (and v-res (Expr v-res)))
+           (list '%call-with-values p c))))
     ((%values ,es ...)
      (cons '%values (map Expr es)))
     ((,op ,args ...)
      (let* ((opt-op (if (symbol? op) op (Expr op)))
             (opt-args (map Expr args)))
-       (or (and (symbol? opt-op) (fold-const-op opt-op opt-args))
+       (or (and (symbol? opt-op) (rule-cp0-const-fold (cons opt-op opt-args)))
            (cons opt-op opt-args))))))
 
 (define (cp0-expr expr)
@@ -13108,30 +13276,58 @@
                 (or (has-call? var (car es))
                     (loop (cdr es)))))))))
 
+;;; -----------------------------------------------------------------------
+;;; First-Class Femtopass & Picopass Rules for Contification (DSN-33-01 T5.2)
+;;; -----------------------------------------------------------------------
+
+(define-femtopass femto-contifiable?
+  :reads '(lambda)
+  (Expr
+    ((letrec ((,x* ,e*) ...) ,body)
+     (let loop ((xs x*) (es e*) (acc '()))
+       (if (null? xs)
+           (reverse acc)
+           (let ((v (car xs))
+                 (val (car es)))
+             (if (contifiable-binding? v val body)
+                 (loop (cdr xs) (cdr es) (cons v acc))
+                 (loop (cdr xs) (cdr es) acc))))))))
+
+(define-picopass rule-contify-letrec
+  :reads '(letrec) :writes '(%cont-fun)
+  (Expr
+    ((letrec ((,x* ,e*) ...) ,body)
+     (if (= (length x*) 1)
+         (let ((var (car x*))
+               (val (car e*)))
+           (if (and (has-call? var body)
+                    (contifiable-binding? var val body))
+               (let* ((params (cadr val))
+                      (lbody (caddr val))
+                      (opt-lbody (contify-calls var lbody))
+                      (opt-body (contify-calls var body)))
+                 (list '%cont-fun var params
+                       (contify-expr opt-lbody)
+                       (contify-expr opt-body)))
+               #f))
+         #f))))
+
 ;;; Processes a letrec form, lifting contifiable local bindings into %cont-fun wrappers.
 (define (contify-letrec bindings orig-body)
-  (if (= (length bindings) 1)
-      (let* ((b (car bindings))
-             (var (car b))
-             (val (cadr b)))
-        (if (and (has-call? var orig-body)
-                 (contifiable-binding? var val orig-body))
-            (let* ((params (cadr val))
-                   (lbody (caddr val))
-                   (opt-lbody (contify-calls var lbody))
-                   (opt-body (contify-calls var orig-body)))
-              (list '%cont-fun var params
-                    (contify-expr opt-lbody)
-                    (contify-expr opt-body)))
+  (or (rule-contify-letrec (list 'letrec bindings orig-body))
+      (if (= (length bindings) 1)
+          (let* ((b (car bindings))
+                 (var (car b))
+                 (val (cadr b)))
             (list 'letrec
                   (list (list var (contify-expr val)))
-                  (contify-expr orig-body))))
-      ;; Multi-binding letrec (top-level procedures or mutual recursion):
-      ;; Preserve letrec structure to maintain inter-procedure references,
-      ;; while recursively contifying local loops inside each procedure body.
-      (list 'letrec
-            (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
-            (contify-expr orig-body))))
+                  (contify-expr orig-body)))
+          ;; Multi-binding letrec (top-level procedures or mutual recursion):
+          ;; Preserve letrec structure to maintain inter-procedure references,
+          ;; while recursively contifying local loops inside each procedure body.
+          (list 'letrec
+                (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
+                (contify-expr orig-body)))))
 
 ;;; Pass 4c Entrypoint: Contification & local closure elimination across all expressions.
 (define (contify-all form)
