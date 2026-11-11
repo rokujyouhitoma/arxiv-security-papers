@@ -10,7 +10,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **766** | HIR/MIR Hash-Consing Term DAG と訪問済みノード O(1) メモ化走査および CP0/Contify の Picopass 化 (DSN-33-01 T5.2) | Feature | High | In Progress | [766-implement-hash-consing-term-dag-and-memoized-catamorphism.md](766-implement-hash-consing-term-dag-and-memoized-catamorphism.md) |
 | **767** | LIR 分岐融合 (128)・ピープホール (133) の Picopass 化と基本ブロック内データ依存 DAG 走査の導入 (DSN-33-01 T5.3) | Feature | High | New | [767-migrate-lir-peephole-to-picopass-and-dependency-dag.md](767-migrate-lir-peephole-to-picopass-and-dependency-dag.md) |
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | New | [768-implement-define-pipeline-for-aot-repl-and-check-modes.md](768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | New | [769-implement-picopass-provenance-tracing-and-auto-bisect.md](769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **766** | HIR/MIR Hash-Consing Term DAG と訪問済みノード O(1) メモ化走査および CP0/Contify の Picopass 化 (DSN-33-01 T5.2) | Feature | 2026-11-12 | [closed/766-implement-hash-consing-term-dag-and-memoized-catamorphism.md](closed/766-implement-hash-consing-term-dag-and-memoized-catamorphism.md) |
 | **765** | ルール依存関係 DAG (Reads/Writes) 自動構築・独立ルール自動 Fusion・Femtopass 解析キャッシュ維持の実装 (DSN-33-01 T5.1) | Feature | 2026-11-12 | [closed/765-implement-rule-dependency-dag-and-femtopass-cache-invalidation.md](closed/765-implement-rule-dependency-dag-and-femtopass-cache-invalidation.md) |
 | **764** | verifier.scm の手書き検証ループの define-attopass 化と Nanopass 融合による三重走査の解消 (DSN-33-01 T4.3) | Feature | 2026-11-11 | [closed/764-migrate-verifier-to-attopass-and-eliminate-triple-traversal.md](closed/764-migrate-verifier-to-attopass-and-eliminate-triple-traversal.md) |
 | **763** | 030_desugar.scm (desugar-all) の手動ディスパッチ約205行撤去と fuse-rules による全規則宣言的自動融合への完全置換 (DSN-33-01 T4.2) | Feature | 2026-11-11 | [closed/763-replace-desugar-030-duplicate-rules-with-fuse-rules.md](closed/763-replace-desugar-030-duplicate-rules-with-fuse-rules.md) |

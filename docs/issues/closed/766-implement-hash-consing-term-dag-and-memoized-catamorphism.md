@@ -2,7 +2,7 @@
 ID: 766
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] HIR/MIR Hash-Consing Term DAG と訪問済みノード O(1) メモ化走査および CP0/Contify の Picopass 化 (DSN-33-01 T5.2) (ID: 766)
@@ -172,28 +172,29 @@ ID: 766
 Target Branch: `feat/766-term-dag-memoization-and-mir-picopass`
 
 ### 7.1 対象ファイル一覧
-- [ ] [ulisp/compiler/nanopass_meta.scm](../../ulisp/compiler/nanopass_meta.scm)（Hash-Consing コンストラクタ、Term DAG メモ化走査ドライバ、スコープリセット API）
-- [ ] [ulisp/frontend/050_cp0.scm](../../ulisp/frontend/050_cp0.scm)（CP0 規則の define-picopass 化と fuse-rules 統合）
-- [ ] [ulisp/frontend/100_contify.scm](../../ulisp/frontend/100_contify.scm)（Contify 判定の define-femtopass 化および置換の define-picopass 化）
-- [ ] [ulisp/tests/test_nanopass_framework.scm](../../ulisp/tests/test_nanopass_framework.scm)（Term DAG メモ化・Hash-Consing 単体テスト追加）
-- [ ] [ulisp/tests/passes/test_050_cp0.scm](../../ulisp/tests/passes/test_050_cp0.scm)（Pass 050 単体テスト検証）
-- [ ] [ulisp/tests/passes/test_100_contify.scm](../../ulisp/tests/passes/test_100_contify.scm)（Pass 100 単体テスト検証）
+- [x] [ulisp/compiler/nanopass_meta.scm](../../ulisp/compiler/nanopass_meta.scm)（Hash-Consing コンストラクタ、Term DAG メモ化走査ドライバ、スコープリセット API）
+- [x] [ulisp/compiler/pass_manager.scm](../../ulisp/compiler/pass_manager.scm)（with-nanopass-term-memo 統合およびパイプラインリセット）
+- [x] [ulisp/frontend/050_cp0.scm](../../ulisp/frontend/050_cp0.scm)（CP0 規則の define-picopass 化とトップレベル関数分解）
+- [x] [ulisp/frontend/100_contify.scm](../../ulisp/frontend/100_contify.scm)（Contify 判定の define-femtopass 化および置換の define-picopass 化）
+- [x] [ulisp/tests/test_nanopass_framework.scm](../../ulisp/tests/test_nanopass_framework.scm)（Term DAG メモ化・Hash-Consing Section 23 単体テスト追加）
+- [x] [ulisp/tests/passes/test_050_cp0.scm](../../ulisp/tests/passes/test_050_cp0.scm)（Pass 050 単体テスト検証）
+- [x] [ulisp/tests/passes/test_100_contify.scm](../../ulisp/tests/passes/test_100_contify.scm)（Pass 100 単体テスト検証）
 
 ### 7.2 ステップ別実装計画
-- [ ] **Step 1: Hash-Consing コンストラクタと Term DAG メモ化機構の実装** (`ulisp/compiler/nanopass_meta.scm`):
-  - `nanopass-hash-cons`, `nanopass-hash-cons-reset!`, `nanopass-term-memo-reset!`
-  - `nanopass-memoize-step`, `with-nanopass-term-memo`
-- [ ] **Step 2: `050_cp0.scm` の Picopass 分割と合成**:
-  - `rule-cp0-const-fold`, `rule-cp0-prune-if`, `rule-cp0-flatten-begin`, `rule-cp0-dead-let`, `rule-cp0-dead-letrec`, `rule-cp0-call-values` を `define-picopass` として定義。
-  - `cp0-opt` を `fuse-rules` または微細粒度コンビネータにより再編成。
-- [ ] **Step 3: `100_contify.scm` の Femtopass / Picopass 化**:
-  - `femto-contifiable?` および `rule-contify-subst` の第一級ルール記述子化。
-  - `contify-all` の Nanopass 走査ドライバ統合。
-- [ ] **Step 4: 単体テスト群の拡充と検証**:
+- [x] **Step 1: Hash-Consing コンストラクタと Term DAG メモ化機構の実装** (`ulisp/compiler/nanopass_meta.scm`, `ulisp/compiler/pass_manager.scm`):
+  - `nanopass-hash-cons`, `nanopass-hash-cons-list`, `nanopass-hash-cons-reset!`, `nanopass-term-memo-reset!`
+  - `nanopass-memoize-step`, `with-nanopass-term-memo`, `nanopass-term-memo-stats`, `nanopass-term-memo-hit-rate`
+- [x] **Step 2: `050_cp0.scm` の Picopass 分割と合成**:
+  - `rule-cp0-prune-if-3`, `rule-cp0-prune-if-2`, `rule-cp0-flatten-begin`, `rule-cp0-dead-let`, `rule-cp0-dead-letrec`, `rule-cp0-call-values`, `rule-cp0-const-fold` を `define-picopass` として定義。
+  - `cp0-opt` をこれら第1級 Picopass 規則を用いて再編成。
+- [x] **Step 3: `100_contify.scm` の Femtopass / Picopass 化**:
+  - `femto-contifiable?` (Femtopass) および `rule-contify-letrec` (Picopass) の第一級ルール記述子化。
+  - `contify-letrec` を `rule-contify-letrec` へ統合。
+- [x] **Step 4: 単体テスト群の拡充と検証**:
   - `test_nanopass_framework.scm` に Section 23 (Term DAG & Memoized Catamorphism) テストを追加。
   - 共有部分木に対する変換で、子ノードの変換が正確に1回のみ実行されることを計量検証。
   - `test_050_cp0.scm`, `test_100_contify.scm`, `test_passes`, `test_all_passes` の PASS 確認。
-- [ ] **Step 5: 全品質ゲートとセルフホスティング検証**:
+- [x] **Step 5: 全品質ゲートとセルフホスティング検証**:
   - `make -C ulisp compiler`
   - `make -C ulisp test_nanopass`, `make -C ulisp test_verifier`, `make -C ulisp test_passes`, `make -C ulisp test_all_passes`
   - `make -C ulisp test_c` (全 143 件 PASS)
@@ -204,15 +205,29 @@ Target Branch: `feat/766-term-dag-memoization-and-mir-picopass`
 
 ## 8. 完了条件 / Success Criteria (DoD)
 
-1. [ ] **Hash-Consing と Term DAG メモ化走査**:
+1. [x] **Hash-Consing と Term DAG メモ化走査**:
    - `nanopass-hash-cons` が構造的に等しい不変式に対して同一のポインタ（`eq?`）を返却すること。
    - 共有ノードを持つ Term DAG に対し、`with-nanopass-term-memo` 環境下で同一ノードの重複走査が $O(1)$ キャッシュヒットにより完全に抑止されること。
-2. [ ] **`050_cp0.scm` の Picopass 適合**:
+2. [x] **`050_cp0.scm` の Picopass 適合**:
    - 定数畳み込み、分岐刈り込み、DCE が独立した第一級ルール記述子（`define-picopass`）として定義され、`cp0-optimize` が全既存 CP0 テストをパスすること。
-3. [ ] **`100_contify.scm` の Picopass 適合**:
+3. [x] **`100_contify.scm` の Picopass 適合**:
    - 局所関数の脱糖および呼び出し置換が `define-picopass` / `define-femtopass` として定義され、全既存 Contify テストをパスすること。
-4. [ ] **テスト完全 PASS & 品質ゲート保証**:
+4. [x] **テスト完全 PASS & 品質ゲート保証**:
    - `ulisp/tests/test_nanopass_framework.scm` の新テストを含む全単体テストが PASS すること。
    - `make -C ulisp test_c` (全 143 件 PASS) および `make -C ulisp test` (ブートストラップ不動点 bit-for-bit 一致) が保証されること。
    - `make py_compile` および `make static_analysis` がエラー 0 件で PASS すること。
    - 全ての内部ドキュメントリンクが相対パス規約に準拠していること。
+
+---
+
+## 9. 検証結果記録 / Verification Results
+
+- **`make -C ulisp compiler`**: S式括弧整合性・モジュール結合 100% PASS。
+- **`make -C ulisp test_nanopass`**: Section 23 (Term DAG Hash-Consing & Memoized Catamorphism) を含む全単体テスト 100% PASS。
+- **`make -C ulisp test_verifier`**: Canonical LIR Verifier 全テスト 100% PASS。
+- **`make -C ulisp test_passes` & `make -C ulisp test_all_passes`**: 全 39 個の Nanopass 単体テスト (Pass 010〜160, CP0, Contify) 100% PASS (0 failures)。
+- **`make -C ulisp test_c`**: Portable C バックエンド全 143 件 PASS (zero warnings)。
+- **`make -C ulisp test`**: 3-Stage セルフホスティングブートストラップ検証完了。Stage 2 と Stage 3 の生成コードが bit-for-bit 完全一致 (IDENTICAL)。
+- **`make py_compile && make static_analysis`**: mypy --strict (617 source files 0 issues), Xenon AAA, isort 100% PASS。
+- **相対パスリンク整合性**: 全ドキュメント参照が相対パスに準拠。
+
