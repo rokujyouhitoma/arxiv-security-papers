@@ -1,9 +1,10 @@
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 015: Nanopass DSL Procedural Expander
-;;; Conforms to DSN-33 Architecture Specification & Issue #587
+;;; Conforms to DSN-33 Architecture Specification & Issues #587, #758
 ;;;
 ;;; Pre-emptively expands Nanopass DSL forms (define-language, define-pass,
-;;; define-parser, define-unparser) into canonical Scheme definitions
+;;; define-parser, define-unparser, define-picopass, define-femtopass,
+;;; define-attopass) into canonical Scheme definitions
 ;;; before syntax-rules macro expansion (Pass 020). Also filters out
 ;;; host-only define-macro declarations to keep downstream passes pure.
 ;;; =======================================================================
@@ -20,7 +21,7 @@
                    (col (cadddr f))
                    (inner (car (cddddr f))))
                (cond
-                 ((and (pair? inner) (memq (car inner) '(define-language define-pass trace-define-pass define-parser define-unparser)))
+                 ((and (pair? inner) (memq (car inner) '(define-language define-pass trace-define-pass define-parser define-unparser define-picopass define-femtopass define-attopass)))
                   (let ((exp-inner (expand-dsl-forms (list inner))))
                     (loop (append (map (lambda (x) (list '%source-loc file line col x)) exp-inner)
                                   (cdr fs))
@@ -61,5 +62,26 @@
             ((and (pair? f) (eq? (car f) 'define-unparser))
              (let ((expanded (nanopass-expand-define-unparser f)))
                (loop (cons expanded (cdr fs)) res)))
+            ((and (pair? f) (eq? (car f) 'define-picopass))
+             (let ((expanded (nanopass-expand-define-picopass f)))
+               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
+                                 (cdr expanded)
+                                 (list expanded))
+                             (cdr fs))
+                     res)))
+            ((and (pair? f) (eq? (car f) 'define-femtopass))
+             (let ((expanded (nanopass-expand-define-femtopass f)))
+               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
+                                 (cdr expanded)
+                                 (list expanded))
+                             (cdr fs))
+                     res)))
+            ((and (pair? f) (eq? (car f) 'define-attopass))
+             (let ((expanded (nanopass-expand-define-attopass f)))
+               (loop (append (if (and (pair? expanded) (eq? (car expanded) 'begin))
+                                 (cdr expanded)
+                                 (list expanded))
+                             (cdr fs))
+                     res)))
             (else
              (loop (cdr fs) (cons f res))))))))

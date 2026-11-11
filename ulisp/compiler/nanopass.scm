@@ -392,6 +392,9 @@
                 (list 'letrec (list recurse-binding)
                       cascade))
               cascade)))
+    ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
+    (nanopass-register-rule!
+      (nanopass-make-rule-descriptor name rule-kind nt-name head-tags reads writes eliminates expanded-rules #f))
     (list 'begin
           (list 'define desc-var
                 (list (string->symbol "nanopass-make-rule-descriptor")
