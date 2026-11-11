@@ -496,7 +496,7 @@ bench_microtasks: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thr
 
 bench_latency_under_gc: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/bench_latency_under_gc_input.scm
+	@echo "(!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/bench_latency_under_gc_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm >> build/bench_latency_under_gc_input.scm
 	$(ULISP_COMPILER) build/bench_latency_under_gc_input.scm > build/bench_latency_under_gc.s
 	$(AS) $(ASFLAGS) build/bench_latency_under_gc.s -o build/bench_latency_under_gc.o
