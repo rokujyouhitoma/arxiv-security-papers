@@ -412,6 +412,141 @@
                           (memq out-l registered-langs)
                           (loop (cdr ps)))))))
 
+;;; -----------------------------------------------------------------------
+;;; Group 9: Issue #768 — define-pipeline DSL & Named Pipeline Profiles
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 9: define-pipeline DSL & Named Pipeline Profiles (DSN-33-01 T6.1) ---\n")
+
+(init-default-pass-registry!)
+
+;; 9.1 pipeline-descriptor? predicate and accessors
+(define sample-pipe-desc
+  (make-pipeline-descriptor 'test-pipeline "Sample Test Pipeline" '(pass-010-library) 'lir '(opt-a opt-b)))
+
+(assert-true "9.1 pipeline-descriptor? predicate"
+             (pipeline-descriptor? sample-pipe-desc))
+(assert-equal "9.2 pipeline-desc-name accessor"
+              'test-pipeline
+              (pipeline-desc-name sample-pipe-desc))
+(assert-equal "9.3 pipeline-desc-doc accessor"
+              "Sample Test Pipeline"
+              (pipeline-desc-doc sample-pipe-desc))
+(assert-equal "9.4 pipeline-desc-passes accessor"
+              '(pass-010-library)
+              (pipeline-desc-passes sample-pipe-desc))
+(assert-equal "9.5 pipeline-desc-target-ir accessor"
+              'lir
+              (pipeline-desc-target-ir sample-pipe-desc))
+(assert-equal "9.6 pipeline-desc-options accessor"
+              '(opt-a opt-b)
+              (pipeline-desc-options sample-pipe-desc))
+
+;; 9.2 Standard named pipelines registration
+(assert-true "9.7 standard aot-native-pipeline is registered"
+             (pipeline-registered? 'aot-native-pipeline))
+(assert-true "9.8 standard repl-fast-pipeline is registered"
+             (pipeline-registered? 'repl-fast-pipeline))
+(assert-true "9.9 standard static-check-pipeline is registered"
+             (pipeline-registered? 'static-check-pipeline))
+
+(define aot-desc (lookup-pipeline 'aot-native-pipeline))
+(assert-equal "9.10 aot-native-pipeline target-ir is lir"
+              'lir
+              (pipeline-desc-target-ir aot-desc))
+(assert-true "9.11 aot-native-pipeline includes pass-133-lir-peephole"
+             (memq 'pass-133-lir-peephole (pipeline-desc-passes aot-desc)))
+
+(define repl-desc (lookup-pipeline 'repl-fast-pipeline))
+(assert-equal "9.12 repl-fast-pipeline target-ir is lir"
+              'lir
+              (pipeline-desc-target-ir repl-desc))
+(assert-false "9.13 repl-fast-pipeline excludes heavy CP0 optimization"
+              (memq 'pass-050-cp0 (pipeline-desc-passes repl-desc)))
+(assert-false "9.14 repl-fast-pipeline excludes LIR peephole"
+              (memq 'pass-133-lir-peephole (pipeline-desc-passes repl-desc)))
+
+(define check-desc (lookup-pipeline 'static-check-pipeline))
+(assert-equal "9.15 static-check-pipeline target-ir is ast"
+              'ast
+              (pipeline-desc-target-ir check-desc))
+(assert-true "9.16 static-check-pipeline includes pass-040-analysis"
+             (memq 'pass-040-analysis (pipeline-desc-passes check-desc)))
+(assert-false "9.17 static-check-pipeline excludes pass-130-lir"
+              (memq 'pass-130-lir (pipeline-desc-passes check-desc)))
+
+;; 9.3 Language Continuity Validation
+(assert-true "9.18 validate-pipeline-continuity-by-ids succeeds on aot-native-pipeline"
+             (validate-pipeline-continuity-by-ids (pipeline-desc-passes aot-desc)))
+(assert-true "9.19 validate-pipeline-continuity-by-ids succeeds on repl-fast-pipeline"
+             (validate-pipeline-continuity-by-ids (pipeline-desc-passes repl-desc)))
+(assert-true "9.20 validate-pipeline-continuity-by-ids succeeds on static-check-pipeline"
+             (validate-pipeline-continuity-by-ids (pipeline-desc-passes check-desc)))
+
+;; Test continuity rejection with incompatible passes (pass-010-library [L_cst] followed by pass-070-anf [L_core -> L_anf])
+(define bad-continuity-passes '(pass-010-library pass-070-anf))
+(assert-false "9.21 check-pipeline-continuity-by-ids detects schema continuity violation"
+              (check-pipeline-continuity-by-ids bad-continuity-passes))
+
+;; 9.4 Prerequisite Validation Rejection
+(define bad-prereq-passes '(pass-070-anf))
+(assert-false "9.22 check-pipeline-prerequisites-by-ids detects missing prerequisites"
+              (check-pipeline-prerequisites-by-ids bad-prereq-passes))
+
+;; 9.5 select-pipeline! and current-pipeline-name
+(assert-equal "9.23 initial pipeline is aot-native-pipeline"
+              'aot-native-pipeline
+              (current-pipeline-name))
+(select-pipeline! 'repl-fast-pipeline)
+(assert-equal "9.24 active pipeline switched to repl-fast-pipeline"
+              'repl-fast-pipeline
+              (current-pipeline-name))
+(select-pipeline! 'aot-native-pipeline)
+(assert-equal "9.25 active pipeline restored to aot-native-pipeline"
+              'aot-native-pipeline
+              (current-pipeline-name))
+
+;; 9.6 Execution of named pipelines
+(define test-code-form
+  '((define (square x) (* x x))
+    (square 7)))
+
+;; Execute aot-native-pipeline
+(define aot-lir (run-named-pipeline 'aot-native-pipeline test-code-form #t #f))
+(assert-true "9.26 aot-native-pipeline produces %lir-program"
+             (and (pair? aot-lir) (eq? (car aot-lir) '%lir-program)))
+
+;; Execute repl-fast-pipeline
+(define repl-lir (run-named-pipeline 'repl-fast-pipeline test-code-form #t #f))
+(assert-true "9.27 repl-fast-pipeline produces %lir-program"
+             (and (pair? repl-lir) (eq? (car repl-lir) '%lir-program)))
+
+;; Execute static-check-pipeline (should return analyzed AST, not %lir-program)
+(define check-ast (run-named-pipeline 'static-check-pipeline test-code-form #f #f))
+(assert-true "9.28 static-check-pipeline produces valid AST output"
+             (and (pair? check-ast) (not (eq? (car check-ast) '%lir-program))))
+
+;; 9.7 define-pipeline DSL expansion and registration
+(define-pipeline test-dynamic-sub-pipeline
+  (doc "Dynamically defined sub-pipeline via DSL")
+  (target-ir lir)
+  (passes
+    pass-010-library
+    pass-015-dsl-expander
+    pass-020-macro-expander
+    pass-025-top-level
+    pass-030-desugar
+    pass-035-scope-resolve
+    pass-070-anf
+    pass-110-closure-convert
+    pass-130-lir))
+
+(assert-true "9.29 define-pipeline registers named pipeline into registry"
+             (pipeline-registered? 'test-dynamic-sub-pipeline))
+
+(define dyn-lir (test-dynamic-sub-pipeline test-code-form #t #f))
+(assert-true "9.30 define-pipeline generates callable wrapper procedure producing %lir-program"
+             (and (pair? dyn-lir) (eq? (car dyn-lir) '%lir-program)))
+
 (display "\n=======================================================\n")
 (display " Test Suite Completed: ")
 (display (car *pass-count*))

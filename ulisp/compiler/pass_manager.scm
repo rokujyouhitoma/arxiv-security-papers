@@ -27,6 +27,24 @@
 (define (pass-mandatory? p) (caddr (cddddr (cddddr p))))
 
 ;;; -----------------------------------------------------------------------
+;;; 1.1 Pipeline Descriptor Record & Accessors (DSN-33-01 T6.1 / Issue #768)
+;;; -----------------------------------------------------------------------
+;;; A pipeline descriptor represents a named, end-to-end transformation flow:
+;;;   (list 'pipeline-descriptor name doc passes target-ir options)
+
+(define (make-pipeline-descriptor name doc passes target-ir options)
+  (list 'pipeline-descriptor name doc passes target-ir options))
+
+(define (pipeline-descriptor? obj)
+  (and (pair? obj) (eq? (car obj) 'pipeline-descriptor)))
+
+(define (pipeline-desc-name p) (cadr p))
+(define (pipeline-desc-doc p) (caddr p))
+(define (pipeline-desc-passes p) (cadddr p))
+(define (pipeline-desc-target-ir p) (car (cddddr p)))
+(define (pipeline-desc-options p) (cadr (cddddr p)))
+
+;;; -----------------------------------------------------------------------
 ;;; 2. Global Pass Registry
 ;;; -----------------------------------------------------------------------
 
@@ -150,6 +168,53 @@
     id))
 
 ;;; -----------------------------------------------------------------------
+;;; 2.1 Named Pipeline Registry (DSN-33-01 T6.1 / Issue #768)
+;;; -----------------------------------------------------------------------
+
+(define *pipeline-registry* (cons '() '()))
+
+(define (pipeline-registry)
+  (car *pipeline-registry*))
+
+(define (reset-pipeline-registry!)
+  (set-car! *pipeline-registry* '()))
+
+(define (register-pipeline! descriptor)
+  (let* ((name (pipeline-desc-name descriptor))
+         (passes (pipeline-desc-passes descriptor))
+         (current (car *pipeline-registry*))
+         (filtered (let loop ((ps current))
+                     (cond
+                       ((null? ps) '())
+                       ((eq? (pipeline-desc-name (car ps)) name) (loop (cdr ps)))
+                       (else (cons (car ps) (loop (cdr ps))))))))
+    ;; Validate prerequisites and language schema continuity
+    (validate-pipeline-prerequisites-by-ids passes)
+    (validate-pipeline-continuity-by-ids passes)
+    (set-car! *pipeline-registry* (append filtered (list descriptor)))
+    name))
+
+(define (lookup-pipeline name)
+  (let loop ((ps (car *pipeline-registry*)))
+    (cond
+      ((null? ps)
+       (error "lookup-pipeline: unknown pipeline" name))
+      ((eq? (pipeline-desc-name (car ps)) name)
+       (car ps))
+      (else
+       (loop (cdr ps))))))
+
+(define (pipeline-registered? name)
+  (let loop ((ps (car *pipeline-registry*)))
+    (cond
+      ((null? ps) #f)
+      ((eq? (pipeline-desc-name (car ps)) name) #t)
+      (else (loop (cdr ps))))))
+
+(define (list-pipelines)
+  (map pipeline-desc-name (car *pipeline-registry*)))
+
+;;; -----------------------------------------------------------------------
 ;;; 3. Pipeline Configuration & Tuning Options
 ;;; -----------------------------------------------------------------------
 
@@ -231,6 +296,80 @@
                       (error "validate-pipeline-prerequisites: missing required prerequisite pass"
                              (list 'pass id 'requires req))
                       (check-prereqs (cdr reqs))))))))))
+
+;;; -----------------------------------------------------------------------
+;;; 4.1 Pipeline Validation Engine (Prerequisites & Continuity)
+;;; -----------------------------------------------------------------------
+
+(define (check-pipeline-prerequisites-by-ids pass-ids)
+  (let loop ((ids pass-ids) (seen '()))
+    (if (null? ids)
+        #t
+        (let* ((pid (car ids))
+               (p (if (pass-registered? pid) (lookup-pass pid) #f)))
+          (if (not p)
+              #f
+              (let* ((prereqs (pass-prerequisites p)))
+                (let check-prereqs ((reqs prereqs))
+                  (if (null? reqs)
+                      (loop (cdr ids) (cons pid seen))
+                      (let ((req (car reqs)))
+                        (if (not (memq req seen))
+                            #f
+                            (check-prereqs (cdr reqs))))))))))))
+
+(define (validate-pipeline-prerequisites-by-ids pass-ids)
+  (let loop ((ids pass-ids) (seen '()))
+    (if (null? ids)
+        #t
+        (let* ((pid (car ids))
+               (p (lookup-pass pid))
+               (prereqs (pass-prerequisites p)))
+          (let check-prereqs ((reqs prereqs))
+            (if (null? reqs)
+                (loop (cdr ids) (cons pid seen))
+                (let ((req (car reqs)))
+                  (if (not (memq req seen))
+                      (error "validate-pipeline-prerequisites-by-ids: missing prerequisite pass"
+                             (list 'pass pid 'requires req))
+                      (check-prereqs (cdr reqs))))))))))
+
+(define (nanopass-language-compatible? out-lang in-lang)
+  (cond
+    ((or (not out-lang) (not in-lang)) #t)
+    ((or (eq? out-lang 'any) (eq? in-lang 'any)) #t)
+    ((eq? out-lang in-lang) #t)
+    (else #f)))
+
+(define (check-pipeline-continuity-by-ids pass-ids)
+  (let loop ((ids pass-ids) (prev-desc #f))
+    (if (null? ids)
+        #t
+        (let* ((pid (car ids))
+               (desc (if (pass-registered? pid) (lookup-pass pid) #f)))
+          (if (not desc)
+              #f
+              (if (and prev-desc
+                       (not (nanopass-language-compatible?
+                              (pass-out-lang prev-desc)
+                              (pass-in-lang desc))))
+                  #f
+                  (loop (cdr ids) desc)))))))
+
+(define (validate-pipeline-continuity-by-ids pass-ids)
+  (let loop ((ids pass-ids) (prev-desc #f))
+    (if (null? ids)
+        #t
+        (let* ((pid (car ids))
+               (desc (lookup-pass pid)))
+          (if prev-desc
+              (let ((out-lang (pass-out-lang prev-desc))
+                    (in-lang (pass-in-lang desc)))
+                (if (not (nanopass-language-compatible? out-lang in-lang))
+                    (error "validate-pipeline-continuity: language schema mismatch between passes"
+                           (list 'from (pass-id prev-desc) 'out-lang out-lang
+                                 'to pid 'in-lang in-lang)))))
+          (loop (cdr ids) desc)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Pass Timing & Profiling Statistics
@@ -528,8 +667,130 @@
               (loop (cdr ps) next-ast)))))))
 
 ;;; -----------------------------------------------------------------------
+;;; 7.1 Named Pipeline Execution Engine (DSN-33-01 T6.1 / Issue #768)
+;;; -----------------------------------------------------------------------
+
+(define *current-pipeline-name* (cons 'aot-native-pipeline '()))
+
+(define (current-pipeline-name)
+  (car *current-pipeline-name*))
+
+(define (select-pipeline! name)
+  (if (null? (car *pipeline-registry*))
+      (init-default-pipeline-registry!))
+  (if (not (pipeline-registered? name))
+      (error "select-pipeline!: pipeline not registered" name))
+  (set-car! *current-pipeline-name* name)
+  name)
+
+(define (run-named-pipeline name forms verify-mode trace-mode)
+  (if (null? (car *pass-registry*))
+      (init-default-pass-registry!))
+  (if (null? (car *pipeline-registry*))
+      (init-default-pipeline-registry!))
+  (if (not (pipeline-registered? name))
+      (error "run-named-pipeline: pipeline not found in registry" name))
+  (let* ((pdesc (lookup-pipeline name))
+         (pass-ids (pipeline-desc-passes pdesc))
+         (target-ir (pipeline-desc-target-ir pdesc)))
+    (reset-nanopass-verification-cache!)
+    (femto-cache-reset!)
+    (nanopass-term-memo-reset!)
+    (nanopass-hash-cons-reset!)
+    (if verify-mode
+        (begin
+          (enable-verifier!)
+          (if (eq? verify-mode 'strict)
+              (set-verifier-strict! #t))))
+    (let ((prev-trace (nanopass-trace-enabled?)))
+      (if trace-mode
+          (enable-nanopass-trace!))
+      (reset-pass-timings!)
+      (let loop ((ids pass-ids) (current-ast forms))
+        (if (null? ids)
+            (begin
+              (if (not prev-trace)
+                  (disable-nanopass-trace!))
+              (if (and verify-mode (eq? target-ir 'lir))
+                  (if (not (verify-pass-output 'lir current-ast))
+                      (error "IR Verifier Invariant Violation in final LIR" current-ast)))
+              current-ast)
+            (let* ((desc (lookup-pass (car ids)))
+                   (next-ast (run-single-pass desc current-ast verify-mode trace-mode)))
+              (loop (cdr ids) next-ast)))))))
+
+(define (run-current-pipeline forms verify-mode trace-mode)
+  (run-named-pipeline (current-pipeline-name) forms verify-mode trace-mode))
+
+;;; -----------------------------------------------------------------------
 ;;; 8. Default Pass Registry Initialization
 ;;; -----------------------------------------------------------------------
+
+(define *aot-native-pipeline-passes*
+  '(pass-010-library
+    pass-015-dsl-expander
+    pass-020-macro-expander
+    pass-025-top-level
+    pass-030-desugar
+    pass-035-scope-resolve
+    pass-040-analysis
+    pass-050-cp0
+    pass-060-lvn
+    pass-070-anf
+    pass-080-annotator
+    pass-090-rtyper
+    pass-100-contify
+    pass-110-closure-convert
+    pass-120-alias-escape
+    pass-130-lir
+    pass-128-lir-branch-fusion
+    pass-133-lir-peephole))
+
+(define *repl-fast-pipeline-passes*
+  '(pass-010-library
+    pass-015-dsl-expander
+    pass-020-macro-expander
+    pass-025-top-level
+    pass-030-desugar
+    pass-035-scope-resolve
+    pass-070-anf
+    pass-110-closure-convert
+    pass-130-lir))
+
+(define *static-check-pipeline-passes*
+  '(pass-010-library
+    pass-015-dsl-expander
+    pass-020-macro-expander
+    pass-025-top-level
+    pass-030-desugar
+    pass-035-scope-resolve
+    pass-040-analysis))
+
+(define (init-default-pipeline-registry!)
+  (reset-pipeline-registry!)
+  (register-pipeline!
+    (make-pipeline-descriptor
+      'aot-native-pipeline
+      "Full AOT compilation pipeline with complete optimization and LIR generation"
+      *aot-native-pipeline-passes*
+      'lir
+      '()))
+  (register-pipeline!
+    (make-pipeline-descriptor
+      'repl-fast-pipeline
+      "Ultra-low-latency REPL evaluation pipeline skipping middle-end optimizations"
+      *repl-fast-pipeline-passes*
+      'lir
+      '()))
+  (register-pipeline!
+    (make-pipeline-descriptor
+      'static-check-pipeline
+      "Static verification pipeline for diagnostics and LSP without code emission"
+      *static-check-pipeline-passes*
+      'ast
+      '()))
+  (set-car! *current-pipeline-name* 'aot-native-pipeline)
+  #t)
 
 (define (init-default-pass-registry!)
   (reset-pass-registry!)
@@ -595,4 +856,5 @@
         (begin
           ((car hooks))
           (loop (cdr hooks)))))
+  (init-default-pipeline-registry!)
   #t)
