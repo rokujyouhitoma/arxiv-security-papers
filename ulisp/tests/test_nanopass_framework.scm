@@ -1259,23 +1259,23 @@
 (display (string-append (string #\newline) "--- [Section 20: LIR fuse-window-rules & Sliding Window Convergence] ---" (string #\newline)))
 
 ;; 20.1 InstWindow Picopass Definitions
-(define-picopass rule-lir-self-mov-elim
+(define-picopass test-rule-lir-self-mov-elim
   (InstWindow
     (((%mov ,r ,r) . ,rest) rest)))
 
-(define-picopass rule-lir-store-load-forward
+(define-picopass test-rule-lir-store-load-forward
   (InstWindow
     (((%store %rsp ,off ,src) (%load ,dst %rsp ,off) . ,rest)
      (if (equal? dst src)
          (cons `(%store %rsp ,off ,src) rest)
          (cons `(%store %rsp ,off ,src) (cons `(%mov ,dst ,src) rest))))))
 
-(define-picopass rule-lir-zero-add-elim
+(define-picopass test-rule-lir-zero-add-elim
   (InstWindow
     (((%add ,r 0) . ,rest) rest)
     (((%raw-add ,r 0) . ,rest) rest)))
 
-(define-picopass rule-lir-load-add-store
+(define-picopass test-rule-lir-load-add-store
   (InstWindow
     (((%load ,r %rsp ,off) (%add ,r 1) (%store %rsp ,off ,r) . ,rest)
      (cons `(%inc-mem %rsp ,off) rest))))
@@ -1284,10 +1284,10 @@
 (define-pass test-pass-lir-peephole : L_lir_raw (lir) -> L_lir_canonical ()
   (entry InstructionList)
   (fuse-window-rules
-    rule-lir-self-mov-elim
-    rule-lir-store-load-forward
-    rule-lir-zero-add-elim
-    rule-lir-load-add-store))
+    test-rule-lir-self-mov-elim
+    test-rule-lir-store-load-forward
+    test-rule-lir-zero-add-elim
+    test-rule-lir-load-add-store))
 
 ;; Test 1: Single instruction elimination (%mov %rax %rax)
 (assert-equal "fuse-window-rules eliminates redundant self-move (%mov %rax %rax)"
@@ -1330,8 +1330,8 @@
 (define-pass test-pass-inline-window : L_lir_raw (lir) -> L_lir_canonical ()
   (InstructionList (insts)
     (fuse-window-rules
-      rule-lir-self-mov-elim
-      rule-lir-zero-add-elim)))
+      test-rule-lir-self-mov-elim
+      test-rule-lir-zero-add-elim)))
 
 (assert-equal "inline NT clause with fuse-window-rules performs peephole pass"
               '((%return))
@@ -1706,6 +1706,84 @@
                 '(letrec ((loop (lambda (n acc)
                                   (if (= n 0) acc (loop (- n 1) (+ acc n))))))
                    (loop 10 0))))
+
+;;; =======================================================================
+;;; Section 24: LIR Data Dependency DAG & Distance-Independent Store-Reload (DSN-33-01 T5.3)
+;;; =======================================================================
+(display "--- [Section 24: LIR Data Dependency DAG & Store-Reload Forwarding] ---") (newline)
+
+;; 24.1 Basic Block Data Dependency DAG Extraction
+(let* ((insts '((%store %rsp 8 %rax)
+                (%mov %rbx 42)
+                (%store %rsp 16 %rcx)
+                (%load %rdx %rsp 8)))
+       (dag (lir-build-block-data-dag insts))
+       (raw-edges (lir-data-dag-raw-edges dag)))
+  (assert-equal "lir-build-block-data-dag extracts RAW edge from store to load across distance 3"
+                '((0 . 3))
+                raw-edges))
+
+;; 24.2 Branch Fusion First-Class Picopasses
+(assert-equal "rule-lir-fuse-cmp-branch-invert fuses cmp and jump-if-false into jump-cond"
+              '((%cmp %rax 10) (%jump-cond "jne" L_else))
+              (rule-lir-fuse-cmp-branch-invert
+                '((%cmp %rax 10)
+                  (%set-boolean %rbx "je")
+                  (%jump-if-false %rbx L_else))))
+
+(assert-equal "rule-lir-fuse-set-boolean-branch fuses set-boolean and jump-if-false"
+              '((%jump-cond "jne" L_target))
+              (rule-lir-fuse-set-boolean-branch
+                '((%set-boolean %r12 "je")
+                  (%jump-if-false %r12 L_target))))
+
+(assert-equal "rule-lir-fuse-cmp-jne-branch fuses raw-cmp and jump-if-false"
+              '((%raw-cmp %rax 0) (%jump-cond "jne" L_next))
+              (rule-lir-fuse-cmp-jne-branch
+                '((%raw-cmp %rax 0)
+                  (%jump-if-false %rbx L_next))))
+
+;; 24.3 Peephole First-Class Picopasses
+(assert-equal "rule-lir-self-mov-elim eliminates (%mov %rax %rax)"
+              '((%return))
+              (rule-lir-self-mov-elim '((%mov %rax %rax) (%return))))
+
+(assert-equal "rule-lir-roundtrip-mov-elim keeps first mov and eliminates reverse"
+              '((%mov %rax %rbx) (%return))
+              (rule-lir-roundtrip-mov-elim '((%mov %rax %rbx) (%mov %rbx %rax) (%return))))
+
+(assert-equal "rule-lir-jump-next-label-elim removes jump directly preceding target label"
+              '((%label L_loop) (%return))
+              (rule-lir-jump-next-label-elim '((%jump L_loop) (%label L_loop) (%return))))
+
+(assert-equal "rule-lir-identity-arith-elim eliminates identity add and sub zero"
+              '((%return))
+              (rule-lir-identity-arith-elim '((%add %rax 0) (%return))))
+
+(assert-equal "rule-lir-identity-mul-elim eliminates multiplication by one"
+              '((%return))
+              (rule-lir-identity-mul-elim '((%imul %rdx 1) (%return))))
+
+(assert-equal "rule-lir-unreachable-dce purges dead instructions up to label"
+              '((%jump L2) (%label L1) (%return))
+              (rule-lir-unreachable-dce '((%jump L2) (%mov %rax 42) (%add %rax 10) (%label L1) (%return))))
+
+;; 24.4 Distance-Independent Store-Reload Forwarding via Picopass
+(let* ((in-insts '((%store %rsp 8 %rax)
+                   (%mov %r8 1)
+                   (%mov %r9 2)
+                   (%store %rsp 16 %rcx)
+                   (%load %rdx %rsp 8)
+                   (%return)))
+       (fwd (rule-lir-store-load-forward in-insts)))
+  (assert-equal "rule-lir-store-load-forward forwards across 4 instructions"
+                '((%store %rsp 8 %rax)
+                  (%mov %r8 1)
+                  (%mov %r9 2)
+                  (%store %rsp 16 %rcx)
+                  (%mov %rdx %rax)
+                  (%return))
+                fwd))
 
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")

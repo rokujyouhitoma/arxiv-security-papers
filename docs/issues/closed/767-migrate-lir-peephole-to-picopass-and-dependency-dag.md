@@ -2,7 +2,7 @@
 ID: 767
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT/ENH] LIR 分岐融合 (128)・ピープホール (133) の Picopass 化と基本ブロック内データ依存 DAG 走査の導入 (DSN-33-01 T5.3) (ID: 767)
@@ -204,27 +204,28 @@ flowchart TD
 Target Branch: `feat/767-lir-peephole-picopass-and-dependency-dag`
 
 ### 7.1 対象ファイル一覧
-- [ ] [ulisp/compiler/nanopass_meta.scm](../../ulisp/compiler/nanopass_meta.scm)（基本ブロック内 LIR データ依存 DAG / Reaching Store 走査ドライバ）
-- [ ] [ulisp/lir/128_lir_branch_fusion.scm](../../ulisp/lir/128_lir_branch_fusion.scm)（第一級 Picopass 化と fuse-window-rules 統合）
-- [ ] [ulisp/lir/133_lir_peephole.scm](../../ulisp/lir/133_lir_peephole.scm)（第一級 Picopass 化と距離非依存 DAG Store-Reload 統合）
-- [ ] [ulisp/tests/passes/test_128_lir_branch_fusion.scm](../../ulisp/tests/passes/test_128_lir_branch_fusion.scm)（分岐融合単体テスト検証）
-- [ ] [ulisp/tests/passes/test_133_lir_peephole.scm](../../ulisp/tests/passes/test_133_lir_peephole.scm)（距離非依存 Store-Reload テスト拡充と全件検証）
-- [ ] [ulisp/tests/test_nanopass_framework.scm](../../ulisp/tests/test_nanopass_framework.scm)（Section 24: LIR Data Dependency DAG 単体テスト追加）
+- [x] [ulisp/compiler/nanopass_meta.scm](../../ulisp/compiler/nanopass_meta.scm)（基本ブロック内 LIR データ依存 DAG / Reaching Store 走査ドライバ）
+- [x] [ulisp/lir/128_lir_branch_fusion.scm](../../ulisp/lir/128_lir_branch_fusion.scm)（第一級 Picopass 化と fuse-window-rules 統合）
+- [x] [ulisp/lir/133_lir_peephole.scm](../../ulisp/lir/133_lir_peephole.scm)（第一級 Picopass 化と距離非依存 DAG Store-Reload 統合）
+- [x] [ulisp/frontend/030_desugar.scm](../../ulisp/frontend/030_desugar.scm)（Program 節明示化による Catamorphism O(1) 短縮化）
+- [x] [ulisp/tests/passes/test_128_lir_branch_fusion.scm](../../ulisp/tests/passes/test_128_lir_branch_fusion.scm)（分岐融合単体テスト検証）
+- [x] [ulisp/tests/passes/test_133_lir_peephole.scm](../../ulisp/tests/passes/test_133_lir_peephole.scm)（距離非依存 Store-Reload テスト拡充と全件検証）
+- [x] [ulisp/tests/test_nanopass_framework.scm](../../ulisp/tests/test_nanopass_framework.scm)（Section 24: LIR Data Dependency DAG 単体テスト追加）
 
 ### 7.2 ステップ別実装計画
-- [ ] **Step 1: `nanopass_meta.scm` への LIR データ依存 DAG ヘルパーの配備**:
+- [x] **Step 1: `nanopass_meta.scm` への LIR データ依存 DAG ヘルパーの配備**:
   - 基本ブロック内の命令列から RAW/WAW エッジを検出し、有効なスタックスロット保持テーブルを追跡する `nanopass-lir-dag-forward-stores` を実装。
-- [ ] **Step 2: `128_lir_branch_fusion.scm` の Picopass 化**:
+- [x] **Step 2: `128_lir_branch_fusion.scm` の Picopass 化**:
   - `rule-lir-fuse-cmp-branch-invert`, `rule-lir-fuse-set-boolean-branch`, `rule-lir-fuse-cmp-jne-branch` を `define-picopass` 化。
   - `lir-fuse-branches` を `fuse-window-rules` で再構成。
-- [ ] **Step 3: `133_lir_peephole.scm` の Picopass 化と DAG Store-Reload 統合**:
+- [x] **Step 3: `133_lir_peephole.scm` の Picopass 化と DAG Store-Reload 統合**:
   - `rule-lir-self-mov-elim`, `rule-lir-roundtrip-mov-elim`, `rule-lir-jump-next-label-elim`, `rule-lir-identity-arith-elim`, `rule-lir-identity-mul-elim`, `rule-lir-unreachable-dce` を `define-picopass` 化。
   - 旧 Rule 2b, 2b-2, 2b-3, 2c を距離非依存 DAG 最適化規則 `rule-lir-store-load-forward` へ統合。
-- [ ] **Step 4: 単体テスト群の拡充と検証**:
+- [x] **Step 4: 単体テスト群の拡充と検証**:
   - `test_133_lir_peephole.scm` に間に 2個、3個、4個の命令が挟まる Store-Reload テストを追加。
   - `test_nanopass_framework.scm` に Section 24 を追加。
   - `make -C ulisp test_nanopass`, `test_verifier`, `test_passes`, `test_all_passes` を検証。
-- [ ] **Step 5: 全品質ゲートとセルフホスティング検証**:
+- [x] **Step 5: 全品質ゲートとセルフホスティング検証**:
   - `make -C ulisp compiler`
   - `make -C ulisp test_c` (全 143 件 PASS)
   - `make -C ulisp test` (3ステージブートストラップ不動点 bit-for-bit IDENTICAL PASS)
@@ -234,13 +235,13 @@ Target Branch: `feat/767-lir-peephole-picopass-and-dependency-dag`
 
 ## 8. 完了条件 / Success Criteria (DoD)
 
-1. [ ] **Picopass 化の完全性**:
+1. [x] **Picopass 化の完全性**:
    - `128_lir_branch_fusion.scm` および `133_lir_peephole.scm` の全規則が第一級 `define-picopass` として定義され、個別テストおよび個別無効化（`disable-picopass!`）が可能であること。
-2. [ ] **距離非依存な Store-Reload 最適化**:
+2. [x] **距離非依存な Store-Reload 最適化**:
    - 間に 2 個以上の無関係な命令（別スロット store、mov、算術演算等）が挟まれたパターンでも、データ依存追跡により `%load` が正しく `%mov` に転送または除去されること。
-3. [ ] **エイリアス健全性とメモリバリア保護**:
+3. [x] **エイリアス健全性とメモリバリア保護**:
    - 関数呼び出しや制御合流境界において、スタック依存情報が安全に無効化され、古いレジスタ値による誤最適化が 100% 抑止されること。
-4. [ ] **テスト完全 PASS & 品質ゲート保証**:
+4. [x] **テスト完全 PASS & 品質ゲート保証**:
    - `test_128_lir_branch_fusion.scm`、`test_133_lir_peephole.scm`、および `test_nanopass_framework.scm` が 100% PASS すること。
    - `make -C ulisp test_c`（全 143 件 PASS）および `make -C ulisp test`（ブートストラップ不動点 bit-for-bit 一致）が保証されること。
    - `make py_compile` および `make static_analysis` がエラー 0 件で PASS すること。

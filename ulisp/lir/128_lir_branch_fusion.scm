@@ -113,89 +113,55 @@
   (lir-compile-fused-cmp-cond op e1 e2 else-label lir-cmp-false-cc si env))
 
 ;;; -----------------------------------------------------------------------
-;;; Linear LIR Branch Fusion Transformer
+;;; First-Class Branch Fusion Picopass Rules (DSN-33-01 T5.3)
 ;;; -----------------------------------------------------------------------
 
-(define (optimize-branch-fusion insts)
-  (let loop ((rest insts) (acc '()))
-    (cond
-      ((null? rest)
-       (reverse acc))
+;; Pattern 1: (%cmp opnd1 opnd2) followed by (%set-boolean reg cond) and (%jump-if-false reg lbl)
+;; -> (%cmp opnd1 opnd2) followed by (%jump-cond (invert-cc cond) lbl)
+(define-picopass rule-lir-fuse-cmp-branch-invert
+  (InstWindow
+    (((%cmp ,opnd1 ,opnd2) (%set-boolean ,reg1 ,cond) (%jump-if-false ,reg2 ,lbl) . ,rest)
+     (guard (equal? reg1 reg2))
+     (cons (list '%cmp opnd1 opnd2)
+           (cons (list '%jump-cond (lir-invert-cond-op cond) lbl)
+                 rest)))
+    (((%raw-cmp ,opnd1 ,opnd2) (%set-boolean ,reg1 ,cond) (%jump-if-false ,reg2 ,lbl) . ,rest)
+     (guard (equal? reg1 reg2))
+     (cons (list '%raw-cmp opnd1 opnd2)
+           (cons (list '%jump-cond (lir-invert-cond-op cond) lbl)
+                 rest)))))
 
-      ;; Pattern 1: (%cmp opnd1 opnd2) followed by (%set-boolean reg cond) and (%jump-if-false reg lbl)
-      ;; -> (%cmp opnd1 opnd2) followed by (%jump-cond (invert-cc cond) lbl)
-      ((and (pair? rest)
-            (pair? (cdr rest))
-            (pair? (cddr rest))
-            (pair? (car rest))
-            (memq (caar rest) '(%cmp %raw-cmp))
-            (pair? (cadr rest))
-            (eq? (car (cadr rest)) '%set-boolean)
-            (pair? (caddr rest))
-            (eq? (car (caddr rest)) '%jump-if-false)
-            (equal? (cadr (cadr rest)) (cadr (caddr rest))))
-       (let* ((cmp-inst (car rest))
-              (set-b (cadr rest))
-              (jmp-inst (caddr rest))
-              (cond-op (caddr set-b))
-              (target-lbl (caddr jmp-inst))
-              (fused-jmp (list '%jump-cond (lir-invert-cond-op cond-op) target-lbl)))
-         (loop (cdddr rest) (cons fused-jmp (cons cmp-inst acc)))))
+;; Pattern 2: (%set-boolean reg cond) followed by (%jump-if-false reg lbl)
+;; -> (%jump-cond (invert-cc cond) lbl)
+(define-picopass rule-lir-fuse-set-boolean-branch
+  (InstWindow
+    (((%set-boolean ,reg1 ,cond) (%jump-if-false ,reg2 ,lbl) . ,rest)
+     (guard (equal? reg1 reg2))
+     (cons (list '%jump-cond (lir-invert-cond-op cond) lbl)
+           rest))))
 
-      ;; Pattern 2: (%set-boolean reg cond) followed by (%jump-if-false reg lbl)
-      ;; -> (%jump-cond (invert-cc cond) lbl)
-      ((and (pair? rest)
-            (pair? (cdr rest))
-            (pair? (car rest))
-            (eq? (caar rest) '%set-boolean)
-            (pair? (cadr rest))
-            (eq? (car (cadr rest)) '%jump-if-false)
-            (equal? (cadar rest) (cadr (cadr rest))))
-       (let* ((set-b (car rest))
-              (jmp-inst (cadr rest))
-              (cond-op (caddr set-b))
-              (target-lbl (caddr jmp-inst))
-              (fused-jmp (list '%jump-cond (lir-invert-cond-op cond-op) target-lbl)))
-         (loop (cddr rest) (cons fused-jmp acc))))
-
-      ;; Pattern 3: (%cmp reg const) followed by (%jump-if-false reg2 lbl)
-      ((and (pair? rest)
-            (pair? (cdr rest))
-            (pair? (car rest))
-            (memq (caar rest) '(%cmp %raw-cmp))
-            (pair? (cadr rest))
-            (eq? (car (cadr rest)) '%jump-if-false))
-       (let* ((cmp-inst (car rest))
-              (jmp-inst (cadr rest))
-              (target-lbl (caddr jmp-inst))
-              (fused-jmp (list '%jump-cond "jne" target-lbl)))
-         (loop (cddr rest) (cons fused-jmp (cons cmp-inst acc)))))
-
-      (else
-       (loop (cdr rest) (cons (car rest) acc))))))
+;; Pattern 3: (%cmp reg const) followed by (%jump-if-false reg2 lbl)
+;; -> (%cmp reg const) followed by (%jump-cond "jne" lbl)
+(define-picopass rule-lir-fuse-cmp-jne-branch
+  (InstWindow
+    (((%cmp ,opnd1 ,opnd2) (%jump-if-false ,reg ,lbl) . ,rest)
+     (cons (list '%cmp opnd1 opnd2)
+           (cons (list '%jump-cond "jne" lbl)
+                 rest)))
+    (((%raw-cmp ,opnd1 ,opnd2) (%jump-if-false ,reg ,lbl) . ,rest)
+     (cons (list '%raw-cmp opnd1 opnd2)
+           (cons (list '%jump-cond "jne" lbl)
+                 rest)))))
 
 ;;; -----------------------------------------------------------------------
-;;; Nanopass DSL Pass: lir-fuse-branches
+;;; Nanopass DSL Pass: lir-fuse-branches (fuse-window-rules)
 ;;; -----------------------------------------------------------------------
 
 (define-pass lir-fuse-branches : L_lir_canonical (ir) -> L_lir_canonical ()
-  (entry Program)
-  (Program : Program (p) -> Program ()
-    ((%lir-program (strings ,se) (stackmaps ,sm) (%lir-functions ,f ...) ,m)
-     (list '%lir-program
-           (list 'strings se)
-           (list 'stackmaps sm)
-           (cons '%lir-functions (map FunctionDecl f))
-           (MainDecl m))))
-  (FunctionDecl : FunctionDecl (f) -> FunctionDecl ()
-    ((%lir-function ,lbl (params (,x ...)) (frame-size ,frame_size) (body ,inst ...))
-     (list '%lir-function
-           lbl
-           (list 'params x)
-           (list 'frame-size frame_size)
-           (cons 'body (optimize-branch-fusion inst)))))
-  (MainDecl : MainDecl (m) -> MainDecl ()
-    ((%lir-main (frame-size ,frame_size) (body ,inst ...))
-     (list '%lir-main
-           (list 'frame-size frame_size)
-           (cons 'body (optimize-branch-fusion inst))))))
+  (fuse-window-rules
+    rule-lir-fuse-cmp-branch-invert
+    rule-lir-fuse-set-boolean-branch
+    rule-lir-fuse-cmp-jne-branch))
+
+(define (optimize-branch-fusion insts)
+  (lir-fuse-branches insts))
