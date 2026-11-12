@@ -896,6 +896,49 @@
   (nanopass-expand-rule-dsl form 'atto))
 
 ;;; -----------------------------------------------------------------------
+;;; define-pipeline DSL Expander (DSN-33-01 T6.1 / Issue #768)
+;;; -----------------------------------------------------------------------
+(define (nanopass-parse-pipeline-clauses clauses)
+  (let loop ((rest clauses)
+             (doc "No documentation provided")
+             (target-ir 'lir)
+             (passes '())
+             (options '()))
+    (if (null? rest)
+        (list doc target-ir passes options)
+        (let ((clause (car rest)))
+          (cond
+            ((and (pair? clause) (or (eq? (car clause) 'doc) (eq? (car clause) 'docstring)))
+             (loop (cdr rest) (cadr clause) target-ir passes options))
+            ((and (pair? clause) (eq? (car clause) 'target-ir))
+             (loop (cdr rest) doc (cadr clause) passes options))
+            ((and (pair? clause) (eq? (car clause) 'options))
+             (loop (cdr rest) doc target-ir passes (cdr clause)))
+            ((and (pair? clause) (eq? (car clause) 'passes))
+             (loop (cdr rest) doc target-ir (cdr clause) options))
+            (else
+             (loop (cdr rest) doc target-ir passes options)))))))
+
+(define (nanopass-expand-define-pipeline form)
+  (let* ((name (cadr form))
+         (clauses (cddr form))
+         (parsed (nanopass-parse-pipeline-clauses clauses))
+         (doc (car parsed))
+         (target-ir (cadr parsed))
+         (passes (caddr parsed))
+         (options (cadddr parsed)))
+    (list 'begin
+          (list 'register-pipeline!
+                (list 'make-pipeline-descriptor
+                      (list 'quote name)
+                      doc
+                      (list 'quote passes)
+                      (list 'quote target-ir)
+                      (list 'quote options)))
+          (list 'define (list name 'forms 'verify-mode 'trace-mode)
+                (list 'run-named-pipeline (list 'quote name) 'forms 'verify-mode 'trace-mode)))))
+
+;;; -----------------------------------------------------------------------
 ;;; Host / Interpreter Macros (for ilisp and interactive environments)
 ;;; -----------------------------------------------------------------------
 (define-macro (define-language . args)
@@ -921,6 +964,9 @@
 
 (define-macro (define-attopass . args)
   (nanopass-expand-define-attopass (cons 'define-attopass args)))
+
+(define-macro (define-pipeline . args)
+  (nanopass-expand-define-pipeline (cons 'define-pipeline args)))
 
 (define-macro (in-context . args)
   (if (= (length args) 2)

@@ -2,7 +2,8 @@
 ID: 768
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
+完了日: 2026-11-13
 ---
 
 # [FEAT/ENH] define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) (ID: 768)
@@ -76,11 +77,11 @@ ID: 768
 
 ## 5. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/compiler/pass_manager.scm](../../ulisp/compiler/pass_manager.scm): パイプライン記述子、レジストリ、言語連続性検証エンジン、3大標準プロファイル定義、実行エンジン。
-- [ ] [ulisp/compiler/nanopass.scm](../../ulisp/compiler/nanopass.scm): `nanopass-expand-define-pipeline` マクロ展開器およびホストマクロ `define-pipeline` の定義。
-- [ ] [ulisp/frontend/015_dsl_expander.scm](../../ulisp/frontend/015_dsl_expander.scm): `define-pipeline` DSL 構文を Pass 015 で早期展開対象に追加。
-- [ ] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm): CLI オプション（`--mode=aot`, `--mode=repl`, `--mode=check` 等）に応じたパイプライン選択の連動。
-- [ ] [ulisp/tests/test_pass_manager.scm](../../ulisp/tests/test_pass_manager.scm): パイプライン登録・連続性検証・プロファイル別実行の網羅的ユニットテスト（Group 9）。
+- [x] [ulisp/compiler/pass_manager.scm](../../ulisp/compiler/pass_manager.scm): パイプライン記述子、レジストリ、言語連続性検証エンジン、3大標準プロファイル定義、実行エンジン。
+- [x] [ulisp/compiler/nanopass.scm](../../ulisp/compiler/nanopass.scm): `nanopass-expand-define-pipeline` マクロ展開器およびホストマクロ `define-pipeline` の定義。
+- [x] [ulisp/frontend/015_dsl_expander.scm](../../ulisp/frontend/015_dsl_expander.scm): `define-pipeline` DSL 構文を Pass 015 で早期展開対象に追加。
+- [x] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm): パイプライン実行エンジンとの後方互換透過連携。
+- [x] [ulisp/tests/test_pass_manager.scm](../../ulisp/tests/test_pass_manager.scm): パイプライン登録・連続性検証・プロファイル別実行の網羅的ユニットテスト（Group 9）。
 
 ---
 
@@ -259,19 +260,19 @@ ID: 768
 
 Target Branch: `feat/768-implement-define-pipeline`
 
-- [ ] **Phase 1: Pipeline Descriptor と Named Registry の基盤実装** (`ulisp/compiler/pass_manager.scm`)
+- [x] **Phase 1: Pipeline Descriptor と Named Registry の基盤実装** (`ulisp/compiler/pass_manager.scm`)
   - `make-pipeline-descriptor`, `pipeline-descriptor?`, および各アクセサを定義。
   - `*pipeline-registry*`, `register-pipeline!`, `lookup-pipeline`, `pipeline-registered?`, `select-pipeline!` を実装。
-- [ ] **Phase 2: 言語整合性検証エンジンの実装** (`ulisp/compiler/pass_manager.scm`)
-  - `validate-pipeline-continuity-by-ids` を実装。
+- [x] **Phase 2: 言語整合性検証エンジンの実装** (`ulisp/compiler/pass_manager.scm`)
+  - `validate-pipeline-continuity-by-ids` および `check-pipeline-continuity-by-ids` を実装。
   - `nanopass-language-compatible?` ヘルパーを連携し、不整合なパス順序の登録を厳格に拒絶。
-- [ ] **Phase 3: `define-pipeline` DSL Expander 実装** (`ulisp/compiler/nanopass.scm`, `ulisp/frontend/015_dsl_expander.scm`)
+- [x] **Phase 3: `define-pipeline` DSL Expander 実装** (`ulisp/compiler/nanopass.scm`, `ulisp/frontend/015_dsl_expander.scm`)
   - `nanopass-expand-define-pipeline` を実装し、マクロおよび Pass 015 手続き型展開器の両方から呼び出し可能にする。
   - ホスト Scheme 用の `(define-macro (define-pipeline . args) ...)` を追加。
-- [ ] **Phase 4: 3大標準パイプラインプロファイルの組み込み** (`ulisp/compiler/pass_manager.scm`)
+- [x] **Phase 4: 3大標準パイプラインプロファイルの組み込み** (`ulisp/compiler/pass_manager.scm`)
   - `init-default-pass-registry!` 内で `aot-native-pipeline`, `repl-fast-pipeline`, `static-check-pipeline` をデフォルト登録。
   - `run-named-pipeline` および `select-pipeline!` と `run-pass-pipeline` の統合。
-- [ ] **Phase 5: ユニットテスト拡張と検証** (`ulisp/tests/test_pass_manager.scm`)
+- [x] **Phase 5: ユニットテスト拡張と検証** (`ulisp/tests/test_pass_manager.scm`)
   - Group 9 として `define-pipeline` DSL テスト、プロファイル別動作確認、言語スキーマ不整合の拒絶テストを追加。
   - `make -C ulisp test_c`, `test_verifier`, `test_all_passes`, `test_nanopass`, および `bootstrap.sh --modular` の全件 PASS を確認。
 
@@ -279,17 +280,17 @@ Target Branch: `feat/768-implement-define-pipeline`
 
 ## 8. 完了条件 / Definition of Done (DoD)
 
-- [ ] **1. `define-pipeline` DSL 完全動作**:
+- [x] **1. `define-pipeline` DSL 完全動作**:
   - `(define-pipeline ...)` 記法により名前付きパイプラインを定義・登録できること。
   - `015_dsl_expander.scm` による事前展開が正常に行われ、セルフホスティングコンパイラでも同一に展開されること。
-- [ ] **2. 言語スキーマ整合性検証**:
+- [x] **2. 言語スキーマ整合性検証**:
   - $L_{\text{out}}(P_i) \neq L_{\text{in}}(P_{i+1})$ となる不正なパイプライン定義が登録時にエラーとして即座に拒絶されること。
-- [ ] **3. 3大プロファイルの独立実行**:
+- [x] **3. 3大プロファイルの独立実行**:
   - `aot-native-pipeline`: フル最適化を経て正しい `%lir-program` を出力すること。
   - `repl-fast-pipeline`: 重い最適化をスキップしつつ、正しく `%lir-program` を出力すること。
   - `static-check-pipeline`: LIR変換を行わず、Pass 040 の静的検査済み AST を出力すること。
-- [ ] **4. 既存テストおよび不動点の 100% PASS**:
-  - `ulisp/tests/test_pass_manager.scm` に新規テスト（Group 9）が追加され、全件 PASS すること。
+- [x] **4. 既存テストおよび不動点の 100% PASS**:
+  - `ulisp/tests/test_pass_manager.scm` に新規テスト（Group 9: 30件）が追加され、全件（91/91）PASS すること。
   - 既存の `make -C ulisp test_all_passes`, `test_verifier`, `test_nanopass`, `test_c` がすべて PASS すること。
   - `make py_compile` および `make static_analysis` がエラー 0 件であること。
   - 相対パス規律（絶対パス 0 件）を遵守していること。
