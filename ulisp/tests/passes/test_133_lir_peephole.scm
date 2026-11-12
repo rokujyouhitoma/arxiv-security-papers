@@ -133,6 +133,78 @@
   (assert-true "function optimization satisfies L_lir_canonical schema"
                (L_lir_canonical? opt)))
 
+;; 11. Distance-independent Store-Reload forwarding (distance = 2 instructions in between)
+(let* ((in-insts '((%store %rsp 8 %rax)
+                   (%mov %rbx 42)
+                   (%store %rsp 16 %rcx)
+                   (%load %rdx %rsp 8)
+                   (%return)))
+       (out (optimize-peephole-fixpoint in-insts)))
+  (assert-equal "non-adjacent store-load forwarded to mov across 2 instructions"
+                '((%store %rsp 8 %rax)
+                  (%mov %rbx 42)
+                  (%store %rsp 16 %rcx)
+                  (%mov %rdx %rax)
+                  (%return))
+                out))
+
+;; 12. Non-adjacent Store-Reload elimination (same register, distance = 3 instructions)
+(let* ((in-insts '((%store %rsp 8 %rax)
+                   (%mov %rbx 1)
+                   (%store %rsp 16 %rcx)
+                   (%add %rbx 2)
+                   (%load %rax %rsp 8)
+                   (%return)))
+       (out (optimize-peephole-fixpoint in-insts)))
+  (assert-equal "non-adjacent reload to same register eliminated across 3 instructions"
+                '((%store %rsp 8 %rax)
+                  (%mov %rbx 1)
+                  (%store %rsp 16 %rcx)
+                  (%add %rbx 2)
+                  (%return))
+                out))
+
+;; 13. Source register clobber inhibits forwarding
+(let* ((in-insts '((%store %rsp 8 %rax)
+                   (%mov %rax 99)
+                   (%load %rdx %rsp 8)
+                   (%return)))
+       (out (optimize-peephole-fixpoint in-insts)))
+  (assert-equal "source register clobber safely preserves load"
+                '((%store %rsp 8 %rax)
+                  (%mov %rax 99)
+                  (%load %rdx %rsp 8)
+                  (%return))
+                out))
+
+;; 14. Function call memory barrier inhibits forwarding
+(let* ((in-insts '((%store %rsp 8 %rax)
+                   (%direct-call foo 0)
+                   (%load %rdx %rsp 8)
+                   (%return)))
+       (out (optimize-peephole-fixpoint in-insts)))
+  (assert-equal "function call barrier safely preserves load"
+                '((%store %rsp 8 %rax)
+                  (%direct-call foo 0)
+                  (%load %rdx %rsp 8)
+                  (%return))
+                out))
+
+;; 15. Overwritten stack slot forwards latest reaching value
+(let* ((in-insts '((%store %rsp 8 %rax)
+                   (%mov %rcx 10)
+                   (%store %rsp 8 %rbx)
+                   (%load %rdx %rsp 8)
+                   (%return)))
+       (out (optimize-peephole-fixpoint in-insts)))
+  (assert-equal "overwritten stack slot forwards latest reaching value"
+                '((%store %rsp 8 %rax)
+                  (%mov %rcx 10)
+                  (%store %rsp 8 %rbx)
+                  (%mov %rdx %rbx)
+                  (%return))
+                out))
+
 (display "=======================================================") (newline)
 (display " Pass 133: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

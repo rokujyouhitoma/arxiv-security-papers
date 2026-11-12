@@ -1406,14 +1406,16 @@
          (primary-match (if primary-entry (try-nt primary-entry) #f)))
     (if primary-match
         primary-match
-        (let loop-nts ((rest nts))
-          (if (null? rest)
-              #f
-              (let ((e (car rest)))
-                (if (and primary-entry (eq? (car e) nt-name))
-                    (loop-nts (cdr rest))
-                    (let ((m (try-nt e)))
-                      (if m m (loop-nts (cdr rest)))))))))))
+        (if primary-entry
+            #f
+            (let loop-nts ((rest nts))
+              (if (null? rest)
+                  #f
+                  (let ((e (car rest)))
+                    (if (and primary-entry (eq? (car e) nt-name))
+                        (loop-nts (cdr rest))
+                        (let ((m (try-nt e)))
+                          (if m m (loop-nts (cdr rest))))))))))))
 
 ;;; Schema-driven subpattern transformer
 ;;; When `pat` is a nonterminal meta-variable (e.g. `d` for `Def`), if `target-nt` is `Def`
@@ -1864,7 +1866,7 @@
        (let ((m (try-match-proc rest)))
          (if (and (pair? m) (car m))
              (let ((new-suffix (cdr m)))
-               (if (equal? new-suffix rest)
+               (if (eq? new-suffix rest)
                    (loop (cdr rest) (cons (car rest) acc) changed? step-fuel)
                    (loop new-suffix acc #t (- step-fuel 1))))
              (loop (cdr rest) (cons (car rest) acc) changed? step-fuel)))))))
@@ -1878,7 +1880,7 @@
         (let* ((res (nanopass-sliding-window-pass try-match-proc cur))
                (next (car res))
                (changed? (cdr res)))
-          (if (or (not changed?) (equal? cur next))
+          (if (or (not changed?) (eq? cur next))
               next
               (loop next (- iterations 1)))))))
 
@@ -2319,6 +2321,238 @@
                 (set-car! *nanopass-term-memo*
                           (cons (cons node res) (car *nanopass-term-memo*)))
                 res))))))
+
+;;; =======================================================================
+;;; Part 15: LIR Basic Block Data Dependency DAG & Reaching Store Forwarding (DSN-33-01 T5.3)
+;;; =======================================================================
+
+(define (lir-peephole-reg? opnd)
+  (and (symbol? opnd)
+       (let ((s (symbol->string opnd)))
+         (and (> (string-length s) 1)
+              (char=? (string-ref s 0) #\%)))))
+
+(define (lir-unconditional-terminator? inst)
+  (and (pair? inst)
+       (memq (car inst) '(%jump %direct-jump %return))))
+
+(define (lir-label-inst? inst)
+  (and (pair? inst)
+       (memq (car inst) '(%label %block))))
+
+(define (lir-inst-defines-reg? inst reg)
+  (and (pair? inst)
+       (let ((op (car inst)))
+         (case op
+           ((%mov %load %load-byte-zx %pop %code-ref %str-ref %global-ref
+             %add %raw-add %sub %raw-sub %imul %raw-mul
+             %bit-and %bit-or %bit-xor %shl %shr %sar
+             %box-fixnum %unbox-fixnum %neg %inc
+             %alloc %alloc-stack)
+            (and (pair? (cdr inst)) (equal? (cadr inst) reg)))
+           ((%set-boolean)
+            (or (and (pair? (cdr inst)) (equal? (cadr inst) reg))
+                (eq? reg '%rax)))
+           ((%cqo %idiv)
+            (memq reg '(%rax %rdx)))
+           ((%atomic-cas!)
+            (or (and (pair? (cdr inst)) (equal? (cadr inst) reg))
+                (eq? reg '%rax)))
+           ((%c-call %call-closure %direct-call %dispatch-consumer)
+            (memq reg '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11)))
+           ((%syscall)
+            (memq reg '(%rax %rcx %r11)))
+           ((%set-values-count)
+            (eq? reg '%rdx))
+           ((%global-set!)
+            (eq? reg '%r11))
+           (else #f)))))
+
+(define (lir-inst-memory-barrier? inst)
+  (and (pair? inst)
+       (memq (car inst) '(%c-call %call-closure %direct-call %dispatch-consumer
+                          %syscall %memory-fence %push %pop %raise
+                          %capture-cc %push-handler %pop-handler
+                          %store-values-buf))))
+
+(define (lir-inst-terminates-block? inst)
+  (and (pair? inst)
+       (memq (car inst) '(%jump %direct-jump %jump-cond %jump-if %jump-if-false %jump-if-zero
+                          %return %raise %label %block))))
+
+(define (lir-skip-to-next-label insts)
+  (cond
+    ((null? insts) '())
+    ((lir-label-inst? (car insts)) insts)
+    (else (lir-skip-to-next-label (cdr insts)))))
+
+;;; Distance-independent Store-Reload Forwarding across instructions in basic block
+(define (lir-dag-try-forward-store off src rest)
+  (let loop ((cur rest)
+             (prefix '()))
+    (cond
+      ((null? cur) #f)
+      (else
+       (let* ((inst (car cur))
+              (tail (cdr cur)))
+         (cond
+           ;; 1. Block terminator: stop scanning
+           ((lir-inst-terminates-block? inst)
+            #f)
+
+           ;; 2. Memory barrier: stop scanning
+           ((lir-inst-memory-barrier? inst)
+            #f)
+
+           ;; 3. Store instruction:
+           ((and (pair? inst) (eq? (car inst) '%store))
+            (let ((base (cadr inst))
+                  (store-off (caddr inst)))
+              (cond
+                ;; Indirect store not via %rsp: potential memory alias, stop
+                ((not (eq? base '%rsp)) #f)
+                ;; Overwriting the same stack slot: stop scanning
+                ((equal? store-off off) #f)
+                ;; Store to different stack slot: continue scanning
+                (else
+                 (loop tail (cons inst prefix))))))
+
+           ;; 4. Load from matching stack slot (%load dst %rsp off)
+           ;; Safely replace %load with (%mov dst src).
+           ;; If dst == src, rule-lir-self-mov-elim will eliminate it monotonically.
+           ((and (pair? inst)
+                 (eq? (car inst) '%load)
+                 (= (length inst) 4)
+                 (eq? (caddr inst) '%rsp)
+                 (equal? (cadddr inst) off))
+            (let ((dst (cadr inst)))
+              (append (reverse prefix) (cons (list '%mov dst src) tail))))
+
+           ;; 5. Did inst clobber src register? Stop scanning
+           ((lir-inst-defines-reg? inst src)
+            #f)
+
+           ;; 6. General instruction not defining src: continue scanning
+           (else
+            (loop tail (cons inst prefix)))))))))
+
+;;; Extract registers/stack slots used by instruction
+(define (lir-inst-extract-uses inst)
+  (if (not (pair? inst))
+      '()
+      (case (car inst)
+        ((%store)
+         (let ((base (cadr inst)) (val (cadddr inst)))
+           (cond
+             ((and (eq? base '%rsp) (lir-peephole-reg? val)) (list val))
+             ((lir-peephole-reg? base) (if (lir-peephole-reg? val) (list base val) (list base)))
+             (else (if (lir-peephole-reg? val) (list val) '())))))
+        ((%load)
+         (let ((base (caddr inst)) (off (cadddr inst)))
+           (if (eq? base '%rsp)
+               (list (list 'stack off))
+               (if (lir-peephole-reg? base) (list base) '()))))
+        ((%mov)
+         (let ((src (caddr inst)))
+           (if (lir-peephole-reg? src) (list src) '())))
+        ((%add %raw-add %sub %raw-sub %imul %raw-mul %bit-and %bit-or %bit-xor %shl %shr %sar)
+         (let ((dst (cadr inst)) (src (caddr inst)))
+           (if (lir-peephole-reg? src) (list dst src) (list dst))))
+        ((%cmp %raw-cmp)
+         (let ((op1 (cadr inst)) (op2 (caddr inst)))
+           (cond
+             ((and (lir-peephole-reg? op1) (lir-peephole-reg? op2)) (list op1 op2))
+             ((lir-peephole-reg? op1) (list op1))
+             ((lir-peephole-reg? op2) (list op2))
+             (else '()))))
+        (else '()))))
+
+;;; Extract registers/stack slots defined by instruction
+(define (lir-inst-extract-defs inst)
+  (if (not (pair? inst))
+      '()
+      (case (car inst)
+        ((%store)
+         (let ((base (cadr inst)) (off (caddr inst)))
+           (if (eq? base '%rsp)
+               (list (list 'stack off))
+               '())))
+        ((%load %load-byte-zx %pop %code-ref %str-ref %global-ref %set-boolean %alloc %alloc-stack)
+         (list (cadr inst)))
+        ((%mov)
+         (let ((dst (cadr inst)))
+           (if (symbol? dst)
+               (list dst)
+               (if (and (pair? dst) (eq? (car dst) '%stack))
+                   (list (list 'stack (cadr dst)))
+                   '()))))
+        ((%add %raw-add %sub %raw-sub %imul %raw-mul %bit-and %bit-or %bit-xor %shl %shr %sar %neg %inc)
+         (list (cadr inst)))
+        (else '()))))
+
+;;; Build basic block data dependency DAG: (list 'lir-data-dag insts raw-edges waw-edges)
+(define (lir-build-block-data-dag insts)
+  (let loop ((cur insts)
+             (idx 0)
+             (reg-producers '())   ; ((reg . idx) ...)
+             (stack-producers '()) ; ((off . idx) ...)
+             (raw-edges '())       ; ((producer-idx . consumer-idx) ...)
+             (waw-edges '()))      ; ((earlier-idx . later-idx) ...)
+    (if (null? cur)
+        (list 'lir-data-dag insts (reverse raw-edges) (reverse waw-edges))
+        (let* ((inst (car cur))
+               (tail (cdr cur)))
+          (cond
+            ((lir-inst-terminates-block? inst)
+             (list 'lir-data-dag insts (reverse raw-edges) (reverse waw-edges)))
+            ((lir-inst-memory-barrier? inst)
+             (loop tail (+ idx 1) '() '() raw-edges waw-edges))
+            (else
+             (let* ((uses (lir-inst-extract-uses inst))
+                    (defs (lir-inst-extract-defs inst))
+                    (new-raw
+                     (let u-loop ((us uses) (edges raw-edges))
+                       (if (null? us)
+                           edges
+                           (let* ((u (car us))
+                                  (prod (if (pair? u)
+                                            (assoc (cadr u) stack-producers)
+                                            (assoc u reg-producers))))
+                             (if prod
+                                 (u-loop (cdr us) (cons (cons (cdr prod) idx) edges))
+                                 (u-loop (cdr us) edges))))))
+                    (new-waw
+                     (let d-loop ((ds defs) (edges waw-edges))
+                       (if (null? ds)
+                           edges
+                           (let* ((d (car ds))
+                                  (prod (if (pair? d)
+                                            (assoc (cadr d) stack-producers)
+                                            (assoc d reg-producers))))
+                             (if prod
+                                 (d-loop (cdr ds) (cons (cons (cdr prod) idx) edges))
+                                 (d-loop (cdr ds) edges))))))
+                    (new-reg-prods
+                     (let r-up ((ds defs) (prods reg-producers))
+                       (if (null? ds)
+                           prods
+                           (let ((d (car ds)))
+                             (if (symbol? d)
+                                 (r-up (cdr ds) (cons (cons d idx) (filter (lambda (p) (not (equal? (car p) d))) prods)))
+                                 (r-up (cdr ds) prods))))))
+                    (new-stack-prods
+                     (let s-up ((ds defs) (prods stack-producers))
+                       (if (null? ds)
+                           prods
+                           (let ((d (car ds)))
+                             (if (and (pair? d) (eq? (car d) 'stack))
+                                 (s-up (cdr ds) (cons (cons (cadr d) idx) (filter (lambda (p) (not (equal? (car p) (cadr d)))) prods)))
+                                 (s-up (cdr ds) prods)))))))
+               (loop tail (+ idx 1) new-reg-prods new-stack-prods new-raw new-waw))))))))
+
+(define (lir-data-dag-insts dag) (cadr dag))
+(define (lir-data-dag-raw-edges dag) (caddr dag))
+(define (lir-data-dag-waw-edges dag) (cadddr dag))
 
 
 
