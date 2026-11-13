@@ -1356,6 +1356,26 @@
     (emit "ulisp_flush:")
     (emit "    mov x0, #0x2F")
     (emit "    ret")
+    ;; Default Weak Stubs for Synapse Safepoint Poll (Issue #809)
+    ;; Parity with x86-64 backend: no-op returning #f (47) when the
+    ;; concurrency runtime (runtime/concurrency/preempt.scm) is not linked.
+    ;; The .weak binding lets a real definition override these at link time.
+    (if (and (not (assq '%synapse-safepoint-poll! (car *top-level-fns*)))
+             (not (memq '%synapse-safepoint-poll! (car *top-level-vars*))))
+        (begin
+          (emit "    .p2align 2")
+          (emit "    .globl ulisp_fn__pctsynapse_safepoint_poll_excl")
+          (emit "    .weak ulisp_fn__pctsynapse_safepoint_poll_excl")
+          (emit "    .type ulisp_fn__pctsynapse_safepoint_poll_excl, %function")
+          (emit "ulisp_fn__pctsynapse_safepoint_poll_excl:")
+          (emit "    mov x0, #47")
+          (emit "    ret")
+          (emit "    .data")
+          (emit "    .align 3")
+          (emit "    .globl ulisp_gvar__pctsynapse_safepoint_poll_excl")
+          (emit "    .weak ulisp_gvar__pctsynapse_safepoint_poll_excl")
+          (emit "ulisp_gvar__pctsynapse_safepoint_poll_excl:")
+          (emit "    .xword ulisp_fn__pctsynapse_safepoint_poll_excl")))
     (emit "    .bss")
     (emit "    .align 3")
     (emit "    .globl ulisp_stack_base")
