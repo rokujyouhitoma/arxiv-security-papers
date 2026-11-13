@@ -2,14 +2,15 @@
 ID: 769
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
+完了日: 2026-11-13
 ---
 
 # [FEAT/ENH] 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) (ID: 769)
 
 ## 1. 概要 / Summary
 
-[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 7.2 節（来歴追跡と細粒度 AST Diff）、第 7.3 節（ルール単位の自動二分探索デバッグ）、第 8.4 節、および第 9.2 節タスク **T6.2** に基づき、Pass Fusion 基盤に高度な診断・自己修復デバッグ支援機能（Provenance Tracking & Rule-level Auto-Bisect）を実装する。
+[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 7.2 節（来歴追跡と細粒度 AST Diff）、第 7.3 節（ルール単位の自動二分探索デバッグ）、第 8.4 節、および第 9.2 節タスク **T6.2** に基づき、Pass Fusion 基盤に高度な診断・自己修復デバッグ支援機能（Provenance Tracking & Rule-level Auto-Bisect）を実装する。
 
 先行する Issue #759 〜 #767 の Pass Fusion / Picopass 統廃合により、Frontend 脱糖層（`030_desugar.scm`）や LIR ピープホール（`133_lir_peephole.scm`）において数十個の独立した書き換え規則が単一の走査パス内へ高度に融合された。
 しかし、この「超細粒度ルールの単一パス融合」は、コンパイル速度とメモリ消費を劇的に改善した一方で、以下の **観測性・デバッグ性における新たな構造的課題** を生じさせた：
@@ -66,7 +67,7 @@ ID: 769
 ## 4. トレーサビリティ / Traceability
 
 - **関連設計書**:
-  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
     - 第 7.2 節（来歴追跡（Provenance Tracking）と細粒度 AST Diff）
     - 第 7.3 節（ルール単位の自動二分探索デバッグ（Rule-level Auto-Bisect））
     - 第 8.4 節（既存機能の4階層フレームワークへの統廃合・再配置マトリクス）
@@ -296,26 +297,26 @@ ID: 769
 
 Target Branch: `feat/769-picopass-provenance-and-auto-bisect`
 
-- [ ] **Phase 1: 来歴追跡データ構造と Picopass 有効/無効化 API の実装**
+- [x] **Phase 1: 来歴追跡データ構造と Picopass 有効/無効化 API の実装**
   - `ulisp/compiler/nanopass_meta.scm` に `*picopass-provenance-enabled*`, `*picopass-firing-counts*`, `*picopass-firing-log*`, `record-picopass-firing!`, `reset-picopass-provenance!`, `*disabled-picopasses*`, `picopass-enabled?` を定義。
   - `ulisp/compiler/pass_manager.scm` に `disable-picopass!`, `enable-picopass!`, `reset-disabled-picopasses!`, `with-disabled-picopasses` を実装・エクスポート。
-- [ ] **Phase 2: コード生成器への発火記録と無効化ガードの埋め込み**
+- [x] **Phase 2: コード生成器への発火記録と無効化ガードの埋め込み**
   - `ulisp/compiler/nanopass.scm`:
     - `nanopass-extract-fused-clauses` および `nanopass-extract-fused-window-rules` で各ルール節にルール名シンボルを付加。
     - `nanopass-compile-single-rule-cascade` および `nanopass-compile-window-rule-chain` で `(picopass-enabled? 'rule-name)` によるスキップ分岐と、発火時の `(record-picopass-firing! 'rule-name ir-var res-var)` フックをコード生成。
-- [ ] **Phase 3: AST Diff トレーサの Provenance 拡張**
+- [x] **Phase 3: AST Diff トレーサの Provenance 拡張**
   - `nanopass-display-ast-diff`（`ulisp/compiler/nanopass_meta.scm`）において、発火回数リスト `(get-picopass-firing-counts)` を整形表示するセクションを追加。
   - パス実行開始時に `reset-picopass-provenance!` を呼び出し、パス境界ごとの発火内訳を独立集計。
-- [ ] **Phase 4: Delta Debugging 自動二分探索エンジンの実装**
+- [x] **Phase 4: Delta Debugging 自動二分探索エンジンの実装**
   - `ulisp/compiler/pass_manager.scm` に `(auto-bisect-picopasses candidate-rules test-fn)` を実装。
   - 単一ルール特定、複数ルール相互作用（`interaction`）、全無効化時継続失敗の各ケースを堅牢にハンドリング。
-- [ ] **Phase 5: ユニットテスト群の拡充と検証**
+- [x] **Phase 5: ユニットテスト群の拡充と検証**
   - `ulisp/tests/test_nanopass_tracer.scm`:
     - Provenance 有効化時の発火カウンタ計測、AST Diff 内への Picopass 名表示のテストを追加。
   - `ulisp/tests/test_pass_manager.scm`:
     - `disable-picopass!` / `enable-picopass!` による単一ルール無効化テスト。
     - 意図的に壊れた AST を出力するダミー Picopass を混入させ、`auto-bisect-picopasses` が $O(\log_2 n)$ ステップでそのルール名を 100% 正確に特定する二分探索テスト（Group 10）を追加。
-- [ ] **Phase 6: 3-Stage セルフホスティングブートストラップ ＆ 品質ゲート検証**
+- [x] **Phase 6: 3-Stage セルフホスティングブートストラップ ＆ 品質ゲート検証**
   - `make test`（C言語、Verifier、All Passes、Nanopass 全スイート PASS）。
   - `bash ulisp/bootstrap.sh --modular` を実行し、Stage 2 と Stage 3 の生成バイナリが完全一致（Fixed-Point）することを確認。
   - `make py_compile && make static_analysis` による品質ゲート全項目 PASS を確認。
