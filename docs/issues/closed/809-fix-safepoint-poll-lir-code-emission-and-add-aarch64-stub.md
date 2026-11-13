@@ -2,7 +2,7 @@
 ID: 809
 種別: Bug
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [BUG/SEC] %synapse-safepoint-poll! の LIR コード未生成の修正および aarch64 向けスタブの提供 (ID: 809)
@@ -26,16 +26,16 @@ Issue #799 において `%synapse-safepoint-poll!`, `%safepoint-poll!`, `synapse
 ## 2. トレーサビリティ / Traceability
 
 - **設計仕様書**:
-  - [DSN-37 Synapse Concurrency Architecture Specification Section 7.2 & 14.4](../../docs/design/DSN-37-synapse-concurrency-architecture-specification.md)
-  - [DSN-33 Nanopass Architecture Section 6](../../docs/design/DSN-33-nanopass-aot-compiler-architecture.md)
+  - [DSN-37 Synapse Concurrency Architecture Specification Section 7.2 & 14.4](../../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)
+  - [DSN-33 Nanopass Architecture Section 6](../../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連 Issue**:
-  - [Issue #796 (セーフポイント注入パスの本番コンパイラ PASSES パイプライン正式統合)](closed/796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md)
-  - [Issue #799 (クロスワーカー環境テスト拡充および Linux 実機 CI 検証環境の確立)](closed/799-add-cross-worker-coroutine-yield-exception-and-linux-ci-stress-tests.md)
-  - [Issue #802 (セーフポイント注入時における末尾呼び出し最適化 (TCO) の保護)](closed/802-preserve-tail-call-optimization-in-safepoint-injection.md)
-  - [Issue #807 (x86-64 バックエンドにおけるセーフポイントポーリング stub 重複定義の解消)](closed/807-eliminate-duplicate-safepoint-poll-stub-in-x86-64-backend.md)
-  - [Issue #808 (safepoint 有効化状態でのプリエンプション実機統合テストの追加と Makefile 除外設定の整理)](closed/808-add-hardware-safepoint-preemption-tests-and-clean-makefile-disables.md)
-  - [Issue #810 (safepoint 挿入除外判定の名前プレフィックス廃止と declare no-safepoints 構文の導入)](810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md)
-  - [Issue #811 (型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入)](811-warn-on-untyped-variable-crossing-channel-boundary.md)
+  - [Issue #796 (セーフポイント注入パスの本番コンパイラ PASSES パイプライン正式統合)](796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md)
+  - [Issue #799 (クロスワーカー環境テスト拡充および Linux 実機 CI 検証環境の確立)](799-add-cross-worker-coroutine-yield-exception-and-linux-ci-stress-tests.md)
+  - [Issue #802 (セーフポイント注入時における末尾呼び出し最適化 (TCO) の保護)](802-preserve-tail-call-optimization-in-safepoint-injection.md)
+  - [Issue #807 (x86-64 バックエンドにおけるセーフポイントポーリング stub 重複定義の解消)](807-eliminate-duplicate-safepoint-poll-stub-in-x86-64-backend.md)
+  - [Issue #808 (safepoint 有効化状態でのプリエンプション実機統合テストの追加と Makefile 除外設定の整理)](808-add-hardware-safepoint-preemption-tests-and-clean-makefile-disables.md)
+  - [Issue #810 (safepoint 挿入除外判定の名前プレフィックス廃止と declare no-safepoints 構文の導入)](../810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md)
+  - [Issue #811 (型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入)](../811-warn-on-untyped-variable-crossing-channel-boundary.md)
 
 ---
 
@@ -75,13 +75,13 @@ Issue #799 において `%synapse-safepoint-poll!`, `%safepoint-poll!`, `synapse
 
 ## 5. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ulisp/compiler/primitives.scm](../../ulisp/compiler/primitives.scm): `zero-arg-prim?` におけるシンボル定義確認
-- [ulisp/lir/129_lir_primitives.scm](../../ulisp/lir/129_lir_primitives.scm): LIR 命令選択ハンドラ確認
-- [ulisp/backend/140_backend_x86_64.scm](../../ulisp/backend/140_backend_x86_64.scm): x86-64 側 weak スタブ実装の参照元
-- [ulisp/backend/150_backend_aarch64.scm](../../ulisp/backend/150_backend_aarch64.scm): AArch64 側 weak スタブ実装対象
-- [ulisp/compiler.scm](../../ulisp/compiler.scm): 統合コンパイラソース（`make -C ulisp compiler` で再生成）
-- [ulisp/tests/test_backend_aarch64.scm](../../ulisp/tests/test_backend_aarch64.scm): AArch64 バックエンド単体テスト拡張
-- [ulisp/Makefile](../../ulisp/Makefile): 依存関係およびビルド検証ターゲット
+- [ulisp/compiler/primitives.scm](../../../ulisp/compiler/primitives.scm): `zero-arg-prim?` におけるシンボル定義確認
+- [ulisp/lir/129_lir_primitives.scm](../../../ulisp/lir/129_lir_primitives.scm): LIR 命令選択ハンドラ確認
+- [ulisp/backend/140_backend_x86_64.scm](../../../ulisp/backend/140_backend_x86_64.scm): x86-64 側 weak スタブ実装の参照元
+- [ulisp/backend/150_backend_aarch64.scm](../../../ulisp/backend/150_backend_aarch64.scm): AArch64 側 weak スタブ実装対象
+- [ulisp/compiler.scm](../../../ulisp/compiler.scm): 統合コンパイラソース（`make -C ulisp compiler` で再生成）
+- [ulisp/tests/test_backend_aarch64.scm](../../../ulisp/tests/test_backend_aarch64.scm): AArch64 バックエンド単体テスト拡張
+- [ulisp/Makefile](../../../ulisp/Makefile): 依存関係およびビルド検証ターゲット
 
 ---
 
@@ -135,11 +135,43 @@ Target Branch: `fix/809-safepoint-poll-lir-code-emission-and-add-aarch64-stub`
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp/backend/150_backend_aarch64.scm` に `ulisp_fn__pctsynapse_safepoint_poll_excl` および `ulisp_gvar__pctsynapse_safepoint_poll_excl` の weak スタブ生成が実装されていること。
-- [ ] 並行ランタイム非リンク時の AArch64 ターゲット出力アセンブリに weak スタブが含まれ、`mov x0, #47; ret` が正しく emit されること。
-- [ ] `ulisp/compiler.scm` が最新の pass 群と同期して再構築されていること。
-- [ ] `make -C ulisp lint_sexpr` がエラー 0 件で通過すること。
-- [ ] `ulisp/tests/test_backend_aarch64.scm` に検証テストが追加され、`make -C ulisp test_aarch64` が全件 PASS すること。
-- [ ] `make -C ulisp test_lir_suite` および `make -C ulisp test_concurrency` に回帰がないこと。
-- [ ] `make py_compile && make static_analysis` が 100% PASS すること。
-- [ ] ドキュメント内の全リンクが相対パス（`../../` 等）で統一されていること。
+- [x] `ulisp/backend/150_backend_aarch64.scm` に `ulisp_fn__pctsynapse_safepoint_poll_excl` および `ulisp_gvar__pctsynapse_safepoint_poll_excl` の weak スタブ生成が実装されていること。
+- [x] 並行ランタイム非リンク時の AArch64 ターゲット出力アセンブリに weak スタブが含まれ、`mov x0, #47; ret` が正しく emit されること。
+- [x] `ulisp/compiler.scm` が最新の pass 群と同期して再構築されていること。
+- [x] `make -C ulisp lint_sexpr` がエラー 0 件で通過すること。
+- [x] `ulisp/tests/test_backend_aarch64.scm` に検証テストが追加され、`make -C ulisp test_aarch64` が全件 PASS すること。
+- [x] `make -C ulisp test_lir_suite`, `make -C ulisp test_backend` および `make -C ulisp test_concurrency` に回帰がないこと。
+- [x] `make py_compile && make static_analysis` が 100% PASS すること。
+- [x] ドキュメント内の全リンクが相対パス（`../../` 等）で統一されていること。
+
+---
+
+## 8. 実装結果・検証記録 / Implementation Results
+
+### 変更ファイル
+- [ulisp/backend/150_backend_aarch64.scm](../../../ulisp/backend/150_backend_aarch64.scm): `ulisp_flush` 直後に weak スタブ生成を追加（`*top-level-fns*` / `*top-level-vars*` に `%synapse-safepoint-poll!` が無い場合のみ）。関数は `.text` に `mov x0, #47; ret`、変数は `.data` に `.xword` ポインタとして配置。
+- [ulisp/compiler.scm](../../../ulisp/compiler.scm): `make -C ulisp compiler` で再生成。
+- [ulisp/tests/test_backend_aarch64.scm](../../../ulisp/tests/test_backend_aarch64.scm): Step 12（9 アサーション）を追加。LIR 命令選択（`%memory-fence` / `#t`）、`dmb ish` 出力、weak 関数・変数スタブが各 1 回だけ出力されること、ランタイム定義時はスタブが抑止されることを検証。
+
+### Phase 1 の結論（LIR 命令選択）
+`lir-compile-zero-arg` には既に Issue #802 でハンドラが入っており、「サイレント NOP」は解消済み（x86-64: `mfence; mov rax, 111`、AArch64: `dmb ish; mov x0, #111`）。ランタイムがトップレベルで `%synapse-safepoint-poll!` を定義した場合は通常の関数ラベル（`ulisp_fn__pctsynapse_safepoint_poll_excl`）として出力される。未解決だった欠陥は、手続きを**値として**参照したとき（`ulisp_gvar__pctsynapse_safepoint_poll_excl` への参照）の AArch64 側リンク失敗だった。
+
+### 再現と修正の確認（AArch64 クロスツールチェーン + QEMU）
+| ケース | 修正前 (`main`) | 修正後 |
+| :--- | :--- | :--- |
+| `(define g %synapse-safepoint-poll!)` を含みランタイム非リンクのプログラム | `aarch64-linux-gnu-ld`: `undefined reference to ulisp_gvar__pctsynapse_safepoint_poll_excl` | リンク成功、`qemu-aarch64` で正常終了 (rc=0) |
+| ランタイム非リンク時のシンボル | 存在せず | `nm`: `W ulisp_fn_…`, `W ulisp_gvar_…`（weak） |
+| ランタイムが `%synapse-safepoint-poll!` を定義 | — | スタブ非出力、本定義のみ（重複なし） |
+
+### 品質ゲート
+| ゲート | 結果 |
+| :--- | :--- |
+| `make -C ulisp lint_sexpr` | PASS |
+| `make -C ulisp test_aarch64` | 37/37 PASS（28 → 37） |
+| `make -C ulisp test_lir_suite` | PASS |
+| `make -C ulisp test_backend` | PASS |
+| `make -C ulisp test_concurrency` | PASS（失敗 0 件） |
+| `make py_compile && make static_analysis` | PASS（mypy --strict: 617 ファイルで指摘 0 件） |
+
+> [!NOTE]
+> `make -C ulisp test_aarch64_qemu`（stdlib の include パス解決エラー）と `test_context_switch_aarch64`（QEMU 上で SIGSEGV）は、変更前の `main` でも同じ結果になる既存不具合のため、本 Issue の範囲外として [Issue #812](../812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) に起票した。

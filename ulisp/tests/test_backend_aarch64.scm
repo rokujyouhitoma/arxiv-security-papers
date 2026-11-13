@@ -171,6 +171,60 @@
       (assert-true "emitted asm contains ulisp_handler_chain"
                    (test-aarch64-lines-contain? lines "ulisp_handler_chain")))))
 
+;;; Test 12: Synapse safepoint poll LIR selection & AArch64 weak stubs (Issue #809)
+(display "--- Step 12: Safepoint Poll LIR Selection & AArch64 Weak Stubs (Issue #809) ---")
+(newline)
+(define (test-aarch64-tree-contains? tree item)
+  (cond
+    ((equal? tree item) #t)
+    ((pair? tree) (or (test-aarch64-tree-contains? (car tree) item)
+                      (test-aarch64-tree-contains? (cdr tree) item)))
+    (else #f)))
+
+(define (test-aarch64-count-lines lines str)
+  (let loop ((ls lines) (n 0))
+    (if (pair? ls)
+        (loop (cdr ls) (if (string=? (car ls) str) (+ n 1) n))
+        n)))
+
+(define (test-aarch64-capture lir)
+  (let ((emitted-lines '()))
+    (set-emit-line-sink! (lambda (line) (set! emitted-lines (cons line emitted-lines))))
+    (emit-aarch64 lir 'none)
+    (set-emit-line-sink! #f)
+    (reverse emitted-lines)))
+
+(let* ((ast '(%synapse-safepoint-poll!))
+       (lir (generate-lir (closure-convert (anf-all (cp0-optimize (desugar-all ast)))))))
+  ;; Phase 1: zero-arg primitive selection must never be a silent NOP
+  (assert-true "safepoint poll lowers to %memory-fence in LIR"
+               (test-aarch64-tree-contains? lir '(%memory-fence)))
+  (assert-true "safepoint poll yields #t (111) in LIR"
+               (test-aarch64-tree-contains? lir '(%mov %rax 111)))
+  ;; Phase 2: runtime unlinked -> weak stubs emitted exactly once
+  (let ((lines (test-aarch64-capture lir)))
+    (assert-true "emitted asm contains dmb ish fence for safepoint poll"
+                 (test-aarch64-lines-contain? lines "dmb ish"))
+    (assert-equal "weak fn stub label emitted exactly once" 1
+                  (test-aarch64-count-lines lines "ulisp_fn__pctsynapse_safepoint_poll_excl:"))
+    (assert-true "fn stub marked .weak"
+                 (test-aarch64-lines-contain? lines ".weak ulisp_fn__pctsynapse_safepoint_poll_excl"))
+    (assert-true "fn stub returns #f via x0 (mov x0, #47)"
+                 (test-aarch64-lines-contain? lines "mov x0, #47"))
+    (assert-equal "weak gvar stub label emitted exactly once" 1
+                  (test-aarch64-count-lines lines "ulisp_gvar__pctsynapse_safepoint_poll_excl:"))
+    (assert-true "gvar stub uses 64-bit .xword pointer"
+                 (test-aarch64-lines-contain? lines ".xword ulisp_fn__pctsynapse_safepoint_poll_excl")))
+  ;; Runtime linked (top-level definition present) -> stubs suppressed
+  (let ((saved-fns (car *top-level-fns*)))
+    (set-car! *top-level-fns*
+              (cons (cons '%synapse-safepoint-poll! "ulisp_fn__pctsynapse_safepoint_poll_excl")
+                    saved-fns))
+    (let ((lines (test-aarch64-capture lir)))
+      (set-car! *top-level-fns* saved-fns)
+      (assert-equal "weak stub suppressed when runtime defines %synapse-safepoint-poll!" 0
+                    (test-aarch64-count-lines lines "ulisp_fn__pctsynapse_safepoint_poll_excl:")))))
+
 (display "=======================================================")
 (newline)
 (display " All ")
