@@ -293,7 +293,7 @@ test_queue: $(COMPILER_DEP) build/ulisp_stdlib.o
 
 test_channel: $(COMPILER_DEP) build/ulisp_stdlib.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_channel_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_channel_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_channel.scm >> build/test_channel_input.scm
 	$(ULISP_COMPILER) build/test_channel_input.scm > build/test_channel.s
 	$(AS) $(ASFLAGS) build/test_channel.s -o build/test_channel.o
@@ -302,7 +302,7 @@ test_channel: $(COMPILER_DEP) build/ulisp_stdlib.o build/futex.o
 
 test_boundary: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_boundary_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_boundary_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_boundary.scm >> build/test_boundary_input.scm
 	$(ULISP_COMPILER) build/test_boundary_input.scm > build/test_boundary.s
 	$(AS) $(ASFLAGS) build/test_boundary.s -o build/test_boundary.o
@@ -311,7 +311,7 @@ test_boundary: $(COMPILER_DEP) build/ulisp_stdlib.o
 
 test_epoch: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_epoch_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_epoch_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_epoch.scm >> build/test_epoch_input.scm
 	$(ULISP_COMPILER) build/test_epoch_input.scm > build/test_epoch.s
 	$(AS) $(ASFLAGS) build/test_epoch.s -o build/test_epoch.o
@@ -358,7 +358,7 @@ test_context_switch_aarch64: compiler.scm build/context_aarch64.o
 
 test_scheduler: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_scheduler_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_scheduler_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_scheduler.scm >> build/test_scheduler_input.scm
 	$(ULISP_COMPILER) build/test_scheduler_input.scm > build/test_scheduler.s
 	$(AS) $(ASFLAGS) build/test_scheduler.s -o build/test_scheduler.o
@@ -367,7 +367,7 @@ test_scheduler: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/threa
 
 test_multithread_scheduler: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_multithread_scheduler_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_multithread_scheduler_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_multithread_scheduler.scm >> build/test_multithread_scheduler_input.scm
 	$(ULISP_COMPILER) build/test_multithread_scheduler_input.scm > build/test_multithread_scheduler.s
 	$(AS) $(ASFLAGS) build/test_multithread_scheduler.s -o build/test_multithread_scheduler.o
@@ -376,7 +376,7 @@ test_multithread_scheduler: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o
 
 test_links_monitors: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_links_monitors_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_links_monitors_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_links_monitors.scm >> build/test_links_monitors_input.scm
 	$(ULISP_COMPILER) build/test_links_monitors_input.scm > build/test_links_monitors.s
 	$(AS) $(ASFLAGS) build/test_links_monitors.s -o build/test_links_monitors.o
@@ -385,7 +385,7 @@ test_links_monitors: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/
 
 test_task_mailbox: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_task_mailbox_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_task_mailbox_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_task_mailbox.scm >> build/test_task_mailbox_input.scm
 	$(ULISP_COMPILER) build/test_task_mailbox_input.scm > build/test_task_mailbox.s
 	$(AS) $(ASFLAGS) build/test_task_mailbox.s -o build/test_task_mailbox.o
@@ -394,7 +394,7 @@ test_task_mailbox: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/th
 
 test_let_it_crash: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_let_it_crash_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_let_it_crash_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_let_it_crash.scm >> build/test_let_it_crash_input.scm
 	$(ULISP_COMPILER) build/test_let_it_crash_input.scm > build/test_let_it_crash.s
 	$(AS) $(ASFLAGS) build/test_let_it_crash.s -o build/test_let_it_crash.o
@@ -403,7 +403,7 @@ test_let_it_crash: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/th
 
 test_supervisor: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_supervisor_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_supervisor_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_supervisor.scm >> build/test_supervisor_input.scm
 	$(ULISP_COMPILER) build/test_supervisor_input.scm > build/test_supervisor.s
 	$(AS) $(ASFLAGS) build/test_supervisor.s -o build/test_supervisor.o
@@ -421,7 +421,7 @@ test_futex: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o 
 
 test_registry: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_registry_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_registry_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_registry.scm >> build/test_registry_input.scm
 	$(ULISP_COMPILER) build/test_registry_input.scm > build/test_registry.s
 	$(AS) $(ASFLAGS) build/test_registry.s -o build/test_registry.o
@@ -430,7 +430,7 @@ test_registry: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread
 
 test_crash_logger: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_crash_logger_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_crash_logger_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm >> build/test_crash_logger_input.scm
 	$(ULISP_COMPILER) build/test_crash_logger_input.scm > build/test_crash_logger.s
 	$(AS) $(ASFLAGS) build/test_crash_logger.s -o build/test_crash_logger.o
@@ -439,7 +439,7 @@ test_crash_logger: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/th
 
 test_io_uring: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o build/io_uring.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_io_uring_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_io_uring_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_io_uring.scm >> build/test_io_uring_input.scm
 	$(ULISP_COMPILER) build/test_io_uring_input.scm > build/test_io_uring.s
 	$(AS) $(ASFLAGS) build/test_io_uring.s -o build/test_io_uring.o
@@ -448,7 +448,7 @@ test_io_uring: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread
 
 test_preemption: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_preemption_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_preemption_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_preemption.scm >> build/test_preemption_input.scm
 	$(ULISP_COMPILER) build/test_preemption_input.scm > build/test_preemption.s
 	$(AS) $(ASFLAGS) build/test_preemption.s -o build/test_preemption.o
@@ -457,7 +457,7 @@ test_preemption: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thre
 
 test_eval_adapter: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o build/thread.o build/futex.o
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_eval_adapter_input.scm
+	@echo "(!gc none) (!allow-extern #t)" > build/test_eval_adapter_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm >> build/test_eval_adapter_input.scm
 	$(ULISP_COMPILER) build/test_eval_adapter_input.scm > build/test_eval_adapter.s
 	$(AS) $(ASFLAGS) build/test_eval_adapter.s -o build/test_eval_adapter.o
