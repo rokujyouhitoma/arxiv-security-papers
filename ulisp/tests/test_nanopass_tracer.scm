@@ -269,6 +269,102 @@
                   1
                   (nanopass-ast-diff-display-count))))
 
+;;; -----------------------------------------------------------------------
+;;; 7. Picopass Provenance Tracking & Fine-grained Firing History (DSN-33-01 T6.2)
+;;; -----------------------------------------------------------------------
+
+(display "\n--- [Section 7: Picopass Provenance Tracking & Firing History] ---\n")
+
+;; 7.1 Provenance flags and control
+(assert-false "picopass-provenance-enabled? initially #f"
+              (picopass-provenance-enabled?))
+(enable-picopass-provenance!)
+(assert-true "enable-picopass-provenance! sets flag to #t"
+             (picopass-provenance-enabled?))
+(disable-picopass-provenance!)
+(assert-false "disable-picopass-provenance! resets flag to #f"
+              (picopass-provenance-enabled?))
+
+;; 7.2 Manual recording and resetting
+(enable-picopass-provenance!)
+(reset-picopass-provenance!)
+(assert-equal "initial firing counts is empty" '() (get-picopass-firing-counts))
+(assert-equal "initial firing log is empty" '() (get-picopass-firing-log))
+
+(record-picopass-firing! 'test-rule-alpha '(+ 1 2) 3)
+(record-picopass-firing! 'test-rule-alpha '(+ 3 4) 7)
+(record-picopass-firing! 'test-rule-beta '(* 2 5) 10)
+
+(let ((counts (get-picopass-firing-counts)))
+  (assert-equal "test-rule-alpha fired twice"
+                2
+                (cdr (assq 'test-rule-alpha counts)))
+  (assert-equal "test-rule-beta fired once"
+                1
+                (cdr (assq 'test-rule-beta counts))))
+
+(let ((log (get-picopass-firing-log)))
+  (assert-equal "firing log records 3 events" 3 (length log))
+  (assert-equal "first log rule is test-rule-alpha" 'test-rule-alpha (caar log)))
+
+(reset-picopass-provenance!)
+(assert-equal "reset-picopass-provenance! clears counts" '() (get-picopass-firing-counts))
+(assert-equal "reset-picopass-provenance! clears log" '() (get-picopass-firing-log))
+(disable-picopass-provenance!)
+
+;; 7.3 Integration test: define-picopass + fuse-rules firing count tracking
+(define-picopass rule-trace-add-zero
+  (Expr
+    ((+ ,e 0) e)))
+
+(define-picopass rule-trace-mul-one
+  (Expr
+    ((* ,e 1) e)))
+
+(define-pass test-pass-provenance-fuse : L_tracer_base (ir) -> L_tracer_base ()
+  (entry Expr)
+  (fuse-rules
+    rule-trace-add-zero
+    rule-trace-mul-one))
+
+;; Run with provenance DISABLED: counts should remain empty
+(reset-picopass-provenance!)
+(disable-picopass-provenance!)
+(let ((res (test-pass-provenance-fuse '(list (+ x 0) (* y 1) (+ z 0)))))
+  (assert-equal "pass output transformed correctly with provenance disabled"
+                '(list x y z)
+                res)
+  (assert-equal "firing counts empty when provenance disabled"
+                '()
+                (get-picopass-firing-counts)))
+
+;; Run with provenance ENABLED: counts should track rule firings
+(reset-picopass-provenance!)
+(enable-picopass-provenance!)
+(let ((res (test-pass-provenance-fuse '(list (+ a 0) (* b 1) (+ c 0) (* d 1)))))
+  (assert-equal "pass output transformed correctly with provenance enabled"
+                '(list a b c d)
+                res)
+  (let ((counts (get-picopass-firing-counts)))
+    (assert-equal "rule-trace-add-zero recorded 2 hits"
+                  2
+                  (cdr (assq 'rule-trace-add-zero counts)))
+    (assert-equal "rule-trace-mul-one recorded 2 hits"
+                  2
+                  (cdr (assq 'rule-trace-mul-one counts)))))
+
+;; 7.4 Display AST diff with Picopass Firings
+(reset-nanopass-ast-diff-display-count!)
+(nanopass-display-ast-diff 'test-pass-provenance-fuse
+                          '(list (+ a 0) (* b 1) (+ c 0) (* d 1))
+                          '(list a b c d))
+(assert-equal "nanopass-display-ast-diff with firings increments display count"
+              1
+              (nanopass-ast-diff-display-count))
+
+(reset-picopass-provenance!)
+(disable-picopass-provenance!)
+
 (display "=======================================================") (newline)
 (display " Nanopass Phase 4: All ")
 (display *tracer-tests-passed*)

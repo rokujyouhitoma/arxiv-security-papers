@@ -547,6 +547,159 @@
 (assert-true "9.30 define-pipeline generates callable wrapper procedure producing %lir-program"
              (and (pair? dyn-lir) (eq? (car dyn-lir) '%lir-program)))
 
+;;; -----------------------------------------------------------------------
+;;; Group 10: Picopass Disabling API & Rule-level Auto-Bisect (DSN-33-01 T6.2)
+;;; -----------------------------------------------------------------------
+
+(display "\n--- Group 10: Picopass Disabling API & Rule-level Auto-Bisect ---\n")
+
+;; 10.1 Picopass disabling state
+(reset-disabled-picopasses!)
+(assert-equal "10.1 initial disabled-picopasses is empty"
+              '()
+              (disabled-picopasses))
+
+(assert-true "10.2 picopass-enabled? returns #t initially"
+             (picopass-enabled? 'test-rule-x))
+
+(disable-picopass! 'test-rule-x)
+(assert-equal "10.3 disable-picopass! adds rule to disabled list"
+              '(test-rule-x)
+              (disabled-picopasses))
+
+(assert-false "10.4 picopass-enabled? returns #f for disabled rule"
+              (picopass-enabled? 'test-rule-x))
+
+(assert-true "10.5 picopass-enabled? returns #t for other rules"
+             (picopass-enabled? 'test-rule-y))
+
+(enable-picopass! 'test-rule-x)
+(assert-equal "10.6 enable-picopass! removes rule from disabled list"
+              '()
+              (disabled-picopasses))
+
+(assert-true "10.7 picopass-enabled? restored to #t"
+             (picopass-enabled? 'test-rule-x))
+
+;; 10.8 with-disabled-picopasses scoped execution
+(with-disabled-picopasses '(rule-temp-1 rule-temp-2)
+  (lambda ()
+    (assert-false "10.8 rule-temp-1 disabled inside thunk"
+                  (picopass-enabled? 'rule-temp-1))
+    (assert-false "10.9 rule-temp-2 disabled inside thunk"
+                  (picopass-enabled? 'rule-temp-2))))
+
+(assert-true "10.10 rule-temp-1 restored outside thunk"
+             (picopass-enabled? 'rule-temp-1))
+(assert-true "10.11 rule-temp-2 restored outside thunk"
+             (picopass-enabled? 'rule-temp-2))
+
+;; 10.12 mandatory rule protection
+(define-picopass rule-mandatory-guard
+  :mandatory #t
+  (Expr
+    ((guard-check ,x) x)))
+
+(assert-true "10.12 rule-mandatory? returns #t for mandatory rule"
+             (rule-mandatory? (rule-descriptor 'rule-mandatory-guard)))
+
+(assert-false "10.13 disable-picopass! rejects disabling mandatory rule"
+              (disable-picopass! 'rule-mandatory-guard))
+(assert-true "10.13.1 mandatory rule remains enabled"
+             (picopass-enabled? 'rule-mandatory-guard))
+
+;; 10.14 picopass-split-list helper
+(assert-equal "10.14 picopass-split-list splits list evenly"
+              '((a b) c d e)
+              (let ((s (picopass-split-list '(a b c d e) 2)))
+                (cons (car s) (cdr s))))
+
+;; 10.15 auto-bisect-picopasses: base check when test-fn passes initially
+(let ((res (auto-bisect-picopasses '(r1 r2 r3) (lambda () #t))))
+  (assert-equal "10.15 auto-bisect returns #f when bug does not reproduce"
+                #f
+                res))
+
+;; 10.16 auto-bisect-picopasses: when test-fn fails even with all candidates disabled
+(let ((res (auto-bisect-picopasses '(r1 r2 r3) (lambda () #f))))
+  (assert-equal "10.16 auto-bisect detects failure with all rules disabled"
+                'cannot-isolate-all-disabled-still-fails
+                res))
+
+;; 10.17 auto-bisect-picopasses: single rule isolation among 6 rules (rule 4 is bug)
+;; Bug rule: r4.
+;; test-fn returns #t (PASS) if r4 is disabled, #f (FAIL) if r4 is enabled.
+(let* ((candidates '(r1 r2 r3 r4 r5 r6))
+       (test-fn (lambda ()
+                  (not (picopass-enabled? 'r4))))
+       (isolated (auto-bisect-picopasses candidates test-fn)))
+  (assert-equal "10.17 auto-bisect successfully isolates buggy rule r4 in O(log n)"
+                'r4
+                isolated))
+
+;; 10.18 auto-bisect-picopasses: single rule isolation among 8 rules (rule 7 is bug)
+(let* ((candidates '(opt-1 opt-2 opt-3 opt-4 opt-5 opt-6 opt-7 opt-8))
+       (test-fn (lambda ()
+                  (not (picopass-enabled? 'opt-7))))
+       (isolated (auto-bisect-picopasses candidates test-fn)))
+  (assert-equal "10.18 auto-bisect successfully isolates opt-7 among 8 candidates"
+                'opt-7
+                isolated))
+
+;; 10.19 auto-bisect-picopasses: 2-rule interaction bug
+;; Bug requires BOTH r2 and r5 to be enabled simultaneously.
+(let* ((candidates '(r1 r2 r3 r4 r5 r6))
+       (test-fn (lambda ()
+                  (not (and (picopass-enabled? 'r2)
+                            (picopass-enabled? 'r5)))))
+       (isolated (auto-bisect-picopasses candidates test-fn)))
+  (assert-true "10.19 auto-bisect detects multi-rule interaction"
+               (and (pair? isolated) (eq? (car isolated) 'interaction))))
+
+;; 10.20 auto-bisect-picopasses restores state on exception in test-fn
+(disable-picopass! 'saved-rule-init)
+(let ((caught #f))
+  (call/cc
+    (lambda (escape)
+      (with-exception-handler
+        (lambda (ex)
+          (set! caught #t)
+          (escape #t))
+        (lambda ()
+          (auto-bisect-picopasses '(r1 r2) (lambda () (raise 'simulated-failure)))))))
+  (assert-true "10.20 exception handled" caught)
+  (assert-equal "10.21 disabled-picopasses restored to initial state after exception"
+                '(saved-rule-init)
+                (disabled-picopasses)))
+(reset-disabled-picopasses!)
+
+;; 10.22 Real integration: fused pass with disabled rule skips transformation
+(define-picopass rule-pm-fuse-1
+  (Expr
+    ((pm-op-1 ,x) (list 'res-1 x))))
+
+(define-picopass rule-pm-fuse-2
+  (Expr
+    ((pm-op-2 ,x) (list 'res-2 x))))
+
+(define-pass test-pass-pm-fused : L_src (ir) -> L_src ()
+  (entry Expr)
+  (fuse-rules
+    rule-pm-fuse-1
+    rule-pm-fuse-2))
+
+;; When both enabled: both transform
+(assert-equal "10.22 both rules transform when enabled"
+              '(list (res-1 a) (res-2 b))
+              (test-pass-pm-fused '(list (pm-op-1 a) (pm-op-2 b))))
+
+;; When rule-pm-fuse-1 is disabled: only rule 2 transforms, rule 1 is skipped!
+(disable-picopass! 'rule-pm-fuse-1)
+(assert-equal "10.23 disabled rule-pm-fuse-1 is skipped in fused pass"
+              '(list (pm-op-1 a) (res-2 b))
+              (test-pass-pm-fused '(list (pm-op-1 a) (pm-op-2 b))))
+(reset-disabled-picopasses!)
+
 (display "\n=======================================================\n")
 (display " Test Suite Completed: ")
 (display (car *pass-count*))
