@@ -37,11 +37,20 @@
                   #f))))))
 
 (define *safepoint-excluded-prefixes*
-  '("synapse-" "task-" "thread-" "futex-" "arena-"
-    "atomic-" "channel-" "queue-" "epoch-" "boundary-" "registry-"
-    "preempt-" "io-uring-" "context-" "scheduler-" "supervisor-"
-    "coroutine-" "worker-" "current-synapse-" "check-safepoint"
-    "safepoint-" "sys-" "gc-" "make-"))
+  '("synapse" "task" "thread" "futex" "arena"
+    "atomic" "channel" "queue" "epoch" "boundary" "registry"
+    "preempt" "io-uring" "context" "scheduler" "supervisor"
+    "coroutine" "worker" "current-synapse" "check-safepoint"
+    "safepoint" "sys" "gc" "make"
+    "deque" "chase-lev-deque" "l1-ring" "lock-free"
+    "dequeue" "enqueue" "pool" "padded-atomic" "broadcast"
+    "with-synapse" "with-task" "lookup-task" "monitor" "ensure-task"
+    "release-task" "acquire-task" "setup-task" "free-task"
+    "free-futex" "free-coroutine" "allocate" "init-worker"
+    "get-current" "online-cpu" "exit-native" "spawn-native"
+    "swap-context" "verify-swap-context" "bench-swap-context"
+    "budgeted-task" "work-stealing" "shared-pointer" "sanitize"
+    "bitwise" "memory-fence" "native-thread" "set-"))
 
 (define *safepoint-excluded-exact-symbols*
   '(sys-poll

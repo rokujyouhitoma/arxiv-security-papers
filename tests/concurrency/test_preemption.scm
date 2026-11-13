@@ -480,6 +480,68 @@
 
 
 ;; -----------------------------------------------------------------------
+;; Group 11: True Dynamic Preemption with Compiler-Injected Safepoints (#808)
+;; -----------------------------------------------------------------------
+(write-string "--- Group 11: Dynamic Injected Safepoint Preemption (#808) ---\n")
+
+;; 1. Pure Scheme loop without manual poll halts via compiler-injected safepoint
+(let* ((t-killer3 (make-task-context))
+       (t-worker3 (make-task-context))
+       (worker-arena3 (make-task-arena 2048))
+       (pure-worker-iters (vector 0)))
+  (task-set-arena! t-worker3 worker-arena3)
+  (task-link! t-killer3 t-worker3)
+
+  ;; Pure loop WITHOUT any manual (%synapse-safepoint-poll!) calls:
+  ;; Rely 100% on pass-synapse-inject-safepoints compiler pass.
+  (let ((res (with-synapse-task-boundary t-worker3
+               (lambda ()
+                 (let pure-loop ((count 0))
+                   (if (< count 1000000)
+                       (begin
+                         (vector-set! pure-worker-iters 0 (+ (vector-ref pure-worker-iters 0) 1))
+                         (if (= count 5)
+                             (task-handle-termination! t-killer3 'peer_fault)
+                             #f)
+                         (pure-loop (+ count 1)))
+                       'completed-1m))))))
+    (assert-equal (task-state t-worker3) 'terminated "pure worker task transitioned to 'terminated via injected safepoint")
+    (assert-equal (task-reductions t-worker3) 0 "pure worker reductions zeroed upon termination")
+    (assert-equal (vector-ref pure-worker-iters 0) 6 "pure loop stopped immediately at count 5/6 (not 1,000,000)")
+    (assert-equal (car res) 'terminated "task boundary returned 'terminated from compiler-injected safepoint")
+    (assert-equal (arena-used-bytes worker-arena3) 0 "task arena reclaimed after safepoint exit")))
+
+;; 2. Multi-iteration nested loop without manual poll halts via loop backedge safepoint
+(let* ((t-killer4 (make-task-context))
+       (t-worker4 (make-task-context))
+       (worker-arena4 (make-task-arena 2048))
+       (nested-iters (vector 0)))
+  (task-set-arena! t-worker4 worker-arena4)
+  (task-link! t-killer4 t-worker4)
+
+  (let ((res (with-synapse-task-boundary t-worker4
+               (lambda ()
+                 (let outer ((i 0))
+                   (if (< i 100)
+                       (begin
+                         (let inner ((j 0))
+                           (if (< j 1000000)
+                               (begin
+                                 (vector-set! nested-iters 0 (+ (vector-ref nested-iters 0) 1))
+                                 (if (= j 4)
+                                     (task-handle-termination! t-killer4 'peer_crash)
+                                     #f)
+                                 (inner (+ j 1)))
+                               'inner-done))
+                         (outer (+ i 1)))
+                       'outer-done))))))
+    (assert-equal (task-state t-worker4) 'terminated "nested worker task transitioned to 'terminated")
+    (assert-equal (task-reductions t-worker4) 0 "nested worker reductions zeroed upon termination")
+    (assert-true (< (vector-ref nested-iters 0) 10) "nested loop stopped immediately after termination signal")
+    (assert-equal (car res) 'terminated "boundary caught termination during nested loop")
+    (assert-equal (arena-used-bytes worker-arena4) 0 "arena reclaimed after nested loop termination")))
+
+;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
 (write-string "=======================================================\n")

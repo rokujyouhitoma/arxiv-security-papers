@@ -10,10 +10,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | Medium | Closed | [closed/768-implement-define-pipeline-for-aot-repl-and-check-modes.md](closed/768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
-| **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | Medium | Closed | [closed/769-implement-picopass-provenance-tracing-and-auto-bisect.md](closed/769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
-| **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | High | Closed | [closed/770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](closed/770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
-| **808** | safepoint 有効化状態でのプリエンプション実機統合テストの追加と Makefile 除外設定の整理 | Feature | High | In Progress | [808-add-hardware-safepoint-preemption-tests-and-clean-makefile-disables.md](808-add-hardware-safepoint-preemption-tests-and-clean-makefile-disables.md) |
 | **809** | %synapse-safepoint-poll! の LIR コード未生成の修正および aarch64 向けスタブの提供 | Bug | High | New | [809-fix-safepoint-poll-lir-code-emission-and-add-aarch64-stub.md](809-fix-safepoint-poll-lir-code-emission-and-add-aarch64-stub.md) |
 | **810** | safepoint 挿入除外判定の名前プレフィックス廃止と declare no-safepoints 構文の導入 | Feature | Medium | New | [810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md](810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md) |
 | **811** | 型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入 | Feature | Medium | New | [811-warn-on-untyped-variable-crossing-channel-boundary.md](811-warn-on-untyped-variable-crossing-channel-boundary.md) |
@@ -21,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **808** | safepoint 有効化状態でのプリエンプション実機統合テストの追加と Makefile 除外設定の整理 | Feature | 2026-11-13 | [closed/808-add-hardware-safepoint-preemption-tests-and-clean-makefile-disables.md](closed/808-add-hardware-safepoint-preemption-tests-and-clean-makefile-disables.md) |
 | **770** | DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) | Feature | 2026-11-13 | [closed/770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md](closed/770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) |
 | **769** | 発火 Picopass 名の来歴追跡 (Provenance Tracking) トレーサと Rule-level Auto-Bisect 自動二分探索デバッグの実装 (DSN-33-01 T6.2) | Feature | 2026-11-13 | [closed/769-implement-picopass-provenance-tracing-and-auto-bisect.md](closed/769-implement-picopass-provenance-tracing-and-auto-bisect.md) |
 | **768** | define-pipeline による用途別パイプライン (AOT / REPL / Check-only) の宣言的編成と動的切り替え (DSN-33-01 T6.1) | Feature | 2026-11-13 | [closed/768-implement-define-pipeline-for-aot-repl-and-check-modes.md](closed/768-implement-define-pipeline-for-aot-repl-and-check-modes.md) |
