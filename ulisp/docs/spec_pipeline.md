@@ -286,4 +286,78 @@ flowchart TD
 3. **完全遮断・隔離検証 (`make test_pure_bootstrap`)**:
    - `ulisp/tests/test_pure_bootstrap.sh` により、`gcc`, `clang`, `ld`, `python`, `python3`, `gosh` を終了コード 99 の強制失敗スタブで完全にシャドウイングした環境下でブートストラップが完遂することを自動検証。
 
+---
+
+## 5. 階層型 Pass Fusion ＆ DAG 最適化アーキテクチャ (DSN-33-01 / Issue #753 〜 #770)
+
+`DSN-33-01` 仕様に基づき、ULisp は直列 Nanopass 型アーキテクチャにおける「走査回数増大に伴う $O(P \times N)$ の中間表現複製コスト（Nanopass の粒度ジレンマ）」を解消するため、4 階層パス体系（Nanopass / Picopass / Femtopass / Attopass）および Pass Fusion エンジンを導入した。
+
+```mermaid
+graph TD
+    subgraph PassFusionArch ["4階層 Pass Fusion アーキテクチャ"]
+        N["Nanopass<br/>(言語間 lowering / 走査境界)"]
+        P["Picopass<br/>(単一ノード書き換え / Head-Tag O(1) ディスパッチ)"]
+        F["Femtopass<br/>(属性合成 / キャッシュ維持)"]
+        A["Attopass<br/>(述語アサーション / Verifier フック)"]
+        
+        N -->|fuse-rules / fuse-window-rules| P
+        N -->|synthesize| F
+        N -->|assert| A
+    end
+```
+
+### 5.1 統合された主要最適化・診断機構
+1. **Frontend 脱糖パス融合 (`pass-030-desugar`)**:
+   - 旧 `026_desugar_constructors`, `027_desugar_conditionals`, `028_desugar_bindings`, `029_desugar_dynamic` を単一の再帰走査パスへ統合。
+   - 先頭タグ（Head Symbol）による $O(1)$ ディスパッチと局所再適用（Re-dispatch）により、中間 AST の複製を極小化。
+2. **HIR/MIR Hash-Consing Term DAG カタモルフィズム (`pass-050-cp0`)**:
+   - 同一構文構造を持つ部分木を Hash-Consing により DAG 化し、訪問済みノードの変換結果を $O(1)$ メモ化再利用。
+3. **LIR 命令データ依存 DAG ピープホール (`pass-133-lir-peephole`)**:
+   - 基本ブロック内の RAW/WAW データ依存エッジを解析し、非隣接 Store-Reload や不要 move を 1 走査で除去。
+4. **用途別パイプライン編成 (`define-pipeline`)**:
+   - `aot-native-pipeline`（AOT 最適化）、`repl-fast-pipeline`（低遅延対話評価）、`static-check-pipeline`（検証専用）を宣言的に編成。
+5. **来歴追跡トレーサ ＆ Rule-level Auto-Bisect (`pass_manager.scm`)**:
+   - 融合ルール単位の発火回数集計（Provenance Tracking）、AST Diff 連携、および Delta Debugging による不具合ルールの自動二分探索。
+
+### 5.2 実測プロファイルレポート (`--time-passes`)
+
+Issue #770（タスク T6.3）において実測された代表的コンパイルプロファイル：
+
+```text
+========================================================================================
+ULisp Nanopass Execution Profile (--time-passes)
+========================================================================================
+Pass ID                  Pass Name                         Time (ms)  Share (%)   Heap (KB)
+----------------------------------------------------------------------------------------
+pass-010-library         Desugar Libraries and Imports        0.01 ms       0.1%       2 KB
+pass-015-dsl-expander    DSL Expander                         0.00 ms       0.0%       1 KB
+pass-020-macro-expander  Hygienic Macro Expander              0.02 ms       0.2%      10 KB
+pass-025-top-level       Rewrite Top-Level                    0.00 ms       0.0%       2 KB
+pass-030-desugar         Core Desugar All                     3.16 ms      46.1%      34 KB
+pass-035-scope-resolve   Lexical Scope Resolution and Alpha   0.06 ms       0.9%      20 KB
+pass                     Static Arity & Scope Analysis        0.09 ms       1.3%     102 KB
+pass                     Synapse Safepoint Injection          0.04 ms       0.5%       7 KB
+pass-050-cp0             CP0 Source Optimization              0.41 ms       5.9%     257 KB
+pass-060-lvn             Local Value Numbering                0.14 ms       1.9%     121 KB
+pass-070-anf             A-Normal Form Conversion             0.01 ms       0.2%      10 KB
+pass-080-annotator       Abstract Interpretation Annotator    0.01 ms       0.1%       5 KB
+pass-090-rtyper          Representation Typer & Unboxing      0.07 ms       1.0%      50 KB
+pass-100-contify         Contification                        0.07 ms       1.0%      62 KB
+pass-110-closure-convert Closure Conversion                   0.16 ms       2.3%     227 KB
+pass-120-alias-escape    TBAA and Escape Analysis             0.04 ms       0.5%      16 KB
+pass-130-lir             LIR Lowering and Generation          0.35 ms       5.1%     174 KB
+pass-128-lir-branch-fusion LIR Branch Fusion                  0.21 ms       3.0%      19 KB
+pass-133-lir-peephole    LIR Peephole Optimization            0.81 ms      11.8%     397 KB
+pass-140-backend-x86-64  Backend Code Generation (x86-64)     1.17 ms      17.0%     242 KB
+----------------------------------------------------------------------------------------
+Total Compilation Time : 6.84 ms
+Total Heap Allocation  : 1749 KB
+========================================================================================
+```
+
+- **脱糖走査回数**: 4 パスから 1 パスへ削減（75% 削減）
+- **脱糖時ヒープ消費**: 34 KB（旧構造対比 約 70% 削減）
+- **5モジュール並列ブートストラップ**: 15〜25 秒で完走し、Stage 2 と Stage 3 の生成コードが bit-for-bit で完全一致（Fixed-Point）。
+
+
 

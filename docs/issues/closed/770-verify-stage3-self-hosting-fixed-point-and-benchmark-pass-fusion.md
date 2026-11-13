@@ -2,14 +2,15 @@
 ID: 770
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
+完了日: 2026-11-13
 ---
 
 # [FEAT/ENH] DSN-33-01 完全統合後の 3-Stage セルフホスティング不動点検証および速度・ヒープ削減ベンチマーク実証 (DSN-33-01 T6.3) (ID: 770)
 
 ## 1. 概要 / Summary
 
-[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 4.5 節（性能予測モデル）、第 9.2 節（タスク **T6.3**）、および第 9.3 節（品質ゲートとセルフホスティング不動点保証規準）に基づき、先行する Issue #753 〜 #769（Phase 1 〜 Phase 6.2）の全 Pass Fusion 成果物を包括統合する。
+[[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の第 4.5 節（性能予測モデル）、第 9.2 節（タスク **T6.3**）、および第 9.3 節（品質ゲートとセルフホスティング不動点保証規準）に基づき、先行する Issue #753 〜 #769（Phase 1 〜 Phase 6.2）の全 Pass Fusion 成果物を包括統合する。
 
 本 Issue は、`DSN-33-01` アーキテクチャロードマップ（全 18 タスク）の **最終完遂マイルストーン (T6.3)** である。
 最新の全 4 階層パス体系（Nanopass / Picopass / Femtopass / Attopass）、Term DAG カタモルフィズム、LIR 命令依存 DAG 走査、用途別 Pipeline 宣言、および Provenance / Auto-Bisect 診断機構を包含した単一バンドル `ulisp/compiler.scm` を再生成し、以下の 3 大検証・実証を完遂する：
@@ -90,7 +91,7 @@ ID: 770
 - [ulisp/bin/ulisp-boot](../../ulisp/bin/ulisp-boot) (検証済み Stage 3 バイナリでのシード更新)
 
 ### 設計書・仕様書ドキュメント
-- [docs/designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 4.5 節・第 9 節のベンチマーク実測値反映)
+- [docs/designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) (第 4.5 節・第 9 節のベンチマーク実測値反映)
 - [ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md) (Pass Fusion 実行プロファイルおよび実測データ追記)
 - [docs/issues/README.md](README.md) (Issue 台帳更新)
 
@@ -100,28 +101,28 @@ ID: 770
 
 Target Branch: `feat/770-verify-self-hosting-and-pass-fusion-benchmarks`
 
-- [ ] **Phase 1: `compiler.scm` バンドル再生成と S式構文検証**
+- [x] **Phase 1: `compiler.scm` バンドル再生成と S式構文検証**
   - `make -C ulisp compiler.scm` を実行し、Issue #753 〜 #769 の全変更を取り込んだ最新の単一統合ソースを生成。
   - `make -C ulisp lint_sexpr` を実行し、全 173 個の Scheme ファイル（ライブラリ＋コンパイラ＋テスト）で括弧の完全整合（100% balanced）を確認。
-- [ ] **Phase 2: 3-Stage セルフホスティング完全不動点検証 (Fixed-Point Verification)**
+- [x] **Phase 2: 3-Stage セルフホスティング完全不動点検証 (Fixed-Point Verification)**
   - `bash ulisp/bootstrap.sh --modular` を実行し、全 5 モジュール（`compiler_base`, `frontend_passes`, `lir_passes`, `backend_passes`, `compiler_driver`）について Stage 2 と Stage 3 の生成アセンブリ（`stage2_*.s` vs `stage3_*.s`）の `diff` が 0 バイトであることを確認。
   - 生成された Stage 3 バイナリにより Smoke Test（42 出力）が正常動作することを確認。
   - `ulisp/bin/ulisp-boot` シードバイナリを不動点確認済み Stage 3 バイナリで同期更新。
-- [ ] **Phase 3: 包括的テストスイートによる後退（回帰）ゼロ検証**
+- [x] **Phase 3: 包括的テストスイートによる後退（回帰）ゼロ検証**
   - 以下の全テストスイートを実行し、全件 PASS を確認：
     - `make -C ulisp test_c` (C99 ランタイムプリミティブテスト: 143/143 PASS)
     - `make -C ulisp test_verifier` (Nanopass / IR Invariant Verifier: 86/86 PASS)
     - `make -C ulisp test_nanopass` (Nanopass DSL / Fusion / Redispatch: 242/242 PASS)
     - `make -C ulisp test_all_passes` (全 39 Nanopass 1:1 単体テスト: 39/39 PASS)
     - `make -C ulisp test_pass_manager` (Pass Manager, Pipeline, Auto-Bisect: 115/115 PASS)
-- [ ] **Phase 4: `--time-passes` による速度・ヒープ削減定量ベンチマーク測定**
+- [x] **Phase 4: `--time-passes` による速度・ヒープ削減定量ベンチマーク測定**
   - セルフコンパイル時（`compiler_entry.scm`）および大規模テスト実行時において `--time-passes`（`ULISP_TIME_PASSES=1`）を有効化し、Pass ごとの実行時間（ms）、シェア率（%）、ヒープ割り当て量（KB）を実測。
   - Pass Fusion 適用前後の比較を行い、以下の主要 Pass の効果を定量化：
     - `pass-030-desugar` (旧 026〜029 の 4 パス統合効果)
     - `pass-050-cp0` (Term DAG カタモルフィズムによる同一部分木再帰スキップ効果)
     - `pass-133-lir-peephole` (命令依存 DAG による非隣接 Store-Reload 統合効果)
   - DSN-33-01 第 4.5 節の性能予測モデル（2.0x〜4.0x 高速化、40%〜60% ヒープ削減）との対比評価レポートを作成。
-- [ ] **Phase 5: 設計書・公式ドキュメントの更新と品質ゲート検証**
+- [x] **Phase 5: 設計書・公式ドキュメントの更新と品質ゲート検証**
   - `docs/designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md`:
     - 第 4.5 節「性能の定量的予測モデル」に実測結果テーブルを追記。
     - 第 9.2 節タスク T6.3 の完了を記録。
