@@ -256,7 +256,10 @@
   (set-car! *pipeline-time-passes* #f)
   (set-car! *pipeline-dump-ir* #f)
   (set-car! *pipeline-print-after-all* #f)
-  (set-car! *pipeline-disabled-passes* '()))
+  (set-car! *pipeline-disabled-passes* '())
+  (reset-disabled-picopasses!)
+  (reset-picopass-provenance!)
+  (disable-picopass-provenance!))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. Dynamic Pipeline Scheduling & Invariant Validation
@@ -601,6 +604,8 @@
                     (set-nanopass-in-pipeline-runner! prev-in-runner)
                     res)))))))
     (set-current-pass! id)
+    (if (or trace-mode (nanopass-trace-enabled?) (picopass-provenance-enabled?))
+        (reset-picopass-provenance!))
     (with-call-frame id input-ast
       (lambda ()
         (if (pipeline-time-passes?)
@@ -612,7 +617,7 @@
                    (elapsed-us (let ((d (- t1 t0))) (if (< d 0) 0 d)))
                    (alloc-bytes (let ((d (- m1 m0))) (if (< d 0) 0 d))))
               (record-pass-timing! id pname elapsed-us alloc-bytes)
-              (if (or trace-mode (nanopass-trace-enabled?))
+              (if (or trace-mode (nanopass-trace-enabled?) (picopass-provenance-enabled?))
                   (nanopass-display-ast-diff id input-ast output-ast))
               (if (or (pipeline-print-after-all?)
                       (eq? (pipeline-dump-ir) id)
@@ -623,7 +628,7 @@
                       (error "IR Verifier Invariant Violation in pass" id)))
               output-ast)
             (let ((output-ast (invoke-pass-fn)))
-              (if (or trace-mode (nanopass-trace-enabled?))
+              (if (or trace-mode (nanopass-trace-enabled?) (picopass-provenance-enabled?))
                   (nanopass-display-ast-diff id input-ast output-ast))
               (if (or (pipeline-print-after-all?)
                       (eq? (pipeline-dump-ir) id)
@@ -858,3 +863,54 @@
           (loop (cdr hooks)))))
   (init-default-pipeline-registry!)
   #t)
+
+;;; -----------------------------------------------------------------------
+;;; 10. Rule-level Auto-Bisect (Delta Debugging) Engine (DSN-33-01 T6.2)
+;;; -----------------------------------------------------------------------
+
+(define (picopass-split-list lst k)
+  (let loop ((rem lst) (i k) (acc '()))
+    (if (or (null? rem) (<= i 0))
+        (cons (reverse acc) rem)
+        (loop (cdr rem) (- i 1) (cons (car rem) acc)))))
+
+(define (auto-bisect-picopasses candidate-rules test-fn)
+  (let* ((rule-ids (map (lambda (r) (if (rule-descriptor? r) (rule-name r) r)) candidate-rules))
+         (saved-disabled (disabled-picopasses)))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (reset-disabled-picopasses!)
+        ;; Step 1: Does the bug reproduce when all candidate rules are enabled?
+        (if (test-fn)
+            #f ; Bug is not reproduced (test-fn passed)
+            ;; Step 2: Does the bug disappear when ALL candidate rules are disabled?
+            (let ((passes-when-all-disabled?
+                   (with-disabled-picopasses rule-ids test-fn)))
+              (if (not passes-when-all-disabled?)
+                  'cannot-isolate-all-disabled-still-fails
+                  ;; Step 3: Delta debugging recursive bisection
+                  (let bisect ((rules rule-ids))
+                    (cond
+                      ((null? rules) #f)
+                      ((= (length rules) 1)
+                       (car rules)) ; Isolated single culprit rule!
+                      (else
+                       (let* ((mid (quotient (length rules) 2))
+                              (split (picopass-split-list rules mid))
+                              (r1 (car split))
+                              (r2 (cdr split)))
+                         ;; Test if failure persists without r1
+                         (let ((fails-without-r1?
+                                (not (with-disabled-picopasses r1 test-fn))))
+                           (if fails-without-r1?
+                               (bisect r2)
+                               ;; Otherwise test if failure persists without r2
+                               (let ((fails-without-r2?
+                                      (not (with-disabled-picopasses r2 test-fn))))
+                                 (if fails-without-r2?
+                                     (bisect r1)
+                                     ;; Both subsets needed -> interaction bug
+                                     (list 'interaction r1 r2)))))))))))))
+      (lambda ()
+        (set-car! *disabled-picopasses* saved-disabled)))))

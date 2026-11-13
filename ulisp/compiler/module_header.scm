@@ -154,6 +154,22 @@
   assemble-and-build-elf-obj
   emit-x86-64-elf-obj
   build-x86-64-elf-obj
-  assemble-stream-to-elf-obj)
+  assemble-stream-to-elf-obj
+  record-picopass-firing!
+  picopass-enabled?
+  register-mandatory-picopass!
+  disable-picopass!
+  enable-picopass!
+  auto-bisect-picopasses
+  with-disabled-picopasses
+  reset-disabled-picopasses!
+  reset-picopass-provenance!
+  enable-picopass-provenance!
+  disable-picopass-provenance!
+  picopass-provenance-enabled?
+  get-picopass-firing-counts
+  get-picopass-firing-log
+  rule-mandatory?
+  picopass-mandatory?)
 
 

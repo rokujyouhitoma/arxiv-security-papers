@@ -57,7 +57,7 @@
       (list (car res) (reverse (caddr res))))))
 
 ;;; Expand a single rule in a nonterminal transformer
-(define (nanopass-expand-rule rule nt-name)
+(define (nanopass-expand-rule rule nt-name rule-name)
   (let* ((orig-pat (car rule))
          (rest (cdr rule))
          (has-guard? (and (pair? rest)
@@ -80,7 +80,9 @@
                   (cons 'and (append extra-guards (list orig-guard))))))
          (vars (nanopass-extract-pattern-vars pat))
          (body-expr (nanopass-expand-template raw-body vars)))
-    (list pat vars guard-expr body-expr)))
+    (if rule-name
+        (list pat vars guard-expr body-expr rule-name)
+        (list pat vars guard-expr body-expr))))
 
 ;;; Bind matched pattern variables from list `m-var` without allocating a closure
 (define (nanopass-var-ref-expr m-var idx)
@@ -167,53 +169,70 @@
          (vars (cadr r))
          (guard-expr (caddr r))
          (body-expr (cadddr r))
+         (rule-name (if (pair? (cddddr r)) (car (cddddr r)) #f))
          (m-var (unique-symbol "__m_"))
+         (body-with-firing
+          (if rule-name
+              (let ((res-val (unique-symbol "__rres_")))
+                (list 'let (list (list res-val body-expr))
+                      (list (string->symbol "record-picopass-firing!")
+                            (list 'quote rule-name)
+                            ir-var
+                            res-val)
+                      res-val))
+              body-expr))
          (wrapped-body
           (if (and loop-var fuel-var)
               (let ((res-var (unique-symbol "__rw_")))
-                (list 'let (list (list res-var body-expr))
+                (list 'let (list (list res-var body-with-firing))
                       (list 'if (list 'or
                                       (list 'eq? res-var ir-var)
                                       (list (string->symbol "equal?") res-var ir-var))
                             res-var
                             (list loop-var res-var (list '- fuel-var 1)))))
-              body-expr)))
-    (if (eq? guard-expr #t)
-        (list 'let (list (list m-var
-                               (list (string->symbol "nanopass-match-clause")
-                                     (list 'quote pat)
-                                     ir-var
-                                     (list 'quote vars)
-                                     nt-name)))
-              (list 'if m-var
-                    (nanopass-bind-matched-vars vars m-var wrapped-body)
-                    fallback-expr))
-        (let ((c-var (unique-symbol "__c_")))
-          (list 'let (list (list c-var
-                                 (list 'let (list (list m-var
-                                                        (list (string->symbol "nanopass-match-clause")
-                                                              (list 'quote pat)
-                                                              ir-var
-                                                              (list 'quote vars)
-                                                              nt-name)))
-                                        (list 'if m-var
-                                              (nanopass-bind-matched-vars
-                                               vars m-var
-                                               (list 'if guard-expr
-                                                     (list 'cons #t body-expr)
-                                                     #f))
-                                              #f))))
-                (list 'if c-var
-                      (if (and loop-var fuel-var)
-                          (let ((res-var (unique-symbol "__rw_")))
-                            (list 'let (list (list res-var (list 'cdr c-var)))
-                                  (list 'if (list 'or
-                                                  (list 'eq? res-var ir-var)
-                                                  (list (string->symbol "equal?") res-var ir-var))
-                                        res-var
-                                        (list loop-var res-var (list '- fuel-var 1)))))
-                          (list 'cdr c-var))
-                      fallback-expr))))))
+              body-with-firing))
+         (cascade-core
+          (if (eq? guard-expr #t)
+              (list 'let (list (list m-var
+                                     (list (string->symbol "nanopass-match-clause")
+                                           (list 'quote pat)
+                                           ir-var
+                                           (list 'quote vars)
+                                           nt-name)))
+                    (list 'if m-var
+                          (nanopass-bind-matched-vars vars m-var wrapped-body)
+                          fallback-expr))
+              (let ((c-var (unique-symbol "__c_")))
+                (list 'let (list (list c-var
+                                       (list 'let (list (list m-var
+                                                              (list (string->symbol "nanopass-match-clause")
+                                                                    (list 'quote pat)
+                                                                    ir-var
+                                                                    (list 'quote vars)
+                                                                    nt-name)))
+                                              (list 'if m-var
+                                                    (nanopass-bind-matched-vars
+                                                     vars m-var
+                                                     (list 'if guard-expr
+                                                           (list 'cons #t body-with-firing)
+                                                           #f))
+                                                    #f))))
+                      (list 'if c-var
+                            (if (and loop-var fuel-var)
+                                (let ((res-var (unique-symbol "__rw_")))
+                                  (list 'let (list (list res-var (list 'cdr c-var)))
+                                        (list 'if (list 'or
+                                                        (list 'eq? res-var ir-var)
+                                                        (list (string->symbol "equal?") res-var ir-var))
+                                              res-var
+                                              (list loop-var res-var (list '- fuel-var 1)))))
+                                (list 'cdr c-var))
+                            fallback-expr))))))
+    (if rule-name
+        (list 'if (list (string->symbol "picopass-enabled?") (list 'quote rule-name))
+              cascade-core
+              fallback-expr)
+        cascade-core)))
 
 ;;; Compile a list of expanded rules sequentially with fallback-expr at the tail
 (define (nanopass-compile-rule-list rs ir-var nt-name fallback-expr loop-var fuel-var)
@@ -253,8 +272,15 @@
           (reverse acc)
           (let* ((spec (car rem))
                  (desc (nanopass-lookup-rule spec))
-                 (clauses (rule-clauses desc)))
-            (loop (cdr rem) (append (reverse clauses) acc)))))))
+                 (r-name (if desc (rule-name desc) (if (symbol? spec) spec #f)))
+                 (clauses (if desc (rule-clauses desc) '())))
+            (let ((tagged-clauses
+                   (map (lambda (c)
+                          (if (and r-name (null? (cddddr c)))
+                              (append c (list r-name))
+                              c))
+                        clauses)))
+              (loop (cdr rem) (append (reverse tagged-clauses) acc))))))))
 
 ;;; Extract head opcode from a window pattern, e.g. ((%mov ...) . ,rest) -> '%mov
 (define (nanopass-window-rule-head-symbol pat)
@@ -282,10 +308,17 @@
             (cond
               ((symbol? spec)
                (let* ((desc (nanopass-lookup-rule spec))
-                      (cls (rule-clauses desc)))
-                 (loop (cdr rem) (append (reverse cls) acc))))
+                      (r-name (if desc (rule-name desc) spec))
+                      (cls (if desc (rule-clauses desc) '())))
+                 (let ((tagged-cls
+                        (map (lambda (c)
+                               (if (and r-name (null? (cddddr c)))
+                                   (append c (list r-name))
+                                   c))
+                             cls)))
+                   (loop (cdr rem) (append (reverse tagged-cls) acc)))))
               ((pair? spec)
-               (let ((expanded (nanopass-expand-rule spec 'InstWindow)))
+               (let ((expanded (nanopass-expand-rule spec 'InstWindow #f)))
                  (loop (cdr rem) (cons expanded acc))))
               (else
                (loop (cdr rem) acc))))))))
@@ -317,31 +350,48 @@
              (vars (cadr r))
              (guard-expr (caddr r))
              (body-expr (cadddr r))
+             (rule-name (if (pair? (cddddr r)) (car (cddddr r)) #f))
              (rest-chain (nanopass-compile-window-rule-chain (cdr rules) insts-var fallback-expr))
-             (m-var (unique-symbol "__wm_")))
-        (if (eq? guard-expr #t)
-            (list 'let (list (list m-var
-                                   (list (string->symbol "nanopass-match-clause")
-                                         (list 'quote pat)
-                                         insts-var
-                                         (list 'quote vars)
-                                         '(lambda (x) x))))
-                  (list 'if m-var
-                        (nanopass-bind-matched-vars vars m-var (list 'cons #t body-expr))
-                        rest-chain))
-            (list 'let (list (list m-var
-                                   (list (string->symbol "nanopass-match-clause")
-                                         (list 'quote pat)
-                                         insts-var
-                                         (list 'quote vars)
-                                         '(lambda (x) x))))
-                  (list 'if m-var
-                        (nanopass-bind-matched-vars
-                         vars m-var
-                         (list 'if guard-expr
-                               (list 'cons #t body-expr)
-                               rest-chain))
-                        rest-chain))))))
+             (m-var (unique-symbol "__wm_"))
+             (body-with-firing
+              (if rule-name
+                  (let ((rres (unique-symbol "__wr_")))
+                    (list 'let (list (list rres body-expr))
+                          (list (string->symbol "record-picopass-firing!")
+                                (list 'quote rule-name)
+                                insts-var
+                                rres)
+                          rres))
+                  body-expr))
+             (rule-core
+              (if (eq? guard-expr #t)
+                  (list 'let (list (list m-var
+                                         (list (string->symbol "nanopass-match-clause")
+                                               (list 'quote pat)
+                                               insts-var
+                                               (list 'quote vars)
+                                               '(lambda (x) x))))
+                        (list 'if m-var
+                              (nanopass-bind-matched-vars vars m-var (list 'cons #t body-with-firing))
+                              rest-chain))
+                  (list 'let (list (list m-var
+                                         (list (string->symbol "nanopass-match-clause")
+                                               (list 'quote pat)
+                                               insts-var
+                                               (list 'quote vars)
+                                               '(lambda (x) x))))
+                        (list 'if m-var
+                              (nanopass-bind-matched-vars
+                               vars m-var
+                               (list 'if guard-expr
+                                     (list 'cons #t body-with-firing)
+                                     rest-chain))
+                              rest-chain)))))
+        (if rule-name
+            (list 'if (list (string->symbol "picopass-enabled?") (list 'quote rule-name))
+                  rule-core
+                  rest-chain)
+            rule-core))))
 
 ;;; Build cascaded dispatch expression for window rules
 (define (nanopass-build-window-rules-cascade rules insts-var)
@@ -405,7 +455,7 @@
       ((and (pair? (car rem)) (memq (caar rem) '(redispatch :redispatch)))
        (loop (cdr rem) acc))
       (else
-       (let ((expanded (nanopass-expand-rule (car rem) nt-name)))
+       (let ((expanded (nanopass-expand-rule (car rem) nt-name #f)))
          (loop (cdr rem) (cons expanded acc)))))))
 
 ;;; Group rule descriptors by target NT name for top-level fuse-rules
@@ -844,11 +894,12 @@
          (in-attrs (cadddr parsed))
          (raw-clauses (car (cddddr (cdr parsed))))
          (opts (cadr (cddddr (cdr parsed))))
-         (expanded-rules (map (lambda (r) (nanopass-expand-rule r nt-name)) raw-clauses))
+         (expanded-rules (map (lambda (r) (nanopass-expand-rule r nt-name name)) raw-clauses))
          (opt-head-tags (let ((e (assq ':head-tags opts))) (if e (cdr e) #f)))
          (opt-reads (let ((e (assq ':reads opts))) (if e (cdr e) #f)))
          (opt-writes (let ((e (assq ':writes opts))) (if e (cdr e) #f)))
          (opt-eliminates (let ((e (assq ':eliminates opts))) (if e (cdr e) #f)))
+         (opt-mandatory (let ((e (or (assq ':mandatory opts) (assq ':mandatory? opts)))) (if e (cdr e) #f)))
          (head-tags (if opt-head-tags opt-head-tags (nanopass-extract-head-tags expanded-rules)))
          (reads (if opt-reads opt-reads (nanopass-extract-pattern-reads expanded-rules)))
          (writes (if opt-writes opt-writes (nanopass-extract-template-writes expanded-rules)))
@@ -866,25 +917,32 @@
                       cascade))
               cascade)))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
+    (if opt-mandatory
+        (register-mandatory-picopass! name))
     (nanopass-register-rule!
       (nanopass-make-rule-descriptor name rule-kind nt-name head-tags reads writes eliminates expanded-rules #f))
-    (list 'begin
-          (list 'define desc-var
-                (list (string->symbol "nanopass-make-rule-descriptor")
-                      (list 'quote name)
-                      (list 'quote rule-kind)
-                      (list 'quote nt-name)
-                      (list 'quote head-tags)
-                      (list 'quote reads)
-                      (list 'quote writes)
-                      (list 'quote eliminates)
-                      (list 'quote expanded-rules)
-                      #f))
-          (list 'define (cons name (if (null? in-attrs) '(ir) (cons 'ir in-attrs)))
-                proc-body)
-          (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
-          (list (string->symbol "nanopass-register-rule!") desc-var)
-          (list 'quote name))))
+    (cons 'begin
+          (append
+            (list (list 'define desc-var
+                        (list (string->symbol "nanopass-make-rule-descriptor")
+                              (list 'quote name)
+                              (list 'quote rule-kind)
+                              (list 'quote nt-name)
+                              (list 'quote head-tags)
+                              (list 'quote reads)
+                              (list 'quote writes)
+                              (list 'quote eliminates)
+                              (list 'quote expanded-rules)
+                              #f))
+                  (list 'define (cons name (if (null? in-attrs) '(ir) (cons 'ir in-attrs)))
+                        proc-body)
+                  (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
+                  (list (string->symbol "nanopass-register-rule!") desc-var))
+            (append
+              (if opt-mandatory
+                  (list (list (string->symbol "register-mandatory-picopass!") (list 'quote name)))
+                  '())
+              (list (list 'quote name)))))))
 
 (define (nanopass-expand-define-picopass form)
   (nanopass-expand-rule-dsl form 'pico))

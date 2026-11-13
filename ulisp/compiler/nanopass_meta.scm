@@ -599,6 +599,48 @@
 (define (enable-nanopass-trace!) (set-car! *nanopass-trace* #t))
 (define (disable-nanopass-trace!) (set-car! *nanopass-trace* #f))
 
+;;; Picopass Provenance Tracking & Firing History (DSN-33-01 T6.2 / Issue #769)
+(define *picopass-provenance-enabled* (cons #f '()))
+(define (picopass-provenance-enabled?) (car *picopass-provenance-enabled*))
+(define (enable-picopass-provenance!) (set-car! *picopass-provenance-enabled* #t))
+(define (disable-picopass-provenance!) (set-car! *picopass-provenance-enabled* #f))
+
+;; Firing counts alist: ((rule-name . count) ...)
+(define *picopass-firing-counts* (cons '() '()))
+
+;; Firing log entries: list of (rule-name old-ir new-ir)
+(define *picopass-firing-log* (cons '() '()))
+(define *picopass-max-log-entries* 500)
+
+(define (reset-picopass-provenance!)
+  (set-car! *picopass-firing-counts* '())
+  (set-car! *picopass-firing-log* '()))
+
+(define (record-picopass-firing! rule-name old-ir new-ir)
+  (if (car *picopass-provenance-enabled*)
+      (begin
+        ;; 1. Update firing counter
+        (let* ((counts (car *picopass-firing-counts*))
+               (entry (assq rule-name counts)))
+          (if entry
+              (set-cdr! entry (+ (cdr entry) 1))
+              (set-car! *picopass-firing-counts* (cons (cons rule-name 1) counts))))
+        ;; 2. Bounded log append
+        (let ((log (car *picopass-firing-log*)))
+          (if (< (length log) *picopass-max-log-entries*)
+              (set-car! *picopass-firing-log*
+                        (cons (list rule-name
+                                    (nanopass-truncate-expr old-ir 6 10)
+                                    (nanopass-truncate-expr new-ir 6 10))
+                              log))
+              #f)))))
+
+(define (get-picopass-firing-counts)
+  (car *picopass-firing-counts*))
+
+(define (get-picopass-firing-log)
+  (reverse (car *picopass-firing-log*)))
+
 ;;; Pipeline runner guard to prevent duplicate AST diff emission when a `define-pass`
 ;;; is invoked inside `run-single-pass` / `run-pass-pipeline` (DSN-33-01 T1.3).
 (define *nanopass-in-pipeline-runner* (cons #f '()))
@@ -649,6 +691,20 @@
           (write (nanopass-truncate-expr new-ir max-depth max-len))
           (nanopass-display-esc)
           (display "[0m\n")))
+    (let ((counts (get-picopass-firing-counts)))
+      (if (pair? counts)
+          (begin
+            (nanopass-display-esc)
+            (display "[33m  [Picopass Firings]:\n")
+            (nanopass-display-esc)
+            (display "[0m")
+            (for-each (lambda (entry)
+                        (display "    * ")
+                        (display (car entry))
+                        (display ": ")
+                        (display (cdr entry))
+                        (display " hit(s)\n"))
+                      counts))))
     (nanopass-display-esc)
     (display "[36m----------------------------------------------------------------------")
     (nanopass-display-esc)
@@ -1016,6 +1072,17 @@
 (define (rule-clauses r) (car (cddddr (cddddr r))))
 (define (rule-proc r) (cadr (cddddr (cddddr r))))
 
+(define *mandatory-picopasses* (cons '() '()))
+(define (mandatory-picopasses) (car *mandatory-picopasses*))
+(define (register-mandatory-picopass! name)
+  (if (not (memq name (car *mandatory-picopasses*)))
+      (set-car! *mandatory-picopasses* (cons name (car *mandatory-picopasses*)))))
+(define (picopass-mandatory? name)
+  (and (memq name (car *mandatory-picopasses*)) #t))
+(define (rule-mandatory? r)
+  (let ((name (if (rule-descriptor? r) (rule-name r) r)))
+    (picopass-mandatory? name)))
+
 (define (nanopass-rule-set-proc! r proc)
   (set-car! (cdr (cddddr (cddddr r))) proc))
 
@@ -1057,6 +1124,46 @@
 
 (define (rule-descriptor name-or-proc)
   (nanopass-lookup-rule name-or-proc))
+
+;;; -----------------------------------------------------------------------
+;;; Picopass Rule Disabling API (DSN-33-01 T6.2 / Issue #769)
+;;; -----------------------------------------------------------------------
+
+(define *disabled-picopasses* (cons '() '()))
+(define (disabled-picopasses) (car *disabled-picopasses*))
+
+(define (picopass-enabled? rule-name)
+  (if (null? (car *disabled-picopasses*))
+      #t
+      (not (memq rule-name (car *disabled-picopasses*)))))
+
+(define (disable-picopass! rule-name)
+  (if (picopass-mandatory? rule-name)
+      #f
+      (begin
+        (if (not (memq rule-name (car *disabled-picopasses*)))
+            (set-car! *disabled-picopasses* (cons rule-name (car *disabled-picopasses*))))
+        #t)))
+
+(define (enable-picopass! rule-name)
+  (set-car! *disabled-picopasses*
+            (let loop ((rs (car *disabled-picopasses*)))
+              (cond
+                ((null? rs) '())
+                ((eq? (car rs) rule-name) (loop (cdr rs)))
+                (else (cons (car rs) (loop (cdr rs))))))))
+
+(define (reset-disabled-picopasses!)
+  (set-car! *disabled-picopasses* '()))
+
+(define (with-disabled-picopasses rules thunk)
+  (let ((saved (car *disabled-picopasses*)))
+    (dynamic-wind
+      (lambda ()
+        (for-each disable-picopass! rules))
+      thunk
+      (lambda ()
+        (set-car! *disabled-picopasses* saved)))))
 
 ;;; Structured Assertion Failure Helper
 (define (picopass-fail message ir)

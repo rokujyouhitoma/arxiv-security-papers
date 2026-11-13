@@ -2603,6 +2603,48 @@
 (define (enable-nanopass-trace!) (set-car! *nanopass-trace* #t))
 (define (disable-nanopass-trace!) (set-car! *nanopass-trace* #f))
 
+;;; Picopass Provenance Tracking & Firing History (DSN-33-01 T6.2 / Issue #769)
+(define *picopass-provenance-enabled* (cons #f '()))
+(define (picopass-provenance-enabled?) (car *picopass-provenance-enabled*))
+(define (enable-picopass-provenance!) (set-car! *picopass-provenance-enabled* #t))
+(define (disable-picopass-provenance!) (set-car! *picopass-provenance-enabled* #f))
+
+;; Firing counts alist: ((rule-name . count) ...)
+(define *picopass-firing-counts* (cons '() '()))
+
+;; Firing log entries: list of (rule-name old-ir new-ir)
+(define *picopass-firing-log* (cons '() '()))
+(define *picopass-max-log-entries* 500)
+
+(define (reset-picopass-provenance!)
+  (set-car! *picopass-firing-counts* '())
+  (set-car! *picopass-firing-log* '()))
+
+(define (record-picopass-firing! rule-name old-ir new-ir)
+  (if (car *picopass-provenance-enabled*)
+      (begin
+        ;; 1. Update firing counter
+        (let* ((counts (car *picopass-firing-counts*))
+               (entry (assq rule-name counts)))
+          (if entry
+              (set-cdr! entry (+ (cdr entry) 1))
+              (set-car! *picopass-firing-counts* (cons (cons rule-name 1) counts))))
+        ;; 2. Bounded log append
+        (let ((log (car *picopass-firing-log*)))
+          (if (< (length log) *picopass-max-log-entries*)
+              (set-car! *picopass-firing-log*
+                        (cons (list rule-name
+                                    (nanopass-truncate-expr old-ir 6 10)
+                                    (nanopass-truncate-expr new-ir 6 10))
+                              log))
+              #f)))))
+
+(define (get-picopass-firing-counts)
+  (car *picopass-firing-counts*))
+
+(define (get-picopass-firing-log)
+  (reverse (car *picopass-firing-log*)))
+
 ;;; Pipeline runner guard to prevent duplicate AST diff emission when a `define-pass`
 ;;; is invoked inside `run-single-pass` / `run-pass-pipeline` (DSN-33-01 T1.3).
 (define *nanopass-in-pipeline-runner* (cons #f '()))
@@ -2653,6 +2695,20 @@
           (write (nanopass-truncate-expr new-ir max-depth max-len))
           (nanopass-display-esc)
           (display "[0m\n")))
+    (let ((counts (get-picopass-firing-counts)))
+      (if (pair? counts)
+          (begin
+            (nanopass-display-esc)
+            (display "[33m  [Picopass Firings]:\n")
+            (nanopass-display-esc)
+            (display "[0m")
+            (for-each (lambda (entry)
+                        (display "    * ")
+                        (display (car entry))
+                        (display ": ")
+                        (display (cdr entry))
+                        (display " hit(s)\n"))
+                      counts))))
     (nanopass-display-esc)
     (display "[36m----------------------------------------------------------------------")
     (nanopass-display-esc)
@@ -3020,6 +3076,17 @@
 (define (rule-clauses r) (car (cddddr (cddddr r))))
 (define (rule-proc r) (cadr (cddddr (cddddr r))))
 
+(define *mandatory-picopasses* (cons '() '()))
+(define (mandatory-picopasses) (car *mandatory-picopasses*))
+(define (register-mandatory-picopass! name)
+  (if (not (memq name (car *mandatory-picopasses*)))
+      (set-car! *mandatory-picopasses* (cons name (car *mandatory-picopasses*)))))
+(define (picopass-mandatory? name)
+  (and (memq name (car *mandatory-picopasses*)) #t))
+(define (rule-mandatory? r)
+  (let ((name (if (rule-descriptor? r) (rule-name r) r)))
+    (picopass-mandatory? name)))
+
 (define (nanopass-rule-set-proc! r proc)
   (set-car! (cdr (cddddr (cddddr r))) proc))
 
@@ -3061,6 +3128,46 @@
 
 (define (rule-descriptor name-or-proc)
   (nanopass-lookup-rule name-or-proc))
+
+;;; -----------------------------------------------------------------------
+;;; Picopass Rule Disabling API (DSN-33-01 T6.2 / Issue #769)
+;;; -----------------------------------------------------------------------
+
+(define *disabled-picopasses* (cons '() '()))
+(define (disabled-picopasses) (car *disabled-picopasses*))
+
+(define (picopass-enabled? rule-name)
+  (if (null? (car *disabled-picopasses*))
+      #t
+      (not (memq rule-name (car *disabled-picopasses*)))))
+
+(define (disable-picopass! rule-name)
+  (if (picopass-mandatory? rule-name)
+      #f
+      (begin
+        (if (not (memq rule-name (car *disabled-picopasses*)))
+            (set-car! *disabled-picopasses* (cons rule-name (car *disabled-picopasses*))))
+        #t)))
+
+(define (enable-picopass! rule-name)
+  (set-car! *disabled-picopasses*
+            (let loop ((rs (car *disabled-picopasses*)))
+              (cond
+                ((null? rs) '())
+                ((eq? (car rs) rule-name) (loop (cdr rs)))
+                (else (cons (car rs) (loop (cdr rs))))))))
+
+(define (reset-disabled-picopasses!)
+  (set-car! *disabled-picopasses* '()))
+
+(define (with-disabled-picopasses rules thunk)
+  (let ((saved (car *disabled-picopasses*)))
+    (dynamic-wind
+      (lambda ()
+        (for-each disable-picopass! rules))
+      thunk
+      (lambda ()
+        (set-car! *disabled-picopasses* saved)))))
 
 ;;; Structured Assertion Failure Helper
 (define (picopass-fail message ir)
@@ -4620,7 +4727,7 @@
       (list (car res) (reverse (caddr res))))))
 
 ;;; Expand a single rule in a nonterminal transformer
-(define (nanopass-expand-rule rule nt-name)
+(define (nanopass-expand-rule rule nt-name rule-name)
   (let* ((orig-pat (car rule))
          (rest (cdr rule))
          (has-guard? (and (pair? rest)
@@ -4643,7 +4750,9 @@
                   (cons 'and (append extra-guards (list orig-guard))))))
          (vars (nanopass-extract-pattern-vars pat))
          (body-expr (nanopass-expand-template raw-body vars)))
-    (list pat vars guard-expr body-expr)))
+    (if rule-name
+        (list pat vars guard-expr body-expr rule-name)
+        (list pat vars guard-expr body-expr))))
 
 ;;; Bind matched pattern variables from list `m-var` without allocating a closure
 (define (nanopass-var-ref-expr m-var idx)
@@ -4730,53 +4839,70 @@
          (vars (cadr r))
          (guard-expr (caddr r))
          (body-expr (cadddr r))
+         (rule-name (if (pair? (cddddr r)) (car (cddddr r)) #f))
          (m-var (unique-symbol "__m_"))
+         (body-with-firing
+          (if rule-name
+              (let ((res-val (unique-symbol "__rres_")))
+                (list 'let (list (list res-val body-expr))
+                      (list (string->symbol "record-picopass-firing!")
+                            (list 'quote rule-name)
+                            ir-var
+                            res-val)
+                      res-val))
+              body-expr))
          (wrapped-body
           (if (and loop-var fuel-var)
               (let ((res-var (unique-symbol "__rw_")))
-                (list 'let (list (list res-var body-expr))
+                (list 'let (list (list res-var body-with-firing))
                       (list 'if (list 'or
                                       (list 'eq? res-var ir-var)
                                       (list (string->symbol "equal?") res-var ir-var))
                             res-var
                             (list loop-var res-var (list '- fuel-var 1)))))
-              body-expr)))
-    (if (eq? guard-expr #t)
-        (list 'let (list (list m-var
-                               (list (string->symbol "nanopass-match-clause")
-                                     (list 'quote pat)
-                                     ir-var
-                                     (list 'quote vars)
-                                     nt-name)))
-              (list 'if m-var
-                    (nanopass-bind-matched-vars vars m-var wrapped-body)
-                    fallback-expr))
-        (let ((c-var (unique-symbol "__c_")))
-          (list 'let (list (list c-var
-                                 (list 'let (list (list m-var
-                                                        (list (string->symbol "nanopass-match-clause")
-                                                              (list 'quote pat)
-                                                              ir-var
-                                                              (list 'quote vars)
-                                                              nt-name)))
-                                        (list 'if m-var
-                                              (nanopass-bind-matched-vars
-                                               vars m-var
-                                               (list 'if guard-expr
-                                                     (list 'cons #t body-expr)
-                                                     #f))
-                                              #f))))
-                (list 'if c-var
-                      (if (and loop-var fuel-var)
-                          (let ((res-var (unique-symbol "__rw_")))
-                            (list 'let (list (list res-var (list 'cdr c-var)))
-                                  (list 'if (list 'or
-                                                  (list 'eq? res-var ir-var)
-                                                  (list (string->symbol "equal?") res-var ir-var))
-                                        res-var
-                                        (list loop-var res-var (list '- fuel-var 1)))))
-                          (list 'cdr c-var))
-                      fallback-expr))))))
+              body-with-firing))
+         (cascade-core
+          (if (eq? guard-expr #t)
+              (list 'let (list (list m-var
+                                     (list (string->symbol "nanopass-match-clause")
+                                           (list 'quote pat)
+                                           ir-var
+                                           (list 'quote vars)
+                                           nt-name)))
+                    (list 'if m-var
+                          (nanopass-bind-matched-vars vars m-var wrapped-body)
+                          fallback-expr))
+              (let ((c-var (unique-symbol "__c_")))
+                (list 'let (list (list c-var
+                                       (list 'let (list (list m-var
+                                                              (list (string->symbol "nanopass-match-clause")
+                                                                    (list 'quote pat)
+                                                                    ir-var
+                                                                    (list 'quote vars)
+                                                                    nt-name)))
+                                              (list 'if m-var
+                                                    (nanopass-bind-matched-vars
+                                                     vars m-var
+                                                     (list 'if guard-expr
+                                                           (list 'cons #t body-with-firing)
+                                                           #f))
+                                                    #f))))
+                      (list 'if c-var
+                            (if (and loop-var fuel-var)
+                                (let ((res-var (unique-symbol "__rw_")))
+                                  (list 'let (list (list res-var (list 'cdr c-var)))
+                                        (list 'if (list 'or
+                                                        (list 'eq? res-var ir-var)
+                                                        (list (string->symbol "equal?") res-var ir-var))
+                                              res-var
+                                              (list loop-var res-var (list '- fuel-var 1)))))
+                                (list 'cdr c-var))
+                            fallback-expr))))))
+    (if rule-name
+        (list 'if (list (string->symbol "picopass-enabled?") (list 'quote rule-name))
+              cascade-core
+              fallback-expr)
+        cascade-core)))
 
 ;;; Compile a list of expanded rules sequentially with fallback-expr at the tail
 (define (nanopass-compile-rule-list rs ir-var nt-name fallback-expr loop-var fuel-var)
@@ -4816,8 +4942,15 @@
           (reverse acc)
           (let* ((spec (car rem))
                  (desc (nanopass-lookup-rule spec))
-                 (clauses (rule-clauses desc)))
-            (loop (cdr rem) (append (reverse clauses) acc)))))))
+                 (r-name (if desc (rule-name desc) (if (symbol? spec) spec #f)))
+                 (clauses (if desc (rule-clauses desc) '())))
+            (let ((tagged-clauses
+                   (map (lambda (c)
+                          (if (and r-name (null? (cddddr c)))
+                              (append c (list r-name))
+                              c))
+                        clauses)))
+              (loop (cdr rem) (append (reverse tagged-clauses) acc))))))))
 
 ;;; Extract head opcode from a window pattern, e.g. ((%mov ...) . ,rest) -> '%mov
 (define (nanopass-window-rule-head-symbol pat)
@@ -4845,10 +4978,17 @@
             (cond
               ((symbol? spec)
                (let* ((desc (nanopass-lookup-rule spec))
-                      (cls (rule-clauses desc)))
-                 (loop (cdr rem) (append (reverse cls) acc))))
+                      (r-name (if desc (rule-name desc) spec))
+                      (cls (if desc (rule-clauses desc) '())))
+                 (let ((tagged-cls
+                        (map (lambda (c)
+                               (if (and r-name (null? (cddddr c)))
+                                   (append c (list r-name))
+                                   c))
+                             cls)))
+                   (loop (cdr rem) (append (reverse tagged-cls) acc)))))
               ((pair? spec)
-               (let ((expanded (nanopass-expand-rule spec 'InstWindow)))
+               (let ((expanded (nanopass-expand-rule spec 'InstWindow #f)))
                  (loop (cdr rem) (cons expanded acc))))
               (else
                (loop (cdr rem) acc))))))))
@@ -4880,31 +5020,48 @@
              (vars (cadr r))
              (guard-expr (caddr r))
              (body-expr (cadddr r))
+             (rule-name (if (pair? (cddddr r)) (car (cddddr r)) #f))
              (rest-chain (nanopass-compile-window-rule-chain (cdr rules) insts-var fallback-expr))
-             (m-var (unique-symbol "__wm_")))
-        (if (eq? guard-expr #t)
-            (list 'let (list (list m-var
-                                   (list (string->symbol "nanopass-match-clause")
-                                         (list 'quote pat)
-                                         insts-var
-                                         (list 'quote vars)
-                                         '(lambda (x) x))))
-                  (list 'if m-var
-                        (nanopass-bind-matched-vars vars m-var (list 'cons #t body-expr))
-                        rest-chain))
-            (list 'let (list (list m-var
-                                   (list (string->symbol "nanopass-match-clause")
-                                         (list 'quote pat)
-                                         insts-var
-                                         (list 'quote vars)
-                                         '(lambda (x) x))))
-                  (list 'if m-var
-                        (nanopass-bind-matched-vars
-                         vars m-var
-                         (list 'if guard-expr
-                               (list 'cons #t body-expr)
-                               rest-chain))
-                        rest-chain))))))
+             (m-var (unique-symbol "__wm_"))
+             (body-with-firing
+              (if rule-name
+                  (let ((rres (unique-symbol "__wr_")))
+                    (list 'let (list (list rres body-expr))
+                          (list (string->symbol "record-picopass-firing!")
+                                (list 'quote rule-name)
+                                insts-var
+                                rres)
+                          rres))
+                  body-expr))
+             (rule-core
+              (if (eq? guard-expr #t)
+                  (list 'let (list (list m-var
+                                         (list (string->symbol "nanopass-match-clause")
+                                               (list 'quote pat)
+                                               insts-var
+                                               (list 'quote vars)
+                                               '(lambda (x) x))))
+                        (list 'if m-var
+                              (nanopass-bind-matched-vars vars m-var (list 'cons #t body-with-firing))
+                              rest-chain))
+                  (list 'let (list (list m-var
+                                         (list (string->symbol "nanopass-match-clause")
+                                               (list 'quote pat)
+                                               insts-var
+                                               (list 'quote vars)
+                                               '(lambda (x) x))))
+                        (list 'if m-var
+                              (nanopass-bind-matched-vars
+                               vars m-var
+                               (list 'if guard-expr
+                                     (list 'cons #t body-with-firing)
+                                     rest-chain))
+                              rest-chain)))))
+        (if rule-name
+            (list 'if (list (string->symbol "picopass-enabled?") (list 'quote rule-name))
+                  rule-core
+                  rest-chain)
+            rule-core))))
 
 ;;; Build cascaded dispatch expression for window rules
 (define (nanopass-build-window-rules-cascade rules insts-var)
@@ -4968,7 +5125,7 @@
       ((and (pair? (car rem)) (memq (caar rem) '(redispatch :redispatch)))
        (loop (cdr rem) acc))
       (else
-       (let ((expanded (nanopass-expand-rule (car rem) nt-name)))
+       (let ((expanded (nanopass-expand-rule (car rem) nt-name #f)))
          (loop (cdr rem) (cons expanded acc)))))))
 
 ;;; Group rule descriptors by target NT name for top-level fuse-rules
@@ -5407,11 +5564,12 @@
          (in-attrs (cadddr parsed))
          (raw-clauses (car (cddddr (cdr parsed))))
          (opts (cadr (cddddr (cdr parsed))))
-         (expanded-rules (map (lambda (r) (nanopass-expand-rule r nt-name)) raw-clauses))
+         (expanded-rules (map (lambda (r) (nanopass-expand-rule r nt-name name)) raw-clauses))
          (opt-head-tags (let ((e (assq ':head-tags opts))) (if e (cdr e) #f)))
          (opt-reads (let ((e (assq ':reads opts))) (if e (cdr e) #f)))
          (opt-writes (let ((e (assq ':writes opts))) (if e (cdr e) #f)))
          (opt-eliminates (let ((e (assq ':eliminates opts))) (if e (cdr e) #f)))
+         (opt-mandatory (let ((e (or (assq ':mandatory opts) (assq ':mandatory? opts)))) (if e (cdr e) #f)))
          (head-tags (if opt-head-tags opt-head-tags (nanopass-extract-head-tags expanded-rules)))
          (reads (if opt-reads opt-reads (nanopass-extract-pattern-reads expanded-rules)))
          (writes (if opt-writes opt-writes (nanopass-extract-template-writes expanded-rules)))
@@ -5429,25 +5587,32 @@
                       cascade))
               cascade)))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
+    (if opt-mandatory
+        (register-mandatory-picopass! name))
     (nanopass-register-rule!
       (nanopass-make-rule-descriptor name rule-kind nt-name head-tags reads writes eliminates expanded-rules #f))
-    (list 'begin
-          (list 'define desc-var
-                (list (string->symbol "nanopass-make-rule-descriptor")
-                      (list 'quote name)
-                      (list 'quote rule-kind)
-                      (list 'quote nt-name)
-                      (list 'quote head-tags)
-                      (list 'quote reads)
-                      (list 'quote writes)
-                      (list 'quote eliminates)
-                      (list 'quote expanded-rules)
-                      #f))
-          (list 'define (cons name (if (null? in-attrs) '(ir) (cons 'ir in-attrs)))
-                proc-body)
-          (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
-          (list (string->symbol "nanopass-register-rule!") desc-var)
-          (list 'quote name))))
+    (cons 'begin
+          (append
+            (list (list 'define desc-var
+                        (list (string->symbol "nanopass-make-rule-descriptor")
+                              (list 'quote name)
+                              (list 'quote rule-kind)
+                              (list 'quote nt-name)
+                              (list 'quote head-tags)
+                              (list 'quote reads)
+                              (list 'quote writes)
+                              (list 'quote eliminates)
+                              (list 'quote expanded-rules)
+                              #f))
+                  (list 'define (cons name (if (null? in-attrs) '(ir) (cons 'ir in-attrs)))
+                        proc-body)
+                  (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
+                  (list (string->symbol "nanopass-register-rule!") desc-var))
+            (append
+              (if opt-mandatory
+                  (list (list (string->symbol "register-mandatory-picopass!") (list 'quote name)))
+                  '())
+              (list (list 'quote name)))))))
 
 (define (nanopass-expand-define-picopass form)
   (nanopass-expand-rule-dsl form 'pico))
@@ -6182,7 +6347,10 @@
   (set-car! *pipeline-time-passes* #f)
   (set-car! *pipeline-dump-ir* #f)
   (set-car! *pipeline-print-after-all* #f)
-  (set-car! *pipeline-disabled-passes* '()))
+  (set-car! *pipeline-disabled-passes* '())
+  (reset-disabled-picopasses!)
+  (reset-picopass-provenance!)
+  (disable-picopass-provenance!))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. Dynamic Pipeline Scheduling & Invariant Validation
@@ -6527,6 +6695,8 @@
                     (set-nanopass-in-pipeline-runner! prev-in-runner)
                     res)))))))
     (set-current-pass! id)
+    (if (or trace-mode (nanopass-trace-enabled?) (picopass-provenance-enabled?))
+        (reset-picopass-provenance!))
     (with-call-frame id input-ast
       (lambda ()
         (if (pipeline-time-passes?)
@@ -6538,7 +6708,7 @@
                    (elapsed-us (let ((d (- t1 t0))) (if (< d 0) 0 d)))
                    (alloc-bytes (let ((d (- m1 m0))) (if (< d 0) 0 d))))
               (record-pass-timing! id pname elapsed-us alloc-bytes)
-              (if (or trace-mode (nanopass-trace-enabled?))
+              (if (or trace-mode (nanopass-trace-enabled?) (picopass-provenance-enabled?))
                   (nanopass-display-ast-diff id input-ast output-ast))
               (if (or (pipeline-print-after-all?)
                       (eq? (pipeline-dump-ir) id)
@@ -6549,7 +6719,7 @@
                       (error "IR Verifier Invariant Violation in pass" id)))
               output-ast)
             (let ((output-ast (invoke-pass-fn)))
-              (if (or trace-mode (nanopass-trace-enabled?))
+              (if (or trace-mode (nanopass-trace-enabled?) (picopass-provenance-enabled?))
                   (nanopass-display-ast-diff id input-ast output-ast))
               (if (or (pipeline-print-after-all?)
                       (eq? (pipeline-dump-ir) id)
@@ -6784,6 +6954,57 @@
           (loop (cdr hooks)))))
   (init-default-pipeline-registry!)
   #t)
+
+;;; -----------------------------------------------------------------------
+;;; 10. Rule-level Auto-Bisect (Delta Debugging) Engine (DSN-33-01 T6.2)
+;;; -----------------------------------------------------------------------
+
+(define (picopass-split-list lst k)
+  (let loop ((rem lst) (i k) (acc '()))
+    (if (or (null? rem) (<= i 0))
+        (cons (reverse acc) rem)
+        (loop (cdr rem) (- i 1) (cons (car rem) acc)))))
+
+(define (auto-bisect-picopasses candidate-rules test-fn)
+  (let* ((rule-ids (map (lambda (r) (if (rule-descriptor? r) (rule-name r) r)) candidate-rules))
+         (saved-disabled (disabled-picopasses)))
+    (dynamic-wind
+      (lambda () #f)
+      (lambda ()
+        (reset-disabled-picopasses!)
+        ;; Step 1: Does the bug reproduce when all candidate rules are enabled?
+        (if (test-fn)
+            #f ; Bug is not reproduced (test-fn passed)
+            ;; Step 2: Does the bug disappear when ALL candidate rules are disabled?
+            (let ((passes-when-all-disabled?
+                   (with-disabled-picopasses rule-ids test-fn)))
+              (if (not passes-when-all-disabled?)
+                  'cannot-isolate-all-disabled-still-fails
+                  ;; Step 3: Delta debugging recursive bisection
+                  (let bisect ((rules rule-ids))
+                    (cond
+                      ((null? rules) #f)
+                      ((= (length rules) 1)
+                       (car rules)) ; Isolated single culprit rule!
+                      (else
+                       (let* ((mid (quotient (length rules) 2))
+                              (split (picopass-split-list rules mid))
+                              (r1 (car split))
+                              (r2 (cdr split)))
+                         ;; Test if failure persists without r1
+                         (let ((fails-without-r1?
+                                (not (with-disabled-picopasses r1 test-fn))))
+                           (if fails-without-r1?
+                               (bisect r2)
+                               ;; Otherwise test if failure persists without r2
+                               (let ((fails-without-r2?
+                                      (not (with-disabled-picopasses r2 test-fn))))
+                                 (if fails-without-r2?
+                                     (bisect r1)
+                                     ;; Both subsets needed -> interaction bug
+                                     (list 'interaction r1 r2)))))))))))))
+      (lambda ()
+        (set-car! *disabled-picopasses* saved-disabled)))))
 ;;; =======================================================================
 ;;; ULisp Compiler: Generic Dataflow Analysis Framework & Lattice Engine
 ;;; Conforms to DSN-33 Architecture Specification & Issue #599
