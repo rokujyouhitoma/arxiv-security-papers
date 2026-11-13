@@ -26,11 +26,13 @@
   (epoch-box  %registry-entry-epoch-box))
 
 (define (registry-entry-target entry)
+  (declare (no-safepoints))
   (if (not (registry-entry? entry))
       (error "registry-entry-target: expected <registry-entry> (CWE-843)" entry)
       (atomic-ref (%registry-entry-target-box entry))))
 
 (define (registry-entry-epoch entry)
+  (declare (no-safepoints))
   (if (not (registry-entry? entry))
       (error "registry-entry-epoch: expected <registry-entry> (CWE-843)" entry)
       (atomic-ref (%registry-entry-epoch-box entry))))
@@ -51,7 +53,8 @@
 ;; -----------------------------------------------------------------------
 
 (define make-process-registry
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (make-process-registry *registry-max-entries*))
     ((max-capacity)
@@ -71,14 +74,16 @@
                      (let ((cur (atomic-ref *active-synapse-registries-box*)))
                        (if (not (atomic-cas! *active-synapse-registries-box* cur (cons reg cur)))
                            (retry)
-                           reg)))))))))))
+                           reg))))))))))))
 
 (define *default-synapse-registry-box* (vector (make-process-registry)))
 
 (define (current-synapse-registry)
+  (declare (no-safepoints))
   (vector-ref *default-synapse-registry-box* 0))
 
 (define (set-default-synapse-registry! reg)
+  (declare (no-safepoints))
   (if (not (process-registry? reg))
       (error "set-default-synapse-registry!: expected <process-registry> (CWE-843)" reg)
       (begin
@@ -109,7 +114,8 @@
 ;; Atomically registers `target` under `name` (Symbol).
 ;; Returns #t on success, #f if `name` is already registered (no overwrite).
 (define synapse-register!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((name target)
      (synapse-register! (current-synapse-registry) name target))
     ((reg name target)
@@ -141,13 +147,14 @@
                                        (begin
                                          (atomic-fetch-add! cnt-box 1)
                                          (atomic-fetch-add! (%process-registry-epoch-box reg) 1)
-                                         #t)))))))))))))))
+                                         #t))))))))))))))))
 
 ;; (synapse-unregister! [reg] name)
 ;; Atomically removes registration for `name`.
 ;; Returns #t if removed, #f if not found.
 (define synapse-unregister!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((name)
      (synapse-unregister! (current-synapse-registry) name))
     ((reg name)
@@ -169,13 +176,14 @@
                              (begin
                                (atomic-fetch-add! (%process-registry-count-box reg) -1)
                                (atomic-fetch-add! (%process-registry-epoch-box reg) 1)
-                               #t))))))))))))
+                               #t)))))))))))))
 
 ;; (synapse-unregister-target! [reg] target)
 ;; Atomically removes any registration whose target matches `target` (or same task tid).
 ;; Returns the number of removed entries.
 (define synapse-unregister-target!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((target)
      (let loop ((regs (atomic-ref *active-synapse-registries-box*)) (total 0))
        (if (null? regs)
@@ -223,13 +231,14 @@
                                    (atomic-fetch-add! cnt-box (- 0 num))
                                    (atomic-fetch-add! (%process-registry-epoch-box reg) 1)
                                    (bucket-loop (+ i 1) (+ total-removed num)))))))))
-                 total-removed)))))))))
+                 total-removed))))))))))
 
 ;; (synapse-whereis [reg] name)
 ;; Resolves `name` to its current target.
 ;; Returns target if registered, #f if not found.
 (define synapse-whereis
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((name)
      (synapse-whereis (current-synapse-registry) name))
     ((reg name)
@@ -245,14 +254,15 @@
                (if pair
                    (let ((entry (cdr pair)))
                      (atomic-ref (%registry-entry-target-box entry)))
-                   #f)))))))
+                   #f))))))))
 
 ;; (synapse-rebind! [reg] name target)
 ;; Atomically updates the target for `name`. If `name` was already registered,
 ;; swaps the target in-place; if not found, inserts a new entry.
 ;; Returns #t.
 (define synapse-rebind!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((name target)
      (synapse-rebind! (current-synapse-registry) name target))
     ((reg name target)
@@ -286,12 +296,13 @@
                                  (begin
                                    (atomic-fetch-add! (%process-registry-count-box reg) 1)
                                    (atomic-fetch-add! (%process-registry-epoch-box reg) 1)
-                                   #t)))))))))))))
+                                   #t))))))))))))))
 
 ;; (synapse-registered-names [reg])
 ;; Returns a list of all currently registered symbol names.
 (define synapse-registered-names
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (synapse-registered-names (current-synapse-registry)))
     ((reg)
@@ -307,23 +318,25 @@
                    (let a-loop ((xs alist) (names acc))
                      (if (null? xs)
                          (b-loop (+ i 1) names)
-                         (a-loop (cdr xs) (cons (caar xs) names))))))))))))
+                         (a-loop (cdr xs) (cons (caar xs) names)))))))))))))
 
 ;; (synapse-registry-count [reg])
 ;; Returns the current number of registered names.
 (define synapse-registry-count
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (synapse-registry-count (current-synapse-registry)))
     ((reg)
      (if (not (process-registry? reg))
          (error "synapse-registry-count: expected <process-registry> (CWE-843)" reg)
-         (atomic-ref (%process-registry-count-box reg))))))
+         (atomic-ref (%process-registry-count-box reg)))))))
 
 ;; (synapse-registry-clear! [reg])
 ;; Clears all entries from the registry.
 (define synapse-registry-clear!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (synapse-registry-clear! (current-synapse-registry)))
     ((reg)
@@ -339,7 +352,7 @@
                  (begin
                    (atomic-set! (%process-registry-count-box reg) 0)
                    (atomic-fetch-add! (%process-registry-epoch-box reg) 1)
-                   #t))))))))
+                   #t)))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 5. Non-Blocking Transparent Message Routing (CWE-833 Deadlock Free)
@@ -352,7 +365,8 @@
 ;;   'not_found     : `name` is not registered
 ;;   'dead_process  : Target channel is closed or task is terminated/panicked
 (define synapse-send-named!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((name msg)
      (synapse-send-named! (current-synapse-registry) name msg))
     ((reg name msg)
@@ -384,13 +398,14 @@
               #t)
              ;; Unknown target type
              (else
-              #t)))))))
+              #t))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 6. Supervisor Integration Hook (Issue #667)
 ;; -----------------------------------------------------------------------
 
 (define (synapse-enable-supervisor-rebind!)
+  (declare (no-safepoints))
   (guard (exn (else #f))
     (begin
       (vector-set! *supervisor-registry-rebind-box* 0
@@ -406,6 +421,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (synapse-enable-termination-unregister!)
+  (declare (no-safepoints))
   (guard (exn (else #f))
     (begin
       (if (vector? *task-termination-registry-unregister-hook*)

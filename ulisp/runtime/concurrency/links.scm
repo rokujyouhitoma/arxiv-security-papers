@@ -22,12 +22,15 @@
 (define *monitor-next-id* (make-atomic-box 1))
 
 (define (allocate-monitor-ref!)
+  (declare (no-safepoints))
   (atomic-fetch-add! *monitor-next-id* 1))
 
 (define (monitor-next-id-current)
+  (declare (no-safepoints))
   (atomic-ref *monitor-next-id*))
 
 (define (monitor-reset-next-id! val)
+  (declare (no-safepoints))
   (if (not (integer? val))
       (error "monitor-reset-next-id!: val must be an integer" val)
       (atomic-set! *monitor-next-id* val)))
@@ -63,6 +66,7 @@
                 (retry)))))))
 
 (define (task-linked? task-a task-b)
+  (declare (no-safepoints))
   (if (or (not (task-context? task-a)) (not (task-context? task-b)))
       (error "task-linked?: expected <task-context>" (list task-a task-b))
       (if (eq? task-a task-b)
@@ -92,6 +96,7 @@
       (task-handle-termination! live-task 'noproc #f)))
 
 (define (task-link! task-a task-b)
+  (declare (no-safepoints))
   (if (or (not (task-context? task-a)) (not (task-context? task-b)))
       (error "task-link!: expected <task-context> (CWE-843)" (list task-a task-b))
       (if (eq? task-a task-b)
@@ -111,6 +116,7 @@
                       #t)))))))
 
 (define (task-unlink! task-a task-b)
+  (declare (no-safepoints))
   (if (or (not (task-context? task-a)) (not (task-context? task-b)))
       (error "task-unlink!: expected <task-context> (CWE-843)" (list task-a task-b))
       (if (eq? task-a task-b)
@@ -127,6 +133,7 @@
 (define *monitor-down-dispatch-hook-box* (make-atomic-box #f))
 
 (define (set-monitor-down-dispatch-hook! proc)
+  (declare (no-safepoints))
   (atomic-set! *monitor-down-dispatch-hook-box* proc))
 
 (define (%deliver-monitor-down! observer-task notify-channel ref target-tid reason wake-hook)
@@ -145,7 +152,8 @@
                     #f)))))))
 
 (define task-monitor
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((observer-task target-task)
      (task-monitor observer-task target-task #f))
     ((observer-task target-task notify-channel)
@@ -182,9 +190,10 @@
                                    (if (atomic-cas! obs-box cur (cons (cons ref target-task) cur))
                                        #t
                                        (retry-obs))))))
-                       ref)))))))))
+                       ref))))))))))
 
 (define (task-demonitor observer-task ref)
+  (declare (no-safepoints))
   (if (not (task-context? observer-task))
       (error "task-demonitor: expected <task-context>" observer-task)
       (if (not (integer? ref))
@@ -245,7 +254,8 @@
   #t)
 
 (define task-handle-termination!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task reason)
      (task-handle-termination! task reason #f))
     ((task reason wake-hook)
@@ -330,10 +340,11 @@
 
                  ;; Step 6: Recycle task context to worker-local object pool (Issue #803)
                  (release-task-context! task)
-                 #t)))))))
+                 #t))))))))
 
 (define task-exit!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task)
      (if (task-context? task)
          (let ((meta (task-meta-fast task)))
@@ -352,7 +363,7 @@
          (if (and (eq? reason 'normal) (not wake-hook) (not (task-meta-fast task)))
              (%task-fast-normal-termination! task)
              (task-handle-termination! task reason wake-hook))
-         (error "task-exit!: expected <task-context>" task)))))
+         (error "task-exit!: expected <task-context>" task))))))
 
 ;; Connect task-handle-termination! into global exit hook box (#741)
 (vector-set! *task-exit-hook-box* 0

@@ -342,19 +342,26 @@
 (newline)
 (display "--- Group 8: Exclusion Rules & Trivial Accessor Pruning (#796) ---\n")
 
-;; 8.1 Runtime internal procedures must NOT receive safepoint prologue
-(let* ((forms '((define (task-internal-helper a b) (display a) (+ a b))
+;; 8.1 Name prefix deprecation (#810): user procedures (make-*, task-*, etc.) DO receive safepoints
+;; while %-prefixed and exact excluded symbols (or procedures with declare) do NOT.
+(let* ((forms '((define (make-tree n) (display n) (+ n 1))
                 (define (%synapse-lowlevel-call x) (display x) x)
-                (define (futex-atomic-op f) (display f) 0)))
+                (define (sys-poll) (display "poll") 0)
+                (define (task-internal-helper a b)
+                  (declare (no-safepoints))
+                  (display a)
+                  (+ a b))))
        (trans (inject-safepoints-pass forms)))
-  (assert-false "8.1 task-* internal procedure does not receive safepoint prologue"
-                (safepoint-poll-form? (caddr (car trans))))
+  (assert-true "8.1 make-tree user procedure receives safepoint prologue"
+               (safepoint-poll-form? (caddr (car trans))))
   (assert-false "8.2 %synapse-* internal procedure does not receive safepoint prologue"
                 (safepoint-poll-form? (caddr (cadr trans))))
-  (assert-false "8.3 futex-* internal procedure does not receive safepoint prologue"
-                (safepoint-poll-form? (caddr (caddr trans)))))
+  (assert-false "8.3 sys-poll exact excluded symbol does not receive safepoint prologue"
+                (safepoint-poll-form? (caddr (caddr trans))))
+  (assert-false "8.3.1 task-internal-helper with declare no-safepoints skips safepoint"
+                (safepoint-poll-form? (caddr (cadddr trans)))))
 
-;; 8.2 Explicit (declare (no-safepoints)) skips safepoint injection
+;; 8.2 Explicit (declare (no-safepoints)) skips safepoint injection and strips declare (#810)
 (let* ((forms '((define (explicitly-exempt x y)
                   (declare (no-safepoints))
                   (display x)
@@ -367,7 +374,20 @@
   (assert-false "8.4 explicit declare no-safepoints skips define prologue safepoint"
                 (safepoint-poll-form? (caddr (car trans))))
   (assert-false "8.5 explicit declare no-safepoints skips lambda prologue safepoint"
-                (safepoint-poll-form? (cadr (cadr trans)))))
+                (and (pair? (caddr (cadr trans)))
+                     (pair? (cdr (caddr (cadr trans))))
+                     (safepoint-poll-form? (cadr (caddr (cadr trans))))))
+  (let ((contains-no-safepoints?
+         (lambda (tree)
+           (let loop ((t tree))
+             (cond
+               ((eq? t 'no-safepoints) #t)
+               ((not (pair? t)) #f)
+               (else (or (loop (car t)) (loop (cdr t)))))))))
+    (assert-false "8.5.1 declaration symbol stripped from define body"
+                  (contains-no-safepoints? (car trans)))
+    (assert-false "8.5.2 declaration symbol stripped from lambda body"
+                  (contains-no-safepoints? (cadr trans)))))
 
 ;; 8.3 Trivial field accessors skip safepoint prologue
 (let* ((forms '((define (get-car p) (car p))

@@ -41,7 +41,8 @@
   (mask     %deque-mask     %deque-mask-set!))
 
 (define make-chase-lev-deque
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (make-chase-lev-deque *deque-default-capacity*))
     ((initial-capacity)
@@ -53,13 +54,14 @@
                  (error "make-chase-lev-deque: initial-capacity exceeds *deque-max-capacity* (CWE-400)" initial-capacity)
                  (let* ((cap (%deque-round-pow2 initial-capacity))
                         (buf (make-vector cap #f)))
-                   (%make-chase-lev-deque (make-atomic-box 0) 0 buf cap (- cap 1)))))))))
+                   (%make-chase-lev-deque (make-atomic-box 0) 0 buf cap (- cap 1))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 3. Deque Observers & State Predicates
 ;; -----------------------------------------------------------------------
 
 (define (deque-count deque)
+  (declare (no-safepoints))
   (if (not (chase-lev-deque? deque))
       (error "deque-count: expected <chase-lev-deque>" deque)
       (let* ((b (%deque-bottom deque))
@@ -68,6 +70,7 @@
         (if (> diff 0) diff 0))))
 
 (define (deque-empty? deque)
+  (declare (no-safepoints))
   (if (not (chase-lev-deque? deque))
       (error "deque-empty?: expected <chase-lev-deque>" deque)
       (let ((b (%deque-bottom deque))
@@ -75,6 +78,7 @@
         (>= t b))))
 
 (define (deque-stats deque)
+  (declare (no-safepoints))
   (if (not (chase-lev-deque? deque))
       (error "deque-stats: expected <chase-lev-deque>" deque)
       (let* ((b (%deque-bottom deque))
@@ -116,6 +120,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (deque-push! deque val)
+  (declare (no-safepoints))
   (if (not (chase-lev-deque? deque))
       (error "deque-push!: expected <chase-lev-deque>" deque)
       (if (not val)
@@ -135,6 +140,7 @@
               #t)))))
 
 (define (deque-pop! deque)
+  (declare (no-safepoints))
   (if (not (chase-lev-deque? deque))
       (error "deque-pop!: expected <chase-lev-deque>" deque)
       (let* ((b-prev (%deque-bottom deque))
@@ -171,6 +177,7 @@
              #f))))))
 
 (define (deque-steal! deque)
+  (declare (no-safepoints))
   (if (not (chase-lev-deque? deque))
       (error "deque-steal!: expected <chase-lev-deque>" deque)
       (let* ((top-box (%deque-top-box deque))
@@ -208,6 +215,7 @@
   (runnext  %l1-ring-runnext  %l1-ring-runnext-set!))
 
 (define (make-l1-ring-buffer)
+  (declare (no-safepoints))
   (%make-l1-ring-buffer (make-vector *l1-ring-capacity* #f) (make-atomic-box 0) 0 #f))
 
 (define (%l1-ring-head l1)
@@ -217,6 +225,7 @@
   (atomic-set! (%l1-ring-head-box l1) val))
 
 (define (l1-ring-count l1)
+  (declare (no-safepoints))
   (if (not (l1-ring-buffer? l1))
       (error "l1-ring-count: expected <l1-ring-buffer>" l1)
       (let* ((h (%l1-ring-head l1))
@@ -226,17 +235,20 @@
         (+ (if (> diff 0) diff 0) nxt))))
 
 (define (l1-ring-empty? l1)
+  (declare (no-safepoints))
   (if (not (l1-ring-buffer? l1))
       (error "l1-ring-empty?: expected <l1-ring-buffer>" l1)
       (and (not (%l1-ring-runnext l1))
            (>= (%l1-ring-head l1) (%l1-ring-tail l1)))))
 
 (define (l1-ring-full? l1)
+  (declare (no-safepoints))
   (if (not (l1-ring-buffer? l1))
       (error "l1-ring-full?: expected <l1-ring-buffer>" l1)
       (>= (- (%l1-ring-tail l1) (%l1-ring-head l1)) *l1-ring-capacity*)))
 
 (define (l1-ring-runnext l1)
+  (declare (no-safepoints))
   (if (not (l1-ring-buffer? l1))
       (error "l1-ring-runnext: expected <l1-ring-buffer>" l1)
       (%l1-ring-runnext l1)))
@@ -283,7 +295,8 @@
       0))
 
 (define l1-ring-push!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((l1 val)
      (l1-ring-push! l1 val #f))
     ((l1 val l2-deque)
@@ -313,10 +326,11 @@
                        (vector-set! buf slot to-insert)
                        (%l1-ring-tail-set! l1 (+ new-t 1))
                        (%l1-ring-runnext-set! l1 val)
-                       #t)))))))))
+                       #t))))))))))
 
 (define l1-ring-pop!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((l1)
      (l1-ring-pop! l1 #f))
     ((l1 l2-deque)
@@ -371,9 +385,10 @@
                                 (%l1-ring-tail-set! l1 new-t)
                                 val)
                               #f))
-                        #f))))))))))
+                        #f)))))))))))
 
 (define (l1-ring-steal! l1)
+  (declare (no-safepoints))
   (if (not (l1-ring-buffer? l1))
       (error "l1-ring-steal!: expected <l1-ring-buffer>" l1)
       (let* ((h-box (%l1-ring-head-box l1))
@@ -394,6 +409,7 @@
                       'abort)))))))
 
 (define (l1-ring-drain-all! l1)
+  (declare (no-safepoints))
   (if (not (l1-ring-buffer? l1))
       (error "l1-ring-drain-all!: expected <l1-ring-buffer>" l1)
       (let* ((rn (%l1-ring-runnext l1))

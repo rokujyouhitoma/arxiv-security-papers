@@ -12,6 +12,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (memory-fence)
+  (declare (no-safepoints))
   (%memory-fence))
 
 ;; -----------------------------------------------------------------------
@@ -27,20 +28,24 @@
   (val %atomic-box-val %atomic-box-val-set!))
 
 (define (make-atomic-box initial-val)
+  (declare (no-safepoints))
   (let ((box (%make-atomic-box initial-val)))
     (%memory-fence)
     box))
 
 (define (atomic-ref box)
+  (declare (no-safepoints))
   (cond
     ((atomic-box? box) (%atomic-box-val box))
     ((padded-atomic-box? box) (%padded-atomic-box-val box))
     (else (error "atomic-ref: expected <atomic-box> or <padded-atomic-box>" box))))
 
 (define (atomic-box-ref box)
+  (declare (no-safepoints))
   (atomic-ref box))
 
 (define (atomic-set! box new-val)
+  (declare (no-safepoints))
   (cond
     ((atomic-box? box)
      (%atomic-box-val-set! box new-val)
@@ -53,9 +58,11 @@
     (else (error "atomic-set!: expected <atomic-box> or <padded-atomic-box>" box))))
 
 (define (atomic-box-set! box new-val)
+  (declare (no-safepoints))
   (atomic-set! box new-val))
 
 (define (atomic-cas! box expected new-val)
+  (declare (no-safepoints))
   (cond
     ((or (atomic-box? box) (padded-atomic-box? box))
      (%atomic-cas! box expected new-val))
@@ -75,16 +82,19 @@
   (val %padded-atomic-box-val %padded-atomic-box-val-set!))
 
 (define (make-padded-atomic-box initial-val)
+  (declare (no-safepoints))
   (let ((box (%make-padded-atomic-box initial-val 0 0 0 0 0 0 0)))
     (%memory-fence)
     box))
 
 (define (padded-atomic-ref box)
+  (declare (no-safepoints))
   (if (not (padded-atomic-box? box))
       (error "padded-atomic-ref: expected <padded-atomic-box>" box)
       (%padded-atomic-box-val box)))
 
 (define (padded-atomic-set! box new-val)
+  (declare (no-safepoints))
   (if (not (padded-atomic-box? box))
       (error "padded-atomic-set!: expected <padded-atomic-box>" box)
       (begin
@@ -93,11 +103,13 @@
         new-val)))
 
 (define (padded-atomic-cas! box expected new-val)
+  (declare (no-safepoints))
   (if (not (padded-atomic-box? box))
       (error "padded-atomic-cas!: expected <padded-atomic-box>" box)
       (%atomic-cas! box expected new-val)))
 
 (define (padded-atomic-swap! box new-val)
+  (declare (no-safepoints))
   (if (not (padded-atomic-box? box))
       (error "padded-atomic-swap!: expected <padded-atomic-box>" box)
       (let retry ()
@@ -107,6 +119,7 @@
               (retry))))))
 
 (define (padded-atomic-fetch-add! box delta)
+  (declare (no-safepoints))
   (if (not (padded-atomic-box? box))
       (error "padded-atomic-fetch-add!: expected <padded-atomic-box>" box)
       (if (not (integer? delta))
@@ -125,6 +138,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (atomic-swap! box new-val)
+  (declare (no-safepoints))
   (cond
     ((atomic-box? box)
      (let retry ()
@@ -137,6 +151,7 @@
     (else (error "atomic-swap!: expected <atomic-box> or <padded-atomic-box>" box))))
 
 (define (atomic-fetch-add! box delta)
+  (declare (no-safepoints))
   (cond
     ((atomic-box? box)
      (if (not (integer? delta))
@@ -154,6 +169,7 @@
     (else (error "atomic-fetch-add!: expected <atomic-box> or <padded-atomic-box>" box))))
 
 (define (atomic-update! box proc)
+  (declare (no-safepoints))
   (cond
     ((atomic-box? box)
      (if (not (procedure? proc))
@@ -187,30 +203,35 @@
   (cell %atomic-stamped-cell))
 
 (define make-atomic-stamped-box
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((initial-val)
      (%make-atomic-stamped-box (make-atomic-box (cons initial-val 0))))
     ((initial-val initial-stamp)
      (if (not (integer? initial-stamp))
          (error "make-atomic-stamped-box: initial-stamp must be an integer" initial-stamp)
-         (%make-atomic-stamped-box (make-atomic-box (cons initial-val initial-stamp)))))))
+         (%make-atomic-stamped-box (make-atomic-box (cons initial-val initial-stamp))))))))
 
 (define (atomic-stamped-ref sbox)
+  (declare (no-safepoints))
   (if (not (atomic-stamped-box? sbox))
       (error "atomic-stamped-ref: expected <atomic-stamped-box>" sbox)
       (%atomic-box-val (%atomic-stamped-cell sbox))))
 
 (define (atomic-stamped-val sbox)
+  (declare (no-safepoints))
   (if (not (atomic-stamped-box? sbox))
       (error "atomic-stamped-val: expected <atomic-stamped-box>" sbox)
       (car (%atomic-box-val (%atomic-stamped-cell sbox)))))
 
 (define (atomic-stamped-stamp sbox)
+  (declare (no-safepoints))
   (if (not (atomic-stamped-box? sbox))
       (error "atomic-stamped-stamp: expected <atomic-stamped-box>" sbox)
       (cdr (%atomic-box-val (%atomic-stamped-cell sbox)))))
 
 (define (atomic-stamped-set! sbox new-val new-stamp)
+  (declare (no-safepoints))
   (if (not (atomic-stamped-box? sbox))
       (error "atomic-stamped-set!: expected <atomic-stamped-box>" sbox)
       (if (not (integer? new-stamp))
@@ -220,6 +241,7 @@
             pair))))
 
 (define (atomic-stamped-cas! sbox expected-val new-val expected-stamp new-stamp)
+  (declare (no-safepoints))
   (if (not (atomic-stamped-box? sbox))
       (error "atomic-stamped-cas!: expected <atomic-stamped-box>" sbox)
       (if (or (not (integer? expected-stamp)) (not (integer? new-stamp)))

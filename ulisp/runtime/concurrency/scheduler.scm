@@ -12,9 +12,11 @@
 (define *scheduler-max-tasks-box* (vector 10000000))
 
 (define (scheduler-max-tasks)
+  (declare (no-safepoints))
   (vector-ref *scheduler-max-tasks-box* 0))
 
 (define (scheduler-set-max-tasks! limit)
+  (declare (no-safepoints))
   (if (not (integer? limit))
       (error "scheduler-set-max-tasks!: expected integer (CWE-843)" limit)
       (if (<= limit 0)
@@ -80,7 +82,8 @@
     b))
 
 (define make-worker-context
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((id initial-cap)
      (make-worker-context id 0 initial-cap))
     ((id node-id initial-cap)
@@ -92,42 +95,53 @@
             (rng-box (%make-worker-box seed-clamped))
             (stats (%make-worker-stats))
             (futex-cell ((vector-ref *scheduler-make-futex-cell-box* 0))))
-       (%make-worker-context id node-id dq l1 cur-box rng-box stats futex-cell)))))
+       (%make-worker-context id node-id dq l1 cur-box rng-box stats futex-cell))))))
 
 (define (worker-current-task worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-current-task-box worker) 0))
 
 (define (worker-tasks-executed worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-stats worker) 0))
 
 (define (worker-steals-attempted worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-stats worker) 1))
 
 (define (worker-steals-succeeded worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-stats worker) 2))
 
 (define (worker-yields worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-stats worker) 3))
 
 (define (worker-local-steals-attempted worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-stats worker) 4))
 
 (define (worker-local-steals-succeeded worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-stats worker) 5))
 
 (define (worker-remote-steals-attempted worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-stats worker) 6))
 
 (define (worker-remote-steals-succeeded worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-stats worker) 7))
 
 (define (worker-rng-seed worker)
+  (declare (no-safepoints))
   (vector-ref (%worker-rng-state-box worker) 0))
 
 (define (%bitwise-xor a b)
   (- (bitwise-ior a b) (bitwise-and a b)))
 
 (define (worker-next-random! worker)
+  (declare (no-safepoints))
   (let* ((box (%worker-rng-state-box worker))
          (seed (vector-ref box 0))
          ;; Xorshift32 PRNG (Marsaglia 2003): x ^= x << 13, x ^= x >> 17, x ^= x << 5
@@ -200,6 +214,7 @@
   (stats         %scheduler-stats))
 
 (define (scheduler-node-workers sched node-id)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-node-workers: expected <work-stealing-scheduler>" sched)
       (if (not (integer? node-id))
@@ -262,7 +277,8 @@
       vec))
 
 (define make-work-stealing-scheduler
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (make-work-stealing-scheduler *scheduler-default-workers* *deque-default-capacity* 1))
     ((worker-count)
@@ -285,9 +301,10 @@
                              (let ((workers (make-vector worker-count))
                                    (node-workers (%build-node-workers-table worker-count node-count)))
                                (%init-workers! workers 0 worker-count initial-deque-cap node-count)
-                               (%make-scheduler-internal worker-count node-count workers node-workers)))))))))))
+                               (%make-scheduler-internal worker-count node-count workers node-workers))))))))))))
 
 (define (scheduler-get-worker sched worker-id)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-get-worker: expected <work-stealing-scheduler>" sched)
       (if (or (< worker-id 0) (>= worker-id (scheduler-worker-count sched)))
@@ -295,46 +312,57 @@
           (vector-ref (scheduler-workers sched) worker-id))))
 
 (define (scheduler-state sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-state: expected <work-stealing-scheduler>" sched)
       (atomic-ref (%scheduler-state-box sched))))
 
 (define (scheduler-running? sched)
+  (declare (no-safepoints))
   (eq? (scheduler-state sched) 'running))
 
 (define (scheduler-stopped? sched)
+  (declare (no-safepoints))
   (eq? (scheduler-state sched) 'stopped))
 
 (define (scheduler-tasks-spawned sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-tasks-spawned: expected <work-stealing-scheduler>" sched)
       (atomic-ref (vector-ref (%scheduler-stats sched) 0))))
 
 (define (scheduler-tasks-completed sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-tasks-completed: expected <work-stealing-scheduler>" sched)
       (atomic-ref (vector-ref (%scheduler-stats sched) 1))))
 
 (define (scheduler-tasks-failed sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-tasks-failed: expected <work-stealing-scheduler>" sched)
       (atomic-ref (vector-ref (%scheduler-stats sched) 2))))
 
 (define (scheduler-live-tasks sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-live-tasks: expected <work-stealing-scheduler>" sched)
       (atomic-ref (vector-ref (%scheduler-stats sched) 3))))
 
 (define (scheduler-total-spawned sched)
+  (declare (no-safepoints))
   (scheduler-tasks-spawned sched))
 
 (define (scheduler-total-completed sched)
+  (declare (no-safepoints))
   (scheduler-tasks-completed sched))
 
 (define (scheduler-total-failed sched)
+  (declare (no-safepoints))
   (scheduler-tasks-failed sched))
 
 (define (scheduler-total-live sched)
+  (declare (no-safepoints))
   (scheduler-live-tasks sched))
 
 (define (%scheduler-tasks-spawned-inc! sched)
@@ -409,6 +437,7 @@
         (error "scheduler-spawn!: task must be procedure, coroutine, or task-context (CWE-843)" task))))))
 
 (define (scheduler-execute-task! task)
+  (declare (no-safepoints))
   (let ((ctx (cond
                ((task-context? task) task)
                ((or (coroutine-context? task) (%is-budgeted-task? task) (and (not (vector? task)) (procedure? task)))
@@ -490,7 +519,8 @@
                      (cons 'ok #t))))))))))
 
 (define scheduler-spawn!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sched task)
      (scheduler-spawn! sched task #f))
     ((sched task target-worker-id)
@@ -535,13 +565,14 @@
                                    (let* ((w (scheduler-get-worker sched 1))
                                           (cell (worker-futex-cell w)))
                                      (if cell ((vector-ref *scheduler-futex-unpark-box* 0) cell))))))
-                         #t)))))))))
+                         #t))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 4. Work-Stealing Step & Multi-Worker Coordination
 ;; -----------------------------------------------------------------------
 
 (define (scheduler-worker-step! sched worker-id)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-worker-step!: expected <work-stealing-scheduler>" sched)
       (let* ((num-workers (scheduler-worker-count sched))
@@ -729,7 +760,8 @@
                   (%scheduler-run-loop sched target-done num-workers)))))))
 
 (define scheduler-run!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sched)
      (scheduler-run! sched *scheduler-run-default-max-steps*))
     ((sched max-tasks)
@@ -738,11 +770,12 @@
          (let* ((c (scheduler-tasks-completed sched))
                 (f (scheduler-tasks-failed sched))
                 (target (+ (+ c f) max-tasks)))
-           (%scheduler-run-loop sched target (scheduler-worker-count sched)))))))
+           (%scheduler-run-loop sched target (scheduler-worker-count sched))))))))
 
 (define *scheduler-native-workers-running-box* (make-atomic-box 0))
 
 (define (scheduler-stop! sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-stop!: expected <work-stealing-scheduler>" sched)
       (begin
@@ -785,6 +818,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (scheduler-enable-channel-wake! sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-enable-channel-wake!: expected <work-stealing-scheduler>" sched)
       (let ((wake-hook
@@ -820,6 +854,7 @@
                acc)))))
 
 (define (scheduler-stats sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-stats: expected <work-stealing-scheduler>" sched)
       (let* ((num-workers (scheduler-worker-count sched))
@@ -866,6 +901,7 @@
               #t))))))
 
 (define (scheduler-start-native-workers! sched)
+  (declare (no-safepoints))
   (if (not (work-stealing-scheduler? sched))
       (error "scheduler-start-native-workers!: expected <work-stealing-scheduler>" sched)
       (let ((box (%scheduler-native-workers-started-box sched)))
@@ -885,7 +921,8 @@
             '()))))
 
 (define scheduler-run-parallel!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sched)
      (scheduler-run-parallel! sched *scheduler-run-default-max-steps*))
     ((sched max-tasks)
@@ -924,7 +961,7 @@
                                              ((vector-ref *scheduler-futex-park-adaptive-box* 0) cell 256 50)
                                              #f))))
                                    #f)
-                               (main-loop)))))))))))))
+                               (main-loop))))))))))))))
 
 
 ;; Connect scheduler-spawn! to supervisor automatic restart queueing (Issue #742)

@@ -19,6 +19,7 @@
 (define *supervisor-crash-logger-hook-box* (vector (lambda (target-tid reason id) #f)))
 
 (define (synapse-set-supervisor-crash-hook! hook)
+  (declare (no-safepoints))
   (vector-set! *supervisor-crash-logger-hook-box* 0 hook))
 
 ;; Optional scheduler spawn hook (injected via scheduler.scm, Issue #742)
@@ -30,6 +31,7 @@
                   #f)))))
 
 (define (synapse-set-supervisor-scheduler-spawn-hook! hook)
+  (declare (no-safepoints))
   (vector-set! *supervisor-scheduler-spawn-hook-box* 0 hook))
 
 ;; -----------------------------------------------------------------------
@@ -46,12 +48,15 @@
         0)))
 
 (define (supervisor-clock-now)
+  (declare (no-safepoints))
   (+ (%monotonic-clock-ms) (atomic-ref *supervisor-clock-offset-ms*)))
 
 (define (allocate-supervisor-timestamp!)
+  (declare (no-safepoints))
   (supervisor-clock-now))
 
 (define (supervisor-clock-advance! delta)
+  (declare (no-safepoints))
   (if (not (integer? delta))
       (error "supervisor-clock-advance!: delta must be an integer (CWE-843)" delta)
       (begin
@@ -73,7 +78,8 @@
   (init-args         child-spec-init-args))
 
 (define make-child-spec
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((id start-thunk)
      (make-child-spec id start-thunk 'permanent 'brutal_kill 'worker '()))
     ((id start-thunk restart-or-args)
@@ -95,7 +101,7 @@
                  (error "make-child-spec: invalid restart-type (CWE-843)" restart-type)
                  (if (not (list? init-args))
                      (error "make-child-spec: init-args must be a list (CWE-843)" init-args)
-                     (%make-child-spec id start-thunk restart-type shutdown-strategy child-type (channel-deep-copy init-args)))))))))
+                     (%make-child-spec id start-thunk restart-type shutdown-strategy child-type (channel-deep-copy init-args))))))))))
 
 (define-record-type <supervisor-spec>
   (%make-supervisor-spec strategy max-restarts max-time child-specs)
@@ -106,7 +112,8 @@
   (child-specs  supervisor-spec-child-specs))
 
 (define make-supervisor-spec
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((strategy max-restarts max-time child-specs)
      (if (not (memq strategy '(one_for_one one_for_all rest_for_one)))
          (error "make-supervisor-spec: invalid strategy (CWE-843)" strategy)
@@ -116,7 +123,7 @@
                  (error "make-supervisor-spec: max-time must be a positive integer" max-time)
                  (if (not (list? child-specs))
                      (error "make-supervisor-spec: child-specs must be a list" child-specs)
-                     (%make-supervisor-spec strategy max-restarts max-time child-specs))))))))
+                     (%make-supervisor-spec strategy max-restarts max-time child-specs)))))))))
 
 (define-record-type <supervisor-context>
   (%make-supervisor-context spec sup-task children-box restart-history-box parent-sup
@@ -137,17 +144,20 @@
   (enqueued-box         %supervisor-enqueued-box))
 
 (define (supervisor-enqueued-state sup)
+  (declare (no-safepoints))
   (if (not (supervisor-context? sup))
       (error "supervisor-enqueued-state: expected <supervisor-context> (CWE-843)" sup)
       (atomic-ref (%supervisor-enqueued-box sup))))
 
 (define (supervisor-preserved-messages sup)
+  (declare (no-safepoints))
   (if (not (supervisor-context? sup))
       (error "supervisor-preserved-messages: expected <supervisor-context> (CWE-843)" sup)
       (atomic-ref (%supervisor-preserved-inbox-box sup))))
 
 (define supervisor-take-preserved-message!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup) (supervisor-take-preserved-message! sup #f))
     ((sup empty-default)
      (if (not (supervisor-context? sup))
@@ -161,9 +171,10 @@
                          (tail (cdr cur)))
                      (if (atomic-cas! pbox cur tail)
                          head
-                         (retry)))))))))))
+                         (retry))))))))))))
 
 (define (supervisor-clear-preserved-messages! sup)
+  (declare (no-safepoints))
   (if (not (supervisor-context? sup))
       (error "supervisor-clear-preserved-messages!: expected <supervisor-context> (CWE-843)" sup)
       (let ((pbox (%supervisor-preserved-inbox-box sup)))
@@ -174,11 +185,13 @@
                 (retry)))))))
 
 (define (supervisor-message-handler sup)
+  (declare (no-safepoints))
   (if (not (supervisor-context? sup))
       (error "supervisor-message-handler: expected <supervisor-context> (CWE-843)" sup)
       (atomic-ref (%supervisor-message-handler-box sup))))
 
 (define (supervisor-set-message-handler! sup handler)
+  (declare (no-safepoints))
   (if (not (supervisor-context? sup))
       (error "supervisor-set-message-handler!: expected <supervisor-context> (CWE-843)" sup)
       (if (and handler (not (procedure? handler)))
@@ -188,41 +201,46 @@
             handler))))
 
 (define supervisor-children
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup)
      (if (not (supervisor-context? sup))
          (error "supervisor-children: expected <supervisor-context> (CWE-843)" sup)
-         (atomic-ref (%supervisor-children-box sup))))))
+         (atomic-ref (%supervisor-children-box sup)))))))
 
 (define supervisor-restart-history
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup)
      (if (not (supervisor-context? sup))
          (error "supervisor-restart-history: expected <supervisor-context> (CWE-843)" sup)
-         (atomic-ref (%supervisor-restart-history-box sup))))))
+         (atomic-ref (%supervisor-restart-history-box sup)))))))
 
 (define supervisor-state
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup)
      (if (not (supervisor-context? sup))
          (error "supervisor-state: expected <supervisor-context> (CWE-843)" sup)
-         (atomic-ref (%supervisor-state-box sup))))))
+         (atomic-ref (%supervisor-state-box sup)))))))
 
 (define supervisor-scheduler
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup)
      (if (not (supervisor-context? sup))
          (error "supervisor-scheduler: expected <supervisor-context> (CWE-843)" sup)
-         (atomic-ref (%supervisor-scheduler-box sup))))))
+         (atomic-ref (%supervisor-scheduler-box sup)))))))
 
 (define supervisor-set-scheduler!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup sched)
      (if (not (supervisor-context? sup))
          (error "supervisor-set-scheduler!: expected <supervisor-context> (CWE-843)" sup)
          (begin
            (atomic-set! (%supervisor-scheduler-box sup) sched)
-           sched)))))
+           sched))))))
 
 (define (%supervisor-enqueue-child! sup child-entry)
   (let ((sched (supervisor-scheduler sup)))
@@ -367,7 +385,8 @@
       (else (loop (cdr xs))))))
 
 (define make-supervisor
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((spec)
      (make-supervisor spec #f #f))
     ((spec parent-or-sched)
@@ -398,10 +417,11 @@
             sup-task
             (lambda ()
               (%supervisor-drain-loop! sup #t)))
-           sup)))))
+           sup))))))
 
 (define supervisor-start!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup)
      (supervisor-start! sup #f #f))
     ((sup sched-or-spawn)
@@ -431,10 +451,11 @@
                            (begin
                              (%supervisor-enqueue-child! sup (car xs))
                              (spawn-loop (cdr xs))))))
-                 #t))))))))
+                 #t)))))))))
 
 (define supervisor-stop!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup)
      (if (not (supervisor-context? sup))
          (error "supervisor-stop!: expected <supervisor-context> (CWE-843)" sup)
@@ -453,7 +474,7 @@
                      (loop (cdr cs))))))
            (task-exit! sup-task 'normal)
            (atomic-set! (%supervisor-state-box sup) 'stopped)
-           #t)))))
+           #t))))))
 
 ;; -----------------------------------------------------------------------
 ;; 6. 3 Core Restart Strategies: one_for_one, one_for_all, rest_for_one
@@ -551,7 +572,8 @@
 ;; -----------------------------------------------------------------------
 
 (define supervisor-handle-child-down!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup target-tid reason)
      (if (not (supervisor-context? sup))
          (error "supervisor-handle-child-down!: expected <supervisor-context> (CWE-843)" sup)
@@ -616,10 +638,11 @@
                              ((eq? strat 'rest_for_one)
                               (%restart-rest-for-one! sup entry))
                              (else
-                              (error "supervisor-handle-child-down!: unknown strategy" strat)))))))))))))
+                              (error "supervisor-handle-child-down!: unknown strategy" strat))))))))))))))
 
 (define supervisor-child-task
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup child-id)
      (if (not (supervisor-context? sup))
          (error "supervisor-child-task: expected <supervisor-context> (CWE-843)" sup)
@@ -629,7 +652,7 @@
                  #f
                  (if (eq? (child-spec-id (caar xs)) child-id)
                      (cadar xs)
-                     (find-loop (cdr xs))))))))))
+                     (find-loop (cdr xs)))))))))))
 
 (define (%supervisor-preserve-message! sup msg)
   (let ((pbox (%supervisor-preserved-inbox-box sup)))
@@ -641,7 +664,8 @@
             (retry))))))
 
 (define supervisor-poll-down-signals!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup)
      (if (not (supervisor-context? sup))
          (error "supervisor-poll-down-signals!: expected <supervisor-context> (CWE-843)" sup)
@@ -702,7 +726,7 @@
                                    (handled? (if (procedure? handler) (handler sup msg) #f)))
                               (if (not handled?)
                                   (%supervisor-preserve-message! sup msg))
-                              (drain-loop res))))))))))))))
+                              (drain-loop res)))))))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; Coalesced Actor Scheduling & Drain Loop (Issue #789)

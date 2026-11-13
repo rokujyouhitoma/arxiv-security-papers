@@ -65,7 +65,8 @@
 
 ;; (make-futex-cell [initial-val]) -> <futex-cell>
 (define make-futex-cell
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (make-futex-cell 0))
     ((initial-val)
@@ -77,10 +78,11 @@
                (let ((cell (%make-futex-cell-record addr)))
                  (if (not (= initial-val 0))
                      (%sys-futex-set! addr initial-val))
-                 cell)))))))
+                 cell))))))))
 
 ;; (free-futex-cell! cell) -> #t
 (define (free-futex-cell! cell)
+  (declare (no-safepoints))
   (if (not (futex-cell? cell))
       (error "free-futex-cell!: expected <futex-cell> (CWE-843)" cell)
       (let ((addr (futex-cell-addr cell)))
@@ -92,6 +94,7 @@
 
 ;; (futex-cell-ref cell) -> integer
 (define (futex-cell-ref cell)
+  (declare (no-safepoints))
   (if (not (futex-cell? cell))
       (error "futex-cell-ref: expected <futex-cell> (CWE-843)" cell)
       (let ((addr (futex-cell-addr cell)))
@@ -100,10 +103,12 @@
             (%sys-futex-get addr)))))
 
 (define (futex-cell-value cell)
+  (declare (no-safepoints))
   (futex-cell-ref cell))
 
 ;; (futex-cell-set! cell val) -> #t
 (define (futex-cell-set! cell val)
+  (declare (no-safepoints))
   (if (not (futex-cell? cell))
       (error "futex-cell-set!: expected <futex-cell> (CWE-843)" cell)
       (if (not (integer? val))
@@ -115,6 +120,7 @@
 
 ;; (futex-cell-cas! cell expected desired) -> #t / #f
 (define (futex-cell-cas! cell expected desired)
+  (declare (no-safepoints))
   (if (not (futex-cell? cell))
       (error "futex-cell-cas!: expected <futex-cell> (CWE-843)" cell)
       (if (not (and (integer? expected) (integer? desired)))
@@ -126,7 +132,8 @@
 
 ;; (futex-wait! cell expected [timeout-ms]) -> status (0: woken, 1: eagain, 2: etimedout, 3: eintr, -1: err)
 (define futex-wait!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((cell expected)
      (futex-wait! cell expected -1))
     ((cell expected timeout-ms)
@@ -140,11 +147,12 @@
                    (addr (futex-cell-addr cell)))
                (if (= addr 0)
                    (error "futex-wait!: use-after-free on futex cell (CWE-416)" cell)
-                   (%sys-futex-wait addr expected t))))))))
+                   (%sys-futex-wait addr expected t)))))))))
 
 ;; (futex-wake! cell [count]) -> integer (number of woken threads)
 (define futex-wake!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((cell)
      (futex-wake! cell 1))
     ((cell count)
@@ -155,7 +163,7 @@
              (let ((addr (futex-cell-addr cell)))
                (if (= addr 0)
                    (error "futex-wake!: use-after-free on futex cell (CWE-416)" cell)
-                   (%sys-futex-wake addr count))))))))
+                   (%sys-futex-wake addr count)))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 3-State Park / Unpark Primitives (CWE-833 Deadlock & Lost Wakeup Free)
@@ -163,7 +171,8 @@
 
 ;; (futex-park! cell [timeout-ms]) -> #t (woken or bypass) / #f (timed out)
 (define futex-park!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((cell)
      (futex-park! cell -1))
     ((cell timeout-ms)
@@ -198,10 +207,11 @@
                              (%sys-futex-cas! addr 2 0)
                              (cond
                                ((= status 2) #f)
-                               (else #t))))))))))))
+                               (else #t)))))))))))))
 
 ;; (futex-unpark! cell) -> #t
 (define (futex-unpark! cell)
+  (declare (no-safepoints))
   (if (not (futex-cell? cell))
       (error "futex-unpark!: expected <futex-cell> (CWE-843)" cell)
       (let ((addr (futex-cell-addr cell)))
@@ -226,6 +236,7 @@
 
 ;; (futex-unpark-all! cell) -> #t
 (define (futex-unpark-all! cell)
+  (declare (no-safepoints))
   (if (not (futex-cell? cell))
       (error "futex-unpark-all!: expected <futex-cell> (CWE-843)" cell)
       (let ((addr (futex-cell-addr cell)))
@@ -242,7 +253,8 @@
 
 ;; (futex-spin-pause! [cycles]) -> #t
 (define futex-spin-pause!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (futex-spin-pause! 1))
     ((cycles)
@@ -251,11 +263,12 @@
          (let ((c (cond ((< cycles 1) 1)
                         ((> cycles 4096) 4096)
                         (else cycles))))
-           (%sys-cpu-pause c))))))
+           (%sys-cpu-pause c)))))))
 
 ;; (futex-park-adaptive! cell [max-spins] [timeout-ms]) -> #t (woken or bypass) / #f (timed out)
 (define futex-park-adaptive!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((cell)
      (futex-park-adaptive! cell 256 -1))
     ((cell max-spins)
@@ -288,13 +301,14 @@
                                #t ;; Token arrived and consumed during spin!
                                (spin-loop (+ i 1))))
                          ;; 3. Spin budget exhausted: Fall back to kernel futex sleep
-                         (futex-park! cell t))))))))))
+                         (futex-park! cell t)))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; Scheduler Integration Hook (DSN-37 Section 7.4.2 & Issue #676, #679)
 ;; -----------------------------------------------------------------------
 (define scheduler-enable-futex!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (vector-set! *scheduler-futex-enabled-box* 0 #t)
      (vector-set! *scheduler-make-futex-cell-box* 0 (lambda () (make-futex-cell 0)))
@@ -314,5 +328,5 @@
                        (%worker-futex-cell-set! w (make-futex-cell 0)))
                    (loop (+ i 1)))
                  #t)))
-         #t))))
+         #t)))))
 

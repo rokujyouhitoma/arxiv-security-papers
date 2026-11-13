@@ -30,7 +30,8 @@
         (error "[SYNAPSE-PANIC] Interpreter task panic outside task boundary" reason details))))
 
 (define synapse-panic!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (%default-interpreter-panic 'unspecified-panic '()))
     ((reason)
@@ -40,10 +41,11 @@
     ((reason d1 d2)
      (%default-interpreter-panic reason (list d1 d2)))
     ((reason d1 d2 d3)
-     (%default-interpreter-panic reason (list d1 d2 d3)))))
+     (%default-interpreter-panic reason (list d1 d2 d3))))))
 
 (define synapse-secure-panic!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (let ((task (current-synapse-task)))
        (if (and task (task-context? task))
@@ -71,10 +73,11 @@
            (let ((a (task-arena task)))
              (if (and a (task-arena? a)) (arena-secure-reset! a) #f))
            #f))
-     (%default-interpreter-panic reason (list d1 d2)))))
+     (%default-interpreter-panic reason (list d1 d2))))))
 
 (define synapse-assert-true!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((cond-val)
      (if (not cond-val)
          (synapse-panic! 'assertion-violation "Assertion failed")
@@ -86,39 +89,46 @@
     ((cond-val msg d1)
      (if (not cond-val)
          (synapse-panic! 'assertion-violation msg d1)
-         #t))))
+         #t)))))
 
 ;; Note: with-synapse-task-boundary and current-synapse-task are provided by channel.scm
 
 (define task-link!
-  (lambda (a b)
-    (error "[SYNAPSE-EVAL-ADAPTER] task-link! requires links runtime subsystem (links.scm)" a b)))
+  (begin (declare (no-safepoints))
+   (lambda (a b)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-link! requires links runtime subsystem (links.scm)" a b))))
 
 (define task-unlink!
-  (lambda (a b)
-    (error "[SYNAPSE-EVAL-ADAPTER] task-unlink! requires links runtime subsystem (links.scm)" a b)))
+  (begin (declare (no-safepoints))
+   (lambda (a b)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-unlink! requires links runtime subsystem (links.scm)" a b))))
 
 (define task-monitor
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((a b)
      (error "[SYNAPSE-EVAL-ADAPTER] task-monitor requires links runtime subsystem (links.scm)" a b))
     ((a b ch)
-     (error "[SYNAPSE-EVAL-ADAPTER] task-monitor requires links runtime subsystem (links.scm)" a b ch))))
+     (error "[SYNAPSE-EVAL-ADAPTER] task-monitor requires links runtime subsystem (links.scm)" a b ch)))))
 
 (define task-demonitor
-  (lambda (a b)
-    (error "[SYNAPSE-EVAL-ADAPTER] task-demonitor requires links runtime subsystem (links.scm)" a b)))
+  (begin (declare (no-safepoints))
+   (lambda (a b)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-demonitor requires links runtime subsystem (links.scm)" a b))))
 
 (define task-trap-exit!
-  (lambda (t v)
-    (error "[SYNAPSE-EVAL-ADAPTER] task-trap-exit! requires links runtime subsystem (links.scm)" t v)))
+  (begin (declare (no-safepoints))
+   (lambda (t v)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-trap-exit! requires links runtime subsystem (links.scm)" t v))))
 
 (define task-trapping-exit?
-  (lambda (t)
-    (error "[SYNAPSE-EVAL-ADAPTER] task-trapping-exit? requires links runtime subsystem (links.scm)" t)))
+  (begin (declare (no-safepoints))
+   (lambda (t)
+    (error "[SYNAPSE-EVAL-ADAPTER] task-trapping-exit? requires links runtime subsystem (links.scm)" t))))
 
 (define make-child-spec
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((id thunk)
      (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id))
     ((id thunk restart-type)
@@ -128,10 +138,11 @@
     ((id thunk restart-type shutdown-strategy child-type)
      (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id))
     ((id thunk restart-type shutdown-strategy child-type init-args)
-     (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id))))
+     (error "[SYNAPSE-EVAL-ADAPTER] make-child-spec requires supervisor runtime subsystem (supervisor.scm)" id)))))
 
 (define make-supervisor-spec
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((strategy)
      (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor-spec requires supervisor runtime subsystem (supervisor.scm)" strategy))
     ((strategy max-restarts)
@@ -139,77 +150,89 @@
     ((strategy max-restarts period-seconds)
      (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor-spec requires supervisor runtime subsystem (supervisor.scm)" strategy))
     ((strategy max-restarts period-seconds child-specs)
-     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor-spec requires supervisor runtime subsystem (supervisor.scm)" strategy))))
+     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor-spec requires supervisor runtime subsystem (supervisor.scm)" strategy)))))
 
 (define make-supervisor
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((spec)
      (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor requires supervisor runtime subsystem (supervisor.scm)" spec))
     ((spec parent)
-     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor requires supervisor runtime subsystem (supervisor.scm)" spec))))
+     (error "[SYNAPSE-EVAL-ADAPTER] make-supervisor requires supervisor runtime subsystem (supervisor.scm)" spec)))))
 
 (define supervisor-start!
-  (lambda (sup)
-    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-start! requires supervisor runtime subsystem (supervisor.scm)" sup)))
+  (begin (declare (no-safepoints))
+   (lambda (sup)
+    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-start! requires supervisor runtime subsystem (supervisor.scm)" sup))))
 
 (define supervisor-stop!
-  (lambda (sup)
-    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-stop! requires supervisor runtime subsystem (supervisor.scm)" sup)))
+  (begin (declare (no-safepoints))
+   (lambda (sup)
+    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-stop! requires supervisor runtime subsystem (supervisor.scm)" sup))))
 
 (define supervisor-handle-child-down!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((sup tid reason)
      (error "[SYNAPSE-EVAL-ADAPTER] supervisor-handle-child-down! requires supervisor runtime subsystem (supervisor.scm)" sup tid reason))
     ((sup ref tid reason)
-     (error "[SYNAPSE-EVAL-ADAPTER] supervisor-handle-child-down! requires supervisor runtime subsystem (supervisor.scm)" sup ref tid reason))))
+     (error "[SYNAPSE-EVAL-ADAPTER] supervisor-handle-child-down! requires supervisor runtime subsystem (supervisor.scm)" sup ref tid reason)))))
 
 (define supervisor-child-task
-  (lambda (sup id)
-    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-child-task requires supervisor runtime subsystem (supervisor.scm)" sup id)))
+  (begin (declare (no-safepoints))
+   (lambda (sup id)
+    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-child-task requires supervisor runtime subsystem (supervisor.scm)" sup id))))
 
 (define supervisor-poll-down-signals!
-  (lambda (sup)
-    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-poll-down-signals! requires supervisor runtime subsystem (supervisor.scm)" sup)))
+  (begin (declare (no-safepoints))
+   (lambda (sup)
+    (error "[SYNAPSE-EVAL-ADAPTER] supervisor-poll-down-signals! requires supervisor runtime subsystem (supervisor.scm)" sup))))
 
 ;; Process Registry stubs (#669)
 (define synapse-register!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((n t)
      (error "[SYNAPSE-EVAL-ADAPTER] synapse-register! requires registry runtime subsystem (registry.scm)" n t))
     ((r n t)
-     (error "[SYNAPSE-EVAL-ADAPTER] synapse-register! requires registry runtime subsystem (registry.scm)" r n t))))
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-register! requires registry runtime subsystem (registry.scm)" r n t)))))
 
 (define synapse-unregister!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((n)
      (error "[SYNAPSE-EVAL-ADAPTER] synapse-unregister! requires registry runtime subsystem (registry.scm)" n))
     ((r n)
-     (error "[SYNAPSE-EVAL-ADAPTER] synapse-unregister! requires registry runtime subsystem (registry.scm)" r n))))
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-unregister! requires registry runtime subsystem (registry.scm)" r n)))))
 
 (define synapse-whereis
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((n)
      (error "[SYNAPSE-EVAL-ADAPTER] synapse-whereis requires registry runtime subsystem (registry.scm)" n))
     ((r n)
-     (error "[SYNAPSE-EVAL-ADAPTER] synapse-whereis requires registry runtime subsystem (registry.scm)" r n))))
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-whereis requires registry runtime subsystem (registry.scm)" r n)))))
 
 (define synapse-rebind!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((n t)
      (error "[SYNAPSE-EVAL-ADAPTER] synapse-rebind! requires registry runtime subsystem (registry.scm)" n t))
     ((r n t)
-     (error "[SYNAPSE-EVAL-ADAPTER] synapse-rebind! requires registry runtime subsystem (registry.scm)" r n t))))
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-rebind! requires registry runtime subsystem (registry.scm)" r n t)))))
 
 (define synapse-send-named!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((n m)
      (error "[SYNAPSE-EVAL-ADAPTER] synapse-send-named! requires registry runtime subsystem (registry.scm)" n m))
     ((r n m)
-     (error "[SYNAPSE-EVAL-ADAPTER] synapse-send-named! requires registry runtime subsystem (registry.scm)" r n m))))
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-send-named! requires registry runtime subsystem (registry.scm)" r n m)))))
 
 ;; Crash Logger stubs (#670)
 (define make-crash-report
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((t r)
      (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r))
     ((t r d)
@@ -219,17 +242,18 @@
     ((t r d s m)
      (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r d s m))
     ((t r d s m n)
-     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r d s m n))))
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-report requires crash logger subsystem (crash_logger.scm)" t r d s m n)))))
 
 (define crash-report?
   (lambda (x) #f))
 
 (define make-crash-ring-buffer
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (error "[SYNAPSE-EVAL-ADAPTER] make-crash-ring-buffer requires crash logger subsystem (crash_logger.scm)"))
     ((c)
-     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-ring-buffer requires crash logger subsystem (crash_logger.scm)" c))))
+     (error "[SYNAPSE-EVAL-ADAPTER] make-crash-ring-buffer requires crash logger subsystem (crash_logger.scm)" c)))))
 
 (define crash-ring-buffer?
   (lambda (x) #f))
@@ -247,7 +271,8 @@
     (error "[SYNAPSE-EVAL-ADAPTER] crash-buffer-drain! requires crash logger subsystem (crash_logger.scm)" b)))
 
 (define synapse-log-task-crash!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((t r)
      (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r))
     ((t r d)
@@ -257,19 +282,21 @@
     ((t r d s m)
      (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r d s m))
     ((t r d s m n)
-     (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r d s m n))))
+     (error "[SYNAPSE-EVAL-ADAPTER] synapse-log-task-crash! requires crash logger subsystem (crash_logger.scm)" t r d s m n)))))
 
 (define format-crash-report
   (lambda (r)
     (error "[SYNAPSE-EVAL-ADAPTER] format-crash-report requires crash logger subsystem (crash_logger.scm)" r)))
 
 (define synapse-crash-metrics
-  (lambda ()
-    (error "[SYNAPSE-EVAL-ADAPTER] synapse-crash-metrics requires crash logger subsystem (crash_logger.scm)")))
+  (begin (declare (no-safepoints))
+   (lambda ()
+    (error "[SYNAPSE-EVAL-ADAPTER] synapse-crash-metrics requires crash logger subsystem (crash_logger.scm)"))))
 
 ;; io_uring stubs (#677, #683)
 (define make-io-uring
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (error "[SYNAPSE-EVAL-ADAPTER] io_uring is not supported without native Linux io_uring runtime"))
     ((e)
@@ -277,85 +304,104 @@
     ((e s)
      (error "[SYNAPSE-EVAL-ADAPTER] io_uring is not supported without native Linux io_uring runtime" e s))
     ((e s i)
-     (error "[SYNAPSE-EVAL-ADAPTER] io_uring is not supported without native Linux io_uring runtime" e s i))))
+     (error "[SYNAPSE-EVAL-ADAPTER] io_uring is not supported without native Linux io_uring runtime" e s i)))))
 
 (define io-uring?
-  (lambda (x) #f))
+  (begin (declare (no-safepoints))
+   (lambda (x) #f)))
 
 (define io-uring-close!
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-close! requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-close! requires native io_uring" r))))
 
 (define io-uring-sqpoll?
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll? requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll? requires native io_uring" r))))
 
 (define io-uring-sq-idle-ms
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sq-idle-ms requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sq-idle-ms requires native io_uring" r))))
 
 (define io-uring-registered-buffers
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-registered-buffers requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-registered-buffers requires native io_uring" r))))
 
 (define io-uring-registered-buffer-count
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-registered-buffer-count requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-registered-buffer-count requires native io_uring" r))))
 
 (define io-uring-enter-syscall-count
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-enter-syscall-count requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-enter-syscall-count requires native io_uring" r))))
 
 (define io-uring-sqpoll-kick-count
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll-kick-count requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll-kick-count requires native io_uring" r))))
 
 (define io-uring-register-buffers!
-  (lambda (r b)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-register-buffers! requires native io_uring" r b)))
+  (begin (declare (no-safepoints))
+   (lambda (r b)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-register-buffers! requires native io_uring" r b))))
 
 (define io-uring-unregister-buffers!
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-unregister-buffers! requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-unregister-buffers! requires native io_uring" r))))
 
 (define io-uring-submit-nop!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((r u)
      (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-nop! requires native io_uring" r u))
     ((r u t)
-     (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-nop! requires native io_uring" r u t))))
+     (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-nop! requires native io_uring" r u t)))))
 
 (define io-uring-submit-read!
-  (lambda (r f b o l t)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-read! requires native io_uring" r f b o l t)))
+  (begin (declare (no-safepoints))
+   (lambda (r f b o l t)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-read! requires native io_uring" r f b o l t))))
 
 (define io-uring-submit-write!
-  (lambda (r f b o l t)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-write! requires native io_uring" r f b o l t)))
+  (begin (declare (no-safepoints))
+   (lambda (r f b o l t)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-write! requires native io_uring" r f b o l t))))
 
 (define io-uring-submit-read-fixed!
-  (lambda (r f b o l t)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-read-fixed! requires native io_uring" r f b o l t)))
+  (begin (declare (no-safepoints))
+   (lambda (r f b o l t)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-read-fixed! requires native io_uring" r f b o l t))))
 
 (define io-uring-submit-write-fixed!
-  (lambda (r f b o l t)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-write-fixed! requires native io_uring" r f b o l t)))
+  (begin (declare (no-safepoints))
+   (lambda (r f b o l t)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-submit-write-fixed! requires native io_uring" r f b o l t))))
 
 (define io-uring-sqpoll-wakeup!
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll-wakeup! requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-sqpoll-wakeup! requires native io_uring" r))))
 
 (define io-uring-poll-completions!
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-poll-completions! requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-poll-completions! requires native io_uring" r))))
 
 (define io-uring-dequeue-completion!
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-dequeue-completion! requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-dequeue-completion! requires native io_uring" r))))
 
 (define io-uring-stats
-  (lambda (r)
-    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-stats requires native io_uring" r)))
+  (begin (declare (no-safepoints))
+   (lambda (r)
+    (error "[SYNAPSE-EVAL-ADAPTER] io-uring-stats requires native io_uring" r))))
 
 ;; Deep-equal helper for AST symbols and values
 (define (%sym-equal? a b)
@@ -496,6 +542,7 @@
     (else #f)))
 
 (define (with-task-arena task-or-arena thunk)
+  (declare (no-safepoints))
   (if (not (%valid-task-or-arena? task-or-arena))
       (error "with-task-arena: invalid task or arena object (CWE-843)" task-or-arena)
       (let ((arena (%resolve-task-arena task-or-arena)))
@@ -524,12 +571,13 @@
     (%make-eval-env box parent)))
 
 (define make-eval-env
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (() (%make-env-internal #f))
     ((parent)
      (if (and parent (not (eval-env? parent)))
          (error "make-eval-env: parent must be <eval-env> or #f (CWE-843)" parent)
-         (%make-env-internal parent)))))
+         (%make-env-internal parent))))))
 
 (define (eval-env-bind! env sym val)
   (if (not (eval-env? env))
@@ -586,6 +634,7 @@
 (define *eval-yield-hook-box* (make-vector 1 #f))
 
 (define (set-eval-yield-hook! proc)
+  (declare (no-safepoints))
   (vector-set! *eval-yield-hook-box* 0 proc))
 
 (define (eval-yield-hook)
@@ -806,6 +855,7 @@
     ((a b) (/ a b))))
 
 (define (make-default-eval-env)
+  (declare (no-safepoints))
   (let ((env (make-eval-env)))
     (begin
       ;; Arithmetic & Comparison

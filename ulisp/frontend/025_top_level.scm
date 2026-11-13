@@ -4,6 +4,23 @@
 ;;; Hoists all top-level (define ...) forms into canonical (%program ...) AST.
 ;;; =======================================================================
 
+;; Names declared (declare (no-safepoints)); consulted by the safepoint pass.
+(define *declared-no-safepoint-names* (cons '() '()))
+
+(define (register-no-safepoints-name! name)
+  (if (not (memq name (car *declared-no-safepoint-names*)))
+      (set-car! *declared-no-safepoint-names*
+                (cons name (car *declared-no-safepoint-names*)))))
+
+(define (no-safepoints-decl-form? e)
+  (and (pair? e)
+       (eq? (car e) 'declare)
+       (pair? (cdr e))
+       (let ((d (cadr e)))
+         (or (eq? d 'no-safepoints)
+             (eq? d 'no-safepoint)
+             (and (pair? d) (or (eq? (car d) 'no-safepoints) (eq? (car d) 'no-safepoint)))))))
+
 (define (record-type-tag-symbol type-name)
   (string->symbol (string-append "%%record-type-" (symbol->string type-name))))
 
@@ -26,10 +43,12 @@
                               #f))
                         field-names)))
               (list 'define (cons ctor-name ctor-args)
+                    '(declare (no-safepoints))
                     (cons 'vector (cons (list 'quote tag) vec-args)))))
            (pred-arg (unique-symbol "rec_"))
            (pred-def
             (list 'define (list pred-name pred-arg)
+                  '(declare (no-safepoints))
                   (list 'and
                         (list 'vector? pred-arg)
                         (list '> (list 'vector-length pred-arg) 0)
@@ -44,12 +63,14 @@
                    (setter (if has-setter? (caddr spec) #f))
                    (get-arg (unique-symbol "rec_"))
                    (get-def (list 'define (list getter get-arg)
+                                  '(declare (no-safepoints))
                                   (list 'vector-ref get-arg idx)))
                    (set-defs
                     (if has-setter?
                         (let ((set-arg (unique-symbol "rec_"))
                               (val-arg (unique-symbol "val_")))
                           (list (list 'define (list setter set-arg val-arg)
+                                      '(declare (no-safepoints))
                                       (list 'vector-set! set-arg idx val-arg))))
                         '())))
               (loop (cdr specs)
@@ -151,9 +172,14 @@
              (let ((def-spec (cadr f)))
                (if (pair? def-spec)
                    ;; (define (name . params) . body)
-                   (let ((name (car def-spec))
-                         (params (cdr def-spec))
-                         (lbody (cddr f)))
+                   (let* ((name (car def-spec))
+                          (params (cdr def-spec))
+                          (raw-lbody (cddr f))
+                          (decl? (and (pair? raw-lbody) (no-safepoints-decl-form? (car raw-lbody))))
+                          (lbody (if decl?
+                                     (if (null? (cdr raw-lbody)) (list #t) (cdr raw-lbody))
+                                     raw-lbody)))
+                     (if decl? (register-no-safepoints-name! name))
                      (set-current-toplevel-name! name)
                      (if (not (eq? (current-source-file) 'none))
                          (register-function-source-loc! name (current-source-file) (current-source-line) (current-source-col)))
@@ -161,8 +187,17 @@
                            (cons (list 'define name (cons 'lambda (cons params lbody))) defs)
                            bodies))
                    ;; (define name val)
-                   (let ((name def-spec)
-                         (val (caddr f)))
+                   (let* ((name def-spec)
+                          (raw-val (caddr f))
+                          (decl? (and (pair? raw-val) (eq? (car raw-val) 'begin) (pair? (cdr raw-val))
+                                      (no-safepoints-decl-form? (cadr raw-val))))
+                          (val (if decl?
+                                   (let ((rest (cddr raw-val)))
+                                     (cond ((null? rest) #t)
+                                           ((null? (cdr rest)) (car rest))
+                                           (else (cons 'begin rest))))
+                                   raw-val)))
+                     (if decl? (register-no-safepoints-name! name))
                      (set-current-toplevel-name! name)
                      (if (not (eq? (current-source-file) 'none))
                          (register-function-source-loc! name (current-source-file) (current-source-line) (current-source-col)))
