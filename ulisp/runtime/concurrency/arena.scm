@@ -26,14 +26,17 @@
 ;; -----------------------------------------------------------------------
 
 (define (bitwise-not x)
+  (declare (no-safepoints))
   (- -1 x))
 
 (define (arena-power-of-two? n)
+  (declare (no-safepoints))
   (and (integer? n)
        (> n 0)
        (= (bitwise-and n (- n 1)) 0)))
 
 (define (arena-align-up size align)
+  (declare (no-safepoints))
   (let ((mask (- align 1)))
     (bitwise-and (+ size mask) (bitwise-not mask))))
 
@@ -83,7 +86,8 @@
                               0)))))
 
 (define make-task-arena
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (%init-task-arena *arena-default-base* 0 *arena-default-capacity*))
     ((initial-capacity)
@@ -91,7 +95,7 @@
     ((initial-capacity base-addr)
      (%init-task-arena base-addr 0 initial-capacity))
     ((base offset capacity)
-     (%init-task-arena base offset capacity))))
+     (%init-task-arena base offset capacity)))))
 
 ;; -----------------------------------------------------------------------
 ;; 4. Overflow Chunk Chaining Fallback & Task-Local Panic Hook (DSN-37 Section 5.3, #721)
@@ -102,6 +106,7 @@
             (error msg irritant))))
 
 (define (set-arena-overflow-panic-hook! proc)
+  (declare (no-safepoints))
   (if (not (procedure? proc))
       (error "set-arena-overflow-panic-hook!: expected procedure (CWE-843)" proc)
       (begin
@@ -109,6 +114,7 @@
         #t)))
 
 (define (arena-overflow-panic! reason msg irritant)
+  (declare (no-safepoints))
   ((vector-ref *arena-overflow-panic-hook-box* 0) reason msg irritant))
 
 (define (%arena-allocate-new-chunk! arena aligned-size align)
@@ -148,11 +154,12 @@
         (%arena-allocate-new-chunk! arena aligned-size align))))
 
 (define arena-overflow-fallback!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((arena aligned-size)
      (%arena-overflow-fallback-impl! arena aligned-size *arena-default-align*))
     ((arena aligned-size align)
-     (%arena-overflow-fallback-impl! arena aligned-size align))))
+     (%arena-overflow-fallback-impl! arena aligned-size align)))))
 
 ;; -----------------------------------------------------------------------
 ;; 5. Fast Bump Allocation (DSN-37 Section 5.2)
@@ -179,17 +186,19 @@
                       (+ (arena-base arena) current-off))))))))
 
 (define arena-allocate!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((arena size)
      (%arena-allocate-impl! arena size *arena-default-align*))
     ((arena size align)
-     (%arena-allocate-impl! arena size align))))
+     (%arena-allocate-impl! arena size align)))))
 
 ;; -----------------------------------------------------------------------
 ;; 6. O(1) Instant Reset & Secure Zero-Scrubbing Reset
 ;; -----------------------------------------------------------------------
 
 (define (arena-reset! arena)
+  (declare (no-safepoints))
   (if (not (task-arena? arena))
       (error "arena-reset!: expected <task-arena>" arena)
       (begin
@@ -211,6 +220,7 @@
           #t))))
 
 (define (arena-secure-reset! arena)
+  (declare (no-safepoints))
   (if (not (task-arena? arena))
       (error "arena-secure-reset!: expected <task-arena>" arena)
       (begin
@@ -244,14 +254,17 @@
                         (loop (cdr cs))))))))))
 
 (define (arena-u8-ref arena addr)
+  (declare (no-safepoints))
   (let ((resolved (%resolve-arena-buffer-and-offset arena addr 1)))
     (bytevector-u8-ref (car resolved) (cdr resolved))))
 
 (define (arena-u8-set! arena addr val)
+  (declare (no-safepoints))
   (let ((resolved (%resolve-arena-buffer-and-offset arena addr 1)))
     (bytevector-u8-set! (car resolved) (cdr resolved) (bitwise-and val 255))))
 
 (define (arena-u64-ref arena addr)
+  (declare (no-safepoints))
   (if (not (= (modulo addr 8) 0))
       (error "arena-u64-ref: unaligned 64-bit access" addr)
       (let* ((resolved (%resolve-arena-buffer-and-offset arena addr 8))
@@ -264,6 +277,7 @@
                     (+ (* acc 256) (bytevector-u8-ref bv (+ off i)))))))))
 
 (define (arena-u64-set! arena addr val)
+  (declare (no-safepoints))
   (if (not (= (modulo addr 8) 0))
       (error "arena-u64-set!: unaligned 64-bit access" addr)
       (let* ((resolved (%resolve-arena-buffer-and-offset arena addr 8))
@@ -279,19 +293,23 @@
               #t)))))
 
 (define (arena-used-bytes arena)
+  (declare (no-safepoints))
   (let loop ((cs (arena-chunks arena)) (acc (arena-offset arena)))
     (if (null? cs)
         acc
         (loop (cdr cs) (+ acc (arena-chunk-offset (car cs)))))))
 
 (define (arena-available-bytes arena)
+  (declare (no-safepoints))
   (- (arena-capacity arena) (arena-offset arena)))
 
 (define (arena-empty? arena)
+  (declare (no-safepoints))
   (and (= (arena-offset arena) 0)
        (null? (arena-chunks arena))))
 
 (define (arena-stats arena)
+  (declare (no-safepoints))
   (list (cons 'base (arena-base arena))
         (cons 'offset (arena-offset arena))
         (cons 'capacity (arena-capacity arena))

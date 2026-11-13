@@ -99,6 +99,7 @@
      (error "boundary-sanitize: unsupported type across boundary (CWE-843)" val))))
 
 (define (sanitize-to-arena val arena)
+  (declare (no-safepoints))
   (if (and arena (not (task-arena? arena)))
       (error "sanitize-to-arena: expected <task-arena> or #f" arena)
       (%sanitize-to-arena-step val arena '() 0)))
@@ -148,6 +149,7 @@
      (error "sanitize-from-arena: unsupported type across boundary (CWE-843)" val))))
 
 (define (sanitize-from-arena val)
+  (declare (no-safepoints))
   (%sanitize-from-arena-step val '() 0))
 
 ;; -----------------------------------------------------------------------
@@ -179,6 +181,7 @@
            ptrs)))))
 
 (define (shared-pointer? obj1 obj2)
+  (declare (no-safepoints))
   (let ((ptrs1 (collect-all-pointers obj1))
         (ptrs2 (collect-all-pointers obj2)))
     (let loop ((ps ptrs1))

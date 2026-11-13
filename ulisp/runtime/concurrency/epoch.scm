@@ -28,20 +28,25 @@
 ;; -----------------------------------------------------------------------
 
 (define (epoch-current)
+  (declare (no-safepoints))
   (atomic-ref *epoch-global-counter*))
 
 (define (epoch-floor)
+  (declare (no-safepoints))
   (atomic-ref *epoch-active-floor*))
 
 (define (epoch-advance!)
+  (declare (no-safepoints))
   (+ (atomic-fetch-add! *epoch-global-counter* 1) 1))
 
 (define (epoch-set-floor! floor-val)
+  (declare (no-safepoints))
   (if (or (not (integer? floor-val)) (< floor-val 1))
       (error "epoch-set-floor!: floor must be a positive integer" floor-val)
       (atomic-set! *epoch-active-floor* floor-val)))
 
 (define (epoch-aborted? ep)
+  (declare (no-safepoints))
   (let ((aborted (atomic-ref *epoch-aborted-list*))
         (floor-val (atomic-ref *epoch-active-floor*)))
     (or (< ep floor-val)
@@ -52,7 +57,8 @@
 ;; -----------------------------------------------------------------------
 
 (define epoch-bind-task!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task)
      (epoch-bind-task! task (epoch-current) #f))
     ((task ep)
@@ -68,9 +74,10 @@
               (new-reg (cons (cons task (cons ep arena)) reg)))
          (if (not (atomic-cas! *epoch-task-registry* reg new-reg))
              (loop)
-             ep))))))
+             ep)))))))
 
 (define (epoch-unbind-task! task)
+  (declare (no-safepoints))
   (let loop ()
     (let* ((reg (atomic-ref *epoch-task-registry*))
            (new-reg (let rem ((cur reg))
@@ -83,6 +90,7 @@
           #t))))
 
 (define (epoch-registered-tasks)
+  (declare (no-safepoints))
   (atomic-ref *epoch-task-registry*))
 
 ;; -----------------------------------------------------------------------
@@ -121,6 +129,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (epoch-rollback-to! target-epoch)
+  (declare (no-safepoints))
   (if (or (not (integer? target-epoch)) (< target-epoch 1))
       (error "epoch-rollback-to!: target-epoch must be a positive integer" target-epoch)
       (begin
@@ -171,6 +180,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (epoch-task-valid? task)
+  (declare (no-safepoints))
   (if (not task)
       #f
       (let ((st (if (task-context? task) (%task-state task) 'unknown)))
@@ -189,6 +199,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (epoch-checkpoint proc)
+  (declare (no-safepoints))
   (let ((saved-epoch (epoch-current)))
     (call/cc
      (lambda (k)
@@ -202,6 +213,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (epoch-stats)
+  (declare (no-safepoints))
   (list (cons 'current-epoch (epoch-current))
         (cons 'active-floor (epoch-floor))
         (cons 'aborted-epochs (atomic-ref *epoch-stats-aborted-epochs*))
@@ -209,12 +221,14 @@
         (cons 'registered-tasks (length (atomic-ref *epoch-task-registry*)))))
 
 (define (epoch-reset-stats!)
+  (declare (no-safepoints))
   (begin
     (atomic-set! *epoch-stats-aborted-tasks* 0)
     (atomic-set! *epoch-stats-aborted-epochs* 0)
     #t))
 
 (define (epoch-reset-global!)
+  (declare (no-safepoints))
   (begin
     (atomic-set! *epoch-global-counter* 1)
     (atomic-set! *epoch-active-floor* 1)

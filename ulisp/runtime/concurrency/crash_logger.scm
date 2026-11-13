@@ -16,6 +16,7 @@
 (define *crash-report-id-counter* (make-atomic-box 1))
 
 (define (allocate-crash-report-id!)
+  (declare (no-safepoints))
   (atomic-fetch-add! *crash-report-id-counter* 1))
 
 (define *crash-default-buffer-capacity* 256)
@@ -81,7 +82,8 @@
 
 ;; Builder for <crash-report>
 (define make-crash-report
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task reason)
      (make-crash-report task reason '() #f #f #f))
     ((task reason details)
@@ -121,7 +123,7 @@
                               ts))
 
          (else
-          (error "make-crash-report: expected <task-context> or integer TID (CWE-843)" task)))))))
+          (error "make-crash-report: expected <task-context> or integer TID (CWE-843)" task))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 2. Lock-Free Non-Blocking Crash Ring Buffer
@@ -138,7 +140,8 @@
   (dropped-box  %crash-buffer-dropped-box))
 
 (define make-crash-ring-buffer
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (make-crash-ring-buffer *crash-default-buffer-capacity*))
     ((capacity)
@@ -152,7 +155,7 @@
                                         (make-atomic-box 0)
                                         (make-atomic-box 0)
                                         (make-atomic-box 0)
-                                        (make-atomic-box 0))))))))
+                                        (make-atomic-box 0)))))))))
 
 (define (crash-buffer-count buf)
   (if (not (crash-ring-buffer? buf))
@@ -236,6 +239,7 @@
 (define *crash-metrics-by-reason-box* (make-atomic-box '()))
 
 (define (synapse-record-crash-metric! reason)
+  (declare (no-safepoints))
   (atomic-fetch-add! *crash-metrics-total* 1)
   (let update-reason ()
     (let* ((cur-alist (atomic-ref *crash-metrics-by-reason-box*))
@@ -255,11 +259,13 @@
           (update-reason)))))
 
 (define (synapse-crash-metrics)
+  (declare (no-safepoints))
   (list (cons 'total (atomic-ref *crash-metrics-total*))
         (cons 'dropped (atomic-ref *crash-metrics-dropped*))
         (cons 'by-reason (atomic-ref *crash-metrics-by-reason-box*))))
 
 (define (synapse-reset-crash-metrics!)
+  (declare (no-safepoints))
   (atomic-set! *crash-metrics-total* 0)
   (atomic-set! *crash-metrics-dropped* 0)
   (atomic-set! *crash-metrics-by-reason-box* '())
@@ -275,13 +281,15 @@
   (atomic-ref *default-crash-buffer-box*))
 
 (define (synapse-set-current-crash-buffer! buf)
+  (declare (no-safepoints))
   (if (not (crash-ring-buffer? buf))
       (error "synapse-set-current-crash-buffer!: expected <crash-ring-buffer> (CWE-843)" buf)
       (atomic-set! *default-crash-buffer-box* buf)))
 
 ;; Top-level crash logging primitive (Layer 2 safe)
 (define synapse-log-task-crash!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task reason)
      (synapse-log-task-crash! task reason '() #f #f #f))
     ((task reason details)
@@ -299,7 +307,7 @@
              ;; Enqueue report into ring buffer (non-blocking)
              (crash-buffer-enqueue! buf rep)
              rep)
-           #f)))))
+           #f))))))
 
 ;; -----------------------------------------------------------------------
 ;; 5. Human-Readable SASL Diagnostic Formatter & S-Expression Exporter
@@ -375,6 +383,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (synapse-enable-crash-logging!)
+  (declare (no-safepoints))
   (if (procedure? synapse-set-crash-logger-hook!)
       (synapse-set-crash-logger-hook!
        (lambda (task reason details)
@@ -388,6 +397,7 @@
   #t)
 
 (define (synapse-disable-crash-logging!)
+  (declare (no-safepoints))
   (if (procedure? synapse-set-crash-logger-hook!)
       (synapse-set-crash-logger-hook! #f)
       #f)

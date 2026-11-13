@@ -20,6 +20,7 @@
 (define *panic-timestamp-counter* (make-atomic-box 1))
 
 (define (allocate-panic-timestamp!)
+  (declare (no-safepoints))
   (atomic-fetch-add! *panic-timestamp-counter* 1))
 
 (define-record-type <synapse-panic-record>
@@ -31,13 +32,14 @@
   (timestamp  synapse-panic-timestamp))
 
 (define make-synapse-panic-record
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((reason)
      (%make-synapse-panic-record reason (list) #f (allocate-panic-timestamp!)))
     ((reason details)
      (%make-synapse-panic-record reason details #f (allocate-panic-timestamp!)))
     ((reason details source-loc)
-     (%make-synapse-panic-record reason details source-loc (allocate-panic-timestamp!)))))
+     (%make-synapse-panic-record reason details source-loc (allocate-panic-timestamp!))))))
 
 ;; -----------------------------------------------------------------------
 ;; 2. Active Current Task Tracking & Crash Logger Hook (Per-Worker TLS, #719)
@@ -46,6 +48,7 @@
 (define *synapse-crash-logger-hook-box* (make-atomic-box #f))
 
 (define (synapse-set-crash-logger-hook! hook)
+  (declare (no-safepoints))
   (atomic-set! *synapse-crash-logger-hook-box* hook))
 
 ;; -----------------------------------------------------------------------
@@ -53,6 +56,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (synapse-deep-copy-reason val)
+  (declare (no-safepoints))
   (channel-deep-copy val))
 
 (define (%reclaim-terminated-task-arena! task secure-scrub?)
@@ -68,7 +72,8 @@
       #f))
 
 (define synapse-cleanup-task-resources!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task panic-reason)
      (synapse-cleanup-task-resources! task panic-reason #f #f))
     ((task panic-reason secure-scrub?)
@@ -93,7 +98,7 @@
                          (arena-reset! arena))
                      #f))
                #f)
-           #t)))))
+           #t))))))
 
 ;; -----------------------------------------------------------------------
 ;; 4. Fail-Fast Panic Primitives
@@ -120,7 +125,8 @@
         (error "synapse-panic!: called outside active task boundary" safe-reason safe-details))))
 
 (define synapse-panic!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((reason)
      (%execute-task-panic! reason (list) #f))
     ((reason d1)
@@ -128,10 +134,11 @@
     ((reason d1 d2)
      (%execute-task-panic! reason (list d1 d2) #f))
     ((reason d1 d2 d3)
-     (%execute-task-panic! reason (list d1 d2 d3) #f))))
+     (%execute-task-panic! reason (list d1 d2 d3) #f)))))
 
 (define synapse-secure-panic!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((reason)
      (%execute-task-panic! reason (list) #t))
     ((reason d1)
@@ -139,7 +146,7 @@
     ((reason d1 d2)
      (%execute-task-panic! reason (list d1 d2) #t))
     ((reason d1 d2 d3)
-     (%execute-task-panic! reason (list d1 d2 d3) #t))))
+     (%execute-task-panic! reason (list d1 d2 d3) #t)))))
 
 ;; Connect Ephemeral Arena overflow to task-local synapse-panic! (Issue #721, Item A3)
 (guard (exn (else #f))
@@ -221,18 +228,20 @@
 (atomic-set! *synapse-task-boundary-hook-box* %panic-with-synapse-task-boundary)
 
 (define with-synapse-task-boundary
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task thunk)
      (%panic-with-synapse-task-boundary task thunk #f))
     ((task thunk secure-scrub?)
-     (%panic-with-synapse-task-boundary task thunk secure-scrub?))))
+     (%panic-with-synapse-task-boundary task thunk secure-scrub?)))))
 
 ;; -----------------------------------------------------------------------
 ;; 6. Fast Assertion Guard
 ;; -----------------------------------------------------------------------
 
 (define synapse-assert-true!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((cond-val msg)
      (if (not cond-val)
          (synapse-panic! 'assertion-violation msg)
@@ -244,10 +253,11 @@
     ((cond-val msg d1 d2)
      (if (not cond-val)
          (synapse-panic! 'assertion-violation msg d1 d2)
-         #t))))
+         #t)))))
 
 (define synapse-assert
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((test msg)
      (if (not test)
          (synapse-panic! 'assertion-violation msg)
@@ -259,4 +269,4 @@
     ((test msg d1 d2)
      (if (not test)
          (synapse-panic! 'assertion-violation msg d1 d2)
-         #t))))
+         #t)))))

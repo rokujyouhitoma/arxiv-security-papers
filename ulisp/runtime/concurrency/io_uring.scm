@@ -79,41 +79,49 @@
   (sqpoll-kicks-box       %io-uring-sqpoll-kicks-box))
 
 (define (io-uring-active? ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-active?: expected <io-uring> (CWE-843)" ring)
       (atomic-ref (%io-uring-active-box ring))))
 
 (define (io-uring-submitted-count ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-submitted-count: expected <io-uring> (CWE-843)" ring)
       (atomic-ref (%io-uring-submitted-box ring))))
 
 (define (io-uring-completed-count ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-completed-count: expected <io-uring> (CWE-843)" ring)
       (atomic-ref (%io-uring-completed-count-box ring))))
 
 (define (io-uring-pending-count ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-pending-count: expected <io-uring> (CWE-843)" ring)
       (length (atomic-ref (%io-uring-pending-box ring)))))
 
 (define (io-uring-registered-buffers ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-registered-buffers: expected <io-uring> (CWE-843)" ring)
       (atomic-ref (%io-uring-registered-buffers-box ring))))
 
 (define (io-uring-registered-buffer-count ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-registered-buffer-count: expected <io-uring> (CWE-843)" ring)
       (vector-length (atomic-ref (%io-uring-registered-buffers-box ring)))))
 
 (define (io-uring-enter-syscall-count ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-enter-syscall-count: expected <io-uring> (CWE-843)" ring)
       (atomic-ref (%io-uring-enter-syscalls-box ring))))
 
 (define (io-uring-sqpoll-kick-count ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-sqpoll-kick-count: expected <io-uring> (CWE-843)" ring)
       (atomic-ref (%io-uring-sqpoll-kicks-box ring))))
@@ -123,7 +131,8 @@
 ;; -----------------------------------------------------------------------
 
 (define make-io-uring
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (make-io-uring *io-uring-default-entries* #f *io-uring-default-sqpoll-idle-ms*))
     ((entries)
@@ -172,7 +181,7 @@
                                        (make-atomic-box 0)
                                        (make-atomic-box (vector))
                                        (make-atomic-box 0)
-                                       (make-atomic-box 0))))))))))
+                                       (make-atomic-box 0)))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; Helper Predicates
@@ -182,6 +191,7 @@
   (and (not (null? x)) (bytevector? x)))
 
 (define (io-uring-register-buffers! ring buffers)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-register-buffers!: expected <io-uring> (CWE-843)" ring)
       (if (not (io-uring-active? ring))
@@ -222,6 +232,7 @@
                         #t))))))))
 
 (define (io-uring-unregister-buffers! ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-unregister-buffers!: expected <io-uring> (CWE-843)" ring)
       (let* ((prev (atomic-swap! (%io-uring-registered-buffers-box ring) (vector)))
@@ -238,6 +249,7 @@
         #t)))
 
 (define (io-uring-close! ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-close!: expected <io-uring> (CWE-843)" ring)
       (let ((was-active (atomic-swap! (%io-uring-active-box ring) #f)))
@@ -287,7 +299,8 @@
 
 ;; NOP Submission
 (define io-uring-submit-nop!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ring user-data)
      (io-uring-submit-nop! ring user-data #f))
     ((ring user-data task)
@@ -295,10 +308,11 @@
          (error "io-uring-submit-nop!: expected <io-uring> (CWE-843)" ring)
          (if (not (io-uring-active? ring))
              (error "io-uring-submit-nop!: ring is closed (CWE-833)" ring)
-             (%register-pending-request! ring IORING_OP_NOP 0 #f 0 0 task user-data))))))
+             (%register-pending-request! ring IORING_OP_NOP 0 #f 0 0 task user-data)))))))
 
 ;; Async Read Submission
 (define (io-uring-submit-read! ring fd buf offset len task)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-submit-read!: expected <io-uring> (CWE-843)" ring)
       (if (not (io-uring-active? ring))
@@ -318,6 +332,7 @@
 
 ;; Async Write Submission
 (define (io-uring-submit-write! ring fd buf offset len task)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-submit-write!: expected <io-uring> (CWE-843)" ring)
       (if (not (io-uring-active? ring))
@@ -337,6 +352,7 @@
 
 ;; Fixed Buffer Async Read Submission (IORING_OP_READ_FIXED)
 (define (io-uring-submit-read-fixed! ring fd buf-index offset len task)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-submit-read-fixed!: expected <io-uring> (CWE-843)" ring)
       (if (not (io-uring-active? ring))
@@ -361,6 +377,7 @@
 
 ;; Fixed Buffer Async Write Submission (IORING_OP_WRITE_FIXED)
 (define (io-uring-submit-write-fixed! ring fd buf-index offset len task)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-submit-write-fixed!: expected <io-uring> (CWE-843)" ring)
       (if (not (io-uring-active? ring))
@@ -385,6 +402,7 @@
 
 ;; SQPOLL Wakeup Helper
 (define (io-uring-sqpoll-wakeup! ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-sqpoll-wakeup!: expected <io-uring> (CWE-843)" ring)
       (if (not (io-uring-active? ring))
@@ -400,6 +418,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (io-uring-poll-completions! ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-poll-completions!: expected <io-uring> (CWE-843)" ring)
       (let* ((pending-box (%io-uring-pending-box ring))
@@ -458,6 +477,7 @@
 
 ;; Dequeue one CQE from completed queue (FIFO): returns (cons user-data result-bytes) or #f
 (define (io-uring-dequeue-completion! ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-dequeue-completion!: expected <io-uring> (CWE-843)" ring)
       (let ((completed-box (%io-uring-completed-box ring)))
@@ -483,11 +503,13 @@
   (atomic-ref *default-io-uring-box*))
 
 (define (synapse-set-current-io-uring! ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "synapse-set-current-io-uring!: expected <io-uring> (CWE-843)" ring)
       (atomic-set! *default-io-uring-box* ring)))
 
 (define (io-uring-stats ring)
+  (declare (no-safepoints))
   (if (not (io-uring? ring))
       (error "io-uring-stats: expected <io-uring> (CWE-843)" ring)
       (list (cons 'native? (io-uring-native? ring))

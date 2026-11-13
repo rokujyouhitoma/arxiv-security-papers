@@ -2,14 +2,14 @@
 ID: 810
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] safepoint 挿入除外判定の名前プレフィックス廃止と declare no-safepoints 構文の導入 (ID: 810)
 
 ## 1. 概要 / Summary
 
-現在の `pass-synapse-inject-safepoints`（[ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm)）では、ランタイム内部の不可分操作や再入ループの防止を目的として、大域変数 `*safepoint-excluded-prefixes*`（56 種類におよぶプレフィックス: `"synapse"`, `"task"`, `"channel"`, `"queue"`, `"arena"`, `"make"`, `"set-"`, `"budgeted-task"`, `"sys"` 等）による関数名前方一致のブラックリスト判定を実施している。
+現在の `pass-synapse-inject-safepoints`（[ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm](../../../ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm)）では、ランタイム内部の不可分操作や再入ループの防止を目的として、大域変数 `*safepoint-excluded-prefixes*`（56 種類におよぶプレフィックス: `"synapse"`, `"task"`, `"channel"`, `"queue"`, `"arena"`, `"make"`, `"set-"`, `"budgeted-task"`, `"sys"` 等）による関数名前方一致のブラックリスト判定を実施している。
 
 しかし、この**名前依存ヒューリスティック (Name-based Heuristics)** には重大な構造的欠陥が存在する：
 
@@ -29,8 +29,8 @@ ID: 810
 ## 2. トレーサビリティ / Traceability
 
 - **設計仕様書**:
-  - [DSN-37 Synapse Dual-Plane Concurrency Runtime Architecture Section 7.2 & 14.4](../../docs/designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)
-  - [DSN-33 Nanopass AOT Compiler Architecture Section 6](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+  - [DSN-37 Synapse Dual-Plane Concurrency Runtime Architecture Section 7.2 & 14.4](../../designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)
+  - [DSN-33 Nanopass AOT Compiler Architecture Section 6](../../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連 Issue**:
   - [Issue #792 (Affine 検査における変数名ヒント強制判定の廃止)](closed/792-refactor-affine-check-to-eliminate-name-based-heuristics.md)
   - [Issue #796 (セーフポイント注入パスの本番パイプライン正式統合)](closed/796-integrate-pass-inject-safepoints-into-compiler-passes-pipeline.md)
@@ -77,15 +77,15 @@ ID: 810
 
 ## 5. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm): `*safepoint-excluded-prefixes*` 撤廃、`begin` ラップ宣言検出・ストリップ対応
-- [ulisp/frontend/025_top_level.scm](../../ulisp/frontend/025_top_level.scm): `expand-define-record-type` における `(declare (no-safepoints))` 自動付与
-- [ulisp/runtime/concurrency/preempt.scm](../../ulisp/runtime/concurrency/preempt.scm): ランタイム手続きへの宣言付与
-- [ulisp/runtime/concurrency/context.scm](../../ulisp/runtime/concurrency/context.scm): 低レベルコンテキスト操作手続きへの宣言付与
-- [ulisp/runtime/concurrency/scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm): スケジューラ内部手続きへの宣言付与
-- [ulisp/runtime/concurrency/channel.scm](../../ulisp/runtime/concurrency/channel.scm): チャネル内部手続きへの宣言付与
-- [ulisp/runtime/concurrency/arena.scm](../../ulisp/runtime/concurrency/arena.scm): アリーナ内部手続きへの宣言付与
-- [tests/concurrency/test_pass_inject_safepoints.scm](../../tests/concurrency/test_pass_inject_safepoints.scm): プレフィックス除外廃止および declare 構文のテスト更新
-- [ulisp/compiler.scm](../../ulisp/compiler.scm): 統合コンパイラソース再生成
+- [ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm](../../../ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm): `*safepoint-excluded-prefixes*` 撤廃、`begin` ラップ宣言検出・ストリップ対応
+- [ulisp/frontend/025_top_level.scm](../../../ulisp/frontend/025_top_level.scm): `expand-define-record-type` における `(declare (no-safepoints))` 自動付与
+- [ulisp/runtime/concurrency/preempt.scm](../../../ulisp/runtime/concurrency/preempt.scm): ランタイム手続きへの宣言付与
+- [ulisp/runtime/concurrency/context.scm](../../../ulisp/runtime/concurrency/context.scm): 低レベルコンテキスト操作手続きへの宣言付与
+- [ulisp/runtime/concurrency/scheduler.scm](../../../ulisp/runtime/concurrency/scheduler.scm): スケジューラ内部手続きへの宣言付与
+- [ulisp/runtime/concurrency/channel.scm](../../../ulisp/runtime/concurrency/channel.scm): チャネル内部手続きへの宣言付与
+- [ulisp/runtime/concurrency/arena.scm](../../../ulisp/runtime/concurrency/arena.scm): アリーナ内部手続きへの宣言付与
+- [tests/concurrency/test_pass_inject_safepoints.scm](../../../tests/concurrency/test_pass_inject_safepoints.scm): プレフィックス除外廃止および declare 構文のテスト更新
+- [ulisp/compiler.scm](../../../ulisp/compiler.scm): 統合コンパイラソース再生成
 
 ---
 
@@ -94,13 +94,13 @@ ID: 810
 Target Branch: `feat/810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints`
 
 ### Phase 1: `declare no-safepoints` 構文の堅牢化と AST ストリッピングの完備
-1. [ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm](../../ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm) において、`safepoint-no-safepoint-decl?` を拡張：
+1. [ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm](../../../ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm) において、`safepoint-no-safepoint-decl?` を拡張：
    - `(declare no-safepoint)`, `(declare no-safepoints)`, `(declare (no-safepoint))`, `(declare (no-safepoints))` のすべての表記ゆれを完全サポート。
 2. `lambda` 式および `define` 式のボディにおいて、Pass 030 (`desugar-all`) でラップされた `(begin (declare (no-safepoints)) body ...)` から宣言を確実に検知し、ボディから宣言ノードを除去（ストリップ）するロジックを実装。
 3. `(define (f x) (declare (no-safepoints)) x)` を単体コンパイルし、LIR に `declare` や `no-safepoints` が流出せず正常終了することを確認。
 
 ### Phase 2: `define-record-type` 展開ルーチンへの宣言自動付与
-1. [ulisp/frontend/025_top_level.scm](../../ulisp/frontend/025_top_level.scm) の `expand-define-record-type` を改修：
+1. [ulisp/frontend/025_top_level.scm](../../../ulisp/frontend/025_top_level.scm) の `expand-define-record-type` を改修：
    - コンストラクタ定義 (`ctor-def`)
    - 述語定義 (`pred-def`)
    - ゲッター定義 (`get-def`)
@@ -109,8 +109,8 @@ Target Branch: `feat/810-deprecate-name-prefix-safepoint-exclusion-and-introduce
 2. これにより、型述語（`budgeted-task?` 等）が自動的に safepoint 注入除外対象となることを保証。
 
 ### Phase 3: ランタイム内部手続きへの宣言付与
-1. [ulisp/runtime/concurrency/preempt.scm](../../ulisp/runtime/concurrency/preempt.scm) の主要手続き（`task-reductions`, `task-reductions-set!`, `task-state`, `task-state-set!`, `task-replenish!`, `check-safepoint!`, `safepoint-poll!`, `budgeted-task-execute!` 等）に `(declare (no-safepoints))` を配置。
-2. [ulisp/runtime/concurrency/context.scm](../../ulisp/runtime/concurrency/context.scm)、[ulisp/runtime/concurrency/scheduler.scm](../../ulisp/runtime/concurrency/scheduler.scm)、[ulisp/runtime/concurrency/arena.scm](../../ulisp/runtime/concurrency/arena.scm) の低レベル手続きにも同様に宣言を付与。
+1. [ulisp/runtime/concurrency/preempt.scm](../../../ulisp/runtime/concurrency/preempt.scm) の主要手続き（`task-reductions`, `task-reductions-set!`, `task-state`, `task-state-set!`, `task-replenish!`, `check-safepoint!`, `safepoint-poll!`, `budgeted-task-execute!` 等）に `(declare (no-safepoints))` を配置。
+2. [ulisp/runtime/concurrency/context.scm](../../../ulisp/runtime/concurrency/context.scm)、[ulisp/runtime/concurrency/scheduler.scm](../../../ulisp/runtime/concurrency/scheduler.scm)、[ulisp/runtime/concurrency/arena.scm](../../../ulisp/runtime/concurrency/arena.scm) の低レベル手続きにも同様に宣言を付与。
 
 ### Phase 4: `*safepoint-excluded-prefixes*` の完全撤廃
 1. `pass_inject_safepoints.scm` から `*safepoint-excluded-prefixes*` リストおよびプレフィックス走査ループを完全削除。
@@ -120,7 +120,7 @@ Target Branch: `feat/810-deprecate-name-prefix-safepoint-exclusion-and-introduce
    - 明示的宣言 `(declare (no-safepoints))`（`safepoint-no-safepoint-decl?`）
 
 ### Phase 5: テストスイートの更新と検証
-1. [tests/concurrency/test_pass_inject_safepoints.scm](../../tests/concurrency/test_pass_inject_safepoints.scm) の Group 8 を改修：
+1. [tests/concurrency/test_pass_inject_safepoints.scm](../../../tests/concurrency/test_pass_inject_safepoints.scm) の Group 8 を改修：
    - プレフィックス判定テストを撤廃し、`make-tree` や `task-worker` に safepoint が正しく注入されることを検証。
    - `(declare (no-safepoints))` を指定した関数のみ safepoint が除外されることを検証。
 2. `make -C ulisp test_pass_inject_safepoints`
@@ -136,15 +136,23 @@ Target Branch: `feat/810-deprecate-name-prefix-safepoint-exclusion-and-introduce
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm` から `*safepoint-excluded-prefixes*` が完全に削除されていること。
-- [ ] `(declare (no-safepoints))` が Pass 030 の `begin` ラップ下でも確実に認識され、AST から正常にストリップされること。
-- [ ] `(define (f x) (declare (no-safepoints)) x)` が LIR 未定義シンボルエラーを出さずに正常にコンパイル・実行できること。
-- [ ] `ulisp/frontend/025_top_level.scm` の `expand-define-record-type` が生成するすべての手続きに `(declare (no-safepoints))` が付与されていること。
-- [ ] `ulisp/runtime/concurrency/` 内の不可分・内部手続きに `(declare (no-safepoints))` が明示配置されていること。
-- [ ] `make-tree` や `task-worker` 等のユーザー定義再帰関数に正常にセーフポイントが注入されること。
-- [ ] `make -C ulisp test_pass_inject_safepoints` が全件 PASS すること。
-- [ ] `make -C ulisp test_concurrency` の全 20 並行性ターゲットに回帰が発生しないこと。
-- [ ] `make -C ulisp lint_sexpr` がエラー 0 件で通過すること。
-- [ ] `make -C ulisp compiler` で `ulisp/compiler.scm` が同期再生成されていること。
-- [ ] `make py_compile && make static_analysis` が 100% PASS すること。
-- [ ] ドキュメント内のすべてのリンクが相対パスで記述されていること。
+- [x] `ulisp/lib/ulisp/concurrency/passes/pass_inject_safepoints.scm` から `*safepoint-excluded-prefixes*` が完全に削除されていること。
+- [x] `(declare (no-safepoints))` が Pass 030 の `begin` ラップ下でも確実に認識され、AST から正常にストリップされること。
+- [x] `(define (f x) (declare (no-safepoints)) x)` が LIR 未定義シンボルエラーを出さずに正常にコンパイル・実行できること。
+- [x] `ulisp/frontend/025_top_level.scm` の `expand-define-record-type` が生成するすべての手続きに `(declare (no-safepoints))` が付与されていること。
+- [x] `ulisp/runtime/concurrency/` 内の不可分・内部手続きに `(declare (no-safepoints))` が明示配置されていること。
+- [x] `make-tree` や `task-worker` 等のユーザー定義再帰関数に正常にセーフポイントが注入されること。
+- [x] `make -C ulisp test_pass_inject_safepoints` が全件 PASS すること。
+- [x] `make -C ulisp test_concurrency` の全 20 並行性ターゲットに回帰が発生しないこと。
+- [x] `make -C ulisp lint_sexpr` がエラー 0 件で通過すること。
+- [x] `make -C ulisp compiler` で `ulisp/compiler.scm` が同期再生成されていること。
+- [x] `make py_compile && make static_analysis` が 100% PASS すること。
+- [x] ドキュメント内のすべてのリンクが相対パスで記述されていること。
+
+## Implementation Results
+
+- `*safepoint-excluded-prefixes*` を削除。除外は `%` 接頭辞・完全一致シンボル・`(declare (no-safepoints))` 宣言のみ。
+- Pass 030 の `(begin (declare ...) ...)` ラップ下でも宣言を認識しストリップ（LIR 未束縛 `no-safepoints` エラーを解消）。
+- Pass 025 でトップレベル定義の宣言を除去して名前を登録（パス無効時も一貫）。`define-record-type` 生成手続きに自動付与。
+- `runtime/concurrency/*.scm` の旧プレフィックス該当 483 定義へ宣言を移行（再帰による segfault を解消）。
+- 検証: `test_pass_inject_safepoints` 55/55、`test_concurrency` 全 PASS（`test_preemption` 102/102）、`lint_sexpr`、`test_lir_suite`、`test_backend`、`test_aarch64`、`py_compile`/`static_analysis` PASS。ブートストラップ固定点確認済み。

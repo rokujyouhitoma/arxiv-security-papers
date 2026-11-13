@@ -25,7 +25,8 @@
   (next %queue-node-next %queue-node-next-set!))
 
 (define make-queue-node
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((value)
      (let ((node (%make-queue-node value (make-atomic-box #f))))
        (%memory-fence)
@@ -35,14 +36,16 @@
          (error "make-queue-node: next must be an <atomic-box>" next-box)
          (let ((node (%make-queue-node value next-box)))
            (%memory-fence)
-           node)))))
+           node))))))
 
 (define (queue-node-value node)
+  (declare (no-safepoints))
   (if (not (queue-node? node))
       (error "queue-node-value: expected <queue-node>" node)
       (%queue-node-value node)))
 
 (define (queue-node-value-set! node val)
+  (declare (no-safepoints))
   (if (not (queue-node? node))
       (error "queue-node-value-set!: expected <queue-node>" node)
       (begin
@@ -51,11 +54,13 @@
         val)))
 
 (define (queue-node-next node)
+  (declare (no-safepoints))
   (if (not (queue-node? node))
       (error "queue-node-next: expected <queue-node>" node)
       (%queue-node-next node)))
 
 (define (queue-node-next-set! node next-box)
+  (declare (no-safepoints))
   (if (not (queue-node? node))
       (error "queue-node-next-set!: expected <queue-node>" node)
       (if (not (atomic-box? next-box))
@@ -80,7 +85,8 @@
   (available-box %queue-node-pool-available-box))
 
 (define make-queue-node-pool
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (%make-queue-node-pool (make-atomic-stamped-box #f 0) 0 (make-atomic-box 0)))
     ((capacity)
@@ -92,24 +98,28 @@
                                       capacity
                                       (make-atomic-box capacity))
                (let ((node (%make-queue-node #f (make-atomic-box head))))
-                 (build-free-list (+ i 1) node))))))))
+                 (build-free-list (+ i 1) node)))))))))
 
 (define (queue-node-pool-stamp pool)
+  (declare (no-safepoints))
   (if (not (queue-node-pool? pool))
       (error "queue-node-pool-stamp: expected <queue-node-pool>" pool)
       (atomic-stamped-stamp (%queue-node-pool-top pool))))
 
 (define (queue-node-pool-capacity pool)
+  (declare (no-safepoints))
   (if (not (queue-node-pool? pool))
       (error "queue-node-pool-capacity: expected <queue-node-pool>" pool)
       (%queue-node-pool-capacity pool)))
 
 (define (queue-node-pool-available pool)
+  (declare (no-safepoints))
   (if (not (queue-node-pool? pool))
       (error "queue-node-pool-available: expected <queue-node-pool>" pool)
       (atomic-ref (%queue-node-pool-available-box pool))))
 
 (define (pool-alloc-node! pool val)
+  (declare (no-safepoints))
   (if (not (queue-node-pool? pool))
       (error "pool-alloc-node!: expected <queue-node-pool>" pool)
       (let ((sbox (%queue-node-pool-top pool)))
@@ -130,9 +140,11 @@
                       (retry)))))))))
 
 (define (queue-pool-acquire! pool val)
+  (declare (no-safepoints))
   (pool-alloc-node! pool val))
 
 (define (pool-free-node! pool node)
+  (declare (no-safepoints))
   (if (not (queue-node-pool? pool))
       (error "pool-free-node!: expected <queue-node-pool>" pool)
       (if (not (queue-node? node))
@@ -151,6 +163,7 @@
                     (retry))))))))
 
 (define (queue-pool-release! pool node)
+  (declare (no-safepoints))
   (pool-free-node! pool node))
 
 ;; -----------------------------------------------------------------------
@@ -170,7 +183,8 @@
   (dequeue-count-box %queue-dequeue-count-box))
 
 (define make-lock-free-queue
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (let* ((dummy (make-queue-node #f (make-atomic-box #f)))
             (q (%make-lock-free-queue (make-atomic-box dummy)
@@ -208,14 +222,16 @@
                                          (make-atomic-box 0)
                                          (make-atomic-box 0))))
            (%memory-fence)
-           q)))))
+           q))))))
 
 (define (lock-free-queue-head q)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "lock-free-queue-head: expected <lock-free-queue>" q)
       (%queue-head q)))
 
 (define (lock-free-queue-head-set! q head-box)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "lock-free-queue-head-set!: expected <lock-free-queue>" q)
       (if (not (or (atomic-box? head-box) (padded-atomic-box? head-box)))
@@ -226,11 +242,13 @@
             head-box))))
 
 (define (lock-free-queue-tail q)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "lock-free-queue-tail: expected <lock-free-queue>" q)
       (%queue-tail q)))
 
 (define (lock-free-queue-tail-set! q tail-box)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "lock-free-queue-tail-set!: expected <lock-free-queue>" q)
       (if (not (or (atomic-box? tail-box) (padded-atomic-box? tail-box)))
@@ -241,9 +259,11 @@
             tail-box))))
 
 (define (queue-head q)
+  (declare (no-safepoints))
   (lock-free-queue-head q))
 
 (define (queue-tail q)
+  (declare (no-safepoints))
   (lock-free-queue-tail q))
 
 ;; -----------------------------------------------------------------------
@@ -275,6 +295,7 @@
           (loop)))))
 
 (define (enqueue-lockfree! q val)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "enqueue-lockfree!: expected <lock-free-queue>" q)
       (let* ((pool (%queue-pool q))
@@ -284,6 +305,7 @@
         (%enqueue-node-lockfree! q node))))
 
 (define (queue-enqueue! q val)
+  (declare (no-safepoints))
   (enqueue-lockfree! q val))
 
 (define (%dequeue-core! q empty-default release-pool)
@@ -320,7 +342,8 @@
           (loop)))))
 
 (define dequeue-lockfree!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((q)
      (if (not (lock-free-queue? q))
          (error "dequeue-lockfree!: expected <lock-free-queue>" q)
@@ -328,19 +351,22 @@
     ((q empty-default)
      (if (not (lock-free-queue? q))
          (error "dequeue-lockfree!: expected <lock-free-queue>" q)
-         (cdr (%dequeue-core! q empty-default (%queue-pool q)))))))
+         (cdr (%dequeue-core! q empty-default (%queue-pool q))))))))
 
 (define queue-dequeue!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((q) (dequeue-lockfree! q))
-    ((q empty-default) (dequeue-lockfree! q empty-default))))
+    ((q empty-default) (dequeue-lockfree! q empty-default)))))
 
 (define (dequeue-lockfree-with-status! q)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "dequeue-lockfree-with-status!: expected <lock-free-queue>" q)
       (%dequeue-core! q #f (%queue-pool q))))
 
 (define (enqueue-lockfree/pooled! q pool val)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "enqueue-lockfree/pooled!: expected <lock-free-queue>" q)
       (if (not (queue-node-pool? pool))
@@ -349,7 +375,8 @@
             (%enqueue-node-lockfree! q node)))))
 
 (define dequeue-lockfree/pooled!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((q pool)
      (if (not (lock-free-queue? q))
          (error "dequeue-lockfree/pooled!: expected <lock-free-queue>" q)
@@ -361,13 +388,14 @@
          (error "dequeue-lockfree/pooled!: expected <lock-free-queue>" q)
          (if (not (queue-node-pool? pool))
              (error "dequeue-lockfree/pooled!: expected <queue-node-pool>" pool)
-             (cdr (%dequeue-core! q empty-default pool)))))))
+             (cdr (%dequeue-core! q empty-default pool))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 5. Queue Inspection & Telemetry Procedures
 ;; -----------------------------------------------------------------------
 
 (define (queue-empty? q)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "queue-empty?: expected <lock-free-queue>" q)
       (let loop ()
@@ -387,10 +415,12 @@
               (loop))))))
 
 (define (lock-free-queue-empty? q)
+  (declare (no-safepoints))
   (queue-empty? q))
 
 (define queue-peek
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((q) (queue-peek q #f))
     ((q empty-default)
      (if (not (lock-free-queue? q))
@@ -409,14 +439,16 @@
                            (atomic-cas! tail-box tail next)
                            (loop)))
                      (%queue-node-value next))
-                 (loop))))))))
+                 (loop)))))))))
 
 (define lock-free-queue-peek
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((q) (queue-peek q #f))
-    ((q empty-default) (queue-peek q empty-default))))
+    ((q empty-default) (queue-peek q empty-default)))))
 
 (define (queue-size q)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "queue-size: expected <lock-free-queue>" q)
       (let* ((head (atomic-ref (%queue-head q)))
@@ -427,9 +459,11 @@
               (count-loop (atomic-ref (%queue-node-next cur)) (+ n 1)))))))
 
 (define (lock-free-queue-size q)
+  (declare (no-safepoints))
   (queue-size q))
 
 (define (queue->list q)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "queue->list: expected <lock-free-queue>" q)
       (let* ((head (atomic-ref (%queue-head q)))
@@ -441,6 +475,7 @@
                             (cons (%queue-node-value cur) acc)))))))
 
 (define (queue-stats q)
+  (declare (no-safepoints))
   (if (not (lock-free-queue? q))
       (error "queue-stats: expected <lock-free-queue>" q)
       (list (cons 'size (queue-size q))

@@ -51,6 +51,7 @@
         #f)))
 
 (define (current-synapse-task)
+  (declare (no-safepoints))
   (let ((idx (%current-worker-tls-index)))
     (vector-ref *worker-current-task-tls* idx)))
 
@@ -66,11 +67,13 @@
 (define *channel-wake-hook-box* (make-atomic-box #f))
 
 (define (set-channel-wake-hook! proc)
+  (declare (no-safepoints))
   (if (and proc (not (procedure? proc)))
       (error "set-channel-wake-hook!: expected procedure or #f" proc)
       (atomic-set! *channel-wake-hook-box* proc)))
 
 (define (channel-wake-hook)
+  (declare (no-safepoints))
   (atomic-ref *channel-wake-hook-box*))
 
 ;; Optional predicate `(lambda (task) ...)` for DSN-37 Section 8.3 Generation Gate.
@@ -78,11 +81,13 @@
 (define *channel-epoch-validator-box* (make-atomic-box #f))
 
 (define (set-channel-epoch-validator! proc)
+  (declare (no-safepoints))
   (if (and proc (not (procedure? proc)))
       (error "set-channel-epoch-validator!: expected procedure or #f" proc)
       (atomic-set! *channel-epoch-validator-box* proc)))
 
 (define (channel-epoch-validator)
+  (declare (no-safepoints))
   (atomic-ref *channel-epoch-validator-box*))
 
 ;; -----------------------------------------------------------------------
@@ -145,11 +150,13 @@
   (meta-box              %task-meta-box))
 
 (define (task-meta-fast t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       #f
       (atomic-ref (%task-meta-box t))))
 
 (define (ensure-task-meta! t)
+  (declare (no-safepoints))
   (let ((box (%task-meta-box t)))
     (let loop ()
       (let ((meta (atomic-ref box)))
@@ -170,12 +177,15 @@
 (define *task-next-id* (make-atomic-box 1))
 
 (define (allocate-task-id!)
+  (declare (no-safepoints))
   (atomic-fetch-add! *task-next-id* 1))
 
 (define (task-next-id-current)
+  (declare (no-safepoints))
   (atomic-ref *task-next-id*))
 
 (define (task-reset-next-id! val)
+  (declare (no-safepoints))
   (if (not (integer? val))
       (error "task-reset-next-id!: val must be an integer" val)
       (atomic-set! *task-next-id* val)))
@@ -240,6 +250,7 @@
       #f))
 
 (define (task-table-register! task)
+  (declare (no-safepoints))
   (if (not (task-context? task))
       (error "task-table-register!: expected <task-context>" task)
       (let* ((tid (task-tid task))
@@ -279,6 +290,7 @@
                           (retry-overflow))))))))))
 
 (define (task-table-unregister! tid-or-task)
+  (declare (no-safepoints))
   (let ((tid (cond
                ((integer? tid-or-task) tid-or-task)
                ((task-context? tid-or-task) (task-tid tid-or-task))
@@ -311,6 +323,7 @@
                         (retry-overflow))))))))))
 
 (define (lookup-task-by-tid tid)
+  (declare (no-safepoints))
   (if (not (integer? tid))
       #f
       (let ((slot-box (%get-task-table-slot-box tid #f)))
@@ -332,9 +345,11 @@
                   #f))))))
 
 (define (task-by-id tid)
+  (declare (no-safepoints))
   (lookup-task-by-tid tid))
 
 (define (task-table-clear!)
+  (declare (no-safepoints))
   (let loop ((i 0))
     (if (< i *task-table-max-pages*)
         (let ((p-box (vector-ref *task-table-pages* i)))
@@ -348,6 +363,7 @@
           #t))))
 
 (define (task-table-count)
+  (declare (no-safepoints))
   (let ((c (atomic-ref *task-table-live-count*)))
     (if (< c 0) 0 c)))
 
@@ -362,7 +378,8 @@
                       (make-atomic-box #f)))
 
 (define make-task-context
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (let ((tid (allocate-task-id!)))
        (%register-task-in-table!
@@ -383,14 +400,16 @@
                           blocked-on epoch next-run
                           reduction-exhaustions steals-count
                           #f 0 #f
-                          (make-atomic-box #f))))))
+                          (make-atomic-box #f)))))))
 
 (define (task-tid t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-tid: expected <task-context>" t)
       (%task-tid t)))
 
 (define (task-tid-set! t new-tid)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-tid-set!: expected <task-context>" t)
       (begin
@@ -424,20 +443,25 @@
 (define *task-pool-misses* (make-atomic-box 0))
 
 (define (task-pool-stats)
+  (declare (no-safepoints))
   (list (cons 'hits (atomic-ref *task-pool-hits*))
         (cons 'misses (atomic-ref *task-pool-misses*))))
 
 (define (task-pool-hits)
+  (declare (no-safepoints))
   (atomic-ref *task-pool-hits*))
 
 (define (task-pool-misses)
+  (declare (no-safepoints))
   (atomic-ref *task-pool-misses*))
 
 (define (task-pool-reset-stats!)
+  (declare (no-safepoints))
   (atomic-set! *task-pool-hits* 0)
   (atomic-set! *task-pool-misses* 0))
 
 (define (task-pool-clear!)
+  (declare (no-safepoints))
   (let loop ((w 0))
     (if (< w *task-pool-max-workers*)
         (let ((pool (vector-ref *task-context-pools* w))
@@ -477,7 +501,8 @@
   ctx)
 
 (define acquire-task-context!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (acquire-task-context! #f))
     ((target-worker-id)
@@ -503,10 +528,11 @@
                    (make-task-context))))
            (begin
              (atomic-fetch-add! *task-pool-misses* 1)
-             (make-task-context)))))))
+             (make-task-context))))))))
 
 (define release-task-context!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ctx)
      (release-task-context! ctx #f))
     ((ctx worker-id)
@@ -531,13 +557,15 @@
                      (vector-set! *task-context-pool-tops* w (+ top 1))
                      #t)
                    ;; Pool is full: let host GC collect
-                   #f)))))))
+                   #f))))))))
 
 (define (task-pooled? ctx)
+  (declare (no-safepoints))
   (and (task-context? ctx)
        (eq? (%task-state ctx) 'pooled)))
 
 (define (task-state t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-state: expected <task-context>" t)
       (let ((s (%task-state t)))
@@ -546,11 +574,13 @@
             s))))
 
 (define (task-internal-state t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-internal-state: expected <task-context>" t)
       (%task-state t)))
 
 (define (task-state-set! t new-state)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-state-set!: expected <task-context>" t)
       (begin
@@ -559,61 +589,73 @@
         new-state)))
 
 (define (task-reductions t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-reductions: expected <task-context>" t)
       (%task-reductions t)))
 
 (define (task-reductions-set! t r)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-reductions-set!: expected <task-context>" t)
       (%task-reductions-set! t r)))
 
 (define (task-continuation-pc t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-continuation-pc: expected <task-context>" t)
       (%task-continuation-pc t)))
 
 (define (task-continuation-pc-set! t pc)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-continuation-pc-set!: expected <task-context>" t)
       (%task-continuation-pc-set! t pc)))
 
 (define (task-stack-pointer t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-stack-pointer: expected <task-context>" t)
       (%task-stack-pointer t)))
 
 (define (task-stack-pointer-set! t sp)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-stack-pointer-set!: expected <task-context>" t)
       (%task-stack-pointer-set! t sp)))
 
 (define (task-arena-base t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-arena-base: expected <task-context>" t)
       (%task-arena-base t)))
 
 (define (task-arena-offset t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-arena-offset: expected <task-context>" t)
       (%task-arena-offset t)))
 
 (define (task-arena-offset-set! t off)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-arena-offset-set!: expected <task-context>" t)
       (%task-arena-offset-set! t off)))
 
 (define (task-arena-capacity t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-arena-capacity: expected <task-context>" t)
       (%task-arena-capacity t)))
 
 (define (task-blocked-on t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-blocked-on: expected <task-context>" t)
       (%task-blocked-on t)))
 
 (define (task-blocked-on-set! t ch)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-blocked-on-set!: expected <task-context>" t)
       (begin
@@ -622,11 +664,13 @@
         ch)))
 
 (define (task-epoch t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-epoch: expected <task-context>" t)
       (%task-epoch t)))
 
 (define (task-epoch-set! t ep)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-epoch-set!: expected <task-context>" t)
       (begin
@@ -635,31 +679,37 @@
         ep)))
 
 (define (task-next-run t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-next-run: expected <task-context>" t)
       (%task-next-run t)))
 
 (define (task-next-run-set! t nxt)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-next-run-set!: expected <task-context>" t)
       (%task-next-run-set! t nxt)))
 
 (define (task-reduction-exhaustions t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-reduction-exhaustions: expected <task-context>" t)
       (%task-reduction-exhaustions t)))
 
 (define (task-reduction-exhaustions-set! t n)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-reduction-exhaustions-set!: expected <task-context>" t)
       (%task-reduction-exhaustions-set! t n)))
 
 (define (task-steals-count t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-steals-count: expected <task-context>" t)
       (%task-steals-count t)))
 
 (define (task-steals-count-set! t n)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-steals-count-set!: expected <task-context>" t)
       (%task-steals-count-set! t n)))
@@ -704,6 +754,7 @@
     (else #f)))
 
 (define (task-has-handoff? t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-has-handoff?: expected <task-context>" t)
       (let ((meta (task-meta-fast t)))
@@ -714,11 +765,13 @@
               (> (vector-ref mb 1) 0))))))
 
 (define (task-handoff-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-handoff-box: expected <task-context>" t)
       (%meta-handoff-box (ensure-task-meta! t))))
 
 (define (task-handoff t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-handoff: expected <task-context>" t)
       (let ((meta (task-meta-fast t)))
@@ -739,6 +792,7 @@
                               #f))))))))))
 
 (define (task-mailbox-capacity t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-mailbox-capacity: expected <task-context>" t)
       (let ((meta (task-meta-fast t)))
@@ -747,6 +801,7 @@
             (vector-ref (%%normalize-mailbox (atomic-ref (%meta-handoff-box meta))) 2)))))
 
 (define (task-mailbox-capacity-set! t new-cap)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-mailbox-capacity-set!: expected <task-context>" t)
       (if (not (integer? new-cap))
@@ -768,6 +823,7 @@
                     (retry))))))))
 
 (define (task-mailbox-policy t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-mailbox-policy: expected <task-context>" t)
       (let ((meta (task-meta-fast t)))
@@ -776,6 +832,7 @@
             (vector-ref (%%normalize-mailbox (atomic-ref (%meta-handoff-box meta))) 6)))))
 
 (define (task-mailbox-policy-set! t new-pol)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-mailbox-policy-set!: expected <task-context>" t)
       (if (not (memq new-pol '(reject drop-oldest drop-newest)))
@@ -797,6 +854,7 @@
                     (retry))))))))
 
 (define (task-mailbox-dropped-count t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-mailbox-dropped-count: expected <task-context>" t)
       (let ((meta (task-meta-fast t)))
@@ -858,23 +916,27 @@
                  (retry)))))))))
 
 (define (task-set-handoff! t val)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-set-handoff!: expected <task-context>" t)
       (%task-mailbox-enqueue-internal! t val #t)))
 
 (define (task-mailbox-enqueue! t val)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-mailbox-enqueue!: expected <task-context>" t)
       (%task-mailbox-enqueue-internal! t val #t)))
 
 (define (task-mailbox-try-enqueue! t val)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-mailbox-try-enqueue!: expected <task-context>" t)
       (let ((res (%task-mailbox-enqueue-internal! t val #f)))
         (if res #t #f))))
 
 (define task-take-handoff!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((t) (task-take-handoff! t #f))
     ((t empty-default)
      (if (not (task-context? t))
@@ -905,13 +967,15 @@
                                (begin
                                  (%memory-fence)
                                  (if (pair? entry) (cdr entry) entry))
-                               (retry)))))))))))))
+                               (retry))))))))))))))
 
 ;; Explicit Task Mailbox (FIFO Queue) API (Issue #726, #750)
 (define (task-mailbox-empty? t)
+  (declare (no-safepoints))
   (not (task-has-handoff? t)))
 
 (define (task-mailbox-size t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-mailbox-size: expected <task-context>" t)
       (let ((meta (task-meta-fast t)))
@@ -922,20 +986,24 @@
               (vector-ref mb 1))))))
 
 (define task-mailbox-dequeue!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((t) (task-take-handoff! t #f))
-    ((t empty-default) (task-take-handoff! t empty-default))))
+    ((t empty-default) (task-take-handoff! t empty-default)))))
 
 (define (task-mailbox-peek t)
+  (declare (no-safepoints))
   (task-handoff t))
 
 ;; 耐障害性・リンク・モニタ・チャネル所有メタデータアクセサ (Lazy Initialization, Issue #800)
 (define (task-links-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-links-box: expected <task-context>" t)
       (%meta-links-box (ensure-task-meta! t))))
 
 (define (task-links t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       '()
       (let ((meta (task-meta-fast t)))
@@ -945,11 +1013,13 @@
               (if (list? v) v '()))))))
 
 (define (task-monitors-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-monitors-box: expected <task-context>" t)
       (%meta-monitors-box (ensure-task-meta! t))))
 
 (define (task-monitors t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       '()
       (let ((meta (task-meta-fast t)))
@@ -959,11 +1029,13 @@
               (if (list? v) v '()))))))
 
 (define (task-monitored-by-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-monitored-by-box: expected <task-context>" t)
       (%meta-monitored-by-box (ensure-task-meta! t))))
 
 (define (task-monitored-by t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       '()
       (let ((meta (task-meta-fast t)))
@@ -973,6 +1045,7 @@
               (if (list? v) v '()))))))
 
 (define (task-trap-exit? t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-trap-exit?: expected <task-context>" t)
       (let ((meta (task-meta-fast t)))
@@ -981,6 +1054,7 @@
             (atomic-ref (%meta-trap-exit-box meta))))))
 
 (define (task-trap-exit! t val)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-trap-exit!: expected <task-context>" t)
       (let* ((meta (ensure-task-meta! t))
@@ -990,11 +1064,13 @@
         b)))
 
 (define (task-owned-channels-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-owned-channels-box: expected <task-context>" t)
       (%meta-owned-channels-box (ensure-task-meta! t))))
 
 (define (task-owned-channels t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       '()
       (let ((meta (task-meta-fast t)))
@@ -1004,11 +1080,13 @@
               (if (list? v) v '()))))))
 
 (define (task-arena-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-arena-box: expected <task-context>" t)
       (%meta-arena-box (ensure-task-meta! t))))
 
 (define (task-arena t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       #f
       (let ((meta (task-meta-fast t)))
@@ -1017,6 +1095,7 @@
             (atomic-ref (%meta-arena-box meta))))))
 
 (define (task-set-arena! t arena)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-set-arena!: expected <task-context>" t)
       (let ((meta (ensure-task-meta! t)))
@@ -1024,16 +1103,19 @@
         arena)))
 
 (define (task-escape-k-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-escape-k-box: expected <task-context>" t)
       (%meta-escape-k-box (ensure-task-meta! t))))
 
 (define (task-escape-continuation t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       #f
       (%task-escape-k t)))
 
 (define (task-set-escape-continuation! t k)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-set-escape-continuation!: expected <task-context>" t)
       (begin
@@ -1043,16 +1125,19 @@
         k)))
 
 (define (task-handler-chain-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-handler-chain-box: expected <task-context>" t)
       (%meta-handler-chain-box (ensure-task-meta! t))))
 
 (define (task-handler-chain t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       0
       (%task-handler-chain t)))
 
 (define (task-set-handler-chain! t hc)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-set-handler-chain!: expected <task-context>" t)
       (begin
@@ -1062,16 +1147,19 @@
         hc)))
 
 (define (task-executing-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-executing-box: expected <task-context>" t)
       (%meta-executing-box (ensure-task-meta! t))))
 
 (define (task-executing? t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       #f
       (%task-executing t)))
 
 (define (task-executing-set! t val)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-executing-set!: expected <task-context>" t)
       (let ((b (if val #t #f)))
@@ -1081,11 +1169,13 @@
         b)))
 
 (define (task-resident-box t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-resident-box: expected <task-context>" t)
       (%meta-resident-box (ensure-task-meta! t))))
 
 (define (task-resident? t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       #f
       (let ((meta (task-meta-fast t)))
@@ -1095,6 +1185,7 @@
               (if val #t #f))))))
 
 (define (task-resident-hook t)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       #f
       (let ((meta (task-meta-fast t)))
@@ -1104,6 +1195,7 @@
               (if (procedure? val) val #f))))))
 
 (define (task-resident-set! t val)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-resident-set!: expected <task-context> (CWE-843)" t)
       (if (and val (not (boolean? val)) (not (procedure? val)))
@@ -1176,11 +1268,12 @@
   (make-atomic-box %default-with-synapse-task-boundary))
 
 (define with-synapse-task-boundary
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task thunk)
      ((atomic-ref *synapse-task-boundary-hook-box*) task thunk #f))
     ((task thunk secure-scrub?)
-     ((atomic-ref *synapse-task-boundary-hook-box*) task thunk secure-scrub?))))
+     ((atomic-ref *synapse-task-boundary-hook-box*) task thunk secure-scrub?)))))
 
 ;; Global hook for task normal termination cleanup (#741, #803)
 (define *task-exit-hook-box*
@@ -1195,7 +1288,8 @@
                 #f))))
 
 (define task-exit!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task)
      (task-exit! task 'normal))
     ((task reason)
@@ -1217,13 +1311,14 @@
              (task-reductions-set! task 0)
              (task-table-unregister! task)
              (release-task-context! task)
-             #t))))))
+             #t)))))))
 
 ;; Optional scheduler spawn hook for supervisor restart auto-enqueue (Issue #742)
 (define *supervisor-scheduler-spawn-hook-box*
   (vector (lambda (sched task) #f)))
 
 (define (synapse-set-supervisor-scheduler-spawn-hook! hook)
+  (declare (no-safepoints))
   (vector-set! *supervisor-scheduler-spawn-hook-box* 0 hook))
 
 ;; Global safepoint poll fallback (overridden by preempt.scm, Issue #744)
@@ -1231,6 +1326,7 @@
 (define (%safepoint-poll!) #t)
 
 (define (task-register-channel! t ch)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-register-channel!: expected <task-context>" t)
       (if (not (channel? ch))
@@ -1245,6 +1341,7 @@
                       (retry))))))))
 
 (define (task-unregister-channel! t ch)
+  (declare (no-safepoints))
   (if (not (task-context? t))
       (error "task-unregister-channel!: expected <task-context>" t)
       (if (not (channel? ch))
@@ -1266,7 +1363,8 @@
                               (retry)))))))))))
 
 (define task-cleanup-owned-channels!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((t) (task-cleanup-owned-channels! t 'killed #f))
     ((t reason) (task-cleanup-owned-channels! t reason #f))
     ((t reason wake-hook)
@@ -1291,10 +1389,11 @@
                                    ;; Abnormal termination (crash/panic): poison channel to unblock waiters (CWE-833)
                                    (channel-poison! ch reason wake-hook))
                                (loop (cdr xs))))))
-                     #t))))))))
+                     #t)))))))))
 
 (define task-poison-owned-channels!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((t) (task-poison-owned-channels! t 'killed #f))
     ((t reason) (task-poison-owned-channels! t reason #f))
     ((t reason wake-hook)
@@ -1311,7 +1410,7 @@
                          (let ((ob (%channel-owner-box ch)))
                            (if ob (atomic-cas! ob t #f) #f))
                          (channel-poison! ch reason wake-hook)
-                         (loop (cdr xs))))))))))))
+                         (loop (cdr xs)))))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 3. <channel-waiter> Record Type (Wait Queue Entry)
@@ -1325,6 +1424,7 @@
   (state-box %waiter-state-box))
 
 (define (make-channel-waiter task payload)
+  (declare (no-safepoints))
   (if (and task (not (task-context? task)))
       (error "make-channel-waiter: expected <task-context> or #f" task)
       (%make-channel-waiter task
@@ -1332,11 +1432,13 @@
                             (make-atomic-box 'waiting))))
 
 (define (channel-waiter-task w)
+  (declare (no-safepoints))
   (if (not (channel-waiter? w))
       (error "channel-waiter-task: expected <channel-waiter>" w)
       (%waiter-task w)))
 
 (define (channel-waiter-state w)
+  (declare (no-safepoints))
   (if (not (channel-waiter? w))
       (error "channel-waiter-state: expected <channel-waiter>" w)
       (atomic-ref (%waiter-state-box w))))
@@ -1422,28 +1524,32 @@
         ch)))
 
 (define make-channel
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (%make-channel-instance 0 #f))
     ((capacity)
      (%make-channel-instance capacity #f))
     ((capacity spsc?)
-     (%make-channel-instance capacity spsc?))))
+     (%make-channel-instance capacity spsc?)))))
 
 (define make-spsc-channel
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (%make-channel-instance 0 #t))
     ((capacity)
-     (%make-channel-instance capacity #t))))
+     (%make-channel-instance capacity #t)))))
 
 (define (channel-spsc? ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-spsc?: expected <channel>" ch)
       (%channel-spsc? ch)))
 
 ;; DSN-37 Section 6.1 5-argument constructor compatibility
 (define (make-channel-internal message-queue recv-wait-queue send-wait-queue capacity current-count)
+  (declare (no-safepoints))
   (if (or (not (lock-free-queue? message-queue))
           (not (lock-free-queue? recv-wait-queue))
           (not (lock-free-queue? send-wait-queue)))
@@ -1481,47 +1587,56 @@
                            (make-atomic-box #f))))))
 
 (define (channel-message-queue ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-message-queue: expected <channel>" ch)
       (%channel-message-queue ch)))
 
 (define (channel-recv-wait-queue ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-recv-wait-queue: expected <channel>" ch)
       (%channel-recv-wait-queue ch)))
 
 (define (channel-send-wait-queue ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-send-wait-queue: expected <channel>" ch)
       (%channel-send-wait-queue ch)))
 
 (define (channel-capacity ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-capacity: expected <channel>" ch)
       (%channel-capacity ch)))
 
 (define (channel-current-count ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-current-count: expected <channel>" ch)
       (%channel-current-count ch)))
 
 (define (channel-ring-buffer ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-ring-buffer: expected <channel>" ch)
       (%channel-ring-buffer ch)))
 
 (define (channel-ring-mask ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-ring-mask: expected <channel>" ch)
       (%channel-ring-mask ch)))
 
 (define (channel-unboxed? ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-unboxed?: expected <channel>" ch)
       (and (> (%channel-capacity ch) 0)
            (vector? (%channel-ring-buffer ch)))))
 
 (define (channel-count ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-count: expected <channel>" ch)
       (if (and (%channel-spsc? ch) (> (%channel-capacity ch) 0))
@@ -1534,17 +1649,20 @@
 ;; -----------------------------------------------------------------------
 
 (define (channel-owner-box ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-owner-box: expected <channel>" ch)
       (%channel-owner-box ch)))
 
 (define (channel-owner ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-owner: expected <channel>" ch)
       (let ((ob (%channel-owner-box ch)))
         (if ob (atomic-ref ob) #f))))
 
 (define (channel-transfer-ownership! ch new-owner)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-transfer-ownership!: expected <channel>" ch)
       (if (and new-owner (not (task-context? new-owner)))
@@ -1566,6 +1684,7 @@
                       (retry))))))))
 
 (define (channel-transfer! ch from-task to-task)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-transfer!: expected <channel>" ch)
       (if (and from-task (not (task-context? from-task)))
@@ -1590,27 +1709,32 @@
                             (channel-transfer! ch from-task to-task)))))))))
 
 (define (channel-disown! ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-disown!: expected <channel>" ch)
       (channel-transfer-ownership! ch #f)))
 
 (define (channel-share! ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-share!: expected <channel>" ch)
       (channel-transfer-ownership! ch #f)))
 
 (define (channel-closed? ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-closed?: expected <channel>" ch)
       (let ((val (atomic-ref (%channel-closed-box ch))))
         (if val #t #f))))
 
 (define (channel-poisoned? ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-poisoned?: expected <channel>" ch)
       (eq? (atomic-ref (%channel-closed-box ch)) 'poisoned)))
 
 (define (channel-empty? ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-empty?: expected <channel>" ch)
       (if (and (%channel-spsc? ch) (> (%channel-capacity ch) 0))
@@ -1622,6 +1746,7 @@
                    (queue-empty? (%channel-message-queue ch)))))))
 
 (define (channel-full? ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-full?: expected <channel>" ch)
       (if (and (%channel-spsc? ch) (> (%channel-capacity ch) 0))
@@ -1658,6 +1783,7 @@
                 #t))))))
 
 (define (channel-spsc-try-enqueue! ch val)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-spsc-try-enqueue!: expected <channel>" ch)
       (%channel-spsc-try-enqueue! ch val)))
@@ -1681,6 +1807,7 @@
                 val))))))
 
 (define (channel-spsc-try-dequeue-val! ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-spsc-try-dequeue-val!: expected <channel>" ch)
       (%channel-spsc-try-dequeue-val! ch)))
@@ -1741,6 +1868,7 @@
                       (retry)))))))))
 
 (define (channel-try-dequeue-val! ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-try-dequeue-val!: expected <channel>" ch)
       (if (and (%channel-spsc? ch) (> (%channel-capacity ch) 0))
@@ -1803,9 +1931,10 @@
               (hook task))))))
 
 (define task-wake!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task) (%wake-task! task #f))
-    ((task wake-hook) (%wake-task! task wake-hook))))
+    ((task wake-hook) (%wake-task! task wake-hook)))))
 
 ;; Pop next valid, unclaimed <channel-waiter> from a wait queue.
 ;; Any waiter whose task fails the Generation Gate is transitioned to 'terminated.
@@ -1935,27 +2064,31 @@
           (%channel-send-core! ch val #f #f #t))))
 
 (define channel-send!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch val)
      (%channel-send-fast-2! ch val))
     ((ch val sender-task)
      (%channel-send-core! ch val sender-task #f #t))
     ((ch val sender-task wake-hook)
-     (%channel-send-core! ch val sender-task wake-hook #t))))
+     (%channel-send-core! ch val sender-task wake-hook #t)))))
 
 (define (channel-try-send! ch val)
+  (declare (no-safepoints))
   (%channel-send-core! ch val #f #f #f))
 
 (define channel-send-unboxed!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch val)
      (%channel-send-fast-2! ch val))
     ((ch val sender-task)
      (%channel-send-core! ch val sender-task #f #t))
     ((ch val sender-task wake-hook)
-     (%channel-send-core! ch val sender-task wake-hook #t))))
+     (%channel-send-core! ch val sender-task wake-hook #t)))))
 
 (define (channel-try-send-unboxed! ch val)
+  (declare (no-safepoints))
   (%channel-send-core! ch val #f #f #f))
 
 ;; -----------------------------------------------------------------------
@@ -2087,22 +2220,25 @@
           (%channel-recv-val! ch #f #f #t 'suspended))))
 
 (define channel-recv!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch)
      (%channel-recv-fast-1! ch))
     ((ch receiver-task)
      (%channel-recv-val! ch receiver-task #f #t 'suspended))
     ((ch receiver-task wake-hook)
-     (%channel-recv-val! ch receiver-task wake-hook #t 'suspended))))
+     (%channel-recv-val! ch receiver-task wake-hook #t 'suspended)))))
 
 (define channel-try-recv!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch)
      (%channel-recv-val! ch #f #f #f #f))
     ((ch empty-default)
-     (%channel-recv-val! ch #f #f #f empty-default))))
+     (%channel-recv-val! ch #f #f #f empty-default)))))
 
 (define (channel-try-recv-with-status! ch)
+  (declare (no-safepoints))
   (%channel-recv-core! ch #f #f #f #f))
 
 ;; -----------------------------------------------------------------------
@@ -2128,7 +2264,8 @@
                   (loop (+ i 1)))))))))
 
 (define channel-recv-timeout!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch timeout-ms)
      (channel-recv-timeout! ch timeout-ms #f))
     ((ch timeout-ms receiver-task)
@@ -2207,29 +2344,32 @@
                                            (cons #t val))))
                                     (else
                                      (%memory-fence)
-                                     (wait-loop)))))))))))))))))
+                                     (wait-loop))))))))))))))))))
 
 (define channel-recv-unboxed!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch)
      (%channel-recv-val! ch #f #f #t 'suspended))
     ((ch receiver-task)
      (%channel-recv-val! ch receiver-task #f #t 'suspended))
     ((ch receiver-task wake-hook)
-     (%channel-recv-val! ch receiver-task wake-hook #t 'suspended))))
+     (%channel-recv-val! ch receiver-task wake-hook #t 'suspended)))))
 
 (define channel-try-recv-unboxed!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch)
      (%channel-recv-val! ch #f #f #f #f))
     ((ch empty-default)
-     (%channel-recv-val! ch #f #f #f empty-default))))
+     (%channel-recv-val! ch #f #f #f empty-default)))))
 
 ;; -----------------------------------------------------------------------
 ;; 7b. Multiple Values Zero-Allocation API (R7RS §6.10, Issue #686)
 ;; -----------------------------------------------------------------------
 
 (define (channel-try-recv-values! ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-try-recv-values!: expected <channel>" ch)
       (if (and (%channel-spsc? ch) (> (%channel-capacity ch) 0))
@@ -2264,7 +2404,8 @@
                   (values (car res) (cdr res))))))))
 
 (define channel-recv-values!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch) (channel-recv-values! ch #f #f))
     ((ch receiver-task) (channel-recv-values! ch receiver-task #f))
     ((ch receiver-task wake-hook)
@@ -2298,14 +2439,15 @@
                  (atomic-fetch-add! (%channel-received-count-box ch) 1)
                  (values #t msg))
                (let ((res (%channel-recv-core! ch receiver-task wake-hook #t 'suspended)))
-                 (values (car res) (cdr res)))))))))
+                 (values (car res) (cdr res))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 8. Channel Close & Fan-Out Deep-Copy Broadcast (DSN-37 Section 4.2)
 ;; -----------------------------------------------------------------------
 
 (define channel-close!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch) (channel-close! ch #f))
     ((ch wake-hook)
      (if (not (channel? ch))
@@ -2339,10 +2481,11 @@
                      (if (task-context? cur-task)
                          (task-unregister-channel! cur-task ch)
                          #f)))))
-           #t)))))
+           #t))))))
 
 (define channel-poison!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ch) (channel-poison! ch 'poisoned #f))
     ((ch reason) (channel-poison! ch reason #f))
     ((ch reason wake-hook)
@@ -2387,11 +2530,12 @@
                      (if (task-context? cur-task)
                          (task-unregister-channel! cur-task ch)
                          #f)))))
-           #t)))))
+           #t))))))
 
 ;; Structural deep copy for fan-out broadcast so mutable pairs, vectors,
 ;; strings, and bytevectors are never aliased across receiving tasks (CWE-662).
 (define (channel-deep-copy val)
+  (declare (no-safepoints))
   (cond
     ((or (fixnum? val) (null? val) (boolean? val) (symbol? val) (char? val) (eof-object? val))
      val)
@@ -2415,7 +2559,8 @@
     (else val)))
 
 (define broadcast-send!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((channels val)
      (broadcast-send! channels val channel-deep-copy))
     ((channels val copy-proc)
@@ -2434,13 +2579,14 @@
                              (error "broadcast-send!: element is not a <channel>" ch)
                              (begin
                                (channel-send! ch (copy-proc val))
-                               (loop (cdr rest) (+ count 1)))))))))))))
+                               (loop (cdr rest) (+ count 1))))))))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 9. Channel Telemetry & Inspection
 ;; -----------------------------------------------------------------------
 
 (define (channel-stats ch)
+  (declare (no-safepoints))
   (if (not (channel? ch))
       (error "channel-stats: expected <channel>" ch)
       (let* ((spsc? (%channel-spsc? ch))

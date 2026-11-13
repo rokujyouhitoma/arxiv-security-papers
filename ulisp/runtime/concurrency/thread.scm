@@ -37,33 +37,40 @@
 ;; -----------------------------------------------------------------------
 
 (define (native-thread-supported?)
+  (declare (no-safepoints))
   #t)
 
 (define (init-worker-tls!)
+  (declare (no-safepoints))
   (%sys-init-worker-tls))
 
 (define (online-cpu-count)
+  (declare (no-safepoints))
   (let ((cnt (%sys-online-cpu-count)))
     (if (and (integer? cnt) (> cnt 0))
         cnt
         1)))
 
 (define (get-current-core-id)
+  (declare (no-safepoints))
   (let ((core (%sys-getcpu-core)))
     (if (and (integer? core) (>= core 0))
         core
         0)))
 
 (define (get-current-node-id)
+  (declare (no-safepoints))
   (let ((node (%sys-getcpu-node)))
     (if (and (integer? node) (>= node 0))
         node
         0)))
 
 (define (get-current-cpu-node)
+  (declare (no-safepoints))
   (cons (get-current-core-id) (get-current-node-id)))
 
 (define (set-thread-affinity! core-id)
+  (declare (no-safepoints))
   (if (not (integer? core-id))
       (error "set-thread-affinity!: core-id must be an integer (CWE-843)" core-id)
       (if (or (< core-id 0) (> core-id 1023))
@@ -71,6 +78,7 @@
           (%sys-set-affinity! core-id))))
 
 (define (spawn-native-thread proc arg)
+  (declare (no-safepoints))
   (if (not (procedure? proc))
       (error "spawn-native-thread: proc must be a procedure (CWE-843)" proc)
       (let ((tid (%sys-spawn-thread proc arg)))
@@ -79,5 +87,6 @@
             (error "spawn-native-thread: failed to clone thread" tid)))))
 
 (define (exit-native-thread! code)
+  (declare (no-safepoints))
   (let ((c (if (integer? code) code 0)))
     (%sys-thread-exit! c)))

@@ -21,6 +21,7 @@
 (define *context-stack-canary* 21130214873854) ; 0x1337BEEFCAFE (45-bit fixnum-safe canary)
 
 (define (context-frame-size)
+  (declare (no-safepoints))
   (let ((sz (%asm-get-trampoline-addr 7)))
     (if (> sz 0) sz 64)))
 
@@ -102,7 +103,8 @@
   (freed?     task-stack-freed?     %task-stack-freed-set!))
 
 (define make-task-stack
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (make-task-stack *context-default-stack-size*))
     ((requested-size)
@@ -131,9 +133,10 @@
                  (%context-raw-u64-set! top -24 0)   ; task_state = 0 ('ready)
                  (%context-raw-u64-set! top -16 init-sp) ; task_sp_slot
                  (%context-raw-u64-set! top -8 0)    ; parent_sp_slot = 0
-                 (%make-task-stack base aligned-size top init-sp #f))))))))
+                 (%make-task-stack base aligned-size top init-sp #f)))))))))
 
 (define (free-task-stack! stack)
+  (declare (no-safepoints))
   (if (not (task-stack? stack))
       (error "free-task-stack!: expected <task-stack>" stack)
       (if (task-stack-freed? stack)
@@ -149,6 +152,7 @@
             #t))))
 
 (define (task-stack-check-canary stack)
+  (declare (no-safepoints))
   (if (not (task-stack? stack))
       (error "task-stack-check-canary: expected <task-stack>" stack)
       (if (task-stack-freed? stack)
@@ -159,6 +163,7 @@
                  (= (%context-raw-u64-ref top -80) *context-stack-canary*))))))
 
 (define (task-stack-sp stack)
+  (declare (no-safepoints))
   (if (not (task-stack? stack))
       (error "task-stack-sp: expected <task-stack>" stack)
       (if (task-stack-freed? stack)
@@ -227,7 +232,8 @@
                 init-sp)))))
 
 (define setup-task-stack
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((stack entry-fn)
      (if (not (task-stack? stack))
          (error "setup-task-stack: expected <task-stack>" stack)
@@ -239,7 +245,7 @@
                (%task-stack-initial-sp-set! stack sp)
                sp))))
     ((stack-base stack-size entry-fn)
-     (%setup-task-stack-raw! stack-base stack-size entry-fn))))
+     (%setup-task-stack-raw! stack-base stack-size entry-fn)))))
 
 ;; -----------------------------------------------------------------------
 ;; 5. <coroutine-context> & High-Level Context Switch API
@@ -248,12 +254,15 @@
 (define *coroutine-next-id* (make-atomic-box 1))
 
 (define (allocate-coroutine-id!)
+  (declare (no-safepoints))
   (atomic-fetch-add! *coroutine-next-id* 1))
 
 (define (coroutine-next-id-current)
+  (declare (no-safepoints))
   (atomic-ref *coroutine-next-id*))
 
 (define (coroutine-reset-next-id! val)
+  (declare (no-safepoints))
   (if (not (integer? val))
       (error "coroutine-reset-next-id!: val must be an integer" val)
       (atomic-set! *coroutine-next-id* val)))
@@ -267,7 +276,8 @@
   (owns-stack? coroutine-owns-stack?))
 
 (define make-coroutine-context
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((entry-fn)
      (make-coroutine-context entry-fn *context-default-stack-size*))
     ((entry-fn stack-or-size)
@@ -279,14 +289,16 @@
                          (make-task-stack stack-or-size)))
                 (cid (allocate-coroutine-id!)))
            (setup-task-stack stk entry-fn)
-           (%make-coroutine-context cid stk entry-fn owns?))))))
+           (%make-coroutine-context cid stk entry-fn owns?)))))))
 
 (define (free-coroutine-context! ctx)
+  (declare (no-safepoints))
   (if (not (coroutine-context? ctx))
       (error "free-coroutine-context!: expected <coroutine-context>" ctx)
       (free-task-stack! (coroutine-stack ctx))))
 
 (define (coroutine-state ctx)
+  (declare (no-safepoints))
   (if (not (coroutine-context? ctx))
       (error "coroutine-state: expected <coroutine-context>" ctx)
       (let ((stk (coroutine-stack ctx)))
@@ -301,9 +313,11 @@
                 (else 'unknown)))))))
 
 (define (coroutine-terminated? ctx)
+  (declare (no-safepoints))
   (eq? (coroutine-state ctx) 'terminated))
 
 (define (coroutine-switch-count ctx)
+  (declare (no-safepoints))
   (if (not (coroutine-context? ctx))
       (error "coroutine-switch-count: expected <coroutine-context>" ctx)
       (let ((stk (coroutine-stack ctx)))
@@ -312,6 +326,7 @@
             (%context-raw-u64-ref (task-stack-top stk) -56)))))
 
 (define (coroutine-stack-pointer ctx)
+  (declare (no-safepoints))
   (if (not (coroutine-context? ctx))
       (error "coroutine-stack-pointer: expected <coroutine-context>" ctx)
       (task-stack-sp (coroutine-stack ctx))))
@@ -329,7 +344,8 @@
                     stk))))))
 
 (define context-resume!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((ctx)
      (context-resume! ctx #f))
     ((ctx send-val)
@@ -338,17 +354,19 @@
             (res (%asm-resume-task! top send-val)))
        (if (not (task-stack-check-canary stk))
            (error "context-resume!: stack overflow canary corrupted during execution (CWE-787)" ctx)
-           res)))))
+           res))))))
 
 (define context-yield!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (%asm-yield-task! #f))
     ((yield-val)
-     (%asm-yield-task! yield-val))))
+     (%asm-yield-task! yield-val)))))
 
 (define context-switch!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((from-ctx to-ctx)
      (context-switch! from-ctx to-ctx #f))
     ((from-ctx to-ctx send-val)
@@ -365,9 +383,10 @@
                                                  send-val)))
                      (if (not (task-stack-check-canary from-stk))
                          (error "context-switch!: stack canary corrupted upon resume (CWE-787)" from-ctx)
-                         res)))))))))
+                         res))))))))))
 
 (define (swap-context! old-sp-ptr new-sp)
+  (declare (no-safepoints))
   (if (or (not (integer? old-sp-ptr)) (<= old-sp-ptr 0))
       (error "swap-context!: old-sp-ptr must be a positive integer address" old-sp-ptr)
       (if (or (not (integer? new-sp)) (<= new-sp 0))
@@ -379,7 +398,8 @@
 ;; -----------------------------------------------------------------------
 
 (define verify-swap-context-abi!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     (()
      (let* ((s1 (make-task-stack *context-default-stack-size*))
             (s2 (make-task-stack *context-default-stack-size*))
@@ -395,10 +415,11 @@
              (let ((ok (%asm-verify-swap-context-regs! (task-stack-top s1) (task-stack-top s2))))
                (and ok
                     (task-stack-check-canary s1)
-                    (task-stack-check-canary s2))))))))
+                    (task-stack-check-canary s2)))))))))
 
 (define bench-swap-context!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((total-switches)
      (let* ((s1 (make-task-stack *context-default-stack-size*))
             (s2 (make-task-stack *context-default-stack-size*))
@@ -416,9 +437,10 @@
                                                         total-switches)))
                (if (not (and (task-stack-check-canary s1) (task-stack-check-canary s2)))
                    (error "bench-swap-context!: stack canary corrupted during benchmark" completed)
-                   completed)))))))
+                   completed))))))))
 
 (define (context-stats)
+  (declare (no-safepoints))
   (list (cons 'total-switches (%asm-get-trampoline-addr 3))
         (cons 'active-task-top (%asm-get-trampoline-addr 4))
         (cons 'entry-trampoline (%asm-get-trampoline-addr 0))

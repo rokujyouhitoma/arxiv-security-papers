@@ -47,7 +47,8 @@
                 (%make-budgeted-task id st-box red-box budget task-obj exh-box))))))
 
 (define make-budgeted-task
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((task-obj)
      (%make-budgeted-task-impl (allocate-task-id!) task-obj *default-reduction-budget*))
     ((arg1 arg2)
@@ -55,13 +56,14 @@
          (%make-budgeted-task-impl arg1 arg2 *default-reduction-budget*)
          (%make-budgeted-task-impl (allocate-task-id!) arg1 arg2)))
     ((id task-obj budget)
-     (%make-budgeted-task-impl id task-obj budget))))
+     (%make-budgeted-task-impl id task-obj budget)))))
 
 ;; -----------------------------------------------------------------------
 ;; 2. State & Field Accessors (Unified with DSN-37 <task-context>)
 ;; -----------------------------------------------------------------------
 
 (define (task-reductions obj)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? obj)
      (vector-ref (%task-reductions-box obj) 0))
@@ -71,6 +73,7 @@
      (error "task-reductions: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-reductions-set! obj n)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? obj)
      (if (not (integer? n))
@@ -84,6 +87,7 @@
      (error "task-reductions-set!: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-id obj)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? obj)
      (%budgeted-task-id obj))
@@ -93,6 +97,7 @@
      (error "task-id: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-target-obj obj)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? obj)
      (%budgeted-task-target obj))
@@ -102,6 +107,7 @@
      (error "task-target-obj: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-initial-budget obj)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? obj)
      (%budgeted-task-initial-budget obj))
@@ -111,6 +117,7 @@
      (error "task-initial-budget: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-exhaustion-count obj)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? obj)
      (vector-ref (%task-exhaustions-box obj) 0))
@@ -120,6 +127,7 @@
      (error "task-exhaustion-count: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-state obj)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? obj)
      (vector-ref (%task-state-box obj) 0))
@@ -129,6 +137,7 @@
      (error "task-state: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-state-set! obj st)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? obj)
      (vector-set! (%task-state-box obj) 0 st)
@@ -140,6 +149,7 @@
      (error "task-state-set!: expected <budgeted-task> or <task-context> (CWE-843)" obj))))
 
 (define (task-exhausted? btask)
+  (declare (no-safepoints))
   (<= (task-reductions btask) 0))
 
 ;; -----------------------------------------------------------------------
@@ -178,13 +188,15 @@
      (error "task-consume-reductions!: expected <budgeted-task> or <task-context> (CWE-843)" btask))))
 
 (define task-consume-reductions!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((btask)
      (%task-consume-impl! btask 1))
     ((btask delta)
-     (%task-consume-impl! btask delta))))
+     (%task-consume-impl! btask delta)))))
 
 (define (task-replenish! btask)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? btask)
      (let ((init-b (task-initial-budget btask)))
@@ -253,13 +265,15 @@
      (error "check-safepoint!: expected <budgeted-task> or <task-context> (CWE-843)" btask))))
 
 (define check-safepoint!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((btask)
      (%check-safepoint-impl! btask #f))
     ((btask on-exhaust-thunk)
-     (%check-safepoint-impl! btask on-exhaust-thunk))))
+     (%check-safepoint-impl! btask on-exhaust-thunk)))))
 
 (define (safepoint-poll! btask)
+  (declare (no-safepoints))
   (%check-safepoint-impl! btask #f))
 
 (define (%synapse-safepoint-poll!)
@@ -302,17 +316,19 @@
      (error "scheduler-yield!: expected <budgeted-task> or <task-context> (CWE-843)" btask))))
 
 (define scheduler-yield!
-  (case-lambda
+  (begin (declare (no-safepoints))
+   (case-lambda
     ((btask)
      (%scheduler-yield-impl! btask #f))
     ((btask sched)
-     (%scheduler-yield-impl! btask sched))))
+     (%scheduler-yield-impl! btask sched)))))
 
 ;; -----------------------------------------------------------------------
 ;; 5. Budgeted Task Execution Engine
 ;; -----------------------------------------------------------------------
 
 (define (budgeted-task-execute! btask)
+  (declare (no-safepoints))
   (if (not (budgeted-task? btask))
       (error "budgeted-task-execute!: expected <budgeted-task> (CWE-843)" btask)
       (let ((target (task-target-obj btask)))
@@ -352,6 +368,7 @@
 ;; -----------------------------------------------------------------------
 
 (define (budgeted-task-stats btask)
+  (declare (no-safepoints))
   (cond
     ((budgeted-task? btask)
      (let ((tid (task-id btask))
