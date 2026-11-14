@@ -428,6 +428,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 | **SRFI 45** | Primitives for Expressing Iterative Lazy Algorithms | **◎** | [ulisp/lib/promise.scm](../lib/promise.scm) | R7RS-small §4.2.5 に正式採択。`delay`, `force`, `delay-force`, `make-promise` 完全準拠 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
 | **SRFI 60** | Integers as Bits (整数ビット表現・操作) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 62-bit Fixnum ビットマスク演算プリミティブ群 |
 | **SRFI 64** | Test Suites API (ユニットテスト標準) | **◎** | [ulisp/lib/test.scm](../lib/test.scm)<br>[ulisp/lib/srfi/64.sld](../lib/srfi/64.sld) | SRFI 64 ユニットテスト標準 API 完全準拠。テストスイート・グループ・アサーションマクロ群、スキップ・XFAIL、拡張テストランナー完備 ([Issue #819](../../docs/issues/closed/819-implement-srfi-64-test-suites-library-and-custom-test-runners.md)) |
+| **SRFI 78** | Lightweight Testing (軽量テストフレームワーク) | **◎** | [ulisp/lib/check.scm](../lib/check.scm)<br>[ulisp/lib/srfi/78.sld](../lib/srfi/78.sld) | SRFI 78 軽量テストフレームワーク完全準拠。`check`, `check-ec`、アロー記法 `(=>)`、カスタム等価述語、実行モード切替 (`off`, `summary`, `report-failed`, `report`)、ステータス問い合わせ (`check-passed?`, `check-report`, `check-reset!`)、SRFI 64 テストランナー透過的連携完備 ([Issue #820](../../docs/issues/closed/820-implement-srfi-78-lightweight-testing-library.md)) |
 | **SRFI 69** | Basic Hash Tables (基本ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/69.sld](../lib/srfi/69.sld) | 基本ハッシュテーブル API 完全準拠。`make-hash-table`, `hash-table-ref/default`, `hash-table-walk` 等 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
 | **SRFI 88** | Keyword Objects (キーワードオブジェクト `:key`) | **×** | - | シンボルで代用 |
 | **SRFI 89** | Optional Positional and Named Parameters | **×** | - | 未実装 |
@@ -588,6 +589,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
 - **SRFI 60 (Integers as Bits)**: [SRFI 60: Integers as Bits](https://srfi.schemers.org/srfi-60/srfi-60.html)
 - **SRFI 61 (General cond clause)**: [SRFI 61: A more general cond clause](https://srfi.schemers.org/srfi-61/srfi-61.html)
 - **SRFI 64 (Test Suites)**: [SRFI 64: A Scheme API for Test Suites](https://srfi.schemers.org/srfi-64/srfi-64.html)
+- **SRFI 78 (Lightweight Testing)**: [SRFI 78: Lightweight testing](https://srfi.schemers.org/srfi-78/srfi-78.html)
 - **SRFI 69 (Basic Hash Tables)**: [SRFI 69: Basic Hash Tables](https://srfi.schemers.org/srfi-69/srfi-69.html)
 - **SRFI 95 (Sorting & Merging)**: [SRFI 95: Sorting and Merging](https://srfi.schemers.org/srfi-95/srfi-95.html)
 - **SRFI 101 (Random Access Lists)**: [SRFI 101: Purely Functional Random-Access Pairs and Lists](https://srfi.schemers.org/srfi-101/srfi-101.html)

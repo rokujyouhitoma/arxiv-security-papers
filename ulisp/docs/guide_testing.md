@@ -159,6 +159,22 @@ make test_srfi_64
   - テストランナー: `test-runner-simple`, `test-runner-null`, `test-runner-create`, `test-runner-current`, `test-runner-factory`
   - コールバックフック: `test-runner-on-test-begin!`, `test-runner-on-test-end!`, `test-runner-on-group-begin!`, `test-runner-on-group-end!`, `test-runner-on-final!`
 
+### Layer 9: SRFI 78 軽量テストフレームワーク (`make test_srfi_78` - Issue #820)
+R7RS-large / SRFI 78 に準拠した軽量テストフレームワーク `(srfi 78)` および `lib/check.scm`。単一ファイルや REPL でのアロー記法 `(check expr => expected)`、カスタム等価述語 `(check expr (=> equal-pred) expected)`、Eager Comprehension 反復テスト `(check-ec ...)`、実行モード切替、および SRFI 64 テストランナーとの透過的相互運用を提供する。
+
+```bash
+cd ulisp
+# SRFI 78 テストスイートのネイティブ AOT コンパイル & 実行
+make test_srfi_78
+```
+
+- **利用可能な API**:
+  - チェック構文: `(check expr => expected)`, `(check expr (=> equal-pred) expected)`
+  - 内包表記構文: `(check-ec (: var [from] to) expr => expected)`, `(check-ec (:list var lst) expr (=> equal-pred) expected)`
+  - 実行モード切替: `(check-set-mode! 'off)`, `(check-set-mode! 'summary)`, `(check-set-mode! 'report-failed)`, `(check-set-mode! 'report)`
+  - 状態取得・リセット: `(check-reset!)`, `(check-passed?)`, `(check-report)`
+  - SRFI 64 透過連携: `(test-runner-current)` がアクティブな環境では、`check` の結果を SRFI 64 アサーションとして自動記録・集計。
+
 ---
 
 ## 3. トラブルシューティング
