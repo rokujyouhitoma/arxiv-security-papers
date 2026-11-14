@@ -10,7 +10,7 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **812** | AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV | Bug | Medium | New | [812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md](812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) |
+| **812** | AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV | Bug | Medium | In Progress | [812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md](812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) |
 | **814** | 143_backend_x86_peephole.scm の define-picopass 化と fuse-window-rules への移行 | Feature | Medium | New | [814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md](814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
