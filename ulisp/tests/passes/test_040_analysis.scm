@@ -3,20 +3,7 @@
 ;;; Conforms to Issue #572 & Nanopass Architecture Quality Standard
 ;;; =======================================================================
 
-(define *pass-tests-passed* 0)
-(define *pass-tests-failed* 0)
 
-(define (assert-equal label expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *pass-tests-passed* (+ *pass-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (set! *pass-tests-failed* (+ *pass-tests-failed* 1))
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
 
 (display "=======================================================") (newline)
 (display " Starting Pass 040 (Scope Analysis) Unit Test Suite") (newline)

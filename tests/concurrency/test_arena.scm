@@ -5,46 +5,17 @@
 
 (load "ulisp/runtime/concurrency/arena.scm")
 
-(define *test-arena-failures* (vector 0))
-(define *test-arena-passes* (vector 0))
+(test-begin "concurrency-arena")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-arena-failures* 0 (+ (vector-ref *test-arena-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-arena-passes* 0 (+ (vector-ref *test-arena-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (eqv? actual expected))
-      (begin
-        (vector-set! *test-arena-failures* 0 (+ (vector-ref *test-arena-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (write-string (number->string expected))
-        (write-string ", got ")
-        (write-string (number->string actual))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-arena-passes* 0 (+ (vector-ref *test-arena-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
 (write-string "=======================================================\n")
 (write-string " Starting Process-Local Ephemeral Arena Test Suite (#630)\n")
@@ -252,16 +223,5 @@
   (assert-equal (arena-reset-count arena) 10000 "exact 10,000 arena resets recorded")
   (assert-equal (arena-total-allocated arena) 24000000 "exact 24,000,000 cumulative bytes bump-allocated"))
 
-(write-string "=======================================================\n")
-(if (= (vector-ref *test-arena-failures* 0) 0)
-    (begin
-      (write-string " SUCCESS: ALL PROCESS-LOCAL EPHEMERAL ARENA TESTS PASSED!\n")
-      (write-string "=======================================================\n")
-      (flush-output-port)
-      #t)
-    (begin
-      (write-string " FAILURE: Some arena tests failed!\n")
-      (write-string "=======================================================\n")
-      (flush-output-port)
-      (exit 1)))
+(test-end "concurrency-arena")
 

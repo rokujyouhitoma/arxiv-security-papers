@@ -9,57 +9,22 @@
 ;;;          delete, delete-duplicates, alist-cons, alist-copy, alist-delete
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "srfi-1")
 
-(define (test-pass name)
-  (write-string "  [PASS] ")
-  (write-string name)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal name actual expected)
+     (test-equal name expected actual))))
 
-(define (test-fail name expected actual)
-  (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-  (write-string "  [FAIL] ")
-  (write-string name)
-  (write-string " (expected ")
-  (write expected)
-  (write-string ", got ")
-  (write actual)
-  (write-string ")")
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true name val)
+     (test-assert name val))))
 
-(define (test-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b)) (string=? a b))
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
-    ((and (vector? a) (vector? b))
-     (and (= (vector-length a) (vector-length b))
-          (let loop ((i 0))
-            (if (= i (vector-length a))
-                #t
-                (if (test-equal? (vector-ref a i) (vector-ref b i))
-                    (loop (+ i 1))
-                    #f)))))
-    (else #f)))
-
-(define (assert-equal name actual expected)
-  (if (test-equal? actual expected)
-      (test-pass name)
-      (test-fail name expected actual)))
-
-(define (assert-true name val)
-  (if val
-      (test-pass name)
-      (test-fail name #t val)))
-
-(define (assert-false name val)
-  (if (not val)
-      (test-pass name)
-      (test-fail name #f val)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false name val)
+     (test-assert name (not val)))))
 
 (define (num= a b) (= a b))
 (define (add a b) (+ a b))
@@ -292,16 +257,4 @@
 ;; =======================================================================
 ;; Summary
 ;; =======================================================================
-(write-string "=======================================================")
-(write-char #\newline)
-(if (= (vector-ref *test-failures* 0) 0)
-    (begin
-      (write-string "ALL SRFI 1 PROCEDURES TESTS PASSED (0 failures)!")
-      (write-char #\newline)
-      (flush-output-port))
-    (begin
-      (write-string "TEST FAILURES DETECTED: ")
-      (write (vector-ref *test-failures* 0))
-      (write-char #\newline)
-      (flush-output-port)
-      (exit 1)))
+(test-end "srfi-1")

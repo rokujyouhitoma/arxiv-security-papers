@@ -3,37 +3,7 @@
 ;;; Conforms to DSN-33 Architecture Specification & Issue #602
 ;;; =======================================================================
 
-(define *diag-tests-run* 0)
-(define *diag-tests-passed* 0)
-
-(define (assert-true label cond)
-  (set! *diag-tests-run* (+ *diag-tests-run* 1))
-  (if cond
-      (begin
-        (set! *diag-tests-passed* (+ *diag-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (display "  [FAIL] ") (display label) (newline)
-        (error "Assertion failed:" label))))
-
-(define (assert-equal label expected actual)
-  (set! *diag-tests-run* (+ *diag-tests-run* 1))
-  (if (equal? expected actual)
-      (begin
-        (set! *diag-tests-passed* (+ *diag-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
-
-(display "=======================================================")
-(newline)
-(display " Starting Pass 000 (Compiler Context & Diagnostics) Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 000 (Compiler Context & Diagnostics)")
 
 ;;; --- Group 1: Basic Context Management ---
 (display "--- Group 1: Basic Context Management ---") (newline)
@@ -113,13 +83,4 @@
        (hoisted (rewrite-top-level input)))
   (assert-equal "top-level hoist updates current toplevel" '%main (current-toplevel-name)))
 
-(display "=======================================================")
-(newline)
-(display " All Pass 000 Tests Passed Successfully! (")
-(display *diag-tests-passed*)
-(display " / ")
-(display *diag-tests-run*)
-(display ")")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 000 (Compiler Context & Diagnostics)")

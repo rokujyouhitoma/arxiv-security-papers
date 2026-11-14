@@ -3,51 +3,17 @@
 ;;; Testing (scheme case-lambda) variable arity pattern matching syntax
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "case-lambda")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (test-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b)) (string=? a b))
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
-    (else #f)))
-
-(define (assert-equal actual expected msg)
-  (if (not (test-equal? actual expected))
-      (begin
-        (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
-
-(write-string "=== Running ULisp R7RS case-lambda Test Suite (Issue #609) ===\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
 ;; --- Group 1: Basic Zero- and Single-Arity ---
 (let ((f0 (case-lambda (() 42))))
@@ -126,13 +92,4 @@
                   'no-error)))
     (assert-equal caught 'error-caught "Arity mismatch on 3 args signals error")))
 
-;; --- Final Summary ---
-(if (= (vector-ref *test-failures* 0) 0)
-    (begin
-      (write-string "ALL CASE-LAMBDA TESTS PASSED!\n")
-      (flush-output-port)
-      #t)
-    (begin
-      (write-string "FAILURES DETECTED IN CASE-LAMBDA TESTS!\n")
-      (flush-output-port)
-      (error "case-lambda test failures detected")))
+(test-end "case-lambda")

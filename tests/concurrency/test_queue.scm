@@ -5,46 +5,17 @@
 
 (load "ulisp/runtime/concurrency/queue.scm")
 
-(define *test-queue-failures* (vector 0))
-(define *test-queue-passes* (vector 0))
+(test-begin "concurrency-queue")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-queue-failures* 0 (+ (vector-ref *test-queue-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-queue-passes* 0 (+ (vector-ref *test-queue-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (eqv? actual expected))
-      (begin
-        (vector-set! *test-queue-failures* 0 (+ (vector-ref *test-queue-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-queue-passes* 0 (+ (vector-ref *test-queue-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
 (write-string "=======================================================\n")
 (write-string " Starting Michael-Scott Lock-Free Queue Test Suite (#632)\n")
@@ -325,17 +296,4 @@
   (assert-true caught-node "make-queue-node rejects non-atomic-box next field (CWE-843 mitigation)")
   (assert-true caught-pool "pool-alloc-node! rejects non-pool argument (CWE-843 mitigation)"))
 
-;; -----------------------------------------------------------------------
-;; Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Michael-Scott Queue Test Summary: ")
-(write-string (number->string (vector-ref *test-queue-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-queue-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-queue-failures* 0) 0)
-    (error "test_queue: one or more assertions failed" (vector-ref *test-queue-failures* 0)))
+(test-end "concurrency-queue")

@@ -191,6 +191,22 @@ make test_srfi_252
   - 乱数シード制御: `(property-random-seed-set! seed)`, `(property-random-seed-get)`
   - テストランナー連携: `(property-test-runner)`。`test-begin` / `test-end` 実行中であれば自動的にテスト結果および反例（`counterexample`）を SRFI 64 runner に登録。
 
+### Layer 11: 3 大テストフレームワークの選択指針と統一ハーネス規約 (Issue #822)
+ULisp では、テスト対象の規模・実行形態・特性に応じて 3 つの標準テストフレームワークを明確に使い分ける規約を採用している。
+
+| フレームワーク | ライブラリ | 主な用途・シナリオ | 特徴・選択基準 |
+| :--- | :--- | :--- | :--- |
+| **SRFI 64** | `(srfi 64)`<br>`lib/test.scm` | 大規模ユニットテストスイート、CI 自動検証、Nanopass 階層テスト | `test-begin` / `test-end` によるグループ化、`test-equal` / `test-assert` / `test-approximate` / `test-error`。カスタムテストランナー連携。 |
+| **SRFI 78** | `(srfi 78)`<br>`lib/check.scm` | 単一ファイル・モジュール内軽量テスト、REPL 対話的評価、内包表記反復 | `(check expr => expected)` アロー記法による直感的な式評価。実行モード切替（`off`, `summary`, `report`）。 |
+| **SRFI 252** | `(srfi 252)`<br>`lib/property.scm` | プロパティベーステスト、不変条件・ラウンドトリップ検証、AST ファジング | ランダム入力生成（100 回試行）、決定論的 PRNG による 100% 反例再現性、エッジケース自動注入。 |
+
+- **アサーション引数順序の統一原則**:
+  - すべてのテストファイルにおける等価性アサーションは、SRFI 64 の標準順序 `(test-equal [name] expected actual)`（または `(assert-equal label expected actual)`）に従う。
+  - 第一引数は省略可能またはテスト名ラベル（文字列）、第二引数は期待値（`expected`）、第三引数は被テスト式の実測値（`actual`）である。
+  - これにより、テスト失敗時に「Expected」と「Actual」が逆転表示される誤検知・回帰マスキング（CWE-682）を恒久的に防止する。
+- **Nanopass 共通ハーネス (`tests/passes/common.scm`)**:
+  - 全 39 パスのテストファイルから重複する `*xxx-tests-*` および `assert-*` 定義を完全排除し、`tests/passes/common.scm` への結合により全パス横断の総合集計（`assert-report`）を実現している。
+
 ---
 
 ## 3. トラブルシューティング

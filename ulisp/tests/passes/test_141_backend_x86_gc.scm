@@ -3,30 +3,8 @@
 ;;; Conforms to Issue #519 & DSN-33 Architecture Specification
 ;;; =======================================================================
 
-(define *stackmap-tests-run* 0)
-(define *stackmap-tests-passed* 0)
 
-(define (assert-true label cond)
-  (set! *stackmap-tests-run* (+ *stackmap-tests-run* 1))
-  (if cond
-      (begin
-        (set! *stackmap-tests-passed* (+ *stackmap-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (display "  [FAIL] ") (display label) (newline)
-        (error "Assertion failed:" label))))
 
-(define (assert-equal label expected actual)
-  (set! *stackmap-tests-run* (+ *stackmap-tests-run* 1))
-  (if (equal? expected actual)
-      (begin
-        (set! *stackmap-tests-passed* (+ *stackmap-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
 
 (define (test-stackmap-suite)
   (display "=======================================================")

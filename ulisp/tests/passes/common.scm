@@ -1,6 +1,6 @@
 ;;; =======================================================================
-;;; ULisp Passes Common Test Harness
-;;; Conforms to Issue #572 & Nanopass Architecture Quality Standard
+;;; ULisp Passes Common Test Harness & SRFI 64 Integration
+;;; Conforms to Issue #572, Issue #819, Issue #822 & Nanopass Quality Standard
 ;;; Traceability: SRFI 64 / Issue #819 compatible assertions
 ;;; =======================================================================
 
@@ -8,31 +8,132 @@
 (define *pass-tests-passed* 0)
 (define *pass-tests-failed* 0)
 
+(define *current-pass-suite* #f)
+(define *suite-tests-run* 0)
+(define *suite-tests-passed* 0)
+(define *suite-tests-failed* 0)
+
+;; Global counters & aliases for backwards compatibility with individual test scripts
+(define *tests-run* 0)
+(define *tests-passed* 0)
+(define *tests-failed* 0)
+(define *total-tests* 0)
+(define *passed-tests* 0)
+(define *aarch64-tests-passed* 0)
+(define *aarch64-tests-failed* 0)
+(define *ae-tests-passed* 0)
+(define *ae-tests-failed* 0)
+(define *annotator-tests-run* 0)
+(define *annotator-tests-passed* 0)
+(define *contify-tests-passed* 0)
+(define *contify-tests-failed* 0)
+(define *diag-tests-run* 0)
+(define *diag-tests-passed* 0)
+(define *extern-tests-passed* 0)
+(define *extern-tests-failed* 0)
+(define *library-tests-run* 0)
+(define *library-tests-passed* 0)
+(define *lir-tests-passed* 0)
+(define *lir-tests-failed* 0)
+(define *lvn-tests-passed* 0)
+(define *lvn-tests-failed* 0)
+(define *pa-tests-run* 0)
+(define *pa-tests-passed* 0)
+(define *rtyper-tests-run* 0)
+(define *rtyper-tests-passed* 0)
+(define *stackmap-tests-run* 0)
+(define *stackmap-tests-passed* 0)
+(define *tb-tests-run* 0)
+(define *tb-tests-passed* 0)
+
 (define (reset-pass-test-counters!)
   (set! *pass-tests-run* 0)
   (set! *pass-tests-passed* 0)
-  (set! *pass-tests-failed* 0))
+  (set! *pass-tests-failed* 0)
+  (set! *current-pass-suite* #f)
+  (set! *suite-tests-run* 0)
+  (set! *suite-tests-passed* 0)
+  (set! *suite-tests-failed* 0)
+  (set! *tests-run* 0)
+  (set! *tests-passed* 0)
+  (set! *tests-failed* 0)
+  (set! *total-tests* 0)
+  (set! *passed-tests* 0))
+
+(define (test-begin suite-name)
+  (set! *current-pass-suite* suite-name)
+  (set! *suite-tests-run* 0)
+  (set! *suite-tests-passed* 0)
+  (set! *suite-tests-failed* 0)
+  (display "=======================================================") (newline)
+  (display " Starting ") (display suite-name) (display " Test Suite") (newline)
+  (display "=======================================================") (newline))
+
+(define (test-end . maybe-suite-name)
+  (display "=======================================================") (newline)
+  (if *current-pass-suite*
+      (begin
+        (display " ") (display *current-pass-suite*) (display ": All ")
+        (display *suite-tests-passed*) (display " tests passed!") (newline))
+      (begin
+        (display " All ") (display *suite-tests-passed*) (display " tests passed!") (newline)))
+  (display "=======================================================") (newline)
+  (set! *current-pass-suite* #f))
 
 (define (assert-true label cond)
   (set! *pass-tests-run* (+ *pass-tests-run* 1))
+  (set! *suite-tests-run* (+ *suite-tests-run* 1))
+  (set! *tests-run* (+ *tests-run* 1))
+  (set! *total-tests* (+ *total-tests* 1))
   (if cond
       (begin
         (set! *pass-tests-passed* (+ *pass-tests-passed* 1))
+        (set! *suite-tests-passed* (+ *suite-tests-passed* 1))
+        (set! *tests-passed* (+ *tests-passed* 1))
+        (set! *passed-tests* (+ *passed-tests* 1))
         (display "  [PASS] ") (display label) (newline))
       (begin
         (set! *pass-tests-failed* (+ *pass-tests-failed* 1))
+        (set! *suite-tests-failed* (+ *suite-tests-failed* 1))
+        (set! *tests-failed* (+ *tests-failed* 1))
         (display "  [FAIL] ") (display label) (newline)
         (error "Assertion failed: expected #t" label))))
 
+(define (assert-false label cond)
+  (assert-true label (not cond)))
+
 (define (assert-equal label expected actual)
   (set! *pass-tests-run* (+ *pass-tests-run* 1))
+  (set! *suite-tests-run* (+ *suite-tests-run* 1))
+  (set! *tests-run* (+ *tests-run* 1))
+  (set! *total-tests* (+ *total-tests* 1))
   (if (equal? expected actual)
       (begin
         (set! *pass-tests-passed* (+ *pass-tests-passed* 1))
+        (set! *suite-tests-passed* (+ *suite-tests-passed* 1))
+        (set! *tests-passed* (+ *tests-passed* 1))
+        (set! *passed-tests* (+ *passed-tests* 1))
         (display "  [PASS] ") (display label) (newline))
       (begin
         (set! *pass-tests-failed* (+ *pass-tests-failed* 1))
+        (set! *suite-tests-failed* (+ *suite-tests-failed* 1))
+        (set! *tests-failed* (+ *tests-failed* 1))
         (display "  [FAIL] ") (display label)
         (display " -> Expected: ") (write expected)
         (display " but got: ") (write actual) (newline)
         (error "Assertion failed: values are not equal" label))))
+
+;; SRFI 64 aliases
+(define test-assert assert-true)
+(define test-equal assert-equal)
+
+(define (assert-report)
+  (display "\n=======================================================\n")
+  (display " [NANOPASS TEST SUITE REPORT]\n")
+  (display " Total Tests: ") (display *pass-tests-run*) (newline)
+  (display " Passed:      ") (display *pass-tests-passed*) (newline)
+  (display " Failed:      ") (display *pass-tests-failed*) (newline)
+  (display "=======================================================\n")
+  (if (> *pass-tests-failed* 0)
+      (error "Nanopass tests failed" *pass-tests-failed*)
+      #t))

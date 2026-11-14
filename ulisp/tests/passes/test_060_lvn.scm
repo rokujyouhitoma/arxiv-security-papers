@@ -11,29 +11,8 @@
 ;;; 6. End-to-end AST integration with lvn-all
 ;;; =======================================================================
 
-(define *lvn-tests-passed* 0)
-(define *lvn-tests-failed* 0)
 
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *lvn-tests-passed* (+ *lvn-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *lvn-tests-failed* (+ *lvn-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
 
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
 
 (display "=======================================================")
 (newline)

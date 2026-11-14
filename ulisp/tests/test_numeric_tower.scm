@@ -4,30 +4,17 @@
 ;;; round), rationalize, and Numerical Tower Predicates
 ;;; =======================================================================
 
-(define *pass-count* (cons 0 '()))
-(define *fail-count* (cons 0 '()))
+(test-begin "numeric-tower")
 
-(define (assert-true msg cond-val)
-  (if cond-val
-      (set-car! *pass-count* (+ (car *pass-count*) 1))
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (newline)
-        (set-car! *fail-count* (+ (car *fail-count*) 1)))))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true msg cond-val)
+     (test-assert msg cond-val))))
 
-(define (assert-equal msg expected actual)
-  (if (equal? expected actual)
-      (set-car! *pass-count* (+ (car *pass-count*) 1))
-      (begin
-        (display "FAIL: ")
-        (display msg)
-        (display " expected=")
-        (write expected)
-        (display " actual=")
-        (write actual)
-        (newline)
-        (set-car! *fail-count* (+ (car *fail-count*) 1)))))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal msg expected actual)
+     (test-equal msg expected actual))))
 
 ;; ---------------------------------------------------------------------
 ;; 1. Exact Rationals (<ratnum>) & Canonical GCD Reduction
@@ -212,12 +199,13 @@
 ;; ---------------------------------------------------------------------
 ;; 7. (scheme inexact) Transcendental Functions & sqrt (Issue #713)
 ;; ---------------------------------------------------------------------
-(define (assert-approx msg expected-micros actual-flonum tol)
-  (let* ((v (if (flonum? actual-flonum)
-                (vector-ref actual-flonum 1)
-                (* actual-flonum 1000000)))
-         (diff (let ((d (- v expected-micros))) (if (< d 0) (- 0 d) d))))
-    (assert-true msg (<= diff tol))))
+(define-syntax assert-approx
+  (syntax-rules ()
+    ((assert-approx msg expected-micros actual-flonum tol)
+     (let* ((v (if (flonum? actual-flonum)
+                   (vector-ref actual-flonum 1)
+                   (* actual-flonum 1000000))))
+       (test-approximate msg expected-micros v tol)))))
 
 ;; sqrt
 (assert-equal "sqrt 0 -> 0" 0 (sqrt 0))
@@ -384,11 +372,4 @@
   (write +inf.0 out)
   (assert-equal "write numeric tower values" "3/4 3.5 3-4i +inf.0" (get-output-string out)))
 
-(display "Passed: ")
-(display (car *pass-count*))
-(display ", Failed: ")
-(display (car *fail-count*))
-(newline)
-(if (> (car *fail-count*) 0)
-    (exit 1)
-    (exit 0))
+(test-end "numeric-tower")

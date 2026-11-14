@@ -3,23 +3,8 @@
 ;;; Conforms to DSN-33 Architecture Specification & Issue #607
 ;;; =======================================================================
 
-(define *extern-tests-passed* 0)
-(define *extern-tests-failed* 0)
 
-(define (assert-equal label expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *extern-tests-passed* (+ *extern-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (set! *extern-tests-failed* (+ *extern-tests-failed* 1))
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
 
-(define (assert-true label cond)
-  (assert-equal label #t (if cond #t #f)))
 
 (display "=======================================================") (newline)
 (display " Starting External Symbols (Issue #607) Unit Test Suite") (newline)
