@@ -6,12 +6,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting Pass 05b (S-RTyper) Detailed Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 090 (S-RTyper Lowering)")
 
 ;; Test 1: Binary operators lowering on constants
 (assert-equal "lower + constants" '(%raw-add 10 20) (rtyper-binop '+ 10 20 '()))
@@ -143,10 +138,4 @@
                    ((eq? (car e) 'string-length) #t)
                    (else (or (rec (car e)) (rec (cdr e))))))))
 
-(display "=======================================================")
-(newline)
-(display " All ") (display *rtyper-tests-passed*)
-(display " Pass 05b (S-RTyper) unit tests PASSED! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 090 (S-RTyper Lowering)")

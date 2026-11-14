@@ -16,12 +16,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting ULisp TBAA & Escape Analysis Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 120 (TBAA & Escape Analysis)")
 
 ;;; -----------------------------------------------------------------------
 ;;; Test Group 1: TBAA Type Classes & Disjointness Theorems
@@ -164,11 +159,4 @@
               (else (loop (cdr is)))))))
     (assert-true "LIR contains %alloc-stack for %stack-cons" has-alloc-stack?)))
 
-(display "=======================================================")
-(newline)
-(display " All ULisp TBAA & Escape Analysis Tests Passed (")
-(display *ae-tests-passed*)
-(display " passed)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 120 (TBAA & Escape Analysis)")

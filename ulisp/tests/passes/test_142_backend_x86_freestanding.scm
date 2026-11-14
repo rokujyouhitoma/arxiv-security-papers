@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 142 (x86-64 Freestanding) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 142 (x86-64 Freestanding)")
 
 ;; 1. Test existence and callable nature of freestanding emission procedures
 (assert-true "emit-freestanding-runtime is procedure" (procedure? emit-freestanding-runtime))
@@ -34,6 +32,4 @@
   (assert-true "emit-freestanding-runtime emits error-object symbol name"
                (pair? (member ".L_str_sym_error_object: .asciz \"error-object\"" captured))))
 
-(display "=======================================================") (newline)
-(display " Pass 142: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 142 (x86-64 Freestanding)")

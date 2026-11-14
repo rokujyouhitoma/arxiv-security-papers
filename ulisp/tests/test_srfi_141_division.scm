@@ -22,7 +22,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp SRFI 141 Integer Division Tests ===\n")
 
 ;;; Helper to check n = q * d + r
 (define (verify-div-law name q r n d)
@@ -134,4 +133,3 @@
     (test "centered/ r" -1 r)
     (verify-div-law "centered/ 8 3" q r 8 3)))
 
-(write-string "=== All SRFI 141 Division Tests Passed Successfully! ===\n")

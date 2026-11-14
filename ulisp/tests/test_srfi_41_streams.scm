@@ -22,7 +22,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp SRFI 41 Streams Test Suite ===\n")
 
 ;;; --- Test 1: Stream Primitives & Laziness ---
 (write-string "--- Test 1: Stream Primitives & Laziness ---\n")
@@ -151,5 +150,4 @@
     (test "stream-unfolds evens" '(2 4) (stream->list evens))
     (test "stream-unfolds odds" '(1 3 5) (stream->list odds))))
 
-(write-string "=== All SRFI 41 Streams Tests Passed Successfully! ===\n")
 

@@ -13,24 +13,13 @@
      (string=? a b))
     (else #f)))
 
-(define (test name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (write-string "  [PASS] ")
-        (write-string name)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)
-      (begin
-        (write-string "  [FAIL] ")
-        (write-string name)
-        (write-string " - Expected: ")
-        (write-string (if (boolean? expected) (if expected "#t" "#f") "val"))
-        (write-char #\newline)
-        (flush-output-port)
-        (exit 1))))
+(test-begin "eqv")
 
-(write-string "=== Running ULisp R7RS eqv? & Standard Predicates Tests ===\n")
+(define-syntax test
+  (syntax-rules ()
+    ((test name expected actual)
+     (test-equal name expected actual))))
+
 
 ;;; --- Test 1: eqv? on Immediate Values (Numbers, Chars, Booleans, Null) ---
 (write-string "--- Test 1: eqv? on Immediates ---\n")
@@ -130,4 +119,4 @@
 (test "eqv? passed as closure argument" #t (apply-pred eqv? 100 100))
 (test "eqv? passed as closure argument (false)" #f (apply-pred eqv? 100 200))
 
-(write-string "=== All R7RS eqv? & Standard Predicates Tests Complete ===\n")
+(test-end "eqv")

@@ -6,7 +6,7 @@
 
 
 (display "=======================================================\n")
-(display " Starting Pass 123 (LIR Closures & Stack Allocation) Unit Tests\n")
+(test-begin "Pass 123 (LIR Closures & Stack Allocation)")
 (display "=======================================================\n")
 
 ;; Test 1: Heap closure creation (%make-closure 'label arg1 arg2)
@@ -34,6 +34,4 @@
   (assert-true "stack-closure: emits %code-ref for stack label"
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%code-ref) (eq? (caddr i) 'L_stack_fn))) insts))))
 
-(display "=======================================================\n")
-(display " Pass 123: All tests passed!\n")
-(display "=======================================================\n")
+(test-end "Pass 123 (LIR Closures & Stack Allocation)")

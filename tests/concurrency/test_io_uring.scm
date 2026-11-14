@@ -23,46 +23,40 @@
 ;; Minimal Test Harness
 ;; -----------------------------------------------------------------------
 
-(define *pass-count* (vector 0))
-(define *fail-count* (vector 0))
+(test-begin "concurrency-io_uring")
 
-(define (assert-true cond msg)
-  (if cond
-      (begin
-        (vector-set! *pass-count* 0 (+ (vector-ref *pass-count* 0) 1))
-        (write-string "PASS: ") (write-string msg) (write-char #\newline))
-      (begin
-        (vector-set! *fail-count* 0 (+ (vector-ref *fail-count* 0) 1))
-        (write-string "FAIL: ") (write-string msg) (write-char #\newline))))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-equal actual expected msg)
-  (if (equal? actual expected)
-      (begin
-        (vector-set! *pass-count* 0 (+ (vector-ref *pass-count* 0) 1))
-        (write-string "PASS: ") (write-string msg) (write-char #\newline))
-      (begin
-        (vector-set! *fail-count* 0 (+ (vector-ref *fail-count* 0) 1))
-        (write-string "FAIL: ") (write-string msg)
-        (write-string " [expected ") (write-string (number->string expected))
-        (write-string ", got ") (write-string (number->string actual)) (write-string "]\n"))))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-error thunk msg)
-  (let ((caught? (vector #f)))
-    (guard (ex (else (vector-set! caught? 0 #t)))
-      (thunk))
-    (if (vector-ref caught? 0)
-        (begin
-          (vector-set! *pass-count* 0 (+ (vector-ref *pass-count* 0) 1))
-          (write-string "PASS: ") (write-string msg) (write-char #\newline))
-        (begin
-          (vector-set! *fail-count* 0 (+ (vector-ref *fail-count* 0) 1))
-          (write-string "FAIL: ") (write-string msg) (write-string " (expected error not raised)\n")))))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Synapse io_uring Event Loop Test Suite (#677, #683)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: Basic Ring Initialization & Lifecycle
 ;; -----------------------------------------------------------------------
@@ -448,18 +442,4 @@
 
 (run-group-9!)
 
-;; -----------------------------------------------------------------------
-;; Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Synapse io_uring Summary: ")
-(write-string (number->string (vector-ref *pass-count* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *fail-count* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *fail-count* 0) 0)
-    (exit 1)
-    (exit 0))
+(test-end "concurrency-io_uring")

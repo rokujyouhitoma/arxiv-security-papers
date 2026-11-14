@@ -3,21 +3,28 @@
 ;;; =======================================================================
 
 (define *test-hybrid-failures* (vector 0))
+(define *test-hybrid-passes* (vector 0))
+
+(write-string "=== [Test Suite: gc-hybrid] ===\n")
+(flush-output-port)
 
 (define (assert-true val msg)
   (if (not val)
       (begin
         (vector-set! *test-hybrid-failures* 0 (+ (vector-ref *test-hybrid-failures* 0) 1))
-        (write-string "FAIL: ")
+        (write-string "  [FAIL] ")
         (write-string msg)
         (write-char #\newline)
         (flush-output-port)
         #f)
       (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
+        (vector-set! *test-hybrid-passes* 0 (+ (vector-ref *test-hybrid-passes* 0) 1))
+        (if (get-environment-variable "ULISP_TEST_VERBOSE")
+            (begin
+              (write-string "  [PASS] ")
+              (write-string msg)
+              (write-char #\newline)
+              (flush-output-port)))
         #t)))
 
 (define (assert-equal actual expected msg)
@@ -25,19 +32,21 @@
                (and (string? actual) (string? expected) (string=? actual expected))))
       (begin
         (vector-set! *test-hybrid-failures* 0 (+ (vector-ref *test-hybrid-failures* 0) 1))
-        (write-string "FAIL: ")
+        (write-string "  [FAIL] ")
         (write-string msg)
         (write-char #\newline)
         (flush-output-port)
         #f)
       (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
+        (vector-set! *test-hybrid-passes* 0 (+ (vector-ref *test-hybrid-passes* 0) 1))
+        (if (get-environment-variable "ULISP_TEST_VERBOSE")
+            (begin
+              (write-string "  [PASS] ")
+              (write-string msg)
+              (write-char #\newline)
+              (flush-output-port)))
         #t)))
 
-(write-string "=== Running ULisp Issue #568 Hybrid Exact-Conservative Scanning Tests ===\n")
 (flush-output-port)
 
 ;; -----------------------------------------------------------------------
@@ -156,11 +165,24 @@
 ;; -----------------------------------------------------------------------
 ;; Final Result
 ;; -----------------------------------------------------------------------
-(let ((failures (vector-ref *test-hybrid-failures* 0)))
+(let ((failures (vector-ref *test-hybrid-failures* 0))
+      (passes (vector-ref *test-hybrid-passes* 0)))
+  (write-string "-------------------------------------------------------\n")
+  (if (= failures 0)
+      (write-string " [RESULT] gc-hybrid: ")
+      (write-string " [FAILED] gc-hybrid: "))
+  (write passes)
+  (write-string " passed")
   (if (> failures 0)
       (begin
-        (write-string "=== SOME HYBRID SCANNING TESTS FAILED! ===\n")
-        (sys-exit 1))
-      (begin
-        (write-string "=== ALL Issue #568 Hybrid Scanning Tests PASSED! ===\n")
-        (sys-exit 0))))
+        (write-string ", ")
+        (write failures)
+        (write-string " failed")))
+  (write-string " (Total: ")
+  (write (+ passes failures))
+  (write-string ")\n")
+  (write-string "-------------------------------------------------------\n")
+  (flush-output-port)
+  (if (> failures 0)
+      (sys-exit 1)
+      (sys-exit 0)))

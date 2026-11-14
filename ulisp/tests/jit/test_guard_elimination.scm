@@ -11,36 +11,7 @@
 ;;; 6. End-to-end arithmetic loop trace guard count reduction to ZERO
 ;;; =======================================================================
 
-(define *ge-tests-passed* 0)
-(define *ge-tests-failed* 0)
-
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *ge-tests-passed* (+ *ge-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *ge-tests-failed* (+ *ge-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
-
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
-
-(display "=======================================================")
-(newline)
-(display " Starting MLisp JIT Guard Elimination & OSR Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "MLisp JIT Guard Elimination & OSR")
 
 ;;; Test 1: Immediate/Literal Guard Elimination
 (display "--- Test 1: Immediate & Constant Guard Elimination ---")
@@ -170,11 +141,4 @@
                 12
                 (length body)))
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *ge-tests-passed*)
-(display " MLisp JIT Guard Elimination & OSR tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "MLisp JIT Guard Elimination & OSR")

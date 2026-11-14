@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 020 (Macro Expander) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 020 (Macro Expander)")
 
 ;; 1. parse-syntax-rules-def
 (let ((m (parse-syntax-rules-def '(define-syntax when
@@ -84,6 +82,4 @@
   (set-car! *compiler-abort-on-error* orig-abort)
   (set-car! *compiler-suppress-diagnostics* orig-suppress))
 
-(display "=======================================================") (newline)
-(display " Pass 020: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 020 (Macro Expander)")

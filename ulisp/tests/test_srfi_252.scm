@@ -3,7 +3,7 @@
 ;;; Conforms to DSN-33 Architecture Specification & Issue #821
 ;;; =======================================================================
 
-(write-string "=== Running ULisp SRFI 252 Property Testing Test Suite ===\n")
+
 
 ;; Initialize deterministic PRNG seed for reproducible test run
 (property-random-seed-set! 42)
@@ -243,4 +243,3 @@
 
 (test-end "srfi-252-integrated-suite")
 
-(write-string "=== All SRFI 252 Property Tests Passed Successfully! ===\n")

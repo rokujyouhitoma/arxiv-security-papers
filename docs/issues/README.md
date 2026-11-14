@@ -18,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **823** | uLisp テストスイート表示形式の SRFI 64 統一フォーマッタ導入とログ出力整流化 | Feature | 2026-11-14 | [closed/823-unify-test-runner-output-formats-and-add-verbose-mode.md](closed/823-unify-test-runner-output-formats-and-add-verbose-mode.md) |
 | **822** | 既存テストスイート (267箇所の重複 assert-*) の SRFI 64 統一・引数順序是正および仕様準拠ドキュメント更新 | Feature | 2026-11-14 | [closed/822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md](closed/822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md) |
 | **821** | SRFI 252 プロパティベーステストライブラリ (srfi 252) と決定論的ジェネレータ群の実装 | Feature | 2026-11-14 | [closed/821-implement-srfi-252-property-based-testing-library.md](closed/821-implement-srfi-252-property-based-testing-library.md) |
 | **820** | SRFI 78 軽量テストライブラリ (srfi 78) の実装と SRFI 64 テストランナー・Power Assert 連携 | Feature | 2026-11-14 | [closed/820-implement-srfi-78-lightweight-testing-library.md](closed/820-implement-srfi-78-lightweight-testing-library.md) |

@@ -15,12 +15,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting ULisp Contification & Closure Elimination Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 100 (Contification)")
 
 ;;; Test Group 1: Escape Analysis (escapes?)
 (display "--- Group 1: Escape Analysis (escapes?) ---")
@@ -167,9 +162,4 @@
     (assert-true "contains multiple %jump instructions (local jumps)"
                  (>= jump-count 2))))
 
-(display "=======================================================")
-(newline)
-(display " All Contification & Local Closure Elimination tests PASSED successfully!")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 100 (Contification)")

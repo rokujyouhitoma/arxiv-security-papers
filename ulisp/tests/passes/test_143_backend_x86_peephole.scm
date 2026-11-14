@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 143 (x86-64 Machine Peephole) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 143 (x86-64 Machine Peephole)")
 
 ;; Helper to wrap instruction list in a canonical L_asm_x86 program
 (define (make-test-asm-program insts)
@@ -101,6 +99,4 @@
   (assert-true "function optimization satisfies L_asm_x86 schema"
                (L_asm_x86? opt)))
 
-(display "=======================================================") (newline)
-(display " Pass 143: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 143 (x86-64 Machine Peephole)")

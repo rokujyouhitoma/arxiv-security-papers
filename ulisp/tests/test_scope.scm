@@ -3,30 +3,7 @@
 ;;; Conforms to Issue #600 & Nanopass Architecture Quality Standard
 ;;; =======================================================================
 
-(define *scope-tests-passed* 0)
-(define *scope-tests-failed* 0)
-
-(define (assert-equal label expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *scope-tests-passed* (+ *scope-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (set! *scope-tests-failed* (+ *scope-tests-failed* 1))
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
-
-(define (assert-true label actual)
-  (assert-equal label #t (if actual #t #f)))
-
-(define (assert-false label actual)
-  (assert-equal label #f (if actual #t #f)))
-
-(display "\n=======================================================\n")
-(display " Starting Pass 035 (Scope & Alpha-Conversion) Unit Tests\n")
-(display "=======================================================\n")
+(test-begin "Pass 035 (Scope & Alpha-Conversion)")
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Scope Node Records & Contour Hierarchy
@@ -210,11 +187,4 @@
 (assert-equal "9.6 pass-035 out-lang is L_core" 'L_core (pass-out-lang desc-p35))
 (assert-equal "9.7 pass-035 prerequisite is pass-030-desugar" '(pass-030-desugar) (pass-prerequisites desc-p35))
 
-(display "\n=======================================================\n")
-(display " Pass 035 Unit Tests Completed: ")
-(display *scope-tests-passed*) (display " passed, ")
-(display *scope-tests-failed*) (display " failed.\n")
-(display "=======================================================\n")
-
-(if (> *scope-tests-failed* 0)
-    (error "Pass 035 test suite failed"))
+(test-end "Pass 035 (Scope & Alpha-Conversion)")

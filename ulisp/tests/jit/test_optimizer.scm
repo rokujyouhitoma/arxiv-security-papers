@@ -10,36 +10,7 @@
 ;;; - Combined multi-pass optimization pipeline
 ;;; =======================================================================
 
-(define *opt-tests-passed* 0)
-(define *opt-tests-failed* 0)
-
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *opt-tests-passed* (+ *opt-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *opt-tests-failed* (+ *opt-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
-
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
-
-(display "=======================================================")
-(newline)
-(display " Starting MLisp Trace Optimizer & Virtuals Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "MLisp Trace Optimizer & Virtuals")
 
 ;;; Test 1: Constant folding
 (display "--- Test 1: Constant Folding ---")
@@ -163,11 +134,4 @@
   (assert-true "total computed to constant 300"
                (member '(%mov total 300) body)))
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *opt-tests-passed*)
-(display " MLisp Trace Optimizer tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "MLisp Trace Optimizer & Virtuals")

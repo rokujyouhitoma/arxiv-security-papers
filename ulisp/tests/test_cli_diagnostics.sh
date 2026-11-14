@@ -21,7 +21,9 @@ FAIL=0
 check() {
     local name="$1"; shift
     if "$@"; then
-        echo "  [PASS] $name"
+        if [ "${ULISP_TEST_VERBOSE:-0}" = "1" ]; then
+            echo "  [PASS] $name"
+        fi
         PASS=$((PASS + 1))
     else
         echo "  [FAIL] $name"
@@ -29,7 +31,7 @@ check() {
     fi
 }
 
-echo "=== Running ULisp CLI Diagnostics & Failure Rollback Test Suite (Issue #785) ==="
+echo "=== [Test Suite: cli-diagnostics] ==="
 
 # --- Test 1: Unbound Variable Error Rollback ---
 OUT_FAIL="$BUILD_DIR/test_unbound_fail.bin"
@@ -91,15 +93,14 @@ rm -f "$OUT_ASM_PASS"
 check "Test 5a: -S mode produces assembly file on success" [ -s "$OUT_ASM_PASS" ]
 
 # --- Summary ---
-echo "=============================================================================="
-echo " Results: $PASS Passed, $FAIL Failed"
-echo "=============================================================================="
-
+echo "-------------------------------------------------------"
 if [ "$FAIL" -gt 0 ]; then
-    echo "FAILED: $FAIL test(s) failed."
+    echo " [RESULT] cli-diagnostics: $PASS passed, $FAIL failed (Total: $((PASS + FAIL)))"
+    echo "-------------------------------------------------------"
     exit 1
+else
+    echo " [RESULT] cli-diagnostics: $PASS passed (Total: $PASS)"
+    echo "-------------------------------------------------------"
+    exit 0
 fi
-
-echo "ALL CLI DIAGNOSTICS TESTS PASSED!"
-exit 0
 

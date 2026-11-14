@@ -22,7 +22,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp SRFI 158 Generators & Accumulators Test Suite ===\n")
 
 ;;; --- Test 1: Generator Constructors ---
 (write-string "--- Test 1: Generator Constructors ---\n")
@@ -156,5 +155,4 @@
   (acc 20)
   (test "bytevector-accumulator result" (bytevector 10 20) (acc (eof-object))))
 
-(write-string "=== All SRFI 158 Generators & Accumulators Tests Passed Successfully! ===\n")
 

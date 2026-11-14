@@ -7,33 +7,41 @@
 (load "ulisp/runtime/concurrency/arena.scm")
 (load "ulisp/runtime/concurrency/boundary.scm")
 
-(write-string "=======================================================\n")
-(write-string " Starting Synapse Boundary Sanitizer Tests (#641)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(test-begin "concurrency-boundary")
 
-(define *test-boundary-failures* (vector 0))
-(define *test-boundary-passes* (vector 0))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-boundary-failures* 0 (+ (vector-ref *test-boundary-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-boundary-passes* 0 (+ (vector-ref *test-boundary-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-false val msg)
-  (assert-true (not val) msg))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
+
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
+
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
+
 
 (define (deep-equal? a b)
   (cond
@@ -68,21 +76,7 @@
     (else #f)))
 
 (define (assert-equal actual expected msg)
-  (if (not (deep-equal? actual expected))
-      (begin
-        (vector-set! *test-boundary-failures* 0 (+ (vector-ref *test-boundary-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (mismatch in deep structure)\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-boundary-passes* 0 (+ (vector-ref *test-boundary-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+  (test-equal msg expected actual))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Immediate Value Pass-Through (Zero-Copy)
@@ -218,18 +212,4 @@
   (arena-reset! arena)
   (assert-equal host-data (list "result" (vector 100 200) '(nested-val)) "6.3 host data remains fully accessible after task arena reset"))
 
-;;; -----------------------------------------------------------------------
-;;; Test Summary
-;;; -----------------------------------------------------------------------
-
-(write-string "=======================================================\n")
-(write-string " Boundary Sanitizer Test Summary: ")
-(write-string (number->string (vector-ref *test-boundary-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-boundary-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-boundary-failures* 0) 0)
-    (error "test_boundary: one or more assertions failed" (vector-ref *test-boundary-failures* 0)))
+(test-end "concurrency-boundary")

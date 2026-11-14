@@ -7,9 +7,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 026 (Constructor Desugaring) Unit Test") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 026 (Constructor Desugaring)")
 
 ;; 1. desugar-list
 (assert-equal "desugar-list empty"
@@ -147,6 +145,4 @@
               '(cons (gcd-2 10 20) (cons 30 '()))
               (desugar-constructors '(list (gcd 10 20) 30)))
 
-(display "=======================================================") (newline)
-(display " Pass 026: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 026 (Constructor Desugaring)")

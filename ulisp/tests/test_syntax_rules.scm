@@ -13,26 +13,13 @@
      (string=? a b))
     (else #f)))
 
-(define (test name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (write-string "  [PASS] ")
-        (write-string name)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)
-      (begin
-        (write-string "  [FAIL] ")
-        (write-string name)
-        (write-string " - Expected: ")
-        (display expected)
-        (write-string ", Actual: ")
-        (display actual)
-        (write-char #\newline)
-        (flush-output-port)
-        (exit 1))))
+(test-begin "syntax-rules")
 
-(write-string "=== Running ULisp Hygienic syntax-rules Macro Tests ===\n")
+(define-syntax test
+  (syntax-rules ()
+    ((test name expected actual)
+     (test-equal name expected actual))))
+
 
 ;;; --- Test 1: Basic syntax-rules Macro (when & unless) ---
 (write-string "--- Test 1: Basic when & unless Macros ---\n")
@@ -117,4 +104,4 @@
 
 (test "nested macro expansion works correctly" 25 (sum-of-squares 3 4))
 
-(write-string "=== All Hygienic syntax-rules Macro Tests Complete ===\n")
+(test-end "syntax-rules")

@@ -17,10 +17,7 @@
     ((assert-equal actual expected msg)
      (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Low-Level Atomic Primitives Test Suite (#631)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+
 
 ;; -----------------------------------------------------------------------
 ;; Group 1: <atomic-box> Initialization, Predicates, Ref/Set & Memory Fence

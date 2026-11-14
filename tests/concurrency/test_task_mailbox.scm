@@ -16,51 +16,40 @@
 ;; Minimal Test Harness
 ;; -----------------------------------------------------------------------
 
-(define *tests-passed* (vector 0))
-(define *tests-failed* (vector 0))
+(test-begin "concurrency-task_mailbox")
 
-(define (assert-true expr msg)
-  (if expr
-      (begin
-        (vector-set! *tests-passed* 0 (+ (vector-ref *tests-passed* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-string "\n")
-        (flush-output-port))
-      (begin
-        (vector-set! *tests-failed* 0 (+ (vector-ref *tests-failed* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string "\n")
-        (flush-output-port))))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-false expr msg)
-  (assert-true (not expr) msg))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-equal actual expected msg)
-  (if (equal? actual expected)
-      (begin
-        (vector-set! *tests-passed* 0 (+ (vector-ref *tests-passed* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-string "\n")
-        (flush-output-port))
-      (begin
-        (vector-set! *tests-failed* 0 (+ (vector-ref *tests-failed* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (write expected)
-        (write-string ", got ")
-        (write actual)
-        (write-string ")\n")
-        (flush-output-port))))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Task Mailbox Bounded FIFO Test Suite (#750)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: Basic FIFO Operations & O(1) Scalability
 ;; -----------------------------------------------------------------------
@@ -285,19 +274,4 @@
 (assert-true (guard (exn (else #t)) (task-mailbox-policy-set! (make-task-context) 'invalid-policy) #f)
              "task-mailbox-policy-set! rejects invalid policy name")
 
-;; -----------------------------------------------------------------------
-;; Test Suite Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Task Mailbox Summary: ")
-(write-string (number->string (vector-ref *tests-passed* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *tests-failed* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *tests-failed* 0) 0)
-    (sys-exit 1)
-    (sys-exit 0))
-
+(test-end "concurrency-task_mailbox")

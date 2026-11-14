@@ -4,12 +4,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting Loop Variable Register Allocation Test Suite (Issue #544)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Loop Register Allocation (Issue #544)")
 
 (let* ((ast '(letrec ((loop (lambda (i acc) (if (= i 1000000) acc (loop (+ i 1) (+ acc i)))))) (loop 0 0)))
        (ast1 (desugar-all ast))
@@ -69,12 +64,4 @@
   (assert-true "emitted build/test_loop_reg.s exists" #t))
 
 (newline)
-(display "=======================================================")
-(newline)
-(display " All Loop Register Allocation Tests PASSED: ")
-(display *tests-passed*)
-(display "/")
-(display (+ *tests-passed* *tests-failed*))
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Loop Register Allocation (Issue #544)")

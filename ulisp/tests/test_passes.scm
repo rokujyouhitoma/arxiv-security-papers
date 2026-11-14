@@ -4,35 +4,13 @@
 ;;; Tests Nanopass 1 through Nanopass 7 in isolation.
 ;;; =======================================================================
 
-(define *pass-tests-passed* 0)
-(define *pass-tests-failed* 0)
-
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *pass-tests-passed* (+ *pass-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *pass-tests-failed* (+ *pass-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
-
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
+(test-begin "Nanopass Per-Pass (Pass 1-7)")
 
 ;;; =======================================================================
 ;;; Pass 0b: Metacircular Macro Expander Tests (00b_macro_expander.scm)
 ;;; =======================================================================
 (define (test-pass0b-macro)
-  (display "=== Running Pass 0b (Macro Expander) Tests ===")
+  (display "--- Group: Pass 0b (Macro Expander) ---")
   (newline)
 
   ;; 1. parse-syntax-rules-def
@@ -71,7 +49,7 @@
 ;;; Pass 1: Desugaring Tests (01_desugar.scm)
 ;;; =======================================================================
 (define (test-pass1-desugar)
-  (display "=== Running Pass 1 (Desugaring) Tests ===")
+  (display "--- Group: Pass 1 (Desugaring) ---")
   (newline)
 
   ;; 1. and desugaring
@@ -98,7 +76,7 @@
 ;;; Pass 2: Scope & Free Variable Analysis Tests (02_analysis.scm)
 ;;; =======================================================================
 (define (test-pass2-analysis)
-  (display "=== Running Pass 2 (Scope Analysis) Tests ===")
+  (display "--- Group: Pass 2 (Scope Analysis) ---")
   (newline)
 
   ;; 1. Open expression has free variables
@@ -125,7 +103,7 @@
 ;;; Pass 3: CP0 Constant Folding & Dead Code Elimination (03_cp0.scm)
 ;;; =======================================================================
 (define (test-pass3-cp0)
-  (display "=== Running Pass 3 (CP0 Optimization) Tests ===")
+  (display "--- Group: Pass 3 (CP0 Optimization) ---")
   (newline)
 
   ;; 1. Arithmetic constant folding
@@ -184,7 +162,7 @@
 ;;; Pass 3b: Extended LVN & Accessor Memoization Tests (03b_lvn.scm)
 ;;; =======================================================================
 (define (test-pass3b-lvn)
-  (display "=== Running Pass 3b (Extended LVN) Tests ===")
+  (display "--- Group: Pass 3b (Extended LVN) ---")
   (newline)
 
   ;; 1. Pair accessor deduplication
@@ -217,7 +195,7 @@
 ;;; Pass 4: A-Normal Form (ANF) Normalization Tests (04_anf.scm)
 ;;; =======================================================================
 (define (test-pass4-anf)
-  (display "=== Running Pass 4 (ANF Normalization) Tests ===")
+  (display "--- Group: Pass 4 (ANF Normalization) ---")
   (newline)
 
   ;; 1. Immediate expressions remain unchanged
@@ -239,7 +217,7 @@
 ;;; Pass 4b: S-Annotator Abstract Interpretation Tests (04b_annotator.scm)
 ;;; =======================================================================
 (define (test-pass4b-annotator)
-  (display "=== Running Pass 4b (S-Annotator) Tests ===")
+  (display "--- Group: Pass 4b (S-Annotator) ---")
   (newline)
 
   ;; 1. Lattice operations
@@ -306,7 +284,7 @@
 ;;; Pass 5b: S-RTyper Representation Typing & Unboxing Tests (05b_rtyper.scm)
 ;;; =======================================================================
 (define (test-pass5b-rtyper)
-  (display "=== Running Pass 5b (S-RTyper) Tests ===")
+  (display "--- Group: Pass 5b (S-RTyper) ---")
   (newline)
 
   ;; 1. Binary arithmetic lowering on integer constants
@@ -376,7 +354,7 @@
 ;;; Pass 4c: Contification & Local Closure Elimination Tests (04c_contify.scm)
 ;;; =======================================================================
 (define (test-pass4c-contify)
-  (display "=== Running Pass 4c (Contification) Tests ===")
+  (display "--- Group: Pass 4c (Contification) ---")
   (newline)
 
   ;; 1. Escape analysis
@@ -402,7 +380,7 @@
 ;;; Pass 5: Explicit Closure Conversion Tests (05_closure_convert.scm)
 ;;; =======================================================================
 (define (test-pass5-closure)
-  (display "=== Running Pass 5 (Closure Conversion) Tests ===")
+  (display "--- Group: Pass 5 (Closure Conversion) ---")
   (newline)
 
   ;; 1. Top-level program wrapping
@@ -439,7 +417,7 @@
 ;;; Pass 6: Low-Level Intermediate Representation (LIR) Tests (06_lir.scm)
 ;;; =======================================================================
 (define (test-pass6-lir)
-  (display "=== Running Pass 6 (LIR Generation) Tests ===")
+  (display "--- Group: Pass 6 (LIR Generation) ---")
   (newline)
 
   ;; 1. Basic LIR program structure
@@ -534,7 +512,7 @@
 ;;; Pass 7: Backend x86-64 Codegen Tests (07_backend_x86_64.scm)
 ;;; =======================================================================
 (define (test-pass7-backend)
-  (display "=== Running Pass 7 (x86-64 Backend) Tests ===")
+  (display "--- Group: Pass 7 (x86-64 Backend) ---")
   (newline)
 
   ;; 1. Register formatting
@@ -558,7 +536,7 @@
 ;;; Pass 7b: Portable C Backend Codegen Tests (07_backend_c.scm)
 ;;; =======================================================================
 (define (test-pass7b-backend-c)
-  (display "=== Running Pass 7b (Portable C Backend) Tests ===")
+  (display "--- Group: Pass 7b (Portable C Backend) ---")
   (newline)
 
   ;; 1. Label sanitization
@@ -597,7 +575,7 @@
 ;;; Pass 7c: AArch64 (ARM64) Backend Codegen Tests (07_backend_aarch64.scm)
 ;;; =======================================================================
 (define (test-pass7c-backend-aarch64)
-  (display "=== Running Pass 7c (AArch64 Backend) Tests ===")
+  (display "--- Group: Pass 7c (AArch64 Backend) ---")
   (newline)
 
   ;; 1. Register formatting
@@ -648,13 +626,6 @@
 ;;; =======================================================================
 ;;; Main Test Suite Runner
 ;;; =======================================================================
-(display "=======================================================")
-(newline)
-(display " Starting ULisp Full Nanopass Unit Test Suite (Pass 1-7)")
-(newline)
-(display "=======================================================")
-(newline)
-
 (test-pass0b-macro)
 (test-pass1-desugar)
 (test-pass2-analysis)
@@ -670,11 +641,4 @@
 (test-pass7b-backend-c)
 (test-pass7c-backend-aarch64)
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *pass-tests-passed*)
-(display " per-pass unit tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Nanopass Per-Pass (Pass 1-7)")

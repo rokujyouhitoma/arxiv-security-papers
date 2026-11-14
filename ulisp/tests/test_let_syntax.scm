@@ -32,7 +32,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp R7RS let-syntax & letrec-syntax Tests ===\n")
 
 ;;; --- Test 1: Basic let-syntax with single & multiple macros ---
 (write-string "--- Test 1: Basic let-syntax ---\n")
@@ -118,4 +117,3 @@
   (let ((temp 100))
     (test "hygiene prevents local variable capture in let-syntax" 150 (with-temp 50 temp))))
 
-(write-string "=== All let-syntax and letrec-syntax Tests Passed! ===\n")

@@ -6,7 +6,7 @@
 
 
 (display "=======================================================\n")
-(display " Starting Pass 126 (LIR Structured Control Flow) Unit Tests\n")
+(test-begin "Pass 126 (LIR Structured Control Flow)")
 (display "=======================================================\n")
 
 ;; Test 1: lir-compile-if emits conditional branches and labels
@@ -32,6 +32,4 @@
   (assert-true "begin: compiles sequence and loads constants"
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%mov) (equal? (caddr i) 12))) insts))))
 
-(display "=======================================================\n")
-(display " Pass 126: All tests passed!\n")
-(display "=======================================================\n")
+(test-end "Pass 126 (LIR Structured Control Flow)")

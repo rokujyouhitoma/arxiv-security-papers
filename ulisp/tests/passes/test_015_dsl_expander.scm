@@ -13,9 +13,7 @@
          (and (>= (string-length s) (string-length p))
               (string=? (substring s 0 (string-length p)) p)))))
 
-(display "=======================================================") (newline)
-(display " Starting Pass 015 (DSL Expander) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 015 (DSL Expander)")
 
 ;; 1. Pass-through of standard definitions and expressions
 (let* ((forms '((define (square x) (* x x))
@@ -168,6 +166,4 @@
     (assert-true "source-loc picopass registered at compile-time" (rule-descriptor? desc))
     (assert-equal "source-loc picopass kind is 'pico" 'pico (rule-kind desc))))
 
-(display "=======================================================") (newline)
-(display " Pass 015: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 015 (DSL Expander)")

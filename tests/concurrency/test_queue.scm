@@ -17,10 +17,7 @@
     ((assert-equal actual expected msg)
      (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Michael-Scott Lock-Free Queue Test Suite (#632)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+
 
 ;; -----------------------------------------------------------------------
 ;; Group 1: Queue Initialization, Sentinel Invariance & Empty/#f Semantics

@@ -9,69 +9,41 @@
 (load "ulisp/runtime/concurrency/channel.scm")
 (load "ulisp/runtime/concurrency/epoch.scm")
 
-(write-string "=======================================================\n")
-(write-string " Starting Synapse Epoch Fencing & Rollback Tests (#642)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(test-begin "concurrency-epoch")
 
-(define *test-epoch-failures* (vector 0))
-(define *test-epoch-passes* (vector 0))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-epoch-failures* 0 (+ (vector-ref *test-epoch-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-epoch-passes* 0 (+ (vector-ref *test-epoch-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-false val msg)
-  (assert-true (not val) msg))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(define (deep-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (pair? a) (pair? b))
-     (and (deep-equal? (car a) (car b))
-          (deep-equal? (cdr a) (cdr b))))
-    ((and (vector? a) (vector? b))
-     (let ((len-a (vector-length a))
-           (len-b (vector-length b)))
-       (if (= len-a len-b)
-           (let loop ((i 0))
-             (if (< i len-a)
-                 (if (deep-equal? (vector-ref a i) (vector-ref b i))
-                     (loop (+ i 1))
-                     #f)
-                 #t))
-           #f)))
-    (else #f)))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
-(define (assert-equal actual expected msg)
-  (if (not (deep-equal? actual expected))
-      (begin
-        (vector-set! *test-epoch-failures* 0 (+ (vector-ref *test-epoch-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-epoch-passes* 0 (+ (vector-ref *test-epoch-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
+
 
 ;; -----------------------------------------------------------------------
 ;; Helper: Mock Task Context Creation
@@ -302,18 +274,4 @@
          (aborted-tasks-stat (cdr (assq 'aborted-tasks stats))))
     (assert-equal aborted-tasks-stat num-stress-tasks "6.3 exactly 10,000 aborted tasks recorded in telemetry")))
 
-;;; -----------------------------------------------------------------------
-;;; Test Summary
-;;; -----------------------------------------------------------------------
-
-(write-string "=======================================================\n")
-(write-string " Epoch Fencing & Rollback Test Summary: ")
-(write-string (number->string (vector-ref *test-epoch-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-epoch-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-epoch-failures* 0) 0)
-    (error "test_epoch: one or more assertions failed" (vector-ref *test-epoch-failures* 0)))
+(test-end "concurrency-epoch")

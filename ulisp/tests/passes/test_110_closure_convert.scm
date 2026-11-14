@@ -7,9 +7,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 110 (Closure Conversion) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 110 (Closure Conversion)")
 
 ;; 1. Top-level program wrapping
 (let ((res (closure-convert 42)))
@@ -62,6 +60,4 @@
 (assert-false "L_lifted? rejects unlifted lambda inside %function body"
               (L_lifted? '(%program ((%function L_fn1 (x) (lambda (y) (+ x y)))) 42)))
 
-(display "=======================================================") (newline)
-(display " Pass 110: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 110 (Closure Conversion)")

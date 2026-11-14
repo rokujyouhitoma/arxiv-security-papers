@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 132 (Braun SSA Engine) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 132 (Braun SSA Engine)")
 
 ;; 1. CFG creation
 (let ((cfg (make-braun-cfg)))
@@ -69,6 +67,4 @@
     (assert-equal "inferred join param rep is raw-i64" 'raw-i64 (braun-get-rep-type cfg v-join))
     (assert-true "join param in raw-params list" (memq v-join (braun-get-raw-params cfg)))))
 
-(display "=======================================================") (newline)
-(display " Pass 132: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 132 (Braun SSA Engine)")

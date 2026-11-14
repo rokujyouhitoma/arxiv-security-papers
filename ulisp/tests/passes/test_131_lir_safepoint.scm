@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 131 (LIR Safepoint & Stackmap) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 131 (LIR Safepoint & Stackmap)")
 
 ;; 1. power-of-2 helper
 (assert-equal "power-of-2 0" 1 (power-of-2 0))
@@ -30,6 +28,4 @@
   (assert-true "bitmap is an integer" (integer? bm))
   (assert-true "bitmap is non-negative" (>= bm 0)))
 
-(display "=======================================================") (newline)
-(display " Pass 131: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 131 (LIR Safepoint & Stackmap)")

@@ -3,58 +3,28 @@
 ;;; Testing delay, force, delay-force, make-promise, promise?
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "promise")
 
-(define (print-msg s)
-  (write-string s)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax print-msg
+  (syntax-rules ()
+    ((print-msg s)
+     (begin (write-string s) (write-string "\n") (flush-output-port)))))
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (test-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b)) (string=? a b))
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
-    (else #f)))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
-(define (assert-equal actual expected msg)
-  (if (not (test-equal? actual expected))
-      (begin
-        (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
 
 ;; -----------------------------------------------------------------------
 ;; Test 1: promise? predicate
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 1: promise? Predicate ===")
+(print-msg "--- Test 1: promise? Predicate ---")
 
 (assert-true (promise? (delay 42)) "delay produces a promise")
 (assert-true (promise? (delay-force (delay 42))) "delay-force produces a promise")
@@ -70,7 +40,7 @@
 ;; -----------------------------------------------------------------------
 ;; Test 2: Basic delay and force
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 2: Basic delay and force ===")
+(print-msg "--- Test 2: Basic delay and force ---")
 
 (let ((p1 (delay (+ 10 20))))
   (assert-equal (force p1) 30 "basic arithmetic delay/force"))
@@ -84,7 +54,7 @@
 ;; -----------------------------------------------------------------------
 ;; Test 3: Memoization (Side effects run only once)
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 3: Memoization ===")
+(print-msg "--- Test 3: Memoization ---")
 
 (let ((eval-count (vector 0)))
   (let ((p (delay (begin
@@ -101,7 +71,7 @@
 ;; -----------------------------------------------------------------------
 ;; Test 4: make-promise procedure semantics
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 4: make-promise ===")
+(print-msg "--- Test 4: make-promise ---")
 
 (let ((p (make-promise 999)))
   (assert-true (promise? p) "make-promise on value returns promise")
@@ -115,7 +85,7 @@
 ;; -----------------------------------------------------------------------
 ;; Test 5: delay-force tail recursion & bounded space
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 5: delay-force tail recursion ===")
+(print-msg "--- Test 5: delay-force tail recursion ---")
 
 (define (lazy-countdown n)
   (delay-force
@@ -128,7 +98,7 @@
 ;; -----------------------------------------------------------------------
 ;; Test 6: R7RS 4.2.5 Re-entrant Self-Referential Promise
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 6: R7RS Re-entrancy ===")
+(print-msg "--- Test 6: R7RS Re-entrancy ---")
 
 (define r7rs-count (vector 0))
 (define r7rs-x (vector 5))
@@ -147,7 +117,7 @@
 ;; -----------------------------------------------------------------------
 ;; Test 7: Infinite Lazy Streams & stream-filter
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 7: Infinite Lazy Streams ===")
+(print-msg "--- Test 7: Infinite Lazy Streams ---")
 
 (define (stream-integers n)
   (delay (cons n (stream-integers (+ n 1)))))
@@ -180,7 +150,7 @@
 ;; -----------------------------------------------------------------------
 ;; Test 8: Nested delay and force
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 8: Nested delay and force ===")
+(print-msg "--- Test 8: Nested delay and force ---")
 
 (let ((nested (delay (delay 42))))
   (let ((inner (force nested)))
@@ -191,7 +161,7 @@
 ;; -----------------------------------------------------------------------
 ;; Test 9: Non-promise passed to force
 ;; -----------------------------------------------------------------------
-(print-msg "=== Test 9: Non-promise passed to force ===")
+(print-msg "--- Test 9: Non-promise passed to force ---")
 
 (assert-equal (force 42) 42 "force on integer returns integer")
 (assert-equal (force "abc") "abc" "force on string returns string")
@@ -201,13 +171,4 @@
 ;; -----------------------------------------------------------------------
 ;; Summary
 ;; -----------------------------------------------------------------------
-(print-msg "=======================================================")
-(if (= (vector-ref *test-failures* 0) 0)
-    (begin
-      (print-msg "All R7RS delayed evaluation tests passed successfully!")
-      (print-msg "=======================================================")
-      #t)
-    (begin
-      (print-msg "SOME TESTS FAILED!")
-      (print-msg "=======================================================")
-      (exit 1)))
+(test-end "promise")

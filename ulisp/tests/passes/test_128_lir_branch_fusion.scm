@@ -4,12 +4,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting Condition Branch Flag Fusion Test Suite (Issue #545)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 128 (Condition Branch Flag Fusion)")
 
 ;; Test 1: Verify (= i 1000000) inside hot loop emits %cmp and %jump-cond instead of %set-boolean + %jump-if-false
 (let* ((ast '(letrec ((loop (lambda (i acc) (if (= i 1000000) acc (loop (+ i 1) (+ acc i)))))) (loop 0 0)))
@@ -103,12 +98,4 @@
     (assert-true "fused program satisfies L_lir_canonical schema" (L_lir_canonical? fused))))
 
 (newline)
-(display "=======================================================")
-(newline)
-(display " All Condition Branch Flag Fusion Tests PASSED: ")
-(display *tests-passed*)
-(display "/")
-(display (+ *tests-passed* *tests-failed*))
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 128 (Condition Branch Flag Fusion)")

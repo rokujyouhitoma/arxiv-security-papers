@@ -13,26 +13,13 @@
      (string=? a b))
     (else #f)))
 
-(define (test name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (write-string "  [PASS] ")
-        (write-string name)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)
-      (begin
-        (write-string "  [FAIL] ")
-        (write-string name)
-        (write-string " - Expected: ")
-        (display expected)
-        (write-string ", Actual: ")
-        (display actual)
-        (write-char #\newline)
-        (flush-output-port)
-        (exit 1))))
+(test-begin "string-ports")
 
-(write-string "=== Running ULisp R7RS String Ports Test Suite ===\n")
+(define-syntax test
+  (syntax-rules ()
+    ((test name expected actual)
+     (test-equal name expected actual))))
+
 
 ;;; --- Test 1: Port Predicates ---
 (write-string "--- Test 1: Port Predicates ---\n")
@@ -178,4 +165,4 @@
         (guard (e (else 'caught-eof-quote))
           (read p))))
 
-(write-string "=== All R7RS String Ports Tests Completed Successfully! ===\n")
+(test-end "string-ports")

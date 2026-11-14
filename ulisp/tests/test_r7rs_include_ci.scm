@@ -32,7 +32,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp R7RS include-ci Tests ===\n")
 
 ;;; --- Test 1: include-ci loads uppercase file and normalizes identifiers to lowercase ---
 (write-string "--- Test 1: include-ci file inclusion ---\n")
@@ -44,5 +43,4 @@
 (test "include-ci conditional branching true" 20 (evaluate-upper-cond #t 10))
 (test "include-ci conditional branching false" 8 (evaluate-upper-cond #f 10))
 
-(write-string "=== All include-ci Tests Passed Successfully! ===\n")
 

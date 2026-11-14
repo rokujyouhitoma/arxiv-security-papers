@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 028 (Bindings Desugaring) Unit Test") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 028 (Bindings Desugaring)")
 
 ;; 1. make-body-expr
 (assert-equal "make-body-expr empty"
@@ -189,6 +187,4 @@
               '(lambda (p) (begin 1 2))
               (desugar-bindings '(lambda (p) 1 2)))
 
-(display "=======================================================") (newline)
-(display " Pass 028: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 028 (Bindings Desugaring)")

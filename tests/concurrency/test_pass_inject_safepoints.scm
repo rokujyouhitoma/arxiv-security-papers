@@ -4,58 +4,7 @@
 ;;; Conforms to DSN-37 Section 7.2, 12.4 & Phase 3 Task 3.4 (Issue #640)
 ;;; =======================================================================
 
-(display "=======================================================\n")
-(display " Starting Synapse Reduction Safepoint Injection Tests\n")
-(display "=======================================================\n")
-
-(define *test-count* (cons 0 '()))
-(define *pass-count* (cons 0 '()))
-
-(define (assert-true name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if expr-result
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-false name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (not expr-result)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] Expected failure/rejection: ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-equal name expected actual)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (equal? expected actual)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (display " - Expected: ")
-        (write expected)
-        (display " but got: ")
-        (write actual)
-        (newline)
-        (error "Assertion failed" name))))
+(test-begin "Synapse Reduction Safepoint Injection")
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: AST Predicates & Construction
@@ -507,16 +456,4 @@
                 sum-million))
 
 
-;;; -----------------------------------------------------------------------
-;;; Test Summary
-;;; -----------------------------------------------------------------------
-
-(newline)
-(display "=======================================================\n")
-(display " Test Suite Completed: ")
-(display (car *pass-count*))
-(display " / ")
-(display (car *test-count*))
-(display " assertions passed.\n")
-(display "=======================================================\n")
-(newline)
+(test-end "Synapse Reduction Safepoint Injection")

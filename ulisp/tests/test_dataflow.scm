@@ -3,58 +3,22 @@
 ;;; Conforms to Issue #599 & DSN-33 Architecture Specification
 ;;; =======================================================================
 
-(display "=======================================================\n")
-(display " Starting Generic Dataflow Analysis Test Suite\n")
-(display "=======================================================\n")
+(test-begin "Generic Dataflow Analysis Framework")
 
-(define *df-test-count* (cons 0 '()))
-(define *df-pass-count* (cons 0 '()))
+(define-syntax df-assert-true
+  (syntax-rules ()
+    ((df-assert-true name expr)
+     (assert-true name expr))))
 
-(define (df-assert-true name expr-result)
-  (set-car! *df-test-count* (+ (car *df-test-count*) 1))
-  (if expr-result
-      (begin
-        (set-car! *df-pass-count* (+ (car *df-pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
+(define-syntax df-assert-false
+  (syntax-rules ()
+    ((df-assert-false name expr)
+     (assert-false name expr))))
 
-(define (df-assert-false name expr-result)
-  (set-car! *df-test-count* (+ (car *df-test-count*) 1))
-  (if (not expr-result)
-      (begin
-        (set-car! *df-pass-count* (+ (car *df-pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] Expected failure/rejection: ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (df-assert-equal name expected actual)
-  (set-car! *df-test-count* (+ (car *df-test-count*) 1))
-  (if (equal? expected actual)
-      (begin
-        (set-car! *df-pass-count* (+ (car *df-pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (display " - Expected: ")
-        (write expected)
-        (display " but got: ")
-        (write actual)
-        (newline)
-        (error "Assertion failed" name))))
+(define-syntax df-assert-equal
+  (syntax-rules ()
+    ((df-assert-equal name expected actual)
+     (assert-equal name expected actual))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Boolean Lattice Tests
@@ -244,10 +208,4 @@
 ;;; -----------------------------------------------------------------------
 ;;; Summary Report
 ;;; -----------------------------------------------------------------------
-(display "\n=======================================================\n")
-(display " Dataflow Test Suite Completed: ")
-(display (car *df-pass-count*))
-(display "/")
-(display (car *df-test-count*))
-(display " PASS\n")
-(display "=======================================================\n")
+(test-end "Generic Dataflow Analysis Framework")

@@ -7,9 +7,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 070 (ANF Normalization) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 070 (ANF Normalization)")
 
 ;; 1. Immediate expressions remain unchanged
 (assert-equal "atomic integer"
@@ -71,6 +69,4 @@
 (assert-false "L_anf? rejects un-normalized compound operator call"
               (L_anf? '(f (g x))))
 
-(display "=======================================================") (newline)
-(display " Pass 070: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 070 (ANF Normalization)")

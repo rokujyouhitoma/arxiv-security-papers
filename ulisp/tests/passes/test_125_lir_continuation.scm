@@ -6,7 +6,7 @@
 
 
 (display "=======================================================\n")
-(display " Starting Pass 125 (LIR Continuation & Loop Fusion Lowering) Unit Tests\n")
+(test-begin "Pass 125 (LIR Continuation & Loop Fusion)")
 (display "=======================================================\n")
 
 ;; Test 1: cont-body-has-external-call? and expr-references-var?
@@ -29,6 +29,4 @@
   (assert-true "cont-call: emits %jump to continuation target label"
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%jump) (eq? (cadr i) 'L_k_target))) insts))))
 
-(display "=======================================================\n")
-(display " Pass 125: All tests passed!\n")
-(display "=======================================================\n")
+(test-end "Pass 125 (LIR Continuation & Loop Fusion)")

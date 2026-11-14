@@ -6,12 +6,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting Pass 04b (S-Annotator Narrowing) Detailed Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 080 (S-Annotator Narrowing)")
 
 ;;; --- Group 1: Lattice Meet Operations (GLB: \sqcap) ---
 (display "--- Group 1: Lattice Meet Operations (GLB) ---") (newline)
@@ -120,10 +115,4 @@
                 (type-fixnum)
                 (narrow-var-in-branch 'x '(fixnum? x) #t env)))
 
-(display "=======================================================")
-(newline)
-(display " All ") (display *annotator-tests-passed*)
-(display " Pass 04b (S-Annotator Narrowing) unit tests PASSED! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 080 (S-Annotator Narrowing)")

@@ -3,7 +3,7 @@
 ;;; Conforms to DSN-33 Architecture Specification & Issue #819
 ;;; =======================================================================
 
-(write-string "=== Running ULisp SRFI 64 Test Suite ===\n")
+
 
 ;; -----------------------------------------------------------------------
 ;; Test 1: Basic Assertions (test-assert, test-eq, test-eqv, test-equal)
@@ -117,4 +117,4 @@
 (test-equal "custom-records-length" 2 (length (unbox custom-records)))
 (test-end "meta-verification")
 
-(write-string "=== All SRFI 64 Tests Passed Successfully! ===\n")
+

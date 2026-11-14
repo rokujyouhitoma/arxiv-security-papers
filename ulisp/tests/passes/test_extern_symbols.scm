@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting External Symbols (Issue #607) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "External Symbols (Issue #607)")
 
 ;; 1. Symbol Mangling
 (assert-equal "mangle-fn-label map" 'ulisp_fn_map (mangle-fn-label 'map))
@@ -72,8 +70,4 @@
 (set-allow-extern-symbols! #f)
 (set-module-mode! #f)
 
-(display "=======================================================") (newline)
-(display " External Symbols Unit Tests: ALL ")
-(display *extern-tests-passed*)
-(display " TESTS PASSED!") (newline)
-(display "=======================================================") (newline)
+(test-end "External Symbols (Issue #607)")

@@ -548,7 +548,8 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #819](../../docs/issues/closed/819-implement-srfi-64-test-suites-library-and-custom-test-runners.md): SRFI 64 / `(srfi 64)` ユニットテスト標準 API・テストスイート階層化・拡張テストランナーの完全実装
    - [Issue #820](../../docs/issues/closed/820-implement-srfi-78-lightweight-testing-library.md): SRFI 78 / `(srfi 78)` 軽量テストライブラリ・アロー記法・SRFI 64 透過連携の完全実装
    - [Issue #821](../../docs/issues/closed/821-implement-srfi-252-property-based-testing-library.md): SRFI 252 / `(srfi 252)` プロパティベーステスト・決定論的 PRNG ジェネレータ群の完全実装
-   - [Issue #822](../../docs/issues/822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md): 既存テストスイートの SRFI 64 統一・引数順序是正および Nanopass 共通ハーネスの統合
+   - [Issue #822](../../docs/issues/closed/822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md): 既存テストスイートの SRFI 64 統一・引数順序是正および Nanopass 共通ハーネスの統合
+   - [Issue #823](../../docs/issues/823-unify-test-runner-output-formats-and-add-verbose-mode.md): uLisp テストスイート表示形式の SRFI 64 統一フォーマッタ導入とログ出力整流化
 3. **アーキテクチャ特性に基づく設計の進化**:
    - `eval`, `load`, `repl` などの動的実行系は、メタサーキュラー評価器および `open-input-file` / `port-read` 動的ロード機構により、Issue #716-#718 にて **R7RS-small 全 16 標準ライブラリの 100% 完全準拠 (◎)** を達成。
    - 数値塔（Number Tower）は、62-bit 即値 Fixnum、ヒープ有理数 (`<ratnum>`)、倍精度浮動小数点数 (`<flonum>`)、および直交・極形式複素数 (`<compnum>`) を完備し、Issue #711-#715 にて完全準拠を達成。

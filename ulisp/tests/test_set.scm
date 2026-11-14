@@ -22,7 +22,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp SRFI 113 Sets and Bags Test Suite ===\n")
 
 ;;; --- Test 1: Set Creation, Predicates & Membership ---
 (write-string "--- Test 1: Set Creation & Membership ---\n")
@@ -120,4 +119,3 @@
   (test "bag->set size" 2 (set-size s))
   (test "alist->bag roundtrip bag=?" #t (bag=? b b-roundtrip)))
 
-(write-string "=== All SRFI 113 Sets and Bags Tests Passed Successfully! ===\n")

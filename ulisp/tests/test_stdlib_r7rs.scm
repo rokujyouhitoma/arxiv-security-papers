@@ -4,68 +4,25 @@
 ;;; Conforms to Issue #551
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "stdlib-r7rs")
 
-(define (test-pass name)
-  (write-string "  [PASS] ")
-  (write-string name)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true name expr)
+     (test-assert name expr))))
 
-(define (test-fail name expected actual)
-  (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-  (write-string "  [FAIL] ")
-  (write-string name)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal name expected actual)
+     (test-equal name expected actual))))
 
-(define (test-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b))
-     (string=? a b))
-    ((and (vector? a) (vector? b))
-     (let ((la (vector-length a))
-           (lb (vector-length b)))
-       (if (= la lb)
-           (let loop ((i 0))
-             (if (= i la)
-                 #t
-                 (if (test-equal? (vector-ref a i) (vector-ref b i))
-                     (loop (+ i 1))
-                     #f)))
-           #f)))
-    ((and (bytevector? a) (bytevector? b))
-     (bytevector=? a b))
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
-    (else #f)))
-
-
-(define (assert-true name expr)
-  (if expr
-      (test-pass name)
-      (test-fail name "#t" "#f")))
-
-(define (assert-equal name expected actual)
-  (if (test-equal? expected actual)
-      (test-pass name)
-      (test-fail name expected actual)))
-
-(define (assert-num-equal name expected actual)
-  (if (= expected actual)
-      (test-pass name)
-      (test-fail name expected actual)))
-
-(write-string "=== Running ULisp R7RS Standard Library Sequence Tests (Issue #551) ===")
-(write-char #\newline)
-(flush-output-port)
-
+(define-syntax assert-num-equal
+  (syntax-rules ()
+    ((assert-num-equal name expected actual)
+     (test-equal name expected actual))))
 ;;; =======================================================================
 ;;; 1. List Operations (R7RS Section 6.4)
 ;;; =======================================================================
-(write-string "--- 1. List Procedures ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -106,7 +63,6 @@
 ;;; =======================================================================
 ;;; 2. String Operations (R7RS Section 6.7)
 ;;; =======================================================================
-(write-string "--- 2. String Procedures ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -169,7 +125,6 @@
 ;;; =======================================================================
 ;;; 3. Vector Operations (R7RS Section 6.8)
 ;;; =======================================================================
-(write-string "--- 3. Vector Procedures ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -224,7 +179,6 @@
 ;;; =======================================================================
 ;;; 4. Bytevector Operations (R7RS Section 6.9)
 ;;; =======================================================================
-(write-string "--- 4. Bytevector Procedures ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -253,7 +207,6 @@
 ;;; =======================================================================
 ;;; 5. Character Comparison Operations (R7RS Section 6.6)
 ;;; =======================================================================
-(write-string "--- 5. Character Comparison Procedures ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -294,7 +247,6 @@
 ;;; =======================================================================
 ;;; 6. String Comparison Operations (R7RS Section 6.7)
 ;;; =======================================================================
-(write-string "--- 6. String Comparison Procedures ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -389,7 +341,6 @@
 ;;; =======================================================================
 ;;; 7. Iteration (R7RS Section 4.2.4: do)
 ;;; =======================================================================
-(write-string "--- 7. Iteration (do) ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -448,7 +399,6 @@
 ;;; =======================================================================
 ;;; 8. Multiple-value Definitions (R7RS Section 5.3.3: define-values)
 ;;; =======================================================================
-(write-string "--- 8. Multiple-value Definitions (define-values) ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -546,7 +496,6 @@
 ;;; =======================================================================
 ;;; 11. R7RS (scheme char) Character & String Procedures (Issue #612)
 ;;; =======================================================================
-(write-string "--- 11. (scheme char) Procedures ---")
 (write-char #\newline)
 (flush-output-port)
 
@@ -573,16 +522,4 @@
 (assert-equal "string-ci<? 2 args" #t (string-ci<? "abc" "ABD"))
 (assert-equal "string-ci<? chain" #t (string-ci<? "a" "B" "c" "D"))
 
-;;; Summary
-(write-string "=== ULisp R7RS Standard Library Tests Completed: ")
-(if (= (vector-ref *test-failures* 0) 0)
-    (begin
-      (write-string "ALL TESTS PASSED ===")
-      (write-char #\newline)
-      (flush-output-port)
-      #t)
-    (begin
-      (write-string "FAILURES ENCOUNTERED ===")
-      (write-char #\newline)
-      (flush-output-port)
-      (exit 1)))
+(test-end "stdlib-r7rs")

@@ -4,58 +4,7 @@
 ;;; Conforms to DSN-37 Section 4.3, 12.4 & Phase 4 Task 4.1 (Issue #682)
 ;;; =======================================================================
 
-(display "=======================================================\n")
-(display " Starting Synapse Hotpath Inlining & Type Check Elimination Tests (#682)\n")
-(display "=======================================================\n")
-
-(define *test-count* (cons 0 '()))
-(define *pass-count* (cons 0 '()))
-
-(define (assert-true name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if expr-result
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-false name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (not expr-result)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] Expected failure/rejection: ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-equal name expected actual)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (equal? expected actual)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (display " - Expected: ")
-        (write expected)
-        (display " but got: ")
-        (write actual)
-        (newline)
-        (error "Assertion failed" name))))
+(test-begin "Synapse Hotpath Inlining & Type Check Elimination")
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Utilities, AST Predicates & Type Environment
@@ -727,19 +676,4 @@
 (assert-false "7.9 inline-hotpath pass cleanly removed"
               (memq 'pass-synapse-inline-hotpath (map pass-id (build-pipeline 0 '()))))
 
-;;; -----------------------------------------------------------------------
-;;; Test Suite Summary
-;;; -----------------------------------------------------------------------
-(newline)
-(display "=======================================================\n")
-(display " Hotpath Inlining Test Summary: ")
-(display (car *pass-count*))
-(display " / ")
-(display (car *test-count*))
-(display " passed (")
-(display (if (= (car *pass-count*) (car *test-count*)) "100%" "FAILED"))
-(display ")\n")
-(display "=======================================================\n")
-
-(if (not (= (car *pass-count*) (car *test-count*)))
-    (error "test_pass_inline_hotpath: one or more assertions failed"))
+(test-end "Synapse Hotpath Inlining & Type Check Elimination")

@@ -40,7 +40,6 @@
         (newline)
         (flush-output-port))))
 
-(display "=== Running R7RS §6.12 Environment Specifier Tests (Issue #716) ===")
 (newline)
 
 ;; 1. environment? Predicate and Constructors
@@ -117,7 +116,6 @@
 ;; -----------------------------------------------------------------------
 ;; 7. R7RS §6.12 (scheme eval) Metacircular Dynamic Evaluation (Issue #717)
 ;; -----------------------------------------------------------------------
-(write-string "=== Running R7RS §6.12 (scheme eval) Evaluation Tests (Issue #717) ===\n")
 (flush-output-port)
 
 (let ((base-env (environment '(scheme base)))
@@ -225,7 +223,6 @@
 ;; -----------------------------------------------------------------------
 ;; 8. R7RS §6.14 (scheme load) and (scheme repl) Dynamic File Loading (Issue #718)
 ;; -----------------------------------------------------------------------
-(write-string "=== Running R7RS §6.14 (scheme load) and (scheme repl) Tests (Issue #718) ===\n")
 (flush-output-port)
 
 (let ((test-filename "build/test_tmp_load_script.scm"))
@@ -274,7 +271,6 @@
 ;; -----------------------------------------------------------------------
 ;; 9. R7RS §7.1.16 (scheme r5rs) Full Compatibility Library (Issue #718)
 ;; -----------------------------------------------------------------------
-(write-string "=== Running R7RS §7.1.16 (scheme r5rs) Compatibility Tests (Issue #718) ===\n")
 (flush-output-port)
 
 (let ((r5rs-env (environment '(scheme r5rs))))

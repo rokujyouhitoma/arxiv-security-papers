@@ -6,18 +6,12 @@
 
 
 
-(define (test-stackmap-suite)
-  (display "=======================================================")
-  (newline)
-  (display " Starting ULisp Exact GC Stackmap Test Suite (Issue #519)")
-  (newline)
-  (display "=======================================================")
-  (newline)
+(test-begin "Pass 141 (Exact GC Stackmap)")
 
   ;; -------------------------------------------------------------------
   ;; Test 1: Stackmap Clause Existence in %lir-program
   ;; -------------------------------------------------------------------
-  (display "=== Test 1: Stackmap Clause in LIR Program ===")
+  (display "--- Test 1: Stackmap Clause in LIR Program ---")
   (newline)
   (let* ((ast '(let ((f (lambda (x) (+ x 1)))) (f 42)))
          (anf (anf-all (cp0-optimize (desugar-all ast))))
@@ -39,7 +33,7 @@
   ;; -------------------------------------------------------------------
   ;; Test 2: %self and Pointer Slots are Marked 1 in Bitmap
   ;; -------------------------------------------------------------------
-  (display "=== Test 2: %self and Pointer Slot Bit Allocation ===")
+  (display "--- Test 2: %self and Pointer Slot Bit Allocation ---")
   (newline)
   (let* ((ast '(let ((p (cons 10 20))
                      (f (lambda (dummy) dummy)))
@@ -61,7 +55,7 @@
   ;; -------------------------------------------------------------------
   ;; Test 3: Unboxed Raw Integer Variable has Bit 0 in Bitmap
   ;; -------------------------------------------------------------------
-  (display "=== Test 3: Unboxed Variable Slot has Bit 0 in Bitmap ===")
+  (display "--- Test 3: Unboxed Variable Slot has Bit 0 in Bitmap ---")
   (newline)
   (let* ((ast '(letrec ((loop (lambda (n acc)
                                 (if (zero? n)
@@ -85,7 +79,7 @@
   ;; -------------------------------------------------------------------
   ;; Test 4: %get-stackmap-table Primitive Generation
   ;; -------------------------------------------------------------------
-  (display "=== Test 4: %get-stackmap-table Primitive ===")
+  (display "--- Test 4: %get-stackmap-table Primitive ---")
   (newline)
   (let* ((ast '(%get-stackmap-table))
          (lir (generate-lir (closure-convert (anf-all (cp0-optimize (desugar-all ast))))))
@@ -105,7 +99,7 @@
   ;; -------------------------------------------------------------------
   ;; Test 5: x86-64 Backend Emits __ulisp_stackmap_table in .rodata
   ;; -------------------------------------------------------------------
-  (display "=== Test 5: Assembly Emission of Stackmap Table ===")
+  (display "--- Test 5: Assembly Emission of Stackmap Table ---")
   (newline)
   (let* ((ast '(let ((g (lambda (a) (+ a 5)))) (g 100)))
          (anf (anf-all (cp0-optimize (desugar-all ast))))
@@ -122,7 +116,7 @@
   ;; -------------------------------------------------------------------
   ;; Test 6: Simulation of Exact Stackmap GC Filtering
   ;; -------------------------------------------------------------------
-  (display "=== Test 6: Exact Stackmap Slot Filtering Logic ===")
+  (display "--- Test 6: Exact Stackmap Slot Filtering Logic ---")
   (newline)
   ;; Suppose frame has 3 slots:
   ;; Slot 0: raw scalar (bit 0 = 0)
@@ -137,11 +131,4 @@
     (assert-true "slot 1 (heap pointer) is correctly marked pointer" slot-1-is-ptr)
     (assert-true "slot 2 (%self) is correctly marked pointer" slot-2-is-ptr))
 
-  (display "=======================================================")
-  (newline)
-  (display " All Exact GC Stackmap tests PASSED! (0 failures)")
-  (newline)
-  (display "=======================================================")
-  (newline))
-
-(test-stackmap-suite)
+  (test-end "Pass 141 (Exact GC Stackmap)")

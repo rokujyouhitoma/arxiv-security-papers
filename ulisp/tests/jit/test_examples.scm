@@ -8,36 +8,7 @@
 ;;; - Full 100% Pure Scheme execution lifecycle
 ;;; =======================================================================
 
-(define *ex-tests-passed* 0)
-(define *ex-tests-failed* 0)
-
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *ex-tests-passed* (+ *ex-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *ex-tests-failed* (+ *ex-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
-
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
-
-(display "=======================================================")
-(newline)
-(display " Starting MLisp Example VMs & E2E JIT Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "MLisp Example VMs & E2E JIT")
 
 ;;; Reset global tracer & JIT runtime
 (tracer-reset!)
@@ -108,11 +79,4 @@
   (assert-true "loop was tracked by MLisp tracer"
                (>= (get-loop-count 'scheme-cnt-loop) 1)))
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *ex-tests-passed*)
-(display " MLisp Example VMs tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "MLisp Example VMs & E2E JIT")

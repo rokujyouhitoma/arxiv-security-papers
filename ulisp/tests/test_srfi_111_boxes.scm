@@ -22,7 +22,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp SRFI 111 Boxes Tests ===\n")
 
 ;;; --- Test 1: box creation and predicate ---
 (write-string "--- Test 1: box & box? ---\n")
@@ -68,5 +67,4 @@
 (test "unbox outer returns box" #t (box? (unbox outer)))
 (test "unbox nested" "inner-data" (unbox (unbox outer)))
 
-(write-string "=== All SRFI 111 Boxes Tests Passed Successfully! ===\n")
 

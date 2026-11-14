@@ -22,7 +22,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp SRFI 145 Assumptions Tests ===\n")
 
 ;;; --- Test 1: assume on satisfied conditions ---
 (write-string "--- Test 1: assume satisfied conditions ---\n")
@@ -70,4 +69,3 @@
 
 (test "assert raised exception on false condition" #t (unbox caught-assert-error-box))
 
-(write-string "=== All SRFI 145 Assumptions Tests Passed Successfully! ===\n")

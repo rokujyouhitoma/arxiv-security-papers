@@ -13,27 +13,12 @@
      (string=? a b))
     (else #f)))
 
-(define (test name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (write-string "  [PASS] ")
-        (write-string name)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)
-      (begin
-        (write-string "  [FAIL] ")
-        (write-string name)
-        (write-string " - Expected: ")
-        (display expected)
-        (write-string ", Actual: ")
-        (display actual)
-        (write-char #\newline)
-        (flush-output-port)
-        (exit 1))))
+(test-begin "reader-eof")
 
-(write-string "=== Running ULisp Reader EOF Diagnostic Test Suite (Issue #628) ===\n")
-
+(define-syntax test
+  (syntax-rules ()
+    ((test name expected actual)
+     (test-equal name expected actual))))
 ;; 1. Normal balanced reading
 (write-string "--- Group 1: Normal Balanced Datum Reading ---\n")
 (let ((p (open-input-string "(+ 1 2)")))
@@ -125,5 +110,4 @@
         (guard (e (else 'caught))
           (read p))))
 
-(write-string "=== All Reader EOF Diagnostic Tests Completed Successfully! ===\n")
-
+(test-end "reader-eof")

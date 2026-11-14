@@ -2,42 +2,18 @@
 ;;; ULisp Test Suite: Generational GC Execution Profiles (Issue #567)
 ;;; =======================================================================
 
-(define *test-profile-failures* (vector 0))
+(test-begin "gc-profile")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-profile-failures* 0 (+ (vector-ref *test-profile-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (or (eqv? actual expected)
-               (and (string? actual) (string? expected) (string=? actual expected))))
-      (begin
-        (vector-set! *test-profile-failures* 0 (+ (vector-ref *test-profile-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=== Running ULisp Issue #567 GC Execution Profile Tests ===\n")
 (flush-output-port)
 
 ;; 1. Check current runtime profile (detected from boot environment or default)
@@ -117,11 +93,4 @@
   (assert-equal (car stdp) 555 "Standard promoted pair preserved"))
 
 ;; 6. Final exit check
-(let ((failures (vector-ref *test-profile-failures* 0)))
-  (if (> failures 0)
-      (begin
-        (write-string "=== SOME GC PROFILE TESTS FAILED! ===\n")
-        (sys-exit 1))
-      (begin
-        (write-string "=== ALL Issue #567 GC Execution Profile Tests PASSED! ===\n")
-        (sys-exit 0))))
+(test-end "gc-profile")

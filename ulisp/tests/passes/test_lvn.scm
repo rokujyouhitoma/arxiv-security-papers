@@ -14,12 +14,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting ULisp Extended LVN & Accessor Memoization Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 060 (Extended LVN)")
 
 ;;; Test Group 1: Immutable Pair Accessor Memoization
 (display "--- Group 1: Immutable Pair Accessor Memoization ---")
@@ -214,11 +209,4 @@
   (assert-true "optimized program contains single (car p)"
                (pair? opt)))
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *lvn-tests-passed*)
-(display " ULisp Extended LVN tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 060 (Extended LVN)")

@@ -6,7 +6,7 @@
 
 
 (display "=======================================================\n")
-(display " Starting Pass 124 (LIR Call ABI & Tail Jump Lowering) Unit Tests\n")
+(test-begin "Pass 124 (LIR Call ABI & Tail Jump)")
 (display "=======================================================\n")
 
 ;; Test 1: Non-tail indirect call (%call-closure)
@@ -55,6 +55,4 @@
   (assert-true "fn7: loads arg 5 to %r9"
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%load) (eq? (cadr i) '%r9))) insts))))
 
-(display "=======================================================\n")
-(display " Pass 124: All tests passed!\n")
-(display "=======================================================\n")
+(test-end "Pass 124 (LIR Call ABI & Tail Jump)")

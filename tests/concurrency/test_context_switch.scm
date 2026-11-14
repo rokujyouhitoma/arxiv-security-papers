@@ -12,59 +12,40 @@
 (load "ulisp/runtime/concurrency/atomic.scm")
 (load "ulisp/runtime/concurrency/context.scm")
 
-(define *test-context-failures* (vector 0))
-(define *test-context-passes* (vector 0))
+(test-begin "concurrency-context_switch")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-context-failures* 0 (+ (vector-ref *test-context-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-context-passes* 0 (+ (vector-ref *test-context-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (eqv? actual expected))
-      (begin
-        (vector-set! *test-context-failures* 0 (+ (vector-ref *test-context-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-context-passes* 0 (+ (vector-ref *test-context-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-error thunk msg)
-  (let ((caught
-         (guard (exn (#t #t))
-           (thunk)
-           #f)))
-    (assert-true caught msg)))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Native Context Switch Test Suite (#634)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: <task-stack> Allocation, 16-Byte Alignment & Canaries
 ;; -----------------------------------------------------------------------
@@ -406,14 +387,4 @@
                 "8c.3 local guard recorded 'local-boom")
   (free-coroutine-context! co-local-handler))
 
-(write-string "=======================================================\n")
-(write-string " Native Context Switch Test Summary: ")
-(write-string (number->string (vector-ref *test-context-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-context-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-context-failures* 0) 0)
-    (error "test_context_switch: one or more assertions failed" (vector-ref *test-context-failures* 0)))
+(test-end "concurrency-context_switch")

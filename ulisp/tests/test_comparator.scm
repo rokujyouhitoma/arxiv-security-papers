@@ -22,7 +22,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp SRFI 128 Comparators Test Suite ===\n")
 
 ;;; --- Test 1: Predicates and Atomic Comparators ---
 (write-string "--- Test 1: Predicates and Atomic Comparators ---\n")
@@ -130,4 +129,3 @@
       #t
       (<? default-comparator (make-point 1 9) (make-point 2 0)))
 
-(write-string "=== All SRFI 128 Comparators Tests Passed Successfully! ===\n")

@@ -21,59 +21,40 @@
 (load "ulisp/runtime/concurrency/futex.scm")
 (load "ulisp/runtime/concurrency/scheduler.scm")
 
-(define *test-futex-failures* (vector 0))
-(define *test-futex-passes* (vector 0))
+(test-begin "concurrency-futex")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-futex-failures* 0 (+ (vector-ref *test-futex-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-futex-passes* 0 (+ (vector-ref *test-futex-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (eqv? actual expected))
-      (begin
-        (vector-set! *test-futex-failures* 0 (+ (vector-ref *test-futex-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-futex-passes* 0 (+ (vector-ref *test-futex-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-error thunk msg)
-  (let ((caught
-         (guard (exn (#t #t))
-           (thunk)
-           #f)))
-    (assert-true caught msg)))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Linux Futex Park / Unpark Test Suite (#676) \n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: Low-Level Futex Cell Allocation, Value Ops & Atomic CAS
 ;; -----------------------------------------------------------------------
@@ -321,18 +302,4 @@
   (assert-error (lambda () (futex-park-adaptive! (make-futex-cell 0) "bad-spins" 10))
                 "futex-park-adaptive! rejects non-integer max-spins (CWE-843)"))
 
-;; -----------------------------------------------------------------------
-;; Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Tests Passed: ")
-(write-string (number->string (vector-ref *test-futex-passes* 0)))
-(write-string " | Tests Failed: ")
-(write-string (number->string (vector-ref *test-futex-failures* 0)))
-(write-char #\newline)
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-futex-failures* 0) 0)
-    (error "test_futex failed" (vector-ref *test-futex-failures* 0))
-    #t)
+(test-end "concurrency-futex")

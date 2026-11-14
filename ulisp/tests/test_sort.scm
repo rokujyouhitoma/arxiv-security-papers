@@ -4,57 +4,27 @@
 ;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "sort")
 
-(define (test-pass name)
-  (write-string "  [PASS] ")
-  (write-string name)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal name actual expected)
+     (test-equal name expected actual))))
 
-(define (test-fail name expected actual)
-  (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-  (write-string "  [FAIL] ")
-  (write-string name)
-  (write-string " (expected ")
-  (write expected)
-  (write-string ", got ")
-  (write actual)
-  (write-string ")")
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true name expr)
+     (test-assert name expr))))
 
-(define (test-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b)) (string=? a b))
-    ((and (vector? a) (vector? b))
-     (and (= (vector-length a) (vector-length b))
-          (let loop ((i 0))
-            (if (= i (vector-length a))
-                #t
-                (if (test-equal? (vector-ref a i) (vector-ref b i))
-                    (loop (+ i 1))
-                    #f)))))
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
-    (else #f)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false name expr)
+     (test-assert name (not expr)))))
 
-(define (assert-equal name actual expected)
-  (if (test-equal? actual expected)
-      (test-pass name)
-      (test-fail name expected actual)))
 
-(define (assert-true name cond)
-  (if cond
-      (test-pass name)
-      (test-fail name #t #f)))
 
-(define (assert-false name cond)
-  (if (not cond)
-      (test-pass name)
-      (test-fail name #f #t)))
+
+
 
 ;;; -----------------------------------------------------------------------
 
@@ -67,7 +37,7 @@
 
 ;;; Group 1: Sorted? Predicates (list-sorted?, vector-sorted?, sorted?)
 ;;; -----------------------------------------------------------------------
-(write-string "=== Group 1: Sorted? Predicates ===")
+(write-string "--- Group 1: Sorted? Predicates ---")
 (write-char #\newline)
 
 (assert-true "empty list is sorted"
@@ -117,7 +87,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 2: Merge Procedures (list-merge, vector-merge, merge)
 ;;; -----------------------------------------------------------------------
-(write-string "=== Group 2: Merge Procedures ===")
+(write-string "--- Group 2: Merge Procedures ---")
 (write-char #\newline)
 
 (assert-equal "list-merge both empty"
@@ -155,7 +125,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: List Sorting (list-sort, list-stable-sort, sort)
 ;;; -----------------------------------------------------------------------
-(write-string "=== Group 3: List Sorting ===")
+(write-string "--- Group 3: List Sorting ---")
 (write-char #\newline)
 
 (assert-equal "list-sort empty"
@@ -205,7 +175,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 4: Stability Verification (Keyed Pairs)
 ;;; -----------------------------------------------------------------------
-(write-string "=== Group 4: Stability Verification ===")
+(write-string "--- Group 4: Stability Verification ---")
 (write-char #\newline)
 
 ;; Compare pairs by their car only; equal cars must preserve cdr order
@@ -227,7 +197,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 5: Vector Sorting (vector-sort, vector-stable-sort)
 ;;; -----------------------------------------------------------------------
-(write-string "=== Group 5: Vector Sorting ===")
+(write-string "--- Group 5: Vector Sorting ---")
 (write-char #\newline)
 
 (assert-equal "vector-sort empty"
@@ -269,7 +239,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 6: In-place Destructive Sorts & SRFI 95 (list-sort!, vector-sort!, sort!)
 ;;; -----------------------------------------------------------------------
-(write-string "=== Group 6: Destructive Sorts & SRFI 95 ===")
+(write-string "--- Group 6: Destructive Sorts & SRFI 95 ---")
 (write-char #\newline)
 
 (let ((lst (list 5 1 4 2 3)))
@@ -301,18 +271,4 @@
                 (sort! lst num<)
                 '(1 2 3)))
 
-;;; -----------------------------------------------------------------------
-;;; Summary & Exit Code
-;;; -----------------------------------------------------------------------
-(write-string "------------------------------------------------------------")
-(write-char #\newline)
-(if (= (vector-ref *test-failures* 0) 0)
-    (begin
-      (write-string "All R7RS / SRFI 132 / SRFI 95 sort tests PASSED successfully!")
-      (write-char #\newline)
-      (exit 0))
-    (begin
-      (write-string "Test failures detected: ")
-      (write (vector-ref *test-failures* 0))
-      (write-char #\newline)
-      (exit 1)))
+(test-end "sort")
