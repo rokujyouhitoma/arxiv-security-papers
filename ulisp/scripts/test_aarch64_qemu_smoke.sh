@@ -40,6 +40,18 @@ echo "======================================================================="
 TESTS_PASSED=0
 TESTS_FAILED=0
 
+run_ulisp_compiler() {
+    if [ -n "${ULISP_COMPILER:-}" ]; then
+        ${ULISP_COMPILER} "$@"
+    elif command -v gosh >/dev/null 2>&1; then
+        gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" "$@"
+    elif [ -f "${ROOT_DIR}/.venv/bin/python" ]; then
+        PYTHONPATH="${ROOT_DIR}:${ULISP_DIR}" "${ROOT_DIR}/.venv/bin/python" -m ilisp "${ULISP_DIR}/compiler.scm" "$@"
+    else
+        PYTHONPATH="${ROOT_DIR}:${ULISP_DIR}" python3 -m ilisp "${ULISP_DIR}/compiler.scm" "$@"
+    fi
+}
+
 run_qemu_test() {
     local test_name="$1"
     local scheme_code="$2"
@@ -57,7 +69,7 @@ run_qemu_test() {
     printf "%s\n" "${scheme_code}" > "${src_file}"
 
     # 1. Compile Scheme to GNU AArch64 assembly
-    if ! gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${src_file}" > "${asm_file}" 2>/dev/null; then
+    if ! run_ulisp_compiler --target=aarch64 < "${src_file}" > "${asm_file}" 2>/dev/null; then
         echo "  [FAIL] Compilation to AArch64 assembly failed for: ${test_name}"
         TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1

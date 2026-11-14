@@ -852,39 +852,33 @@
 
 ;; Binary file reader returning raw bytevector
 (define (read-binary-file-to-bytevector path)
-  (cond-expand
-    (gauche
-     (call-with-input-file path
-       (lambda (p) (read-bytevector 1000000000 p))
-       :element-type :binary))
-    (else
-     (let ((fd (sys-open path 0 0)))
-       (if (< fd 0)
-           (begin
-             (display-stderr (string-append "ulisp --ld: error: cannot open input object file: " path "\n"))
-             (compiler-abort-and-cleanup! 1))
-           (let* ((file-size (sys-lseek fd 0 2)))
-             (if (< file-size 0)
-                 (begin
-                   (sys-close fd)
-                   (display-stderr (string-append "ulisp --ld: error: failed to seek file: " path "\n"))
-                   (compiler-abort-and-cleanup! 1))
-                 (begin
-                   (sys-lseek fd 0 0)
-                   (let ((bv (make-bytevector file-size)))
-                     (let loop ((read-total 0))
-                       (if (< read-total file-size)
-                           (let* ((buf-ptr (%ptr-add (%ptr-untag bv) (+ 8 read-total)))
-                                  (n (sys-read fd buf-ptr (- file-size read-total))))
-                             (if (<= n 0)
-                                 (begin
-                                   (sys-close fd)
-                                   (display-stderr (string-append "ulisp --ld: error: unexpected EOF reading: " path "\n"))
-                                   (compiler-abort-and-cleanup! 1))
-                                 (loop (+ read-total n))))
-                           (begin
-                             (sys-close fd)
-                             bv))))))))))))
+  (let ((fd (sys-open path 0 0)))
+    (if (< fd 0)
+        (begin
+          (display-stderr (string-append "ulisp --ld: error: cannot open input object file: " path "\n"))
+          (compiler-abort-and-cleanup! 1))
+        (let* ((file-size (sys-lseek fd 0 2)))
+          (if (< file-size 0)
+              (begin
+                (sys-close fd)
+                (display-stderr (string-append "ulisp --ld: error: failed to seek file: " path "\n"))
+                (compiler-abort-and-cleanup! 1))
+              (begin
+                (sys-lseek fd 0 0)
+                (let ((bv (make-bytevector file-size)))
+                  (let loop ((read-total 0))
+                    (if (< read-total file-size)
+                        (let* ((buf-ptr (%ptr-add (%ptr-untag bv) (+ 8 read-total)))
+                               (n (sys-read fd buf-ptr (- file-size read-total))))
+                          (if (<= n 0)
+                              (begin
+                                (sys-close fd)
+                                (display-stderr (string-append "ulisp --ld: error: unexpected EOF reading: " path "\n"))
+                                (compiler-abort-and-cleanup! 1))
+                              (loop (+ read-total n))))
+                        (begin
+                          (sys-close fd)
+                          bv))))))))))
 
 ;; Parse an ELF64 ET_REL relocatable object file into structured vectors
 ;; Returns: (vector path sec-vec sym-vec relocs)

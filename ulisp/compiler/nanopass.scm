@@ -608,84 +608,84 @@
          (post? (eq? order 'post))
          (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out))
          (leaf-fallback (if post? ir-var cata-call))
-         (raw-cascade-expr
+         (cascade-res
           (if (or (null? rules) (eq? l-out '*) (not enable-redispatch?))
-        (let* ((partitioned (nanopass-partition-rules rules))
-               (buckets (car partitioned))
-               (pair-fallbacks (cadr partitioned))
-               (atom-rules (caddr partitioned))
-               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback #f #f))
-               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback #f #f))
-               (core-expr
-                (if (null? buckets)
-                    (if (and (null? pair-fallbacks) (null? atom-rules))
-                        leaf-fallback
-                        (if (equal? pair-fallbacks atom-rules)
-                            pair-fallback-expr
-                            (list 'if (list 'pair? ir-var)
+              (let* ((partitioned (nanopass-partition-rules rules))
+                     (buckets (car partitioned))
+                     (pair-fallbacks (cadr partitioned))
+                     (atom-rules (caddr partitioned))
+                     (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback #f #f))
+                     (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback #f #f))
+                     (core-expr
+                      (if (null? buckets)
+                          (if (and (null? pair-fallbacks) (null? atom-rules))
+                              leaf-fallback
+                              (if (equal? pair-fallbacks atom-rules)
                                   pair-fallback-expr
-                                  atom-fallback-expr)))
-                    (let ((case-expr
-                           (cons 'case
-                                 (cons (list 'car ir-var)
-                                       (append (map (lambda (b)
-                                                      (list (list (car b))
-                                                            (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr #f #f)))
-                                                    buckets)
-                                               (list (list 'else pair-fallback-expr)))))))
-                      (list 'if (list 'pair? ir-var)
-                            (list 'if (list 'symbol? (list 'car ir-var))
-                                  case-expr
-                                  pair-fallback-expr)
-                            atom-fallback-expr)))))
-          (if post?
-              (list 'let (list (list ir-var cata-call)) core-expr)
-              core-expr))
-        (let* ((loop-var (unique-symbol "__redispatch_loop_"))
-               (fuel-var (unique-symbol "__fuel_"))
-               (partitioned (nanopass-partition-rules rules))
-               (buckets (car partitioned))
-               (pair-fallbacks (cadr partitioned))
-               (atom-rules (caddr partitioned))
-               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback loop-var fuel-var))
-               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback loop-var fuel-var))
-               (cascade-body
-                (if (null? buckets)
-                    (if (and (null? pair-fallbacks) (null? atom-rules))
-                        leaf-fallback
-                        (if (equal? pair-fallbacks atom-rules)
-                            pair-fallback-expr
+                                  (list 'if (list 'pair? ir-var)
+                                        pair-fallback-expr
+                                        atom-fallback-expr)))
+                          (let ((case-expr
+                                 (cons 'case
+                                       (cons (list 'car ir-var)
+                                             (append (map (lambda (b)
+                                                            (list (list (car b))
+                                                                  (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr #f #f)))
+                                                          buckets)
+                                                     (list (list 'else pair-fallback-expr)))))))
                             (list 'if (list 'pair? ir-var)
+                                  (list 'if (list 'symbol? (list 'car ir-var))
+                                        case-expr
+                                        pair-fallback-expr)
+                                  atom-fallback-expr)))))
+                (if post?
+                    (list 'let (list (list ir-var cata-call)) core-expr)
+                    core-expr))
+              (let* ((loop-var (unique-symbol "__redispatch_loop_"))
+                     (fuel-var (unique-symbol "__fuel_"))
+                     (partitioned (nanopass-partition-rules rules))
+                     (buckets (car partitioned))
+                     (pair-fallbacks (cadr partitioned))
+                     (atom-rules (caddr partitioned))
+                     (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback loop-var fuel-var))
+                     (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback loop-var fuel-var))
+                     (cascade-body
+                      (if (null? buckets)
+                          (if (and (null? pair-fallbacks) (null? atom-rules))
+                              leaf-fallback
+                              (if (equal? pair-fallbacks atom-rules)
                                   pair-fallback-expr
-                                  atom-fallback-expr)))
-                    (let ((case-expr
-                           (cons 'case
-                                 (cons (list 'car ir-var)
-                                       (append (map (lambda (b)
-                                                      (list (list (car b))
-                                                            (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr loop-var fuel-var)))
-                                                    buckets)
-                                               (list (list 'else pair-fallback-expr)))))))
-                      (list 'if (list 'pair? ir-var)
-                            (list 'if (list 'symbol? (list 'car ir-var))
-                                  case-expr
-                                  pair-fallback-expr)
-                            atom-fallback-expr))))
-               (redispatch-expr
-                (list 'letrec
-                      (list (list loop-var
-                                  (list 'lambda (list ir-var fuel-var)
-                                        (list 'if (list '<= fuel-var 0)
-                                              (list (string->symbol "picopass-fail")
-                                                    "nanopass: local re-dispatch fuel exhausted on node"
-                                                    ir-var)
-                                              cascade-body))))
-                      (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
+                                  (list 'if (list 'pair? ir-var)
+                                        pair-fallback-expr
+                                        atom-fallback-expr)))
+                          (let ((case-expr
+                                 (cons 'case
+                                       (cons (list 'car ir-var)
+                                             (append (map (lambda (b)
+                                                            (list (list (car b))
+                                                                  (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr loop-var fuel-var)))
+                                                          buckets)
+                                                     (list (list 'else pair-fallback-expr)))))))
+                            (list 'if (list 'pair? ir-var)
+                                  (list 'if (list 'symbol? (list 'car ir-var))
+                                        case-expr
+                                        pair-fallback-expr)
+                                  atom-fallback-expr))))
+                     (redispatch-expr
+                      (list 'letrec
+                            (list (list loop-var
+                                        (list 'lambda (list ir-var fuel-var)
+                                              (list 'if (list '<= fuel-var 0)
+                                                    (list (string->symbol "picopass-fail")
+                                                          "nanopass: local re-dispatch fuel exhausted on node"
+                                                          ir-var)
+                                                    cascade-body))))
+                            (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
                 (if post?
                     (list 'let (list (list ir-var cata-call)) redispatch-expr)
-                    redispatch-expr)))))
+                    redispatch-expr))))))
     (if (eq? l-out '*)
-        raw-cascade-expr
+        cascade-res
         (let ((s-var (unique-symbol "__span_"))
               (inner-var (unique-symbol "__inner_"))
               (res-var (unique-symbol "__res_")))
@@ -694,20 +694,12 @@
                           (list (string->symbol "source-loc?") ir-var))
                 (list 'let (list (list s-var (list (string->symbol "ast-source-span") ir-var))
                                  (list inner-var (list (string->symbol "ast-strip-span") ir-var)))
-                      (list (string->symbol "with-ast-span") s-var
-                            (list 'lambda '()
-                                  (list 'let (list (list ir-var inner-var))
-                                        (list 'let (list (list res-var raw-cascade-expr))
-                                              (list 'if (list (string->symbol "ast-has-span?") res-var)
-                                                    res-var
-                                                    (list (string->symbol "ast-with-span") res-var s-var)))))))
-                (list 'let (list (list res-var raw-cascade-expr))
-                      (list 'if (list 'and
-                                      (list (string->symbol "current-ast-span"))
-                                      (list 'not (list (string->symbol "ast-has-span?") res-var))
-                                      (list 'not (list 'eq? res-var ir-var)))
-                            (list (string->symbol "ast-with-span") res-var (list (string->symbol "current-ast-span")))
-                            res-var)))))))
+                      (list 'let (list (list ir-var inner-var))
+                            (list 'let (list (list res-var cascade-res))
+                                  (list 'if (list (string->symbol "ast-has-span?") res-var)
+                                        res-var
+                                        (list (string->symbol "ast-with-span") res-var s-var)))))
+                cascade-res))))
 
 (define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
   (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? 'pre))
@@ -1110,13 +1102,11 @@
                                (list (string->symbol "source-loc?") 'ir))
                      (list 'let (list (list s-var (list (string->symbol "ast-source-span") 'ir))
                                       (list inner-var (list (string->symbol "ast-strip-span") 'ir)))
-                           (list (string->symbol "with-ast-span") s-var
-                                 (list 'lambda '()
-                                       (list 'let (list (list 'ir inner-var))
-                                             (list 'let (list (list res-var cascade))
-                                                   (list 'if (list 'and res-var (list 'not (list (string->symbol "ast-has-span?") res-var)))
-                                                         (list (string->symbol "ast-with-span") res-var s-var)
-                                                         res-var))))))
+                           (list 'let (list (list 'ir inner-var))
+                                 (list 'let (list (list res-var cascade))
+                                       (list 'if (list 'and res-var (list 'not (list (string->symbol "ast-has-span?") res-var)))
+                                             (list (string->symbol "ast-with-span") res-var s-var)
+                                             res-var)))))
                      cascade)))
             (else cascade))))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
@@ -1153,7 +1143,7 @@
                 (if opt-mandatory
                     (list (list (string->symbol "register-mandatory-picopass!") (list 'quote name)))
                     '())
-                (list (list 'quote name))))))))
+                (list (list 'quote name)))))))
 
 (define (nanopass-expand-define-picopass form)
   (nanopass-expand-rule-dsl form 'pico))

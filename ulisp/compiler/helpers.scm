@@ -394,21 +394,15 @@
   (and (source-span? x)
        (eq? (span-node-id x) 0)))
 
-(define (make-source-span file s-line s-col . opt)
-  (let ((e-line (if (and (pair? opt) (pair? (cdr opt))) (car opt) s-line))
-        (e-col (if (and (pair? opt) (pair? (cdr opt))) (cadr opt) s-col))
-        (macro-origin (if (and (pair? opt) (pair? (cdr opt)) (pair? (cddr opt))) (caddr opt) #f))
-        (node-id (if (and (pair? opt) (pair? (cdr opt)) (pair? (cddr opt)) (pair? (cdddr opt)))
-                     (cadddr opt)
-                     (next-source-span-id!))))
-    (let* ((clean-file (if (string? file) (sanitize-source-path file) "<unknown>"))
-           (val-s-line (if (and (integer? s-line) (>= s-line 1)) s-line 1))
-           (val-s-col (if (and (integer? s-col) (>= s-col 1)) s-col 1))
-           (val-e-line (if (and (integer? e-line) (>= e-line val-s-line)) e-line val-s-line))
-           (val-e-col (if (and (integer? e-col) (>= e-col 1)) e-col val-s-col))
-           (val-origin (if (source-span? macro-origin) macro-origin #f))
-           (val-id (if (and (integer? node-id) (>= node-id 0)) node-id (next-source-span-id!))))
-      (%make-source-span-raw clean-file val-s-line val-s-col val-e-line val-e-col val-origin val-id))))
+(define (make-source-span file s-line s-col e-line e-col macro-origin node-id)
+  (let* ((clean-file (if (string? file) (sanitize-source-path file) "<unknown>"))
+         (val-s-line (if (and (integer? s-line) (>= s-line 1)) s-line 1))
+         (val-s-col (if (and (integer? s-col) (>= s-col 1)) s-col 1))
+         (val-e-line (if (and (integer? e-line) (>= e-line val-s-line)) e-line val-s-line))
+         (val-e-col (if (and (integer? e-col) (>= e-col 1)) e-col val-s-col))
+         (val-origin (if (source-span? macro-origin) macro-origin #f))
+         (val-id (if (and (integer? node-id) (>= node-id 0)) node-id (next-source-span-id!))))
+    (%make-source-span-raw clean-file val-s-line val-s-col val-e-line val-e-col val-origin val-id)))
 
 (define (source-loc? obj)
   (and (pair? obj)
@@ -439,7 +433,8 @@
                        (source-loc-col obj)
                        (source-loc-line obj)
                        (source-loc-col obj)
-                       #f))
+                       #f
+                       (next-source-span-id!)))
     (else #f)))
 
 (define (ast-strip-span obj)
@@ -449,6 +444,19 @@
     ((source-loc? obj)
      (ast-strip-span (source-loc-form obj)))
     (else obj)))
+
+(define (ast-strip-span-all expr)
+  (cond
+    ((pair? expr)
+     (cond
+       ((ast-has-span? expr)
+        (ast-strip-span-all (caddr expr)))
+       ((source-loc? expr)
+        (ast-strip-span-all (source-loc-form expr)))
+       (else
+        (cons (ast-strip-span-all (car expr))
+              (ast-strip-span-all (cdr expr))))))
+    (else expr)))
 
 (define (ast-with-span form span)
   (if (and span (source-span? span))
@@ -542,7 +550,7 @@
     (set-car! *function-source-loc-table*
               (cons (cons fn (list clean line col))
                     (car *function-source-loc-table*)))
-    (register-function-source-span! fn (make-source-span clean line col line col #f))))
+    (register-function-source-span! fn (make-source-span clean line col line col #f (next-source-span-id!)))))
 (define (lookup-function-source-loc fn)
   (let ((entry (assq fn (car *function-source-loc-table*))))
     (if entry
@@ -1956,18 +1964,7 @@
              (begin
                (vector-set! new-v i (sanitize-reader-form (vector-ref expr i)))
                (loop (+ i 1)))))))
-    (else
-     (cond-expand
-       (gauche
-        (cond
-          ((and (number? expr) (nan? expr))
-           (string->symbol "+nan.0"))
-          ((and (number? expr) (infinite? expr) (> expr 0))
-           (string->symbol "+inf.0"))
-          ((and (number? expr) (infinite? expr) (< expr 0))
-           (string->symbol "-inf.0"))
-          (else expr)))
-       (else expr)))))
+    (else expr)))
 
 
 

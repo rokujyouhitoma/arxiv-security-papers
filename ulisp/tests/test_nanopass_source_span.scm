@@ -11,7 +11,7 @@
 (display "\n--- Group 1: <source-span> Record Type & Basic Operations ---\n")
 
 (reset-source-span-id-counter!)
-(define span1 (make-source-span "src/parser.scm" 10 5 12 20 #f))
+(define span1 (make-source-span "src/parser.scm" 10 5 12 20 #f (next-source-span-id!)))
 
 (assert-true "1.1 source-span? identifies <source-span>" (source-span? span1))
 (assert-false "1.2 source-span? rejects non-record vector" (source-span? #(1 2 3)))
@@ -27,7 +27,7 @@
 (assert-true "1.11 span-node-id is positive integer" (> (span-node-id span1) 0))
 
 ;; Monotonic ID counter
-(define span2 (make-source-span "src/parser.scm" 15 1 15 10 #f))
+(define span2 (make-source-span "src/parser.scm" 15 1 15 10 #f (next-source-span-id!)))
 (assert-true "1.12 node-id monotonically increments" (> (span-node-id span2) (span-node-id span1)))
 
 ;; Flyweight singleton *no-source-span*
@@ -35,8 +35,8 @@
 (assert-equal "1.14 *no-source-span* node-id is 0" 0 (span-node-id *no-source-span*))
 (assert-false "1.15 no-source-span? rejects real span" (no-source-span? span1))
 
-;; Default end coordinates when omitted
-(define span-short (make-source-span "src/short.scm" 42 7))
+;; Explicit end coordinates
+(define span-short (make-source-span "src/short.scm" 42 7 42 7 #f (next-source-span-id!)))
 (assert-equal "1.16 end-line defaults to start-line" 42 (span-end-line span-short))
 (assert-equal "1.17 end-col defaults to start-col" 7 (span-end-col span-short))
 
@@ -120,7 +120,7 @@
                                          (syntax-rules ()
                                            ((double x) (+ x x))))))))
 
-(define call-span (make-source-span "src/macro_test.scm" 25 1 25 10 #f))
+(define call-span (make-source-span "src/macro_test.scm" 25 1 25 10 #f (next-source-span-id!)))
 (define macro-call (ast-with-span '(double 21) call-span))
 
 (define macro-res (macro-expand-1 macro-call macro-table-test))
@@ -144,7 +144,7 @@
                                                  (syntax-rules ()
                                                    ((quadruple x) (double (double x))))))))))
 
-(define quad-call-span (make-source-span "src/quad.scm" 50 3 50 18 #f))
+(define quad-call-span (make-source-span "src/quad.scm" 50 3 50 18 #f (next-source-span-id!)))
 (define quad-call (ast-with-span '(quadruple 5) quad-call-span))
 (define quad-res (macro-expand-1 quad-call nested-macro-table))
 (assert-true "4.8 quadruple expands" (car quad-res))
@@ -158,7 +158,7 @@
 (display "\n--- Group 5: Security & Boundary Guards ---\n")
 
 ;; CWE-119 / Coordinate Boundary Guard: negative or inverted lines clamped
-(define safe-span (make-source-span "src/test.scm" -5 -10 2 1))
+(define safe-span (make-source-span "src/test.scm" -5 -10 2 1 #f (next-source-span-id!)))
 (assert-true "5.1 start-line clamped >= 1" (>= (span-start-line safe-span) 1))
 (assert-true "5.2 start-col clamped >= 1" (>= (span-start-col safe-span) 1))
 (assert-true "5.3 end-line clamped >= start-line" (>= (span-end-line safe-span) (span-start-line safe-span)))

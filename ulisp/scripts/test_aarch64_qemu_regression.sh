@@ -59,6 +59,18 @@ SUITE3_TOTAL=0; SUITE3_PASS=0; SUITE3_FAIL=0
 
 cd "${ULISP_DIR}"
 
+run_ulisp_compiler() {
+    if [ -n "${ULISP_COMPILER:-}" ]; then
+        ${ULISP_COMPILER} "$@"
+    elif command -v gosh >/dev/null 2>&1; then
+        gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" "$@"
+    elif [ -f "${ROOT_DIR}/.venv/bin/python" ]; then
+        PYTHONPATH="${ROOT_DIR}:${ULISP_DIR}" "${ROOT_DIR}/.venv/bin/python" -m ilisp "${ULISP_DIR}/compiler.scm" "$@"
+    else
+        PYTHONPATH="${ROOT_DIR}:${ULISP_DIR}" python3 -m ilisp "${ULISP_DIR}/compiler.scm" "$@"
+    fi
+}
+
 run_with_timeout() {
     local timeout_sec="$1"
     shift
@@ -89,7 +101,7 @@ run_smoke_case() {
 
     printf "%s\n" "${scheme_code}" > "${src_file}"
 
-    if ! gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${src_file}" > "${asm_file}" 2>/dev/null; then
+    if ! run_ulisp_compiler --target=aarch64 < "${src_file}" > "${asm_file}" 2>/dev/null; then
         echo -e "  ${RED}[FAIL]${RESET} ${test_name} (Compilation failed)"
         SUITE1_FAIL=$((SUITE1_FAIL + 1))
         return 1
@@ -203,7 +215,7 @@ if [ ! -f "${STDLIB_AARCH64}" ]; then
     echo "--> Compiling AArch64 Standard Library Module (${STDLIB_AARCH64})..."
     echo "(!gc none) (!module #t) (!disable-pass pass-synapse-inject-safepoints)" > "${BUILD_DIR}/stdlib_aarch64_input.scm"
     cat "${ULISP_DIR}/stdlib_entry.scm" >> "${BUILD_DIR}/stdlib_aarch64_input.scm"
-    gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${BUILD_DIR}/stdlib_aarch64_input.scm" > "${BUILD_DIR}/ulisp_stdlib_aarch64.s"
+    run_ulisp_compiler --target=aarch64 < "${BUILD_DIR}/stdlib_aarch64_input.scm" > "${BUILD_DIR}/ulisp_stdlib_aarch64.s"
     "${CROSS_AS}" -march=armv8.1-a "${BUILD_DIR}/ulisp_stdlib_aarch64.s" -o "${STDLIB_AARCH64}"
 fi
 
@@ -212,7 +224,7 @@ if [ ! -f "${CTX_BIN}" ] || [ "${ULISP_DIR}/runtime/concurrency/context_aarch64.
     "${CROSS_AS}" -march=armv8.1-a "${ULISP_DIR}/runtime/concurrency/context_aarch64.s" -o "${BUILD_DIR}/context_aarch64.o"
     echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > "${BUILD_DIR}/test_context_switch_aarch64_input.scm"
     cat "${ULISP_DIR}/lib/stdlib_macros.scm" "${ROOT_DIR}/tests/concurrency/test_context_switch_aarch64.scm" >> "${BUILD_DIR}/test_context_switch_aarch64_input.scm"
-    gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${BUILD_DIR}/test_context_switch_aarch64_input.scm" > "${BUILD_DIR}/test_context_switch_aarch64.s"
+    run_ulisp_compiler --target=aarch64 < "${BUILD_DIR}/test_context_switch_aarch64_input.scm" > "${BUILD_DIR}/test_context_switch_aarch64.s"
     "${CROSS_AS}" -march=armv8.1-a "${BUILD_DIR}/test_context_switch_aarch64.s" -o "${BUILD_DIR}/test_context_switch_aarch64.o"
     "${CROSS_LD}" -static "${BUILD_DIR}/test_context_switch_aarch64.o" "${STDLIB_AARCH64}" "${BUILD_DIR}/context_aarch64.o" -o "${CTX_BIN}"
 fi
@@ -262,7 +274,7 @@ VAL_OUT="${TMP_DIR}/test_values.out"
 echo "(!gc none) (!allow-extern #t)" > "${VAL_INPUT}"
 echo '(include "lib/stdlib_macros.scm")' >> "${VAL_INPUT}"
 cat "${ULISP_DIR}/tests/test_values.scm" >> "${VAL_INPUT}"
-gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${VAL_INPUT}" > "${VAL_ASM}"
+run_ulisp_compiler --target=aarch64 < "${VAL_INPUT}" > "${VAL_ASM}"
 "${CROSS_AS}" -march=armv8.1-a "${VAL_ASM}" -o "${VAL_OBJ}"
 "${CROSS_LD}" -static "${VAL_OBJ}" "${STDLIB_AARCH64}" -o "${VAL_BIN}"
 
@@ -297,7 +309,7 @@ CHAR_OUT="${TMP_DIR}/test_char.out"
 echo "(!gc none) (!allow-extern #t)" > "${CHAR_INPUT}"
 echo '(include "lib/stdlib_macros.scm")' >> "${CHAR_INPUT}"
 cat "${ULISP_DIR}/tests/test_char.scm" >> "${CHAR_INPUT}"
-gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${CHAR_INPUT}" > "${CHAR_ASM}"
+run_ulisp_compiler --target=aarch64 < "${CHAR_INPUT}" > "${CHAR_ASM}"
 "${CROSS_AS}" -march=armv8.1-a "${CHAR_ASM}" -o "${CHAR_OBJ}"
 "${CROSS_LD}" -static "${CHAR_OBJ}" "${STDLIB_AARCH64}" -o "${CHAR_BIN}"
 

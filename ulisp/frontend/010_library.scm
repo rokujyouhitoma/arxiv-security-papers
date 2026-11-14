@@ -299,7 +299,7 @@
         expr
         (let* ((end-line (if (file-input-port? p) (port-line p) cur-line))
                (end-col (if (file-input-port? p) (port-col p) cur-col))
-               (span (make-source-span path cur-line cur-col end-line end-col #f)))
+               (span (make-source-span path cur-line cur-col end-line end-col #f (next-source-span-id!))))
           (list '%source-span span expr)))))
 
 (define (slurp-single-file raw-path)

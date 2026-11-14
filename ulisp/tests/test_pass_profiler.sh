@@ -36,6 +36,8 @@ elif [ -x "${ULISP_DIR}/build/scheme-stage2" ]; then
     COMPILER_CMD="${ULISP_DIR}/build/scheme-stage2"
 elif [ -x "${ULISP_DIR}/bin/ulisp" ]; then
     COMPILER_CMD="${ULISP_DIR}/bin/ulisp"
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import ilisp" >/dev/null 2>&1; then
+    COMPILER_CMD="python3 -m ilisp ${ULISP_DIR}/compiler.scm"
 elif command -v gosh >/dev/null 2>&1; then
     COMPILER_CMD="gosh ${ULISP_DIR}/compiler.scm"
 elif command -v chibi-scheme >/dev/null 2>&1; then

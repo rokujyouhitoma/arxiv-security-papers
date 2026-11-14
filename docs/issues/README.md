@@ -27,6 +27,10 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **844** | ビルド中間生成物クリーンアップとゼロ Gauche 依存の自動回帰検証 | Feature | Medium | Closed | [844-clean-build-artifacts-and-verify-zero-gauche-dependency.md](closed/844-clean-build-artifacts-and-verify-zero-gauche-dependency.md) |
+| **843** | Makefile および bootstrap.sh からの Gauche (gosh) フォールバック機構の疎結合化・純化 | Feature | Medium | Closed | [843-decouple-gauche-fallbacks-from-makefile-and-bootstrap-scripts.md](closed/843-decouple-gauche-fallbacks-from-makefile-and-bootstrap-scripts.md) |
+| **842** | テストおよび回帰検証スクリプトにおける gosh 直書き呼出のネイティブ ulisp / ilisp 置換 | Feature | Medium | Closed | [842-replace-hardcoded-gosh-invocations-in-test-and-regression-scripts.md](closed/842-replace-hardcoded-gosh-invocations-in-test-and-regression-scripts.md) |
+| **841** | コンパイラ本体ソースコードからの Gauche 固有 cond-expand 分岐の撤去と R7RS / ULisp 標準化 | Feature | High | Closed | [841-eliminate-gauche-cond-expand-branches-from-compiler-source.md](closed/841-eliminate-gauche-cond-expand-branches-from-compiler-source.md) |
 | **824** | Nanopass AST ノードにおけるソース位置情報 (Source Span) とメタデータの第一級サポート | Feature | 2026-11-14 | [closed/824-support-first-class-source-span-and-ast-metadata-in-nanopass.md](closed/824-support-first-class-source-span-and-ast-metadata-in-nanopass.md) |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | 2026-11-14 | [closed/617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](closed/617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | 2026-11-14 | [closed/697-implement-cross-platform-osal-for-synapse-concurrency.md](closed/697-implement-cross-platform-osal-for-synapse-concurrency.md) |

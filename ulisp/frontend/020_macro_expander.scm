@@ -447,7 +447,8 @@
                                                       (span-start-col span)
                                                       (span-end-line span)
                                                       (span-end-col span)
-                                                      span)))
+                                                      span
+                                                      (next-source-span-id!))))
                       (cons #t (ast-with-span expanded new-span)))
                     (cons #t expanded)))
               (cons #f expr)))

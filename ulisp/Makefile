@@ -34,9 +34,7 @@ PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.
 ILISP = $(PYTHON) -m ilisp
 ULISP_BOOT = bin/ulisp-boot
 GOSH_BIN = $(shell command -v gosh 2>/dev/null)
-ifeq ($(USE_ILISP),1)
-RUN_SCHEME = PYTHONPATH=$(ROOT_DIR) $(ILISP)
-else ifneq ($(GOSH_BIN),)
+ifeq ($(USE_GOSH),1)
 RUN_SCHEME = $(GOSH_BIN) -ugauche.uvector -uscheme.file -I $(CURDIR) -I $(ROOT_DIR)
 else
 RUN_SCHEME = PYTHONPATH=$(ROOT_DIR) $(ILISP)
@@ -362,7 +360,7 @@ test_context_switch_aarch64: compiler.scm build/context_aarch64.o build/ulisp_st
 	@echo "=== Compiling AArch64 Native Context Switch Test Suite (#692) ==="
 	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_context_switch_aarch64_input.scm
 	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_context_switch_aarch64.scm >> build/test_context_switch_aarch64_input.scm
-	cd $(ROOT_DIR) && $(if $(GOSH_BIN),$(GOSH_BIN) -I ulisp ulisp/compiler.scm,$(RUN_SCHEME) ulisp/compiler.scm) --target=aarch64 < ulisp/build/test_context_switch_aarch64_input.scm > ulisp/build/test_context_switch_aarch64.s
+	cd $(ROOT_DIR) && $(RUN_SCHEME) ulisp/compiler.scm --target=aarch64 < ulisp/build/test_context_switch_aarch64_input.scm > ulisp/build/test_context_switch_aarch64.s
 	$(CROSS_AS_AARCH64) -march=armv8.1-a build/test_context_switch_aarch64.s -o build/test_context_switch_aarch64.o
 	$(CROSS_LD_AARCH64) -static build/test_context_switch_aarch64.o build/ulisp_stdlib_aarch64.o build/context_aarch64.o -o build/test_context_switch_aarch64
 	@echo "=== Running AArch64 Native Context Switch Test Suite under QEMU ==="
@@ -1285,8 +1283,6 @@ define COMPILE_SCM_TO_S
 		env ULISP_GC_PROFILE=compiler ./build/scheme-stage2 < $(1) > $(2); \
 	elif [ -x "build/scheme-stage1" ]; then \
 		env ULISP_GC_PROFILE=compiler ./build/scheme-stage1 < $(1) > $(2); \
-	elif [ -n "$(GOSH_BIN)" ]; then \
-		$(GOSH_BIN) compiler.scm < $(1) > $(2); \
 	else \
 		$(RUN_SCHEME) compiler.scm < $(1) > $(2); \
 	fi
@@ -1308,7 +1304,7 @@ build/ulisp_stdlib_aarch64.s: stdlib_entry.scm $(ULISP_STD_LIBS) | compiler.scm
 	@echo "=== Compiling AArch64 Standard Library Module (stdlib_entry.scm) ==="
 	@echo "(!gc none) (!module #t) (!disable-pass pass-synapse-inject-safepoints)" > build/stdlib_aarch64_input.scm
 	@cat stdlib_entry.scm >> build/stdlib_aarch64_input.scm
-	cd $(ROOT_DIR) && $(if $(GOSH_BIN),$(GOSH_BIN) -I ulisp ulisp/compiler.scm,$(RUN_SCHEME) ulisp/compiler.scm) --target=aarch64 < ulisp/build/stdlib_aarch64_input.scm > ulisp/build/ulisp_stdlib_aarch64.s
+	cd $(ROOT_DIR) && $(RUN_SCHEME) ulisp/compiler.scm --target=aarch64 < ulisp/build/stdlib_aarch64_input.scm > ulisp/build/ulisp_stdlib_aarch64.s
 
 build/ulisp_stdlib_aarch64.o: build/ulisp_stdlib_aarch64.s
 	$(CROSS_AS_AARCH64) -march=armv8.1-a $< -o $@
@@ -1678,7 +1674,14 @@ test_numeric_tower: $(COMPILER_DEP) build/ulisp_stdlib.o
 	$(LD) $(LDFLAGS) build/test_numeric_tower.o build/ulisp_stdlib.o -o build/test_numeric_tower
 	./build/test_numeric_tower < /dev/null
 
-test: test_lint_sexpr test_r7rs_traceability test_cli_diagnostics test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_nanopass_source_span test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_concurrency_osal test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
+verify_zero_gauche:
+	@echo "=== Checking for unexpected Gauche references in compiler & runner sources ==="
+	@if git grep -n "([g]auche" -- compiler/ backend/ runtime/ build/*.scm 2>/dev/null; then \
+		echo "ERROR: Unexpected Gauche branch found in compiler/runner sources!" && exit 1; \
+	fi
+	@echo "[PASS] Zero Gauche dependency check passed."
+
+test: verify_zero_gauche test_lint_sexpr test_r7rs_traceability test_cli_diagnostics test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_nanopass_source_span test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_concurrency_osal test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log

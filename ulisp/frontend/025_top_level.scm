@@ -126,7 +126,7 @@
   (let loop ((fs forms) (defs '()) (bodies '()))
     (if (null? fs)
         (if (null? defs)
-            (make-body-expr (reverse bodies))
+            (ast-strip-span-all (make-body-expr (reverse bodies)))
             (let* ((rev-defs (reverse defs))
                    (unique-defs
                     (let dedup ((ds (reverse rev-defs)) (seen '()) (acc '()))
@@ -137,7 +137,7 @@
                             (if (memq name seen)
                                 (dedup (cdr ds) seen acc)
                                 (dedup (cdr ds) (cons name seen) (cons d acc))))))))
-              (list '%program unique-defs (make-body-expr (reverse bodies)))))
+              (list '%program (ast-strip-span-all unique-defs) (ast-strip-span-all (make-body-expr (reverse bodies))))))
         (let ((f (car fs)))
           (if (pair? f)
               (set-current-form! f))

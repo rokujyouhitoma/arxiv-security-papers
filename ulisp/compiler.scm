@@ -394,21 +394,15 @@
   (and (source-span? x)
        (eq? (span-node-id x) 0)))
 
-(define (make-source-span file s-line s-col . opt)
-  (let ((e-line (if (and (pair? opt) (pair? (cdr opt))) (car opt) s-line))
-        (e-col (if (and (pair? opt) (pair? (cdr opt))) (cadr opt) s-col))
-        (macro-origin (if (and (pair? opt) (pair? (cdr opt)) (pair? (cddr opt))) (caddr opt) #f))
-        (node-id (if (and (pair? opt) (pair? (cdr opt)) (pair? (cddr opt)) (pair? (cdddr opt)))
-                     (cadddr opt)
-                     (next-source-span-id!))))
-    (let* ((clean-file (if (string? file) (sanitize-source-path file) "<unknown>"))
-           (val-s-line (if (and (integer? s-line) (>= s-line 1)) s-line 1))
-           (val-s-col (if (and (integer? s-col) (>= s-col 1)) s-col 1))
-           (val-e-line (if (and (integer? e-line) (>= e-line val-s-line)) e-line val-s-line))
-           (val-e-col (if (and (integer? e-col) (>= e-col 1)) e-col val-s-col))
-           (val-origin (if (source-span? macro-origin) macro-origin #f))
-           (val-id (if (and (integer? node-id) (>= node-id 0)) node-id (next-source-span-id!))))
-      (%make-source-span-raw clean-file val-s-line val-s-col val-e-line val-e-col val-origin val-id))))
+(define (make-source-span file s-line s-col e-line e-col macro-origin node-id)
+  (let* ((clean-file (if (string? file) (sanitize-source-path file) "<unknown>"))
+         (val-s-line (if (and (integer? s-line) (>= s-line 1)) s-line 1))
+         (val-s-col (if (and (integer? s-col) (>= s-col 1)) s-col 1))
+         (val-e-line (if (and (integer? e-line) (>= e-line val-s-line)) e-line val-s-line))
+         (val-e-col (if (and (integer? e-col) (>= e-col 1)) e-col val-s-col))
+         (val-origin (if (source-span? macro-origin) macro-origin #f))
+         (val-id (if (and (integer? node-id) (>= node-id 0)) node-id (next-source-span-id!))))
+    (%make-source-span-raw clean-file val-s-line val-s-col val-e-line val-e-col val-origin val-id)))
 
 (define (source-loc? obj)
   (and (pair? obj)
@@ -439,7 +433,8 @@
                        (source-loc-col obj)
                        (source-loc-line obj)
                        (source-loc-col obj)
-                       #f))
+                       #f
+                       (next-source-span-id!)))
     (else #f)))
 
 (define (ast-strip-span obj)
@@ -449,6 +444,19 @@
     ((source-loc? obj)
      (ast-strip-span (source-loc-form obj)))
     (else obj)))
+
+(define (ast-strip-span-all expr)
+  (cond
+    ((pair? expr)
+     (cond
+       ((ast-has-span? expr)
+        (ast-strip-span-all (caddr expr)))
+       ((source-loc? expr)
+        (ast-strip-span-all (source-loc-form expr)))
+       (else
+        (cons (ast-strip-span-all (car expr))
+              (ast-strip-span-all (cdr expr))))))
+    (else expr)))
 
 (define (ast-with-span form span)
   (if (and span (source-span? span))
@@ -542,7 +550,7 @@
     (set-car! *function-source-loc-table*
               (cons (cons fn (list clean line col))
                     (car *function-source-loc-table*)))
-    (register-function-source-span! fn (make-source-span clean line col line col #f))))
+    (register-function-source-span! fn (make-source-span clean line col line col #f (next-source-span-id!)))))
 (define (lookup-function-source-loc fn)
   (let ((entry (assq fn (car *function-source-loc-table*))))
     (if entry
@@ -1956,18 +1964,7 @@
              (begin
                (vector-set! new-v i (sanitize-reader-form (vector-ref expr i)))
                (loop (+ i 1)))))))
-    (else
-     (cond-expand
-       (gauche
-        (cond
-          ((and (number? expr) (nan? expr))
-           (string->symbol "+nan.0"))
-          ((and (number? expr) (infinite? expr) (> expr 0))
-           (string->symbol "+inf.0"))
-          ((and (number? expr) (infinite? expr) (< expr 0))
-           (string->symbol "-inf.0"))
-          (else expr)))
-       (else expr)))))
+    (else expr)))
 
 
 
@@ -5753,84 +5750,84 @@
          (post? (eq? order 'post))
          (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out))
          (leaf-fallback (if post? ir-var cata-call))
-         (raw-cascade-expr
+         (cascade-res
           (if (or (null? rules) (eq? l-out '*) (not enable-redispatch?))
-        (let* ((partitioned (nanopass-partition-rules rules))
-               (buckets (car partitioned))
-               (pair-fallbacks (cadr partitioned))
-               (atom-rules (caddr partitioned))
-               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback #f #f))
-               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback #f #f))
-               (core-expr
-                (if (null? buckets)
-                    (if (and (null? pair-fallbacks) (null? atom-rules))
-                        leaf-fallback
-                        (if (equal? pair-fallbacks atom-rules)
-                            pair-fallback-expr
-                            (list 'if (list 'pair? ir-var)
+              (let* ((partitioned (nanopass-partition-rules rules))
+                     (buckets (car partitioned))
+                     (pair-fallbacks (cadr partitioned))
+                     (atom-rules (caddr partitioned))
+                     (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback #f #f))
+                     (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback #f #f))
+                     (core-expr
+                      (if (null? buckets)
+                          (if (and (null? pair-fallbacks) (null? atom-rules))
+                              leaf-fallback
+                              (if (equal? pair-fallbacks atom-rules)
                                   pair-fallback-expr
-                                  atom-fallback-expr)))
-                    (let ((case-expr
-                           (cons 'case
-                                 (cons (list 'car ir-var)
-                                       (append (map (lambda (b)
-                                                      (list (list (car b))
-                                                            (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr #f #f)))
-                                                    buckets)
-                                               (list (list 'else pair-fallback-expr)))))))
-                      (list 'if (list 'pair? ir-var)
-                            (list 'if (list 'symbol? (list 'car ir-var))
-                                  case-expr
-                                  pair-fallback-expr)
-                            atom-fallback-expr)))))
-          (if post?
-              (list 'let (list (list ir-var cata-call)) core-expr)
-              core-expr))
-        (let* ((loop-var (unique-symbol "__redispatch_loop_"))
-               (fuel-var (unique-symbol "__fuel_"))
-               (partitioned (nanopass-partition-rules rules))
-               (buckets (car partitioned))
-               (pair-fallbacks (cadr partitioned))
-               (atom-rules (caddr partitioned))
-               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback loop-var fuel-var))
-               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback loop-var fuel-var))
-               (cascade-body
-                (if (null? buckets)
-                    (if (and (null? pair-fallbacks) (null? atom-rules))
-                        leaf-fallback
-                        (if (equal? pair-fallbacks atom-rules)
-                            pair-fallback-expr
+                                  (list 'if (list 'pair? ir-var)
+                                        pair-fallback-expr
+                                        atom-fallback-expr)))
+                          (let ((case-expr
+                                 (cons 'case
+                                       (cons (list 'car ir-var)
+                                             (append (map (lambda (b)
+                                                            (list (list (car b))
+                                                                  (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr #f #f)))
+                                                          buckets)
+                                                     (list (list 'else pair-fallback-expr)))))))
                             (list 'if (list 'pair? ir-var)
+                                  (list 'if (list 'symbol? (list 'car ir-var))
+                                        case-expr
+                                        pair-fallback-expr)
+                                  atom-fallback-expr)))))
+                (if post?
+                    (list 'let (list (list ir-var cata-call)) core-expr)
+                    core-expr))
+              (let* ((loop-var (unique-symbol "__redispatch_loop_"))
+                     (fuel-var (unique-symbol "__fuel_"))
+                     (partitioned (nanopass-partition-rules rules))
+                     (buckets (car partitioned))
+                     (pair-fallbacks (cadr partitioned))
+                     (atom-rules (caddr partitioned))
+                     (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback loop-var fuel-var))
+                     (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback loop-var fuel-var))
+                     (cascade-body
+                      (if (null? buckets)
+                          (if (and (null? pair-fallbacks) (null? atom-rules))
+                              leaf-fallback
+                              (if (equal? pair-fallbacks atom-rules)
                                   pair-fallback-expr
-                                  atom-fallback-expr)))
-                    (let ((case-expr
-                           (cons 'case
-                                 (cons (list 'car ir-var)
-                                       (append (map (lambda (b)
-                                                      (list (list (car b))
-                                                            (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr loop-var fuel-var)))
-                                                    buckets)
-                                               (list (list 'else pair-fallback-expr)))))))
-                      (list 'if (list 'pair? ir-var)
-                            (list 'if (list 'symbol? (list 'car ir-var))
-                                  case-expr
-                                  pair-fallback-expr)
-                            atom-fallback-expr))))
-               (redispatch-expr
-                (list 'letrec
-                      (list (list loop-var
-                                  (list 'lambda (list ir-var fuel-var)
-                                        (list 'if (list '<= fuel-var 0)
-                                              (list (string->symbol "picopass-fail")
-                                                    "nanopass: local re-dispatch fuel exhausted on node"
-                                                    ir-var)
-                                              cascade-body))))
-                      (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
+                                  (list 'if (list 'pair? ir-var)
+                                        pair-fallback-expr
+                                        atom-fallback-expr)))
+                          (let ((case-expr
+                                 (cons 'case
+                                       (cons (list 'car ir-var)
+                                             (append (map (lambda (b)
+                                                            (list (list (car b))
+                                                                  (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr loop-var fuel-var)))
+                                                          buckets)
+                                                     (list (list 'else pair-fallback-expr)))))))
+                            (list 'if (list 'pair? ir-var)
+                                  (list 'if (list 'symbol? (list 'car ir-var))
+                                        case-expr
+                                        pair-fallback-expr)
+                                  atom-fallback-expr))))
+                     (redispatch-expr
+                      (list 'letrec
+                            (list (list loop-var
+                                        (list 'lambda (list ir-var fuel-var)
+                                              (list 'if (list '<= fuel-var 0)
+                                                    (list (string->symbol "picopass-fail")
+                                                          "nanopass: local re-dispatch fuel exhausted on node"
+                                                          ir-var)
+                                                    cascade-body))))
+                            (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
                 (if post?
                     (list 'let (list (list ir-var cata-call)) redispatch-expr)
                     redispatch-expr)))))
     (if (eq? l-out '*)
-        raw-cascade-expr
+        cascade-res
         (let ((s-var (unique-symbol "__span_"))
               (inner-var (unique-symbol "__inner_"))
               (res-var (unique-symbol "__res_")))
@@ -5839,20 +5836,12 @@
                           (list (string->symbol "source-loc?") ir-var))
                 (list 'let (list (list s-var (list (string->symbol "ast-source-span") ir-var))
                                  (list inner-var (list (string->symbol "ast-strip-span") ir-var)))
-                      (list (string->symbol "with-ast-span") s-var
-                            (list 'lambda '()
-                                  (list 'let (list (list ir-var inner-var))
-                                        (list 'let (list (list res-var raw-cascade-expr))
-                                              (list 'if (list (string->symbol "ast-has-span?") res-var)
-                                                    res-var
-                                                    (list (string->symbol "ast-with-span") res-var s-var)))))))
-                (list 'let (list (list res-var raw-cascade-expr))
-                      (list 'if (list 'and
-                                      (list (string->symbol "current-ast-span"))
-                                      (list 'not (list (string->symbol "ast-has-span?") res-var))
-                                      (list 'not (list 'eq? res-var ir-var)))
-                            (list (string->symbol "ast-with-span") res-var (list (string->symbol "current-ast-span")))
-                            res-var)))))))
+                      (list 'let (list (list ir-var inner-var))
+                            (list 'let (list (list res-var cascade-res))
+                                  (list 'if (list (string->symbol "ast-has-span?") res-var)
+                                        res-var
+                                        (list (string->symbol "ast-with-span") res-var s-var)))))
+                cascade-res)))))
 
 (define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
   (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? 'pre))
@@ -6231,39 +6220,37 @@
          (eliminates (if opt-eliminates opt-eliminates (nanopass-infer-eliminates head-tags writes)))
          (desc-var (unique-symbol (string-append "__desc_" (symbol->raw-name name))))
          (cascade (nanopass-build-rule-cascade expanded-rules rule-kind nt-name 'ir))
-         (proc-body
-          (cond
-            ((eq? rule-kind 'femto)
-             (let* ((recurse-params (cons 'sub-node in-attrs))
-                    (recurse-binding
-                     (list 'femto-recurse
-                           (list 'lambda recurse-params
-                                 (cons name recurse-params))))
-                    (inner-body (list 'letrec (list recurse-binding) cascade)))
-               (if (null? in-attrs)
-                   (list (string->symbol "femto-get-cached-attr")
-                         (list 'quote name)
-                         'ir
-                         (list 'lambda '() inner-body))
-                   inner-body)))
-            ((eq? rule-kind 'pico)
-             (let ((s-var (unique-symbol "__pico_span_"))
-                   (inner-var (unique-symbol "__pico_inner_"))
-                   (res-var (unique-symbol "__pico_res_")))
-               (list 'if (list 'or
-                               (list (string->symbol "ast-has-span?") 'ir)
-                               (list (string->symbol "source-loc?") 'ir))
-                     (list 'let (list (list s-var (list (string->symbol "ast-source-span") 'ir))
-                                      (list inner-var (list (string->symbol "ast-strip-span") 'ir)))
-                           (list (string->symbol "with-ast-span") s-var
-                                 (list 'lambda '()
-                                       (list 'let (list (list 'ir inner-var))
-                                             (list 'let (list (list res-var cascade))
-                                                   (list 'if (list 'and res-var (list 'not (list (string->symbol "ast-has-span?") res-var)))
-                                                         (list (string->symbol "ast-with-span") res-var s-var)
-                                                         res-var))))))
-                     cascade)))
-            (else cascade))))
+          (proc-body
+           (cond
+             ((eq? rule-kind 'femto)
+              (let* ((recurse-params (cons 'sub-node in-attrs))
+                     (recurse-binding
+                      (list 'femto-recurse
+                            (list 'lambda recurse-params
+                                  (cons name recurse-params))))
+                     (inner-body (list 'letrec (list recurse-binding) cascade)))
+                (if (null? in-attrs)
+                    (list (string->symbol "femto-get-cached-attr")
+                          (list 'quote name)
+                          'ir
+                          (list 'lambda '() inner-body))
+                    inner-body)))
+             ((eq? rule-kind 'pico)
+              (let ((s-var (unique-symbol "__pico_span_"))
+                    (inner-var (unique-symbol "__pico_inner_"))
+                    (res-var (unique-symbol "__pico_res_")))
+                (list 'if (list 'or
+                                (list (string->symbol "ast-has-span?") 'ir)
+                                (list (string->symbol "source-loc?") 'ir))
+                      (list 'let (list (list s-var (list (string->symbol "ast-source-span") 'ir))
+                                       (list inner-var (list (string->symbol "ast-strip-span") 'ir)))
+                            (list 'let (list (list 'ir inner-var))
+                                  (list 'let (list (list res-var cascade))
+                                        (list 'if (list 'and res-var (list 'not (list (string->symbol "ast-has-span?") res-var)))
+                                              (list (string->symbol "ast-with-span") res-var s-var)
+                                              res-var))))
+                      cascade)))
+             (else cascade))))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
     (if opt-mandatory
         (register-mandatory-picopass! name))
@@ -9180,7 +9167,7 @@
         expr
         (let* ((end-line (if (file-input-port? p) (port-line p) cur-line))
                (end-col (if (file-input-port? p) (port-col p) cur-col))
-               (span (make-source-span path cur-line cur-col end-line end-col #f)))
+               (span (make-source-span path cur-line cur-col end-line end-col #f (next-source-span-id!))))
           (list '%source-span span expr)))))
 
 (define (slurp-single-file raw-path)
@@ -10086,7 +10073,8 @@
                                                       (span-start-col span)
                                                       (span-end-line span)
                                                       (span-end-col span)
-                                                      span)))
+                                                      span
+                                                      (next-source-span-id!))))
                       (cons #t (ast-with-span expanded new-span)))
                     (cons #t expanded)))
               (cons #f expr)))
@@ -10375,7 +10363,7 @@
   (let loop ((fs forms) (defs '()) (bodies '()))
     (if (null? fs)
         (if (null? defs)
-            (make-body-expr (reverse bodies))
+            (ast-strip-span-all (make-body-expr (reverse bodies)))
             (let* ((rev-defs (reverse defs))
                    (unique-defs
                     (let dedup ((ds (reverse rev-defs)) (seen '()) (acc '()))
@@ -10386,7 +10374,7 @@
                             (if (memq name seen)
                                 (dedup (cdr ds) seen acc)
                                 (dedup (cdr ds) (cons name seen) (cons d acc))))))))
-              (list '%program unique-defs (make-body-expr (reverse bodies)))))
+              (list '%program (ast-strip-span-all unique-defs) (ast-strip-span-all (make-body-expr (reverse bodies))))))
         (let ((f (car fs)))
           (if (pair? f)
               (set-current-form! f))
@@ -19187,35 +19175,36 @@
                   (cons 'body insts))))))))
 
 ;;; Pass 6 Entrypoint: Transforms Pass 5 %program AST into %lir-program
-(define (generate-lir prog)
-  (reset-safepoints!)
-  (reset-symbol-table!)
-  (let ((funcs (cadr prog))
-        (main-expr (caddr prog)))
-    (set-current-toplevel-name! '%main)
-    (reset-lir!)
-    (let ((main-loc (lookup-function-source-loc '%main)))
-      (if (and (debug-symbols-enabled?) main-loc)
-          (let* ((file (car main-loc))
-                 (line (cadr main-loc))
-                 (col (caddr main-loc))
-                 (fid (register-source-file! file)))
-            (emit-lir! (list '%loc fid line col)))))
-    (track-lir-si! -8)
-    (lir-compile-expr main-expr -8 (list (cons '%raw-vars '()) (cons '%stack-vars '())) #f)
-    (emit-lir! '(%return))
-    (let* ((main-insts (reverse (car *lir-instructions*)))
-           (main-frame (align-frame-shift (- 0 (car *lir-min-si*))))
-           (lir-main (list '%lir-main
-                           (list 'frame-size main-frame)
-                           (cons 'body main-insts)))
-           (lir-funcs (map lir-compile-function funcs))
-           (safepoints (reverse (car *lir-safepoints*))))
-      (list '%lir-program
-            (list 'strings (car *strings*))
-            (list 'stackmaps safepoints)
-            (cons '%lir-functions lir-funcs)
-            lir-main))))
+(define (generate-lir prog-raw)
+  (let ((prog (ast-strip-span-all prog-raw)))
+    (reset-safepoints!)
+    (reset-symbol-table!)
+    (let ((funcs (cadr prog))
+          (main-expr (caddr prog)))
+      (set-current-toplevel-name! '%main)
+      (reset-lir!)
+      (let ((main-loc (lookup-function-source-loc '%main)))
+        (if (and (debug-symbols-enabled?) main-loc)
+            (let* ((file (car main-loc))
+                   (line (cadr main-loc))
+                   (col (caddr main-loc))
+                   (fid (register-source-file! file)))
+              (emit-lir! (list '%loc fid line col)))))
+      (track-lir-si! -8)
+      (lir-compile-expr main-expr -8 (list (cons '%raw-vars '()) (cons '%stack-vars '())) #f)
+      (emit-lir! '(%return))
+      (let* ((main-insts (reverse (car *lir-instructions*)))
+             (main-frame (align-frame-shift (- 0 (car *lir-min-si*))))
+             (lir-main (list '%lir-main
+                             (list 'frame-size main-frame)
+                             (cons 'body main-insts)))
+             (lir-funcs (map lir-compile-function funcs))
+             (safepoints (reverse (car *lir-safepoints*))))
+        (list '%lir-program
+              (list 'strings (car *strings*))
+              (list 'stackmaps safepoints)
+              (cons '%lir-functions lir-funcs)
+              lir-main)))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 131: GC Safepoint & Stackmap Bitmaps
 ;;; =======================================================================
@@ -24754,39 +24743,33 @@
 
 ;; Binary file reader returning raw bytevector
 (define (read-binary-file-to-bytevector path)
-  (cond-expand
-    (gauche
-     (call-with-input-file path
-       (lambda (p) (read-bytevector 1000000000 p))
-       :element-type :binary))
-    (else
-     (let ((fd (sys-open path 0 0)))
-       (if (< fd 0)
-           (begin
-             (display-stderr (string-append "ulisp --ld: error: cannot open input object file: " path "\n"))
-             (compiler-abort-and-cleanup! 1))
-           (let* ((file-size (sys-lseek fd 0 2)))
-             (if (< file-size 0)
-                 (begin
-                   (sys-close fd)
-                   (display-stderr (string-append "ulisp --ld: error: failed to seek file: " path "\n"))
-                   (compiler-abort-and-cleanup! 1))
-                 (begin
-                   (sys-lseek fd 0 0)
-                   (let ((bv (make-bytevector file-size)))
-                     (let loop ((read-total 0))
-                       (if (< read-total file-size)
-                           (let* ((buf-ptr (%ptr-add (%ptr-untag bv) (+ 8 read-total)))
-                                  (n (sys-read fd buf-ptr (- file-size read-total))))
-                             (if (<= n 0)
-                                 (begin
-                                   (sys-close fd)
-                                   (display-stderr (string-append "ulisp --ld: error: unexpected EOF reading: " path "\n"))
-                                   (compiler-abort-and-cleanup! 1))
-                                 (loop (+ read-total n))))
-                           (begin
-                             (sys-close fd)
-                             bv))))))))))))
+  (let ((fd (sys-open path 0 0)))
+    (if (< fd 0)
+        (begin
+          (display-stderr (string-append "ulisp --ld: error: cannot open input object file: " path "\n"))
+          (compiler-abort-and-cleanup! 1))
+        (let* ((file-size (sys-lseek fd 0 2)))
+          (if (< file-size 0)
+              (begin
+                (sys-close fd)
+                (display-stderr (string-append "ulisp --ld: error: failed to seek file: " path "\n"))
+                (compiler-abort-and-cleanup! 1))
+              (begin
+                (sys-lseek fd 0 0)
+                (let ((bv (make-bytevector file-size)))
+                  (let loop ((read-total 0))
+                    (if (< read-total file-size)
+                        (let* ((buf-ptr (%ptr-add (%ptr-untag bv) (+ 8 read-total)))
+                               (n (sys-read fd buf-ptr (- file-size read-total))))
+                          (if (<= n 0)
+                              (begin
+                                (sys-close fd)
+                                (display-stderr (string-append "ulisp --ld: error: unexpected EOF reading: " path "\n"))
+                                (compiler-abort-and-cleanup! 1))
+                              (loop (+ read-total n))))
+                        (begin
+                          (sys-close fd)
+                          bv))))))))))
 
 ;; Parse an ELF64 ET_REL relocatable object file into structured vectors
 ;; Returns: (vector path sec-vec sym-vec relocs)
@@ -27130,13 +27113,6 @@
     (ulisp
      (write-bytevector bv)
      (flush-output-port))
-    (gauche
-     (let loop ((i 0) (len (bytevector-length bv)))
-       (if (< i len)
-           (begin
-             (write-byte (bytevector-u8-ref bv i))
-             (loop (+ i 1) len))
-           (flush))))
     (else
      (let ((p (current-output-port)))
        (if (binary-port? p)

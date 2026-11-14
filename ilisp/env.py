@@ -1560,6 +1560,14 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             raise TypeError(f"string->symbol expected string, got {type(s).__name__}")
         return Symbol.intern(str(s))
 
+    _gensym_counter = 0
+
+    def prim_gensym(prefix: Any = "g") -> Symbol:
+        nonlocal _gensym_counter
+        _gensym_counter += 1
+        p = str(prefix) if prefix is not None else "g"
+        return Symbol.intern(f"{p}{_gensym_counter}")
+
     def prim_numerator(q: Any) -> int:
         from fractions import Fraction
 
@@ -1976,6 +1984,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "null-environment": prim_null_environment,
         "procedure?": prim_procedure_p,
         "string->symbol": prim_string_to_symbol,
+        "gensym": prim_gensym,
         "numerator": prim_numerator,
         "denominator": prim_denominator,
         "rationalize": prim_rationalize,

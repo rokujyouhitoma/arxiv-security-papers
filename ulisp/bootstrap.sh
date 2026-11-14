@@ -530,8 +530,8 @@ elif [ "${FULL_BOOTSTRAP:-0}" != "1" ] && [ "${BOOTSTRAP_FROM_ILISP:-0}" != "1" 
     echo "[1/3] Stage 1: Fast compiling $BOOTSTRAP_TARGET_NAME using native seed ($BOOT_BIN)..."
     if run_stage_try "Stage 1 ($BOOT_BIN)" "$STAGE1_ASM" "$BOOT_BIN" "$BOOTSTRAP_INPUT" && compile_asm "Stage 1 ($BOOT_BIN)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT" "$BOOT_BIN"; then
         echo "  -> Stage 1 successfully compiled with native seed."
-    elif [ -n "$GOSH_BIN" ]; then
-        echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed (e.g. exit code 139 / timeout / ABI drift). Automatically falling back to Gauche ($GOSH_BIN)...\033[0m"
+    elif [ "${BOOTSTRAP_ALLOW_HOST_FALLBACK:-0}" = "1" ] && [ -n "$GOSH_BIN" ]; then
+        echo -e "\033[1;33m[WARN] Native seed ($BOOT_BIN) failed (e.g. exit code 139 / timeout / ABI drift). Falling back to Gauche ($GOSH_BIN)...\033[0m"
         run_stage "Stage 1 (Gauche)" "$STAGE1_ASM" "$GOSH_BIN" "$ULISP_DIR/compiler.scm"
         compile_asm "Stage 1 (Gauche)" "$STAGE1_ASM" "$BUILD_DIR/scheme-stage1" "$BOOTSTRAP_INPUT" "$BOOT_BIN"
     else
