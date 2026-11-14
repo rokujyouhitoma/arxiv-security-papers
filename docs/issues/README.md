@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **617** | 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 | Feature | High | Closed | [closed/617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md](closed/617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md) |
-| **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
 | **824** | Nanopass AST ノードにおけるソース位置情報 (Source Span) とメタデータの第一級サポート | Feature | High | New | [824-support-first-class-source-span-and-ast-metadata-in-nanopass.md](824-support-first-class-source-span-and-ast-metadata-in-nanopass.md) |
@@ -32,6 +31,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | 2026-11-14 | [closed/695-port-c-backend-to-windows-and-verify-via-wine.md](closed/695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **814** | 143_backend_x86_peephole.scm の define-picopass 化と fuse-window-rules への移行 | Feature | 2026-11-14 | [closed/814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md](closed/814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md) |
 | **812** | AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV | Bug | 2026-11-14 | [closed/812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md](closed/812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) |
 | **811** | 型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入 | Feature | 2026-11-14 | [closed/811-warn-on-untyped-variable-crossing-channel-boundary.md](closed/811-warn-on-untyped-variable-crossing-channel-boundary.md) |

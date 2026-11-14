@@ -257,12 +257,13 @@
   (run-pass-pipeline forms verify-mode trace-mode))
 
 (define (compile-backend lir-ast target gc-mode)
-  (let* ((tgt-str (cond ((eq? target 'c) "c")
+  (let* ((c-target? (or (eq? target 'c) (eq? target 'c-windows) (eq? target 'c-win)))
+         (tgt-str (cond (c-target? "c")
                         ((eq? target 'aarch64) "aarch64")
                         ((eq? target 'elf) "elf")
                         ((or (eq? target 'obj) (eq? target 'elf-obj)) "elf-obj")
                         (else "x86-64")))
-         (pass-id (cond ((eq? target 'c) 'pass-160-backend-c)
+         (pass-id (cond (c-target? 'pass-160-backend-c)
                         ((eq? target 'aarch64) 'pass-150-backend-aarch64)
                         ((eq? target 'elf) 'pass-144-backend-x86-elf)
                         ((or (eq? target 'obj) (eq? target 'elf-obj)) 'pass-144-backend-x86-elf-obj)
@@ -275,7 +276,7 @@
             (let* ((t0 (current-time-monotonic-us))
                    (m0 (current-heap-alloc-bytes))
                    (res (cond
-                          ((eq? target 'c)
+                          (c-target?
                            (emit-c lir-ast gc-mode))
                           ((eq? target 'aarch64)
                            (emit-aarch64 lir-ast gc-mode))
@@ -292,7 +293,7 @@
               (record-pass-timing! pass-id pass-name elapsed-us alloc-bytes)
               res)
             (cond
-              ((eq? target 'c)
+              (c-target?
                (emit-c lir-ast gc-mode))
               ((eq? target 'aarch64)
                (emit-aarch64 lir-ast gc-mode))

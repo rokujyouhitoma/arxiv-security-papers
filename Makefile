@@ -219,6 +219,12 @@ test_wine_env: ## Run MinGW-w64 and Wine verification environment test suite (Is
 
 test-wine-env: test_wine_env
 
+.PHONY: test_c_windows test-c-windows
+test_c_windows: ## Run ULisp C99 backend Windows MinGW & Wine tests (Issue #695)
+	$(MAKE) -C ulisp test_c_windows
+
+test-c-windows: test_c_windows
+
 .PHONY: verify_r7rs_traceability
 verify_r7rs_traceability: activate ## Verify R7RS specification traceability and diagnostic tags (Issue #665)
 	${VENV_PYTHON} scripts/verify_r7rs_traceability.py
