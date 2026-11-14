@@ -192,11 +192,51 @@
 ;;; 3. Capture Mode Classification (DSN-37 Section 8.1 & 12.1)
 ;;; -----------------------------------------------------------------------
 
+;;; -----------------------------------------------------------------------
+;;; Compiler Warnings & Diagnostics for Boundary Crossing (Issue #811)
+;;; -----------------------------------------------------------------------
+
+(define *warn-untyped-boundary*
+  (cons (let ((env-val (guard (ex (else #f)) (get-environment-variable "ULISP_WARN_UNTYPED_BOUNDARY"))))
+          (if (and env-val (string=? env-val "0")) #f #t))
+        '()))
+
+(define *untyped-boundary-warnings* (cons '() '()))
+
+(define (reset-untyped-boundary-warnings!)
+  (set-car! *untyped-boundary-warnings* '()))
+
+(define (untyped-boundary-warnings)
+  (reverse (car *untyped-boundary-warnings*)))
+
+(define (%safe-error-port)
+  (guard (ex (else (current-output-port)))
+    (current-error-port)))
+
+(define (emit-untyped-boundary-warning var boundary-kind)
+  (when (and (car *warn-untyped-boundary*) (symbol? var))
+    (let ((entry (cons var boundary-kind)))
+      (set-car! *untyped-boundary-warnings*
+                (cons entry (car *untyped-boundary-warnings*)))
+      (let ((port (%safe-error-port)))
+        (display "[WARN] pass-synapse-split-planes: Untyped variable '" port)
+        (display var port)
+        (display "' crossing " port)
+        (display boundary-kind port)
+        (display " boundary; falling back to deep-copy (CWE-843/CWE-400). Consider annotating with (: " port)
+        (display var port)
+        (display " <type>) or (: " port)
+        (display var port)
+        (display " deep-copy).\n" port)))))
+
 (define (linear-type? ty)
   (memq ty '(channel spsc-channel bounded-channel linear)))
 
 (define (immediate-type? ty)
   (memq ty '(fixnum integer int boolean bool char number real immediate float)))
+
+(define (explicit-deep-copy-type? ty)
+  (memq ty '(deep-copy any untyped)))
 
 (define (linear-constructor-op? op)
   (memq op '(make-channel make-spsc-channel make-bounded-channel)))
@@ -215,8 +255,11 @@
      'integer)
     (else #f)))
 
-(define (classify-capture-mode var . opt-env)
-  (let ((type-env (if (pair? opt-env) (car opt-env) '())))
+(define (classify-capture-mode var . opt-args)
+  (let* ((type-env (if (pair? opt-args) (car opt-args) '()))
+         (boundary-kind (if (and (pair? opt-args) (pair? (cdr opt-args)))
+                            (cadr opt-args)
+                            'task)))
     (cond
       ;; 1. Annotated variable tuple: (: v type) or (v : type)
       ((pair? var)
@@ -226,18 +269,20 @@
             (cond
               ((linear-type? ty) 'linear-move)
               ((immediate-type? ty) 'immediate)
+              ((explicit-deep-copy-type? ty) 'deep-copy)
               (else 'deep-copy))))
          ((and (pair? (cdr var)) (eq? (cadr var) ':) (pair? (cddr var)))
           (let ((ty (caddr var)))
             (cond
               ((linear-type? ty) 'linear-move)
               ((immediate-type? ty) 'immediate)
+              ((explicit-deep-copy-type? ty) 'deep-copy)
               (else 'deep-copy))))
          ((memq (car var) '(linear-move immediate deep-copy))
           (car var))
          (else 'deep-copy)))
 
-      ;; 2. Symbol lookup in type environment (Issue #797: completely free of name heuristics)
+      ;; 2. Symbol lookup in type environment (Issue #797 & Issue #811)
       ((symbol? var)
        (let ((binding (assq var type-env)))
          (if binding
@@ -249,9 +294,19 @@
                   'linear-move)
                  ((immediate-type? info)
                   'immediate)
-                 (else 'deep-copy)))
-             ;; Untyped fallback: Shared-Nothing Deep Copy (CWE-362/662 safe default)
-             'deep-copy)))
+                 ((explicit-deep-copy-type? info)
+                  ;; Explicitly declared deep-copy/any/untyped: no warning
+                  'deep-copy)
+                 (else
+                  ;; Bound to unknown/composite type without explicit annotation:
+                  ;; emit warning and fallback to deep-copy (CWE-843 / CWE-400)
+                  (emit-untyped-boundary-warning var boundary-kind)
+                  'deep-copy)))
+             (begin
+               ;; Untyped fallback: Shared-Nothing Deep Copy (CWE-362/662 safe default)
+               ;; Emit static compiler warning (Issue #811)
+               (emit-untyped-boundary-warning var boundary-kind)
+               'deep-copy))))
 
       (else
        (error "classify-capture-mode: expected symbol or annotated variable" var)))))
@@ -291,7 +346,7 @@
             (error "spawn-task: empty task body (CWE-843)" expr)
             (let* ((kname (%next-asc-kernel-name))
                    (fvars (extract-free-variables (cons 'begin bodies) '()))
-                   (captures (map (lambda (v) (list v (classify-capture-mode v type-env))) fvars))
+                   (captures (map (lambda (v) (list v (classify-capture-mode v type-env 'spawn-task))) fvars))
                    (kernel-node (list '%asc-kernel (cons kname fvars) (cons 'begin bodies)))
                    (bridge-node (list '%boundary-bridge
                                       captures
@@ -315,8 +370,7 @@
                    ;; rx and tx are channel endpoints, so they are linear
                    (kernel-type-env (cons (cons rx-sym 'channel)
                                           (cons (cons tx-sym 'channel) type-env)))
-                   (captures (map (lambda (v) (list v (classify-capture-mode v type-env))) fvars))
-                   ;; Typed kernel formals: (: rx-sym channel) (: tx-sym channel) ...
+                   (captures (map (lambda (v) (list v (classify-capture-mode v type-env 'with-channel))) fvars))
                    (typed-rx (list ': rx-sym 'channel))
                    (typed-tx (list ': tx-sym 'channel))
                    (kernel-formals (append (list typed-rx typed-tx) fvars))

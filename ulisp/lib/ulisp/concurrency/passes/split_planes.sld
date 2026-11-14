@@ -15,6 +15,13 @@
     classify-capture-mode
     reset-asc-kernel-counter!
 
+    ;; Boundary Warning API (Issue #811)
+    *warn-untyped-boundary*
+    *untyped-boundary-warnings*
+    reset-untyped-boundary-warnings!
+    untyped-boundary-warnings
+    emit-untyped-boundary-warning
+
     ;; Injection API
     synapse-split-planes-descriptor
     inject-synapse-split-planes-pass!
