@@ -598,11 +598,16 @@
           (lambda ()
             (let ((prev-in-runner (nanopass-in-pipeline-runner?)))
               (set-nanopass-in-pipeline-runner! #t)
-              (with-nanopass-term-memo
-                (lambda ()
-                  (let ((res (fn input-ast)))
-                    (set-nanopass-in-pipeline-runner! prev-in-runner)
-                    res)))))))
+              (let ((res (guard (ex (else
+                                     (set-nanopass-in-pipeline-runner! prev-in-runner)
+                                     (femto-cache-reset!)
+                                     (raise ex)))
+                           (with-nanopass-term-memo
+                             (lambda ()
+                               (fn input-ast))))))
+                (set-nanopass-in-pipeline-runner! prev-in-runner)
+                (femto-cache-reset!)
+                res)))))
     (set-current-pass! id)
     (if (or trace-mode (nanopass-trace-enabled?) (picopass-provenance-enabled?))
         (reset-picopass-provenance!))
