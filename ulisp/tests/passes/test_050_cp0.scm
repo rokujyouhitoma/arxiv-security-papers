@@ -74,6 +74,21 @@
               42
               (cp0-optimize '(let ((dead1 10) (dead2 (+ 3 4))) 42)))
 
+;; 6. Bottom-up nested constant folding + branch pruning + eq? structural sharing
+(assert-equal "bottom-up nested fold and branch prune"
+              100
+              (cp0-optimize '(if (= (+ 1 2) 3) (* 10 10) (foo bar))))
+
+(let* ((untouched '(unknown-fn arg1 arg2))
+       (ast (list 'let (list (list 'u untouched)) '(if (= (+ 2 3) 5) (+ 7 8) (baz))))
+       (opt (cp0-optimize ast)))
+  (assert-equal "bottom-up child fold before parent branch prune inside let"
+                15
+                (caddr opt))
+  (assert-equal "eq? structural sharing preserved on untouched impure binding"
+                #t
+                (eq? untouched (cadr (car (cadr opt))))))
+
 (display "=======================================================") (newline)
 (display " Pass 050: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

@@ -49,48 +49,6 @@
 (define (contify-calls var expr)
   (contify-subst expr var))
 
-;;; Recursively transforms an expression, converting eligible letrec bindings into %cont-fun.
-(define (contify-expr expr)
-  (cond
-    ((not (pair? expr)) expr)
-    (else
-     (let ((op (car expr)))
-       (case op
-         ((quote) expr)
-         ((if)
-          (list 'if
-                (contify-expr (cadr expr))
-                (contify-expr (caddr expr))
-                (if (null? (cdddr expr)) #f (contify-expr (cadddr expr)))))
-         ((begin)
-          (cons 'begin (map contify-expr (cdr expr))))
-         ((let)
-          (let ((bindings (cadr expr))
-                (body (caddr expr)))
-            (list 'let
-                  (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
-                  (contify-expr body))))
-         ((letrec)
-          (let* ((bindings (cadr expr))
-                 (body (caddr expr)))
-            (contify-letrec bindings body)))
-         ((lambda)
-          (let ((params (cadr expr))
-                (body (caddr expr)))
-            (list 'lambda params (contify-expr body))))
-         ((%cont-fun)
-          (list '%cont-fun
-                (cadr expr)
-                (caddr expr)
-                (contify-expr (cadddr expr))
-                (contify-expr (cadr (cdddr expr)))))
-         ((%cont-call)
-          (cons '%cont-call
-                (cons (cadr expr)
-                      (map contify-expr (cddr expr)))))
-         (else
-          (map contify-expr expr)))))))
-
 (define (occurs-in-other-bindings? var bindings)
   (let loop ((bs bindings))
     (if (null? bs)
@@ -130,55 +88,36 @@
                  (loop (cdr xs) (cdr es) (cons v acc))
                  (loop (cdr xs) (cdr es) acc))))))))
 
+(define (contify-letrec-reducible? ir x* body)
+  (and (= (length x*) 1)
+       (has-call? (car x*) body)
+       (pair? (femto-contifiable? ir))))
+
 (define-picopass rule-contify-letrec
   :reads '(letrec) :writes '(%cont-fun)
   (Expr
-    ((letrec ((,x* ,e*) ...) ,body)
-     (if (= (length x*) 1)
-         (let ((var (car x*))
-               (val (car e*)))
-           (if (and (has-call? var body)
-                    (contifiable-binding? var val body))
-               (let* ((params (cadr val))
-                      (lbody (caddr val))
-                      (opt-lbody (contify-calls var lbody))
-                      (opt-body (contify-calls var body)))
-                 (list '%cont-fun var params
-                       (contify-expr opt-lbody)
-                       (contify-expr opt-body)))
-               #f))
-         #f))))
+    ((letrec ((,x* ,e*) ...) ,body) (guard (contify-letrec-reducible? ir x* body))
+     (let* ((contifiable-vars (femto-contifiable? ir))
+            (var (car contifiable-vars))
+            (val (car e*))
+            (params (cadr val))
+            (lbody (caddr val))
+            (opt-lbody (contify-calls var lbody))
+            (opt-body (contify-calls var body)))
+       (list '%cont-fun var params opt-lbody opt-body)))))
 
-;;; Processes a letrec form, lifting contifiable local bindings into %cont-fun wrappers.
-(define (contify-letrec bindings orig-body)
-  (or (rule-contify-letrec (list 'letrec bindings orig-body))
-      (if (= (length bindings) 1)
-          (let* ((b (car bindings))
-                 (var (car b))
-                 (val (cadr b)))
-            (list 'letrec
-                  (list (list var (contify-expr val)))
-                  (contify-expr orig-body)))
-          ;; Multi-binding letrec (top-level procedures or mutual recursion):
-          ;; Preserve letrec structure to maintain inter-procedure references,
-          ;; while recursively contifying local loops inside each procedure body.
-          (list 'letrec
-                (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
-                (contify-expr orig-body)))))
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass: contify-opt
+;;; Bottom-up Contification using fused Picopass + Femtopass cache (DSN-33-01)
+;;; -----------------------------------------------------------------------
+(define-pass contify-opt : L_core (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    (fuse-rules :order post
+      rule-contify-letrec)))
+
+(define (contify-expr expr)
+  (contify-opt expr))
 
 ;;; Pass 4c Entrypoint: Contification & local closure elimination across all expressions.
 (define (contify-all form)
-  (cond
-    ((not (pair? form)) form)
-    ((eq? (car form) '%program)
-     (let ((defs (cadr form))
-           (main (caddr form)))
-       (list '%program
-             (map (lambda (d)
-                    (if (and (pair? d) (eq? (car d) 'define))
-                        (list 'define (cadr d) (contify-expr (caddr d)))
-                        (contify-expr d)))
-                  defs)
-             (contify-expr main))))
-    (else
-     (contify-expr form))))
+  (contify-opt form))

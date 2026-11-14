@@ -262,11 +262,25 @@
               (cons 'list extra-in)
               (list 'quote extra-out)))))
 
+;;; Parse optional :order keyword from fuse-rules specification list.
+;;; Returns (cons order-sym clean-specs) where order-sym is 'pre or 'post.
+(define (nanopass-parse-fuse-rules-specs specs)
+  (let ((flat (if (and (= (length specs) 1) (list? (car specs)))
+                  (car specs)
+                  specs)))
+    (if (and (pair? flat)
+             (pair? (cdr flat))
+             (memq (car flat) '(:order order)))
+        (let ((ord (cadr flat))
+              (rest (cddr flat)))
+          (if (or (eq? ord 'post) (eq? ord ':post) (equal? ord ''post))
+              (cons 'post rest)
+              (cons 'pre rest)))
+        (cons 'pre flat))))
+
 ;;; Extract expanded clauses from a list of rule names or descriptors
 (define (nanopass-extract-fused-clauses specs nt-name)
-  (let ((flat-specs (if (and (= (length specs) 1) (list? (car specs)))
-                        (car specs)
-                        specs)))
+  (let ((flat-specs (cdr (nanopass-parse-fuse-rules-specs specs))))
     (let loop ((rem flat-specs) (acc '()))
       (if (null? rem)
           (reverse acc)
@@ -437,14 +451,14 @@
                           ir-var)))
     (list entry-name (list 'lambda in-arg-list body-expr))))
 
-;;; Flatten NT rules: inline (fuse-rules ...) and (fuse-tree-rules ...),
+;;; Flatten NT rules: inline (fuse-rules ...), (fuse-tree-rules ...), and (fuse-post-rules ...),
 ;;; and expand regular rules
 (define (nanopass-flatten-nt-rules raw-rules nt-name)
   (let loop ((rem raw-rules) (acc '()))
     (cond
       ((null? rem)
        (reverse acc))
-      ((and (pair? (car rem)) (memq (caar rem) '(fuse-rules fuse-tree-rules)))
+      ((and (pair? (car rem)) (memq (caar rem) '(fuse-rules fuse-tree-rules fuse-post-rules)))
        (let* ((specs (cdar rem))
               (fused-clauses (nanopass-extract-fused-clauses specs nt-name)))
          (loop (cdr rem) (append (reverse fused-clauses) acc))))
@@ -452,11 +466,31 @@
        (let* ((specs (cdar rem))
               (fused-clauses (nanopass-extract-fused-window-rules specs)))
          (loop (cdr rem) (append (reverse fused-clauses) acc))))
-      ((and (pair? (car rem)) (memq (caar rem) '(redispatch :redispatch)))
+      ((and (pair? (car rem)) (memq (caar rem) '(redispatch :redispatch :order order)))
        (loop (cdr rem) acc))
       (else
        (let ((expanded (nanopass-expand-rule (car rem) nt-name #f)))
          (loop (cdr rem) (cons expanded acc)))))))
+
+;;; Detect rule application order ('pre or 'post) from NT rules
+(define (nanopass-nt-rules-detect-order raw-rules)
+  (let loop ((rem raw-rules))
+    (cond
+      ((null? rem) 'pre)
+      ((and (pair? (car rem)) (eq? (caar rem) 'fuse-post-rules))
+       'post)
+      ((and (pair? (car rem)) (memq (caar rem) '(fuse-rules fuse-tree-rules)))
+       (let ((parsed (nanopass-parse-fuse-rules-specs (cdar rem))))
+         (if (eq? (car parsed) 'post)
+             'post
+             (loop (cdr rem)))))
+      ((and (pair? (car rem)) (memq (caar rem) '(:order order)) (pair? (cdar rem)))
+       (let ((ord (cadar rem)))
+         (if (or (eq? ord 'post) (eq? ord ':post) (equal? ord ''post))
+             'post
+             (loop (cdr rem)))))
+      (else
+       (loop (cdr rem))))))
 
 ;;; Group rule descriptors by target NT name for top-level fuse-rules
 (define (nanopass-group-rules-by-nt specs default-nt)
@@ -481,50 +515,57 @@
 
 ;;; Build cascaded dispatch expression for nonterminal transformer rules
 ;;; Incorporates O(1) Head-Tag bucketing (case dispatch), pair fallback, atom fast-path,
-;;; and Local Re-dispatch with bounded fuel counter (Fuel Guard, DSN-33-01 T3.2).
-(define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
+;;; Local Re-dispatch with bounded fuel counter (Fuel Guard, DSN-33-01 T3.2),
+;;; and traversal order ('pre top-down vs 'post bottom-up).
+(define (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? order)
   (let* ((ir-var (car in-arg-list))
-         (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out)))
+         (post? (eq? order 'post))
+         (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out))
+         (leaf-fallback (if post? ir-var cata-call)))
     (if (or (null? rules) (eq? l-out '*) (not enable-redispatch?))
         (let* ((partitioned (nanopass-partition-rules rules))
                (buckets (car partitioned))
                (pair-fallbacks (cadr partitioned))
                (atom-rules (caddr partitioned))
-               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name cata-call #f #f))
-               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name cata-call #f #f)))
-          (if (null? buckets)
-              (if (and (null? pair-fallbacks) (null? atom-rules))
-                  cata-call
-                  (if (equal? pair-fallbacks atom-rules)
-                      pair-fallback-expr
-                      (list 'if (list 'pair? ir-var)
+               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback #f #f))
+               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback #f #f))
+               (core-expr
+                (if (null? buckets)
+                    (if (and (null? pair-fallbacks) (null? atom-rules))
+                        leaf-fallback
+                        (if (equal? pair-fallbacks atom-rules)
                             pair-fallback-expr
-                            atom-fallback-expr)))
-              (let ((case-expr
-                     (cons 'case
-                           (cons (list 'car ir-var)
-                                 (append (map (lambda (b)
-                                                (list (list (car b))
-                                                      (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr #f #f)))
-                                              buckets)
-                                         (list (list 'else pair-fallback-expr)))))))
-                (list 'if (list 'pair? ir-var)
-                      (list 'if (list 'symbol? (list 'car ir-var))
-                            case-expr
-                            pair-fallback-expr)
-                      atom-fallback-expr))))
+                            (list 'if (list 'pair? ir-var)
+                                  pair-fallback-expr
+                                  atom-fallback-expr)))
+                    (let ((case-expr
+                           (cons 'case
+                                 (cons (list 'car ir-var)
+                                       (append (map (lambda (b)
+                                                      (list (list (car b))
+                                                            (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr #f #f)))
+                                                    buckets)
+                                               (list (list 'else pair-fallback-expr)))))))
+                      (list 'if (list 'pair? ir-var)
+                            (list 'if (list 'symbol? (list 'car ir-var))
+                                  case-expr
+                                  pair-fallback-expr)
+                            atom-fallback-expr)))))
+          (if post?
+              (list 'let (list (list ir-var cata-call)) core-expr)
+              core-expr))
         (let* ((loop-var (unique-symbol "__redispatch_loop_"))
                (fuel-var (unique-symbol "__fuel_"))
                (partitioned (nanopass-partition-rules rules))
                (buckets (car partitioned))
                (pair-fallbacks (cadr partitioned))
                (atom-rules (caddr partitioned))
-               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name cata-call loop-var fuel-var))
-               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name cata-call loop-var fuel-var))
+               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback loop-var fuel-var))
+               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback loop-var fuel-var))
                (cascade-body
                 (if (null? buckets)
                     (if (and (null? pair-fallbacks) (null? atom-rules))
-                        cata-call
+                        leaf-fallback
                         (if (equal? pair-fallbacks atom-rules)
                             pair-fallback-expr
                             (list 'if (list 'pair? ir-var)
@@ -542,16 +583,23 @@
                             (list 'if (list 'symbol? (list 'car ir-var))
                                   case-expr
                                   pair-fallback-expr)
-                            atom-fallback-expr)))))
-          (list 'letrec
-                (list (list loop-var
-                            (list 'lambda (list ir-var fuel-var)
-                                  (list 'if (list '<= fuel-var 0)
-                                        (list (string->symbol "picopass-fail")
-                                              "nanopass: local re-dispatch fuel exhausted on node"
-                                              ir-var)
-                                        cascade-body))))
-                (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))))
+                            atom-fallback-expr))))
+               (redispatch-expr
+                (list 'letrec
+                      (list (list loop-var
+                                  (list 'lambda (list ir-var fuel-var)
+                                        (list 'if (list '<= fuel-var 0)
+                                              (list (string->symbol "picopass-fail")
+                                                    "nanopass: local re-dispatch fuel exhausted on node"
+                                                    ir-var)
+                                              cascade-body))))
+                      (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
+          (if post?
+              (list 'let (list (list ir-var cata-call)) redispatch-expr)
+              redispatch-expr)))))
+
+(define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
+  (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? 'pre))
 
 ;;; Normalize rules whether passed as list of rules or single wrapped list
 (define (nanopass-normalize-rules raw-rules)
@@ -596,7 +644,10 @@
         (reverse acc)
         (let ((c (car rem)))
           (cond
-            ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules fuse-window-rules)))
+            ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules fuse-post-rules)))
+             (let ((flat (cdr (nanopass-parse-fuse-rules-specs (cdr c)))))
+               (loop (cdr rem) (append (reverse flat) acc))))
+            ((and (pair? c) (eq? (car c) 'fuse-window-rules))
              (let* ((specs (cdr c))
                     (flat (if (and (= (length specs) 1) (list? (car specs))) (car specs) specs)))
                (loop (cdr rem) (append (reverse flat) acc))))
@@ -606,7 +657,10 @@
                (let in-loop ((rs raw-rules) (in-acc acc))
                  (cond
                    ((null? rs) (loop (cdr rem) in-acc))
-                   ((and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules fuse-window-rules)))
+                   ((and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules fuse-post-rules)))
+                    (let ((fl (cdr (nanopass-parse-fuse-rules-specs (cdar rs)))))
+                      (in-loop (cdr rs) (append (reverse fl) in-acc))))
+                   ((and (pair? (car rs)) (eq? (caar rs) 'fuse-window-rules))
                     (let* ((sp (cdar rs))
                            (fl (if (and (= (length sp) 1) (list? (car sp))) (car sp) sp)))
                       (in-loop (cdr rs) (append (reverse fl) in-acc))))
@@ -691,10 +745,11 @@
               ;; (entry EntryNT)
               ((and (pair? c) (eq? (car c) 'entry))
                (loop (cdr rest) defs nt-procs (cadr c)))
-              ;; (fuse-rules r1 r2 ...) or (fuse-tree-rules r1 r2 ...) at top-level
-              ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules)))
-               (let* ((specs (cdr c))
-                      (flat-specs (if (and (= (length specs) 1) (list? (car specs))) (car specs) specs))
+              ;; (fuse-rules [:order post] r1 r2 ...), (fuse-tree-rules ...), or (fuse-post-rules ...) at top-level
+              ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules fuse-post-rules)))
+               (let* ((parsed-specs (nanopass-parse-fuse-rules-specs (cdr c)))
+                      (order (if (eq? (car c) 'fuse-post-rules) 'post (car parsed-specs)))
+                      (flat-specs (cdr parsed-specs))
                       (groups (nanopass-group-rules-by-nt flat-specs (if entry-nt entry-nt 'Expr))))
                  (let group-loop ((gs groups) (cur-procs nt-procs) (cur-entry entry-nt))
                    (if (null? gs)
@@ -702,7 +757,7 @@
                        (let* ((g (car gs))
                               (g-nt (car g))
                               (g-clauses (cdr g))
-                              (body-expr (nanopass-build-rules-cascade g-clauses l-in l-out g-nt in-arg-list extra-out #t))
+                              (body-expr (nanopass-build-rules-cascade-with-order g-clauses l-in l-out g-nt in-arg-list extra-out #t order))
                               (proc-binding (list g-nt (list 'lambda in-arg-list body-expr))))
                          (group-loop (cdr gs)
                                      (cons proc-binding cur-procs)
@@ -745,10 +800,11 @@
                      (let* ((has-fused?
                              (let check ((rs raw-rules))
                                (and (pair? rs)
-                                    (or (and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules redispatch :redispatch)))
+                                    (or (and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules fuse-post-rules redispatch :redispatch)))
                                         (check (cdr rs))))))
+                            (nt-order (nanopass-nt-rules-detect-order raw-rules))
                             (expanded-rules (nanopass-flatten-nt-rules raw-rules nt-name))
-                            (body-expr (nanopass-build-rules-cascade expanded-rules l-in nt-out nt-name nt-in-args (if (pair? nt-extra-out) nt-extra-out extra-out) has-fused?))
+                            (body-expr (nanopass-build-rules-cascade-with-order expanded-rules l-in nt-out nt-name nt-in-args (if (pair? nt-extra-out) nt-extra-out extra-out) has-fused? nt-order))
                             (proc-binding (list nt-name (list 'lambda nt-in-args body-expr))))
                        (loop (cdr rest)
                              defs
@@ -912,13 +968,20 @@
                      (recurse-binding
                       (list 'femto-recurse
                             (list 'lambda recurse-params
-                                  (cons name recurse-params)))))
-                (list 'letrec (list recurse-binding)
-                      cascade))
+                                  (cons name recurse-params))))
+                     (inner-body (list 'letrec (list recurse-binding) cascade)))
+                (if (null? in-attrs)
+                    (list (string->symbol "femto-get-cached-attr")
+                          (list 'quote name)
+                          'ir
+                          (list 'lambda '() inner-body))
+                    inner-body))
               cascade)))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
     (if opt-mandatory
         (register-mandatory-picopass! name))
+    (if (and (eq? rule-kind 'femto) (pair? reads))
+        (femto-register-attr-dependencies! name reads))
     (nanopass-register-rule!
       (nanopass-make-rule-descriptor name rule-kind nt-name head-tags reads writes eliminates expanded-rules #f))
     (cons 'begin
@@ -939,10 +1002,16 @@
                   (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
                   (list (string->symbol "nanopass-register-rule!") desc-var))
             (append
-              (if opt-mandatory
-                  (list (list (string->symbol "register-mandatory-picopass!") (list 'quote name)))
+              (if (and (eq? rule-kind 'femto) (pair? reads))
+                  (list (list (string->symbol "femto-register-attr-dependencies!")
+                              (list 'quote name)
+                              (list 'quote reads)))
                   '())
-              (list (list 'quote name)))))))
+              (append
+                (if opt-mandatory
+                    (list (list (string->symbol "register-mandatory-picopass!") (list 'quote name)))
+                    '())
+                (list (list 'quote name))))))))
 
 (define (nanopass-expand-define-picopass form)
   (nanopass-expand-rule-dsl form 'pico))

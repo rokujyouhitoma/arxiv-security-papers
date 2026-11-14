@@ -2621,6 +2621,14 @@
   (set-car! *picopass-firing-log* '()))
 
 (define (record-picopass-firing! rule-name old-ir new-ir)
+  (if (pair? (car *femto-analysis-cache*))
+      (begin
+        (femto-cache-invalidate-node! old-ir)
+        (let ((desc (nanopass-lookup-rule rule-name)))
+          (if desc
+              (let ((changed-tags (nanopass-combine-sets (rule-writes desc) (rule-eliminates desc))))
+                (if (pair? changed-tags)
+                    (femto-cache-invalidate-tags! changed-tags)))))))
   (if (car *picopass-provenance-enabled*)
       (begin
         ;; 1. Update firing counter
@@ -3647,12 +3655,14 @@
          ((symbol? head)
           (let ((cls (nanopass-classify-meta-var head lang)))
             (if cls
-                ;; Application / head meta-variable: (e0 e1 ...) or (a0 a ...)
-                (let ((new-head (if (eq? (car cls) 'nonterminal)
-                                    (call-recurse (car ir))
-                                    (car ir)))
-                      (new-tail (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse)))
-                  (nanopass-cons-sharing ir new-head new-tail))
+                (if (eq? (car ir) '%cont-fun)
+                    (nanopass-fallback-transform-node ir call-recurse)
+                    ;; Application / head meta-variable: (e0 e1 ...) or (a0 a ...)
+                    (let ((new-head (if (eq? (car cls) 'nonterminal)
+                                        (call-recurse (car ir))
+                                        (car ir)))
+                          (new-tail (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse)))
+                      (nanopass-cons-sharing ir new-head new-tail)))
                 ;; Keyword-headed form: (if ...), (lambda ...), (%block ...), (%lir-program ...), etc.
                 (let ((new-tail (nanopass-schema-transform-subforms (cdr prod) (cdr ir) lang curr-nt call-recurse)))
                   (nanopass-cons-sharing ir (car ir) new-tail)))))
@@ -3713,11 +3723,18 @@
                   (new-body (nanopass-map-sharing call-recurse (cdr r1)))
                   (new-r1 (nanopass-cons-sharing r1 new-bindings new-body)))
              (nanopass-cons-sharing ir op new-r1)))
-          ((set!)
+          ((set! define)
            (let* ((r1 (cdr ir))
                   (r2 (cdr r1))
                   (new-val (call-recurse (car r2)))
                   (new-r2 (nanopass-cons-sharing r2 new-val (cdr r2)))
+                  (new-r1 (nanopass-cons-sharing r1 (car r1) new-r2)))
+             (nanopass-cons-sharing ir op new-r1)))
+          ((%cont-fun)
+           (let* ((r1 (cdr ir))
+                  (r2 (cdr r1))
+                  (new-bodies (nanopass-map-sharing call-recurse (cdr r2)))
+                  (new-r2 (nanopass-cons-sharing r2 (car r2) new-bodies))
                   (new-r1 (nanopass-cons-sharing r1 (car r1) new-r2)))
              (nanopass-cons-sharing ir op new-r1)))
           ((%program)
@@ -4932,11 +4949,25 @@
               (cons 'list extra-in)
               (list 'quote extra-out)))))
 
+;;; Parse optional :order keyword from fuse-rules specification list.
+;;; Returns (cons order-sym clean-specs) where order-sym is 'pre or 'post.
+(define (nanopass-parse-fuse-rules-specs specs)
+  (let ((flat (if (and (= (length specs) 1) (list? (car specs)))
+                  (car specs)
+                  specs)))
+    (if (and (pair? flat)
+             (pair? (cdr flat))
+             (memq (car flat) '(:order order)))
+        (let ((ord (cadr flat))
+              (rest (cddr flat)))
+          (if (or (eq? ord 'post) (eq? ord ':post) (equal? ord ''post))
+              (cons 'post rest)
+              (cons 'pre rest)))
+        (cons 'pre flat))))
+
 ;;; Extract expanded clauses from a list of rule names or descriptors
 (define (nanopass-extract-fused-clauses specs nt-name)
-  (let ((flat-specs (if (and (= (length specs) 1) (list? (car specs)))
-                        (car specs)
-                        specs)))
+  (let ((flat-specs (cdr (nanopass-parse-fuse-rules-specs specs))))
     (let loop ((rem flat-specs) (acc '()))
       (if (null? rem)
           (reverse acc)
@@ -5107,14 +5138,14 @@
                           ir-var)))
     (list entry-name (list 'lambda in-arg-list body-expr))))
 
-;;; Flatten NT rules: inline (fuse-rules ...) and (fuse-tree-rules ...),
+;;; Flatten NT rules: inline (fuse-rules ...), (fuse-tree-rules ...), and (fuse-post-rules ...),
 ;;; and expand regular rules
 (define (nanopass-flatten-nt-rules raw-rules nt-name)
   (let loop ((rem raw-rules) (acc '()))
     (cond
       ((null? rem)
        (reverse acc))
-      ((and (pair? (car rem)) (memq (caar rem) '(fuse-rules fuse-tree-rules)))
+      ((and (pair? (car rem)) (memq (caar rem) '(fuse-rules fuse-tree-rules fuse-post-rules)))
        (let* ((specs (cdar rem))
               (fused-clauses (nanopass-extract-fused-clauses specs nt-name)))
          (loop (cdr rem) (append (reverse fused-clauses) acc))))
@@ -5122,11 +5153,31 @@
        (let* ((specs (cdar rem))
               (fused-clauses (nanopass-extract-fused-window-rules specs)))
          (loop (cdr rem) (append (reverse fused-clauses) acc))))
-      ((and (pair? (car rem)) (memq (caar rem) '(redispatch :redispatch)))
+      ((and (pair? (car rem)) (memq (caar rem) '(redispatch :redispatch :order order)))
        (loop (cdr rem) acc))
       (else
        (let ((expanded (nanopass-expand-rule (car rem) nt-name #f)))
          (loop (cdr rem) (cons expanded acc)))))))
+
+;;; Detect rule application order ('pre or 'post) from NT rules
+(define (nanopass-nt-rules-detect-order raw-rules)
+  (let loop ((rem raw-rules))
+    (cond
+      ((null? rem) 'pre)
+      ((and (pair? (car rem)) (eq? (caar rem) 'fuse-post-rules))
+       'post)
+      ((and (pair? (car rem)) (memq (caar rem) '(fuse-rules fuse-tree-rules)))
+       (let ((parsed (nanopass-parse-fuse-rules-specs (cdar rem))))
+         (if (eq? (car parsed) 'post)
+             'post
+             (loop (cdr rem)))))
+      ((and (pair? (car rem)) (memq (caar rem) '(:order order)) (pair? (cdar rem)))
+       (let ((ord (cadar rem)))
+         (if (or (eq? ord 'post) (eq? ord ':post) (equal? ord ''post))
+             'post
+             (loop (cdr rem)))))
+      (else
+       (loop (cdr rem))))))
 
 ;;; Group rule descriptors by target NT name for top-level fuse-rules
 (define (nanopass-group-rules-by-nt specs default-nt)
@@ -5151,50 +5202,57 @@
 
 ;;; Build cascaded dispatch expression for nonterminal transformer rules
 ;;; Incorporates O(1) Head-Tag bucketing (case dispatch), pair fallback, atom fast-path,
-;;; and Local Re-dispatch with bounded fuel counter (Fuel Guard, DSN-33-01 T3.2).
-(define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
+;;; Local Re-dispatch with bounded fuel counter (Fuel Guard, DSN-33-01 T3.2),
+;;; and traversal order ('pre top-down vs 'post bottom-up).
+(define (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? order)
   (let* ((ir-var (car in-arg-list))
-         (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out)))
+         (post? (eq? order 'post))
+         (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out))
+         (leaf-fallback (if post? ir-var cata-call)))
     (if (or (null? rules) (eq? l-out '*) (not enable-redispatch?))
         (let* ((partitioned (nanopass-partition-rules rules))
                (buckets (car partitioned))
                (pair-fallbacks (cadr partitioned))
                (atom-rules (caddr partitioned))
-               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name cata-call #f #f))
-               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name cata-call #f #f)))
-          (if (null? buckets)
-              (if (and (null? pair-fallbacks) (null? atom-rules))
-                  cata-call
-                  (if (equal? pair-fallbacks atom-rules)
-                      pair-fallback-expr
-                      (list 'if (list 'pair? ir-var)
+               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback #f #f))
+               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback #f #f))
+               (core-expr
+                (if (null? buckets)
+                    (if (and (null? pair-fallbacks) (null? atom-rules))
+                        leaf-fallback
+                        (if (equal? pair-fallbacks atom-rules)
                             pair-fallback-expr
-                            atom-fallback-expr)))
-              (let ((case-expr
-                     (cons 'case
-                           (cons (list 'car ir-var)
-                                 (append (map (lambda (b)
-                                                (list (list (car b))
-                                                      (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr #f #f)))
-                                              buckets)
-                                         (list (list 'else pair-fallback-expr)))))))
-                (list 'if (list 'pair? ir-var)
-                      (list 'if (list 'symbol? (list 'car ir-var))
-                            case-expr
-                            pair-fallback-expr)
-                      atom-fallback-expr))))
+                            (list 'if (list 'pair? ir-var)
+                                  pair-fallback-expr
+                                  atom-fallback-expr)))
+                    (let ((case-expr
+                           (cons 'case
+                                 (cons (list 'car ir-var)
+                                       (append (map (lambda (b)
+                                                      (list (list (car b))
+                                                            (nanopass-compile-rule-list (cdr b) ir-var nt-name pair-fallback-expr #f #f)))
+                                                    buckets)
+                                               (list (list 'else pair-fallback-expr)))))))
+                      (list 'if (list 'pair? ir-var)
+                            (list 'if (list 'symbol? (list 'car ir-var))
+                                  case-expr
+                                  pair-fallback-expr)
+                            atom-fallback-expr)))))
+          (if post?
+              (list 'let (list (list ir-var cata-call)) core-expr)
+              core-expr))
         (let* ((loop-var (unique-symbol "__redispatch_loop_"))
                (fuel-var (unique-symbol "__fuel_"))
                (partitioned (nanopass-partition-rules rules))
                (buckets (car partitioned))
                (pair-fallbacks (cadr partitioned))
                (atom-rules (caddr partitioned))
-               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name cata-call loop-var fuel-var))
-               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name cata-call loop-var fuel-var))
+               (pair-fallback-expr (nanopass-compile-rule-list pair-fallbacks ir-var nt-name leaf-fallback loop-var fuel-var))
+               (atom-fallback-expr (nanopass-compile-rule-list atom-rules ir-var nt-name leaf-fallback loop-var fuel-var))
                (cascade-body
                 (if (null? buckets)
                     (if (and (null? pair-fallbacks) (null? atom-rules))
-                        cata-call
+                        leaf-fallback
                         (if (equal? pair-fallbacks atom-rules)
                             pair-fallback-expr
                             (list 'if (list 'pair? ir-var)
@@ -5212,16 +5270,23 @@
                             (list 'if (list 'symbol? (list 'car ir-var))
                                   case-expr
                                   pair-fallback-expr)
-                            atom-fallback-expr)))))
-          (list 'letrec
-                (list (list loop-var
-                            (list 'lambda (list ir-var fuel-var)
-                                  (list 'if (list '<= fuel-var 0)
-                                        (list (string->symbol "picopass-fail")
-                                              "nanopass: local re-dispatch fuel exhausted on node"
-                                              ir-var)
-                                        cascade-body))))
-                (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))))
+                            atom-fallback-expr))))
+               (redispatch-expr
+                (list 'letrec
+                      (list (list loop-var
+                                  (list 'lambda (list ir-var fuel-var)
+                                        (list 'if (list '<= fuel-var 0)
+                                              (list (string->symbol "picopass-fail")
+                                                    "nanopass: local re-dispatch fuel exhausted on node"
+                                                    ir-var)
+                                              cascade-body))))
+                      (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
+          (if post?
+              (list 'let (list (list ir-var cata-call)) redispatch-expr)
+              redispatch-expr)))))
+
+(define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
+  (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? 'pre))
 
 ;;; Normalize rules whether passed as list of rules or single wrapped list
 (define (nanopass-normalize-rules raw-rules)
@@ -5266,7 +5331,10 @@
         (reverse acc)
         (let ((c (car rem)))
           (cond
-            ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules fuse-window-rules)))
+            ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules fuse-post-rules)))
+             (let ((flat (cdr (nanopass-parse-fuse-rules-specs (cdr c)))))
+               (loop (cdr rem) (append (reverse flat) acc))))
+            ((and (pair? c) (eq? (car c) 'fuse-window-rules))
              (let* ((specs (cdr c))
                     (flat (if (and (= (length specs) 1) (list? (car specs))) (car specs) specs)))
                (loop (cdr rem) (append (reverse flat) acc))))
@@ -5276,7 +5344,10 @@
                (let in-loop ((rs raw-rules) (in-acc acc))
                  (cond
                    ((null? rs) (loop (cdr rem) in-acc))
-                   ((and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules fuse-window-rules)))
+                   ((and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules fuse-post-rules)))
+                    (let ((fl (cdr (nanopass-parse-fuse-rules-specs (cdar rs)))))
+                      (in-loop (cdr rs) (append (reverse fl) in-acc))))
+                   ((and (pair? (car rs)) (eq? (caar rs) 'fuse-window-rules))
                     (let* ((sp (cdar rs))
                            (fl (if (and (= (length sp) 1) (list? (car sp))) (car sp) sp)))
                       (in-loop (cdr rs) (append (reverse fl) in-acc))))
@@ -5361,10 +5432,11 @@
               ;; (entry EntryNT)
               ((and (pair? c) (eq? (car c) 'entry))
                (loop (cdr rest) defs nt-procs (cadr c)))
-              ;; (fuse-rules r1 r2 ...) or (fuse-tree-rules r1 r2 ...) at top-level
-              ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules)))
-               (let* ((specs (cdr c))
-                      (flat-specs (if (and (= (length specs) 1) (list? (car specs))) (car specs) specs))
+              ;; (fuse-rules [:order post] r1 r2 ...), (fuse-tree-rules ...), or (fuse-post-rules ...) at top-level
+              ((and (pair? c) (memq (car c) '(fuse-rules fuse-tree-rules fuse-post-rules)))
+               (let* ((parsed-specs (nanopass-parse-fuse-rules-specs (cdr c)))
+                      (order (if (eq? (car c) 'fuse-post-rules) 'post (car parsed-specs)))
+                      (flat-specs (cdr parsed-specs))
                       (groups (nanopass-group-rules-by-nt flat-specs (if entry-nt entry-nt 'Expr))))
                  (let group-loop ((gs groups) (cur-procs nt-procs) (cur-entry entry-nt))
                    (if (null? gs)
@@ -5372,7 +5444,7 @@
                        (let* ((g (car gs))
                               (g-nt (car g))
                               (g-clauses (cdr g))
-                              (body-expr (nanopass-build-rules-cascade g-clauses l-in l-out g-nt in-arg-list extra-out #t))
+                              (body-expr (nanopass-build-rules-cascade-with-order g-clauses l-in l-out g-nt in-arg-list extra-out #t order))
                               (proc-binding (list g-nt (list 'lambda in-arg-list body-expr))))
                          (group-loop (cdr gs)
                                      (cons proc-binding cur-procs)
@@ -5415,10 +5487,11 @@
                      (let* ((has-fused?
                              (let check ((rs raw-rules))
                                (and (pair? rs)
-                                    (or (and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules redispatch :redispatch)))
+                                    (or (and (pair? (car rs)) (memq (caar rs) '(fuse-rules fuse-tree-rules fuse-post-rules redispatch :redispatch)))
                                         (check (cdr rs))))))
+                            (nt-order (nanopass-nt-rules-detect-order raw-rules))
                             (expanded-rules (nanopass-flatten-nt-rules raw-rules nt-name))
-                            (body-expr (nanopass-build-rules-cascade expanded-rules l-in nt-out nt-name nt-in-args (if (pair? nt-extra-out) nt-extra-out extra-out) has-fused?))
+                            (body-expr (nanopass-build-rules-cascade-with-order expanded-rules l-in nt-out nt-name nt-in-args (if (pair? nt-extra-out) nt-extra-out extra-out) has-fused? nt-order))
                             (proc-binding (list nt-name (list 'lambda nt-in-args body-expr))))
                        (loop (cdr rest)
                              defs
@@ -5582,13 +5655,20 @@
                      (recurse-binding
                       (list 'femto-recurse
                             (list 'lambda recurse-params
-                                  (cons name recurse-params)))))
-                (list 'letrec (list recurse-binding)
-                      cascade))
+                                  (cons name recurse-params))))
+                     (inner-body (list 'letrec (list recurse-binding) cascade)))
+                (if (null? in-attrs)
+                    (list (string->symbol "femto-get-cached-attr")
+                          (list 'quote name)
+                          'ir
+                          (list 'lambda '() inner-body))
+                    inner-body))
               cascade)))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
     (if opt-mandatory
         (register-mandatory-picopass! name))
+    (if (and (eq? rule-kind 'femto) (pair? reads))
+        (femto-register-attr-dependencies! name reads))
     (nanopass-register-rule!
       (nanopass-make-rule-descriptor name rule-kind nt-name head-tags reads writes eliminates expanded-rules #f))
     (cons 'begin
@@ -5609,10 +5689,16 @@
                   (list (string->symbol "nanopass-rule-set-proc!") desc-var name)
                   (list (string->symbol "nanopass-register-rule!") desc-var))
             (append
-              (if opt-mandatory
-                  (list (list (string->symbol "register-mandatory-picopass!") (list 'quote name)))
+              (if (and (eq? rule-kind 'femto) (pair? reads))
+                  (list (list (string->symbol "femto-register-attr-dependencies!")
+                              (list 'quote name)
+                              (list 'quote reads)))
                   '())
-              (list (list 'quote name)))))))
+              (append
+                (if opt-mandatory
+                    (list (list (string->symbol "register-mandatory-picopass!") (list 'quote name)))
+                    '())
+                (list (list 'quote name))))))))
 
 (define (nanopass-expand-define-picopass form)
   (nanopass-expand-rule-dsl form 'pico))
@@ -10967,6 +11053,14 @@
     ((%make-closure-env ,tag ,es ...)
      (let loop ((rest es))
        (and (pair? rest) (or (Expr (car rest) var) (loop (cdr rest))))))
+    ((%cont-fun ,f-name (,params ...) ,f-body ,in-body)
+     (if (eq? f-name var)
+         #f
+         (or (if (memq var params) #f (Expr f-body var))
+             (Expr in-body var))))
+    ((%cont-call ,target ,es ...)
+     (let loop ((rest es))
+       (and (pair? rest) (or (Expr (car rest) var) (loop (cdr rest))))))
     ((%with-handler ,h ,body)
      (or (Expr h var) (Expr body var)))
     ((%raw-call/cc ,arg)
@@ -11033,6 +11127,13 @@
               (tail-calls-only-impl body var tail?))))
     ((lambda (,params ...) ,body)
      (if (memq var params) #t (tail-calls-only-impl body var #t)))
+    ((%cont-fun ,f-name (,params ...) ,f-body ,in-body)
+     (if (eq? f-name var)
+         #t
+         (and (if (memq var params) #t (tail-calls-only-impl f-body var tail?))
+              (tail-calls-only-impl in-body var tail?))))
+    ((%cont-call ,target ,es ...)
+     (all-non-tail es var))
     ((%with-handler ,h ,body)
      (and (tail-calls-only-impl h var #f) (tail-calls-only-impl body var #f)))
     ((%raw-call/cc ,arg)
@@ -11831,17 +11932,53 @@
         (loop (cdr x) (cdr e) (cons (list (car x) (car e)) acc)))))
 
 ;;; -----------------------------------------------------------------------
+;;; Guard predicates for CP0 Picopass rules (preserving eq? sharing)
+;;; -----------------------------------------------------------------------
+(define (cp0-can-flatten-begin? es)
+  (and (pair? es)
+       (or (null? (cdr es))
+           (let loop ((rest es))
+             (and (pair? rest)
+                  (or (and (pair? (car rest)) (eq? (caar rest) 'begin))
+                      (loop (cdr rest))))))))
+
+(define (cp0-has-dead-let-binding? x* e* body)
+  (or (null? x*)
+      (let ((body-frees (free-vars body '())))
+        (let loop ((xs x*) (es e*))
+          (and (pair? xs) (pair? es)
+               (or (and (pure-expr? (car es))
+                        (not (memq (car xs) body-frees)))
+                   (loop (cdr xs) (cdr es))))))))
+
+(define (cp0-has-dead-letrec-binding? x* e* body)
+  (let* ((bindings (cp0-zip-bindings x* e*))
+         (reduced (dce-letrec bindings body)))
+    (not (and (pair? reduced)
+              (eq? (car reduced) 'letrec)
+              (eq? (caddr reduced) body)
+              (= (length (cadr reduced)) (length bindings))))))
+
+(define (cp0-call-values-reducible? p c)
+  (or (and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
+           (pair? (caddr p)) (memq (car (caddr p)) '(%values values))
+           (pair? c) (eq? (car c) 'lambda) (list? (cadr c))
+           (= (length (cdr (caddr p))) (length (cadr c))))
+      (and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
+           (not (and (pair? (caddr p)) (memq (car (caddr p)) '(%values values))))
+           (pair? c) (eq? (car c) 'lambda) (list? (cadr c))
+           (= (length (cadr c)) 1))))
+
+;;; -----------------------------------------------------------------------
 ;;; First-Class Picopass Rules for CP0 Optimization (DSN-33-01 T5.2)
 ;;; -----------------------------------------------------------------------
 
 (define-picopass rule-cp0-prune-if-3
   :reads '(if) :writes '(if)
   (Expr
-    ((if ,test ,then ,else-val)
-     (if (const? test)
-         (let ((v (extract-const-val test)))
-           (if (eq? v #f) else-val then))
-         #f))))
+    ((if ,test ,then ,else-val) (guard (const? test))
+     (let ((v (extract-const-val test)))
+       (if (eq? v #f) else-val then)))))
 
 (define-picopass rule-cp0-prune-if-2
   :reads '(if) :writes '(if)
@@ -11850,23 +11987,22 @@
      (if (const? test)
          (let ((v (extract-const-val test)))
            (if (eq? v #f) #f then))
-         #f))))
+         (list 'if test then #f)))))
 
 (define-picopass rule-cp0-flatten-begin
   :reads '(begin) :writes '(begin)
   (Expr
-    ((begin ,es ...)
+    ((begin ,es ...) (guard (cp0-can-flatten-begin? es))
      (let ((flat (cp0-flatten-begin-list es)))
        (cond
-         ((null? flat) #f)
+         ((null? flat) '(begin))
          ((null? (cdr flat)) (car flat))
-         ((equal? flat es) #f)
          (else (cons 'begin flat)))))))
 
 (define-picopass rule-cp0-dead-let
   :reads '(let) :writes '(let)
   (Expr
-    ((let ((,x* ,e*) ...) ,body)
+    ((let ((,x* ,e*) ...) ,body) (guard (cp0-has-dead-let-binding? x* e* body))
      (let* ((bindings (cp0-zip-bindings x* e*))
             (body-frees (free-vars body '()))
             (kept (filter (lambda (b)
@@ -11875,49 +12011,36 @@
                           bindings)))
        (if (null? kept)
            body
-           (if (= (length kept) (length bindings))
-               (list 'let bindings body)
-               (list 'let kept body)))))))
+           (list 'let kept body))))))
 
 (define-picopass rule-cp0-dead-letrec
   :reads '(letrec) :writes '(letrec)
   (Expr
-    ((letrec ((,x* ,e*) ...) ,body)
+    ((letrec ((,x* ,e*) ...) ,body) (guard (cp0-has-dead-letrec-binding? x* e* body))
      (let ((bindings (cp0-zip-bindings x* e*)))
        (dce-letrec bindings body)))))
 
 (define-picopass rule-cp0-call-values
   :reads '(%call-with-values) :writes '(let)
   (Expr
-    ((%call-with-values ,producer ,consumer)
+    ((%call-with-values ,producer ,consumer) (guard (cp0-call-values-reducible? producer consumer))
      (let ((p producer) (c consumer))
-       (cond
-         ((and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
-               (pair? (caddr p)) (memq (car (caddr p)) '(%values values))
-               (pair? c) (eq? (car c) 'lambda) (list? (cadr c))
-               (= (length (cdr (caddr p))) (length (cadr c))))
-          (let* ((vals (cdr (caddr p)))
-                 (vars (cadr c))
-                 (cbody (caddr c))
-                 (bindings (cp0-zip-bindings vars vals)))
-            (list 'let bindings cbody)))
-         ((and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
-               (not (and (pair? (caddr p)) (memq (car (caddr p)) '(%values values))))
-               (pair? c) (eq? (car c) 'lambda) (list? (cadr c))
-               (= (length (cadr c)) 1))
-          (let ((val (caddr p))
-                (var (car (cadr c)))
-                (cbody (caddr c)))
-            (list 'let (list (list var val)) cbody)))
-         (else #f))))))
+       (if (and (pair? (caddr p)) (memq (car (caddr p)) '(%values values)))
+           (let* ((vals (cdr (caddr p)))
+                  (vars (cadr c))
+                  (cbody (caddr c))
+                  (bindings (cp0-zip-bindings vars vals)))
+             (list 'let bindings cbody))
+           (let ((val (caddr p))
+                 (var (car (cadr c)))
+                 (cbody (caddr c)))
+             (list 'let (list (list var val)) cbody)))))))
 
 (define-picopass rule-cp0-const-fold
   :reads '() :writes '()
   (Expr
-    ((,op ,args ...)
-     (if (symbol? op)
-         (fold-const-op op args)
-         #f))))
+    ((,op ,args ...) (guard (and (symbol? op) (fold-const-op op args)))
+     (fold-const-op op args))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: cp0-opt
@@ -11925,78 +12048,21 @@
 ;;; -----------------------------------------------------------------------
 (define-pass cp0-opt : L_core (ir) -> L_core ()
   (Expr : Expr (ir) -> Expr ()
-    ((quote ,datum)
-     ir)
-    ((if ,test ,then ,else-val)
-     (let ((opt-test (Expr test))
-           (opt-then (Expr then))
-           (opt-else (Expr else-val)))
-       (or (rule-cp0-prune-if-3 (list 'if opt-test opt-then opt-else))
-           (list 'if opt-test opt-then opt-else))))
-    ((if ,test ,then)
-     (let ((opt-test (Expr test))
-           (opt-then (Expr then)))
-       (or (rule-cp0-prune-if-2 (list 'if opt-test opt-then))
-           (list 'if opt-test opt-then #f))))
-    ((begin ,es ...)
-     (let* ((opt-es (map Expr es)))
-       (or (rule-cp0-flatten-begin (cons 'begin opt-es))
-           (cons 'begin opt-es))))
-    ((let ((,x* ,e*) ...) ,body)
-     (let* ((opt-e* (map Expr e*))
-            (opt-body (Expr body)))
-       (or (rule-cp0-dead-let (list 'let (cp0-zip-bindings x* opt-e*) opt-body))
-           (list 'let (cp0-zip-bindings x* opt-e*) opt-body))))
-    ((letrec ((,x* ,e*) ...) ,body)
-     (let* ((opt-e* (map Expr e*))
-            (opt-body (Expr body)))
-       (or (rule-cp0-dead-letrec (list 'letrec (cp0-zip-bindings x* opt-e*) opt-body))
-           (list 'letrec (cp0-zip-bindings x* opt-e*) opt-body))))
-    ((lambda (,params ...) ,body)
-     (list 'lambda params (Expr body)))
-    ((%make-closure ,tag ,es ...)
-     (cons '%make-closure (cons tag (map Expr es))))
-    ((%make-closure-env ,tag ,es ...)
-     (cons '%make-closure-env (cons tag (map Expr es))))
-    ((%with-handler ,h ,body)
-     (list '%with-handler (Expr h) (Expr body)))
-    ((%raw-call/cc ,arg)
-     (list '%raw-call/cc (Expr arg)))
-    ((%call-with-values ,producer ,consumer)
-     (let ((p (Expr producer))
-           (c (Expr consumer)))
-       (or (let ((v-res (rule-cp0-call-values (list '%call-with-values p c))))
-             (and v-res (Expr v-res)))
-           (list '%call-with-values p c))))
-    ((%values ,es ...)
-     (cons '%values (map Expr es)))
-    ((,op ,args ...)
-     (let* ((opt-op (if (symbol? op) op (Expr op)))
-            (opt-args (map Expr args)))
-       (or (and (symbol? opt-op) (rule-cp0-const-fold (cons opt-op opt-args)))
-           (cons opt-op opt-args))))))
+    (fuse-rules :order post
+      rule-cp0-prune-if-3
+      rule-cp0-prune-if-2
+      rule-cp0-flatten-begin
+      rule-cp0-dead-let
+      rule-cp0-dead-letrec
+      rule-cp0-call-values
+      rule-cp0-const-fold)))
 
 (define (cp0-expr expr)
   (cp0-opt expr))
 
 ;;; Top-level entrypoint for CP0 optimization
 (define (cp0-optimize form)
-  (cond
-    ((not (pair? form)) form)
-    ((eq? (car form) '%program)
-     (let ((defs (cadr form))
-           (main (caddr form)))
-       (list '%program
-             (map (lambda (d)
-                    (if (and (pair? d) (eq? (car d) 'define))
-                        (list 'define (cadr d) (cp0-expr (caddr d)))
-                        (cp0-expr d)))
-                  defs)
-             (cp0-expr main))))
-    ((eq? (car form) 'define)
-     (list 'define (cadr form) (cp0-expr (caddr form))))
-    (else
-     (cp0-expr form))))
+  (cp0-opt form))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3b: Extended Local Value Numbering (LVN) Nanopass
 ;;; Conforms to DSN-33 Architecture Specification (Section 8.2) & Issue #521
@@ -14094,48 +14160,6 @@
 (define (contify-calls var expr)
   (contify-subst expr var))
 
-;;; Recursively transforms an expression, converting eligible letrec bindings into %cont-fun.
-(define (contify-expr expr)
-  (cond
-    ((not (pair? expr)) expr)
-    (else
-     (let ((op (car expr)))
-       (case op
-         ((quote) expr)
-         ((if)
-          (list 'if
-                (contify-expr (cadr expr))
-                (contify-expr (caddr expr))
-                (if (null? (cdddr expr)) #f (contify-expr (cadddr expr)))))
-         ((begin)
-          (cons 'begin (map contify-expr (cdr expr))))
-         ((let)
-          (let ((bindings (cadr expr))
-                (body (caddr expr)))
-            (list 'let
-                  (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
-                  (contify-expr body))))
-         ((letrec)
-          (let* ((bindings (cadr expr))
-                 (body (caddr expr)))
-            (contify-letrec bindings body)))
-         ((lambda)
-          (let ((params (cadr expr))
-                (body (caddr expr)))
-            (list 'lambda params (contify-expr body))))
-         ((%cont-fun)
-          (list '%cont-fun
-                (cadr expr)
-                (caddr expr)
-                (contify-expr (cadddr expr))
-                (contify-expr (cadr (cdddr expr)))))
-         ((%cont-call)
-          (cons '%cont-call
-                (cons (cadr expr)
-                      (map contify-expr (cddr expr)))))
-         (else
-          (map contify-expr expr)))))))
-
 (define (occurs-in-other-bindings? var bindings)
   (let loop ((bs bindings))
     (if (null? bs)
@@ -14175,58 +14199,39 @@
                  (loop (cdr xs) (cdr es) (cons v acc))
                  (loop (cdr xs) (cdr es) acc))))))))
 
+(define (contify-letrec-reducible? ir x* body)
+  (and (= (length x*) 1)
+       (has-call? (car x*) body)
+       (pair? (femto-contifiable? ir))))
+
 (define-picopass rule-contify-letrec
   :reads '(letrec) :writes '(%cont-fun)
   (Expr
-    ((letrec ((,x* ,e*) ...) ,body)
-     (if (= (length x*) 1)
-         (let ((var (car x*))
-               (val (car e*)))
-           (if (and (has-call? var body)
-                    (contifiable-binding? var val body))
-               (let* ((params (cadr val))
-                      (lbody (caddr val))
-                      (opt-lbody (contify-calls var lbody))
-                      (opt-body (contify-calls var body)))
-                 (list '%cont-fun var params
-                       (contify-expr opt-lbody)
-                       (contify-expr opt-body)))
-               #f))
-         #f))))
+    ((letrec ((,x* ,e*) ...) ,body) (guard (contify-letrec-reducible? ir x* body))
+     (let* ((contifiable-vars (femto-contifiable? ir))
+            (var (car contifiable-vars))
+            (val (car e*))
+            (params (cadr val))
+            (lbody (caddr val))
+            (opt-lbody (contify-calls var lbody))
+            (opt-body (contify-calls var body)))
+       (list '%cont-fun var params opt-lbody opt-body)))))
 
-;;; Processes a letrec form, lifting contifiable local bindings into %cont-fun wrappers.
-(define (contify-letrec bindings orig-body)
-  (or (rule-contify-letrec (list 'letrec bindings orig-body))
-      (if (= (length bindings) 1)
-          (let* ((b (car bindings))
-                 (var (car b))
-                 (val (cadr b)))
-            (list 'letrec
-                  (list (list var (contify-expr val)))
-                  (contify-expr orig-body)))
-          ;; Multi-binding letrec (top-level procedures or mutual recursion):
-          ;; Preserve letrec structure to maintain inter-procedure references,
-          ;; while recursively contifying local loops inside each procedure body.
-          (list 'letrec
-                (map (lambda (b) (list (car b) (contify-expr (cadr b)))) bindings)
-                (contify-expr orig-body)))))
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass: contify-opt
+;;; Bottom-up Contification using fused Picopass + Femtopass cache (DSN-33-01)
+;;; -----------------------------------------------------------------------
+(define-pass contify-opt : L_core (ir) -> L_core ()
+  (Expr : Expr (ir) -> Expr ()
+    (fuse-rules :order post
+      rule-contify-letrec)))
+
+(define (contify-expr expr)
+  (contify-opt expr))
 
 ;;; Pass 4c Entrypoint: Contification & local closure elimination across all expressions.
 (define (contify-all form)
-  (cond
-    ((not (pair? form)) form)
-    ((eq? (car form) '%program)
-     (let ((defs (cadr form))
-           (main (caddr form)))
-       (list '%program
-             (map (lambda (d)
-                    (if (and (pair? d) (eq? (car d) 'define))
-                        (list 'define (cadr d) (contify-expr (caddr d)))
-                        (contify-expr d)))
-                  defs)
-             (contify-expr main))))
-    (else
-     (contify-expr form))))
+  (contify-opt form))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3: Explicit Closure Conversion Nanopass
 ;;; Conforms to DSN-33 Architecture Specification

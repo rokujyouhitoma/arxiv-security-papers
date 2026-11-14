@@ -1707,6 +1707,80 @@
                                   (if (= n 0) acc (loop (- n 1) (+ acc n))))))
                    (loop 10 0))))
 
+;; 23.6 fuse-rules :order post (Bottom-Up Fusion) & Structural Sharing / Femto Cache
+(define-picopass rule-post-leaf
+  (Expr
+    ((p-leaf ,x) (list 'p-val x))))
+
+(define-picopass rule-post-wrap
+  (Expr
+    ((p-wrap (p-val ,x)) (list 'p-done x))))
+
+(define-picopass rule-post-peel
+  (Expr
+    ((p-done (p-done ,x)) (list 'p-done x))))
+
+(define-pass test-pass-pre-order-ref : L_src (ir) -> L_src ()
+  (fuse-rules rule-post-leaf rule-post-wrap))
+
+(define-pass test-pass-post-order-top : L_src (ir) -> L_src ()
+  (fuse-rules :order post rule-post-leaf rule-post-wrap rule-post-peel))
+
+(define-pass test-pass-post-order-nt : L_src (ir) -> L_src ()
+  (Expr : Expr (ir) -> Expr ()
+    (fuse-rules :order post rule-post-leaf rule-post-wrap rule-post-peel)))
+
+(assert-equal "pre-order fuse-rules only transforms child without re-matching parent pattern"
+              '(p-wrap (p-val 42))
+              (test-pass-pre-order-ref '(p-wrap (p-leaf 42))))
+
+(assert-equal "post-order fuse-rules (:order post) optimizes child then fires parent rule"
+              '(p-done 42)
+              (test-pass-post-order-top '(p-wrap (p-leaf 42))))
+
+(assert-equal "NT-level fuse-rules (:order post) cascades bottom-up with local re-dispatch"
+              '(p-done 99)
+              (test-pass-post-order-nt '(p-wrap (p-val (p-done (p-wrap (p-leaf 99)))))))
+
+;; Verify cp0-optimize eq? structural sharing on unchanged subtrees via :order post
+(let* ((untouched-call '(foo x y))
+       (unchanged-let (list 'let (list (list 'u untouched-call)) '(u 1)))
+       (res-unchanged (cp0-optimize unchanged-let))
+       (partial-let (list 'let (list (list 'u untouched-call)) '(+ 10 20)))
+       (res-partial (cp0-optimize partial-let)))
+  (assert-true "cp0-optimize preserves eq? identity on completely unchanged AST"
+               (eq? unchanged-let res-unchanged))
+  (assert-true "cp0-optimize preserves eq? sharing on untouched child subtree"
+               (eq? untouched-call (cadr (car (cadr res-partial)))))
+  (assert-equal "cp0-optimize reduces sibling branch bottom-up"
+                30
+                (caddr res-partial)))
+
+;; Verify define-femtopass cache integration & automatic tag invalidation
+(femto-cache-reset!)
+(let* ((sample-loop '(letrec ((lp (lambda (n) (if (= n 0) 0 (lp (- n 1)))))) (lp 5)))
+       (res1 (femto-contifiable? sample-loop))
+       (stats1 (femto-cache-stats))
+       (res2 (femto-contifiable? sample-loop))
+       (stats2 (femto-cache-stats)))
+  (assert-equal "femto-contifiable? detects contifiable binding on miss" '(lp) res1)
+  (assert-equal "femto-contifiable? returns identical cached list on hit" '(lp) res2)
+  (assert-equal "femto cache misses recorded on first call" 1 (cdr (assq 'misses stats1)))
+  (assert-equal "femto cache hits incremented on second call" 1 (cdr (assq 'hits stats2))))
+
+;; Verify contify-all exercises femto-contifiable? cache and invalidates rewritten node
+(femto-cache-reset!)
+(let* ((prog-loop '(letrec ((lp (lambda (n) (if (= n 0) 0 (lp (- n 1)))))) (lp 5)))
+       (opt (contify-all prog-loop))
+       (stats (femto-cache-stats)))
+  (assert-true "contify-all converts loop to %cont-fun via femto-contifiable?"
+               (and (pair? opt) (eq? (car opt) '%cont-fun)))
+  (assert-true "contify-all records femto cache hit during guard+body evaluation"
+               (>= (cdr (assq 'hits stats)) 1))
+  (assert-equal "record-picopass-firing! invalidates transformed letrec node from femto cache"
+                0
+                (cdr (assq 'entries stats))))
+
 ;;; =======================================================================
 ;;; Section 24: LIR Data Dependency DAG & Distance-Independent Store-Reload (DSN-33-01 T5.3)
 ;;; =======================================================================
