@@ -11,23 +11,23 @@
 
 (test-begin "ULisp C99 Backend Clang (macOS / Linux)")
 
-(define *clang-cmd* "clang")
+(define *c-compiler* (or (sys-getenv "CC") "clang"))
 
 (define (command-available? cmd)
   (let* ((res (sys-system (string-append "which " cmd " > /dev/null 2>&1"))))
     (= res 0)))
 
-(define *has-clang* (command-available? *clang-cmd*))
+(define *has-compiler* (command-available? *c-compiler*))
 
-(assert-true "Clang compiler available" *has-clang*)
+(assert-true "C compiler available" *has-compiler*)
 
 (define *test-counter* 0)
 (define (next-test-id!)
   (set! *test-counter* (+ *test-counter* 1))
   *test-counter*)
 
-(when *has-clang*
-  ;; Helper to compile Scheme expr to C, build with Clang, and run
+(when *has-compiler*
+  ;; Helper to compile Scheme expr to C, build with C compiler, and run
   (define (run-clang-c-test name expr env-vars)
     (let* ((tid (next-test-id!))
            (c-file (string-append "/tmp/ulisp_clang_" (number->string (sys-getpid)) "_" (number->string tid) ".c"))
@@ -44,8 +44,8 @@
         (lambda ()
           (emit-c lir 'none)))
 
-      ;; 2. Compile with Clang (-std=c99 -O2 -Wall -Wextra -Werror -pedantic)
-      (let* ((compile-cmd (string-append *clang-cmd* " -std=c99 -O2 -Wall -Wextra -Werror -pedantic "
+      ;; 2. Compile with C compiler (-std=c99 -O2 -Wall -Wextra -Werror -pedantic)
+      (let* ((compile-cmd (string-append *c-compiler* " -std=c99 -O2 -Wall -Wextra -Werror -pedantic "
                                          c-file " -o " bin-file " > " log-file " 2>&1"))
              (compile-res (sys-system compile-cmd)))
         (when (not (= compile-res 0))

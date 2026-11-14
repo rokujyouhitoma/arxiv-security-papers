@@ -21,11 +21,11 @@ jobs:
           - os: ubuntu-24.04
             cc: gcc
             test_target: test_c_clang
-            install_cmd: sudo apt-get update && sudo apt-get install -y gcc clang gauche
+            install_cmd: sudo apt-get update && sudo apt-get install -y gcc clang && curl -sL https://github.com/practical-scheme/setup-gauche-binary/releases/download/v1/gauche-binary-ubuntu-latest.tar.gz | sudo tar -xz -C /
           - os: ubuntu-24.04
             cc: clang
             test_target: test_c_clang
-            install_cmd: sudo apt-get update && sudo apt-get install -y gcc clang gauche
+            install_cmd: sudo apt-get update && sudo apt-get install -y gcc clang && curl -sL https://github.com/practical-scheme/setup-gauche-binary/releases/download/v1/gauche-binary-ubuntu-latest.tar.gz | sudo tar -xz -C /
           - os: macos-14 # Apple Silicon M1/M2 (ARM64)
             cc: clang
             test_target: test_c_clang
@@ -49,6 +49,8 @@ jobs:
 
       - name: Run Clang / GCC C99 Backend Tests
         if: runner.os != 'Windows'
+        env:
+          CC: ${{ matrix.cc }}
         run: |
           make -C ulisp ${{ matrix.test_target }}
         shell: bash
