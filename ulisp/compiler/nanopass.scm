@@ -164,6 +164,69 @@
 
 ;;; Compile a single expanded rule into an if-check with fallback.
 ;;; When loop-var and fuel-var are non-#f, performs Local Re-dispatch on rewritten nodes (DSN-33-01 T3.2).
+(define (nanopass-unquote-var? pat)
+  (and (pair? pat)
+       (eq? (car pat) 'unquote)
+       (pair? (cdr pat))
+       (symbol? (cadr pat))
+       (null? (cddr pat))))
+
+(define (nanopass-direct-matchable-pattern? pat)
+  (cond
+    ((eq? pat '_) #t)
+    ((symbol? pat) (not (eq? pat '...)))
+    ((null? pat) #t)
+    ((pair? pat)
+     (cond
+       ((eq? (car pat) 'unquote)
+        (nanopass-unquote-var? pat))
+       ((eq? (car pat) 'unquote-splicing) #f)
+       ((and (pair? (cdr pat)) (eq? (cadr pat) '...)) #f)
+       (else
+        (and (nanopass-direct-matchable-pattern? (car pat))
+             (nanopass-direct-matchable-pattern? (cdr pat))))))
+    (else #t)))
+
+(define (nanopass-compile-direct-pattern pat target-expr success-thunk)
+  (let ((root-var (unique-symbol "__dpr_")))
+    (letrec ((emit
+              (lambda (p cur bound k)
+                (cond
+                  ((eq? p '_)
+                   (k bound))
+                  ((nanopass-unquote-var? p)
+                   (let ((v (cadr p)))
+                     (if (memq v bound)
+                         (list 'if (list (string->symbol "equal?") cur v)
+                               (k bound)
+                               #f)
+                         (list 'let (list (list v cur))
+                               (k (cons v bound))))))
+                  ((symbol? p)
+                   (list 'if (list 'eq? cur (list 'quote p))
+                         (k bound)
+                         #f))
+                  ((null? p)
+                   (list 'if (list 'null? cur)
+                         (k bound)
+                         #f))
+                  ((not (pair? p))
+                   (list 'if (list (string->symbol "equal?") cur (list 'quote p))
+                         (k bound)
+                         #f))
+                  (else
+                   (let ((a-var (unique-symbol "__dpa_"))
+                         (d-var (unique-symbol "__dpd_")))
+                     (list 'if (list 'pair? cur)
+                           (list 'let (list (list a-var (list 'car cur))
+                                            (list d-var (list 'cdr cur)))
+                                 (emit (car p) a-var bound
+                                       (lambda (bound2)
+                                         (emit (cdr p) d-var bound2 k))))
+                           #f)))))))
+      (list 'let (list (list root-var target-expr))
+            (emit pat root-var '() (lambda (_bound) (success-thunk)))))))
+
 (define (nanopass-compile-single-rule-cascade r ir-var nt-name fallback-expr loop-var fuel-var)
   (let* ((pat (car r))
          (vars (cadr r))
@@ -171,6 +234,7 @@
          (body-expr (cadddr r))
          (rule-name (if (pair? (cddddr r)) (car (cddddr r)) #f))
          (m-var (unique-symbol "__m_"))
+         (direct? (nanopass-direct-matchable-pattern? pat))
          (body-with-firing
           (if rule-name
               (let ((res-val (unique-symbol "__rres_")))
@@ -181,53 +245,63 @@
                             res-val)
                       res-val))
               body-expr))
-         (wrapped-body
-          (if (and loop-var fuel-var)
-              (let ((res-var (unique-symbol "__rw_")))
-                (list 'let (list (list res-var body-with-firing))
-                      (list 'if (list 'or
-                                      (list 'eq? res-var ir-var)
-                                      (list (string->symbol "equal?") res-var ir-var))
-                            res-var
-                            (list loop-var res-var (list '- fuel-var 1)))))
-              body-with-firing))
+         (wrap-loop-result
+          (lambda (val-expr)
+            (if (and loop-var fuel-var)
+                (let ((res-var (unique-symbol "__rw_")))
+                  (list 'let (list (list res-var val-expr))
+                        (list 'if (list 'or
+                                        (list 'eq? res-var ir-var)
+                                        (list (string->symbol "equal?") res-var ir-var))
+                              res-var
+                              (list loop-var res-var (list '- fuel-var 1)))))
+                val-expr)))
          (cascade-core
-          (if (eq? guard-expr #t)
-              (list 'let (list (list m-var
-                                     (list (string->symbol "nanopass-match-clause")
-                                           (list 'quote pat)
-                                           ir-var
-                                           (list 'quote vars)
-                                           nt-name)))
-                    (list 'if m-var
-                          (nanopass-bind-matched-vars vars m-var wrapped-body)
-                          fallback-expr))
-              (let ((c-var (unique-symbol "__c_")))
-                (list 'let (list (list c-var
-                                       (list 'let (list (list m-var
-                                                              (list (string->symbol "nanopass-match-clause")
-                                                                    (list 'quote pat)
-                                                                    ir-var
-                                                                    (list 'quote vars)
-                                                                    nt-name)))
-                                              (list 'if m-var
-                                                    (nanopass-bind-matched-vars
-                                                     vars m-var
-                                                     (list 'if guard-expr
-                                                           (list 'cons #t body-with-firing)
-                                                           #f))
-                                                    #f))))
-                      (list 'if c-var
-                            (if (and loop-var fuel-var)
-                                (let ((res-var (unique-symbol "__rw_")))
-                                  (list 'let (list (list res-var (list 'cdr c-var)))
-                                        (list 'if (list 'or
-                                                        (list 'eq? res-var ir-var)
-                                                        (list (string->symbol "equal?") res-var ir-var))
-                                              res-var
-                                              (list loop-var res-var (list '- fuel-var 1)))))
-                                (list 'cdr c-var))
-                            fallback-expr))))))
+          (cond
+            (direct?
+             (let* ((c-var (unique-symbol "__dc_"))
+                    (match-expr
+                     (nanopass-compile-direct-pattern
+                      pat ir-var
+                      (lambda ()
+                        (if (eq? guard-expr #t)
+                            (list 'cons #t body-with-firing)
+                            (list 'if guard-expr
+                                  (list 'cons #t body-with-firing)
+                                  #f))))))
+               (list 'let (list (list c-var match-expr))
+                     (list 'if c-var
+                           (wrap-loop-result (list 'cdr c-var))
+                           fallback-expr))))
+            ((eq? guard-expr #t)
+             (list 'let (list (list m-var
+                                    (list (string->symbol "nanopass-match-clause")
+                                          (list 'quote pat)
+                                          ir-var
+                                          (list 'quote vars)
+                                          nt-name)))
+                   (list 'if m-var
+                         (nanopass-bind-matched-vars vars m-var (wrap-loop-result body-with-firing))
+                         fallback-expr)))
+            (else
+             (let ((c-var (unique-symbol "__c_")))
+               (list 'let (list (list c-var
+                                      (list 'let (list (list m-var
+                                                             (list (string->symbol "nanopass-match-clause")
+                                                                   (list 'quote pat)
+                                                                   ir-var
+                                                                   (list 'quote vars)
+                                                                   nt-name)))
+                                            (list 'if m-var
+                                                  (nanopass-bind-matched-vars
+                                                   vars m-var
+                                                   (list 'if guard-expr
+                                                         (list 'cons #t body-with-firing)
+                                                         #f))
+                                                  #f))))
+                     (list 'if c-var
+                           (wrap-loop-result (list 'cdr c-var))
+                           fallback-expr)))))))
     (if rule-name
         (list 'if (list (string->symbol "picopass-enabled?") (list 'quote rule-name))
               cascade-core
@@ -378,29 +452,41 @@
                           rres))
                   body-expr))
              (rule-core
-              (if (eq? guard-expr #t)
-                  (list 'let (list (list m-var
-                                         (list (string->symbol "nanopass-match-clause")
-                                               (list 'quote pat)
-                                               insts-var
-                                               (list 'quote vars)
-                                               '(lambda (x) x))))
-                        (list 'if m-var
-                              (nanopass-bind-matched-vars vars m-var (list 'cons #t body-with-firing))
-                              rest-chain))
-                  (list 'let (list (list m-var
-                                         (list (string->symbol "nanopass-match-clause")
-                                               (list 'quote pat)
-                                               insts-var
-                                               (list 'quote vars)
-                                               '(lambda (x) x))))
-                        (list 'if m-var
-                              (nanopass-bind-matched-vars
-                               vars m-var
-                               (list 'if guard-expr
-                                     (list 'cons #t body-with-firing)
-                                     rest-chain))
-                              rest-chain)))))
+              (if (nanopass-direct-matchable-pattern? pat)
+                  (let ((wres-var (unique-symbol "__wres_"))
+                        (success-expr
+                         (if (eq? guard-expr #t)
+                             (list 'cons #t body-with-firing)
+                             (list 'if guard-expr
+                                   (list 'cons #t body-with-firing)
+                                   #f))))
+                    (list 'let (list (list wres-var
+                                           (nanopass-compile-direct-pattern
+                                            pat insts-var (lambda () success-expr))))
+                          (list 'if wres-var wres-var rest-chain)))
+                  (if (eq? guard-expr #t)
+                      (list 'let (list (list m-var
+                                             (list (string->symbol "nanopass-match-clause")
+                                                   (list 'quote pat)
+                                                   insts-var
+                                                   (list 'quote vars)
+                                                   '(lambda (x) x))))
+                            (list 'if m-var
+                                  (nanopass-bind-matched-vars vars m-var (list 'cons #t body-with-firing))
+                                  rest-chain))
+                      (list 'let (list (list m-var
+                                             (list (string->symbol "nanopass-match-clause")
+                                                   (list 'quote pat)
+                                                   insts-var
+                                                   (list 'quote vars)
+                                                   '(lambda (x) x))))
+                            (list 'if m-var
+                                  (nanopass-bind-matched-vars
+                                   vars m-var
+                                   (list 'if guard-expr
+                                         (list 'cons #t body-with-firing)
+                                         rest-chain))
+                                  rest-chain))))))
         (if rule-name
             (list 'if (list (string->symbol "picopass-enabled?") (list 'quote rule-name))
                   rule-core
@@ -925,22 +1011,35 @@
                (pat (car r))
                (vars (cadr r))
                (guard-expr (caddr r))
-               (body-expr (cadddr r))
-               (m-var (unique-symbol "__m_")))
-          (list 'let (list (list m-var
-                                 (list (string->symbol "nanopass-match-clause")
-                                       (list 'quote pat)
-                                       ir-var
-                                       (list 'quote vars)
-                                       (list 'quote nt-name))))
-                (list 'if m-var
-                      (if (eq? guard-expr #t)
-                          (nanopass-bind-matched-vars vars m-var body-expr)
-                          (nanopass-bind-matched-vars vars m-var
-                                                      (list 'if guard-expr
-                                                            body-expr
-                                                            (loop (cdr rs)))))
-                      (loop (cdr rs))))))))
+               (body-expr (cadddr r)))
+          (if (nanopass-direct-matchable-pattern? pat)
+              (let ((c-var (unique-symbol "__dc_"))
+                    (tail-expr (loop (cdr rs))))
+                (list 'let (list (list c-var
+                                       (nanopass-compile-direct-pattern
+                                        pat ir-var
+                                        (lambda ()
+                                          (if (eq? guard-expr #t)
+                                              (list 'cons #t body-expr)
+                                              (list 'if guard-expr
+                                                    (list 'cons #t body-expr)
+                                                    #f))))))
+                      (list 'if c-var (list 'cdr c-var) tail-expr)))
+              (let ((m-var (unique-symbol "__m_")))
+                (list 'let (list (list m-var
+                                       (list (string->symbol "nanopass-match-clause")
+                                             (list 'quote pat)
+                                             ir-var
+                                             (list 'quote vars)
+                                             (list 'quote nt-name))))
+                      (list 'if m-var
+                            (if (eq? guard-expr #t)
+                                (nanopass-bind-matched-vars vars m-var body-expr)
+                                (nanopass-bind-matched-vars vars m-var
+                                                            (list 'if guard-expr
+                                                                  body-expr
+                                                                  (loop (cdr rs)))))
+                            (loop (cdr rs))))))))))
 
 (define (nanopass-expand-rule-dsl form default-kind)
   (let* ((parsed (nanopass-parse-rule-spec form default-kind))

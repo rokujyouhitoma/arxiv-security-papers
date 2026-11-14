@@ -2009,6 +2009,12 @@
 ;;; If matched, replaces prefix and performs local re-dispatch.
 ;;; If no match, advances window by 1 instruction.
 ;;; Returns (cons transformed-insts changed-boolean)
+(define (nanopass-rev-prefix-until list-start stop-cell)
+  (let loop ((p list-start) (acc '()))
+    (if (or (null? p) (eq? p stop-cell))
+        acc
+        (loop (cdr p) (cons (car p) acc)))))
+
 (define (nanopass-sliding-window-pass try-match-proc insts)
   (let loop ((rest insts)
              (acc '())
@@ -2016,17 +2022,22 @@
              (step-fuel *nanopass-window-step-limit*))
     (cond
       ((null? rest)
-       (cons (reverse acc) changed?))
+       (if changed?
+           (cons (reverse acc) #t)
+           (cons insts #f)))
       ((<= step-fuel 0)
-       (cons (append (reverse acc) rest) changed?))
+       (if changed?
+           (cons (append (reverse acc) rest) #t)
+           (cons insts #f)))
       (else
        (let ((m (try-match-proc rest)))
          (if (and (pair? m) (car m))
              (let ((new-suffix (cdr m)))
                (if (eq? new-suffix rest)
-                   (loop (cdr rest) (cons (car rest) acc) changed? step-fuel)
-                   (loop new-suffix acc #t (- step-fuel 1))))
-             (loop (cdr rest) (cons (car rest) acc) changed? step-fuel)))))))
+                   (loop (cdr rest) (if changed? (cons (car rest) acc) acc) changed? step-fuel)
+                   (let ((cur-acc (if changed? acc (nanopass-rev-prefix-until insts rest))))
+                     (loop new-suffix cur-acc #t (- step-fuel 1)))))
+             (loop (cdr rest) (if changed? (cons (car rest) acc) acc) changed? step-fuel)))))))
 
 ;;; Bounded fixpoint loop for sliding window optimizations
 (define (nanopass-sliding-window-fixpoint try-match-proc insts)
@@ -2052,7 +2063,9 @@
                         (cdr body-clause)
                         '()))
              (opt-insts (opt-proc insts)))
-        (list '%lir-function lbl params frame-size (cons 'body opt-insts)))
+        (if (eq? opt-insts insts)
+            f
+            (list '%lir-function lbl params frame-size (cons 'body opt-insts))))
       f))
 
 ;;; Optimize body instructions inside %lir-main
@@ -2064,7 +2077,9 @@
                         (cdr body-clause)
                         '()))
              (opt-insts (opt-proc insts)))
-        (list '%lir-main frame-size (cons 'body opt-insts)))
+        (if (eq? opt-insts insts)
+            m
+            (list '%lir-main frame-size (cons 'body opt-insts))))
       m))
 
 ;;; Dual-mode wrapper: handles %lir-program, %lir-function, %lir-main, or flat instruction lists
@@ -2538,9 +2553,14 @@
 
 (define (lir-peephole-reg? opnd)
   (and (symbol? opnd)
-       (let ((s (symbol->string opnd)))
-         (and (> (string-length s) 1)
-              (char=? (string-ref s 0) #\%)))))
+       (case opnd
+         ((%rax %rcx %rdx %rbx %rsp %rbp %rsi %rdi
+           %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)
+          #t)
+         (else
+          (let ((s (symbol->string opnd)))
+            (and (> (string-length s) 1)
+                 (char=? (string-ref s 0) #\%)))))))
 
 (define (lir-unconditional-terminator? inst)
   (and (pair? inst)

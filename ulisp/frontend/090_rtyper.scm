@@ -241,6 +241,13 @@
                      (loop (cdr as))))))
          (else #f))))))
 
+(define (rtyper-let-binds-var? name bindings)
+  (let loop ((bs bindings))
+    (cond
+      ((null? bs) #f)
+      ((and (pair? (car bs)) (eq? (caar bs) name)) #t)
+      (else (loop (cdr bs))))))
+
 (define (fn-escapes-in-expr? fn-name expr)
   (cond
     ((symbol? expr) (eq? expr fn-name))
@@ -257,7 +264,7 @@
            (if (null? bs) #f
                (or (fn-escapes-in-expr? fn-name (cadar bs))
                    (loop (cdr bs)))))
-         (if (memq fn-name (map car* (cadr expr)))
+         (if (rtyper-let-binds-var? fn-name (cadr expr))
              #f
              (fn-escapes-in-expr? fn-name (caddr expr)))))
     ((eq? (car expr) 'if)
@@ -298,51 +305,84 @@
 (define (pure-int-recursive-fn? fn-name params lbody body)
   (pure-int-known-fn? fn-name params lbody body '()))
 
+(define (rtyper-valid-int-params? params)
+  (and (pair? params)
+       (let loop ((ps params))
+         (cond
+           ((null? ps) #t)
+           ((and (pair? ps) (symbol? (car ps))) (loop (cdr ps)))
+           (else #f)))))
+
+(define (rtyper-all-params-occur? params lbody)
+  (let loop ((ps params))
+    (if (null? ps) #t
+        (and (occurs-in? (car ps) lbody)
+             (loop (cdr ps))))))
+
+(define (rtyper-prune-pure-cands active-cands known-pure-fns)
+  (let prune-loop ((cands active-cands))
+    (if (null? cands)
+        '()
+        (let* ((active-names (map car* cands))
+               (allowed-fns (append active-names known-pure-fns))
+               (survivors
+                (let filter-loop ((cs cands) (acc '()))
+                  (if (null? cs) (reverse acc)
+                      (let* ((c (car cs))
+                             (fn-name (car c))
+                             (params (cadr c))
+                             (lbody (caddr c)))
+                        (if (pure-int-expr? lbody (cons fn-name allowed-fns) params '() 0)
+                            (filter-loop (cdr cs) (cons c acc))
+                            (filter-loop (cdr cs) acc)))))))
+          (cond
+            ((null? survivors) '())
+            ((= (length survivors) (length cands)) survivors)
+            (else (prune-loop survivors)))))))
+
 ;;; Fixed-Point Iterative Pruning for Interprocedural Unboxing
+;;; Check local purity & self-escape BEFORE O(F*N) full-program escape scan.
 (define (find-pure-int-fns candidate-defs scope-exprs known-pure-fns)
-  (let* ((initial-cands
+  (let* ((param-cands
           (let loop ((cs candidate-defs) (acc '()))
+            (if (null? cs) (reverse acc)
+                (let ((c (car cs)))
+                  (if (rtyper-valid-int-params? (cadr c))
+                      (loop (cdr cs) (cons c acc))
+                      (loop (cdr cs) acc))))))
+         (init-allowed (append (map car* param-cands) known-pure-fns))
+         (local-cands
+          (let loop ((cs param-cands) (acc '()))
             (if (null? cs) (reverse acc)
                 (let* ((c (car cs))
                        (fn-name (car c))
                        (params (cadr c))
                        (lbody (caddr c)))
-                  (if (and (pair? params)
-                           (let occ-loop ((ps params))
-                             (cond
-                               ((null? ps) #t)
-                               ((not (pair? ps)) #f)
-                               (else
-                                (and (occurs-in? (car ps) lbody)
-                                     (occ-loop (cdr ps))))))
-                           (not (fn-escapes-in-expr? fn-name lbody))
-                           (not (let esc-loop ((es scope-exprs))
-                                  (if (null? es) #f
-                                      (or (fn-escapes-in-expr? fn-name (car es))
-                                          (esc-loop (cdr es)))))))
+                  (if (and (pure-int-expr? lbody (cons fn-name init-allowed) params '() 0)
+                           (rtyper-all-params-occur? params lbody)
+                           (not (fn-escapes-in-expr? fn-name lbody)))
                       (loop (cdr cs) (cons c acc))
-                      (loop (cdr cs) acc)))))))
-    (let prune-loop ((active-cands initial-cands))
-      (if (null? active-cands)
-          '()
-          (let* ((active-names (map car* active-cands))
-                 (allowed-fns (append active-names known-pure-fns))
-                 (survivors
-                  (let filter-loop ((cs active-cands) (acc '()))
-                    (if (null? cs) (reverse acc)
-                        (let* ((c (car cs))
-                               (fn-name (car c))
-                               (params (cadr c))
-                               (lbody (caddr c)))
-                          (if (pure-int-expr? lbody (cons fn-name allowed-fns) params '() 0)
-                              (filter-loop (cdr cs) (cons c acc))
-                              (filter-loop (cdr cs) acc)))))))
-            (cond
-              ((null? survivors) '())
-              ((= (length survivors) (length active-cands))
-               (map car* survivors))
-              (else
-               (prune-loop survivors))))))))
+                      (loop (cdr cs) acc))))))
+         (local-survivors (rtyper-prune-pure-cands local-cands known-pure-fns)))
+    (if (null? local-survivors)
+        '()
+        (let ((non-escaping
+               (let loop ((cs local-survivors) (acc '()))
+                 (if (null? cs) (reverse acc)
+                     (let* ((c (car cs))
+                            (fn-name (car c)))
+                       (if (let esc-loop ((es scope-exprs))
+                             (if (null? es) #f
+                                 (or (fn-escapes-in-expr? fn-name (car es))
+                                     (esc-loop (cdr es)))))
+                           (loop (cdr cs) acc)
+                           (loop (cdr cs) (cons c acc))))))))
+          (cond
+            ((null? non-escaping) '())
+            ((= (length non-escaping) (length local-survivors))
+             (map car* non-escaping))
+            (else
+             (map car* (rtyper-prune-pure-cands non-escaping known-pure-fns))))))))
 
 ;;; Ensures integer constants at exit branches of an unboxed-return function are raw
 (define (unbox-const-exit expr)
@@ -426,6 +466,28 @@
     (else
      (list op e1 e2))))
 
+(define (rtyper-standard-let-bindings op bindings body raw-env unboxed-fns)
+  (let* ((new-bindings
+          (map (lambda (b)
+                 (let ((v (car b)) (rhs (cadr b)))
+                   (if (and (pair? rhs) (memq (car rhs) '(fixnum? integer? number?))
+                            (pair? (cdr rhs)) (symbol? (cadr rhs)))
+                       (record-rtyper-fact! v (cadr rhs)))
+                   (list v (rtyper-expr-scoped rhs raw-env unboxed-fns))))
+               bindings))
+         ;; Extend raw-env with newly bound variables that hold raw values
+         (extended-raw-env
+          (let loop ((bs new-bindings) (acc raw-env))
+            (if (null? bs) acc
+                (let* ((b (car bs))
+                       (var (car b))
+                       (val (cadr b)))
+                  (if (rtyper-raw-value-expr? val acc)
+                      (loop (cdr bs) (cons var acc))
+                      (loop (cdr bs) acc))))))
+         (new-body (rtyper-expr-scoped body extended-raw-env unboxed-fns)))
+    (list op new-bindings new-body)))
+
 ;;; Recursively rewrites ANF AST to Typed LIR representation
 (define (rtyper-expr-scoped expr raw-env unboxed-fns)
     (cond
@@ -473,7 +535,7 @@
                     (= (length bindings) 1)
                     (pair? (cadar bindings))
                     (eq? (car (cadar bindings)) 'if)
-                    (<= (expr-size body) 40)
+                    (expr-size-le? body 40)
                     (let ((var (caar bindings)))
                       (expr-has-conditional-or-pred-on-var? body var)))
                (let* ((b (car bindings))
@@ -512,20 +574,7 @@
                         (new-fn-val (list 'lambda params boxed-lbody))
                         (new-body (rtyper-expr-scoped body raw-env inner-unboxed-fns)))
                    (list op (list (list fn-name new-fn-val)) new-body))))
-              ((and (eq? op 'letrec)
-                    (pair? bindings)
-                    (let* ((cand-defs
-                            (let loop ((bs bindings) (acc '()))
-                              (if (null? bs) (reverse acc)
-                                  (let* ((b (car bs))
-                                         (fn-name (car b))
-                                         (val (cadr b)))
-                                    (if (and (pair? val) (eq? (car val) 'lambda)
-                                             (pair? (cdr val)) (pair? (cddr val)))
-                                        (loop (cdr bs) (cons (list fn-name (cadr val) (caddr val)) acc))
-                                        (loop (cdr bs) acc))))))
-                           (unboxed-names (find-pure-int-fns cand-defs (list body) unboxed-fns)))
-                      (pair? unboxed-names)))
+              ((and (eq? op 'letrec) (pair? bindings))
                ;; Interprocedural Unboxing (int64_t -> int64_t) for pure integer functions in letrec
                (let* ((cand-defs
                        (let loop ((bs bindings) (acc '()))
@@ -537,50 +586,35 @@
                                         (pair? (cdr val)) (pair? (cddr val)))
                                    (loop (cdr bs) (cons (list fn-name (cadr val) (caddr val)) acc))
                                    (loop (cdr bs) acc))))))
-                      (unboxed-names (find-pure-int-fns cand-defs (list body) unboxed-fns))
-                      (inner-unboxed-fns (append unboxed-names unboxed-fns))
-                      (ext-unboxed-fns (append (map (lambda (f) (cons '%box-ret f)) unboxed-names) unboxed-fns)))
-                 (for-each (lambda (f)
-                             (record-unboxed-fn! f)
-                             (record-unboxed-ret-fn! f))
-                           unboxed-names)
-                 (let* ((new-bindings
-                         (map (lambda (b)
-                                (let* ((fn-name (car b))
-                                       (fn-val (cadr b)))
-                                  (if (memq fn-name unboxed-names)
-                                      (let* ((params (cadr fn-val))
-                                             (lbody (caddr fn-val))
-                                             (loop-raw-env (append params raw-env))
-                                             (typed-lbody (rtyper-expr-scoped lbody loop-raw-env inner-unboxed-fns))
-                                             (raw-lbody (unbox-const-exit typed-lbody)))
-                                        (list fn-name (list 'lambda params raw-lbody)))
-                                      (list fn-name (rtyper-expr-scoped fn-val raw-env ext-unboxed-fns)))))
-                              bindings))
-                        (new-body (rtyper-expr-scoped body raw-env ext-unboxed-fns)))
-                   (list op new-bindings new-body))))
+                      (unboxed-names
+                       (if (null? cand-defs)
+                           '()
+                           (find-pure-int-fns cand-defs (list body) unboxed-fns))))
+                 (if (pair? unboxed-names)
+                     (let ((inner-unboxed-fns (append unboxed-names unboxed-fns))
+                           (ext-unboxed-fns (append (map (lambda (f) (cons '%box-ret f)) unboxed-names) unboxed-fns)))
+                       (for-each (lambda (f)
+                                   (record-unboxed-fn! f)
+                                   (record-unboxed-ret-fn! f))
+                                 unboxed-names)
+                       (let* ((new-bindings
+                               (map (lambda (b)
+                                      (let* ((fn-name (car b))
+                                             (fn-val (cadr b)))
+                                        (if (memq fn-name unboxed-names)
+                                            (let* ((params (cadr fn-val))
+                                                   (lbody (caddr fn-val))
+                                                   (loop-raw-env (append params raw-env))
+                                                   (typed-lbody (rtyper-expr-scoped lbody loop-raw-env inner-unboxed-fns))
+                                                   (raw-lbody (unbox-const-exit typed-lbody)))
+                                              (list fn-name (list 'lambda params raw-lbody)))
+                                            (list fn-name (rtyper-expr-scoped fn-val raw-env ext-unboxed-fns)))))
+                                    bindings))
+                              (new-body (rtyper-expr-scoped body raw-env ext-unboxed-fns)))
+                         (list op new-bindings new-body)))
+                     (rtyper-standard-let-bindings op bindings body raw-env unboxed-fns))))
               (else
-               ;; Standard let bindings: propagate raw variables and record facts
-               (let* ((new-bindings
-                       (map (lambda (b)
-                              (let ((v (car b)) (rhs (cadr b)))
-                                (if (and (pair? rhs) (memq (car rhs) '(fixnum? integer? number?))
-                                         (pair? (cdr rhs)) (symbol? (cadr rhs)))
-                                    (record-rtyper-fact! v (cadr rhs)))
-                                (list v (rtyper-expr-scoped rhs raw-env unboxed-fns))))
-                            bindings))
-                      ;; Extend raw-env with newly bound variables that hold raw values
-                      (extended-raw-env
-                       (let loop ((bs new-bindings) (acc raw-env))
-                         (if (null? bs) acc
-                             (let* ((b (car bs))
-                                    (var (car b))
-                                    (val (cadr b)))
-                               (if (rtyper-raw-value-expr? val acc)
-                                   (loop (cdr bs) (cons var acc))
-                                   (loop (cdr bs) acc))))))
-                      (new-body (rtyper-expr-scoped body extended-raw-env unboxed-fns)))
-                 (list op new-bindings new-body))))))
+               (rtyper-standard-let-bindings op bindings body raw-env unboxed-fns)))))
          ((eq? op '-)
           (if (null? (cddr expr))
               (list '- (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns))

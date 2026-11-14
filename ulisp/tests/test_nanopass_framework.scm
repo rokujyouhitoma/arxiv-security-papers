@@ -1932,6 +1932,80 @@
     (assert-false "classify-meta-var returns #f for non-symbol"
                   (nanopass-classify-meta-var 123 l-core))))
 
+;;; =======================================================================
+;;; 26. Direct Pattern Compilation, Unchanged Window Sharing & expr-size-le? (Issue #816)
+;;; =======================================================================
+(display (string-append (string #\newline) "--- [Section 26: Direct Pattern Compilation & Window Sharing (#816)] ---" (string #\newline)))
+
+;; 26.1 nanopass-direct-matchable-pattern?
+(assert-true "direct-matchable accepts nested LIR window pattern"
+             (nanopass-direct-matchable-pattern? '((%mov ,r ,r) (%add _ 0) . ,rest)))
+(assert-true "direct-matchable accepts literals, wildcards, and null"
+             (nanopass-direct-matchable-pattern? '(const 42 _ ())))
+(assert-false "direct-matchable rejects ellipsis pattern"
+              (nanopass-direct-matchable-pattern? '(begin ,e ...)))
+(assert-false "direct-matchable rejects catamorphism pattern"
+              (nanopass-direct-matchable-pattern? '(if ,(c) ,(t) ,(e))))
+
+;; 26.2 Direct pattern compilation with fuse-window-rules (duplicate linearization, guards, wildcards)
+(define-picopass test-direct-guard-rule
+  (InstWindow
+    (((%add _ ,n) . ,rest)
+     (guard (> n 0))
+     (cons `(%pos-add ,n) rest))
+    (((%mov ,r ,r) . ,rest)
+     rest)))
+
+(define-pass test-pass-direct-window : L_lir_raw (lir) -> L_lir_canonical ()
+  (entry InstructionList)
+  (fuse-window-rules test-direct-guard-rule))
+
+(assert-equal "direct pattern matches guarded positive add and linearized duplicate mov"
+              '((%pos-add 5) (%add %rbx -3))
+              (test-pass-direct-window '((%add %rax 5) (%mov %rcx %rcx) (%add %rbx -3))))
+
+(assert-equal "direct pattern rejects non-equal duplicate register"
+              '((%mov %rax %rbx))
+              (test-pass-direct-window '((%mov %rax %rbx))))
+
+;; 26.3 Direct pattern preserves explicit #f return value in define-picopass
+(define-picopass test-direct-false-body
+  (Expr
+    ((check ,x) (eq? x 'ok))
+    ((check _) 'fallback)))
+
+(assert-equal "direct-compiled picopass returns #t on eq? ok"
+              #t
+              (test-direct-false-body '(check ok)))
+(assert-equal "direct-compiled picopass returns #f without falling through on mismatch"
+              #f
+              (test-direct-false-body '(check nope)))
+
+;; 26.4 nanopass-sliding-window-pass preserves eq? identity when unchanged and preserves prefix on match
+(let ((insts '((%mov %rax %rbx) (%add %rcx 1) (%ret))))
+  (let ((res-unchanged (nanopass-sliding-window-pass (lambda (xs) #f) insts)))
+    (assert-false "unchanged window pass reports #f changed flag" (cdr res-unchanged))
+    (assert-true "unchanged window pass preserves eq? spine without copying"
+                 (eq? (car res-unchanged) insts)))
+  (let ((res-changed
+         (nanopass-sliding-window-pass
+           (lambda (xs)
+             (if (and (pair? xs) (pair? (car xs)) (eq? (caar xs) '%add))
+                 (cons #t (cdr xs))
+                 #f))
+           insts)))
+    (assert-true "mid-list window match reports #t changed flag" (cdr res-changed))
+    (assert-equal "mid-list window match preserves prefix and suffix"
+                  '((%mov %rax %rbx) (%ret))
+                  (car res-changed))))
+
+;; 26.5 expr-size-le? bounded cutoff
+(assert-true "expr-size-le? matches exact atom count" (expr-size-le? '(a b) 5))
+(assert-false "expr-size-le? rejects one node above limit" (expr-size-le? '(a b) 4))
+(let ((deep (let loop ((i 0) (e 'x)) (if (= i 100) e (loop (+ i 1) (list 'f e))))))
+  (assert-false "expr-size-le? quickly rejects deep AST over budget 40"
+                (expr-size-le? deep 40)))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)
