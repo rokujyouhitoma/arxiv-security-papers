@@ -122,6 +122,58 @@
               'deep-copy
               (classify-capture-mode 'untyped-var '()))
 
+;; Static Boundary Warning for Untyped Variable Crossing (Issue #811)
+(reset-untyped-boundary-warnings!)
+(assert-equal "2.13 untyped variable emits warning and defaults to deep-copy"
+              'deep-copy
+              (classify-capture-mode 'raw-buf '() 'spawn-task))
+
+(assert-equal "2.14 warning list records raw-buf for spawn-task boundary"
+              '((raw-buf . spawn-task))
+              (untyped-boundary-warnings))
+
+(reset-untyped-boundary-warnings!)
+(assert-equal "2.15 inline (: my-buf deep-copy) suppresses warning"
+              'deep-copy
+              (classify-capture-mode '(: my-buf deep-copy)))
+(assert-equal "2.16 warning list remains empty on explicit deep-copy annotation"
+              '()
+              (untyped-boundary-warnings))
+
+(assert-equal "2.17 inline (: my-buf any) suppresses warning"
+              'deep-copy
+              (classify-capture-mode '(: my-buf any)))
+(assert-equal "2.18 warning list remains empty on explicit any annotation"
+              '()
+              (untyped-boundary-warnings))
+
+(let ((env-with-explicit-deep-copy '((explicit-buf . deep-copy))))
+  (assert-equal "2.19 type-env explicit deep-copy suppresses warning"
+                'deep-copy
+                (classify-capture-mode 'explicit-buf env-with-explicit-deep-copy))
+  (assert-equal "2.20 warning list remains empty on type-env explicit deep-copy"
+                '()
+                (untyped-boundary-warnings)))
+
+;; Zero false positives for typed variables
+(reset-untyped-boundary-warnings!)
+(classify-capture-mode 'c sample-type-env 'with-channel)
+(classify-capture-mode 'count sample-type-env 'spawn-task)
+(assert-equal "2.21 zero false positive warnings for typed variables"
+              '()
+              (untyped-boundary-warnings))
+
+;; Global flag suppression (*warn-untyped-boundary* = #f)
+(reset-untyped-boundary-warnings!)
+(set-car! *warn-untyped-boundary* #f)
+(assert-equal "2.22 untyped variable with warnings disabled returns deep-copy"
+              'deep-copy
+              (classify-capture-mode 'silent-untyped '() 'spawn-task))
+(assert-equal "2.23 no warning emitted when *warn-untyped-boundary* is disabled"
+              '()
+              (untyped-boundary-warnings))
+(set-car! *warn-untyped-boundary* #t)
+
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: spawn-task and with-channel Plane Boundary Splitting
 ;;; -----------------------------------------------------------------------

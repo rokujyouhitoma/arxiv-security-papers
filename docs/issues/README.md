@@ -10,7 +10,6 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
-| **811** | 型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入 | Feature | Medium | New | [811-warn-on-untyped-variable-crossing-channel-boundary.md](811-warn-on-untyped-variable-crossing-channel-boundary.md) |
 | **812** | AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV | Bug | Medium | New | [812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md](812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) |
 | **814** | 143_backend_x86_peephole.scm の define-picopass 化と fuse-window-rules への移行 | Feature | Medium | New | [814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md](814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md) |
 
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **811** | 型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入 | Feature | 2026-11-14 | [closed/811-warn-on-untyped-variable-crossing-channel-boundary.md](closed/811-warn-on-untyped-variable-crossing-channel-boundary.md) |
 | **823** | uLisp テストスイート表示形式の SRFI 64 統一フォーマッタ導入とログ出力整流化 | Feature | 2026-11-14 | [closed/823-unify-test-runner-output-formats-and-add-verbose-mode.md](closed/823-unify-test-runner-output-formats-and-add-verbose-mode.md) |
 | **822** | 既存テストスイート (267箇所の重複 assert-*) の SRFI 64 統一・引数順序是正および仕様準拠ドキュメント更新 | Feature | 2026-11-14 | [closed/822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md](closed/822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md) |
 | **821** | SRFI 252 プロパティベーステストライブラリ (srfi 252) と決定論的ジェネレータ群の実装 | Feature | 2026-11-14 | [closed/821-implement-srfi-252-property-based-testing-library.md](closed/821-implement-srfi-252-property-based-testing-library.md) |
