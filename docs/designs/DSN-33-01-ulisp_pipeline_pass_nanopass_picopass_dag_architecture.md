@@ -9,6 +9,7 @@
   - `ulisp/lir/` (`lir_lang.scm`, `lir_verifier.scm`, `123_lir_closures.scm` 〜 `133_lir_peephole.scm`)
   - `ulisp/backend/` (`backend_lang.scm`, `140_backend_x86_64.scm` 〜 `160_backend_c.scm`)
 - **関連設計書**:
+  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）統合 ＆ 型付き機械語 LIR・ゼロコスト ABI アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
   - [[DSN-31] ILisp R7RS Core Architecture Specification](DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)
   - [[DSN-32] AILisp Agent Lisp Architecture Specification](DSN-32-ailisp_agent_lisp_architecture_specification.md)
   - [[DSN-37] Synapse Dual-Plane Concurrent Runtime Architecture](DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)

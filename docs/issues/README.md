@@ -20,6 +20,13 @@
 | **831** | 160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証 | Feature | Medium | New | [831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md](831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md) |
 | **832** | 純粋 Scheme による多倍長整数 (Bignum) および IEEE 754 相互変換標準ライブラリの実装 | Feature | Medium | New | [832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md](832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md) |
 | **833** | コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン (Diagnostic Reporter) の導入 | Feature | Low | New | [833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md](833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md) |
+| **834** | 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 | Feature | High | New | [834-implement-pure-scheme-lir-reference-vm-interpreter.md](834-implement-pure-scheme-lir-reference-vm-interpreter.md) |
+| **835** | Core Machine LIR と Managed Runtime Dialect の完全直交分離 | Feature | High | New | [835-separate-core-machine-lir-from-managed-runtime-dialect.md](835-separate-core-machine-lir-from-managed-runtime-dialect.md) |
+| **836** | `define-value-repr` による値表現・ボクシング方式のプラグイン化 | Feature | Medium | New | [836-plugin-value-representation-and-boxing-scheme.md](836-plugin-value-representation-and-boxing-scheme.md) |
+| **837** | 構文解析後の一意束縛解決 (Binding ID) とスコープ環境管理の共通基盤化 | Feature | Medium | New | [837-unify-symbol-binding-resolution-and-scope-environment.md](837-unify-symbol-binding-resolution-and-scope-environment.md) |
+| **838** | レジスタ制約付きインライン・アセンブリ (%inline-asm) の LIR 統合 | Feature | Medium | New | [838-integrate-inline-assembly-dialect-with-register-constraints-into-lir.md](838-integrate-inline-assembly-dialect-with-register-constraints-into-lir.md) |
+| **839** | 中間表現 (HIR/MIR/LIR) の永続化・再ロード機構 (.sbi 拡張) の整備 | Feature | Low | New | [839-implement-ir-serialization-and-deserialization-sbi-extension.md](839-implement-ir-serialization-and-deserialization-sbi-extension.md) |
+| **840** | Nanopass パスマネージャにおける解析結果キャッシュ自動無効化と再計算 | Feature | Low | New | [840-automate-analysis-cache-invalidation-and-recomputation-in-nanopass.md](840-automate-analysis-cache-invalidation-and-recomputation-in-nanopass.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
