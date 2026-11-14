@@ -25,9 +25,7 @@
     ((assert-false name cond)
      (test-assert name (not cond)))))
 
-(write-string "=== Running ULisp R7RS (scheme char) ASCII Test Suite (Issue #612) ===")
-(write-char #\newline)
-(flush-output-port)
+
 
 ;; =======================================================================
 ;; Group 1: Character Classification Predicates (R7RS §6.6)

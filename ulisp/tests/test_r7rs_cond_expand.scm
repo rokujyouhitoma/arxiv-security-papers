@@ -32,7 +32,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp R7RS cond-expand Tests ===\n")
 
 ;;; --- Test 1: Basic Standard Feature Identifiers ---
 (write-string "--- Test 1: Standard Feature Identifiers ---\n")
@@ -148,4 +147,3 @@
   (script-file #f)
   (command-line orig-cmd))
 
-(write-string "=== All cond-expand Tests Passed Successfully! ===\n")

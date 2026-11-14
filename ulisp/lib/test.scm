@@ -84,8 +84,20 @@
     (test-runner-on-bad-end-name! runner test-on-bad-end-name-simple)
     runner))
 
+(define (test-runner-unified)
+  (let ((runner (%test-runner-alloc)))
+    (test-runner-reset runner)
+    (test-runner-on-group-begin! runner test-on-group-begin-unified)
+    (test-runner-on-group-end! runner test-on-group-end-unified)
+    (test-runner-on-final! runner test-on-final-unified)
+    (test-runner-on-test-begin! runner test-on-test-begin-unified)
+    (test-runner-on-test-end! runner test-on-test-end-unified)
+    (test-runner-on-bad-count! runner test-on-bad-count-simple)
+    (test-runner-on-bad-end-name! runner test-on-bad-end-name-simple)
+    runner))
+
 (define test-runner-current (make-parameter #f))
-(define test-runner-factory (make-parameter test-runner-simple))
+(define test-runner-factory (make-parameter test-runner-unified))
 
 (define (test-runner-get)
   (let ((r (test-runner-current)))
@@ -99,6 +111,109 @@
 ;; ---------------------------------------------------------------------
 ;; §3. Simple Runner Callbacks & Output Formatting
 ;; ---------------------------------------------------------------------
+
+(define (%test-verbose?)
+  (let ((v (or (guard (ex (else #f)) (get-environment-variable "ULISP_TEST_VERBOSE"))
+               (guard (ex (else #f)) (sys-getenv "ULISP_TEST_VERBOSE")))))
+    (and (string? v)
+         (not (string=? v ""))
+         (not (string=? v "0")))))
+
+(define (test-on-group-begin-unified runner suite-name count)
+  (if (null? (test-runner-group-stack runner))
+      (begin
+        (test-runner-aux-value! runner suite-name)
+        (display "=== [Test Suite: ")
+        (display (if suite-name suite-name "Unnamed"))
+        (display "] ===\n")
+        (flush-output-port))
+      (if (%test-verbose?)
+          (begin
+            (display "--- Group: ")
+            (display (if suite-name suite-name "Subgroup"))
+            (display " ---\n")
+            (flush-output-port)))))
+
+(define (test-on-group-end-unified runner)
+  #f)
+
+(define (test-on-test-begin-unified runner)
+  #f)
+
+(define (test-on-test-end-unified runner)
+  (let ((kind (test-result-ref runner 'result-kind))
+        (name (test-result-ref runner 'test-name #f))
+        (verbose? (%test-verbose?)))
+    (cond
+      ((or (eq? kind 'fail) (eq? kind 'xpass))
+       (let ((expected (test-result-ref runner 'expected-value #f))
+             (actual (test-result-ref runner 'actual-value #f)))
+         (display (if (eq? kind 'xpass) "  [XPASS] " "  [FAIL] "))
+         (if name
+             (display name)
+             (begin
+               (display "(test #")
+               (display (%test-runner-total-count runner))
+               (display ")")))
+         (newline)
+         (display "    Expected: ")
+         (write expected)
+         (newline)
+         (display "    Actual:   ")
+         (write actual)
+         (newline)
+         (flush-output-port)))
+      ((eq? kind 'xfail)
+       (if verbose?
+           (begin
+             (display "  [XFAIL] ")
+             (if name (display name) (display "(unnamed)"))
+             (newline)
+             (flush-output-port))))
+      ((eq? kind 'skip)
+       (if verbose?
+           (begin
+             (display "  [SKIP] ")
+             (if name (display name) (display "(unnamed)"))
+             (newline)
+             (flush-output-port))))
+      ((eq? kind 'pass)
+       (if verbose?
+           (begin
+             (display "  [PASS] ")
+             (if name (display name) (display "(unnamed)"))
+             (newline)
+             (flush-output-port)))))))
+
+(define (test-on-final-unified runner)
+  (let* ((pass (test-runner-pass-count runner))
+         (fail (test-runner-fail-count runner))
+         (xfail (test-runner-xfail-count runner))
+         (xpass (test-runner-xpass-count runner))
+         (skip (test-runner-skip-count runner))
+         (total (%test-runner-total-count runner))
+         (suite (test-runner-aux-value runner)))
+    (display "-------------------------------------------------------\n")
+    (if (and (= fail 0) (= xpass 0))
+        (display " [RESULT] ")
+        (display " [FAILED] "))
+    (display (if suite suite "Test Suite"))
+    (display ": ")
+    (display pass)
+    (display " passed")
+    (if (> fail 0)
+        (begin (display ", ") (display fail) (display " failed")))
+    (if (> xfail 0)
+        (begin (display ", ") (display xfail) (display " expected failures")))
+    (if (> xpass 0)
+        (begin (display ", ") (display xpass) (display " unexpected successes")))
+    (if (> skip 0)
+        (begin (display ", ") (display skip) (display " skipped")))
+    (display " (Total: ")
+    (display total)
+    (display ")\n")
+    (display "-------------------------------------------------------\n")
+    (flush-output-port)))
 
 (define (test-on-group-begin-simple runner suite-name count)
   #f)

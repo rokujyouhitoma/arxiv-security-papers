@@ -23,59 +23,40 @@
 (load "ulisp/runtime/concurrency/supervisor.scm")
 (load "ulisp/runtime/concurrency/scheduler.scm")
 
-(define *test-mt-failures* (vector 0))
-(define *test-mt-passes* (vector 0))
+(test-begin "concurrency-multithread_scheduler")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-mt-failures* 0 (+ (vector-ref *test-mt-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-mt-passes* 0 (+ (vector-ref *test-mt-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (eqv? actual expected))
-      (begin
-        (vector-set! *test-mt-failures* 0 (+ (vector-ref *test-mt-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-mt-passes* 0 (+ (vector-ref *test-mt-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-error thunk msg)
-  (let ((caught
-         (guard (exn (#t #t))
-           (thunk)
-           #f)))
-    (assert-true caught msg)))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Multithreaded Work-Stealing Test Suite (#675)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: Native Threading Primitives & CPU Topology
 ;; -----------------------------------------------------------------------
@@ -594,19 +575,4 @@
 (flush-output-port)
 
 
-;; -----------------------------------------------------------------------
-;; Test Suite Summary
-;; -----------------------------------------------------------------------
-(let ((passes (vector-ref *test-mt-passes* 0))
-      (fails (vector-ref *test-mt-failures* 0)))
-  (write-string "=======================================================\n")
-  (write-string " Multithreaded Scheduler Test Summary: ")
-  (write-string (number->string passes))
-  (write-string " passed, ")
-  (write-string (number->string fails))
-  (write-string " failed.\n")
-  (write-string "=======================================================\n")
-  (flush-output-port)
-  (if (> fails 0)
-      (exit 1)
-      #t))
+(test-end "concurrency-multithread_scheduler")

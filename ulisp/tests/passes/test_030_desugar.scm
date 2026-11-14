@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 030 (Desugaring) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 030 (Desugaring)")
 
 ;; 1. and desugaring
 (assert-equal "and 0 args"
@@ -92,6 +90,4 @@
 (let ((res (desugar-all '(begin (begin (define x 10)) x))))
   (assert-equal "splicing begin with internal define" 'let (car res)))
 
-(display "=======================================================") (newline)
-(display " Pass 030: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 030 (Desugaring)")

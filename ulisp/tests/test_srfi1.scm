@@ -33,9 +33,7 @@
 (define (pair-cons a b) (cons a b))
 (define (test-eq? a b) (eq? a b))
 
-(write-string "=== Running ULisp SRFI 1 (List Library) Test Suite (Issue #648) ===")
-(write-char #\newline)
-(flush-output-port)
+
 
 ;; =======================================================================
 ;; Group 1: Constructors (xcons, cons*, list-tabulate, iota)

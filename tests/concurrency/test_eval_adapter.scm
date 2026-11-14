@@ -21,72 +21,40 @@
 (load "ulisp/runtime/concurrency/preempt.scm")
 (load "ulisp/runtime/concurrency/eval_adapter.scm")
 
-(define *test-eval-failures* (vector 0))
-(define *test-eval-passes* (vector 0))
+(test-begin "concurrency-eval_adapter")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-eval-failures* 0 (+ (vector-ref *test-eval-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-eval-passes* 0 (+ (vector-ref *test-eval-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (deep-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b))
-     (string=? a b))
-    ((and (pair? a) (pair? b))
-     (and (deep-equal? (car a) (car b))
-          (deep-equal? (cdr a) (cdr b))))
-    ((and (vector? a) (vector? b))
-     (let ((len (vector-length a)))
-       (if (= len (vector-length b))
-           (let loop ((i 0))
-             (if (< i len)
-                 (if (deep-equal? (vector-ref a i) (vector-ref b i))
-                     (loop (+ i 1))
-                     #f)
-                 #t))
-           #f)))
-    (else #f)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-equal actual expected msg)
-  (if (not (deep-equal? actual expected))
-      (begin
-        (vector-set! *test-eval-failures* 0 (+ (vector-ref *test-eval-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-eval-passes* 0 (+ (vector-ref *test-eval-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Dual-Mode Evaluation Adapter Test Suite (#644)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: Affine Syntax Linter (CWE-416 Guard)
 ;; -----------------------------------------------------------------------
@@ -393,18 +361,4 @@
   (let ((io-err (guard (exn (#t #t)) (make-io-uring) #f)))
     (assert-true io-err "make-io-uring throws error without native io_uring subsystem")))
 
-;; -----------------------------------------------------------------------
-;; Test Suite Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Dual-Mode Evaluation Adapter Summary: ")
-(write-string (number->string (vector-ref *test-eval-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-eval-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-eval-failures* 0) 0)
-    (error "Test Suite Failed" (vector-ref *test-eval-failures* 0)))
-
+(test-end "concurrency-eval_adapter")

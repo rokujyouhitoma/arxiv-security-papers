@@ -7,12 +7,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting ULisp AArch64 Backend Detailed Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 150 (AArch64 Backend)")
 
 ;;; Test 1: Immediate values to LIR to AArch64 instruction mapping
 (display "--- Step 1: Immediate & Arithmetic Instructions ---")
@@ -117,11 +112,4 @@
                 (car forms)))
 (set-current-target-arch! 'x86_64)
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *aarch64-tests-passed*)
-(display " AArch64 Backend tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 150 (AArch64 Backend)")

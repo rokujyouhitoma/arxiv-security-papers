@@ -6,57 +6,27 @@
 (load "ulisp/runtime/concurrency/channel.scm")
 (load "ulisp/runtime/concurrency/links.scm")
 
-(define *test-channel-failures* (vector 0))
-(define *test-channel-passes* (vector 0))
+(test-begin "concurrency-channel")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-channel-failures* 0 (+ (vector-ref *test-channel-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-channel-passes* 0 (+ (vector-ref *test-channel-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (assert-false val msg)
-  (assert-true (not val) msg))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))))
 
-(define (assert-eq actual expected msg)
-  (assert-true (eq? actual expected) msg))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(define (assert-equal actual expected msg)
-  (if (not (eqv? actual expected))
-      (begin
-        (vector-set! *test-channel-failures* 0 (+ (vector-ref *test-channel-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-channel-passes* 0 (+ (vector-ref *test-channel-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
-
-(write-string "=======================================================\n")
-(write-string " Starting Linear Ownership Channel Test Suite (#633)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
 ;; -----------------------------------------------------------------------
 ;; Group 1: <channel> & <task-context> Initialization and Predicates
@@ -1037,17 +1007,4 @@
       (assert-equal (cadr msg) ref "ref matches")
       (assert-equal (cadddr (cdr msg)) 'normal "reason is normal"))))
 
-;; -----------------------------------------------------------------------
-;; Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Linear Ownership Channel Test Summary: ")
-(write-string (number->string (vector-ref *test-channel-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-channel-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-channel-failures* 0) 0)
-    (error "test_channel: one or more assertions failed" (vector-ref *test-channel-failures* 0)))
+(test-end "concurrency-channel")

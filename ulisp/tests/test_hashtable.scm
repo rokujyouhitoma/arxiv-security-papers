@@ -4,45 +4,22 @@
 ;;; Traceability: ulisp/docs/ref_r7rs_compliance.md
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
-(define *test-passes* (vector 0))
+(test-begin "hashtable")
 
-(define (assert-true desc expr)
-  (if expr
-      (begin
-        (vector-set! *test-passes* 0 (+ (vector-ref *test-passes* 0) 1))
-        (write-string "  [PASS] ") (write-string desc) (write-char #\newline)
-        (flush-output-port))
-      (begin
-        (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-        (write-string "  [FAIL] ") (write-string desc)
-        (write-string " => expected #t, got #f") (write-char #\newline)
-        (flush-output-port))))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal desc expected actual)
+     (test-equal desc expected actual))))
 
-(define (assert-false desc expr)
-  (if (not expr)
-      (begin
-        (vector-set! *test-passes* 0 (+ (vector-ref *test-passes* 0) 1))
-        (write-string "  [PASS] ") (write-string desc) (write-char #\newline)
-        (flush-output-port))
-      (begin
-        (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-        (write-string "  [FAIL] ") (write-string desc)
-        (write-string " => expected #f, got truthy") (write-char #\newline)
-        (flush-output-port))))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true desc expr)
+     (test-assert desc expr))))
 
-(define (assert-equal desc expected actual)
-  (if (equal? expected actual)
-      (begin
-        (vector-set! *test-passes* 0 (+ (vector-ref *test-passes* 0) 1))
-        (write-string "  [PASS] ") (write-string desc) (write-char #\newline)
-        (flush-output-port))
-      (begin
-        (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-        (write-string "  [FAIL] ") (write-string desc)
-        (write-string " => expected: ") (write expected)
-        (write-string ", got: ") (write actual) (write-char #\newline)
-        (flush-output-port))))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false desc expr)
+     (test-assert desc (not expr)))))
 
 ;; First-class function wrappers
 (define (num= a b) (= a b))
@@ -50,11 +27,6 @@
 (define (sym= a b) (eq? a b))
 (define (add-val k v acc) (+ v acc))
 (define (double-val k v) (* v 2))
-
-(write-string "=======================================================") (write-char #\newline)
-(write-string " Starting R7RS Hash Table (SRFI 69 / 125) Test Suite   ") (write-char #\newline)
-(write-string "=======================================================") (write-char #\newline)
-(flush-output-port)
 
 ;; ---------------------------------------------------------------------
 ;; Group 1: Constructors & Type Predicates
@@ -282,16 +254,4 @@
   (assert-true "key 49 exists" (hash-table-contains? ht 49))
   (assert-equal "key 49 value correct" 147 (hash-table-ref ht 49)))
 
-;; ---------------------------------------------------------------------
-;; Summary & Final Exit Code
-;; ---------------------------------------------------------------------
-(write-string "=======================================================") (write-char #\newline)
-(write-string " Hash Table Test Suite Summary: ")
-(write (vector-ref *test-passes* 0)) (write-string " passed, ")
-(write (vector-ref *test-failures* 0)) (write-string " failed.") (write-char #\newline)
-(write-string "=======================================================") (write-char #\newline)
-
-(if (> (vector-ref *test-failures* 0) 0)
-    (exit 1)
-    #t)
-
+(test-end "hashtable")

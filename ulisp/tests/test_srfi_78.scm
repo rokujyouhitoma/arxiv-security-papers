@@ -3,7 +3,7 @@
 ;;; Conforms to DSN-33 Architecture Specification & Issue #820
 ;;; =======================================================================
 
-(write-string "=== Running ULisp SRFI 78 Lightweight Testing Test Suite ===\n")
+
 
 ;; Reset check state to known baseline
 (check-set-mode! 'report-failed)
@@ -129,4 +129,3 @@
 ;; Verify check-report returns #t when 0 checks failed
 (check (check-report) => #t)
 
-(write-string "=== All SRFI 78 Tests Passed Successfully! ===\n")

@@ -3,58 +3,7 @@
 ;;; Conforms to Issue #598 & DSN-33 Architecture Specification
 ;;; =======================================================================
 
-(display "=======================================================\n")
-(display " Starting Unified Pass Manager Unit Test Suite\n")
-(display "=======================================================\n")
-
-(define *test-count* (cons 0 '()))
-(define *pass-count* (cons 0 '()))
-
-(define (assert-true name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if expr-result
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-false name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (not expr-result)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] Expected failure/rejection: ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-equal name expected actual)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (equal? expected actual)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (display " - Expected: ")
-        (write expected)
-        (display " but got: ")
-        (write actual)
-        (newline)
-        (error "Assertion failed" name))))
+(test-begin "Unified Pass Manager")
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Pass Descriptor & Global Registry Tests
@@ -700,10 +649,4 @@
               (test-pass-pm-fused '(list (pm-op-1 a) (pm-op-2 b))))
 (reset-disabled-picopasses!)
 
-(display "\n=======================================================\n")
-(display " Test Suite Completed: ")
-(display (car *pass-count*))
-(display " / ")
-(display (car *test-count*))
-(display " assertions passed.\n")
-(display "=======================================================\n\n")
+(test-end "Unified Pass Manager")

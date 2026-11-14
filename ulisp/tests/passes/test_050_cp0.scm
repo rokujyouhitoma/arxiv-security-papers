@@ -5,9 +5,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 050 (CP0 Optimization) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 050 (CP0 Optimization)")
 
 ;; 1. Arithmetic constant folding
 (assert-equal "fold addition"
@@ -128,6 +126,4 @@
                     ((pair? node) (or (has-sym? (car node)) (has-sym? (cdr node))))
                     (else #f)))))
 
-(display "=======================================================") (newline)
-(display " Pass 050: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 050 (CP0 Optimization)")

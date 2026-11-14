@@ -2,42 +2,18 @@
 ;;; ULisp Test Suite: Generational GC Dynamic Heap Growth Policy & mremap (Issue #566)
 ;;; =======================================================================
 
-(define *test-gc-failures* (vector 0))
+(test-begin "gc-growth")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-gc-failures* 0 (+ (vector-ref *test-gc-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (or (eqv? actual expected)
-               (and (string? actual) (string? expected) (string=? actual expected))))
-      (begin
-        (vector-set! *test-gc-failures* 0 (+ (vector-ref *test-gc-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=== Running ULisp Issue #566 Dynamic Heap Growth & mremap Tests ===\n")
 (flush-output-port)
 
 ;; 1. Initialize Generational GC with 256KB Nursery and 64KB Initial Mature Space (1MB VMA reserved)
@@ -87,11 +63,4 @@
         (assert-equal (car acc2) 3499 "Data integrity preserved across multiple expansions")
         #t))))
 
-(let ((failures (vector-ref *test-gc-failures* 0)))
-  (if (> failures 0)
-      (begin
-        (write-string "=== SOME GC GROWTH TESTS FAILED! ===\n")
-        (sys-exit 1))
-      (begin
-        (write-string "=== ALL Issue #566 Dynamic Heap Growth & mremap Tests PASSED! ===\n")
-        (sys-exit 0))))
+(test-end "gc-growth")

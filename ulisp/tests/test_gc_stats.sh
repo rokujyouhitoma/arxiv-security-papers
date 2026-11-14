@@ -10,9 +10,17 @@ ULISP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${ULISP_DIR}/build"
 mkdir -p "${BUILD_DIR}"
 
-echo "========================================================================"
-echo " Starting Runtime GC Statistics Test Suite (Issue #622)"
-echo "========================================================================"
+PASS_COUNT=0
+
+record_pass() {
+    local msg="$1"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    if [ "${ULISP_TEST_VERBOSE:-0}" = "1" ]; then
+        echo "  [PASS] $msg"
+    fi
+}
+
+echo "=== [Test Suite: gc-stats] ==="
 
 # Determine compiler runner
 COMPILER_CMD=""
@@ -34,7 +42,9 @@ else
     COMPILER_CMD="python3 -m ilisp ${ULISP_DIR}/compiler.scm"
 fi
 
-echo "Using compiler: ${COMPILER_CMD}"
+if [ "${ULISP_TEST_VERBOSE:-0}" = "1" ]; then
+    echo "Using compiler: ${COMPILER_CMD}"
+fi
 
 # -----------------------------------------------------------------------
 # Test 1: x86-64 Freestanding Native - Quiet-by-Default (ULISP_GC_STATS unset)
@@ -55,7 +65,7 @@ if [ -s "${BUILD_DIR}/test_gc_stats_1.err" ]; then
     cat "${BUILD_DIR}/test_gc_stats_1.err"
     exit 1
 fi
-echo "PASS: Quiet-by-default verified (stderr is empty)."
+record_pass "Test 1: Quiet-by-default verified (stderr is empty)."
 
 # -----------------------------------------------------------------------
 # Test 2: x86-64 Freestanding Native - ULISP_GC_STATS=1
@@ -81,7 +91,7 @@ if ! grep -q "Copied:" "${BUILD_DIR}/test_gc_stats_2.err" || ! grep -q "GC Time:
     cat "${BUILD_DIR}/test_gc_stats_2.err"
     exit 1
 fi
-echo "PASS: ULISP_GC_STATS=1 allocation tracking verified (Alloc: 72 bytes)."
+record_pass "Test 2: ULISP_GC_STATS=1 allocation tracking verified (Alloc: 72 bytes)."
 
 # -----------------------------------------------------------------------
 # Test 3: x86-64 Freestanding Native - Multiple Allocations Loop & GC
@@ -107,7 +117,7 @@ if ! grep -q "Alloc:" "${BUILD_DIR}/test_gc_stats_3.err"; then
     cat "${BUILD_DIR}/test_gc_stats_3.err"
     exit 1
 fi
-echo "PASS: Loop allocation stats verified."
+record_pass "Test 3: Loop allocation stats verified."
 
 # -----------------------------------------------------------------------
 # Test 4: C Backend - ULISP_GC_STATS=1
@@ -135,7 +145,7 @@ if ! grep -q "Alloc:" "${BUILD_DIR}/test_gc_stats_4.err"; then
     cat "${BUILD_DIR}/test_gc_stats_4.err"
     exit 1
 fi
-echo "PASS: C Backend ULISP_GC_STATS=1 verified."
+record_pass "Test 4: C Backend ULISP_GC_STATS=1 verified."
 
 # -----------------------------------------------------------------------
 # Test 5: Disabled when ULISP_GC_STATS=0
@@ -148,8 +158,8 @@ if [ -s "${BUILD_DIR}/test_gc_stats_5.err" ]; then
     cat "${BUILD_DIR}/test_gc_stats_5.err"
     exit 1
 fi
-echo "PASS: ULISP_GC_STATS=0 correctly disabled statistics."
+record_pass "Test 5: ULISP_GC_STATS=0 correctly disabled statistics."
 
-echo "========================================================================"
-echo " ALL GC STATISTICS TESTS PASSED (5/5)!"
-echo "========================================================================"
+echo "-------------------------------------------------------"
+echo " [RESULT] gc-stats: $PASS_COUNT passed (Total: $PASS_COUNT)"
+echo "-------------------------------------------------------"

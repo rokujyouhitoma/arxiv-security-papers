@@ -7,9 +7,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 027 (Conditionals Desugaring) Unit Test") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 027 (Conditionals Desugaring)")
 
 ;; 1. desugar-and
 (assert-equal "desugar-and empty"
@@ -93,6 +91,4 @@
               '(if x (if y z #f) #f)
               (desugar-conditionals '(and x (and y z))))
 
-(display "=======================================================") (newline)
-(display " Pass 027: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 027 (Conditionals Desugaring)")

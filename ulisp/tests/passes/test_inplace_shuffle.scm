@@ -4,12 +4,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting In-Place Tail Loop Argument Shuffle Test Suite (Issue #546)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "In-Place Tail Loop Shuffle (Issue #546)")
 
 ;; --- Test 1: Standard 2-arg accumulator loop (loop (+ i 1) (+ acc i)) ---
 (let* ((ast '(letrec ((loop (lambda (i acc) (if (= i 1000000) acc (loop (+ i 1) (+ acc i)))))) (loop 0 0)))
@@ -115,12 +110,4 @@
   (assert-true "emitted build/test_countdown.s successfully" #t))
 
 (newline)
-(display "=======================================================")
-(newline)
-(display " All In-Place Tail Loop Argument Shuffle Tests PASSED: ")
-(display *tests-passed*)
-(display "/")
-(display (+ *tests-passed* *tests-failed*))
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "In-Place Tail Loop Shuffle (Issue #546)")

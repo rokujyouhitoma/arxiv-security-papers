@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 029 (Dynamic & Values Desugaring) Unit Test") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 029 (Dynamic & Values Desugaring)")
 
 ;; 1. desugar-let-values
 (let ((lv (desugar-let-values '(((a b) (values 1 2))) '((+ a b)))))
@@ -109,6 +107,4 @@
   (assert-true "desugar-dynamic on delay produces promise" (pair? res))
   (assert-equal "desugar-dynamic on delay root" '%%make-promise (car res)))
 
-(display "=======================================================") (newline)
-(display " Pass 029: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 029 (Dynamic & Values Desugaring)")

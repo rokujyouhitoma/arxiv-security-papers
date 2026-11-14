@@ -17,10 +17,7 @@
     ((assert-equal actual expected msg)
      (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Process-Local Ephemeral Arena Test Suite (#630)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+
 
 ;; -----------------------------------------------------------------------
 ;; Group 1: Arena Initialization & Record Predicates

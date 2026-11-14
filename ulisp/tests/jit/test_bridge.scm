@@ -10,36 +10,7 @@
 ;;; - End-to-end JIT pipeline (Trace -> Opt -> LIR -> Install -> Dispatch)
 ;;; =======================================================================
 
-(define *bridge-tests-passed* 0)
-(define *bridge-tests-failed* 0)
-
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *bridge-tests-passed* (+ *bridge-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *bridge-tests-failed* (+ *bridge-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
-
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
-
-(display "=======================================================")
-(newline)
-(display " Starting MLisp LIR Bridge & JIT Runtime Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "MLisp LIR Bridge & JIT Runtime")
 
 ;;; Reset JIT runtime
 (jit-runtime-reset!)
@@ -138,11 +109,4 @@
                 exec-res)
   (assert-equal "execution count incremented" 1 *jit-stats-executed*))
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *bridge-tests-passed*)
-(display " MLisp LIR Bridge & JIT Runtime tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "MLisp LIR Bridge & JIT Runtime")

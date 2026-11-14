@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 160 (Portable C Backend) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 160 (Portable C Backend)")
 
 ;; 1. Label sanitization
 (assert-equal "c sanitize leading dot" "ulisp_L_else_1" (c-sanitize-label ".L_else_1"))
@@ -42,6 +40,4 @@
   (assert-true "lir generated for c backend" (pair? lir))
   (assert-equal "lir tag" '%lir-program (car lir)))
 
-(display "=======================================================") (newline)
-(display " Pass 160: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 160 (Portable C Backend)")

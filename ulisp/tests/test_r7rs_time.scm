@@ -22,7 +22,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp R7RS (scheme time) Tests ===\n")
 
 ;;; --- Test 1: current-second sanity check ---
 (write-string "--- Test 1: current-second ---\n")
@@ -49,5 +48,4 @@
 (display (- j2 j1))
 (write-string "\n")
 
-(write-string "=== All (scheme time) Tests Passed Successfully! ===\n")
 

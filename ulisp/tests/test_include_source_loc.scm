@@ -3,30 +3,7 @@
 ;;; Conforms to Issue #606 & Nanopass Architecture Quality Standard
 ;;; =======================================================================
 
-(define *inc-tests-passed* 0)
-(define *inc-tests-failed* 0)
-
-(define (assert-equal label expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *inc-tests-passed* (+ *inc-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (set! *inc-tests-failed* (+ *inc-tests-failed* 1))
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
-
-(define (assert-true label actual)
-  (assert-equal label #t (if actual #t #f)))
-
-(define (assert-false label actual)
-  (assert-equal label #f (if actual #t #f)))
-
-(display "\n=======================================================\n")
-(display " Starting R7RS include & Source Location Unit Tests\n")
-(display "=======================================================\n")
+(test-begin "R7RS include & Source Location")
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Source Location Structure & Helpers
@@ -108,12 +85,4 @@
 ;;; -----------------------------------------------------------------------
 ;;; Summary
 ;;; -----------------------------------------------------------------------
-(display "\n=======================================================\n")
-(display " R7RS include & Source Location Tests Summary:\n")
-(display "   Passed: ") (display *inc-tests-passed*) (newline)
-(display "   Failed: ") (display *inc-tests-failed*) (newline)
-(display "=======================================================\n\n")
-
-(if (> *inc-tests-failed* 0)
-    (error "Unit tests failed!" *inc-tests-failed*)
-    #t)
+(test-end "R7RS include & Source Location")

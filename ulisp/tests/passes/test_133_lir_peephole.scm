@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 133 (LIR Peephole & DCE) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 133 (LIR Peephole & DCE)")
 
 ;; Helper to wrap instruction list in a canonical program
 (define (make-test-program insts)
@@ -190,6 +188,4 @@
                   (%return))
                 out))
 
-(display "=======================================================") (newline)
-(display " Pass 133: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 133 (LIR Peephole & DCE)")

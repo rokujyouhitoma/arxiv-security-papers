@@ -5,33 +5,7 @@
 ;;; continuations, nested prompts, and early exit.
 ;;; =======================================================================
 
-(define *delimcc-tests-passed* 0)
-(define *delimcc-tests-failed* 0)
-
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *delimcc-tests-passed* (+ *delimcc-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *delimcc-tests-failed* (+ *delimcc-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
-
-(display "=======================================================")
-(newline)
-(display " Starting MLisp Delimited Continuations Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "MLisp Delimited Continuations")
 
 ;;; Test 1: Simple reset without shift returns value directly
 (display "--- Test 1: Simple Reset ---")
@@ -110,11 +84,4 @@
               42
               (find-first-positive '(-5 -2 42 -10 99)))
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *delimcc-tests-passed*)
-(display " MLisp Delimited Continuations tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "MLisp Delimited Continuations")

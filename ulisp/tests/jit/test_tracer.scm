@@ -9,36 +9,7 @@
 ;;; - Integration with an actual interpreter loop
 ;;; =======================================================================
 
-(define *tracer-tests-passed* 0)
-(define *tracer-tests-failed* 0)
-
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *tracer-tests-passed* (+ *tracer-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *tracer-tests-failed* (+ *tracer-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
-
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
-
-(display "=======================================================")
-(newline)
-(display " Starting MLisp Endogenous Meta-Tracer Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "MLisp Endogenous Meta-Tracer")
 
 ;;; Initialize tracer
 (tracer-reset!)
@@ -136,11 +107,4 @@
     (assert-true "trace was automatically synthesized" (pair? trace))
     (assert-equal "trace PC is sim-loop-pc" 'sim-loop-pc (cadr (assq '%pc (cdr trace))))))
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *tracer-tests-passed*)
-(display " MLisp Endogenous Meta-Tracer tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "MLisp Endogenous Meta-Tracer")

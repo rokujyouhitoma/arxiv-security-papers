@@ -40,7 +40,6 @@
         (flush-output-port)
         (exit 1))))
 
-(write-string "=== Running ULisp R7RS Bytevector Ports & Ready Tests ===\n")
 
 ;;; --- Test 1: open-input-bytevector ---
 (write-string "--- Test 1: open-input-bytevector ---\n")
@@ -114,4 +113,3 @@
 (read-char str-p)
 (test "char-ready? on partially read string port" #t (char-ready? str-p))
 
-(write-string "=== All Bytevector Port & Ready Tests Passed Successfully! ===\n")

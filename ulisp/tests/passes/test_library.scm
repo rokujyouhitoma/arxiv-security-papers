@@ -6,12 +6,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting Pass 0a (R7RS define-library & import) Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 010 (R7RS define-library & import)")
 
 ;;; --- Group 1: Syntax Predicates & Parsing ---
 (display "--- Group 1: Syntax Predicates & Export Parsing ---") (newline)
@@ -207,18 +202,4 @@
 
 ;;; --- Summary ---
 (newline)
-(display "=======================================================")
-(newline)
-(display " Pass 0a (R7RS define-library & import) Test Results: ")
-(display *library-tests-passed*)
-(display " / ")
-(display *library-tests-run*)
-(display " Passed.")
-(newline)
-(display "=======================================================")
-(newline)
-
-(if (= *library-tests-passed* *library-tests-run*)
-    (display "ALL PASS 0A LIBRARY TESTS PASSED!\n")
-    (error "SOME TESTS FAILED!"))
-
+(test-end "Pass 010 (R7RS define-library & import)")

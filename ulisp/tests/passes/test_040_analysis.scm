@@ -5,9 +5,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 040 (Scope Analysis) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 040 (Scope Analysis)")
 
 ;; 1. Open expression has free variables
 (assert-equal "free vars in addition"
@@ -103,6 +101,4 @@
 (set-car! *compiler-abort-on-error* #t)
 (set-car! *compiler-suppress-diagnostics* #f)
 
-(display "=======================================================") (newline)
-(display " Pass 040: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
+(test-end "Pass 040 (Scope Analysis)")

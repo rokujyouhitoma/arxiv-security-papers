@@ -16,12 +16,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting ULisp Block Arguments SSA & Braun Construction Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Pass 130 (Block Arguments SSA & Braun LIR)")
 
 ;;; Test Group 1: Local Definitions & Single Predecessor Optimization
 (display "--- Group 1: Local Defs & Single Predecessor Dominance ---")
@@ -211,12 +206,4 @@
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%jump))) main-body))))
 
 (newline)
-(display "=======================================================")
-(newline)
-(display " All Block Arguments SSA & Braun Construction Tests PASSED: ")
-(display *lir-tests-passed*)
-(display "/")
-(display (+ *lir-tests-passed* *lir-tests-failed*))
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Pass 130 (Block Arguments SSA & Braun LIR)")

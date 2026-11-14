@@ -20,72 +20,40 @@
 (load "ulisp/runtime/concurrency/scheduler.scm")
 (load "ulisp/runtime/concurrency/preempt.scm")
 
-(define *test-preempt-failures* (vector 0))
-(define *test-preempt-passes* (vector 0))
+(test-begin "concurrency-preemption")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-preempt-failures* 0 (+ (vector-ref *test-preempt-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-preempt-passes* 0 (+ (vector-ref *test-preempt-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (eqv? actual expected))
-      (begin
-        (vector-set! *test-preempt-failures* 0 (+ (vector-ref *test-preempt-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-preempt-passes* 0 (+ (vector-ref *test-preempt-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-error thunk msg)
-  (let ((caught
-         (guard (exn (#t #t))
-           (thunk)
-           #f)))
-    (if caught
-        (begin
-          (vector-set! *test-preempt-passes* 0 (+ (vector-ref *test-preempt-passes* 0) 1))
-          (write-string "PASS: ")
-          (write-string msg)
-          (write-char #\newline)
-          (flush-output-port)
-          #t)
-        (begin
-          (vector-set! *test-preempt-failures* 0 (+ (vector-ref *test-preempt-failures* 0) 1))
-          (write-string "FAIL (expected error): ")
-          (write-string msg)
-          (write-char #\newline)
-          (flush-output-port)
-          #f))))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Reduction Safepoint & Preemption Test Suite (#636)\n")
-(write-string "=======================================================\n")
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: Reduction Accounting & Task State Accessors
 ;; -----------------------------------------------------------------------
@@ -541,17 +509,4 @@
     (assert-equal (car res) 'terminated "boundary caught termination during nested loop")
     (assert-equal (arena-used-bytes worker-arena4) 0 "arena reclaimed after nested loop termination")))
 
-;; -----------------------------------------------------------------------
-;; Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Preemption & Reduction Safepoint Test Summary: ")
-(write-string (number->string (vector-ref *test-preempt-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-preempt-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-
-(if (> (vector-ref *test-preempt-failures* 0) 0)
-    (exit 1)
-    (exit 0))
+(test-end "concurrency-preemption")

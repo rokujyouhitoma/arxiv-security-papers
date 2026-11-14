@@ -6,7 +6,7 @@
 
 
 (display "=======================================================\n")
-(display " Starting Pass 127 (LIR Runtime Services & Multiple Values) Unit Tests\n")
+(test-begin "Pass 127 (LIR Runtime Services & Values)")
 (display "=======================================================\n")
 
 ;; Test 1: lir-compile-values generates multi-value storage
@@ -41,6 +41,4 @@
   (assert-true "raw-call-cc: emits %capture-cc"
                (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%capture-cc))) insts))))
 
-(display "=======================================================\n")
-(display " Pass 127: All tests passed!\n")
-(display "=======================================================\n")
+(test-end "Pass 127 (LIR Runtime Services & Values)")

@@ -114,6 +114,31 @@ run_test_file_c() {
 
     echo "(!target c)" > "$in_file"
     echo "(define (exit code) (/ 1 0))" >> "$in_file"
+    cat << "EOF" >> "$in_file"
+(define (test-c-equal? a b)
+  (cond
+    ((eqv? a b) #t)
+    ((and (pair? a) (pair? b))
+     (and (test-c-equal? (car a) (car b)) (test-c-equal? (cdr a) (cdr b))))
+    ((and (string? a) (string? b)) (string=? a b))
+    ((and (vector? a) (vector? b))
+     (let ((la (vector-length a)) (lb (vector-length b)))
+       (if (= la lb)
+           (let loop ((i 0))
+             (if (= i la) #t (if (test-c-equal? (vector-ref a i) (vector-ref b i)) (loop (+ i 1)) #f)))
+           #f)))
+    ((and (bytevector? a) (bytevector? b))
+     (let ((la (bytevector-length a)) (lb (bytevector-length b)))
+       (if (= la lb)
+           (let loop ((i 0))
+             (if (= i la) #t (if (= (bytevector-u8-ref a i) (bytevector-u8-ref b i)) (loop (+ i 1)) #f)))
+           #f)))
+    (else #f)))
+(define-syntax test-begin (syntax-rules () ((_ name ...) #t)))
+(define-syntax test-end (syntax-rules () ((_ name ...) #t)))
+(define-syntax test-assert (syntax-rules () ((_ msg expr) (if (not expr) (/ 1 0) #t))))
+(define-syntax test-equal (syntax-rules () ((_ msg expected actual) (if (not (test-c-equal? actual expected)) (/ 1 0) #t))))
+EOF
     for f in $stdlib "$test_file"; do
         cat "$f" >> "$in_file"
     done

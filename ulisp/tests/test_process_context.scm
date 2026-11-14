@@ -4,35 +4,25 @@
 ;;; Conforms to Issue #611
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "process-context")
 
-(define (test-pass name)
-  (write-string "  [PASS] ")
-  (write-string name)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal name actual expected)
+     (test-equal name expected actual))))
 
-(define (test-fail name expected actual)
-  (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-  (write-string "  [FAIL] ")
-  (write-string name)
-  (write-string " (expected: ")
-  (write-string expected)
-  (write-string ", got: ")
-  (write-string actual)
-  (write-string ")")
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true name expr)
+     (test-assert name expr))))
 
-(define (assert-true name expr)
-  (if expr
-      (test-pass name)
-      (test-fail name "#t" "#f")))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false name expr)
+     (test-assert name (not expr)))))
 
-(define (assert-false name expr)
-  (if (not expr)
-      (test-pass name)
-      (test-fail name "#f" "#t")))
+
+
 
 (define (lookup-env key alist)
   (let loop ((ls alist))
@@ -40,9 +30,6 @@
       ((null? ls) #f)
       ((and (pair? (car ls)) (string=? (car (car ls)) key)) (car ls))
       (else (loop (cdr ls))))))
-
-(write-string "=== Testing (scheme process-context) & R7RS 6.14 ===")
-(write-char #\newline)
 
 ;;; 1. Single environment variable query (get-environment-variable)
 (let ((path (get-environment-variable "PATH")))
@@ -93,15 +80,4 @@
           (assert-true "command-line element is a string" (string? (car rest)))
           (loop (cdr rest))))))
 
-;;; 4. Final report
-(let ((fails (vector-ref *test-failures* 0)))
-  (if (= fails 0)
-      (begin
-        (write-string "All (scheme process-context) tests passed successfully!")
-        (write-char #\newline)
-        (exit 0))
-      (begin
-        (write-string "Test failures detected: ")
-        (sys-write-fixnum fails)
-        (write-char #\newline)
-        (exit 1))))
+(test-end "process-context")

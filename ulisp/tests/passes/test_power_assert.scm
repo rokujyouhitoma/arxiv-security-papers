@@ -6,12 +6,7 @@
 
 
 
-(display "=======================================================")
-(newline)
-(display " Starting Power Assert & LIR Diagnostics (Pass 603) Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Power Assert & LIR Diagnostics (Pass 603)")
 
 ;;; --- Group 1: Levenshtein Distance Algorithm ---
 (display "--- Group 1: Levenshtein Distance Algorithm ---") (newline)
@@ -120,13 +115,4 @@
 (set-car! *compiler-abort-on-error* #t)
 (set-car! *compiler-suppress-diagnostics* #f)
 
-(display "=======================================================")
-(newline)
-(display " All Power Assert & LIR Diagnostics Tests Passed Successfully! (")
-(display *pa-tests-passed*)
-(display " / ")
-(display *pa-tests-run*)
-(display ")")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Power Assert & LIR Diagnostics (Pass 603)")

@@ -10,9 +10,17 @@ ULISP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${ULISP_DIR}/build"
 mkdir -p "${BUILD_DIR}"
 
-echo "========================================================================"
-echo " Starting Nanopass Execution Profiler Test Suite (Issue #621)"
-echo "========================================================================"
+PASS_COUNT=0
+
+record_pass() {
+    local msg="$1"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    if [ "${ULISP_TEST_VERBOSE:-0}" = "1" ]; then
+        echo "  [PASS] $msg"
+    fi
+}
+
+echo "=== [Test Suite: compiler-profiler] ==="
 
 # Determine compiler runner
 COMPILER_CMD=""
@@ -37,7 +45,9 @@ else
     exit 1
 fi
 
-echo "Using compiler: ${COMPILER_CMD}"
+if [ "${ULISP_TEST_VERBOSE:-0}" = "1" ]; then
+    echo "Using compiler: ${COMPILER_CMD}"
+fi
 
 # -----------------------------------------------------------------------
 # Test 1: S-expression directive (!time-passes)
@@ -95,10 +105,9 @@ fi
 # 1.3 Verify generated assembly is valid
 if command -v as >/dev/null 2>&1; then
     as "${BUILD_DIR}/test_prof1.s" -o "${BUILD_DIR}/test_prof1.o"
-    echo "  [PASS] Assembled generated output successfully with 'as'"
 fi
 
-echo "  [PASS] Test 1: (!time-passes) validated successfully."
+record_pass "Test 1: (!time-passes) validated successfully."
 
 # -----------------------------------------------------------------------
 # Test 2: Environment Variable ULISP_BENCH_PASSES=1
@@ -119,7 +128,7 @@ if ! grep -q "ULisp Nanopass Execution Profile (--time-passes)" "${BUILD_DIR}/te
     cat "${BUILD_DIR}/test_prof2.err"
     exit 1
 fi
-echo "  [PASS] Test 2: Environment variable ULISP_BENCH_PASSES=1 validated."
+record_pass "Test 2: Environment variable ULISP_BENCH_PASSES=1 validated."
 
 # -----------------------------------------------------------------------
 # Test 3: Normal Compilation Differential Equivalence (Zero Overhead / No Pollution)
@@ -139,8 +148,8 @@ if ! diff -u "${BUILD_DIR}/test_normal2.s" "${BUILD_DIR}/test_prof2.s" > "${BUIL
     exit 1
 fi
 
-echo "  [PASS] Test 3: Differential equivalence verified (exact bit-for-bit match)."
+record_pass "Test 3: Differential equivalence verified (exact bit-for-bit match)."
 
-echo "========================================================================"
-echo " All Nanopass Execution Profiler Tests PASSED (100% OK)"
-echo "========================================================================"
+echo "-------------------------------------------------------"
+echo " [RESULT] compiler-profiler: $PASS_COUNT passed (Total: $PASS_COUNT)"
+echo "-------------------------------------------------------"

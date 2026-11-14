@@ -6,52 +6,29 @@
 ;;;          modulo (floor division), exact-integer-sqrt
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "base-procedures")
 
-(define (test-pass name)
-  (write-string "  [PASS] ")
-  (write-string name)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal name actual expected)
+     (test-equal name expected actual))))
 
-(define (test-fail name expected actual)
-  (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-  (write-string "  [FAIL] ")
-  (write-string name)
-  (write-string " (expected ")
-  (write expected)
-  (write-string ", got ")
-  (write actual)
-  (write-string ")")
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true name expr)
+     (test-assert name expr))))
 
-(define (test-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b)) (string=? a b))
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
-    (else #f)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false name expr)
+     (test-assert name (not expr)))))
 
-(define (assert-equal name actual expected)
-  (if (test-equal? actual expected)
-      (test-pass name)
-      (test-fail name expected actual)))
 
-(define (assert-true name cond)
-  (if cond
-      (test-pass name)
-      (test-fail name #t #f)))
+
 
 (define (add a b) (+ a b))
 (define (sum4 a b c d) (+ (+ a b) (+ c d)))
 (define (sum3 a b c) (+ (+ a b) c))
-
-(write-string "=== Running ULisp R7RS (scheme base) Core Procedures Test Suite (Issue #610) ===")
-(write-char #\newline)
-(flush-output-port)
 
 ;; =======================================================================
 ;; Group 1: string constructor (R7RS §6.7)
@@ -273,16 +250,4 @@
                 'no-error)))
   (assert-equal "exact-integer-sqrt negative error" caught 'negative-error-caught))
 
-;; =======================================================================
-;; Summary
-;; =======================================================================
-(write-char #\newline)
-(if (= (vector-ref *test-failures* 0) 0)
-    (begin
-      (write-string "ALL R7RS BASE CORE PROCEDURE TESTS PASSED!\n")
-      (flush-output-port)
-      0)
-    (begin
-      (write-string "FAILURES DETECTED IN R7RS BASE CORE PROCEDURE TESTS!\n")
-      (flush-output-port)
-      (error "R7RS base core procedure test failures detected")))
+(test-end "base-procedures")

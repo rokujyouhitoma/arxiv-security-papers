@@ -4,58 +4,7 @@
 ;;; Conforms to DSN-37 Section 1.1, 12.3 & Phase 3 Task 3.3 (Issue #639)
 ;;; =======================================================================
 
-(display "=======================================================\n")
-(display " Starting Synapse FBIP In-Place Reuse Tests\n")
-(display "=======================================================\n")
-
-(define *test-count* (cons 0 '()))
-(define *pass-count* (cons 0 '()))
-
-(define (assert-true name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if expr-result
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-false name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (not expr-result)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] Expected failure/rejection: ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-equal name expected actual)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (equal? expected actual)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (display " - Expected: ")
-        (write expected)
-        (display " but got: ")
-        (write actual)
-        (newline)
-        (error "Assertion failed" name))))
+(test-begin "Synapse FBIP In-Place Reuse")
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: FBIP Predicates & Drop Collection
@@ -236,11 +185,5 @@
 (assert-false "5.8 fbip pass cleanly removed"
               (memq 'pass-synapse-fbip (map pass-id clean-pipe)))
 
-(display "\n=======================================================\n")
-(display " Test Suite Completed: ")
-(display (car *pass-count*))
-(display " / ")
-(display (car *test-count*))
-(display " assertions passed.\n")
-(display "=======================================================\n\n")
+(test-end "Synapse FBIP In-Place Reuse")
 

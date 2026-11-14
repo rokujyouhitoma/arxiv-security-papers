@@ -25,73 +25,40 @@
 (load "ulisp/runtime/concurrency/supervisor.scm")
 (load "ulisp/runtime/concurrency/registry.scm")
 
-(define *test-reg-failures* (vector 0))
-(define *test-reg-passes* (vector 0))
+(test-begin "concurrency-registry")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-reg-failures* 0 (+ (vector-ref *test-reg-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-reg-passes* 0 (+ (vector-ref *test-reg-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (equal? actual expected))
-      (begin
-        (vector-set! *test-reg-failures* 0 (+ (vector-ref *test-reg-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-reg-passes* 0 (+ (vector-ref *test-reg-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-error thunk msg)
-  (let ((raised-box (vector #f)))
-    (guard (exn (else (vector-set! raised-box 0 #t)))
-      (thunk))
-    (if (vector-ref raised-box 0)
-        (begin
-          (vector-set! *test-reg-passes* 0 (+ (vector-ref *test-reg-passes* 0) 1))
-          (write-string "PASS: ")
-          (write-string msg)
-          (write-char #\newline)
-          (flush-output-port)
-          #t)
-        (begin
-          (vector-set! *test-reg-failures* 0 (+ (vector-ref *test-reg-failures* 0) 1))
-          (write-string "FAIL: ")
-          (write-string msg)
-          (write-string " (expected exception but none raised)")
-          (write-char #\newline)
-          (flush-output-port)
-          #f))))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting Synapse Process Registry Test Suite (#669)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: Basic Registration, Unregistration & Whereis Lookup
 ;; -----------------------------------------------------------------------
@@ -338,18 +305,4 @@
   (assert-error (lambda () (synapse-register! reg 'slot_3 300))
                 "synapse-register! rejects exceeding capacity limit (CWE-400)"))
 
-;; -----------------------------------------------------------------------
-;; Test Suite Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Synapse Process Registry Summary: ")
-(write-string (number->string (vector-ref *test-reg-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-reg-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-reg-failures* 0) 0)
-    (error "test_registry: some assertions failed" (vector-ref *test-reg-failures* 0))
-    #t)
+(test-end "concurrency-registry")

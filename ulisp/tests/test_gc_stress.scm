@@ -3,21 +3,22 @@
 ;;; =======================================================================
 
 (define *test-stress-failures* (vector 0))
+(define *test-stress-passes* (vector 0))
+
+(write-string "=== [Test Suite: gc-stress] ===\n")
+(flush-output-port)
 
 (define (assert-true val msg)
   (if (not val)
       (begin
         (vector-set! *test-stress-failures* 0 (+ (vector-ref *test-stress-failures* 0) 1))
-        (write-string "FAIL: ")
+        (write-string "  [FAIL] ")
         (write-string msg)
         (write-char #\newline)
         (flush-output-port)
         #f)
       (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
+        (vector-set! *test-stress-passes* 0 (+ (vector-ref *test-stress-passes* 0) 1))
         #t)))
 
 (define (assert-equal actual expected msg)
@@ -25,24 +26,15 @@
                (and (string? actual) (string? expected) (string=? actual expected))))
       (begin
         (vector-set! *test-stress-failures* 0 (+ (vector-ref *test-stress-failures* 0) 1))
-        (write-string "FAIL: ")
+        (write-string "  [FAIL] ")
         (write-string msg)
-        (write-string " (expected ")
-        (write-string (if (number? expected) (number->string expected) "val"))
-        (write-string ", got ")
-        (write-string (if (number? actual) (number->string actual) "val"))
-        (write-string ")")
         (write-char #\newline)
         (flush-output-port)
         #f)
       (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
+        (vector-set! *test-stress-passes* 0 (+ (vector-ref *test-stress-passes* 0) 1))
         #t)))
 
-(write-string "=== Running ULisp Issue #577 GC Stress Testing Mode Suite ===\n")
 (flush-output-port)
 
 ;; -----------------------------------------------------------------------
@@ -166,12 +158,24 @@
 ;; -----------------------------------------------------------------------
 ;; Final Summary & Exit
 ;; -----------------------------------------------------------------------
-(let ((failures (vector-ref *test-stress-failures* 0)))
+(let ((failures (vector-ref *test-stress-failures* 0))
+      (passes (vector-ref *test-stress-passes* 0)))
+  (write-string "-------------------------------------------------------\n")
+  (if (= failures 0)
+      (write-string " [RESULT] gc-stress: ")
+      (write-string " [FAILED] gc-stress: "))
+  (write-string (number->string passes))
+  (write-string " passed")
   (if (> failures 0)
       (begin
-        (write-string "=== SOME GC STRESS TESTS FAILED! ===\n")
-        (flush-output-port)
-        (/ 1 0))
-      (begin
-        (write-string "=== ALL ULisp Issue #577 GC Stress Tests PASSED! ===\n")
-        #t)))
+        (write-string ", ")
+        (write-string (number->string failures))
+        (write-string " failed")))
+  (write-string " (Total: ")
+  (write-string (number->string (+ passes failures)))
+  (write-string ")\n")
+  (write-string "-------------------------------------------------------\n")
+  (flush-output-port)
+  (if (> failures 0)
+      #f
+      #t))

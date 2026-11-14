@@ -4,58 +4,7 @@
 ;;; Conforms to DSN-37 Section 1.2, 8.1, 12.1 & Phase 3 Task 3.1 (Issue #637)
 ;;; =======================================================================
 
-(display "=======================================================\n")
-(display " Starting Synapse Dual-Plane Boundary Splitting Tests\n")
-(display "=======================================================\n")
-
-(define *test-count* (cons 0 '()))
-(define *pass-count* (cons 0 '()))
-
-(define (assert-true name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if expr-result
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-false name expr-result)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (not expr-result)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] Expected failure/rejection: ")
-        (display name)
-        (newline)
-        (error "Assertion failed" name))))
-
-(define (assert-equal name expected actual)
-  (set-car! *test-count* (+ (car *test-count*) 1))
-  (if (equal? expected actual)
-      (begin
-        (set-car! *pass-count* (+ (car *pass-count*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (display " - Expected: ")
-        (write expected)
-        (display " but got: ")
-        (write actual)
-        (newline)
-        (error "Assertion failed" name))))
+(test-begin "Synapse Dual-Plane Boundary Splitting")
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Free Variable Capture Analysis
@@ -291,10 +240,4 @@
 (assert-false "5.4 pass-synapse-split-planes cleanly removed"
               (memq 'pass-synapse-split-planes (map pass-id pipeline-cleaned)))
 
-(display "\n=======================================================\n")
-(display " Test Suite Completed: ")
-(display (car *pass-count*))
-(display " / ")
-(display (car *test-count*))
-(display " assertions passed.\n")
-(display "=======================================================\n\n")
+(test-end "Synapse Dual-Plane Boundary Splitting")

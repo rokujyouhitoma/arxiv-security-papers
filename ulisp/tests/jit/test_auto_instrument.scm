@@ -11,36 +11,7 @@
 ;;; - End-to-end execution of unannotated Scheme loop with JIT tracer
 ;;; =======================================================================
 
-(define *auto-inst-passed* 0)
-(define *auto-inst-failed* 0)
-
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *auto-inst-passed* (+ *auto-inst-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *auto-inst-failed* (+ *auto-inst-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
-
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
-
-(display "=======================================================")
-(newline)
-(display " Starting MLisp Auto-Instrumentation Test Suite")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "MLisp Auto-Instrumentation")
 
 (reset-auto-loop-counter!)
 
@@ -161,11 +132,4 @@
 (assert-true "compiled trace exists for auto-instrumented loop tag"
              (pair? *compiled-traces*))
 
-(display "=======================================================")
-(newline)
-(display " All ")
-(display *auto-inst-passed*)
-(display " MLisp Auto-Instrumentation tests PASSED successfully! (0 failures)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "MLisp Auto-Instrumentation")

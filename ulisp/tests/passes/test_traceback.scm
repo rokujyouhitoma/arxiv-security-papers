@@ -7,8 +7,7 @@
 
 
 (display "=======================================================\n")
-(display " Starting Pass 604 (Call Stack Traceback) Test Suite\n")
-(display "=======================================================\n")
+(test-begin "Pass 604 (Call Stack Traceback)")
 
 ;;; --- Group 1: Basic Call Frame Operations ---
 (display "--- Group 1: Basic Call Frame Operations ---\n")
@@ -125,10 +124,4 @@
 (reset-compiler-context!)
 (assert-equal "reset-compiler-context resets call stack" '() (current-call-stack))
 
-(display "\n=======================================================\n")
-(display " Test Suite Results: ")
-(display *tb-tests-passed*)
-(display " / ")
-(display *tb-tests-run*)
-(display " Passed\n")
-(display "=======================================================\n")
+(test-end "Pass 604 (Call Stack Traceback)")

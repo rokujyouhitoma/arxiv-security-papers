@@ -13,23 +13,13 @@
      (string=? a b))
     (else #f)))
 
-(define (test name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (write-string "  [PASS] ")
-        (write-string name)
-        (write-char #\newline)
-        #t)
-      (begin
-        (write-string "  [FAIL] ")
-        (write-string name)
-        (write-string " - Expected: ")
-        (write-string (if (symbol? expected) (symbol->string expected) "val"))
-        (write-char #\newline)
-        (flush-output-port)
-        (exit 1))))
+(test-begin "values")
 
-(write-string "=== Running ULisp R7RS Multiple Values Tests ===\n")
+(define-syntax test
+  (syntax-rules ()
+    ((test name expected actual)
+     (test-equal name expected actual))))
+
 
 ;; Test 1: Basic 2-value passing with call-with-values
 (test "cwv-2-values"
@@ -151,5 +141,4 @@
         (define-values (m n) (values 25 30))
         (+ m n)))
 
-(write-string "=== All Multiple Values Tests Passed ===\n")
-#t
+(test-end "values")

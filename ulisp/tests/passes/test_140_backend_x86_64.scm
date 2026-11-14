@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 140 (x86-64 Backend) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 140 (x86-64 Backend)")
 
 ;; 1. Register formatting
 (assert-equal "reg rax" "rax" (reg->str '%rax))
@@ -72,7 +70,4 @@
   (assert-true "get-all-symbols contains car" (pair? (assq 'car syms)))
   (assert-true "get-all-symbols contains error-object" (pair? (assq 'error-object syms))))
 
-(display "=======================================================") (newline)
-(display " Pass 140: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
-(display "=======================================================") (newline)
-
+(test-end "Pass 140 (x86-64 Backend)")

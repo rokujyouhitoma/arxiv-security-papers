@@ -13,28 +13,17 @@
      (string=? a b))
     (else #f)))
 
-(define (test name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (write-string "  [PASS] ")
-        (write-string name)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)
-      (begin
-        (write-string "  [FAIL] ")
-        (write-string name)
-        (write-string " - Expected: ")
-        (write-string (if (symbol? expected) (symbol->string expected) "val"))
-        (write-char #\newline)
-        (flush-output-port)
-        (exit 1))))
+(test-begin "call-cc")
 
 (define (make-box val) (cons val '()))
 (define (box-ref b) (car b))
 (define (box-set! b val) (set-car! b val))
 
-(write-string "=== Running ULisp First-Class call/cc & dynamic-wind Tests ===\n")
+(define-syntax test
+  (syntax-rules ()
+    ((test name expected actual)
+     (test-equal name expected actual))))
+
 
 ;;; --- Test 1: Simple Escape Continuation ---
 (write-string "--- Test 1: Simple Escape Continuation ---\n")
@@ -160,4 +149,4 @@
   (test "coroutine third item is 30" 30 (next))
   (test "coroutine finished" 'done (next)))
 
-(write-string "=== All First-Class call/cc & dynamic-wind Tests Complete ===\n")
+(test-end "call-cc")

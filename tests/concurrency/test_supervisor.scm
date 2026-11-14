@@ -19,38 +19,43 @@
 ;; Minimal Test Harness (Vector Boxes)
 ;; -----------------------------------------------------------------------
 
-(define *tests-passed* (vector 0))
-(define *tests-failed* (vector 0))
+(test-begin "concurrency-supervisor")
 
-(define (assert-true expr msg)
-  (if expr
-      (begin
-        (vector-set! *tests-passed* 0 (+ (vector-ref *tests-passed* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-string "\n")
-        (flush-output-port))
-      (begin
-        (vector-set! *tests-failed* 0 (+ (vector-ref *tests-failed* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string "\n")
-        (flush-output-port))))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-eq a b msg)
-  (assert-true (eq? a b) msg))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-equal a b msg)
-  (assert-true (equal? a b) msg))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
+
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Test Suite Execution
 ;; -----------------------------------------------------------------------
-
-(write-string "=======================================================\n")
-(write-string " Starting Synapse Supervision Tree Test Suite (#667)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
 
 ;; -----------------------------------------------------------------------
 ;; Group 1: one_for_one Restart Strategy
@@ -1186,19 +1191,4 @@
   (supervisor-stop! sup)
   (assert-eq (supervisor-enqueued-state sup) 'idle "stopped supervisor remains 'idle"))
 
-;; -----------------------------------------------------------------------
-;; Final Summary
-;; -----------------------------------------------------------------------
-
-(write-string "=======================================================\n")
-(write-string " Synapse Supervision Tree Summary: ")
-(write-string (number->string (vector-ref *tests-passed* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *tests-failed* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *tests-failed* 0) 0)
-    (sys-exit 1)
-    (sys-exit 0))
+(test-end "concurrency-supervisor")

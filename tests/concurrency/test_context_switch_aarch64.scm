@@ -38,65 +38,40 @@
 (load "ulisp/runtime/concurrency/atomic.scm")
 (load "ulisp/runtime/concurrency/context.scm")
 
-(define *test-aarch64-failures* (vector 0))
-(define *test-aarch64-passes* (vector 0))
+(test-begin "concurrency-context_switch_aarch64")
 
-(define (print-number n)
-  (if (< n 0)
-      (begin (write-char #\-) (print-number (- 0 n)))
-      (if (< n 10)
-          (write-char (integer->char (+ 48 n)))
-          (let ((q (quotient n 10)))
-            (print-number q)
-            (write-char (integer->char (+ 48 (- n (* q 10)))))))))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))
+    ((assert-true val)
+     (test-assert "assert-true" val))))
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-aarch64-failures* 0 (+ (vector-ref *test-aarch64-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        #f)
-      (begin
-        (vector-set! *test-aarch64-passes* 0 (+ (vector-ref *test-aarch64-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false val msg)
+     (test-assert msg (not val)))
+    ((assert-false val)
+     (test-assert "assert-false" (not val)))))
 
-(define (assert-equal actual expected msg)
-  (let ((matched (or (eq? actual expected)
-                     (= actual expected))))
-    (if (not matched)
-        (begin
-          (vector-set! *test-aarch64-failures* 0 (+ (vector-ref *test-aarch64-failures* 0) 1))
-          (write-string "FAIL: ")
-          (write-string msg)
-          (write-string " (actual=")
-          (print-number actual)
-          (write-string ", expected=")
-          (print-number expected)
-          (write-string ")\n")
-          #f)
-        (begin
-          (vector-set! *test-aarch64-passes* 0 (+ (vector-ref *test-aarch64-passes* 0) 1))
-          (write-string "PASS: ")
-          (write-string msg)
-          (write-char #\newline)
-          #t))))
+(define-syntax assert-eq
+  (syntax-rules ()
+    ((assert-eq actual expected msg)
+     (test-equal msg expected actual))))
 
-(define (assert-error thunk msg)
-  (let ((caught
-         (guard (exn (#t #t))
-           (thunk)
-           #f)))
-    (assert-true caught msg)))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
-(write-string "=======================================================\n")
-(write-string " Starting AArch64 Native Context Switch Test Suite (#692)\n")
-(write-string "=======================================================\n")
-
+(define-syntax assert-error
+  (syntax-rules ()
+    ((assert-error thunk msg)
+     (let ((caught
+            (guard (exn (#t #t))
+              (thunk)
+              #f)))
+       (test-assert msg caught)))))
 ;; -----------------------------------------------------------------------
 ;; Group 1: <task-stack> Allocation, 16-Byte Alignment & Canaries
 ;; -----------------------------------------------------------------------
@@ -336,14 +311,4 @@
   (free-coroutine-context! co-a)
   (free-coroutine-context! co-b))
 
-(write-string "=======================================================\n")
-(write-string " AArch64 Native Context Switch Summary: ")
-(print-number (vector-ref *test-aarch64-passes* 0))
-(write-string " passed, ")
-(print-number (vector-ref *test-aarch64-failures* 0))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-
-(if (> (vector-ref *test-aarch64-failures* 0) 0)
-    (error "test_context_switch_aarch64: one or more assertions failed" (vector-ref *test-aarch64-failures* 0))
-    0)
+(test-end "concurrency-context_switch_aarch64")

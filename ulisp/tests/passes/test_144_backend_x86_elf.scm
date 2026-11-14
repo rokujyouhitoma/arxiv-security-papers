@@ -6,9 +6,7 @@
 
 
 
-(display "=======================================================") (newline)
-(display " Starting Pass 144 (Direct ELF64 Generator) Unit Test Suite") (newline)
-(display "=======================================================") (newline)
+(test-begin "Pass 144 (Direct ELF64 Generator)")
 
 ;; Helper to write bytevector to binary file
 (define (test-write-bv-to-file path bv)
@@ -88,14 +86,4 @@
   (test-write-bv-to-file "/tmp/test_pass144_rel.o" obj-bv))
 
 
-(display "=======================================================") (newline)
-(display " Pass 144 Unit Tests: ")
-(display *pass-tests-passed*)
-(display " passed, ")
-(display *pass-tests-failed*)
-(display " failed.")
-(newline)
-(display "=======================================================") (newline)
-
-(if (> *pass-tests-failed* 0)
-    (error "Pass 144 unit test suite failed"))
+(test-end "Pass 144 (Direct ELF64 Generator)")

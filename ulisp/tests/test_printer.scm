@@ -4,44 +4,25 @@
 ;;; Tests write-simple, write-shared, write, display, newline
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "printer")
 
-(define (test-pass name)
-  (write-string "  [PASS] ")
-  (write-string name)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal name actual expected)
+     (test-equal name expected actual))))
 
-(define (test-fail name expected actual)
-  (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-  (write-string "  [FAIL] ")
-  (write-string name)
-  (write-string " (expected ")
-  (write expected)
-  (write-string ", got ")
-  (write actual)
-  (write-string ")")
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true name expr)
+     (test-assert name expr))))
 
-(define (test-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b)) (string=? a b))
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
-    (else #f)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false name expr)
+     (test-assert name (not expr)))))
 
-(define (assert-equal name actual expected)
-  (if (test-equal? actual expected)
-      (test-pass name)
-      (test-fail name expected actual)))
 
-(define (assert-true name actual)
-  (if actual
-      (test-pass name)
-      (test-fail name "#t" actual)))
+
 
 ;;; -----------------------------------------------------------------------
 ;;; Intern Symbols for runtime symbol->string lookups
@@ -119,8 +100,6 @@
 ;;; -----------------------------------------------------------------------
 ;;; Test Suite Execution
 ;;; -----------------------------------------------------------------------
-
-(write-string "=== Running ULisp R7RS write-simple and write-shared Test Suite (Issue #656) ===\n")
 
 ;; --- Group 1: write-simple basic output ---
 (write-string "--- Group 1: write-simple basic output ---\n")
@@ -207,18 +186,4 @@
 (assert-equal "display string without quotes" (capture-display "hello") "hello")
 (assert-equal "display char direct" (capture-display #\z) "z")
 
-;;; -----------------------------------------------------------------------
-;;; Test Results Summary
-;;; -----------------------------------------------------------------------
-
-(let ((failures (vector-ref *test-failures* 0)))
-  (if (= failures 0)
-      (begin
-        (write-string "[SUCCESS] All R7RS write-simple and write-shared tests passed!\n")
-        (flush-output-port))
-      (begin
-        (write-string "[FAILURE] Tests failed with count: ")
-        (write failures)
-        (write-char #\newline)
-        (flush-output-port)
-        (error "printer tests failed"))))
+(test-end "printer")

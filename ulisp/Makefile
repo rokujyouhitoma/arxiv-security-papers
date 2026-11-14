@@ -164,9 +164,9 @@ docs_nanopass: build/compiler_passes.scm
 	@$(RUN_SCHEME) build/generate_docs_runner.scm > docs/spec_nanopass.md
 	@echo "Generated docs/spec_nanopass.md"
 
-test_passes: build/compiler_passes.scm test_all_passes
+test_passes: build/compiler_passes.scm test_all_passes $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/test_passes.scm > build/test_passes_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_passes.scm > build/test_passes_runner.scm
 	@$(RUN_SCHEME) build/test_passes_runner.scm
 
 NANOPASS_TESTS = tests/passes/test_000_compiler_diagnostics.scm \
@@ -643,9 +643,9 @@ test-debug test_dwarf_debug: build/ulisp-modular
 test_hierarchical: test_lir_suite test_backend
 	@echo "=== All Hierarchical LIR Tests Passed ==="
 
-test_aarch64: build/compiler_passes.scm
+test_aarch64: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/test_backend_aarch64.scm > build/test_aarch64_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_backend_aarch64.scm > build/test_aarch64_runner.scm
 	@$(RUN_SCHEME) build/test_aarch64_runner.scm
 
 test_aarch64_env:
@@ -682,53 +682,52 @@ test_lir_verifier: build/compiler_passes.scm
 	cat build/compiler_passes.scm tests/test_lir_verifier.scm > build/test_lir_verifier_runner.scm
 	@$(RUN_SCHEME) build/test_lir_verifier_runner.scm
 
-test_pass_manager: build/compiler_passes.scm
+test_pass_manager: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/test_pass_manager.scm > build/test_pass_manager_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_pass_manager.scm > build/test_pass_manager_runner.scm
 	@$(RUN_SCHEME) build/test_pass_manager_runner.scm
 
-test_pass_split_planes: build/compiler_passes.scm
+test_pass_split_planes: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm lib/ulisp/concurrency/passes/pass_split_planes.scm $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm > build/test_pass_split_planes_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) lib/ulisp/concurrency/passes/pass_split_planes.scm $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm > build/test_pass_split_planes_runner.scm
 	@$(RUN_SCHEME) build/test_pass_split_planes_runner.scm
 
-test_pass_check_affine: build/compiler_passes.scm
+test_pass_check_affine: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm > build/test_pass_check_affine_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm > build/test_pass_check_affine_runner.scm
 	@$(RUN_SCHEME) build/test_pass_check_affine_runner.scm
 
-test_pass_fbip: build/compiler_passes.scm
+test_pass_fbip: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm > build/test_pass_fbip_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm > build/test_pass_fbip_runner.scm
 	@$(RUN_SCHEME) build/test_pass_fbip_runner.scm
 
-test_pass_inline_hotpath: build/compiler_passes.scm
+test_pass_inline_hotpath: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm $(ROOT_DIR)/tests/concurrency/test_pass_inline_hotpath.scm > build/test_pass_inline_hotpath_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm $(ROOT_DIR)/tests/concurrency/test_pass_inline_hotpath.scm > build/test_pass_inline_hotpath_runner.scm
 	@$(RUN_SCHEME) build/test_pass_inline_hotpath_runner.scm
 
-test_pass_inject_safepoints: build/compiler_passes.scm
+test_pass_inject_safepoints: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm > build/test_pass_inject_safepoints_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm > build/test_pass_inject_safepoints_runner.scm
 	@$(RUN_SCHEME) build/test_pass_inject_safepoints_runner.scm
 
 test_profiler: compiler.scm
-	@echo "=== Running Compiler Nanopass Profiler Test Suite (Issue #621) ==="
 	@bash tests/test_pass_profiler.sh
 
-test_dataflow: build/compiler_passes.scm
+test_dataflow: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/test_dataflow.scm > build/test_dataflow_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_dataflow.scm > build/test_dataflow_runner.scm
 	@$(RUN_SCHEME) build/test_dataflow_runner.scm
 
-test_scope: build/compiler_passes.scm
+test_scope: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/test_scope.scm > build/test_scope_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_scope.scm > build/test_scope_runner.scm
 	@$(RUN_SCHEME) build/test_scope_runner.scm
 
-test_include_source_loc: build/compiler_passes.scm
+test_include_source_loc: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/test_include_source_loc.scm > build/test_include_source_loc_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_include_source_loc.scm > build/test_include_source_loc_runner.scm
 	@$(RUN_SCHEME) build/test_include_source_loc_runner.scm
 
 
@@ -1103,7 +1102,6 @@ test_gc_profile: $(COMPILER_DEP)
 	ULISP_GC_PROFILE=compiler ULISP_COMPILER_ARENA_MB=1024 ./build/test_gc_profile
 	@echo "--- 3. Testing ULISP_GC_PROFILE=server ---"
 	ULISP_GC_PROFILE=server ./build/test_gc_profile
-	@echo "=== All GC Execution Profile Tests Passed! ==="
 
 test_gc_hybrid: $(COMPILER_DEP)
 	@mkdir -p build
@@ -1115,7 +1113,6 @@ test_gc_hybrid: $(COMPILER_DEP)
 	./build/test_gc_hybrid
 	@echo "--- 2. Testing Hybrid Scanning with DEBUG_GC=1 ---"
 	DEBUG_GC=1 ./build/test_gc_hybrid
-	@echo "=== All Hybrid Scanning Tests Passed! ==="
 
 test_gc_stress: $(COMPILER_DEP)
 	@mkdir -p build
@@ -1145,7 +1142,6 @@ test_gc_stress: $(COMPILER_DEP)
 	$(ULISP_COMPILER) build/test_gc_stress_c_directive_input.scm > build/test_gc_stress_c_directive.c
 	$(CC) $(CFLAGS) build/test_gc_stress_c_directive.c -o build/test_gc_stress_c_directive
 	./build/test_gc_stress_c_directive
-	@echo "=== All GC Stress Tests Passed Successfully! ==="
 
 test_freestanding: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="
@@ -1502,49 +1498,49 @@ test_pure_bootstrap:
 	@bash tests/test_pure_bootstrap.sh
 
 # --- JIT Component Tests (94 Tests) ---
-build/test_delimcc_runner.scm: jit/core/delimcc.scm tests/jit/test_delimcc.scm
+build/test_delimcc_runner.scm: jit/core/delimcc.scm $(PASS_COMMON) tests/jit/test_delimcc.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_delimcc: build/test_delimcc_runner.scm
 	@$(RUN_SCHEME) build/test_delimcc_runner.scm
 
-build/test_tracer_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm tests/jit/test_tracer.scm
+build/test_tracer_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm $(PASS_COMMON) tests/jit/test_tracer.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_tracer: build/test_tracer_runner.scm
 	@$(RUN_SCHEME) build/test_tracer_runner.scm
 
-build/test_auto_instrument_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/tracer/auto_instrument.scm tests/jit/test_auto_instrument.scm
+build/test_auto_instrument_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/tracer/auto_instrument.scm $(PASS_COMMON) tests/jit/test_auto_instrument.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_auto_instrument: build/test_auto_instrument_runner.scm
 	@$(RUN_SCHEME) build/test_auto_instrument_runner.scm
 
-build/test_optimizer_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm tests/jit/test_optimizer.scm
+build/test_optimizer_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm $(PASS_COMMON) tests/jit/test_optimizer.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_optimizer: build/test_optimizer_runner.scm
 	@$(RUN_SCHEME) build/test_optimizer_runner.scm
 
-build/test_bridge_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm tests/jit/test_bridge.scm
+build/test_bridge_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm $(PASS_COMMON) tests/jit/test_bridge.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_bridge: build/test_bridge_runner.scm
 	@$(RUN_SCHEME) build/test_bridge_runner.scm
 
-build/test_examples_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm tests/jit/test_examples.scm
+build/test_examples_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm $(PASS_COMMON) tests/jit/test_examples.scm
 	@mkdir -p build
 	cat $^ > $@
 
 test_examples: build/test_examples_runner.scm
 	@$(RUN_SCHEME) build/test_examples_runner.scm
 
-build/test_guard_elimination_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm tests/jit/test_guard_elimination.scm
+build/test_guard_elimination_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm $(PASS_COMMON) tests/jit/test_guard_elimination.scm
 	@mkdir -p build
 	cat $^ > $@
 
@@ -1552,7 +1548,6 @@ test_guard_elimination: build/test_guard_elimination_runner.scm
 	@$(RUN_SCHEME) build/test_guard_elimination_runner.scm
 
 test_jit: test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples
-	@echo "=== [All JIT Component Tests Passed: 112/112] ==="
 
 build/demo_runner.scm: jit/core/delimcc.scm jit/tracer/tracer.scm jit/optimizer/pe.scm jit/optimizer/virtuals.scm jit/bridge/to_lir.scm jit/runtime/jit_buffer.scm jit/examples/tiny_vm.scm jit/examples/scheme_eval.scm jit/examples/demo.scm
 	@mkdir -p build
@@ -1638,11 +1633,9 @@ test_aot: core
 	./test.sh
 
 test_gc_stats: compiler
-	@echo "=== Running Runtime GC Statistics Tests (Issue #622) ==="
-	bash tests/test_gc_stats.sh
+	@bash tests/test_gc_stats.sh
 
 test_numeric_tower: $(COMPILER_DEP) build/ulisp_stdlib.o
-	@echo "=== Running R7RS Numeric Tower Tests (Issues #711-#715) ==="
 	@mkdir -p build
 	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_numeric_tower_input.scm
 	@cat lib/stdlib_macros.scm tests/test_numeric_tower.scm >> build/test_numeric_tower_input.scm
@@ -1650,7 +1643,6 @@ test_numeric_tower: $(COMPILER_DEP) build/ulisp_stdlib.o
 	$(AS) $(ASFLAGS) build/test_numeric_tower.s -o build/test_numeric_tower.o
 	$(LD) $(LDFLAGS) build/test_numeric_tower.o build/ulisp_stdlib.o -o build/test_numeric_tower
 	./build/test_numeric_tower < /dev/null
-	@echo "SUCCESS: All R7RS Numeric Tower tests passed!"
 
 test: test_lint_sexpr test_r7rs_traceability test_cli_diagnostics test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
