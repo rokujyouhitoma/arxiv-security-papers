@@ -19,13 +19,15 @@
              raise %raise
              %set-heap-ptr! %ptr-tag %ptr-untag
              %to-raw %to-fixnum
-             %box-fixnum %unbox-fixnum)))
+             %box-fixnum %unbox-fixnum
+             %box-flonum %unbox-flonum %sitofp %fptosi)))
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
              bytevector-u8-ref vector-ref
              %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
-             %raw-add %raw-sub %raw-mul %raw-cmp)))
+             %raw-add %raw-sub %raw-mul %raw-cmp
+             %fadd %fsub %fmul %fdiv %fcmp %fmov)))
 
 (define (triop-prim? op)
   (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!)))
@@ -52,8 +54,10 @@
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
              bytevector? bytevector-length vector? vector-length %num-args
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
+             %box-flonum %unbox-flonum %sitofp %fptosi
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
-             %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp)))
+             %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
+             %fadd %fsub %fmul %fdiv %fcmp %fmov)))
 
 (define (const? x)
   (or (number? x)

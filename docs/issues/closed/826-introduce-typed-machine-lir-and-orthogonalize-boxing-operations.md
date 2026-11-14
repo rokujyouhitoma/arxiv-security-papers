@@ -2,7 +2,8 @@
 ID: 826
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-11-15
 ---
 
 # [FEAT] 機械型 (i8..i64, f32, f64, ptr) を備えた Typed LIR への移行とボクシング操作の直交分離 (ID: 826)
@@ -25,13 +26,13 @@ Scheme 特有の動的型ボクシング（`%box-fixnum`, `%unbox-fixnum`, `%all
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lir/lir_lang.scm](../../ulisp/lir/lir_lang.scm): 機械型ターミナル、型付きレジスタ/オペランド、浮動小数点命令（`%fadd` 等）、幅指定メモリアクセス（`%load-typed`, `%store-typed`）の言語定義
-- [ ] [ulisp/lir/lir_verifier.scm](../../ulisp/lir/lir_verifier.scm): Typed LIR 型整合性検証器の拡張（レジスタ型チェック、幅整合性）
-- [ ] [ulisp/lir/130_lir.scm](../../ulisp/lir/130_lir.scm): AST/ANF から Typed LIR への Lowering ロジック、ボクシング直交化
-- [ ] [ulisp/lir/133_lir_peephole.scm](../../ulisp/lir/133_lir_peephole.scm): アンボックス化された冗長な `%box` / `%unbox` ペアの相殺除去
-- [ ] [ulisp/backend/140_backend_x86_64.scm](../../ulisp/backend/140_backend_x86_64.scm): 機械型に応じた x86_64 レジスタ（RAX/EAX/AX/AL, XMM0〜XMM15）選択および命令生成
-- [ ] [ulisp/backend/160_backend_c.scm](../../ulisp/backend/160_backend_c.scm): C バックエンドにおける機械型（`int8_t`〜`int64_t`, `double`, `uintptr_t`）の出力
-- [ ] [ulisp/tests/test_typed_lir.scm](../../ulisp/tests/test_typed_lir.scm): Typed LIR 生成・型検証・アンボックス最適化の単体テスト（新規作成）
+- [x] [ulisp/lir/lir_lang.scm](../../../ulisp/lir/lir_lang.scm): 機械型ターミナル、型付きレジスタ/オペランド、浮動小数点命令（`%fadd` 等）、幅指定メモリアクセス（`%load-typed`, `%store-typed`）の言語定義
+- [x] [ulisp/lir/lir_verifier.scm](../../../ulisp/lir/lir_verifier.scm): Typed LIR 型整合性検証器の拡張（レジスタ型チェック、幅整合性）
+- [x] [ulisp/lir/130_lir.scm](../../../ulisp/lir/130_lir.scm): AST/ANF から Typed LIR への Lowering ロジック、ボクシング直交化
+- [x] [ulisp/lir/133_lir_peephole.scm](../../../ulisp/lir/133_lir_peephole.scm): アンボックス化された冗長な `%box` / `%unbox` ペアの相殺除去
+- [x] [ulisp/backend/140_backend_x86_64.scm](../../../ulisp/backend/140_backend_x86_64.scm): 機械型に応じた x86_64 レジスタ（RAX/EAX/AX/AL, XMM0〜XMM15）選択および命令生成
+- [x] [ulisp/backend/160_backend_c.scm](../../../ulisp/backend/160_backend_c.scm): C バックエンドにおける機械型（`int8_t`〜`int64_t`, `double`, `uintptr_t`）の出力
+- [x] [ulisp/tests/test_typed_lir.scm](../../../ulisp/tests/test_typed_lir.scm): Typed LIR 生成・型検証・アンボックス最適化の単体テスト（新規作成）
 
 ---
 
@@ -98,9 +99,9 @@ Target Branch: `feat/826-typed-machine-lir-orthogonal-boxing`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/lir/lir_lang.scm` に機械型および型付き命令（幅指定メモリアクセス、浮動小数点演算）が定義されていること。
-- [ ] `ulisp/lir/lir_verifier.scm` にて型整合性・レジスタ型一致の静的検証が実装され、不正な型混在が検出されること。
-- [ ] `ulisp/lir/130_lir.scm` で Fixnum / Flonum のボクシングが直交分離され、型付き LIR が生成されること。
-- [ ] `make -C ulisp test_typed_lir` が新規作成され、型チェック・アンボックス最適化の全テストに PASS すること。
-- [ ] `make -C ulisp verify_zero_gauche` および `make -C ulisp lint_sexpr` が PASS すること。
-- [ ] 既存の全テストスイートおよびセルフホストブートストラップ検証（`test_pure_bootstrap.sh`）がリグレッションなく PASS すること。
+- [x] `ulisp/lir/lir_lang.scm` に機械型および型付き命令（幅指定メモリアクセス、浮動小数点演算）が定義されていること。
+- [x] `ulisp/lir/lir_verifier.scm` にて型整合性・レジスタ型一致の静的検証が実装され、不正な型混在が検出されること。
+- [x] `ulisp/lir/130_lir.scm` で Fixnum / Flonum のボクシングが直交分離され、型付き LIR が生成されること。
+- [x] `make -C ulisp test_typed_lir` が新規作成され、型チェック・アンボックス最適化の全テストに PASS すること。
+- [x] `make -C ulisp verify_zero_gauche` および `make -C ulisp lint_sexpr` が PASS すること。
+- [x] 既存の全テストスイートおよびセルフホストブートストラップ検証（`test_pure_bootstrap.sh`）がリグレッションなく PASS すること。

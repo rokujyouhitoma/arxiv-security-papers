@@ -7,17 +7,49 @@
   '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
     %r8  %r9  %r10 %r11 %r12 %r13 %r14 %r15 %al))
 
+(define *canonical-lir-float-registers*
+  '(%xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+    %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
+
+(define *canonical-lir-machine-types*
+  '(i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 ptr raw-bits scheme-val))
+
+(define (lir-machine-type? ty)
+  (if (memq ty *canonical-lir-machine-types*) #t #f))
+
 (define (lir-symbol-starts-with-percent? sym)
   (and (symbol? sym)
        (let ((str (symbol->string sym)))
          (and (> (string-length str) 1)
               (char=? (string-ref str 0) #\%)))))
 
+(define (lir-float-register? reg)
+  (cond
+    ((memq reg *canonical-lir-float-registers*) #t)
+    ((and (pair? reg) (eq? (car reg) '%reg) (pair? (cdr reg))
+          (memq (cadr reg) *canonical-lir-float-registers*)) #t)
+    ((and (pair? reg) (eq? (car reg) '%reg) (pair? (cdr reg)) (pair? (cddr reg))
+          (memq (cadr reg) '(f32 f64))) #t)
+    ((and (pair? reg) (eq? (car reg) '%freg) (pair? (cdr reg))) #t)
+    (else #f)))
+
+(define (lir-float-operand? opnd)
+  (or (lir-float-register? opnd)
+      (and (pair? opnd) (eq? (car opnd) '%mem))
+      (and (pair? opnd) (eq? (car opnd) '%stack))
+      (number? opnd)))
+
 (define (lir-valid-register? reg)
   (cond
     ((memq reg *canonical-lir-registers*) #t)
-    ((and (pair? reg) (eq? (car reg) '%reg) (pair? (cdr reg))
-          (memq (cadr reg) *canonical-lir-registers*)) #t)
+    ((memq reg *canonical-lir-float-registers*) #t)
+    ((and (pair? reg) (eq? (car reg) '%reg) (pair? (cdr reg)))
+     (cond
+       ((and (pair? (cddr reg)) (lir-machine-type? (cadr reg))) #t)
+       ((memq (cadr reg) *canonical-lir-registers*) #t)
+       ((memq (cadr reg) *canonical-lir-float-registers*) #t)
+       (else (symbol? (cadr reg)))))
+    ((and (pair? reg) (eq? (car reg) '%freg) (pair? (cdr reg)) (symbol? (cadr reg))) #t)
     (else #f)))
 
 (define (lir-valid-sib? sib)
@@ -337,6 +369,75 @@
                     (lir-valid-operand? (caddr inst)))
                #t
                (lir-report-error (string-append (symbol->string op) " format must be (op <dst> <src>)") inst)))
+
+          ;; Typed Machine LIR: Memory & Conversions (Issue #826)
+          ((%load-typed)
+           (if (and (= (length inst) 5)
+                    (lir-machine-type? (cadr inst))
+                    (lir-valid-register? (caddr inst))
+                    (lir-valid-register? (cadddr inst))
+                    (lir-valid-offset? (car (cddddr inst))))
+               (if (and (memq (cadr inst) '(f32 f64))
+                        (not (lir-float-register? (caddr inst))))
+                   (lir-report-error "%load-typed float type requires float destination register" inst)
+                   #t)
+               (lir-report-error "%load-typed format must be (%load-typed <mty> <dst-reg> <base-reg> <offset>)" inst)))
+
+          ((%store-typed)
+           (if (and (= (length inst) 5)
+                    (lir-machine-type? (cadr inst))
+                    (lir-valid-register? (caddr inst))
+                    (lir-valid-offset? (cadddr inst))
+                    (lir-valid-operand? (car (cddddr inst))))
+               (if (and (memq (cadr inst) '(f32 f64))
+                        (not (lir-float-operand? (car (cddddr inst)))))
+                   (lir-report-error "%store-typed float type requires float source operand" inst)
+                   #t)
+               (lir-report-error "%store-typed format must be (%store-typed <mty> <base-reg> <offset> <src-opnd>)" inst)))
+
+          ((%fmov)
+           (if (and (= (length inst) 3)
+                    (lir-float-register? (cadr inst))
+                    (lir-float-operand? (caddr inst)))
+               #t
+               (lir-report-error "%fmov format must be (%fmov <dst-freg> <src-fopnd>)" inst)))
+
+          ((%fadd %fsub %fmul %fdiv %fcmp)
+           (if (and (= (length inst) 3)
+                    (lir-float-register? (cadr inst))
+                    (lir-float-operand? (caddr inst)))
+               #t
+               (lir-report-error (string-append (symbol->string op) " operands must be floating-point registers/operands (CWE-843 defense)") inst)))
+
+          ((%box-flonum %unbox-flonum)
+           (if (and (= (length inst) 3)
+                    (lir-valid-operand? (cadr inst))
+                    (lir-valid-operand? (caddr inst)))
+               #t
+               (lir-report-error (string-append (symbol->string op) " format must be (op <dst> <src>)") inst)))
+
+          ((%sitofp)
+           (if (and (= (length inst) 3)
+                    (lir-float-register? (cadr inst))
+                    (lir-valid-operand? (caddr inst)))
+               #t
+               (lir-report-error "%sitofp format must be (%sitofp <dst-freg> <src-gpr>)" inst)))
+
+          ((%fptosi)
+           (if (and (= (length inst) 3)
+                    (lir-valid-register? (cadr inst))
+                    (not (lir-float-register? (cadr inst)))
+                    (lir-float-operand? (caddr inst)))
+               #t
+               (lir-report-error "%fptosi format must be (%fptosi <dst-gpr> <src-freg>)" inst)))
+
+          ((%trunc %zext %sext)
+           (if (and (= (length inst) 4)
+                    (lir-machine-type? (cadr inst))
+                    (lir-valid-register? (caddr inst))
+                    (lir-valid-operand? (cadddr inst)))
+               #t
+               (lir-report-error (string-append (symbol->string op) " format must be (op <mty> <dst> <src>)") inst)))
 
           ;; Runtime / GC / CC / Values
           ((%alloc)

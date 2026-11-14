@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **826** | 機械型 (i8..i64, f32, f64, ptr) を備えた Typed LIR への移行とボクシング操作の直交分離 | Feature | High | In Progress | [826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md](826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md) |
 | **827** | Pass 132 Braun SSA の任意 CFG (基本ブロック・多方向分岐・goto) 汎用対応化 | Feature | High | New | [827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md](827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md) |
 | **828** | LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設 | Feature | Medium | New | [828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md](828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md) |
 | **829** | 呼出規約 (Calling Convention) の多重化・モジュール分離とゼロオーバーヘッド C-FFI の実現 | Feature | High | New | [829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md](829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md) |
@@ -26,6 +25,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **826** | 機械型 (i8..i64, f32, f64, ptr) を備えた Typed LIR への移行とボクシング操作の直交分離 | Feature | 2026-11-15 | [826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md](closed/826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md) |
 | **825** | Nanopass AST 定数式評価器 (eval-in-language) およびコンパイル時計算 (CTFE) 基盤の導入 | Feature | 2026-11-15 | [825-implement-eval-in-language-ast-evaluator-for-ctfe-and-constant-folding.md](closed/825-implement-eval-in-language-ast-evaluator-for-ctfe-and-constant-folding.md) |
 | **844** | ビルド中間生成物クリーンアップとゼロ Gauche 依存の自動回帰検証 | Feature | Medium | Closed | [844-clean-build-artifacts-and-verify-zero-gauche-dependency.md](closed/844-clean-build-artifacts-and-verify-zero-gauche-dependency.md) |
 | **843** | Makefile および bootstrap.sh からの Gauche (gosh) フォールバック機構の疎結合化・純化 | Feature | Medium | Closed | [843-decouple-gauche-fallbacks-from-makefile-and-bootstrap-scripts.md](closed/843-decouple-gauche-fallbacks-from-makefile-and-bootstrap-scripts.md) |

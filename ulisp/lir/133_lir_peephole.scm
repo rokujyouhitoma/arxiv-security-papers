@@ -163,6 +163,34 @@
          (cons (list '%store '%rsp off src) (cons i1 (cons i2 (cons i3 rest))))
          (cons (list '%store '%rsp off src) (cons i1 (cons i2 (cons i3 (cons (list '%mov dst src) rest)))))))))
 
+;; Rule 8: Redundant Box-Unbox Pair Elimination (Issue #826)
+;; (%box-fixnum r1 r2) (%unbox-fixnum r3 r1) -> (%mov r3 r2)
+;; (%unbox-fixnum r1 r2) (%box-fixnum r3 r1) -> (%mov r3 r2)
+;; (%box-flonum r1 r2) (%unbox-flonum r3 r1) -> (%fmov r3 r2)
+;; (%unbox-flonum r1 r2) (%box-flonum r3 r1) -> (%fmov r3 r2)
+(define-picopass rule-lir-box-unbox-elim
+  (InstWindow
+    (((%box-fixnum ,d1 ,s1) (%unbox-fixnum ,d2 ,s2) . ,rest)
+     (guard (equal? d1 s2))
+     (if (equal? d2 s1)
+         rest
+         (cons (list '%mov d2 s1) rest)))
+    (((%unbox-fixnum ,d1 ,s1) (%box-fixnum ,d2 ,s2) . ,rest)
+     (guard (equal? d1 s2))
+     (if (equal? d2 s1)
+         rest
+         (cons (list '%mov d2 s1) rest)))
+    (((%box-flonum ,d1 ,s1) (%unbox-flonum ,d2 ,s2) . ,rest)
+     (guard (equal? d1 s2))
+     (if (equal? d2 s1)
+         rest
+         (cons (list '%fmov d2 s1) rest)))
+    (((%unbox-flonum ,d1 ,s1) (%box-flonum ,d2 ,s2) . ,rest)
+     (guard (equal? d1 s2))
+     (if (equal? d2 s1)
+         rest
+         (cons (list '%fmov d2 s1) rest)))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: lir-peephole-optimize (fuse-window-rules)
 ;;; -----------------------------------------------------------------------
@@ -175,6 +203,7 @@
     rule-lir-jump-next-label-elim
     rule-lir-identity-arith-elim
     rule-lir-identity-mul-elim
+    rule-lir-box-unbox-elim
     rule-lir-unreachable-dce))
 
 (define (optimize-peephole-fixpoint insts)

@@ -1991,13 +1991,15 @@
              raise %raise
              %set-heap-ptr! %ptr-tag %ptr-untag
              %to-raw %to-fixnum
-             %box-fixnum %unbox-fixnum)))
+             %box-fixnum %unbox-fixnum
+             %box-flonum %unbox-flonum %sitofp %fptosi)))
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
              bytevector-u8-ref vector-ref
              %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
-             %raw-add %raw-sub %raw-mul %raw-cmp)))
+             %raw-add %raw-sub %raw-mul %raw-cmp
+             %fadd %fsub %fmul %fdiv %fcmp %fmov)))
 
 (define (triop-prim? op)
   (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!)))
@@ -2024,8 +2026,10 @@
              car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
              bytevector? bytevector-length vector? vector-length %num-args
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
+             %box-flonum %unbox-flonum %sitofp %fptosi
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
-             %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp)))
+             %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
+             %fadd %fsub %fmul %fdiv %fcmp %fmov)))
 
 (define (const? x)
   (or (number? x)
@@ -16267,13 +16271,17 @@
 (define-language L_lir_raw
   (entry Program)
   (terminals
-    (symbol (x lbl var cond_op sp_lbl))
+    (symbol (x lbl var cond_op sp_lbl mty))
     (integer (n offset shift frame_size bytes tag si cnt bitmap line col))
     (string (str fn_name)))
   (Register (reg)
     %rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
     %r8  %r9  %r10 %r11 %r12 %r13 %r14 %r15 %al
-    (%reg x))
+    %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+    %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15
+    (%reg x)
+    (%reg mty x)
+    (%freg x))
   (StackSlot (stk)
     (%stack offset))
   (MemRef (mem)
@@ -16354,6 +16362,21 @@
     (%set-boolean opnd cond_op)
     (%box-fixnum opnd1 opnd2)
     (%unbox-fixnum opnd1 opnd2)
+    (%load-typed mty reg1 reg2 offset)
+    (%store-typed mty reg1 offset opnd)
+    (%fmov reg1 reg2)
+    (%fadd opnd1 opnd2)
+    (%fsub opnd1 opnd2)
+    (%fmul opnd1 opnd2)
+    (%fdiv opnd1 opnd2)
+    (%fcmp opnd1 opnd2)
+    (%box-flonum opnd1 opnd2)
+    (%unbox-flonum opnd1 opnd2)
+    (%sitofp reg1 opnd2)
+    (%fptosi reg1 opnd2)
+    (%trunc mty reg1 opnd2)
+    (%zext mty reg1 opnd2)
+    (%sext mty reg1 opnd2)
     (%syscall)
     (%syscall si)
     (%memory-fence)
@@ -16399,17 +16422,49 @@
   '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
     %r8  %r9  %r10 %r11 %r12 %r13 %r14 %r15 %al))
 
+(define *canonical-lir-float-registers*
+  '(%xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+    %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
+
+(define *canonical-lir-machine-types*
+  '(i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 ptr raw-bits scheme-val))
+
+(define (lir-machine-type? ty)
+  (if (memq ty *canonical-lir-machine-types*) #t #f))
+
 (define (lir-symbol-starts-with-percent? sym)
   (and (symbol? sym)
        (let ((str (symbol->string sym)))
          (and (> (string-length str) 1)
               (char=? (string-ref str 0) #\%)))))
 
+(define (lir-float-register? reg)
+  (cond
+    ((memq reg *canonical-lir-float-registers*) #t)
+    ((and (pair? reg) (eq? (car reg) '%reg) (pair? (cdr reg))
+          (memq (cadr reg) *canonical-lir-float-registers*)) #t)
+    ((and (pair? reg) (eq? (car reg) '%reg) (pair? (cdr reg)) (pair? (cddr reg))
+          (memq (cadr reg) '(f32 f64))) #t)
+    ((and (pair? reg) (eq? (car reg) '%freg) (pair? (cdr reg))) #t)
+    (else #f)))
+
+(define (lir-float-operand? opnd)
+  (or (lir-float-register? opnd)
+      (and (pair? opnd) (eq? (car opnd) '%mem))
+      (and (pair? opnd) (eq? (car opnd) '%stack))
+      (number? opnd)))
+
 (define (lir-valid-register? reg)
   (cond
     ((memq reg *canonical-lir-registers*) #t)
-    ((and (pair? reg) (eq? (car reg) '%reg) (pair? (cdr reg))
-          (memq (cadr reg) *canonical-lir-registers*)) #t)
+    ((memq reg *canonical-lir-float-registers*) #t)
+    ((and (pair? reg) (eq? (car reg) '%reg) (pair? (cdr reg)))
+     (cond
+       ((and (pair? (cddr reg)) (lir-machine-type? (cadr reg))) #t)
+       ((memq (cadr reg) *canonical-lir-registers*) #t)
+       ((memq (cadr reg) *canonical-lir-float-registers*) #t)
+       (else (symbol? (cadr reg)))))
+    ((and (pair? reg) (eq? (car reg) '%freg) (pair? (cdr reg)) (symbol? (cadr reg))) #t)
     (else #f)))
 
 (define (lir-valid-sib? sib)
@@ -16729,6 +16784,75 @@
                     (lir-valid-operand? (caddr inst)))
                #t
                (lir-report-error (string-append (symbol->string op) " format must be (op <dst> <src>)") inst)))
+
+          ;; Typed Machine LIR: Memory & Conversions (Issue #826)
+          ((%load-typed)
+           (if (and (= (length inst) 5)
+                    (lir-machine-type? (cadr inst))
+                    (lir-valid-register? (caddr inst))
+                    (lir-valid-register? (cadddr inst))
+                    (lir-valid-offset? (car (cddddr inst))))
+               (if (and (memq (cadr inst) '(f32 f64))
+                        (not (lir-float-register? (caddr inst))))
+                   (lir-report-error "%load-typed float type requires float destination register" inst)
+                   #t)
+               (lir-report-error "%load-typed format must be (%load-typed <mty> <dst-reg> <base-reg> <offset>)" inst)))
+
+          ((%store-typed)
+           (if (and (= (length inst) 5)
+                    (lir-machine-type? (cadr inst))
+                    (lir-valid-register? (caddr inst))
+                    (lir-valid-offset? (cadddr inst))
+                    (lir-valid-operand? (car (cddddr inst))))
+               (if (and (memq (cadr inst) '(f32 f64))
+                        (not (lir-float-operand? (car (cddddr inst)))))
+                   (lir-report-error "%store-typed float type requires float source operand" inst)
+                   #t)
+               (lir-report-error "%store-typed format must be (%store-typed <mty> <base-reg> <offset> <src-opnd>)" inst)))
+
+          ((%fmov)
+           (if (and (= (length inst) 3)
+                    (lir-float-register? (cadr inst))
+                    (lir-float-operand? (caddr inst)))
+               #t
+               (lir-report-error "%fmov format must be (%fmov <dst-freg> <src-fopnd>)" inst)))
+
+          ((%fadd %fsub %fmul %fdiv %fcmp)
+           (if (and (= (length inst) 3)
+                    (lir-float-register? (cadr inst))
+                    (lir-float-operand? (caddr inst)))
+               #t
+               (lir-report-error (string-append (symbol->string op) " operands must be floating-point registers/operands (CWE-843 defense)") inst)))
+
+          ((%box-flonum %unbox-flonum)
+           (if (and (= (length inst) 3)
+                    (lir-valid-operand? (cadr inst))
+                    (lir-valid-operand? (caddr inst)))
+               #t
+               (lir-report-error (string-append (symbol->string op) " format must be (op <dst> <src>)") inst)))
+
+          ((%sitofp)
+           (if (and (= (length inst) 3)
+                    (lir-float-register? (cadr inst))
+                    (lir-valid-operand? (caddr inst)))
+               #t
+               (lir-report-error "%sitofp format must be (%sitofp <dst-freg> <src-gpr>)" inst)))
+
+          ((%fptosi)
+           (if (and (= (length inst) 3)
+                    (lir-valid-register? (cadr inst))
+                    (not (lir-float-register? (cadr inst)))
+                    (lir-float-operand? (caddr inst)))
+               #t
+               (lir-report-error "%fptosi format must be (%fptosi <dst-gpr> <src-freg>)" inst)))
+
+          ((%trunc %zext %sext)
+           (if (and (= (length inst) 4)
+                    (lir-machine-type? (cadr inst))
+                    (lir-valid-register? (caddr inst))
+                    (lir-valid-operand? (cadddr inst)))
+               #t
+               (lir-report-error (string-append (symbol->string op) " format must be (op <mty> <dst> <src>)") inst)))
 
           ;; Runtime / GC / CC / Values
           ((%alloc)
@@ -18882,6 +19006,14 @@
      (emit-lir! '(%box-fixnum %rax %rax)))
     ((%unbox-fixnum)
      (emit-lir! '(%unbox-fixnum %rax %rax)))
+    ((%box-flonum)
+     (emit-lir! '(%box-flonum %rax %xmm0)))
+    ((%unbox-flonum)
+     (emit-lir! '(%unbox-flonum %xmm0 %rax)))
+    ((%sitofp)
+     (emit-lir! '(%sitofp %xmm0 %rax)))
+    ((%fptosi)
+     (emit-lir! '(%fptosi %rax %xmm0)))
     ((make-string)
      (emit-lir! '(%sar %rax 2))
      (emit-lir! '(%mov %rcx %rax))
@@ -19343,7 +19475,8 @@
   (cond
     ((not (pair? expr))
      (and (symbol? expr) (memq expr raw-env)))
-    ((memq (car expr) '(%raw-add %raw-sub %raw-mul %raw-cmp %raw-load %raw-syscall %to-raw %unbox-fixnum))
+    ((memq (car expr) '(%raw-add %raw-sub %raw-mul %raw-cmp %raw-load %raw-syscall %to-raw %unbox-fixnum
+                        %load-typed %fadd %fsub %fmul %fdiv %fcmp %unbox-flonum %sitofp %fptosi))
      #t)
     ((and (eq? (car expr) '%direct-call)
           (pair? (cdr expr))
@@ -19478,6 +19611,60 @@
             (emit-lir! (list '%load '%rdx '%rsp si))
             (emit-lir! (list '%store '%rdx offset '%rax))
             (emit-lir! '(%mov %rax 63))))
+         ;; Typed Machine LIR: Memory Access, FP & Conversions (Issue #826)
+         ((eq? op '%load-typed)
+          (let ((mty (cadr expr))
+                (base-expr (caddr expr))
+                (off-expr (cadddr expr)))
+            (lir-compile-expr base-expr si env #f)
+            (let ((dst-reg (if (memq mty '(f32 f64)) '%xmm0 '%rax)))
+              (emit-lir! (list '%load-typed mty dst-reg '%rax off-expr)))))
+         ((eq? op '%store-typed)
+          (let ((mty (cadr expr))
+                (base-expr (caddr expr))
+                (off-expr (cadddr expr))
+                (val-expr (car (cddddr expr))))
+            (track-lir-si! si)
+            (lir-compile-expr base-expr si env #f)
+            (emit-lir! (list '%store '%rsp si '%rax))
+            (track-lir-si! (- si 8))
+            (lir-compile-expr val-expr (- si 8) env #f)
+            (emit-lir! (list '%load '%rdx '%rsp si))
+            (let ((src-opnd (if (memq mty '(f32 f64)) '%xmm0 '%rax)))
+              (emit-lir! (list '%store-typed mty '%rdx off-expr src-opnd))
+              (emit-lir! '(%mov %rax 63)))))
+         ((memq op '(%fadd %fsub %fmul %fdiv %fcmp))
+          (let ((e1 (cadr expr))
+                (e2 (caddr expr)))
+            (track-lir-si! si)
+            (lir-compile-expr e1 si env #f)
+            (emit-lir! (list '%store '%rsp si '%rax))
+            (track-lir-si! (- si 8))
+            (lir-compile-expr e2 (- si 8) env #f)
+            (emit-lir! '(%fmov %xmm1 %xmm0))
+            (emit-lir! (list '%load '%rax '%rsp si))
+            (emit-lir! (list op '%xmm0 '%xmm1))))
+         ((eq? op '%fmov)
+          (lir-compile-expr (cadr expr) si env #f)
+          (emit-lir! '(%fmov %xmm0 %xmm1)))
+         ((eq? op '%sitofp)
+          (lir-compile-expr (cadr expr) si env #f)
+          (emit-lir! '(%sitofp %xmm0 %rax)))
+         ((eq? op '%fptosi)
+          (lir-compile-expr (cadr expr) si env #f)
+          (emit-lir! '(%fptosi %rax %xmm0)))
+         ((eq? op '%box-flonum)
+          (lir-compile-expr (cadr expr) si env #f)
+          (emit-lir! '(%alloc %rax 16 3))
+          (emit-lir! '(%store-typed f64 %rax 8 %xmm0)))
+         ((eq? op '%unbox-flonum)
+          (lir-compile-expr (cadr expr) si env #f)
+          (emit-lir! '(%load-typed f64 %xmm0 %rax 8)))
+         ((memq op '(%trunc %zext %sext))
+          (let ((mty (cadr expr))
+                (val-expr (caddr expr)))
+            (lir-compile-expr val-expr si env #f)
+            (emit-lir! (list op mty '%rax '%rax))))
          ((binop-prim? op)
           (lir-compile-binop op (cadr expr) (caddr expr) si env))
          ((triop-prim? op)
@@ -20229,6 +20416,34 @@
          (cons (list '%store '%rsp off src) (cons i1 (cons i2 (cons i3 rest))))
          (cons (list '%store '%rsp off src) (cons i1 (cons i2 (cons i3 (cons (list '%mov dst src) rest)))))))))
 
+;; Rule 8: Redundant Box-Unbox Pair Elimination (Issue #826)
+;; (%box-fixnum r1 r2) (%unbox-fixnum r3 r1) -> (%mov r3 r2)
+;; (%unbox-fixnum r1 r2) (%box-fixnum r3 r1) -> (%mov r3 r2)
+;; (%box-flonum r1 r2) (%unbox-flonum r3 r1) -> (%fmov r3 r2)
+;; (%unbox-flonum r1 r2) (%box-flonum r3 r1) -> (%fmov r3 r2)
+(define-picopass rule-lir-box-unbox-elim
+  (InstWindow
+    (((%box-fixnum ,d1 ,s1) (%unbox-fixnum ,d2 ,s2) . ,rest)
+     (guard (equal? d1 s2))
+     (if (equal? d2 s1)
+         rest
+         (cons (list '%mov d2 s1) rest)))
+    (((%unbox-fixnum ,d1 ,s1) (%box-fixnum ,d2 ,s2) . ,rest)
+     (guard (equal? d1 s2))
+     (if (equal? d2 s1)
+         rest
+         (cons (list '%mov d2 s1) rest)))
+    (((%box-flonum ,d1 ,s1) (%unbox-flonum ,d2 ,s2) . ,rest)
+     (guard (equal? d1 s2))
+     (if (equal? d2 s1)
+         rest
+         (cons (list '%fmov d2 s1) rest)))
+    (((%unbox-flonum ,d1 ,s1) (%box-flonum ,d2 ,s2) . ,rest)
+     (guard (equal? d1 s2))
+     (if (equal? d2 s1)
+         rest
+         (cons (list '%fmov d2 s1) rest)))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: lir-peephole-optimize (fuse-window-rules)
 ;;; -----------------------------------------------------------------------
@@ -20241,6 +20456,7 @@
     rule-lir-jump-next-label-elim
     rule-lir-identity-arith-elim
     rule-lir-identity-mul-elim
+    rule-lir-box-unbox-elim
     rule-lir-unreachable-dce))
 
 (define (optimize-peephole-fixpoint insts)
@@ -20493,7 +20709,93 @@
     ((%r14 r14) "r14")
     ((%r15 r15) "r15")
     ((%al  al)  "al")
-    (else (if (symbol? reg) (asm-label->str reg) reg))))
+    ((%xmm0 xmm0) "xmm0")
+    ((%xmm1 xmm1) "xmm1")
+    ((%xmm2 xmm2) "xmm2")
+    ((%xmm3 xmm3) "xmm3")
+    ((%xmm4 xmm4) "xmm4")
+    ((%xmm5 xmm5) "xmm5")
+    ((%xmm6 xmm6) "xmm6")
+    ((%xmm7 xmm7) "xmm7")
+    ((%xmm8 xmm8) "xmm8")
+    ((%xmm9 xmm9) "xmm9")
+    ((%xmm10 xmm10) "xmm10")
+    ((%xmm11 xmm11) "xmm11")
+    ((%xmm12 xmm12) "xmm12")
+    ((%xmm13 xmm13) "xmm13")
+    ((%xmm14 xmm14) "xmm14")
+    ((%xmm15 xmm15) "xmm15")
+    (else
+     (cond
+       ((and (pair? reg) (eq? (car reg) '%reg))
+        (if (and (pair? (cdr reg)) (pair? (cddr reg)))
+            (reg->str (caddr reg))
+            (reg->str (cadr reg))))
+       ((and (pair? reg) (eq? (car reg) '%freg))
+        (reg->str (cadr reg)))
+       ((symbol? reg) (asm-label->str reg))
+       (else reg)))))
+
+(define (reg8->str reg)
+  (case reg
+    ((%rax rax) "al")
+    ((%rbx rbx) "bl")
+    ((%rcx rcx) "cl")
+    ((%rdx rdx) "dl")
+    ((%rsi rsi) "sil")
+    ((%rdi rdi) "dil")
+    ((%rbp rbp) "bpl")
+    ((%rsp rsp) "spl")
+    ((%r8  r8)  "r8b")
+    ((%r9  r9)  "r9b")
+    ((%r10 r10) "r10b")
+    ((%r11 r11) "r11b")
+    ((%r12 r12) "r12b")
+    ((%r13 r13) "r13b")
+    ((%r14 r14) "r14b")
+    ((%r15 r15) "r15b")
+    ((%al  al)  "al")
+    (else (reg->str reg))))
+
+(define (reg16->str reg)
+  (case reg
+    ((%rax rax) "ax")
+    ((%rbx rbx) "bx")
+    ((%rcx rcx) "cx")
+    ((%rdx rdx) "dx")
+    ((%rsi rsi) "si")
+    ((%rdi rdi) "di")
+    ((%rbp rbp) "bp")
+    ((%rsp rsp) "sp")
+    ((%r8  r8)  "r8w")
+    ((%r9  r9)  "r9w")
+    ((%r10 r10) "r10w")
+    ((%r11 r11) "r11w")
+    ((%r12 r12) "r12w")
+    ((%r13 r13) "r13w")
+    ((%r14 r14) "r14w")
+    ((%r15 r15) "r15w")
+    (else (reg->str reg))))
+
+(define (reg32->str reg)
+  (case reg
+    ((%rax rax) "eax")
+    ((%rbx rbx) "ebx")
+    ((%rcx rcx) "ecx")
+    ((%rdx rdx) "edx")
+    ((%rsi rsi) "esi")
+    ((%rdi rdi) "edi")
+    ((%rbp rbp) "ebp")
+    ((%rsp rsp) "esp")
+    ((%r8  r8)  "r8d")
+    ((%r9  r9)  "r9d")
+    ((%r10 r10) "r10d")
+    ((%r11 r11) "r11d")
+    ((%r12 r12) "r12d")
+    ((%r13 r13) "r13d")
+    ((%r14 r14) "r14d")
+    ((%r15 r15) "r15d")
+    (else (reg->str reg))))
 
 (define (mem-op->str base offset)
   (cond
@@ -20881,6 +21183,105 @@
              (list (list 'sar (lower-lir-opnd dst) 2))
              (list (list 'mov (lower-lir-opnd dst) (lower-lir-opnd src))
                    (list 'sar (lower-lir-opnd dst) 2)))))
+
+      ;; Typed Machine LIR: Memory Access, FP & Conversions (Issue #826)
+      ((%load-typed)
+       (let ((mty (cadr inst))
+             (dst (caddr inst))
+             (base (cadddr inst))
+             (offset (car (cddddr inst))))
+         (let ((dst-str (reg->str dst))
+               (mem-str (mem-op->str base offset)))
+           (case mty
+             ((i8)  (list (list '%raw-asm (string-append "    movsx " dst-str ", byte ptr " mem-str))))
+             ((u8)  (list (list '%raw-asm (string-append "    movzx " dst-str ", byte ptr " mem-str))))
+             ((i16) (list (list '%raw-asm (string-append "    movsx " dst-str ", word ptr " mem-str))))
+             ((u16) (list (list '%raw-asm (string-append "    movzx " dst-str ", word ptr " mem-str))))
+             ((i32) (list (list '%raw-asm (string-append "    movsxd " dst-str ", dword ptr " mem-str))))
+             ((u32) (list (list '%raw-asm (string-append "    mov " (reg32->str dst) ", dword ptr " mem-str))))
+             ((f32) (list (list '%raw-asm (string-append "    movss " dst-str ", dword ptr " mem-str))))
+             ((f64) (list (list '%raw-asm (string-append "    movsd " dst-str ", qword ptr " mem-str))))
+             (else  (list (list '%raw-asm (string-append "    mov " dst-str ", qword ptr " mem-str))))))))
+
+      ((%store-typed)
+       (let ((mty (cadr inst))
+             (base (caddr inst))
+             (offset (cadddr inst))
+             (src (car (cddddr inst))))
+         (let ((src-str (if (number? src) (number->string src) (reg->str src)))
+               (mem-str (mem-op->str base offset)))
+           (case mty
+             ((i8 u8)   (list (list '%raw-asm (string-append "    mov byte ptr " mem-str ", " (if (number? src) src-str (reg8->str src))))))
+             ((i16 u16) (list (list '%raw-asm (string-append "    mov word ptr " mem-str ", " (if (number? src) src-str (reg16->str src))))))
+             ((i32 u32) (list (list '%raw-asm (string-append "    mov dword ptr " mem-str ", " (if (number? src) src-str (reg32->str src))))))
+             ((f32)     (list (list '%raw-asm (string-append "    movss dword ptr " mem-str ", " src-str))))
+             ((f64)     (list (list '%raw-asm (string-append "    movsd qword ptr " mem-str ", " src-str))))
+             (else      (list (list '%raw-asm (string-append "    mov qword ptr " mem-str ", " src-str))))))))
+
+      ((%fmov)
+       (let ((dst (cadr inst))
+             (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    movsd " (reg->str dst) ", " (if (pair? src) (operand->str src) (reg->str src)))))))
+
+      ((%fadd)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    addsd " (reg->str dst) ", " (if (pair? src) (operand->str src) (reg->str src)))))))
+
+      ((%fsub)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    subsd " (reg->str dst) ", " (if (pair? src) (operand->str src) (reg->str src)))))))
+
+      ((%fmul)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    mulsd " (reg->str dst) ", " (if (pair? src) (operand->str src) (reg->str src)))))))
+
+      ((%fdiv)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    divsd " (reg->str dst) ", " (if (pair? src) (operand->str src) (reg->str src)))))))
+
+      ((%fcmp)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    ucomisd " (reg->str dst) ", " (if (pair? src) (operand->str src) (reg->str src)))))))
+
+      ((%sitofp)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    cvtsi2sd " (reg->str dst) ", " (reg->str src))))))
+
+      ((%fptosi)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    cvttsd2si " (reg->str dst) ", " (reg->str src))))))
+
+      ((%box-flonum)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    movsd qword ptr [" (reg->str dst) " + 8], " (reg->str src))))))
+
+      ((%unbox-flonum)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    movsd " (reg->str dst) ", qword ptr [" (reg->str src) " + 8]")))))
+
+      ((%trunc)
+       (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
+         (case mty
+           ((i8 u8)   (list (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg8->str src)))))
+           ((i16 u16) (list (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg16->str src)))))
+           ((i32 u32) (list (list '%raw-asm (string-append "    mov " (reg32->str dst) ", " (reg32->str src)))))
+           (else      (list (list '%raw-asm (string-append "    mov " (reg->str dst) ", " (reg->str src))))))))
+
+      ((%zext)
+       (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
+         (case mty
+           ((i8 u8)   (list (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg8->str src)))))
+           ((i16 u16) (list (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg16->str src)))))
+           ((i32 u32) (list (list '%raw-asm (string-append "    mov " (reg32->str dst) ", " (reg32->str src)))))
+           (else      (list (list '%raw-asm (string-append "    mov " (reg->str dst) ", " (reg->str src))))))))
+
+      ((%sext)
+       (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
+         (case mty
+           ((i8 u8)   (list (list '%raw-asm (string-append "    movsx " (reg->str dst) ", " (reg8->str src)))))
+           ((i16 u16) (list (list '%raw-asm (string-append "    movsx " (reg->str dst) ", " (reg16->str src)))))
+           ((i32 u32) (list (list '%raw-asm (string-append "    movsxd " (reg->str dst) ", " (reg32->str src)))))
+           (else      (list (list '%raw-asm (string-append "    mov " (reg->str dst) ", " (reg->str src))))))))
 
       ((%cqo)
        (list (list 'cqo)))
@@ -27699,7 +28100,32 @@
     ((%rbp) "x29")
     ((%rsp) "sp")
     ((%al)  "w0")
-    (else (symbol->string reg))))
+    ((%xmm0) "d0")
+    ((%xmm1) "d1")
+    ((%xmm2) "d2")
+    ((%xmm3) "d3")
+    ((%xmm4) "d4")
+    ((%xmm5) "d5")
+    ((%xmm6) "d6")
+    ((%xmm7) "d7")
+    ((%xmm8) "d8")
+    ((%xmm9) "d9")
+    ((%xmm10) "d10")
+    ((%xmm11) "d11")
+    ((%xmm12) "d12")
+    ((%xmm13) "d13")
+    ((%xmm14) "d14")
+    ((%xmm15) "d15")
+    (else
+     (cond
+       ((and (pair? reg) (eq? (car reg) '%reg))
+        (if (and (pair? (cdr reg)) (pair? (cddr reg)))
+            (arm-reg->str (caddr reg))
+            (arm-reg->str (cadr reg))))
+       ((and (pair? reg) (eq? (car reg) '%freg))
+        (arm-reg->str (cadr reg)))
+       ((symbol? reg) (symbol->string reg))
+       (else reg)))))
 
 (define (arm-w-reg->str reg)
   (case reg
@@ -28226,6 +28652,91 @@
        (let ((dst (cadr inst))
              (src (caddr inst)))
          (emit (string-append "    asr " (arm-reg->str dst) ", " (arm-reg->str src) ", #2"))))
+
+      ;; Typed Machine LIR: Memory Access, FP & Conversions (Issue #826)
+      ((%load-typed)
+       (let ((mty (cadr inst))
+             (dst (caddr inst))
+             (base (cadddr inst))
+             (offset (car (cddddr inst))))
+         (let ((dst-str (arm-reg->str dst))
+               (mem-str (arm-mem-op->str base offset)))
+           (case mty
+             ((i8)  (emit (string-append "    ldrsb " dst-str ", " mem-str)))
+             ((u8)  (emit (string-append "    ldrb " (arm-w-reg->str dst) ", " mem-str)))
+             ((i16) (emit (string-append "    ldrsh " dst-str ", " mem-str)))
+             ((u16) (emit (string-append "    ldrh " (arm-w-reg->str dst) ", " mem-str)))
+             ((i32) (emit (string-append "    ldrsw " dst-str ", " mem-str)))
+             ((u32) (emit (string-append "    ldr " (arm-w-reg->str dst) ", " mem-str)))
+             ((f32) (emit (string-append "    ldr s" (substring dst-str 1 (string-length dst-str)) ", " mem-str)))
+             ((f64) (emit (string-append "    ldr " dst-str ", " mem-str)))
+             (else  (emit (string-append "    ldr " dst-str ", " mem-str)))))))
+
+      ((%store-typed)
+       (let ((mty (cadr inst))
+             (base (caddr inst))
+             (offset (cadddr inst))
+             (src (car (cddddr inst))))
+         (let ((src-str (arm-operand->str src))
+               (mem-str (arm-mem-op->str base offset)))
+           (case mty
+             ((i8 u8)   (emit (string-append "    strb " (arm-w-reg->str src) ", " mem-str)))
+             ((i16 u16) (emit (string-append "    strh " (arm-w-reg->str src) ", " mem-str)))
+             ((i32 u32) (emit (string-append "    str " (arm-w-reg->str src) ", " mem-str)))
+             ((f32)     (emit (string-append "    str s" (substring src-str 1 (string-length src-str)) ", " mem-str)))
+             ((f64)     (emit (string-append "    str " src-str ", " mem-str)))
+             (else      (emit (string-append "    str " src-str ", " mem-str)))))))
+
+      ((%fmov)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    fmov " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%fadd)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    fadd " (arm-reg->str dst) ", " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%fsub)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    fsub " (arm-reg->str dst) ", " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%fmul)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    fmul " (arm-reg->str dst) ", " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%fdiv)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    fdiv " (arm-reg->str dst) ", " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%fcmp)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    fcmp " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%sitofp)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    scvtf " (arm-reg->str dst) ", " (arm-reg->str src)))))
+
+      ((%fptosi)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    fcvtzs " (arm-reg->str dst) ", " (arm-reg->str src)))))
+
+      ((%box-flonum)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    str " (arm-reg->str src) ", [" (arm-reg->str dst) ", #8]"))))
+
+      ((%unbox-flonum)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    ldr " (arm-reg->str dst) ", [" (arm-reg->str src) ", #8]"))))
+
+      ((%trunc %zext %sext)
+       (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
+         (case mty
+           ((i8)  (emit (string-append "    sxtb " (arm-reg->str dst) ", " (arm-w-reg->str src))))
+           ((u8)  (emit (string-append "    uxtb " (arm-w-reg->str dst) ", " (arm-w-reg->str src))))
+           ((i16) (emit (string-append "    sxth " (arm-reg->str dst) ", " (arm-w-reg->str src))))
+           ((u16) (emit (string-append "    uxth " (arm-w-reg->str dst) ", " (arm-w-reg->str src))))
+           ((i32) (emit (string-append "    sxtw " (arm-reg->str dst) ", " (arm-w-reg->str src))))
+           ((u32) (emit (string-append "    mov " (arm-w-reg->str dst) ", " (arm-w-reg->str src))))
+           (else  (emit (string-append "    mov " (arm-reg->str dst) ", " (arm-operand->str src)))))))
 
       ((%cqo)
        ;; In AArch64, 64-bit sdiv does not require cqo sign extension; no-op.
@@ -29222,7 +29733,31 @@
     ((%r15) "reg_r15")
     ((%rsp) "reg_rsp")
     ((%al)  "((uint8_t)reg_rax)")
-    (else (c-sanitize-label reg))))
+    ((%xmm0) "reg_xmm0")
+    ((%xmm1) "reg_xmm1")
+    ((%xmm2) "reg_xmm2")
+    ((%xmm3) "reg_xmm3")
+    ((%xmm4) "reg_xmm4")
+    ((%xmm5) "reg_xmm5")
+    ((%xmm6) "reg_xmm6")
+    ((%xmm7) "reg_xmm7")
+    ((%xmm8) "reg_xmm8")
+    ((%xmm9) "reg_xmm9")
+    ((%xmm10) "reg_xmm10")
+    ((%xmm11) "reg_xmm11")
+    ((%xmm12) "reg_xmm12")
+    ((%xmm13) "reg_xmm13")
+    ((%xmm14) "reg_xmm14")
+    ((%xmm15) "reg_xmm15")
+    (else
+     (cond
+       ((and (pair? reg) (eq? (car reg) '%reg))
+        (if (and (pair? (cdr reg)) (pair? (cddr reg)))
+            (c-reg->str (caddr reg))
+            (c-reg->str (cadr reg))))
+       ((and (pair? reg) (eq? (car reg) '%freg))
+        (c-reg->str (cadr reg)))
+       (else (c-sanitize-label reg))))))
 
 (define (c-base-ptr-str base)
   (case base
@@ -29510,6 +30045,93 @@
        (let ((dst (cadr inst))
              (src (caddr inst)))
          (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(((int64_t)" (c-operand->str src) ") >> 2);"))))
+
+      ;; Typed Machine LIR: Memory Access, FP & Conversions (Issue #826)
+      ((%load-typed)
+       (let ((mty (cadr inst))
+             (dst (caddr inst))
+             (base (cadddr inst))
+             (offset (car (cddddr inst))))
+         (let ((base-str (c-base-ptr-str base))
+               (off-str (c-offset->str offset))
+               (dst-str (c-operand->str dst)))
+           (case mty
+             ((i8)  (emit (string-append "    " dst-str " = (uint64_t)(*(int8_t *)(" base-str " + (" off-str ")));")))
+             ((u8)  (emit (string-append "    " dst-str " = (uint64_t)(*(uint8_t *)(" base-str " + (" off-str ")));")))
+             ((i16) (emit (string-append "    " dst-str " = (uint64_t)(*(int16_t *)(" base-str " + (" off-str ")));")))
+             ((u16) (emit (string-append "    " dst-str " = (uint64_t)(*(uint16_t *)(" base-str " + (" off-str ")));")))
+             ((i32) (emit (string-append "    " dst-str " = (uint64_t)(*(int32_t *)(" base-str " + (" off-str ")));")))
+             ((u32) (emit (string-append "    " dst-str " = (uint64_t)(*(uint32_t *)(" base-str " + (" off-str ")));")))
+             ((f32) (emit (string-append "    " dst-str " = (double)(*(float *)(" base-str " + (" off-str ")));")))
+             ((f64) (emit (string-append "    " dst-str " = *(double *)(" base-str " + (" off-str "));")))
+             (else  (emit (string-append "    " dst-str " = *(uint64_t *)(" base-str " + (" off-str "));")))))))
+
+      ((%store-typed)
+       (let ((mty (cadr inst))
+             (base (caddr inst))
+             (offset (cadddr inst))
+             (src (car (cddddr inst))))
+         (let ((base-str (c-base-ptr-str base))
+               (off-str (c-offset->str offset))
+               (src-str (c-operand->str src)))
+           (case mty
+             ((i8 u8)   (emit (string-append "    *(uint8_t *)(" base-str " + (" off-str ")) = (uint8_t)(" src-str ");")))
+             ((i16 u16) (emit (string-append "    *(uint16_t *)(" base-str " + (" off-str ")) = (uint16_t)(" src-str ");")))
+             ((i32 u32) (emit (string-append "    *(uint32_t *)(" base-str " + (" off-str ")) = (uint32_t)(" src-str ");")))
+             ((f32)     (emit (string-append "    *(float *)(" base-str " + (" off-str ")) = (float)(" src-str ");")))
+             ((f64)     (emit (string-append "    *(double *)(" base-str " + (" off-str ")) = (double)(" src-str ");")))
+             (else      (emit (string-append "    *(uint64_t *)(" base-str " + (" off-str ")) = (uint64_t)(" src-str ");")))))))
+
+      ((%fmov)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = (double)" (c-operand->str src) ";"))))
+
+      ((%fadd)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " += (double)" (c-operand->str src) ";"))))
+
+      ((%fsub)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " -= (double)" (c-operand->str src) ";"))))
+
+      ((%fmul)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " *= (double)" (c-operand->str src) ";"))))
+
+      ((%fdiv)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " /= (double)" (c-operand->str src) ";"))))
+
+      ((%fcmp)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    cmp_s1 = ((double)" (c-operand->str dst) " == (double)" (c-operand->str src) ") ? 0x6F : 0x2F;"))))
+
+      ((%sitofp)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = (double)((int64_t)" (c-operand->str src) ");"))))
+
+      ((%fptosi)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(double)" (c-operand->str src) ");"))))
+
+      ((%box-flonum)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    *(double *)(((char *)(uintptr_t)" (c-operand->str dst) ") + 8) = (double)" (c-operand->str src) ";"))))
+
+      ((%unbox-flonum)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = *(double *)(((char *)(uintptr_t)" (c-operand->str src) ") + 8);"))))
+
+      ((%trunc %zext %sext)
+       (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
+         (case mty
+           ((i8)  (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int8_t)" (c-operand->str src) ");")))
+           ((u8)  (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint8_t)" (c-operand->str src) ";")))
+           ((i16) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int16_t)" (c-operand->str src) ");")))
+           ((u16) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint16_t)" (c-operand->str src) ";")))
+           ((i32) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int32_t)" (c-operand->str src) ");")))
+           ((u32) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint32_t)" (c-operand->str src) ";")))
+           (else  (emit (string-append "    " (c-operand->str dst) " = (uint64_t)" (c-operand->str src) ";"))))))
 
       ((%cqo)
        (emit "    /* cqo */"))
@@ -30257,6 +30879,22 @@
     (emit "static uint64_t reg_r14 ULISP_UNUSED;")
     (emit "static uint64_t reg_r15 ULISP_UNUSED;")
     (emit "static char *reg_rsp ULISP_UNUSED;")
+    (emit "static double reg_xmm0 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm1 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm2 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm3 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm4 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm5 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm6 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm7 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm8 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm9 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm10 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm11 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm12 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm13 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm14 ULISP_UNUSED = 0.0;")
+    (emit "static double reg_xmm15 ULISP_UNUSED = 0.0;")
     (emit "static uint64_t cmp_s1 ULISP_UNUSED;")
     (emit "static uint64_t cmp_s2 ULISP_UNUSED;")
     (emit "static char stack_mem[64 * 1024 * 1024] ULISP_UNUSED;")

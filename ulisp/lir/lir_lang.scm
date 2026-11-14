@@ -18,13 +18,17 @@
 (define-language L_lir_raw
   (entry Program)
   (terminals
-    (symbol (x lbl var cond_op sp_lbl))
+    (symbol (x lbl var cond_op sp_lbl mty))
     (integer (n offset shift frame_size bytes tag si cnt bitmap line col))
     (string (str fn_name)))
   (Register (reg)
     %rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
     %r8  %r9  %r10 %r11 %r12 %r13 %r14 %r15 %al
-    (%reg x))
+    %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+    %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15
+    (%reg x)
+    (%reg mty x)
+    (%freg x))
   (StackSlot (stk)
     (%stack offset))
   (MemRef (mem)
@@ -105,6 +109,21 @@
     (%set-boolean opnd cond_op)
     (%box-fixnum opnd1 opnd2)
     (%unbox-fixnum opnd1 opnd2)
+    (%load-typed mty reg1 reg2 offset)
+    (%store-typed mty reg1 offset opnd)
+    (%fmov reg1 reg2)
+    (%fadd opnd1 opnd2)
+    (%fsub opnd1 opnd2)
+    (%fmul opnd1 opnd2)
+    (%fdiv opnd1 opnd2)
+    (%fcmp opnd1 opnd2)
+    (%box-flonum opnd1 opnd2)
+    (%unbox-flonum opnd1 opnd2)
+    (%sitofp reg1 opnd2)
+    (%fptosi reg1 opnd2)
+    (%trunc mty reg1 opnd2)
+    (%zext mty reg1 opnd2)
+    (%sext mty reg1 opnd2)
     (%syscall)
     (%syscall si)
     (%memory-fence)
