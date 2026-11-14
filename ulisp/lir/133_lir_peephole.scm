@@ -7,9 +7,14 @@
 
 (define (lir-peephole-reg? opnd)
   (and (symbol? opnd)
-       (let ((s (symbol->string opnd)))
-         (and (> (string-length s) 1)
-              (char=? (string-ref s 0) #\%)))))
+       (case opnd
+         ((%rax %rcx %rdx %rbx %rsp %rbp %rsi %rdi
+           %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)
+          #t)
+         (else
+          (let ((s (symbol->string opnd)))
+            (and (> (string-length s) 1)
+                 (char=? (string-ref s 0) #\%)))))))
 
 (define (lir-unconditional-terminator? inst)
   (and (pair? inst)

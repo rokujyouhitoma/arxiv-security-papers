@@ -1488,6 +1488,19 @@
     ((not (pair? expr)) 1)
     (else (+ (+ 1 (expr-size (car expr))) (expr-size (cdr expr))))))
 
+(define (expr-size-budget expr budget)
+  (cond
+    ((< budget 0) -1)
+    ((not (pair? expr)) (- budget 1))
+    (else
+     (let ((b1 (expr-size-budget (car expr) (- budget 1))))
+       (if (< b1 0)
+           -1
+           (expr-size-budget (cdr expr) b1))))))
+
+(define (expr-size-le? expr limit)
+  (>= (expr-size-budget expr limit) 0))
+
 (define (%program? form)
   (and (pair? form) (eq? (car form) '%program)))
 

@@ -1488,6 +1488,19 @@
     ((not (pair? expr)) 1)
     (else (+ (+ 1 (expr-size (car expr))) (expr-size (cdr expr))))))
 
+(define (expr-size-budget expr budget)
+  (cond
+    ((< budget 0) -1)
+    ((not (pair? expr)) (- budget 1))
+    (else
+     (let ((b1 (expr-size-budget (car expr) (- budget 1))))
+       (if (< b1 0)
+           -1
+           (expr-size-budget (cdr expr) b1))))))
+
+(define (expr-size-le? expr limit)
+  (>= (expr-size-budget expr limit) 0))
+
 (define (%program? form)
   (and (pair? form) (eq? (car form) '%program)))
 
@@ -4023,6 +4036,12 @@
 ;;; If matched, replaces prefix and performs local re-dispatch.
 ;;; If no match, advances window by 1 instruction.
 ;;; Returns (cons transformed-insts changed-boolean)
+(define (nanopass-rev-prefix-until list-start stop-cell)
+  (let loop ((p list-start) (acc '()))
+    (if (or (null? p) (eq? p stop-cell))
+        acc
+        (loop (cdr p) (cons (car p) acc)))))
+
 (define (nanopass-sliding-window-pass try-match-proc insts)
   (let loop ((rest insts)
              (acc '())
@@ -4030,17 +4049,22 @@
              (step-fuel *nanopass-window-step-limit*))
     (cond
       ((null? rest)
-       (cons (reverse acc) changed?))
+       (if changed?
+           (cons (reverse acc) #t)
+           (cons insts #f)))
       ((<= step-fuel 0)
-       (cons (append (reverse acc) rest) changed?))
+       (if changed?
+           (cons (append (reverse acc) rest) #t)
+           (cons insts #f)))
       (else
        (let ((m (try-match-proc rest)))
          (if (and (pair? m) (car m))
              (let ((new-suffix (cdr m)))
                (if (eq? new-suffix rest)
-                   (loop (cdr rest) (cons (car rest) acc) changed? step-fuel)
-                   (loop new-suffix acc #t (- step-fuel 1))))
-             (loop (cdr rest) (cons (car rest) acc) changed? step-fuel)))))))
+                   (loop (cdr rest) (if changed? (cons (car rest) acc) acc) changed? step-fuel)
+                   (let ((cur-acc (if changed? acc (nanopass-rev-prefix-until insts rest))))
+                     (loop new-suffix cur-acc #t (- step-fuel 1)))))
+             (loop (cdr rest) (if changed? (cons (car rest) acc) acc) changed? step-fuel)))))))
 
 ;;; Bounded fixpoint loop for sliding window optimizations
 (define (nanopass-sliding-window-fixpoint try-match-proc insts)
@@ -4066,7 +4090,9 @@
                         (cdr body-clause)
                         '()))
              (opt-insts (opt-proc insts)))
-        (list '%lir-function lbl params frame-size (cons 'body opt-insts)))
+        (if (eq? opt-insts insts)
+            f
+            (list '%lir-function lbl params frame-size (cons 'body opt-insts))))
       f))
 
 ;;; Optimize body instructions inside %lir-main
@@ -4078,7 +4104,9 @@
                         (cdr body-clause)
                         '()))
              (opt-insts (opt-proc insts)))
-        (list '%lir-main frame-size (cons 'body opt-insts)))
+        (if (eq? opt-insts insts)
+            m
+            (list '%lir-main frame-size (cons 'body opt-insts))))
       m))
 
 ;;; Dual-mode wrapper: handles %lir-program, %lir-function, %lir-main, or flat instruction lists
@@ -4552,9 +4580,14 @@
 
 (define (lir-peephole-reg? opnd)
   (and (symbol? opnd)
-       (let ((s (symbol->string opnd)))
-         (and (> (string-length s) 1)
-              (char=? (string-ref s 0) #\%)))))
+       (case opnd
+         ((%rax %rcx %rdx %rbx %rsp %rbp %rsi %rdi
+           %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)
+          #t)
+         (else
+          (let ((s (symbol->string opnd)))
+            (and (> (string-length s) 1)
+                 (char=? (string-ref s 0) #\%)))))))
 
 (define (lir-unconditional-terminator? inst)
   (and (pair? inst)
@@ -4947,6 +4980,69 @@
 
 ;;; Compile a single expanded rule into an if-check with fallback.
 ;;; When loop-var and fuel-var are non-#f, performs Local Re-dispatch on rewritten nodes (DSN-33-01 T3.2).
+(define (nanopass-unquote-var? pat)
+  (and (pair? pat)
+       (eq? (car pat) 'unquote)
+       (pair? (cdr pat))
+       (symbol? (cadr pat))
+       (null? (cddr pat))))
+
+(define (nanopass-direct-matchable-pattern? pat)
+  (cond
+    ((eq? pat '_) #t)
+    ((symbol? pat) (not (eq? pat '...)))
+    ((null? pat) #t)
+    ((pair? pat)
+     (cond
+       ((eq? (car pat) 'unquote)
+        (nanopass-unquote-var? pat))
+       ((eq? (car pat) 'unquote-splicing) #f)
+       ((and (pair? (cdr pat)) (eq? (cadr pat) '...)) #f)
+       (else
+        (and (nanopass-direct-matchable-pattern? (car pat))
+             (nanopass-direct-matchable-pattern? (cdr pat))))))
+    (else #t)))
+
+(define (nanopass-compile-direct-pattern pat target-expr success-thunk)
+  (let ((root-var (unique-symbol "__dpr_")))
+    (letrec ((emit
+              (lambda (p cur bound k)
+                (cond
+                  ((eq? p '_)
+                   (k bound))
+                  ((nanopass-unquote-var? p)
+                   (let ((v (cadr p)))
+                     (if (memq v bound)
+                         (list 'if (list (string->symbol "equal?") cur v)
+                               (k bound)
+                               #f)
+                         (list 'let (list (list v cur))
+                               (k (cons v bound))))))
+                  ((symbol? p)
+                   (list 'if (list 'eq? cur (list 'quote p))
+                         (k bound)
+                         #f))
+                  ((null? p)
+                   (list 'if (list 'null? cur)
+                         (k bound)
+                         #f))
+                  ((not (pair? p))
+                   (list 'if (list (string->symbol "equal?") cur (list 'quote p))
+                         (k bound)
+                         #f))
+                  (else
+                   (let ((a-var (unique-symbol "__dpa_"))
+                         (d-var (unique-symbol "__dpd_")))
+                     (list 'if (list 'pair? cur)
+                           (list 'let (list (list a-var (list 'car cur))
+                                            (list d-var (list 'cdr cur)))
+                                 (emit (car p) a-var bound
+                                       (lambda (bound2)
+                                         (emit (cdr p) d-var bound2 k))))
+                           #f)))))))
+      (list 'let (list (list root-var target-expr))
+            (emit pat root-var '() (lambda (_bound) (success-thunk)))))))
+
 (define (nanopass-compile-single-rule-cascade r ir-var nt-name fallback-expr loop-var fuel-var)
   (let* ((pat (car r))
          (vars (cadr r))
@@ -4954,6 +5050,7 @@
          (body-expr (cadddr r))
          (rule-name (if (pair? (cddddr r)) (car (cddddr r)) #f))
          (m-var (unique-symbol "__m_"))
+         (direct? (nanopass-direct-matchable-pattern? pat))
          (body-with-firing
           (if rule-name
               (let ((res-val (unique-symbol "__rres_")))
@@ -4964,53 +5061,63 @@
                             res-val)
                       res-val))
               body-expr))
-         (wrapped-body
-          (if (and loop-var fuel-var)
-              (let ((res-var (unique-symbol "__rw_")))
-                (list 'let (list (list res-var body-with-firing))
-                      (list 'if (list 'or
-                                      (list 'eq? res-var ir-var)
-                                      (list (string->symbol "equal?") res-var ir-var))
-                            res-var
-                            (list loop-var res-var (list '- fuel-var 1)))))
-              body-with-firing))
+         (wrap-loop-result
+          (lambda (val-expr)
+            (if (and loop-var fuel-var)
+                (let ((res-var (unique-symbol "__rw_")))
+                  (list 'let (list (list res-var val-expr))
+                        (list 'if (list 'or
+                                        (list 'eq? res-var ir-var)
+                                        (list (string->symbol "equal?") res-var ir-var))
+                              res-var
+                              (list loop-var res-var (list '- fuel-var 1)))))
+                val-expr)))
          (cascade-core
-          (if (eq? guard-expr #t)
-              (list 'let (list (list m-var
-                                     (list (string->symbol "nanopass-match-clause")
-                                           (list 'quote pat)
-                                           ir-var
-                                           (list 'quote vars)
-                                           nt-name)))
-                    (list 'if m-var
-                          (nanopass-bind-matched-vars vars m-var wrapped-body)
-                          fallback-expr))
-              (let ((c-var (unique-symbol "__c_")))
-                (list 'let (list (list c-var
-                                       (list 'let (list (list m-var
-                                                              (list (string->symbol "nanopass-match-clause")
-                                                                    (list 'quote pat)
-                                                                    ir-var
-                                                                    (list 'quote vars)
-                                                                    nt-name)))
-                                              (list 'if m-var
-                                                    (nanopass-bind-matched-vars
-                                                     vars m-var
-                                                     (list 'if guard-expr
-                                                           (list 'cons #t body-with-firing)
-                                                           #f))
-                                                    #f))))
-                      (list 'if c-var
-                            (if (and loop-var fuel-var)
-                                (let ((res-var (unique-symbol "__rw_")))
-                                  (list 'let (list (list res-var (list 'cdr c-var)))
-                                        (list 'if (list 'or
-                                                        (list 'eq? res-var ir-var)
-                                                        (list (string->symbol "equal?") res-var ir-var))
-                                              res-var
-                                              (list loop-var res-var (list '- fuel-var 1)))))
-                                (list 'cdr c-var))
-                            fallback-expr))))))
+          (cond
+            (direct?
+             (let* ((c-var (unique-symbol "__dc_"))
+                    (match-expr
+                     (nanopass-compile-direct-pattern
+                      pat ir-var
+                      (lambda ()
+                        (if (eq? guard-expr #t)
+                            (list 'cons #t body-with-firing)
+                            (list 'if guard-expr
+                                  (list 'cons #t body-with-firing)
+                                  #f))))))
+               (list 'let (list (list c-var match-expr))
+                     (list 'if c-var
+                           (wrap-loop-result (list 'cdr c-var))
+                           fallback-expr))))
+            ((eq? guard-expr #t)
+             (list 'let (list (list m-var
+                                    (list (string->symbol "nanopass-match-clause")
+                                          (list 'quote pat)
+                                          ir-var
+                                          (list 'quote vars)
+                                          nt-name)))
+                   (list 'if m-var
+                         (nanopass-bind-matched-vars vars m-var (wrap-loop-result body-with-firing))
+                         fallback-expr)))
+            (else
+             (let ((c-var (unique-symbol "__c_")))
+               (list 'let (list (list c-var
+                                      (list 'let (list (list m-var
+                                                             (list (string->symbol "nanopass-match-clause")
+                                                                   (list 'quote pat)
+                                                                   ir-var
+                                                                   (list 'quote vars)
+                                                                   nt-name)))
+                                            (list 'if m-var
+                                                  (nanopass-bind-matched-vars
+                                                   vars m-var
+                                                   (list 'if guard-expr
+                                                         (list 'cons #t body-with-firing)
+                                                         #f))
+                                                  #f))))
+                     (list 'if c-var
+                           (wrap-loop-result (list 'cdr c-var))
+                           fallback-expr)))))))
     (if rule-name
         (list 'if (list (string->symbol "picopass-enabled?") (list 'quote rule-name))
               cascade-core
@@ -5161,29 +5268,41 @@
                           rres))
                   body-expr))
              (rule-core
-              (if (eq? guard-expr #t)
-                  (list 'let (list (list m-var
-                                         (list (string->symbol "nanopass-match-clause")
-                                               (list 'quote pat)
-                                               insts-var
-                                               (list 'quote vars)
-                                               '(lambda (x) x))))
-                        (list 'if m-var
-                              (nanopass-bind-matched-vars vars m-var (list 'cons #t body-with-firing))
-                              rest-chain))
-                  (list 'let (list (list m-var
-                                         (list (string->symbol "nanopass-match-clause")
-                                               (list 'quote pat)
-                                               insts-var
-                                               (list 'quote vars)
-                                               '(lambda (x) x))))
-                        (list 'if m-var
-                              (nanopass-bind-matched-vars
-                               vars m-var
-                               (list 'if guard-expr
-                                     (list 'cons #t body-with-firing)
-                                     rest-chain))
-                              rest-chain)))))
+              (if (nanopass-direct-matchable-pattern? pat)
+                  (let ((wres-var (unique-symbol "__wres_"))
+                        (success-expr
+                         (if (eq? guard-expr #t)
+                             (list 'cons #t body-with-firing)
+                             (list 'if guard-expr
+                                   (list 'cons #t body-with-firing)
+                                   #f))))
+                    (list 'let (list (list wres-var
+                                           (nanopass-compile-direct-pattern
+                                            pat insts-var (lambda () success-expr))))
+                          (list 'if wres-var wres-var rest-chain)))
+                  (if (eq? guard-expr #t)
+                      (list 'let (list (list m-var
+                                             (list (string->symbol "nanopass-match-clause")
+                                                   (list 'quote pat)
+                                                   insts-var
+                                                   (list 'quote vars)
+                                                   '(lambda (x) x))))
+                            (list 'if m-var
+                                  (nanopass-bind-matched-vars vars m-var (list 'cons #t body-with-firing))
+                                  rest-chain))
+                      (list 'let (list (list m-var
+                                             (list (string->symbol "nanopass-match-clause")
+                                                   (list 'quote pat)
+                                                   insts-var
+                                                   (list 'quote vars)
+                                                   '(lambda (x) x))))
+                            (list 'if m-var
+                                  (nanopass-bind-matched-vars
+                                   vars m-var
+                                   (list 'if guard-expr
+                                         (list 'cons #t body-with-firing)
+                                         rest-chain))
+                                  rest-chain))))))
         (if rule-name
             (list 'if (list (string->symbol "picopass-enabled?") (list 'quote rule-name))
                   rule-core
@@ -5708,22 +5827,35 @@
                (pat (car r))
                (vars (cadr r))
                (guard-expr (caddr r))
-               (body-expr (cadddr r))
-               (m-var (unique-symbol "__m_")))
-          (list 'let (list (list m-var
-                                 (list (string->symbol "nanopass-match-clause")
-                                       (list 'quote pat)
-                                       ir-var
-                                       (list 'quote vars)
-                                       (list 'quote nt-name))))
-                (list 'if m-var
-                      (if (eq? guard-expr #t)
-                          (nanopass-bind-matched-vars vars m-var body-expr)
-                          (nanopass-bind-matched-vars vars m-var
-                                                      (list 'if guard-expr
-                                                            body-expr
-                                                            (loop (cdr rs)))))
-                      (loop (cdr rs))))))))
+               (body-expr (cadddr r)))
+          (if (nanopass-direct-matchable-pattern? pat)
+              (let ((c-var (unique-symbol "__dc_"))
+                    (tail-expr (loop (cdr rs))))
+                (list 'let (list (list c-var
+                                       (nanopass-compile-direct-pattern
+                                        pat ir-var
+                                        (lambda ()
+                                          (if (eq? guard-expr #t)
+                                              (list 'cons #t body-expr)
+                                              (list 'if guard-expr
+                                                    (list 'cons #t body-expr)
+                                                    #f))))))
+                      (list 'if c-var (list 'cdr c-var) tail-expr)))
+              (let ((m-var (unique-symbol "__m_")))
+                (list 'let (list (list m-var
+                                       (list (string->symbol "nanopass-match-clause")
+                                             (list 'quote pat)
+                                             ir-var
+                                             (list 'quote vars)
+                                             (list 'quote nt-name))))
+                      (list 'if m-var
+                            (if (eq? guard-expr #t)
+                                (nanopass-bind-matched-vars vars m-var body-expr)
+                                (nanopass-bind-matched-vars vars m-var
+                                                            (list 'if guard-expr
+                                                                  body-expr
+                                                                  (loop (cdr rs)))))
+                            (loop (cdr rs))))))))))
 
 (define (nanopass-expand-rule-dsl form default-kind)
   (let* ((parsed (nanopass-parse-rule-spec form default-kind))
@@ -13786,6 +13918,13 @@
                      (loop (cdr as))))))
          (else #f))))))
 
+(define (rtyper-let-binds-var? name bindings)
+  (let loop ((bs bindings))
+    (cond
+      ((null? bs) #f)
+      ((and (pair? (car bs)) (eq? (caar bs) name)) #t)
+      (else (loop (cdr bs))))))
+
 (define (fn-escapes-in-expr? fn-name expr)
   (cond
     ((symbol? expr) (eq? expr fn-name))
@@ -13802,7 +13941,7 @@
            (if (null? bs) #f
                (or (fn-escapes-in-expr? fn-name (cadar bs))
                    (loop (cdr bs)))))
-         (if (memq fn-name (map car* (cadr expr)))
+         (if (rtyper-let-binds-var? fn-name (cadr expr))
              #f
              (fn-escapes-in-expr? fn-name (caddr expr)))))
     ((eq? (car expr) 'if)
@@ -13843,51 +13982,84 @@
 (define (pure-int-recursive-fn? fn-name params lbody body)
   (pure-int-known-fn? fn-name params lbody body '()))
 
+(define (rtyper-valid-int-params? params)
+  (and (pair? params)
+       (let loop ((ps params))
+         (cond
+           ((null? ps) #t)
+           ((and (pair? ps) (symbol? (car ps))) (loop (cdr ps)))
+           (else #f)))))
+
+(define (rtyper-all-params-occur? params lbody)
+  (let loop ((ps params))
+    (if (null? ps) #t
+        (and (occurs-in? (car ps) lbody)
+             (loop (cdr ps))))))
+
+(define (rtyper-prune-pure-cands active-cands known-pure-fns)
+  (let prune-loop ((cands active-cands))
+    (if (null? cands)
+        '()
+        (let* ((active-names (map car* cands))
+               (allowed-fns (append active-names known-pure-fns))
+               (survivors
+                (let filter-loop ((cs cands) (acc '()))
+                  (if (null? cs) (reverse acc)
+                      (let* ((c (car cs))
+                             (fn-name (car c))
+                             (params (cadr c))
+                             (lbody (caddr c)))
+                        (if (pure-int-expr? lbody (cons fn-name allowed-fns) params '() 0)
+                            (filter-loop (cdr cs) (cons c acc))
+                            (filter-loop (cdr cs) acc)))))))
+          (cond
+            ((null? survivors) '())
+            ((= (length survivors) (length cands)) survivors)
+            (else (prune-loop survivors)))))))
+
 ;;; Fixed-Point Iterative Pruning for Interprocedural Unboxing
+;;; Check local purity & self-escape BEFORE O(F*N) full-program escape scan.
 (define (find-pure-int-fns candidate-defs scope-exprs known-pure-fns)
-  (let* ((initial-cands
+  (let* ((param-cands
           (let loop ((cs candidate-defs) (acc '()))
+            (if (null? cs) (reverse acc)
+                (let ((c (car cs)))
+                  (if (rtyper-valid-int-params? (cadr c))
+                      (loop (cdr cs) (cons c acc))
+                      (loop (cdr cs) acc))))))
+         (init-allowed (append (map car* param-cands) known-pure-fns))
+         (local-cands
+          (let loop ((cs param-cands) (acc '()))
             (if (null? cs) (reverse acc)
                 (let* ((c (car cs))
                        (fn-name (car c))
                        (params (cadr c))
                        (lbody (caddr c)))
-                  (if (and (pair? params)
-                           (let occ-loop ((ps params))
-                             (cond
-                               ((null? ps) #t)
-                               ((not (pair? ps)) #f)
-                               (else
-                                (and (occurs-in? (car ps) lbody)
-                                     (occ-loop (cdr ps))))))
-                           (not (fn-escapes-in-expr? fn-name lbody))
-                           (not (let esc-loop ((es scope-exprs))
-                                  (if (null? es) #f
-                                      (or (fn-escapes-in-expr? fn-name (car es))
-                                          (esc-loop (cdr es)))))))
+                  (if (and (pure-int-expr? lbody (cons fn-name init-allowed) params '() 0)
+                           (rtyper-all-params-occur? params lbody)
+                           (not (fn-escapes-in-expr? fn-name lbody)))
                       (loop (cdr cs) (cons c acc))
-                      (loop (cdr cs) acc)))))))
-    (let prune-loop ((active-cands initial-cands))
-      (if (null? active-cands)
-          '()
-          (let* ((active-names (map car* active-cands))
-                 (allowed-fns (append active-names known-pure-fns))
-                 (survivors
-                  (let filter-loop ((cs active-cands) (acc '()))
-                    (if (null? cs) (reverse acc)
-                        (let* ((c (car cs))
-                               (fn-name (car c))
-                               (params (cadr c))
-                               (lbody (caddr c)))
-                          (if (pure-int-expr? lbody (cons fn-name allowed-fns) params '() 0)
-                              (filter-loop (cdr cs) (cons c acc))
-                              (filter-loop (cdr cs) acc)))))))
-            (cond
-              ((null? survivors) '())
-              ((= (length survivors) (length active-cands))
-               (map car* survivors))
-              (else
-               (prune-loop survivors))))))))
+                      (loop (cdr cs) acc))))))
+         (local-survivors (rtyper-prune-pure-cands local-cands known-pure-fns)))
+    (if (null? local-survivors)
+        '()
+        (let ((non-escaping
+               (let loop ((cs local-survivors) (acc '()))
+                 (if (null? cs) (reverse acc)
+                     (let* ((c (car cs))
+                            (fn-name (car c)))
+                       (if (let esc-loop ((es scope-exprs))
+                             (if (null? es) #f
+                                 (or (fn-escapes-in-expr? fn-name (car es))
+                                     (esc-loop (cdr es)))))
+                           (loop (cdr cs) acc)
+                           (loop (cdr cs) (cons c acc))))))))
+          (cond
+            ((null? non-escaping) '())
+            ((= (length non-escaping) (length local-survivors))
+             (map car* non-escaping))
+            (else
+             (map car* (rtyper-prune-pure-cands non-escaping known-pure-fns))))))))
 
 ;;; Ensures integer constants at exit branches of an unboxed-return function are raw
 (define (unbox-const-exit expr)
@@ -13971,6 +14143,28 @@
     (else
      (list op e1 e2))))
 
+(define (rtyper-standard-let-bindings op bindings body raw-env unboxed-fns)
+  (let* ((new-bindings
+          (map (lambda (b)
+                 (let ((v (car b)) (rhs (cadr b)))
+                   (if (and (pair? rhs) (memq (car rhs) '(fixnum? integer? number?))
+                            (pair? (cdr rhs)) (symbol? (cadr rhs)))
+                       (record-rtyper-fact! v (cadr rhs)))
+                   (list v (rtyper-expr-scoped rhs raw-env unboxed-fns))))
+               bindings))
+         ;; Extend raw-env with newly bound variables that hold raw values
+         (extended-raw-env
+          (let loop ((bs new-bindings) (acc raw-env))
+            (if (null? bs) acc
+                (let* ((b (car bs))
+                       (var (car b))
+                       (val (cadr b)))
+                  (if (rtyper-raw-value-expr? val acc)
+                      (loop (cdr bs) (cons var acc))
+                      (loop (cdr bs) acc))))))
+         (new-body (rtyper-expr-scoped body extended-raw-env unboxed-fns)))
+    (list op new-bindings new-body)))
+
 ;;; Recursively rewrites ANF AST to Typed LIR representation
 (define (rtyper-expr-scoped expr raw-env unboxed-fns)
     (cond
@@ -14018,7 +14212,7 @@
                     (= (length bindings) 1)
                     (pair? (cadar bindings))
                     (eq? (car (cadar bindings)) 'if)
-                    (<= (expr-size body) 40)
+                    (expr-size-le? body 40)
                     (let ((var (caar bindings)))
                       (expr-has-conditional-or-pred-on-var? body var)))
                (let* ((b (car bindings))
@@ -14057,20 +14251,7 @@
                         (new-fn-val (list 'lambda params boxed-lbody))
                         (new-body (rtyper-expr-scoped body raw-env inner-unboxed-fns)))
                    (list op (list (list fn-name new-fn-val)) new-body))))
-              ((and (eq? op 'letrec)
-                    (pair? bindings)
-                    (let* ((cand-defs
-                            (let loop ((bs bindings) (acc '()))
-                              (if (null? bs) (reverse acc)
-                                  (let* ((b (car bs))
-                                         (fn-name (car b))
-                                         (val (cadr b)))
-                                    (if (and (pair? val) (eq? (car val) 'lambda)
-                                             (pair? (cdr val)) (pair? (cddr val)))
-                                        (loop (cdr bs) (cons (list fn-name (cadr val) (caddr val)) acc))
-                                        (loop (cdr bs) acc))))))
-                           (unboxed-names (find-pure-int-fns cand-defs (list body) unboxed-fns)))
-                      (pair? unboxed-names)))
+              ((and (eq? op 'letrec) (pair? bindings))
                ;; Interprocedural Unboxing (int64_t -> int64_t) for pure integer functions in letrec
                (let* ((cand-defs
                        (let loop ((bs bindings) (acc '()))
@@ -14082,50 +14263,35 @@
                                         (pair? (cdr val)) (pair? (cddr val)))
                                    (loop (cdr bs) (cons (list fn-name (cadr val) (caddr val)) acc))
                                    (loop (cdr bs) acc))))))
-                      (unboxed-names (find-pure-int-fns cand-defs (list body) unboxed-fns))
-                      (inner-unboxed-fns (append unboxed-names unboxed-fns))
-                      (ext-unboxed-fns (append (map (lambda (f) (cons '%box-ret f)) unboxed-names) unboxed-fns)))
-                 (for-each (lambda (f)
-                             (record-unboxed-fn! f)
-                             (record-unboxed-ret-fn! f))
-                           unboxed-names)
-                 (let* ((new-bindings
-                         (map (lambda (b)
-                                (let* ((fn-name (car b))
-                                       (fn-val (cadr b)))
-                                  (if (memq fn-name unboxed-names)
-                                      (let* ((params (cadr fn-val))
-                                             (lbody (caddr fn-val))
-                                             (loop-raw-env (append params raw-env))
-                                             (typed-lbody (rtyper-expr-scoped lbody loop-raw-env inner-unboxed-fns))
-                                             (raw-lbody (unbox-const-exit typed-lbody)))
-                                        (list fn-name (list 'lambda params raw-lbody)))
-                                      (list fn-name (rtyper-expr-scoped fn-val raw-env ext-unboxed-fns)))))
-                              bindings))
-                        (new-body (rtyper-expr-scoped body raw-env ext-unboxed-fns)))
-                   (list op new-bindings new-body))))
+                      (unboxed-names
+                       (if (null? cand-defs)
+                           '()
+                           (find-pure-int-fns cand-defs (list body) unboxed-fns))))
+                 (if (pair? unboxed-names)
+                     (let ((inner-unboxed-fns (append unboxed-names unboxed-fns))
+                           (ext-unboxed-fns (append (map (lambda (f) (cons '%box-ret f)) unboxed-names) unboxed-fns)))
+                       (for-each (lambda (f)
+                                   (record-unboxed-fn! f)
+                                   (record-unboxed-ret-fn! f))
+                                 unboxed-names)
+                       (let* ((new-bindings
+                               (map (lambda (b)
+                                      (let* ((fn-name (car b))
+                                             (fn-val (cadr b)))
+                                        (if (memq fn-name unboxed-names)
+                                            (let* ((params (cadr fn-val))
+                                                   (lbody (caddr fn-val))
+                                                   (loop-raw-env (append params raw-env))
+                                                   (typed-lbody (rtyper-expr-scoped lbody loop-raw-env inner-unboxed-fns))
+                                                   (raw-lbody (unbox-const-exit typed-lbody)))
+                                              (list fn-name (list 'lambda params raw-lbody)))
+                                            (list fn-name (rtyper-expr-scoped fn-val raw-env ext-unboxed-fns)))))
+                                    bindings))
+                              (new-body (rtyper-expr-scoped body raw-env ext-unboxed-fns)))
+                         (list op new-bindings new-body)))
+                     (rtyper-standard-let-bindings op bindings body raw-env unboxed-fns))))
               (else
-               ;; Standard let bindings: propagate raw variables and record facts
-               (let* ((new-bindings
-                       (map (lambda (b)
-                              (let ((v (car b)) (rhs (cadr b)))
-                                (if (and (pair? rhs) (memq (car rhs) '(fixnum? integer? number?))
-                                         (pair? (cdr rhs)) (symbol? (cadr rhs)))
-                                    (record-rtyper-fact! v (cadr rhs)))
-                                (list v (rtyper-expr-scoped rhs raw-env unboxed-fns))))
-                            bindings))
-                      ;; Extend raw-env with newly bound variables that hold raw values
-                      (extended-raw-env
-                       (let loop ((bs new-bindings) (acc raw-env))
-                         (if (null? bs) acc
-                             (let* ((b (car bs))
-                                    (var (car b))
-                                    (val (cadr b)))
-                               (if (rtyper-raw-value-expr? val acc)
-                                   (loop (cdr bs) (cons var acc))
-                                   (loop (cdr bs) acc))))))
-                      (new-body (rtyper-expr-scoped body extended-raw-env unboxed-fns)))
-                 (list op new-bindings new-body))))))
+               (rtyper-standard-let-bindings op bindings body raw-env unboxed-fns)))))
          ((eq? op '-)
           (if (null? (cddr expr))
               (list '- (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns))
@@ -18997,9 +19163,14 @@
 
 (define (lir-peephole-reg? opnd)
   (and (symbol? opnd)
-       (let ((s (symbol->string opnd)))
-         (and (> (string-length s) 1)
-              (char=? (string-ref s 0) #\%)))))
+       (case opnd
+         ((%rax %rcx %rdx %rbx %rsp %rbp %rsi %rdi
+           %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)
+          #t)
+         (else
+          (let ((s (symbol->string opnd)))
+            (and (> (string-length s) 1)
+                 (char=? (string-ref s 0) #\%)))))))
 
 (define (lir-unconditional-terminator? inst)
   (and (pair? inst)

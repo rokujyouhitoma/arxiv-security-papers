@@ -177,6 +177,7 @@
   femto-cache-invalidate-node!
   femto-cache-reset!
   femto-cache-stats
-  femto-cache-hit-rate)
+  femto-cache-hit-rate
+  expr-size-le?)
 
 
