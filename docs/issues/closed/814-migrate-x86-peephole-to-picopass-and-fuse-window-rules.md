@@ -2,7 +2,7 @@
 ID: 814
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] 143_backend_x86_peephole.scm の define-picopass 化と fuse-window-rules への移行 (ID: 814)
@@ -242,11 +242,27 @@ Nanopass アーキテクチャ仕様書（DSN-33-01 Task 5.3）において、LI
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `nanopass_meta.scm` の `nanopass-wrap-window-rules-input` が `L_asm_x86` の `%asm-program`, `%asm-function`, `%asm-main` をサポートしていること。
-- [ ] `143_backend_x86_peephole.scm` の手書き走査ループ（`x86-peephole-step-window` 等）が撤廃され、全 8 規則が `define-picopass` として定義されていること。
-- [ ] `x86-peephole-pass` が `(fuse-window-rules ...)` として定義され、既存の `optimize-x86-peephole` / `optimize-x86-peephole-insts` が透過的に動作すること。
-- [ ] `test_143_backend_x86_peephole.scm` に全 8 規則の網羅テストおよび Provenance Tracking 検証テストが追加され、全テストが 100% PASS すること。
-- [ ] `make -C ulisp compiler` で生成された `compiler.scm` が構文エラーなく正常に動作すること。
-- [ ] `make -C ulisp bootstrap_verify` で Stage 2 と Stage 3 の bit-for-bit 一致が確認されること。
-- [ ] `make py_compile` および `make static_analysis` がエラー 0 件で通過すること。
-- [ ] ドキュメント内のすべての内部リンクが相対パス（`docs/`, `ulisp/`）で記述されていること。
+- [x] `nanopass_meta.scm` の `nanopass-wrap-window-rules-input` が `L_asm_x86` の `%asm-program`, `%asm-function`, `%asm-main` をサポートしていること。
+- [x] `143_backend_x86_peephole.scm` の手書き走査ループ（`x86-peephole-step-window` 等）が撤廃され、全 8 規則が `define-picopass` として定義されていること。
+- [x] `x86-peephole-pass` が `(fuse-window-rules ...)` として定義され、既存の `optimize-x86-peephole` / `optimize-x86-peephole-insts` が透過的に動作すること。
+- [x] `test_143_backend_x86_peephole.scm` に全 8 規則の網羅テストおよび Provenance Tracking 検証テストが追加され、全テストが 100% PASS すること（22/22 PASS）。
+- [x] `make -C ulisp compiler` で生成された `compiler.scm` が構文エラーなく正常に動作すること。
+- [x] `make -C ulisp bootstrap_verify` で Stage 2 と Stage 3 の bit-for-bit 一致が確認されること（全5モジュール完全一致）。
+- [x] `make py_compile` および `make static_analysis` がエラー 0 件で通過すること。
+- [x] ドキュメント内のすべての内部リンクが相対パス（`docs/`, `ulisp/`）で記述されていること。
+
+---
+
+## 7. 完了報告 / Completion Summary
+
+1. **実装成果**:
+   - `ulisp/compiler/nanopass_meta.scm`: `nanopass-optimize-asm-function-body` および `nanopass-optimize-asm-main-body` を新設し、`nanopass-wrap-window-rules-input` にて `%asm-program`, `%asm-function`, `%asm-main` の透過的トラバーサルをサポート。
+   - `ulisp/backend/143_backend_x86_peephole.scm`: 手書きループ（`x86-peephole-step-window` 等）を完全撤廃し、全 8 規則を `define-picopass` 化。`x86-peephole-pass` を `fuse-window-rules` として定義し、後方互換 API `optimize-x86-peephole` / `optimize-x86-peephole-insts` を透過的に接続。
+   - `ulisp/tests/passes/test_143_backend_x86_peephole.scm`: テストケース 9〜13 を追加し、全 22 アサーションが 100% PASS。
+2. **検証結果**:
+   - `make -C ulisp test_143`: 22/22 PASS
+   - `make -C ulisp test_passes`: 39/39 パス 782/782 PASS, Per-Pass 147/147 PASS
+   - `make -C ulisp test_backend`: 3/3 PASS
+   - `make -C ulisp bootstrap_verify`: 5 モジュール（compiler_base, frontend_passes, lir_passes, backend_passes, compiler_driver）すべてで Stage 2 == Stage 3 の不動点完全一致（bit-for-bit identical）を達成。
+   - `make -C ulisp test`: 総合テストスイート全件 PASS。
+   - `make py_compile && make static_analysis`: エラー 0 件（617 ファイル検証）。
