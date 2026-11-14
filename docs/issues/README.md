@@ -13,7 +13,7 @@
 | **811** | 型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入 | Feature | Medium | New | [811-warn-on-untyped-variable-crossing-channel-boundary.md](811-warn-on-untyped-variable-crossing-channel-boundary.md) |
 | **812** | AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV | Bug | Medium | New | [812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md](812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) |
 | **814** | 143_backend_x86_peephole.scm の define-picopass 化と fuse-window-rules への移行 | Feature | Medium | New | [814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md](814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md) |
-| **821** | SRFI 252 プロパティベーステストライブラリ (srfi 252) と決定論的ジェネレータ群の実装 | Feature | Medium | New | [821-implement-srfi-252-property-based-testing-library.md](821-implement-srfi-252-property-based-testing-library.md) |
+| **821** | SRFI 252 プロパティベーステストライブラリ (srfi 252) と決定論的ジェネレータ群の実装 | Feature | Medium | In Progress | [821-implement-srfi-252-property-based-testing-library.md](821-implement-srfi-252-property-based-testing-library.md) |
 | **822** | 既存テストスイート (267箇所の重複 assert-*) の SRFI 64 統一・引数順序是正および仕様準拠ドキュメント更新 | Feature | Medium | New | [822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md](822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md) |
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
