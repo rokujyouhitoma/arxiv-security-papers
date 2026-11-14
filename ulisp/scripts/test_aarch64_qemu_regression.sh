@@ -198,12 +198,23 @@ run_smoke_case "Nested Exception Guard & Handler Isolation" '
 echo -e "\n${BLUE}=== [Suite 2/3] Synapse Concurrency Runtime Suite (Issue #692) ===${RESET}"
 
 CTX_BIN="${BUILD_DIR}/test_context_switch_aarch64"
+STDLIB_AARCH64="${BUILD_DIR}/ulisp_stdlib_aarch64.o"
+if [ ! -f "${STDLIB_AARCH64}" ]; then
+    echo "--> Compiling AArch64 Standard Library Module (${STDLIB_AARCH64})..."
+    echo "(!gc none) (!module #t) (!disable-pass pass-synapse-inject-safepoints)" > "${BUILD_DIR}/stdlib_aarch64_input.scm"
+    cat "${ULISP_DIR}/stdlib_entry.scm" >> "${BUILD_DIR}/stdlib_aarch64_input.scm"
+    gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${BUILD_DIR}/stdlib_aarch64_input.scm" > "${BUILD_DIR}/ulisp_stdlib_aarch64.s"
+    "${CROSS_AS}" -march=armv8.1-a "${BUILD_DIR}/ulisp_stdlib_aarch64.s" -o "${STDLIB_AARCH64}"
+fi
+
 if [ ! -f "${CTX_BIN}" ] || [ "${ULISP_DIR}/runtime/concurrency/context_aarch64.s" -nt "${CTX_BIN}" ]; then
     echo "--> Building ${CTX_BIN}..."
     "${CROSS_AS}" -march=armv8.1-a "${ULISP_DIR}/runtime/concurrency/context_aarch64.s" -o "${BUILD_DIR}/context_aarch64.o"
-    gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${ROOT_DIR}/tests/concurrency/test_context_switch_aarch64.scm" > "${BUILD_DIR}/test_context_switch_aarch64.s"
+    echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > "${BUILD_DIR}/test_context_switch_aarch64_input.scm"
+    cat "${ULISP_DIR}/lib/stdlib_macros.scm" "${ROOT_DIR}/tests/concurrency/test_context_switch_aarch64.scm" >> "${BUILD_DIR}/test_context_switch_aarch64_input.scm"
+    gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${BUILD_DIR}/test_context_switch_aarch64_input.scm" > "${BUILD_DIR}/test_context_switch_aarch64.s"
     "${CROSS_AS}" -march=armv8.1-a "${BUILD_DIR}/test_context_switch_aarch64.s" -o "${BUILD_DIR}/test_context_switch_aarch64.o"
-    "${CROSS_LD}" -static "${BUILD_DIR}/test_context_switch_aarch64.o" "${BUILD_DIR}/context_aarch64.o" -o "${CTX_BIN}"
+    "${CROSS_LD}" -static "${BUILD_DIR}/test_context_switch_aarch64.o" "${STDLIB_AARCH64}" "${BUILD_DIR}/context_aarch64.o" -o "${CTX_BIN}"
 fi
 
 echo "--> Executing test_context_switch_aarch64 under QEMU..."
@@ -214,8 +225,11 @@ CTX_EXIT=$?
 set -e
 
 if [ ${CTX_EXIT} -eq 0 ]; then
-    # Count passed assertions (matches "PASS:")
-    PASS_COUNT=$(grep -c "^PASS:" "${CTX_OUT}" || true)
+    # Count passed assertions
+    PASS_COUNT=$(grep -oE "[0-9]+ passed" "${CTX_OUT}" | head -n1 | awk '{print $1}' || true)
+    if [ -z "${PASS_COUNT}" ] || [ "${PASS_COUNT}" -eq 0 ]; then
+        PASS_COUNT=$(grep -c "^PASS:" "${CTX_OUT}" || true)
+    fi
     if [ "${PASS_COUNT}" -eq 0 ]; then
         PASS_COUNT=71
     fi
@@ -237,15 +251,6 @@ fi
 # ==============================================================================
 echo -e "\n${BLUE}=== [Suite 3/3] R7RS Standard & Language Features Suite ===${RESET}"
 
-STDLIB_AARCH64="${BUILD_DIR}/ulisp_stdlib_aarch64.o"
-if [ ! -f "${STDLIB_AARCH64}" ]; then
-    echo "--> Compiling AArch64 Standard Library Module (${STDLIB_AARCH64})..."
-    echo "(!gc none) (!module #t)" > "${BUILD_DIR}/stdlib_aarch64_input.scm"
-    cat "${ULISP_DIR}/stdlib_entry.scm" >> "${BUILD_DIR}/stdlib_aarch64_input.scm"
-    gosh -I "${ULISP_DIR}" "${ULISP_DIR}/compiler.scm" --target=aarch64 < "${BUILD_DIR}/stdlib_aarch64_input.scm" > "${BUILD_DIR}/ulisp_stdlib_aarch64.s"
-    "${CROSS_AS}" -march=armv8.1-a "${BUILD_DIR}/ulisp_stdlib_aarch64.s" -o "${STDLIB_AARCH64}"
-fi
-
 # 3a. Multiple Values
 echo "--> Compiling and running test_values on QEMU AArch64..."
 VAL_INPUT="${BUILD_DIR}/test_values_aarch64_input.scm"
@@ -266,7 +271,10 @@ run_with_timeout 30 "${QEMU}" "${VAL_BIN}" > "${VAL_OUT}" 2>&1
 VAL_EXIT=$?
 set -e
 
-VAL_PASS=$(grep -c "\[PASS\]" "${VAL_OUT}" || true)
+VAL_PASS=$(grep -oE "[0-9]+ passed" "${VAL_OUT}" | head -n1 | awk '{print $1}' || true)
+if [ -z "${VAL_PASS}" ] || [ "${VAL_PASS}" -eq 0 ]; then
+    VAL_PASS=$(grep -c "\[PASS\]" "${VAL_OUT}" || true)
+fi
 if [ ${VAL_EXIT} -eq 0 ] && [ "${VAL_PASS}" -gt 0 ]; then
     echo -e "  ${GREEN}[PASS]${RESET} R7RS Multiple Values Suite (${VAL_PASS} assertions passed)"
     SUITE3_TOTAL=$((SUITE3_TOTAL + VAL_PASS))
@@ -298,7 +306,10 @@ run_with_timeout 30 "${QEMU}" "${CHAR_BIN}" > "${CHAR_OUT}" 2>&1
 CHAR_EXIT=$?
 set -e
 
-CHAR_PASS=$(grep -c "\[PASS\]" "${CHAR_OUT}" || true)
+CHAR_PASS=$(grep -oE "[0-9]+ passed" "${CHAR_OUT}" | head -n1 | awk '{print $1}' || true)
+if [ -z "${CHAR_PASS}" ] || [ "${CHAR_PASS}" -eq 0 ]; then
+    CHAR_PASS=$(grep -c "\[PASS\]" "${CHAR_OUT}" || true)
+fi
 if [ ${CHAR_EXIT} -eq 0 ] && [ "${CHAR_PASS}" -gt 0 ]; then
     echo -e "  ${GREEN}[PASS]${RESET} R7RS (scheme char) Suite (${CHAR_PASS} assertions passed)"
     SUITE3_TOTAL=$((SUITE3_TOTAL + CHAR_PASS))

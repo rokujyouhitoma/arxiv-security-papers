@@ -357,12 +357,14 @@ test_context_switch: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o
 	$(LD) $(LDFLAGS) build/test_context_switch.o build/ulisp_stdlib.o build/context.o -o build/test_context_switch
 	./build/test_context_switch < /dev/null
 
-test_context_switch_aarch64: compiler.scm build/context_aarch64.o
+test_context_switch_aarch64: compiler.scm build/context_aarch64.o build/ulisp_stdlib_aarch64.o
 	@mkdir -p build
 	@echo "=== Compiling AArch64 Native Context Switch Test Suite (#692) ==="
-	cd $(ROOT_DIR) && $(if $(GOSH_BIN),$(GOSH_BIN) -I ulisp ulisp/compiler.scm,$(RUN_SCHEME) ulisp/compiler.scm) --target=aarch64 < tests/concurrency/test_context_switch_aarch64.scm > ulisp/build/test_context_switch_aarch64.s
+	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_context_switch_aarch64_input.scm
+	@cat lib/stdlib_macros.scm $(ROOT_DIR)/tests/concurrency/test_context_switch_aarch64.scm >> build/test_context_switch_aarch64_input.scm
+	cd $(ROOT_DIR) && $(if $(GOSH_BIN),$(GOSH_BIN) -I ulisp ulisp/compiler.scm,$(RUN_SCHEME) ulisp/compiler.scm) --target=aarch64 < ulisp/build/test_context_switch_aarch64_input.scm > ulisp/build/test_context_switch_aarch64.s
 	$(CROSS_AS_AARCH64) -march=armv8.1-a build/test_context_switch_aarch64.s -o build/test_context_switch_aarch64.o
-	$(CROSS_LD_AARCH64) -static build/test_context_switch_aarch64.o build/context_aarch64.o -o build/test_context_switch_aarch64
+	$(CROSS_LD_AARCH64) -static build/test_context_switch_aarch64.o build/ulisp_stdlib_aarch64.o build/context_aarch64.o -o build/test_context_switch_aarch64
 	@echo "=== Running AArch64 Native Context Switch Test Suite under QEMU ==="
 	$(QEMU_AARCH64) ./build/test_context_switch_aarch64
 

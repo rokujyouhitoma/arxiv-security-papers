@@ -695,8 +695,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_verify_swap_context_regs_excl:
     adrp x2, ulisp_verify_status
     str xzr, [x2, :lo12:ulisp_verify_status]
 
-    // Set up Task 1 stack frame at (stack1_top - 160)
-    sub x8, x0, #160
+    // Set up Task 1 stack frame at (stack1_top - 176) [80B TCB + 96B Frame]
+    sub x8, x0, #176
     ldr x3, =0x1919191919191919
     str x3, [x8, #0]
     ldr x3, =0x2020202020202020
@@ -726,8 +726,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_verify_swap_context_regs_excl:
     adrp x4, ulisp_verify_t1_sp
     str x8, [x4, :lo12:ulisp_verify_t1_sp]
 
-    // Set up Task 2 stack frame at (stack2_top - 160)
-    sub x9, x1, #160
+    // Set up Task 2 stack frame at (stack2_top - 176) [80B TCB + 96B Frame]
+    sub x9, x1, #176
     ldr x3, =0x1122334455667788
     str x3, [x9, #0]
     ldr x3, =0x2233445566778899
@@ -953,8 +953,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_bench_swap_context_excl:
     adrp x3, ulisp_bench_completed
     str xzr, [x3, :lo12:ulisp_bench_completed]
 
-    // Prepare Task 1 stack at (stack1_top - 160)
-    sub x8, x0, #160
+    // Prepare Task 1 stack at (stack1_top - 176) [80B TCB + 96B Frame]
+    sub x8, x0, #176
     ldr x4, =0x1111111111111111
     str x4, [x8, #0]    // x19 canary
     str x0, [x8, #8]    // x20: stack1
@@ -970,8 +970,8 @@ ulisp_fn___lib_ulisp_concurrency_context___pctasm_bench_swap_context_excl:
     adrp x5, ulisp_verify_t1_sp
     str x8, [x5, :lo12:ulisp_verify_t1_sp]
 
-    // Prepare Task 2 stack at (stack2_top - 160)
-    sub x9, x1, #160
+    // Prepare Task 2 stack at (stack2_top - 176) [80B TCB + 96B Frame]
+    sub x9, x1, #176
     ldr x4, =0x2222222222222222
     str x4, [x9, #0]    // x19 canary
     str x1, [x9, #8]    // x20: stack2

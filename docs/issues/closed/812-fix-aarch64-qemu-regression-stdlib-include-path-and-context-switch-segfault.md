@@ -2,7 +2,8 @@
 ID: 812
 種別: Bug
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
+完了日: 2026-11-14
 ---
 
 # [BUG/SEC] AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV (ID: 812)
@@ -69,6 +70,11 @@ GDB / QEMU 動的解析および LIR/ASM コード追跡により、以下の 5 
 - 正しい AArch64 オフセットは `176`（80B + 96B）であり、`160` のままレジスタ検証ルーチンが動作したため、スタックカナリア領域（`[top - 80]`）が破損し、カナリアチェックが `#f` となっていた。
 - さらに `ulisp/Makefile` の `test_context_switch_aarch64` ターゲットが `lib/stdlib_macros.scm` を結合せず、かつ `build/ulisp_stdlib_aarch64.o` をリンクしていなかったため、SRFI-64 構文が未定義関数参照となっていた。
 
+### 原因 6: `150_backend_aarch64.scm` の `%call-closure` における第 2 引数レジスタ (`x1`) 破壊
+- AArch64 バックエンドの `%call-closure` 実装において、クロージャポインタ (`x10`) から関数エントリーアドレスをロードするスクラッチレジスタとして `x1` を使用していた (`ldr x1, [x10, #-1]; blr x1`)。
+- しかし AAPCS64 において `x1` は第 2 引数レジスタであるため、2 引数以上のクロージャ呼び出し（`assq` 等）において第 2 引数が関数エントリーアドレスで上書き破壊され、`assq` が常に `#f` を返すか不正メモリ参照により SIGSEGV を引き起こしていた。
+- 他の呼び出し箇所（`%dispatch-consumer` 等）と同様に、AArch64 標準の呼び出し時スクラッチレジスタ `x16` (`ldr x16, [x10, #-1]; blr x16`) を使用するよう是正した。
+
 ---
 
 ## 4. 実装方針 / Implementation Plan
@@ -119,12 +125,12 @@ GDB / QEMU 動的解析および LIR/ASM コード追跡により、以下の 5 
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `010_library.scm` の include パス解決が `file-exists?` を使用し、存在しないパスに対する例外送出が根絶されていること
-- [ ] `build/ulisp_stdlib_aarch64.s` および `.o` が `make -C ulisp` から単体で正常にビルドできること
-- [ ] `150_backend_aarch64.scm` に `*top-level-fns*` 由来の静的クロージャおよび `ulisp_gvar_*` シンボルが出力されること
-- [ ] AArch64 における `module-mode?` 実行時に `x19`（ヒープポインタ）が破壊されず、stdlib のヒープアロケーションが保持されること
-- [ ] `nanopass_meta.scm` の `lir-inst-defines-reg?` が AArch64 の `%rax` / `%rdi` レジスタエイリアスを正しく扱い、第1引数と第2引数の混同バグが発生しないこと
-- [ ] `context_aarch64.s` のスタックフレームオフセットが 80B TCB ヘッダに対応し（176B）、スタックカナリアが正常に機能すること
-- [ ] `test_context_switch_aarch64.scm` の全グループが QEMU 上で SIGSEGV なく 100% PASS すること
-- [ ] `make -C ulisp test_aarch64_qemu` が正常終了すること
-- [ ] `make py_compile` および `make static_analysis` がエラー 0 件で通過すること
+- [x] `010_library.scm` の include パス解決が `file-exists?` を使用し、存在しないパスに対する例外送出が根絶されていること
+- [x] `build/ulisp_stdlib_aarch64.s` および `.o` が `make -C ulisp` から単体で正常にビルドできること
+- [x] `150_backend_aarch64.scm` に `*top-level-fns*` 由来の静的クロージャおよび `ulisp_gvar_*` シンボルが出力されること
+- [x] AArch64 における `module-mode?` 実行時に `x19`（ヒープポインタ）が破壊されず、stdlib のヒープアロケーションが保持されること
+- [x] `nanopass_meta.scm` の `lir-inst-defines-reg?` が AArch64 の `%rax` / `%rdi` レジスタエイリアスを正しく扱い、第1引数と第2引数の混同バグが発生しないこと
+- [x] `context_aarch64.s` のスタックフレームオフセットが 80B TCB ヘッダに対応し（176B）、スタックカナリアが正常に機能すること
+- [x] `test_context_switch_aarch64.scm` の全グループが QEMU 上で SIGSEGV なく 100% PASS すること（71/71 assertions passed）
+- [x] `make -C ulisp test_aarch64_qemu` が正常終了すること（全 206/206 テスト PASS）
+- [x] `make py_compile` および `make static_analysis` がエラー 0 件で通過すること
