@@ -1157,6 +1157,16 @@ test_c_windows: build/compiler_passes.scm $(PASS_COMMON)
 	@rm -f build/test_c_windows_runner.scm
 	@echo "SUCCESS: ULisp C99 Backend Windows Tests PASSED!"
 
+test_c_clang: build/compiler_passes.scm $(PASS_COMMON)
+	@echo "=== Running ULisp C99 Backend Clang (macOS / Linux) Tests ==="
+	@mkdir -p build
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/test_c_backend_clang.scm > build/test_c_clang_runner.scm
+	@$(RUN_SCHEME) build/test_c_clang_runner.scm
+	@rm -f build/test_c_clang_runner.scm
+	@echo "SUCCESS: ULisp C99 Backend Clang Tests PASSED!"
+
+test_c_macos: test_c_clang
+
 test_c: compiler
 	./test_c.sh
 

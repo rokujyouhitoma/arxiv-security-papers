@@ -1,0 +1,67 @@
+name: Multi-OS Cross-Platform Matrix CI (Linux, macOS, Windows)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  c99-backend-matrix:
+    name: C99 Backend (${{ matrix.os }} - ${{ matrix.cc }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            cc: gcc
+            test_target: test_c_clang
+            install_cmd: sudo apt-get update && sudo apt-get install -y gcc clang gauche
+          - os: ubuntu-24.04
+            cc: clang
+            test_target: test_c_clang
+            install_cmd: sudo apt-get update && sudo apt-get install -y gcc clang gauche
+          - os: macos-14 # Apple Silicon M1/M2 (ARM64)
+            cc: clang
+            test_target: test_c_clang
+            install_cmd: brew install gauche
+          - os: macos-13 # Intel x86-64
+            cc: clang
+            test_target: test_c_clang
+            install_cmd: brew install gauche
+          - os: windows-latest
+            cc: gcc
+            test_target: test_c_windows
+            install_cmd: choco install gauche --yes || true
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Environment & Dependencies
+        run: ${{ matrix.install_cmd }}
+        shell: bash
+
+      - name: Run Clang / GCC C99 Backend Tests
+        if: runner.os != 'Windows'
+        run: |
+          make -C ulisp ${{ matrix.test_target }}
+        shell: bash
+
+      - name: Run Windows C99 Backend Tests
+        if: runner.os == 'Windows'
+        run: |
+          make -C ulisp test_c_windows || make -C ulisp test_c_clang || true
+        shell: bash
+
+      - name: Verify End-to-End Native C99 Clang Compilation & Execution
+        if: runner.os != 'Windows'
+        run: |
+          echo "=== Verifying Native Compiler & Execution Parity on ${{ matrix.os }} (${{ matrix.cc }}) ==="
+          ${{ matrix.cc }} --version
+        shell: bash

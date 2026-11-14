@@ -257,7 +257,8 @@
   (run-pass-pipeline forms verify-mode trace-mode))
 
 (define (compile-backend lir-ast target gc-mode)
-  (let* ((c-target? (or (eq? target 'c) (eq? target 'c-windows) (eq? target 'c-win)))
+  (let* ((c-target? (or (eq? target 'c) (eq? target 'c-windows) (eq? target 'c-win)
+                        (eq? target 'c-macos) (eq? target 'c-darwin) (eq? target 'c-apple)))
          (tgt-str (cond (c-target? "c")
                         ((eq? target 'aarch64) "aarch64")
                         ((eq? target 'elf) "elf")

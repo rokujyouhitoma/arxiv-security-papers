@@ -225,6 +225,14 @@ test_c_windows: ## Run ULisp C99 backend Windows MinGW & Wine tests (Issue #695)
 
 test-c-windows: test_c_windows
 
+.PHONY: test_c_clang test-c-clang test_c_macos test-c-macos
+test_c_clang: ## Run ULisp C99 backend Clang (macOS / Linux) tests (Issue #696)
+	$(MAKE) -C ulisp test_c_clang
+
+test-c-clang: test_c_clang
+test_c_macos: test_c_clang
+test-c-macos: test_c_clang
+
 .PHONY: verify_r7rs_traceability
 verify_r7rs_traceability: activate ## Verify R7RS specification traceability and diagnostic tags (Issue #665)
 	${VENV_PYTHON} scripts/verify_r7rs_traceability.py
