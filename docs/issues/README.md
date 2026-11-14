@@ -10,6 +10,16 @@
 | **695** | ULisp Portable C99 バックエンドの Windows (MinGW/MSVC) 移植と Wine 実行検証 | Feature | High | New | [695-port-c-backend-to-windows-and-verify-via-wine.md](695-port-c-backend-to-windows-and-verify-via-wine.md) |
 | **696** | ULisp Portable C99 バックエンドの macOS (Clang) 対応および GitHub Actions CI マトリクス検証の確立 | Feature | High | New | [696-support-macos-clang-and-github-actions-ci-matrix.md](696-support-macos-clang-and-github-actions-ci-matrix.md) |
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
+| **824** | Nanopass AST ノードにおけるソース位置情報 (Source Span) とメタデータの第一級サポート | Feature | High | New | [824-support-first-class-source-span-and-ast-metadata-in-nanopass.md](824-support-first-class-source-span-and-ast-metadata-in-nanopass.md) |
+| **825** | Nanopass AST 定数式評価器 (eval-in-language) およびコンパイル時計算 (CTFE) 基盤の導入 | Feature | Medium | New | [825-implement-eval-in-language-ast-evaluator-for-ctfe-and-constant-folding.md](825-implement-eval-in-language-ast-evaluator-for-ctfe-and-constant-folding.md) |
+| **826** | 機械型 (i8..i64, f32, f64, ptr) を備えた Typed LIR への移行とボクシング操作の直交分離 | Feature | High | New | [826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md](826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md) |
+| **827** | Pass 132 Braun SSA の任意 CFG (基本ブロック・多方向分岐・goto) 汎用対応化 | Feature | High | New | [827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md](827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md) |
+| **828** | LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設 | Feature | Medium | New | [828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md](828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md) |
+| **829** | 呼出規約 (Calling Convention) の多重化・モジュール分離とゼロオーバーヘッド C-FFI の実現 | Feature | High | New | [829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md](829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md) |
+| **830** | 144a アセンブラおよび 144 ELF リンカにおける複数セクション (.rodata/.data/.bss) と再配置の抽象化 | Feature | High | New | [830-abstract-elf-sections-and-relocations-in-144a-assembler-and-144-linker.md](830-abstract-elf-sections-and-relocations-in-144a-assembler-and-144-linker.md) |
+| **831** | 160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証 | Feature | Medium | New | [831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md](831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md) |
+| **832** | 純粋 Scheme による多倍長整数 (Bignum) および IEEE 754 相互変換標準ライブラリの実装 | Feature | Medium | New | [832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md](832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md) |
+| **833** | コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン (Diagnostic Reporter) の導入 | Feature | Low | New | [833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md](833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
