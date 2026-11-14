@@ -472,13 +472,13 @@
 (define (sys-getenv name)
   (get-environment-variable name))
 
-;; §6.14 System interface - features (R7RS-small, Issue #705, #706, #707, #708, #709, #710)
+;; §6.14 System interface - features (R7RS-small, Issue #705, #706, #707, #708, #709, #710, #819)
 (cond-expand
   ((or aarch64 arm64)
    (define (features)
-     '(r7rs ulisp exact-closed ieee-float full-unicode little-endian aarch64 arm64 lp64 posix linux unix gnu-linux srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193)))
+     '(r7rs ulisp exact-closed ieee-float full-unicode little-endian aarch64 arm64 lp64 posix linux unix gnu-linux srfi-14 srfi-64 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193)))
   (else
    (define (features)
-     '(r7rs ulisp exact-closed ieee-float full-unicode little-endian x86-64 lp64 posix linux unix gnu-linux srfi-14 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))))
+     '(r7rs ulisp exact-closed ieee-float full-unicode little-endian x86-64 lp64 posix linux unix gnu-linux srfi-14 srfi-64 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))))
 
 

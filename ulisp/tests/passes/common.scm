@@ -1,6 +1,7 @@
 ;;; =======================================================================
 ;;; ULisp Passes Common Test Harness
 ;;; Conforms to Issue #572 & Nanopass Architecture Quality Standard
+;;; Traceability: SRFI 64 / Issue #819 compatible assertions
 ;;; =======================================================================
 
 (define *pass-tests-run* 0)

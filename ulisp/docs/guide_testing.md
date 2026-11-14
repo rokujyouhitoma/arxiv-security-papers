@@ -143,6 +143,22 @@ make test_hierarchical
 - **Direct LIR Ingestion**:
   - `cat fixture.lir | ulisp`（先頭が `(%lir-program ...)` の場合、Frontend パスをバイパスして Backend のみ直接実行）
 
+### Layer 8: SRFI 64 ユニットテスト標準スイート (`make test_srfi_64` - Issue #819)
+R7RS-large / SRFI 64 に準拠したユニットテスト標準フレームワーク `(srfi 64)` および `lib/test.scm`。テストスイートの階層グループ化、豊富なアサーションマクロ群、実行条件フィルタリング（`test-skip`, `test-expect-fail`）、およびカスタムテストランナー・コールバック機構を提供する。
+
+```bash
+cd ulisp
+# SRFI 64 テストスイートのネイティブ AOT コンパイル & 実行
+make test_srfi_64
+```
+
+- **利用可能な API**:
+  - グループ化構文: `test-begin`, `test-end`, `test-group`, `test-group-with-cleanup`, `test-apply`, `test-with-runner`
+  - アサーション構文: `test-assert`, `test-eq`, `test-eqv`, `test-equal`, `test-approximate`, `test-error`
+  - フィルタリング: `test-skip`, `test-expect-fail`, `test-match-nth`, `test-match-name`, `test-match-all`, `test-match-any`
+  - テストランナー: `test-runner-simple`, `test-runner-null`, `test-runner-create`, `test-runner-current`, `test-runner-factory`
+  - コールバックフック: `test-runner-on-test-begin!`, `test-runner-on-test-end!`, `test-runner-on-group-begin!`, `test-runner-on-group-end!`, `test-runner-on-final!`
+
 ---
 
 ## 3. トラブルシューティング

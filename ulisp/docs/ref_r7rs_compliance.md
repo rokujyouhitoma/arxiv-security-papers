@@ -427,7 +427,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 | **SRFI 39** | Parameter objects (`make-parameter`, `parameterize`) | **◎** | [ulisp/lib/parameter.scm](../lib/parameter.scm) | R7RS-small §4.2.6 に正式採択。完全サポート ([Issue #537](../../docs/issues/closed/537-implement-r7rs-parameters-and-parameterize.md)) |
 | **SRFI 45** | Primitives for Expressing Iterative Lazy Algorithms | **◎** | [ulisp/lib/promise.scm](../lib/promise.scm) | R7RS-small §4.2.5 に正式採択。`delay`, `force`, `delay-force`, `make-promise` 完全準拠 ([Issue #550](../../docs/issues/closed/550-implement-r7rs-lazy-evaluation-delay-force.md)) |
 | **SRFI 60** | Integers as Bits (整数ビット表現・操作) | **◎** | [compiler/primitives.scm](../compiler/primitives.scm) | 62-bit Fixnum ビットマスク演算プリミティブ群 |
-| **SRFI 64** | Test Suites API (ユニットテスト標準) | **△** | [ulisp/test.sh](../test.sh)<br>[ulisp/test_c.sh](../test_c.sh) | 自前アサーション・テストランナーで運用 |
+| **SRFI 64** | Test Suites API (ユニットテスト標準) | **◎** | [ulisp/lib/test.scm](../lib/test.scm)<br>[ulisp/lib/srfi/64.sld](../lib/srfi/64.sld) | SRFI 64 ユニットテスト標準 API 完全準拠。テストスイート・グループ・アサーションマクロ群、スキップ・XFAIL、拡張テストランナー完備 ([Issue #819](../../docs/issues/closed/819-implement-srfi-64-test-suites-library-and-custom-test-runners.md)) |
 | **SRFI 69** | Basic Hash Tables (基本ハッシュテーブル) | **◎** | [ulisp/lib/hashtable.scm](../lib/hashtable.scm)<br>[ulisp/lib/srfi/69.sld](../lib/srfi/69.sld) | 基本ハッシュテーブル API 完全準拠。`make-hash-table`, `hash-table-ref/default`, `hash-table-walk` 等 ([Issue #649](../../docs/issues/closed/649-implement-r7rs-hash-table-api.md)) |
 | **SRFI 88** | Keyword Objects (キーワードオブジェクト `:key`) | **×** | - | シンボルで代用 |
 | **SRFI 89** | Optional Positional and Named Parameters | **×** | - | 未実装 |
@@ -543,6 +543,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
    - [Issue #716](../../docs/issues/closed/716-implement-r7rs-environment-specifiers-and-library-import-environments.md): R7RS-small §6.12 環境指定子およびライブラリインポート環境の完全実装
    - [Issue #717](../../docs/issues/closed/717-implement-r7rs-scheme-eval-embedded-metacircular-evaluator.md): R7RS-small `(scheme eval)` 組み込みメタサーキュラー評価器の完全実装
    - [Issue #718](../../docs/issues/closed/718-implement-r7rs-scheme-load-repl-and-r5rs-full-compliance.md): R7RS-small `(scheme load)`, `(scheme repl)`, `(scheme r5rs)` 完全準拠化と動的ロードの完全実装（**R7RS-small 全 16 標準ライブラリ 100% 完全準拠達成**）
+   - [Issue #819](../../docs/issues/closed/819-implement-srfi-64-test-suites-library-and-custom-test-runners.md): SRFI 64 / `(srfi 64)` ユニットテスト標準 API・テストスイート階層化・拡張テストランナーの完全実装
 3. **アーキテクチャ特性に基づく設計の進化**:
    - `eval`, `load`, `repl` などの動的実行系は、メタサーキュラー評価器および `open-input-file` / `port-read` 動的ロード機構により、Issue #716-#718 にて **R7RS-small 全 16 標準ライブラリの 100% 完全準拠 (◎)** を達成。
    - 数値塔（Number Tower）は、62-bit 即値 Fixnum、ヒープ有理数 (`<ratnum>`)、倍精度浮動小数点数 (`<flonum>`)、および直交・極形式複素数 (`<compnum>`) を完備し、Issue #711-#715 にて完全準拠を達成。
