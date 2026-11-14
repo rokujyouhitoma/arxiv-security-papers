@@ -283,12 +283,14 @@ check_asm_output() {
     if [ ! -s "$asm_file" ]; then
         echo -e "\033[1;31m[ERROR] $stage_name produced an empty assembly file: $asm_file\033[0m" >&2
         diagnose_stage_failure "$stage_name" "$asm_file" 0 "Empty assembly output produced" "$in_file"
+        rm -f "$asm_file"
         exit 1
     fi
     if grep -q "^\*\*\* ERROR:" "$asm_file"; then
         echo -e "\033[1;31m[ERROR] $stage_name failed with Scheme runtime exception:\033[0m" >&2
         cat "$asm_file" >&2
         diagnose_stage_failure "$stage_name" "$asm_file" 0 "Scheme runtime exception detected in output" "$in_file"
+        rm -f "$asm_file"
         exit 1
     fi
 }
@@ -296,17 +298,27 @@ check_asm_output() {
 run_stage() {
     local stage_name="$1"
     local asm_file="$2"
+    local err_file="${asm_file}.err"
     shift 2
     local rc=0
-    "$@" < "$BOOTSTRAP_INPUT" > "$asm_file" 2>&1 || rc=$?
+    "$@" < "$BOOTSTRAP_INPUT" > "$asm_file" 2> "$err_file" || rc=$?
     if [ "$rc" -ne 0 ]; then
         echo -e "\033[1;31m[ERROR] $stage_name execution failed with exit code $rc:\033[0m" >&2
+        if [ -s "$err_file" ]; then
+            cat "$err_file" >&2
+            cat "$err_file" >> "$asm_file"
+        fi
         if [ -s "$asm_file" ]; then
             cat "$asm_file" >&2
         fi
         diagnose_stage_failure "$stage_name" "$asm_file" "$rc" "Execution returned non-zero exit code ($rc)" "$BOOTSTRAP_INPUT"
+        rm -f "$asm_file" "$err_file"
         exit 1
     fi
+    if [ -s "$err_file" ] && grep -q "^\*\*\* ERROR:" "$err_file"; then
+        cat "$err_file" >> "$asm_file"
+    fi
+    rm -f "$err_file"
     check_asm_output "$stage_name" "$asm_file" "$BOOTSTRAP_INPUT"
 }
 
@@ -337,7 +349,7 @@ compile_asm() {
         echo -e "\033[1;31m[ERROR] $stage_name: as (assembler) failed with exit code $rc:\033[0m" >&2
         cat "$tool_err" >&2
         diagnose_stage_failure "$stage_name (as)" "$asm_file" "$rc" "Assembler failed to compile generated .s file" "$in_file"
-        rm -f "$tool_err"
+        rm -f "$obj_file" "$tool_err"
         exit 1
     fi
 
@@ -373,16 +385,20 @@ compile_asm() {
 run_stage_try() {
     local stage_name="$1"
     local asm_file="$2"
+    local err_file="${asm_file}.err"
     shift 2
     local rc=0
     local stage_timeout="${BOOTSTRAP_STAGE_TIMEOUT:-600s}"
-    timeout "$stage_timeout" "$@" < "$BOOTSTRAP_INPUT" > "$asm_file" 2>&1 || rc=$?
+    timeout "$stage_timeout" "$@" < "$BOOTSTRAP_INPUT" > "$asm_file" 2> "$err_file" || rc=$?
     if [ "$rc" -eq 124 ]; then
         echo -e "\033[1;33m[WARN] $stage_name timed out after $stage_timeout.\033[0m" >&2
+        rm -f "$asm_file" "$err_file"
         return 1
-    elif [ "$rc" -ne 0 ] || grep -q "^\*\*\* ERROR:" "$asm_file" || [ ! -s "$asm_file" ]; then
+    elif [ "$rc" -ne 0 ] || grep -q "^\*\*\* ERROR:" "$asm_file" || grep -q "^\*\*\* ERROR:" "$err_file" || [ ! -s "$asm_file" ]; then
+        rm -f "$asm_file" "$err_file"
         return 1
     fi
+    rm -f "$err_file"
     return 0
 }
 

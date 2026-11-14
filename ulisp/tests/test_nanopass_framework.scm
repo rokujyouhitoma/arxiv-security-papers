@@ -2060,14 +2060,14 @@
       (n2 '(let ((a 10)) (+ a 20)))
       (n3 '(set! x 99))
       (calls 0))
-  (let ((v1 (femto-get-cached-attr 'bucket-test-attr n1
-              (lambda () (set! calls (+ calls 1)) 101)))
-        (v2 (femto-get-cached-attr 'bucket-other-attr n2
-              (lambda () (set! calls (+ calls 1)) 202)))
-        (v1-hit (femto-get-cached-attr 'bucket-test-attr n1
-                  (lambda () (set! calls (+ calls 1)) 999)))
-        (v3 (femto-get-cached-attr 'bucket-test-attr n3
-              (lambda () (set! calls (+ calls 1)) 303))))
+  (let* ((v1 (femto-get-cached-attr 'bucket-test-attr n1
+               (lambda () (set! calls (+ calls 1)) 101)))
+         (v2 (femto-get-cached-attr 'bucket-other-attr n2
+               (lambda () (set! calls (+ calls 1)) 202)))
+         (v1-hit (femto-get-cached-attr 'bucket-test-attr n1
+                   (lambda () (set! calls (+ calls 1)) 999)))
+         (v3 (femto-get-cached-attr 'bucket-test-attr n3
+               (lambda () (set! calls (+ calls 1)) 303))))
     (assert-equal "femto cache miss computes initial value" 101 v1)
     (assert-equal "femto cache hit returns cached value without recomputing" 101 v1-hit)
     (assert-equal "femto cache miss invoked compute-thunk exact number of misses" 3 calls)

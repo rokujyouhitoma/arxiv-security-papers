@@ -16497,7 +16497,8 @@
       (and (symbol? attr)
            (let ((s (symbol->string attr)))
              (or (string=? s ":stack-alloc")
-                 (string=? s "#:stack-alloc"))))))
+                 (string=? s "#:stack-alloc")
+                 (string=? s "stack-alloc"))))))
 
 (define (stack-alloc-bytes val)
   (cond
@@ -18594,7 +18595,8 @@
       (and (symbol? attr)
            (let ((s (symbol->string attr)))
              (or (string=? s ":stack-alloc")
-                 (string=? s "#:stack-alloc"))))))
+                 (string=? s "#:stack-alloc")
+                 (string=? s "stack-alloc"))))))
 (define (get-raw-vars env)
   (let ((entry (assq '%raw-vars env)))
     (if entry (cdr entry) '())))
