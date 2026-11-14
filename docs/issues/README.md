@@ -12,12 +12,12 @@
 | **697** | Synapse 並行性ランタイム向けクロスプラットフォーム OSAL (OS Abstraction Layer) の設計と kqueue/IOCP 統合 | Feature | Medium | New | [697-implement-cross-platform-osal-for-synapse-concurrency.md](697-implement-cross-platform-osal-for-synapse-concurrency.md) |
 | **811** | 型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入 | Feature | Medium | New | [811-warn-on-untyped-variable-crossing-channel-boundary.md](811-warn-on-untyped-variable-crossing-channel-boundary.md) |
 | **812** | AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV | Bug | Medium | New | [812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md](812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) |
-| **813** | fuse-rules 後順 (Bottom-Up) 融合モード `:order post` の導入と 050_cp0 / 100_contify 移行および Femtopass 解析キャッシュ実接続 | Feature | High | New | [813-implement-fuse-rules-post-order-and-connect-femtopass-cache.md](813-implement-fuse-rules-post-order-and-connect-femtopass-cache.md) |
 | **814** | 143_backend_x86_peephole.scm の define-picopass 化と fuse-window-rules への移行 | Feature | Medium | New | [814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md](814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md) |
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **813** | fuse-rules 後順 (Bottom-Up) 融合モード `:order post` の導入と 050_cp0 / 100_contify 移行および Femtopass 解析キャッシュ実接続 | Feature | 2026-11-14 | [closed/813-implement-fuse-rules-post-order-and-connect-femtopass-cache.md](closed/813-implement-fuse-rules-post-order-and-connect-femtopass-cache.md) |
 | **810** | safepoint 挿入除外判定の名前プレフィックス廃止と declare no-safepoints 構文の導入 | Feature | 2026-11-14 | [closed/810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md](closed/810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md) |
 | **809** | %synapse-safepoint-poll! の LIR コード未生成の修正および aarch64 向けスタブの提供 | Bug | 2026-11-13 | [closed/809-fix-safepoint-poll-lir-code-emission-and-add-aarch64-stub.md](closed/809-fix-safepoint-poll-lir-code-emission-and-add-aarch64-stub.md) |
 | **808** | safepoint 有効化状態でのプリエンプション実機統合テストの追加と Makefile 除外設定の整理 | Feature | 2026-11-13 | [closed/808-add-hardware-safepoint-preemption-tests-and-clean-makefile-disables.md](closed/808-add-hardware-safepoint-preemption-tests-and-clean-makefile-disables.md) |

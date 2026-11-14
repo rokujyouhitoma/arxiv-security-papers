@@ -170,6 +170,13 @@
   get-picopass-firing-counts
   get-picopass-firing-log
   rule-mandatory?
-  picopass-mandatory?)
+  picopass-mandatory?
+  femto-get-cached-attr
+  femto-register-attr-dependencies!
+  femto-cache-invalidate-tags!
+  femto-cache-invalidate-node!
+  femto-cache-reset!
+  femto-cache-stats
+  femto-cache-hit-rate)
 
 

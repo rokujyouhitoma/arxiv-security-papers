@@ -190,6 +190,35 @@
     (assert-true "contains multiple %jump instructions (local jumps)"
                  (>= jump-count 2))))
 
+;;; Test Group 7: Nested letrec Post-Order Contification & Femtopass Cache
+(display "--- Group 7: Nested Post-Order Contification & Femtopass Cache ---")
+(newline)
+(femto-cache-reset!)
+(let* ((nested-input
+        '(letrec ((outer (lambda (i)
+                           (if (= i 0)
+                               0
+                               (letrec ((inner (lambda (j)
+                                                 (if (= j 0)
+                                                     (outer (- i 1))
+                                                     (inner (- j 1))))))
+                                 (inner i))))))
+           (outer 3)))
+       (transformed (contify-all nested-input))
+       (stats (femto-cache-stats)))
+  (assert-true "outer nested loop converts to %cont-fun via post-order fusion"
+               (and (pair? transformed)
+                    (eq? (car transformed) '%cont-fun)
+                    (eq? (cadr transformed) 'outer)))
+  (assert-true "inner nested loop inside outer %cont-fun converts to %cont-fun"
+               (let* ((lbody (cadddr transformed))
+                      (inner-form (cadddr lbody)))
+                 (and (pair? inner-form)
+                      (eq? (car inner-form) '%cont-fun)
+                      (eq? (cadr inner-form) 'inner))))
+  (assert-true "femto-cache records hits during nested contification"
+               (>= (cdr (assq 'hits stats)) 2)))
+
 (display "=======================================================")
 (newline)
 (display " All Contification & Local Closure Elimination tests PASSED successfully!")
