@@ -1149,6 +1149,14 @@ test_freestanding: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Tests ==="
 	@PYTHONPATH=$(ROOT_DIR) $(PYTHON) -m pytest $(ROOT_DIR)/tests/test_bare_metal_ulisp.py -v
 
+test_c_windows: build/compiler_passes.scm $(PASS_COMMON)
+	@echo "=== Running ULisp C99 Backend Windows (MinGW-w64 / Wine64) Tests ==="
+	@mkdir -p build
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/test_c_backend_windows.scm > build/test_c_windows_runner.scm
+	@$(RUN_SCHEME) build/test_c_windows_runner.scm
+	@rm -f build/test_c_windows_runner.scm
+	@echo "SUCCESS: ULisp C99 Backend Windows Tests PASSED!"
+
 test_c: compiler
 	./test_c.sh
 
