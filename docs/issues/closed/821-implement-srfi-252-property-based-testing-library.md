@@ -2,7 +2,7 @@
 ID: 821
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] SRFI 252 プロパティベーステストライブラリ (srfi 252) と決定論的ジェネレータ群の実装 (ID: 821)
@@ -33,18 +33,18 @@ SRFI 252 は、個別のテストケースを手動で列挙する代わりに�
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
 ### 新規作成ファイル
-- [ ] [ulisp/lib/property.scm](../../ulisp/lib/property.scm) (新規作成: SRFI 252 コアエンジン、決定論的 PRNG、R7RS-small 型ジェネレータ群、AST 生成器、反例レポーティング)
-- [ ] [ulisp/lib/srfi/252.sld](../../ulisp/lib/srfi/252.sld) (新規作成: R7RS `(srfi 252)` ライブラリ定義・エクスポート節・仕様トレーサビリティヘッダ)
-- [ ] [ulisp/tests/test_srfi_252.scm](../../ulisp/tests/test_srfi_252.scm) (新規作成: SRFI 252 総合プロパティテストスイート: 数学的不変条件、リスト/ベクタ性質、反例再現性、S式ASTファジング)
+- [x] [ulisp/lib/property.scm](../../ulisp/lib/property.scm) (新規作成: SRFI 252 コアエンジン、決定論的 PRNG、R7RS-small 型ジェネレータ群、AST 生成器、反例レポーティング)
+- [x] [ulisp/lib/srfi/252.sld](../../ulisp/lib/srfi/252.sld) (新規作成: R7RS `(srfi 252)` ライブラリ定義・エクスポート節・仕様トレーサビリティヘッダ)
+- [x] [ulisp/tests/test_srfi_252.scm](../../ulisp/tests/test_srfi_252.scm) (新規作成: SRFI 252 総合プロパティテストスイート: 数学的不変条件、リスト/ベクタ性質、反例再現性、S式ASTファジング)
 
 ### 既存更新ファイル
-- [ ] [ulisp/stdlib_entry.scm](../../ulisp/stdlib_entry.scm) (モジュラーコンパイル `ulisp_stdlib.o` への `(include "lib/property.scm")` 追加)
-- [ ] [ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm) (`builtin-library-name?` に `(srfi 252)` を登録、`ulisp-supported-feature?` に `srfi-252` を追加)
-- [ ] [ulisp/lib/posix.scm](../../ulisp/lib/posix.scm) (`(features)` 出力リストに `srfi-252` を追加)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`ULISP_STD_LIBS` への `lib/property.scm` 追加、`test_srfi_252` ターゲット新設、`lint_sexpr` 対象への登録)
-- [ ] [ulisp/docs/ref_r7rs_compliance.md](../../ulisp/docs/ref_r7rs_compliance.md) (SRFI 252 準拠状況テーブル更新、§5 原典リンクの追加)
-- [ ] [ulisp/docs/guide_testing.md](../../ulisp/docs/guide_testing.md) (Layer 10: SRFI 252 プロパティベーステスト利用ガイドの追記)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳のステータス同期)
+- [x] [ulisp/stdlib_entry.scm](../../ulisp/stdlib_entry.scm) (モジュラーコンパイル `ulisp_stdlib.o` への `(include "lib/property.scm")` 追加)
+- [x] [ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm) (`builtin-library-name?` に `(srfi 252)` を登録、`ulisp-supported-feature?` に `srfi-252` を追加)
+- [x] [ulisp/lib/posix.scm](../../ulisp/lib/posix.scm) (`(features)` 出力リストに `srfi-252` を追加)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`ULISP_STD_LIBS` への `lib/property.scm` 追加、`test_srfi_252` ターゲット新設、`lint_sexpr` 対象への登録)
+- [x] [ulisp/docs/ref_r7rs_compliance.md](../../ulisp/docs/ref_r7rs_compliance.md) (SRFI 252 準拠状況テーブル更新、§5 原典リンクの追加)
+- [x] [ulisp/docs/guide_testing.md](../../ulisp/docs/guide_testing.md) (Layer 10: SRFI 252 プロパティベーステスト利用ガイドの追記)
+- [x] [docs/issues/README.md](README.md) (Issue 台帳のステータス同期)
 
 ---
 
@@ -150,12 +150,12 @@ SRFI 158 の引数なし手続き（呼び出しごとに値を返し、終了�
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/lib/property.scm` および `ulisp/lib/srfi/252.sld` が作成され、全 SRFI 252 標準手続きおよびジェネレータ群が利用可能であること。
-- [ ] `(import (srfi 252))` により、`test-property`, `property-test-runner` および各種ジェネレータが正しくロードできること。
-- [ ] 決定論的 PRNG シード制御（`property-random-seed-set!`, `property-random-seed-get`）が提供され、同一シードで同一の乱数列・反例が 100% 再現可能であること。
-- [ ] 反例検出時に失敗した引数列とシード番号がレポートされ、SRFI 64 の `test-runner` に正しく集約されること。
-- [ ] `make -C ulisp test_srfi_252` が Makefile から正常に実行でき、ネイティブ x86-64 ELF バイナリとして 0 エラーで終了すること。
-- [ ] ホスト Scheme（Gauche `gosh` / Python `ilisp`）環境でも `ulisp/tests/test_srfi_252.scm` が 100% PASS すること。
-- [ ] `make -C ulisp lint_sexpr` および `python3 scripts/verify_r7rs_traceability.py` が 100% PASS すること。
-- [ ] ドキュメント（`ulisp/docs/ref_r7rs_compliance.md` および `ulisp/docs/guide_testing.md`）が更新され、仕様トレーサビリティが確立されていること。
-- [ ] ドキュメント内のすべての内部リンクが相対パス（絶対パスや `file://` を含まない）で記述されていること。
+- [x] `ulisp/lib/property.scm` および `ulisp/lib/srfi/252.sld` が作成され、全 SRFI 252 標準手続きおよびジェネレータ群が利用可能であること。
+- [x] `(import (srfi 252))` により、`test-property`, `property-test-runner` および各種ジェネレータが正しくロードできること。
+- [x] 決定論的 PRNG シード制御（`property-random-seed-set!`, `property-random-seed-get`）が提供され、同一シードで同一の乱数列・反例が 100% 再現可能であること。
+- [x] 反例検出時に失敗した引数列とシード番号がレポートされ、SRFI 64 の `test-runner` に正しく集約されること。
+- [x] `make -C ulisp test_srfi_252` が Makefile から正常に実行でき、ネイティブ x86-64 ELF バイナリとして 0 エラーで終了すること。
+- [x] ホスト Scheme（Gauche `gosh` / Python `ilisp`）環境でも `ulisp/tests/test_srfi_252.scm` が 100% PASS すること。
+- [x] `make -C ulisp lint_sexpr` および `python3 scripts/verify_r7rs_traceability.py` が 100% PASS すること。
+- [x] ドキュメント（`ulisp/docs/ref_r7rs_compliance.md` および `ulisp/docs/guide_testing.md`）が更新され、仕様トレーサビリティが確立されていること。
+- [x] ドキュメント内のすべての内部リンクが相対パス（絶対パスや `file://` を含まない）で記述されていること。

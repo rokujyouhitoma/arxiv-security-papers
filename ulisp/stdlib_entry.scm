@@ -31,6 +31,7 @@
 (include "lib/box.scm")
 (include "lib/test.scm")
 (include "lib/check.scm")
+(include "lib/property.scm")
 (include "lib/gc.scm")
 (include "lib/eval.scm")
 
