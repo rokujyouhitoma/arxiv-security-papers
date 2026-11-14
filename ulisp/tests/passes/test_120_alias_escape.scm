@@ -151,7 +151,7 @@
                 (%closure-ref c 1)))
        (res (alias-escape-all expr)))
   (assert-equal "local %make-closure-env is annotated with #:stack-alloc"
-                '(let ((c (annotate #:stack-alloc (%make-closure-env 'L_add1 x))))
+                `(let ((c (annotate ,*stack-alloc-attr* (%make-closure-env 'L_add1 x))))
                    (%closure-ref c 1))
                 res))
 
@@ -162,7 +162,7 @@
                 (f 10)))
        (res (alias-escape-all expr)))
   (assert-equal "locally invoked closure is annotated with #:stack-alloc"
-                '(let ((f (annotate #:stack-alloc (%make-closure-env 'L_square x))))
+                `(let ((f (annotate ,*stack-alloc-attr* (%make-closure-env 'L_square x))))
                    (f 10))
                 res))
 

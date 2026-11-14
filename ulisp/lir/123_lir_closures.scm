@@ -48,7 +48,8 @@
       (and (symbol? attr)
            (let ((s (symbol->string attr)))
              (or (string=? s ":stack-alloc")
-                 (string=? s "#:stack-alloc"))))))
+                 (string=? s "#:stack-alloc")
+                 (string=? s "stack-alloc"))))))
 
 (define (stack-alloc-bytes val)
   (cond

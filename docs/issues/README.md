@@ -13,11 +13,15 @@
 | **811** | 型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入 | Feature | Medium | New | [811-warn-on-untyped-variable-crossing-channel-boundary.md](811-warn-on-untyped-variable-crossing-channel-boundary.md) |
 | **812** | AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV | Bug | Medium | New | [812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md](812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) |
 | **814** | 143_backend_x86_peephole.scm の define-picopass 化と fuse-window-rules への移行 | Feature | Medium | New | [814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md](814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md) |
-| **818** | Makefile テストランナー RUN_SCHEME の Gauche (gosh) 優先化とモジュラー並列ブートストラップ検証の統合 | Feature | Medium | New | [818-prioritize-gauche-in-test-runner-and-enable-modular-parallel-bootstrap-verify.md](818-prioritize-gauche-in-test-runner-and-enable-modular-parallel-bootstrap-verify.md) |
+| **819** | R7RS-large / SRFI 64 テストスイート標準ライブラリ (srfi 64) と拡張テストランナー・互換ブリッジの実装 | Feature | High | New | [819-implement-srfi-64-test-suites-library-and-custom-test-runners.md](819-implement-srfi-64-test-suites-library-and-custom-test-runners.md) |
+| **820** | SRFI 78 軽量テストライブラリ (srfi 78) の実装と SRFI 64 テストランナー・Power Assert 連携 | Feature | Medium | New | [820-implement-srfi-78-lightweight-testing-library.md](820-implement-srfi-78-lightweight-testing-library.md) |
+| **821** | SRFI 252 プロパティベーステストライブラリ (srfi 252) と決定論的ジェネレータ群の実装 | Feature | Medium | New | [821-implement-srfi-252-property-based-testing-library.md](821-implement-srfi-252-property-based-testing-library.md) |
+| **822** | 既存テストスイート (267箇所の重複 assert-*) の SRFI 64 統一・引数順序是正および仕様準拠ドキュメント更新 | Feature | Medium | New | [822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md](822-unify-existing-test-suites-to-srfi-64-and-update-compliance-docs.md) |
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **818** | Makefile テストランナー RUN_SCHEME の Gauche (gosh) 優先化とモジュラー並列ブートストラップ検証の統合 | Feature | 2026-11-14 | [closed/818-prioritize-gauche-in-test-runner-and-enable-modular-parallel-bootstrap-verify.md](closed/818-prioritize-gauche-in-test-runner-and-enable-modular-parallel-bootstrap-verify.md) |
 | **817** | コンパイラ内部連想リストのベクタハッシュテーブル化と 050_cp0 における map/for-each インライン展開による AOT 実行高速化 | Feature | 2026-11-14 | [closed/817-hash-table-compiler-registries-and-inline-higher-order-list-ops-in-cp0.md](closed/817-hash-table-compiler-registries-and-inline-higher-order-list-ops-in-cp0.md) |
 | **816** | 090_rtyper のエスケープ走査 O(N) 化と 133_lir_peephole ウィンドウマッチングのヒープアロケーション削減 | Feature | 2026-11-14 | [closed/816-optimize-rtyper-escape-pruning-and-lir-peephole-window-allocation.md](closed/816-optimize-rtyper-escape-pruning-and-lir-peephole-window-allocation.md) |
 | **815** | nanopass-catamorphism-step の O(1) 浅層ディスパッチ化と *nanopass-term-memo* ハッシュバケット化によるコンパイル時間 90% 削減 | Feature | 2026-11-14 | [closed/815-optimize-nanopass-catamorphism-shallow-dispatch-and-term-memo-buckets.md](closed/815-optimize-nanopass-catamorphism-shallow-dispatch-and-term-memo-buckets.md) |
