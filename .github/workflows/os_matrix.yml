@@ -26,11 +26,7 @@ jobs:
             cc: clang
             test_target: test_c_clang
             install_cmd: sudo apt-get update && sudo apt-get install -y gcc clang && curl -sL https://github.com/practical-scheme/setup-gauche-binary/releases/download/v1/gauche-binary-ubuntu-latest.tar.gz | sudo tar -xz -C /
-          - os: macos-14 # Apple Silicon M1/M2 (ARM64)
-            cc: clang
-            test_target: test_c_clang
-            install_cmd: brew install gauche
-          - os: macos-13 # Intel x86-64
+          - os: macos-latest # Apple Silicon M1/M2 (ARM64, Apple Clang)
             cc: clang
             test_target: test_c_clang
             install_cmd: brew install gauche
