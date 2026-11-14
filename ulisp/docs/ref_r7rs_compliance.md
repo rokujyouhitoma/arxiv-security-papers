@@ -440,6 +440,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 | **SRFI 193** | Command line (コマンドライン情報) | **◎** | [ulisp/lib/posix.scm](../lib/posix.scm)<br>[ulisp/lib/srfi/193.sld](../lib/srfi/193.sld) | `command-line`, `command-name`, `command-args`, `script-file`, `script-directory` 完備 ([Issue #706](../../docs/issues/closed/706-implement-r7rs-include-library-declarations-and-srfi-193-command-line.md)) |
 | **SRFI 194** | Random data generators (乱数ジェネレータ) | **×** | - | 未実装 |
 | **SRFI 216** | SICP Prerequisites (SICP 演習前提機能) | **△** | [ulisp/lib/*.scm](../lib/) | `runtime`, `parallel-execute` 等の一部を除き主要プリミティブ完備 |
+| **SRFI 252** | Property Testing (プロパティベーステスト) | **◎** | [ulisp/lib/property.scm](../lib/property.scm)<br>[ulisp/lib/srfi/252.sld](../lib/srfi/252.sld) | SRFI 252 プロパティテスト完全準拠。組み込み型ジェネレータ（boolean, char, string, symbol, bytevector, exact-integer, exact-rational, exact-complex, exact-real, exact-number, inexact-real, inexact-integer, inexact-rational, inexact-complex, inexact-number）、複合ジェネレータ（pair, list, vector, sexpr）、決定論的 PRNG シード制御 (`property-random-seed-set!`, `property-random-seed-get`)、`test-property`, `test-property-expect-fail`, `test-property-skip`, `test-property-error`, `test-property-error-type`、および SRFI 64 透過的テストランナー連携完備 ([Issue #821](../../docs/issues/closed/821-implement-srfi-252-property-based-testing-library.md)) |
 
 ---
 
@@ -624,6 +625,7 @@ ULisp における R7RS 標準準拠ライブラリおよびコンパイラモ�
 - **SRFI 189 (Maybe and Either)**: [SRFI 189: Maybe and Either: optional values and error containers](https://srfi.schemers.org/srfi-189/srfi-189.html)
 - **SRFI 210 (Multiple Values Procedures & Syntax)**: [SRFI 210: Procedures and Syntax for Multiple Values](https://srfi.schemers.org/srfi-210/srfi-210.html)
 - **SRFI 219 (Define higher-order lambda)**: [SRFI 219: Define higher-order lambda](https://srfi.schemers.org/srfi-219/srfi-219.html)
+- **SRFI 252 (Property Testing)**: [SRFI 252: Property Testing](https://srfi.schemers.org/srfi-252/srfi-252.html)
 
 ### 5.4 Scheme コミュニティ規格・実装リファレンス
 - **Scheme.org Standards Index**: [Scheme.org: Standards](https://standards.scheme.org/)

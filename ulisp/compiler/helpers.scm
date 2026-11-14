@@ -1701,7 +1701,7 @@
     ((memq feat '(x86-64 x86_64))
      (let ((tgt (current-target-arch)))
        (or (eq? tgt 'x86_64) (eq? tgt 'x86-64) (eq? tgt 'elf) (eq? tgt 'asm) (eq? tgt 'obj) (eq? tgt 'elf-obj))))
-    ((memq feat '(ulisp r7rs exact-closed little-endian posix linux unix srfi-14 srfi-64 srfi-78 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193))
+    ((memq feat '(ulisp r7rs exact-closed little-endian posix linux unix srfi-14 srfi-64 srfi-78 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193 srfi-252))
      #t)
     (else #f)))
 
@@ -1710,7 +1710,7 @@
        (or (and (eq? (car name) 'scheme)
                 (memq (cadr name) '(base write read time file process-context cxr inexact complex char lazy case-lambda eval repl r5rs load list hash-table sort division box comparator set stream generator list-queue lseq charset)))
            (and (eq? (car name) 'srfi)
-                (memq (cadr name) '(1 14 28 41 64 69 78 95 111 113 117 121 125 127 128 132 141 145 158 193)))
+                (memq (cadr name) '(1 14 28 41 64 69 78 95 111 113 117 121 125 127 128 132 141 145 158 193 252)))
            (and (eq? (car name) 'ulisp)
                 (memq (cadr name) '(base core native))))))
 

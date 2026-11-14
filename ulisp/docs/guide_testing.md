@@ -175,6 +175,22 @@ make test_srfi_78
   - 状態取得・リセット: `(check-reset!)`, `(check-passed?)`, `(check-report)`
   - SRFI 64 透過連携: `(test-runner-current)` がアクティブな環境では、`check` の結果を SRFI 64 アサーションとして自動記録・集計。
 
+### Layer 10: SRFI 252 プロパティベーステスト (`make test_srfi_252` - Issue #821)
+R7RS-large / SRFI 252 に準拠したプロパティテストライブラリ `(srfi 252)` および `lib/property.scm`。R7RS-small 全データ型の組み込みジェネレータ、複合データ構造（リスト・ベクタ・S式AST）ジェネレータ、決定論的 PRNG シード制御、反例の完全再現、プロパティ検証（成功・期待された失敗・スキップ・例外補足）、および SRFI 64 テストランナーとの透過的統合を提供する。
+
+```bash
+cd ulisp
+# SRFI 252 テストスイートのネイティブ AOT コンパイル & 実行
+make test_srfi_252
+```
+
+- **利用可能な API**:
+  - プロパティ検証手続き: `(test-property [name] prop gen-list [runs])`, `(test-property-expect-fail ...)`, `(test-property-skip ...)`, `(test-property-error ...)`, `(test-property-error-type error-type ...)`
+  - 基本型ジェネレータ: `boolean-generator`, `char-generator`, `string-generator`, `symbol-generator`, `bytevector-generator`, `exact-integer-generator`, `exact-rational-generator`, `exact-complex-generator`, `exact-real-generator`, `exact-number-generator`, `inexact-real-generator`, `inexact-integer-generator`, `inexact-rational-generator`, `inexact-complex-generator`, `inexact-number-generator`
+  - 複合型ジェネレータ: `pair-generator`, `list-generator`, `vector-generator`, `sexpr-generator`
+  - 乱数シード制御: `(property-random-seed-set! seed)`, `(property-random-seed-get)`
+  - テストランナー連携: `(property-test-runner)`。`test-begin` / `test-end` 実行中であれば自動的にテスト結果および反例（`counterexample`）を SRFI 64 runner に登録。
+
 ---
 
 ## 3. トラブルシューティング
