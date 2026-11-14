@@ -99,4 +99,76 @@
   (assert-true "function optimization satisfies L_asm_x86 schema"
                (L_asm_x86? opt)))
 
+;; 9. Redundant jump over align to immediate next label (rule-x86-jump-p2align-next-label)
+(let* ((in-insts '((jmp L1) (%p2align 4) (%label L1) (ret)))
+       (out (optimize-x86-peephole-insts in-insts)))
+  (assert-equal "jump over p2align to next label eliminated"
+                '((%p2align 4) (%label L1) (ret))
+                out))
+
+;; 10. LEA optimization (rule-x86-lea-optimize)
+(let* ((in-insts '((mov rax rbx) (add rax 8) (ret)))
+       (out (optimize-x86-peephole-insts in-insts)))
+  (assert-equal "mov + add immediate folded into lea"
+                '((lea rax (%disp 8 rbx)) (ret))
+                out))
+(let* ((in-insts '((mov r10 r11) (add r10 (%imm 16)) (ret)))
+       (out (optimize-x86-peephole-insts in-insts)))
+  (assert-equal "mov + add %imm folded into lea"
+                '((lea r10 (%disp 16 r11)) (ret))
+                out))
+
+;; 11. Jump to return across intermediate blocks (rule-x86-jump-to-ret)
+(let* ((in-insts '((jmp L_end) (%label L_other) (mov rax 1) (%label L_end) (ret)))
+       (out (optimize-x86-peephole-insts in-insts)))
+  (assert-equal "jump across block to ret simplified to ret"
+                '((ret) (%label L_other) (mov rax 1) (%label L_end) (ret))
+                out))
+
+;; 12. Direct Picopass rule invocation
+(let ((out (rule-x86-self-mov-elim '((mov rax rax) (ret)))))
+  (assert-equal "direct rule-x86-self-mov-elim eliminates self-mov"
+                '((ret))
+                out))
+(let ((out (rule-x86-zero-xor '((mov rax 0) (ret)))))
+  (assert-equal "direct rule-x86-zero-xor transforms mov 0 to xor"
+                '((xor rax rax) (ret))
+                out))
+
+;; 13. Provenance Tracking & Firing Log Verification (Issue #769 / #814)
+(reset-picopass-provenance!)
+(enable-picopass-provenance!)
+(let* ((in-insts '((mov rax rax)
+                   (mov rbx 0)
+                   (mov rcx rdx)
+                   (add rcx 32)
+                   (jmp L1)
+                   (%label L1)
+                   (ret)))
+       (out (optimize-x86-peephole-insts in-insts))
+       (counts (get-picopass-firing-counts))
+       (log (get-picopass-firing-log)))
+  (assert-equal "peephole optimized output with provenance"
+                '((xor rbx rbx)
+                  (lea rcx (%disp 32 rdx))
+                  (%label L1)
+                  (ret))
+                out)
+  (assert-true "provenance recorded rule-x86-self-mov-elim"
+               (and (assq 'rule-x86-self-mov-elim counts)
+                    (>= (cdr (assq 'rule-x86-self-mov-elim counts)) 1)))
+  (assert-true "provenance recorded rule-x86-zero-xor"
+               (and (assq 'rule-x86-zero-xor counts)
+                    (>= (cdr (assq 'rule-x86-zero-xor counts)) 1)))
+  (assert-true "provenance recorded rule-x86-lea-optimize"
+               (and (assq 'rule-x86-lea-optimize counts)
+                    (>= (cdr (assq 'rule-x86-lea-optimize counts)) 1)))
+  (assert-true "provenance recorded rule-x86-jump-next-label"
+               (and (assq 'rule-x86-jump-next-label counts)
+                    (>= (cdr (assq 'rule-x86-jump-next-label counts)) 1)))
+  (assert-true "provenance firing log non-empty"
+               (> (length log) 0)))
+(reset-picopass-provenance!)
+(disable-picopass-provenance!)
+
 (test-end "Pass 143 (x86-64 Machine Peephole)")

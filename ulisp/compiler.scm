@@ -4147,7 +4147,34 @@
             (list '%lir-main frame-size (cons 'body opt-insts))))
       m))
 
-;;; Dual-mode wrapper: handles %lir-program, %lir-function, %lir-main, or flat instruction lists
+;;; Optimize body instructions inside %asm-function (DSN-33-01 Task 5.3 / Issue #814)
+(define (nanopass-optimize-asm-function-body opt-proc f)
+  (if (and (pair? f) (eq? (car f) '%asm-function))
+      (let* ((lbl (cadr f))
+             (frame-size-entry (assq 'frame-size (cddr f)))
+             (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
+             (body-clause (assq 'body (cddr f)))
+             (insts (if body-clause (cdr body-clause) '()))
+             (opt-insts (opt-proc insts)))
+        (if (eq? opt-insts insts)
+            f
+            (list '%asm-function lbl (list 'frame-size frame-size) (cons 'body opt-insts))))
+      f))
+
+;;; Optimize body instructions inside %asm-main (DSN-33-01 Task 5.3 / Issue #814)
+(define (nanopass-optimize-asm-main-body opt-proc m)
+  (if (and (pair? m) (eq? (car m) '%asm-main))
+      (let* ((frame-size-entry (assq 'frame-size (cdr m)))
+             (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
+             (body-clause (assq 'body (cdr m)))
+             (insts (if body-clause (cdr body-clause) '()))
+             (opt-insts (opt-proc insts)))
+        (if (eq? opt-insts insts)
+            m
+            (list '%asm-main (list 'frame-size frame-size) (cons 'body opt-insts))))
+      m))
+
+;;; Dual-mode wrapper: handles %lir-program / %asm-program, functions, main, or flat instruction lists
 (define (nanopass-wrap-window-rules-input opt-proc ir)
   (cond
     ((and (pair? ir) (eq? (car ir) '%lir-program))
@@ -4162,10 +4189,29 @@
             (opt-funcs (map (lambda (f) (nanopass-optimize-function-body opt-proc f)) raw-funcs))
             (opt-main (nanopass-optimize-main-body opt-proc main-clause)))
        (list '%lir-program strings-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main)))
+    ((and (pair? ir) (eq? (car ir) '%asm-program))
+     (let* ((strings (assq 'strings (cdr ir)))
+            (stackmaps (assq 'stackmaps (cdr ir)))
+            (funcs-entry (assq '%asm-functions (cdr ir)))
+            (funcs (if funcs-entry (cdr funcs-entry) '()))
+            (main-entry (assq '%asm-main (cdr ir)))
+            (opt-funcs (map (lambda (f) (nanopass-optimize-asm-function-body opt-proc f)) funcs))
+            (opt-main (if main-entry
+                          (nanopass-optimize-asm-main-body opt-proc main-entry)
+                          '(%asm-main (frame-size 0) (body ())))))
+       (list '%asm-program
+             (if strings strings '(strings ()))
+             (if stackmaps stackmaps '(stackmaps ()))
+             (cons '%asm-functions opt-funcs)
+             opt-main)))
     ((and (pair? ir) (eq? (car ir) '%lir-function))
      (nanopass-optimize-function-body opt-proc ir))
+    ((and (pair? ir) (eq? (car ir) '%asm-function))
+     (nanopass-optimize-asm-function-body opt-proc ir))
     ((and (pair? ir) (eq? (car ir) '%lir-main))
      (nanopass-optimize-main-body opt-proc ir))
+    ((and (pair? ir) (eq? (car ir) '%asm-main))
+     (nanopass-optimize-asm-main-body opt-proc ir))
     ((list? ir)
      (opt-proc ir))
     (else ir)))
@@ -23425,8 +23471,9 @@
   (emit ""))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 143: Native x86-64 Machine Peephole Optimization
-;;; Conforms to DSN-33 Architecture Specification & Issue #596
-;;; Implements sliding-window local simplifications on L_asm_x86 AST.
+;;; Conforms to DSN-33 Architecture Specification & Issues #596, #814
+;;; Implements sliding-window local simplifications on L_asm_x86 AST
+;;; via Nanopass define-picopass rules and fuse-window-rules.
 ;;; =======================================================================
 
 (define (x86-asm-reg? opnd)
@@ -23450,209 +23497,137 @@
   (and (pair? inst)
        (eq? (car inst) '%label)))
 
-(define *peephole-changed* (cons #f '()))
+(define (x86-asm-reachable-boundary? inst)
+  (and (pair? inst)
+       (or (eq? (car inst) '%label)
+           (eq? (car inst) '%p2align))))
 
-(define (x86-peephole-step-window insts)
-  (let loop ((rest insts) (acc '()))
+(define (x86-asm-skip-unreachable rest)
+  (let loop ((rem rest))
     (cond
-      ((null? rest)
-       (reverse acc))
+      ((null? rem) '())
+      ((x86-asm-reachable-boundary? (car rem)) rem)
+      (else (loop (cdr rem))))))
 
-      ;; -----------------------------------------------------------------
-      ;; Rule 1: Redundant Self-Move Elimination
-      ;; (mov r r) -> ()
-      ;; -----------------------------------------------------------------
-      ((and (pair? (car rest))
-            (let ((i (car rest)))
-              (and (eq? (car i) 'mov)
-                   (= (length i) 3)
-                   (x86-asm-reg? (cadr i))
-                   (equal? (cadr i) (caddr i)))))
-       (set-car! *peephole-changed* #t)
-       (loop (cdr rest) acc))
-
-      ;; -----------------------------------------------------------------
-      ;; Rule 2: Round-Trip Register Move Elimination
-      ;; (mov r1 r2) followed immediately by (mov r2 r1) -> (mov r1 r2)
-      ;; -----------------------------------------------------------------
-      ((and (pair? (cdr rest))
-            (pair? (car rest))
-            (pair? (cadr rest))
-            (let ((i1 (car rest))
-                  (i2 (cadr rest)))
-              (and (eq? (car i1) 'mov)
-                   (eq? (car i2) 'mov)
-                   (= (length i1) 3)
-                   (= (length i2) 3)
-                   (equal? (cadr i1) (caddr i2))
-                   (equal? (caddr i1) (cadr i2))
-                   (x86-asm-reg? (cadr i1))
-                   (x86-asm-reg? (caddr i1)))))
-       (set-car! *peephole-changed* #t)
-       (loop (cddr rest) (cons (car rest) acc)))
-
-      ;; -----------------------------------------------------------------
-      ;; Rule 3: Zero-idiom XOR Optimization
-      ;; (mov reg 0) / (mov reg (%imm 0)) -> (xor reg reg)
-      ;; -----------------------------------------------------------------
-      ((and (pair? (car rest))
-            (let ((i (car rest)))
-              (and (eq? (car i) 'mov)
-                   (= (length i) 3)
-                   (x86-asm-reg? (cadr i))
-                   (x86-asm-zero-imm? (caddr i)))))
-       (set-car! *peephole-changed* #t)
-       (let ((reg (cadr (car rest))))
-         (loop (cdr rest) (cons (list 'xor reg reg) acc))))
-
-      ;; -----------------------------------------------------------------
-      ;; Rule 4: Redundant Jump to Next Immediate Label
-      ;; (jmp L1) followed immediately by (%label L1) -> (%label L1)
-      ;; -----------------------------------------------------------------
-      ((and (pair? (cdr rest))
-            (pair? (car rest))
-            (pair? (cadr rest))
-            (eq? (car (car rest)) 'jmp)
-            (eq? (car (cadr rest)) '%label)
-            (equal? (cadr (car rest)) (cadr (cadr rest))))
-       (set-car! *peephole-changed* #t)
-       (loop (cdr rest) acc))
-
-      ;; -----------------------------------------------------------------
-      ;; Rule 4b: Redundant Jump Over Align to Next Immediate Label
-      ;; (jmp L1) followed immediately by (%p2align _) and (%label L1) -> (%p2align _) (%label L1)
-      ;; -----------------------------------------------------------------
-      ((and (pair? (cdr rest))
-            (pair? (cddr rest))
-            (pair? (car rest))
-            (pair? (cadr rest))
-            (pair? (caddr rest))
-            (eq? (car (car rest)) 'jmp)
-            (eq? (car (cadr rest)) '%p2align)
-            (eq? (car (caddr rest)) '%label)
-            (equal? (cadr (car rest)) (cadr (caddr rest))))
-       (set-car! *peephole-changed* #t)
-       (loop (cdr rest) acc))
-
-      ;; -----------------------------------------------------------------
-      ;; Rule 4d: LEA Optimization
-      ;; (mov r1 r2) followed by (add r1 imm) -> (lea r1 (%disp imm r2))
-      ;; -----------------------------------------------------------------
-      ((and (pair? (cdr rest))
-            (pair? (car rest))
-            (pair? (cadr rest))
-            (let ((i1 (car rest))
-                  (i2 (cadr rest)))
-              (and (eq? (car i1) 'mov)
-                   (eq? (car i2) 'add)
-                   (= (length i1) 3)
-                   (= (length i2) 3)
-                   (x86-asm-reg? (cadr i1))
-                   (x86-asm-reg? (caddr i1))
-                   (not (equal? (cadr i1) (caddr i1)))
-                   (equal? (cadr i2) (cadr i1))
-                   (or (integer? (caddr i2))
-                       (and (pair? (caddr i2)) (eq? (car (caddr i2)) '%imm) (integer? (cadr (caddr i2))))))))
-       (set-car! *peephole-changed* #t)
-       (let* ((i1 (car rest))
-              (i2 (cadr rest))
-              (dst (cadr i1))
-              (src (caddr i1))
-              (imm (if (integer? (caddr i2)) (caddr i2) (cadr (caddr i2)))))
-         (loop (cddr rest) (cons (list 'lea dst (list '%disp imm src)) acc))))
-
-      ;; -----------------------------------------------------------------
-      ;; Rule 5: Unreachable Code Elimination (Dead Code Elimination)
-      ;; (jmp L) or (ret) followed by non-label instructions up to next label
-      ;; -----------------------------------------------------------------
-      ((and (x86-asm-unconditional-terminator? (car rest))
-            (pair? (cdr rest))
-            (not (x86-asm-label-inst? (cadr rest)))
-            (not (and (pair? (cadr rest)) (eq? (caadr rest) '%p2align))))
-       (set-car! *peephole-changed* #t)
-       (let skip ((tail (cdr rest)))
-         (cond
-           ((null? tail)
-            (loop '() (cons (car rest) acc)))
-           ((or (x86-asm-label-inst? (car tail))
-                (and (pair? (car tail)) (eq? (caar tail) '%p2align)))
-            (loop tail (cons (car rest) acc)))
-           (else
-            (skip (cdr tail))))))
-
-      ;; -----------------------------------------------------------------
-      ;; Rule 4c: Jump to Return Simplification across intermediate blocks
-      ;; (jmp L1) ... (%label L_other) ... (%label L1) (ret) -> (ret)
-      ;; -----------------------------------------------------------------
-      ((and (pair? (car rest))
-            (eq? (car (car rest)) 'jmp)
-            (let ((target (cadr (car rest))))
-              (let find-lbl ((scan (cdr rest)) (seen-other-label? #f))
-                (cond
-                  ((null? scan) #f)
-                  ((and (pair? (car scan))
-                        (eq? (caar scan) '%label)
-                        (equal? (cadar scan) target))
-                   (and seen-other-label?
-                        (pair? (cdr scan))
-                        (pair? (cadr scan))
-                        (eq? (caadr scan) 'ret)))
-                  ((and (pair? (car scan)) (eq? (caar scan) '%label))
-                   (find-lbl (cdr scan) #t))
-                  (else (find-lbl (cdr scan) seen-other-label?))))))
-       (set-car! *peephole-changed* #t)
-       (loop (cdr rest) (cons '(ret) acc)))
-
-      ;; Fallthrough: Keep instruction unchanged
+(define (x86-asm-jump-targets-ret-across-labels? target rest)
+  (let find-lbl ((scan rest) (seen-other-label? #f))
+    (cond
+      ((null? scan) #f)
+      ((and (pair? (car scan))
+            (eq? (caar scan) '%label)
+            (equal? (cadar scan) target))
+       (and seen-other-label?
+            (pair? (cdr scan))
+            (pair? (cadr scan))
+            (eq? (caadr scan) 'ret)))
+      ((and (pair? (car scan)) (eq? (caar scan) '%label))
+       (find-lbl (cdr scan) #t))
       (else
-       (loop (cdr rest) (cons (car rest) acc))))))
+       (find-lbl (cdr scan) seen-other-label?)))))
 
+;;; -----------------------------------------------------------------------
+;;; First-Class x86-64 Peephole Picopass Rules (DSN-33-01 T5.3 / Issue #814)
+;;; -----------------------------------------------------------------------
+
+;; Rule 1: Redundant Self-Move Elimination
+;; (mov r r) -> ()
+(define-picopass rule-x86-self-mov-elim
+  (InstWindow
+    (((mov ,r1 ,r2) . ,rest)
+     (guard (and (equal? r1 r2)
+                 (x86-asm-reg? r1)))
+     rest)))
+
+;; Rule 2: Round-Trip Register Move Elimination
+;; (mov r1 r2) followed immediately by (mov r2 r1) -> (mov r1 r2)
+(define-picopass rule-x86-roundtrip-mov-elim
+  (InstWindow
+    (((mov ,r1 ,r2) (mov ,r3 ,r4) . ,rest)
+     (guard (and (equal? r1 r4)
+                 (equal? r2 r3)
+                 (x86-asm-reg? r1)
+                 (x86-asm-reg? r2)))
+     (cons (list 'mov r1 r2) rest))))
+
+;; Rule 3: Zero-idiom XOR Optimization
+;; (mov reg 0) / (mov reg (%imm 0)) -> (xor reg reg)
+(define-picopass rule-x86-zero-xor
+  (InstWindow
+    (((mov ,reg ,imm) . ,rest)
+     (guard (and (x86-asm-reg? reg)
+                 (x86-asm-zero-imm? imm)))
+     (cons (list 'xor reg reg) rest))))
+
+;; Rule 4: Redundant Jump to Next Immediate Label
+;; (jmp L1) followed immediately by (%label L1) -> (%label L1)
+(define-picopass rule-x86-jump-next-label
+  (InstWindow
+    (((jmp ,l1) (%label ,l2) . ,rest)
+     (guard (equal? l1 l2))
+     (cons (list '%label l2) rest))))
+
+;; Rule 4b: Redundant Jump Over Align to Next Immediate Label
+;; (jmp L1) followed immediately by (%p2align _) and (%label L1) -> (%p2align _) (%label L1)
+(define-picopass rule-x86-jump-p2align-next-label
+  (InstWindow
+    (((jmp ,l1) (%p2align ,a) (%label ,l2) . ,rest)
+     (guard (equal? l1 l2))
+     (cons (list '%p2align a) (cons (list '%label l2) rest)))))
+
+;; Rule 4d: LEA Optimization
+;; (mov r1 r2) followed by (add r1 imm) -> (lea r1 (%disp imm r2))
+(define-picopass rule-x86-lea-optimize
+  (InstWindow
+    (((mov ,r1 ,r2) (add ,r3 ,imm) . ,rest)
+     (guard (and (x86-asm-reg? r1)
+                 (x86-asm-reg? r2)
+                 (not (equal? r1 r2))
+                 (equal? r3 r1)
+                 (or (integer? imm)
+                     (and (pair? imm) (eq? (car imm) '%imm) (integer? (cadr imm))))))
+     (let ((c (if (integer? imm) imm (cadr imm))))
+       (cons (list 'lea r1 (list '%disp c r2)) rest)))))
+
+;; Rule 5: Unreachable Code Elimination (Dead Code Elimination)
+;; (jmp L) or (ret) followed by non-boundary instructions up to next label/align
+(define-picopass rule-x86-unreachable-dce
+  (InstWindow
+    (((jmp ,lbl) ,next . ,rest)
+     (guard (not (x86-asm-reachable-boundary? next)))
+     (cons (list 'jmp lbl) (x86-asm-skip-unreachable rest)))
+    (((ret) ,next . ,rest)
+     (guard (not (x86-asm-reachable-boundary? next)))
+     (cons '(ret) (x86-asm-skip-unreachable rest)))))
+
+;; Rule 4c: Jump to Return Simplification across intermediate blocks
+;; (jmp L1) ... (%label L_other) ... (%label L1) (ret) -> (ret)
+(define-picopass rule-x86-jump-to-ret
+  (InstWindow
+    (((jmp ,lbl) . ,rest)
+     (guard (x86-asm-jump-targets-ret-across-labels? lbl rest))
+     (cons '(ret) rest))))
+
+;;; -----------------------------------------------------------------------
+;;; Nanopass DSL Pass: x86-peephole-pass (fuse-window-rules)
+;;; -----------------------------------------------------------------------
+
+(define-pass x86-peephole-pass : L_asm_x86 (ir) -> L_asm_x86 ()
+  (fuse-window-rules
+    rule-x86-self-mov-elim
+    rule-x86-roundtrip-mov-elim
+    rule-x86-zero-xor
+    rule-x86-jump-next-label
+    rule-x86-jump-p2align-next-label
+    rule-x86-lea-optimize
+    rule-x86-unreachable-dce
+    rule-x86-jump-to-ret))
+
+;;; Transparent backwards-compatible wrappers
 (define (optimize-x86-peephole-insts insts)
-  (let loop ((cur insts) (iterations 3))
-    (if (<= iterations 0)
-        cur
-        (begin
-          (set-car! *peephole-changed* #f)
-          (let ((next (x86-peephole-step-window cur)))
-            (if (not (car *peephole-changed*))
-                cur
-                (loop next (- iterations 1))))))))
-
-(define (optimize-x86-peephole-function fn)
-  (let* ((lbl (cadr fn))
-         (frame-size-entry (assq 'frame-size (cddr fn)))
-         (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
-         (body-entry (assq 'body (cddr fn)))
-         (body (if body-entry (cdr body-entry) '()))
-         (opt-body (optimize-x86-peephole-insts body)))
-    (list '%asm-function
-          lbl
-          (list 'frame-size frame-size)
-          (cons 'body opt-body))))
-
-(define (optimize-x86-peephole-main m)
-  (let* ((frame-size-entry (assq 'frame-size (cdr m)))
-         (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
-         (body-entry (assq 'body (cdr m)))
-         (body (if body-entry (cdr body-entry) '()))
-         (opt-body (optimize-x86-peephole-insts body)))
-    (list '%asm-main
-          (list 'frame-size frame-size)
-          (cons 'body opt-body))))
+  (x86-peephole-pass insts))
 
 (define (optimize-x86-peephole prog)
-  (let* ((strings (assq 'strings (cdr prog)))
-         (stackmaps (assq 'stackmaps (cdr prog)))
-         (funcs-entry (assq '%asm-functions (cdr prog)))
-         (funcs (if funcs-entry (cdr funcs-entry) '()))
-         (main-entry (assq '%asm-main (cdr prog))))
-    (list '%asm-program
-          (if strings strings '(strings ()))
-          (if stackmaps stackmaps '(stackmaps ()))
-          (cons '%asm-functions (map optimize-x86-peephole-function funcs))
-          (if main-entry
-              (optimize-x86-peephole-main main-entry)
-              '(%asm-main (frame-size 0) (body ()))))))
+  (x86-peephole-pass prog))
 ;;; =======================================================================
 ;;; ULisp Compiler Backend: Common Static ELF64 Executable Builder
 ;;; Conforms to DSN-33 Architecture Specification & Issues #616, #619
