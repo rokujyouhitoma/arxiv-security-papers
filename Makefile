@@ -188,6 +188,10 @@ watch_js: activate ## Watch frontend JS sources and automatically recompile bund
 .PHONY: test
 test: build_js pytest ## pytest
 
+.PHONY: test_concurrency_osal
+test_concurrency_osal: ## Run cross-platform Synapse concurrency OSAL test suite (#697)
+	$(MAKE) -C ulisp test_concurrency_osal
+
 .PHONY: test_concurrency test-concurrency
 test_concurrency: ## Run complete Synapse multithreaded and coroutine concurrency test suite
 	$(MAKE) -C ulisp test_concurrency
