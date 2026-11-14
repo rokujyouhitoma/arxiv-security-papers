@@ -607,8 +607,9 @@
   (let* ((ir-var (car in-arg-list))
          (post? (eq? order 'post))
          (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out))
-         (leaf-fallback (if post? ir-var cata-call)))
-    (if (or (null? rules) (eq? l-out '*) (not enable-redispatch?))
+         (leaf-fallback (if post? ir-var cata-call))
+         (raw-cascade-expr
+          (if (or (null? rules) (eq? l-out '*) (not enable-redispatch?))
         (let* ((partitioned (nanopass-partition-rules rules))
                (buckets (car partitioned))
                (pair-fallbacks (cadr partitioned))
@@ -680,9 +681,33 @@
                                                     ir-var)
                                               cascade-body))))
                       (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
-          (if post?
-              (list 'let (list (list ir-var cata-call)) redispatch-expr)
-              redispatch-expr)))))
+                (if post?
+                    (list 'let (list (list ir-var cata-call)) redispatch-expr)
+                    redispatch-expr)))))
+    (if (eq? l-out '*)
+        raw-cascade-expr
+        (let ((s-var (unique-symbol "__span_"))
+              (inner-var (unique-symbol "__inner_"))
+              (res-var (unique-symbol "__res_")))
+          (list 'if (list 'or
+                          (list (string->symbol "ast-has-span?") ir-var)
+                          (list (string->symbol "source-loc?") ir-var))
+                (list 'let (list (list s-var (list (string->symbol "ast-source-span") ir-var))
+                                 (list inner-var (list (string->symbol "ast-strip-span") ir-var)))
+                      (list (string->symbol "with-ast-span") s-var
+                            (list 'lambda '()
+                                  (list 'let (list (list ir-var inner-var))
+                                        (list 'let (list (list res-var raw-cascade-expr))
+                                              (list 'if (list (string->symbol "ast-has-span?") res-var)
+                                                    res-var
+                                                    (list (string->symbol "ast-with-span") res-var s-var)))))))
+                (list 'let (list (list res-var raw-cascade-expr))
+                      (list 'if (list 'and
+                                      (list (string->symbol "current-ast-span"))
+                                      (list 'not (list (string->symbol "ast-has-span?") res-var))
+                                      (list 'not (list 'eq? res-var ir-var)))
+                            (list (string->symbol "ast-with-span") res-var (list (string->symbol "current-ast-span")))
+                            res-var)))))))
 
 (define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
   (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? 'pre))
@@ -1062,20 +1087,38 @@
          (desc-var (unique-symbol (string-append "__desc_" (symbol->raw-name name))))
          (cascade (nanopass-build-rule-cascade expanded-rules rule-kind nt-name 'ir))
          (proc-body
-          (if (eq? rule-kind 'femto)
-              (let* ((recurse-params (cons 'sub-node in-attrs))
-                     (recurse-binding
-                      (list 'femto-recurse
-                            (list 'lambda recurse-params
-                                  (cons name recurse-params))))
-                     (inner-body (list 'letrec (list recurse-binding) cascade)))
-                (if (null? in-attrs)
-                    (list (string->symbol "femto-get-cached-attr")
-                          (list 'quote name)
-                          'ir
-                          (list 'lambda '() inner-body))
-                    inner-body))
-              cascade)))
+          (cond
+            ((eq? rule-kind 'femto)
+             (let* ((recurse-params (cons 'sub-node in-attrs))
+                    (recurse-binding
+                     (list 'femto-recurse
+                           (list 'lambda recurse-params
+                                 (cons name recurse-params))))
+                    (inner-body (list 'letrec (list recurse-binding) cascade)))
+               (if (null? in-attrs)
+                   (list (string->symbol "femto-get-cached-attr")
+                         (list 'quote name)
+                         'ir
+                         (list 'lambda '() inner-body))
+                   inner-body)))
+            ((eq? rule-kind 'pico)
+             (let ((s-var (unique-symbol "__pico_span_"))
+                   (inner-var (unique-symbol "__pico_inner_"))
+                   (res-var (unique-symbol "__pico_res_")))
+               (list 'if (list 'or
+                               (list (string->symbol "ast-has-span?") 'ir)
+                               (list (string->symbol "source-loc?") 'ir))
+                     (list 'let (list (list s-var (list (string->symbol "ast-source-span") 'ir))
+                                      (list inner-var (list (string->symbol "ast-strip-span") 'ir)))
+                           (list (string->symbol "with-ast-span") s-var
+                                 (list 'lambda '()
+                                       (list 'let (list (list 'ir inner-var))
+                                             (list 'let (list (list res-var cascade))
+                                                   (list 'if (list 'and res-var (list 'not (list (string->symbol "ast-has-span?") res-var)))
+                                                         (list (string->symbol "ast-with-span") res-var s-var)
+                                                         res-var))))))
+                     cascade)))
+            (else cascade))))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
     (if opt-mandatory
         (register-mandatory-picopass! name))

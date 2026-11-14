@@ -221,9 +221,13 @@
     ((symbol? x)
      (string->symbol (string-downcase-ascii (symbol->string x))))
     ((pair? x)
-     (if (eq? (car x) '%source-loc)
-         (list '%source-loc (cadr x) (caddr x) (cadddr x) (fold-case-datum (car (cddddr x))))
-         (cons (fold-case-datum (car x)) (fold-case-datum (cdr x)))))
+     (cond
+       ((eq? (car x) '%source-loc)
+        (list '%source-loc (cadr x) (caddr x) (cadddr x) (fold-case-datum (car (cddddr x)))))
+       ((eq? (car x) '%source-span)
+        (list '%source-span (cadr x) (fold-case-datum (caddr x))))
+       (else
+        (cons (fold-case-datum (car x)) (fold-case-datum (cdr x))))))
     ((vector? x)
      (let* ((len (vector-length x))
             (v (make-vector len)))
@@ -250,6 +254,11 @@
                     (case-fold? (eq? (car inner) 'include-ci))
                     (included (slurp-included-files-mode (cdr inner) case-fold?)))
                (loop (append included (cdr fs)) acc)))
+            ((and (ast-has-span? f) (include-form? (ast-strip-span f)))
+             (let* ((inner (ast-strip-span f))
+                    (case-fold? (eq? (car inner) 'include-ci))
+                    (included (slurp-included-files-mode (cdr inner) case-fold?)))
+               (loop (append included (cdr fs)) acc)))
             (else
              (loop (cdr fs) (cons f acc))))))))
 
@@ -264,6 +273,9 @@
                (loop (append matched (cdr fs)) acc)))
             ((and (source-loc? f) (pair? (source-loc-form f)) (eq? (car (source-loc-form f)) 'cond-expand))
              (let ((matched (expand-cond-expand (cdr (source-loc-form f)))))
+               (loop (append matched (cdr fs)) acc)))
+            ((and (ast-has-span? f) (pair? (ast-strip-span f)) (eq? (car (ast-strip-span f)) 'cond-expand))
+             (let ((matched (expand-cond-expand (cdr (ast-strip-span f)))))
                (loop (append matched (cdr fs)) acc)))
             (else
              (loop (cdr fs) (cons f acc))))))))
@@ -285,7 +297,10 @@
         (expr (sanitize-reader-form (read p))))
     (if (eof-object? expr)
         expr
-        (list '%source-loc path cur-line cur-col expr))))
+        (let* ((end-line (if (file-input-port? p) (port-line p) cur-line))
+               (end-col (if (file-input-port? p) (port-col p) cur-col))
+               (span (make-source-span path cur-line cur-col end-line end-col #f)))
+          (list '%source-span span expr)))))
 
 (define (slurp-single-file raw-path)
   (slurp-single-file-mode raw-path #f))

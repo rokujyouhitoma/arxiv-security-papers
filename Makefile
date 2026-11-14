@@ -237,6 +237,12 @@ test-c-clang: test_c_clang
 test_c_macos: test_c_clang
 test-c-macos: test_c_clang
 
+.PHONY: test_nanopass_source_span test-nanopass-source-span
+test_nanopass_source_span: ## Run Nanopass first-class source span and AST metadata test suite (Issue #824)
+	$(MAKE) -C ulisp test_nanopass_source_span
+
+test-nanopass-source-span: test_nanopass_source_span
+
 .PHONY: verify_r7rs_traceability
 verify_r7rs_traceability: activate ## Verify R7RS specification traceability and diagnostic tags (Issue #665)
 	${VENV_PYTHON} scripts/verify_r7rs_traceability.py

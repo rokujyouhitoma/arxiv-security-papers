@@ -1036,8 +1036,11 @@
     (else '())))
 
 ;;; Match clause helper: returns list of values for expected vars, or #f
-(define (nanopass-match-clause pat expr expected-vars recurse-fn)
-  (if (and (pair? pat)
+(define (nanopass-match-clause pat raw-expr expected-vars recurse-fn)
+  (let ((expr (if (or (ast-has-span? raw-expr) (source-loc? raw-expr))
+                  (ast-strip-span raw-expr)
+                  raw-expr)))
+    (if (and (pair? pat)
            (symbol? (car pat))
            (not (eq? (car pat) 'unquote))
            (not (eq? (car pat) '_))
@@ -1055,7 +1058,7 @@
                     (let ((entry (assq (car vars) env)))
                       (if entry
                           (loop (cdr vars) (cons (cdr entry) vals))
-                          (loop (cdr vars) (cons #f vals)))))))))))
+                          (loop (cdr vars) (cons #f vals))))))))))))
 
 ;;; Manual `apply` for clause handlers (arity 0-8)
 (define (nanopass-apply-list proc vals)
@@ -1911,16 +1914,26 @@
     (else acc)))
 
 (define (nanopass-catamorphism-step lang-in lang-out nt-name ir recurse-fn extra-args extra-out)
-  ;; Fast path for atomic IR nodes: avoid language lookup and closure allocation
-  (if (not (pair? ir))
-      (if (eq? lang-out '*)
-          (if (and (pair? extra-args) (pair? extra-out))
-              (car (reverse extra-args))
-              #f)
-          ir)
-      (let ((extra-args (if (pair? extra-args) extra-args '()))
-            (extra-out (if (pair? extra-out) extra-out '()))
-            (lang (nanopass-lookup-language-opt lang-in)))
+  (if (and (not (eq? lang-out '*))
+           (or (ast-has-span? ir) (source-loc? ir)))
+      (let ((span (ast-source-span ir))
+            (inner (ast-strip-span ir)))
+        (with-ast-span span
+          (lambda ()
+            (let ((res (nanopass-catamorphism-step lang-in lang-out nt-name inner recurse-fn extra-args extra-out)))
+              (if (ast-has-span? res)
+                  res
+                  (ast-with-span res span))))))
+      ;; Fast path for atomic IR nodes: avoid language lookup and closure allocation
+      (if (not (pair? ir))
+          (if (eq? lang-out '*)
+              (if (and (pair? extra-args) (pair? extra-out))
+                  (car (reverse extra-args))
+                  #f)
+              ir)
+          (let ((extra-args (if (pair? extra-args) extra-args '()))
+                (extra-out (if (pair? extra-out) extra-out '()))
+                (lang (nanopass-lookup-language-opt lang-in)))
         (if (eq? lang-out '*)
             ;; Pure Analyzer mode
             (if (pair? extra-args)
@@ -1952,7 +1965,7 @@
               (let ((matched (if lang (nanopass-find-matching-production-shallow ir nt-name lang) #f)))
                 (if matched
                     (nanopass-schema-transform-node (cdr matched) ir lang (car matched) call-recurse)
-                    (nanopass-fallback-transform-node ir call-recurse))))))))
+                    (nanopass-fallback-transform-node ir call-recurse)))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Part 10: Local Re-dispatch Parameters & Schema Coverage Validation (DSN-33-01 T3.2)

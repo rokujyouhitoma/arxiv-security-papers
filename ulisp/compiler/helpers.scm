@@ -326,6 +326,90 @@
 (define (current-source-col) (car *current-source-col*))
 (define (set-current-source-col! c) (set-car! *current-source-col* c))
 
+;;; -----------------------------------------------------------------------
+;;; Source Span & AST Metadata Context (Conforms to DSN-33-02 §3.1 & Issue #824)
+;;; -----------------------------------------------------------------------
+
+;;; -----------------------------------------------------------------------
+;;; SRFI 9: Defining Record Types (Pure Portable Scheme Implementation)
+;;; Conforms to SRFI 9 & R7RS §5.5 (Zero Gauche / External Library Dependencies)
+;;; -----------------------------------------------------------------------
+
+(define-macro (define-record-type type-name ctor-spec pred-name . field-specs)
+  (let* ((ctor-name (if (pair? ctor-spec) (car ctor-spec) ctor-spec))
+         (ctor-args (if (pair? ctor-spec) (cdr ctor-spec) '()))
+         (tag (string->symbol (string-append "%%record-type-" (symbol->string type-name))))
+         (field-names (map car field-specs))
+         (vec-args (map (lambda (f) (if (memq f ctor-args) f #f)) field-names))
+         (ctor-def (list 'define (cons ctor-name ctor-args)
+                         (cons 'vector (cons (list 'quote tag) vec-args))))
+         (pred-arg (gensym "rec_"))
+         (pred-def (list 'define (list pred-name pred-arg)
+                         (list 'and (list 'vector? pred-arg)
+                               (list '> (list 'vector-length pred-arg) 0)
+                               (list 'eq? (list 'vector-ref pred-arg 0) (list 'quote tag))))))
+    (let loop ((specs field-specs) (idx 1) (acc (list pred-def ctor-def)))
+      (if (null? specs)
+          (cons 'begin (reverse acc))
+          (let* ((spec (car specs))
+                 (fname (car spec))
+                 (getter (cadr spec))
+                 (setter (if (pair? (cddr spec)) (caddr spec) #f))
+                 (get-arg (gensym "rec_"))
+                 (get-def (list 'define (list getter get-arg)
+                                (list 'vector-ref get-arg idx)))
+                 (acc2 (cons get-def acc))
+                 (acc3 (if setter
+                           (let ((set-obj (gensym "rec_"))
+                                 (set-val (gensym "val_")))
+                             (cons (list 'define (list setter set-obj set-val)
+                                         (list 'vector-set! set-obj idx set-val))
+                                   acc2))
+                           acc2)))
+            (loop (cdr specs) (+ idx 1) acc3))))))
+
+(define-record-type <source-span>
+  (%make-source-span-raw file start-line start-col end-line end-col macro-origin node-id)
+  source-span?
+  (file         span-file)
+  (start-line   span-start-line)
+  (start-col    span-start-col)
+  (end-line     span-end-line)
+  (end-col      span-end-col)
+  (macro-origin span-macro-origin)
+  (node-id      span-node-id))
+
+(define *source-span-id-counter* (cons 0 '()))
+(define (next-source-span-id!)
+  (let ((id (+ (car *source-span-id-counter*) 1)))
+    (set-car! *source-span-id-counter* id)
+    id))
+(define (reset-source-span-id-counter!)
+  (set-car! *source-span-id-counter* 0))
+
+(define *no-source-span*
+  (%make-source-span-raw "<unknown>" 1 1 1 1 #f 0))
+
+(define (no-source-span? x)
+  (and (source-span? x)
+       (eq? (span-node-id x) 0)))
+
+(define (make-source-span file s-line s-col . opt)
+  (let ((e-line (if (and (pair? opt) (pair? (cdr opt))) (car opt) s-line))
+        (e-col (if (and (pair? opt) (pair? (cdr opt))) (cadr opt) s-col))
+        (macro-origin (if (and (pair? opt) (pair? (cdr opt)) (pair? (cddr opt))) (caddr opt) #f))
+        (node-id (if (and (pair? opt) (pair? (cdr opt)) (pair? (cddr opt)) (pair? (cdddr opt)))
+                     (cadddr opt)
+                     (next-source-span-id!))))
+    (let* ((clean-file (if (string? file) (sanitize-source-path file) "<unknown>"))
+           (val-s-line (if (and (integer? s-line) (>= s-line 1)) s-line 1))
+           (val-s-col (if (and (integer? s-col) (>= s-col 1)) s-col 1))
+           (val-e-line (if (and (integer? e-line) (>= e-line val-s-line)) e-line val-s-line))
+           (val-e-col (if (and (integer? e-col) (>= e-col 1)) e-col val-s-col))
+           (val-origin (if (source-span? macro-origin) macro-origin #f))
+           (val-id (if (and (integer? node-id) (>= node-id 0)) node-id (next-source-span-id!))))
+      (%make-source-span-raw clean-file val-s-line val-s-col val-e-line val-e-col val-origin val-id))))
+
 (define (source-loc? obj)
   (and (pair? obj)
        (eq? (car obj) '%source-loc)
@@ -339,10 +423,82 @@
 (define (source-loc-col loc) (cadddr loc))
 (define (source-loc-form loc) (car (cddddr loc)))
 
+(define (ast-has-span? obj)
+  (and (pair? obj)
+       (eq? (car obj) '%source-span)
+       (pair? (cdr obj))
+       (pair? (cddr obj))))
+
+(define (ast-source-span obj)
+  (cond
+    ((ast-has-span? obj)
+     (cadr obj))
+    ((source-loc? obj)
+     (make-source-span (source-loc-file obj)
+                       (source-loc-line obj)
+                       (source-loc-col obj)
+                       (source-loc-line obj)
+                       (source-loc-col obj)
+                       #f))
+    (else #f)))
+
+(define (ast-strip-span obj)
+  (cond
+    ((ast-has-span? obj)
+     (ast-strip-span (caddr obj)))
+    ((source-loc? obj)
+     (ast-strip-span (source-loc-form obj)))
+    (else obj)))
+
+(define (ast-with-span form span)
+  (if (and span (source-span? span))
+      (list '%source-span span (ast-strip-span form))
+      form))
+
+(define (ast-propagate-span new-form old-form)
+  (let ((span (ast-source-span old-form)))
+    (if span
+        (ast-with-span new-form span)
+        new-form)))
+
 (define (strip-source-loc obj)
-  (if (source-loc? obj)
-      (source-loc-form obj)
-      obj))
+  (cond
+    ((source-loc? obj)
+     (strip-source-loc (source-loc-form obj)))
+    ((ast-has-span? obj)
+     (strip-source-loc (caddr obj)))
+    (else obj)))
+
+(define *current-ast-span* (cons #f '()))
+(define (current-ast-span) (car *current-ast-span*))
+(define (set-current-ast-span! s) (set-car! *current-ast-span* s))
+
+(define (with-ast-span span thunk)
+  (let ((prev (current-ast-span)))
+    (set-current-ast-span! span)
+    (let ((res (thunk)))
+      (set-current-ast-span! prev)
+      res)))
+
+(define *function-source-span-table* (cons '() '()))
+(define (reset-function-source-span-table!) (set-car! *function-source-span-table* '()))
+(define (register-function-source-span! fn span)
+  (if (source-span? span)
+      (set-car! *function-source-span-table*
+                (cons (cons fn span)
+                      (car *function-source-span-table*)))))
+(define (lookup-function-source-span fn)
+  (let ((entry (assq fn (car *function-source-span-table*))))
+    (if entry
+        (cdr entry)
+        (let loop ((es (car *function-source-span-table*)))
+          (cond
+            ((null? es) #f)
+            ((and (symbol? (car (car es)))
+                  (not (eq? (car (car es)) '%main))
+                  (eq? (mangle-fn-label (car (car es))) fn))
+             (cdr (car es)))
+            (else (loop (cdr es))))))))
 
 ;;; Debug Symbol Generation Context (Conforms to DSN-33 & Issue #619)
 (define *debug-symbols-enabled* (cons #f '()))
@@ -378,12 +534,15 @@
           new-id))))
 
 (define *function-source-loc-table* (cons '() '()))
-(define (reset-function-source-loc-table!) (set-car! *function-source-loc-table* '()))
+(define (reset-function-source-loc-table!)
+  (set-car! *function-source-loc-table* '())
+  (reset-function-source-span-table!))
 (define (register-function-source-loc! fn file line col)
   (let ((clean (sanitize-source-path file)))
     (set-car! *function-source-loc-table*
               (cons (cons fn (list clean line col))
-                    (car *function-source-loc-table*)))))
+                    (car *function-source-loc-table*)))
+    (register-function-source-span! fn (make-source-span clean line col line col #f))))
 (define (lookup-function-source-loc fn)
   (let ((entry (assq fn (car *function-source-loc-table*))))
     (if entry
@@ -598,6 +757,7 @@
   (set-car! *current-source-line* 0)
   (set-car! *current-source-col* 0)
   (set-car! *compiler-in-error* #f)
+  (set-car! *current-ast-span* #f)
   (reset-call-stack!))
 
 ;;; Safe AST truncation for diagnostics (prevents memory blowup / circular structures)

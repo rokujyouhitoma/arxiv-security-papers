@@ -15,6 +15,19 @@
         (reverse res)
         (let ((f (car fs)))
           (cond
+            ((ast-has-span? f)
+             (let ((span (ast-source-span f))
+                   (inner (ast-strip-span f)))
+               (cond
+                 ((and (pair? inner) (memq (car inner) '(define-language define-pass trace-define-pass define-parser define-unparser define-picopass define-femtopass define-attopass define-pipeline)))
+                  (let ((exp-inner (expand-dsl-forms (list inner))))
+                    (loop (append (map (lambda (x) (ast-with-span x span)) exp-inner)
+                                  (cdr fs))
+                          res)))
+                 ((and (pair? inner) (eq? (car inner) 'define-macro))
+                  (loop (cdr fs) res))
+                 (else
+                  (loop (cdr fs) (cons f res))))))
             ((and (pair? f) (eq? (car f) '%source-loc))
              (let ((file (cadr f))
                    (line (caddr f))

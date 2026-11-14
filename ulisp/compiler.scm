@@ -326,6 +326,90 @@
 (define (current-source-col) (car *current-source-col*))
 (define (set-current-source-col! c) (set-car! *current-source-col* c))
 
+;;; -----------------------------------------------------------------------
+;;; Source Span & AST Metadata Context (Conforms to DSN-33-02 §3.1 & Issue #824)
+;;; -----------------------------------------------------------------------
+
+;;; -----------------------------------------------------------------------
+;;; SRFI 9: Defining Record Types (Pure Portable Scheme Implementation)
+;;; Conforms to SRFI 9 & R7RS §5.5 (Zero Gauche / External Library Dependencies)
+;;; -----------------------------------------------------------------------
+
+(define-macro (define-record-type type-name ctor-spec pred-name . field-specs)
+  (let* ((ctor-name (if (pair? ctor-spec) (car ctor-spec) ctor-spec))
+         (ctor-args (if (pair? ctor-spec) (cdr ctor-spec) '()))
+         (tag (string->symbol (string-append "%%record-type-" (symbol->string type-name))))
+         (field-names (map car field-specs))
+         (vec-args (map (lambda (f) (if (memq f ctor-args) f #f)) field-names))
+         (ctor-def (list 'define (cons ctor-name ctor-args)
+                         (cons 'vector (cons (list 'quote tag) vec-args))))
+         (pred-arg (gensym "rec_"))
+         (pred-def (list 'define (list pred-name pred-arg)
+                         (list 'and (list 'vector? pred-arg)
+                               (list '> (list 'vector-length pred-arg) 0)
+                               (list 'eq? (list 'vector-ref pred-arg 0) (list 'quote tag))))))
+    (let loop ((specs field-specs) (idx 1) (acc (list pred-def ctor-def)))
+      (if (null? specs)
+          (cons 'begin (reverse acc))
+          (let* ((spec (car specs))
+                 (fname (car spec))
+                 (getter (cadr spec))
+                 (setter (if (pair? (cddr spec)) (caddr spec) #f))
+                 (get-arg (gensym "rec_"))
+                 (get-def (list 'define (list getter get-arg)
+                                (list 'vector-ref get-arg idx)))
+                 (acc2 (cons get-def acc))
+                 (acc3 (if setter
+                           (let ((set-obj (gensym "rec_"))
+                                 (set-val (gensym "val_")))
+                             (cons (list 'define (list setter set-obj set-val)
+                                         (list 'vector-set! set-obj idx set-val))
+                                   acc2))
+                           acc2)))
+            (loop (cdr specs) (+ idx 1) acc3))))))
+
+(define-record-type <source-span>
+  (%make-source-span-raw file start-line start-col end-line end-col macro-origin node-id)
+  source-span?
+  (file         span-file)
+  (start-line   span-start-line)
+  (start-col    span-start-col)
+  (end-line     span-end-line)
+  (end-col      span-end-col)
+  (macro-origin span-macro-origin)
+  (node-id      span-node-id))
+
+(define *source-span-id-counter* (cons 0 '()))
+(define (next-source-span-id!)
+  (let ((id (+ (car *source-span-id-counter*) 1)))
+    (set-car! *source-span-id-counter* id)
+    id))
+(define (reset-source-span-id-counter!)
+  (set-car! *source-span-id-counter* 0))
+
+(define *no-source-span*
+  (%make-source-span-raw "<unknown>" 1 1 1 1 #f 0))
+
+(define (no-source-span? x)
+  (and (source-span? x)
+       (eq? (span-node-id x) 0)))
+
+(define (make-source-span file s-line s-col . opt)
+  (let ((e-line (if (and (pair? opt) (pair? (cdr opt))) (car opt) s-line))
+        (e-col (if (and (pair? opt) (pair? (cdr opt))) (cadr opt) s-col))
+        (macro-origin (if (and (pair? opt) (pair? (cdr opt)) (pair? (cddr opt))) (caddr opt) #f))
+        (node-id (if (and (pair? opt) (pair? (cdr opt)) (pair? (cddr opt)) (pair? (cdddr opt)))
+                     (cadddr opt)
+                     (next-source-span-id!))))
+    (let* ((clean-file (if (string? file) (sanitize-source-path file) "<unknown>"))
+           (val-s-line (if (and (integer? s-line) (>= s-line 1)) s-line 1))
+           (val-s-col (if (and (integer? s-col) (>= s-col 1)) s-col 1))
+           (val-e-line (if (and (integer? e-line) (>= e-line val-s-line)) e-line val-s-line))
+           (val-e-col (if (and (integer? e-col) (>= e-col 1)) e-col val-s-col))
+           (val-origin (if (source-span? macro-origin) macro-origin #f))
+           (val-id (if (and (integer? node-id) (>= node-id 0)) node-id (next-source-span-id!))))
+      (%make-source-span-raw clean-file val-s-line val-s-col val-e-line val-e-col val-origin val-id))))
+
 (define (source-loc? obj)
   (and (pair? obj)
        (eq? (car obj) '%source-loc)
@@ -339,10 +423,82 @@
 (define (source-loc-col loc) (cadddr loc))
 (define (source-loc-form loc) (car (cddddr loc)))
 
+(define (ast-has-span? obj)
+  (and (pair? obj)
+       (eq? (car obj) '%source-span)
+       (pair? (cdr obj))
+       (pair? (cddr obj))))
+
+(define (ast-source-span obj)
+  (cond
+    ((ast-has-span? obj)
+     (cadr obj))
+    ((source-loc? obj)
+     (make-source-span (source-loc-file obj)
+                       (source-loc-line obj)
+                       (source-loc-col obj)
+                       (source-loc-line obj)
+                       (source-loc-col obj)
+                       #f))
+    (else #f)))
+
+(define (ast-strip-span obj)
+  (cond
+    ((ast-has-span? obj)
+     (ast-strip-span (caddr obj)))
+    ((source-loc? obj)
+     (ast-strip-span (source-loc-form obj)))
+    (else obj)))
+
+(define (ast-with-span form span)
+  (if (and span (source-span? span))
+      (list '%source-span span (ast-strip-span form))
+      form))
+
+(define (ast-propagate-span new-form old-form)
+  (let ((span (ast-source-span old-form)))
+    (if span
+        (ast-with-span new-form span)
+        new-form)))
+
 (define (strip-source-loc obj)
-  (if (source-loc? obj)
-      (source-loc-form obj)
-      obj))
+  (cond
+    ((source-loc? obj)
+     (strip-source-loc (source-loc-form obj)))
+    ((ast-has-span? obj)
+     (strip-source-loc (caddr obj)))
+    (else obj)))
+
+(define *current-ast-span* (cons #f '()))
+(define (current-ast-span) (car *current-ast-span*))
+(define (set-current-ast-span! s) (set-car! *current-ast-span* s))
+
+(define (with-ast-span span thunk)
+  (let ((prev (current-ast-span)))
+    (set-current-ast-span! span)
+    (let ((res (thunk)))
+      (set-current-ast-span! prev)
+      res)))
+
+(define *function-source-span-table* (cons '() '()))
+(define (reset-function-source-span-table!) (set-car! *function-source-span-table* '()))
+(define (register-function-source-span! fn span)
+  (if (source-span? span)
+      (set-car! *function-source-span-table*
+                (cons (cons fn span)
+                      (car *function-source-span-table*)))))
+(define (lookup-function-source-span fn)
+  (let ((entry (assq fn (car *function-source-span-table*))))
+    (if entry
+        (cdr entry)
+        (let loop ((es (car *function-source-span-table*)))
+          (cond
+            ((null? es) #f)
+            ((and (symbol? (car (car es)))
+                  (not (eq? (car (car es)) '%main))
+                  (eq? (mangle-fn-label (car (car es))) fn))
+             (cdr (car es)))
+            (else (loop (cdr es))))))))
 
 ;;; Debug Symbol Generation Context (Conforms to DSN-33 & Issue #619)
 (define *debug-symbols-enabled* (cons #f '()))
@@ -378,12 +534,15 @@
           new-id))))
 
 (define *function-source-loc-table* (cons '() '()))
-(define (reset-function-source-loc-table!) (set-car! *function-source-loc-table* '()))
+(define (reset-function-source-loc-table!)
+  (set-car! *function-source-loc-table* '())
+  (reset-function-source-span-table!))
 (define (register-function-source-loc! fn file line col)
   (let ((clean (sanitize-source-path file)))
     (set-car! *function-source-loc-table*
               (cons (cons fn (list clean line col))
-                    (car *function-source-loc-table*)))))
+                    (car *function-source-loc-table*)))
+    (register-function-source-span! fn (make-source-span clean line col line col #f))))
 (define (lookup-function-source-loc fn)
   (let ((entry (assq fn (car *function-source-loc-table*))))
     (if entry
@@ -598,6 +757,7 @@
   (set-car! *current-source-line* 0)
   (set-car! *current-source-col* 0)
   (set-car! *compiler-in-error* #f)
+  (set-car! *current-ast-span* #f)
   (reset-call-stack!))
 
 ;;; Safe AST truncation for diagnostics (prevents memory blowup / circular structures)
@@ -3069,8 +3229,11 @@
     (else '())))
 
 ;;; Match clause helper: returns list of values for expected vars, or #f
-(define (nanopass-match-clause pat expr expected-vars recurse-fn)
-  (if (and (pair? pat)
+(define (nanopass-match-clause pat raw-expr expected-vars recurse-fn)
+  (let ((expr (if (or (ast-has-span? raw-expr) (source-loc? raw-expr))
+                  (ast-strip-span raw-expr)
+                  raw-expr)))
+    (if (and (pair? pat)
            (symbol? (car pat))
            (not (eq? (car pat) 'unquote))
            (not (eq? (car pat) '_))
@@ -3088,7 +3251,7 @@
                     (let ((entry (assq (car vars) env)))
                       (if entry
                           (loop (cdr vars) (cons (cdr entry) vals))
-                          (loop (cdr vars) (cons #f vals)))))))))))
+                          (loop (cdr vars) (cons #f vals))))))))))))
 
 ;;; Manual `apply` for clause handlers (arity 0-8)
 (define (nanopass-apply-list proc vals)
@@ -3944,16 +4107,26 @@
     (else acc)))
 
 (define (nanopass-catamorphism-step lang-in lang-out nt-name ir recurse-fn extra-args extra-out)
-  ;; Fast path for atomic IR nodes: avoid language lookup and closure allocation
-  (if (not (pair? ir))
-      (if (eq? lang-out '*)
-          (if (and (pair? extra-args) (pair? extra-out))
-              (car (reverse extra-args))
-              #f)
-          ir)
-      (let ((extra-args (if (pair? extra-args) extra-args '()))
-            (extra-out (if (pair? extra-out) extra-out '()))
-            (lang (nanopass-lookup-language-opt lang-in)))
+  (if (and (not (eq? lang-out '*))
+           (or (ast-has-span? ir) (source-loc? ir)))
+      (let ((span (ast-source-span ir))
+            (inner (ast-strip-span ir)))
+        (with-ast-span span
+          (lambda ()
+            (let ((res (nanopass-catamorphism-step lang-in lang-out nt-name inner recurse-fn extra-args extra-out)))
+              (if (ast-has-span? res)
+                  res
+                  (ast-with-span res span))))))
+      ;; Fast path for atomic IR nodes: avoid language lookup and closure allocation
+      (if (not (pair? ir))
+          (if (eq? lang-out '*)
+              (if (and (pair? extra-args) (pair? extra-out))
+                  (car (reverse extra-args))
+                  #f)
+              ir)
+          (let ((extra-args (if (pair? extra-args) extra-args '()))
+                (extra-out (if (pair? extra-out) extra-out '()))
+                (lang (nanopass-lookup-language-opt lang-in)))
         (if (eq? lang-out '*)
             ;; Pure Analyzer mode
             (if (pair? extra-args)
@@ -3985,7 +4158,7 @@
               (let ((matched (if lang (nanopass-find-matching-production-shallow ir nt-name lang) #f)))
                 (if matched
                     (nanopass-schema-transform-node (cdr matched) ir lang (car matched) call-recurse)
-                    (nanopass-fallback-transform-node ir call-recurse))))))))
+                    (nanopass-fallback-transform-node ir call-recurse)))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Part 10: Local Re-dispatch Parameters & Schema Coverage Validation (DSN-33-01 T3.2)
@@ -5579,8 +5752,9 @@
   (let* ((ir-var (car in-arg-list))
          (post? (eq? order 'post))
          (cata-call (nanopass-make-catamorphism-call l-in l-out nt-name ir-var in-arg-list extra-out))
-         (leaf-fallback (if post? ir-var cata-call)))
-    (if (or (null? rules) (eq? l-out '*) (not enable-redispatch?))
+         (leaf-fallback (if post? ir-var cata-call))
+         (raw-cascade-expr
+          (if (or (null? rules) (eq? l-out '*) (not enable-redispatch?))
         (let* ((partitioned (nanopass-partition-rules rules))
                (buckets (car partitioned))
                (pair-fallbacks (cadr partitioned))
@@ -5652,9 +5826,33 @@
                                                     ir-var)
                                               cascade-body))))
                       (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
-          (if post?
-              (list 'let (list (list ir-var cata-call)) redispatch-expr)
-              redispatch-expr)))))
+                (if post?
+                    (list 'let (list (list ir-var cata-call)) redispatch-expr)
+                    redispatch-expr)))))
+    (if (eq? l-out '*)
+        raw-cascade-expr
+        (let ((s-var (unique-symbol "__span_"))
+              (inner-var (unique-symbol "__inner_"))
+              (res-var (unique-symbol "__res_")))
+          (list 'if (list 'or
+                          (list (string->symbol "ast-has-span?") ir-var)
+                          (list (string->symbol "source-loc?") ir-var))
+                (list 'let (list (list s-var (list (string->symbol "ast-source-span") ir-var))
+                                 (list inner-var (list (string->symbol "ast-strip-span") ir-var)))
+                      (list (string->symbol "with-ast-span") s-var
+                            (list 'lambda '()
+                                  (list 'let (list (list ir-var inner-var))
+                                        (list 'let (list (list res-var raw-cascade-expr))
+                                              (list 'if (list (string->symbol "ast-has-span?") res-var)
+                                                    res-var
+                                                    (list (string->symbol "ast-with-span") res-var s-var)))))))
+                (list 'let (list (list res-var raw-cascade-expr))
+                      (list 'if (list 'and
+                                      (list (string->symbol "current-ast-span"))
+                                      (list 'not (list (string->symbol "ast-has-span?") res-var))
+                                      (list 'not (list 'eq? res-var ir-var)))
+                            (list (string->symbol "ast-with-span") res-var (list (string->symbol "current-ast-span")))
+                            res-var)))))))
 
 (define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
   (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? 'pre))
@@ -6034,20 +6232,38 @@
          (desc-var (unique-symbol (string-append "__desc_" (symbol->raw-name name))))
          (cascade (nanopass-build-rule-cascade expanded-rules rule-kind nt-name 'ir))
          (proc-body
-          (if (eq? rule-kind 'femto)
-              (let* ((recurse-params (cons 'sub-node in-attrs))
-                     (recurse-binding
-                      (list 'femto-recurse
-                            (list 'lambda recurse-params
-                                  (cons name recurse-params))))
-                     (inner-body (list 'letrec (list recurse-binding) cascade)))
-                (if (null? in-attrs)
-                    (list (string->symbol "femto-get-cached-attr")
-                          (list 'quote name)
-                          'ir
-                          (list 'lambda '() inner-body))
-                    inner-body))
-              cascade)))
+          (cond
+            ((eq? rule-kind 'femto)
+             (let* ((recurse-params (cons 'sub-node in-attrs))
+                    (recurse-binding
+                     (list 'femto-recurse
+                           (list 'lambda recurse-params
+                                 (cons name recurse-params))))
+                    (inner-body (list 'letrec (list recurse-binding) cascade)))
+               (if (null? in-attrs)
+                   (list (string->symbol "femto-get-cached-attr")
+                         (list 'quote name)
+                         'ir
+                         (list 'lambda '() inner-body))
+                   inner-body)))
+            ((eq? rule-kind 'pico)
+             (let ((s-var (unique-symbol "__pico_span_"))
+                   (inner-var (unique-symbol "__pico_inner_"))
+                   (res-var (unique-symbol "__pico_res_")))
+               (list 'if (list 'or
+                               (list (string->symbol "ast-has-span?") 'ir)
+                               (list (string->symbol "source-loc?") 'ir))
+                     (list 'let (list (list s-var (list (string->symbol "ast-source-span") 'ir))
+                                      (list inner-var (list (string->symbol "ast-strip-span") 'ir)))
+                           (list (string->symbol "with-ast-span") s-var
+                                 (list 'lambda '()
+                                       (list 'let (list (list 'ir inner-var))
+                                             (list 'let (list (list res-var cascade))
+                                                   (list 'if (list 'and res-var (list 'not (list (string->symbol "ast-has-span?") res-var)))
+                                                         (list (string->symbol "ast-with-span") res-var s-var)
+                                                         res-var))))))
+                     cascade)))
+            (else cascade))))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
     (if opt-mandatory
         (register-mandatory-picopass! name))
@@ -8886,9 +9102,13 @@
     ((symbol? x)
      (string->symbol (string-downcase-ascii (symbol->string x))))
     ((pair? x)
-     (if (eq? (car x) '%source-loc)
-         (list '%source-loc (cadr x) (caddr x) (cadddr x) (fold-case-datum (car (cddddr x))))
-         (cons (fold-case-datum (car x)) (fold-case-datum (cdr x)))))
+     (cond
+       ((eq? (car x) '%source-loc)
+        (list '%source-loc (cadr x) (caddr x) (cadddr x) (fold-case-datum (car (cddddr x)))))
+       ((eq? (car x) '%source-span)
+        (list '%source-span (cadr x) (fold-case-datum (caddr x))))
+       (else
+        (cons (fold-case-datum (car x)) (fold-case-datum (cdr x))))))
     ((vector? x)
      (let* ((len (vector-length x))
             (v (make-vector len)))
@@ -8915,6 +9135,11 @@
                     (case-fold? (eq? (car inner) 'include-ci))
                     (included (slurp-included-files-mode (cdr inner) case-fold?)))
                (loop (append included (cdr fs)) acc)))
+            ((and (ast-has-span? f) (include-form? (ast-strip-span f)))
+             (let* ((inner (ast-strip-span f))
+                    (case-fold? (eq? (car inner) 'include-ci))
+                    (included (slurp-included-files-mode (cdr inner) case-fold?)))
+               (loop (append included (cdr fs)) acc)))
             (else
              (loop (cdr fs) (cons f acc))))))))
 
@@ -8929,6 +9154,9 @@
                (loop (append matched (cdr fs)) acc)))
             ((and (source-loc? f) (pair? (source-loc-form f)) (eq? (car (source-loc-form f)) 'cond-expand))
              (let ((matched (expand-cond-expand (cdr (source-loc-form f)))))
+               (loop (append matched (cdr fs)) acc)))
+            ((and (ast-has-span? f) (pair? (ast-strip-span f)) (eq? (car (ast-strip-span f)) 'cond-expand))
+             (let ((matched (expand-cond-expand (cdr (ast-strip-span f)))))
                (loop (append matched (cdr fs)) acc)))
             (else
              (loop (cdr fs) (cons f acc))))))))
@@ -8950,7 +9178,10 @@
         (expr (sanitize-reader-form (read p))))
     (if (eof-object? expr)
         expr
-        (list '%source-loc path cur-line cur-col expr))))
+        (let* ((end-line (if (file-input-port? p) (port-line p) cur-line))
+               (end-col (if (file-input-port? p) (port-col p) cur-col))
+               (span (make-source-span path cur-line cur-col end-line end-col #f)))
+          (list '%source-span span expr)))))
 
 (define (slurp-single-file raw-path)
   (slurp-single-file-mode raw-path #f))
@@ -9316,6 +9547,19 @@
         (reverse res)
         (let ((f (car fs)))
           (cond
+            ((ast-has-span? f)
+             (let ((span (ast-source-span f))
+                   (inner (ast-strip-span f)))
+               (cond
+                 ((and (pair? inner) (memq (car inner) '(define-language define-pass trace-define-pass define-parser define-unparser define-picopass define-femtopass define-attopass define-pipeline)))
+                  (let ((exp-inner (expand-dsl-forms (list inner))))
+                    (loop (append (map (lambda (x) (ast-with-span x span)) exp-inner)
+                                  (cdr fs))
+                          res)))
+                 ((and (pair? inner) (eq? (car inner) 'define-macro))
+                  (loop (cdr fs) res))
+                 (else
+                  (loop (cdr fs) (cons f res))))))
             ((and (pair? f) (eq? (car f) '%source-loc))
              (let ((file (cadr f))
                    (line (caddr f))
@@ -9828,14 +10072,25 @@
       (error "syntax-error [R7RS §4.3.1]: invalid let-syntax/letrec-syntax syntax" expr)))
 
 (define (macro-expand-1 expr macro-table)
-  (if (and (pair? expr) (symbol? (car expr)))
-      (let ((entry (assq (car expr) macro-table)))
-        (if entry
-            (let* ((macro-desc (cdr entry))
-                   (expanded (apply-syntax-rules-macro macro-desc expr)))
-              (cons #t expanded))
-            (cons #f expr)))
-      (cons #f expr)))
+  (let* ((has-span? (or (ast-has-span? expr) (source-loc? expr)))
+         (span (if has-span? (ast-source-span expr) #f))
+         (clean-expr (if has-span? (ast-strip-span expr) expr)))
+    (if (and (pair? clean-expr) (symbol? (car clean-expr)))
+        (let ((entry (assq (car clean-expr) macro-table)))
+          (if entry
+              (let* ((macro-desc (cdr entry))
+                     (expanded (apply-syntax-rules-macro macro-desc clean-expr)))
+                (if span
+                    (let ((new-span (make-source-span (span-file span)
+                                                      (span-start-line span)
+                                                      (span-start-col span)
+                                                      (span-end-line span)
+                                                      (span-end-col span)
+                                                      span)))
+                      (cons #t (ast-with-span expanded new-span)))
+                    (cons #t expanded)))
+              (cons #f expr)))
+        (cons #f expr))))
 
 (define (macro-expand-top-expr expr macro-table)
   (let ((res (macro-expand-1 expr macro-table)))
@@ -9964,6 +10219,15 @@
         (reverse res)
         (let ((f (car fs)))
           (cond
+            ((ast-has-span? f)
+             (let* ((span (ast-source-span f))
+                    (inner (ast-strip-span f)))
+               (if (macro-def? inner)
+                   (let* ((macro-desc (parse-syntax-rules-def inner))
+                          (name (macro-name macro-desc)))
+                     (loop (cdr fs) (cons (cons name macro-desc) macro-table) res))
+                   (let ((exp-f (macro-expand-all inner macro-table)))
+                     (loop (cdr fs) macro-table (cons (ast-with-span exp-f span) res))))))
             ((source-loc? f)
              (let* ((file (source-loc-file f))
                     (line (source-loc-line f))
@@ -10127,6 +10391,14 @@
           (if (pair? f)
               (set-current-form! f))
           (cond
+            ((ast-has-span? f)
+             (let* ((span (ast-source-span f))
+                    (inner (ast-strip-span f)))
+               (set-current-source-file! (span-file span))
+               (set-current-source-line! (span-start-line span))
+               (set-current-source-col! (span-start-col span))
+               (set-current-ast-span! span)
+               (loop (cons inner (cdr fs)) defs bodies)))
             ((and (pair? f) (eq? (car f) '%source-loc))
              (let ((file (cadr f))
                    (line (caddr f))
