@@ -22,18 +22,7 @@
 (define (sys-munmap addr length)
   (%to-fixnum (%raw-syscall (%to-raw *sys-munmap*) (%to-raw addr) (%to-raw length) 0 0 0 0)))
 
-(define (assq key alist)
-  (if (null? alist)
-      #f
-      (if (eq? (car (car alist)) key)
-          (car alist)
-          (assq key (cdr alist)))))
 
-(define (length lst)
-  (let loop ((l lst) (n 0))
-    (if (null? l) n (loop (cdr l) (+ n 1)))))
-
-(define (string-append2 s1 s2) s1)
 
 (load "ulisp/runtime/concurrency/atomic.scm")
 (load "ulisp/runtime/concurrency/context.scm")
@@ -108,12 +97,12 @@
        (dummy-fn (lambda () 123))
        (sp1 (setup-task-stack stk dummy-fn))
        (top (task-stack-top stk))
-       (frame-top (- top 64))
+       (frame-top (- top *context-tcb-header-size*))
        (entry-tramp (%asm-get-trampoline-addr 0))
        (exit-tramp (%asm-get-trampoline-addr 1))
        (frame-sz (context-frame-size)))
   (assert-equal frame-sz 96 "context-frame-size is 96 on AArch64 (12 callee-saved registers)")
-  (assert-equal sp1 (- top 160) "setup-task-stack returns initial_sp = top - 160")
+  (assert-equal sp1 (- top (+ *context-tcb-header-size* frame-sz)) "setup-task-stack returns initial_sp = top - (tcb + frame)")
   (assert-equal (modulo sp1 16) 0 "initial_sp is 16-byte aligned (sp % 16 == 0)")
   (assert-equal (modulo frame-top 16) 0 "frame-top is 16-byte aligned (sp % 16 == 0)")
   (assert-equal (%context-raw-u64-ref frame-top -8) entry-tramp "[frame_top - 8] holds ulisp_task_entry_trampoline (x30/lr)")
