@@ -3,30 +3,8 @@
 ;;; Conforms to DSN-33 Architecture Specification & Issue #604
 ;;; =======================================================================
 
-(define *tb-tests-run* 0)
-(define *tb-tests-passed* 0)
 
-(define (assert-true label cond)
-  (set! *tb-tests-run* (+ *tb-tests-run* 1))
-  (if cond
-      (begin
-        (set! *tb-tests-passed* (+ *tb-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (display "  [FAIL] ") (display label) (newline)
-        (error "Assertion failed:" label))))
 
-(define (assert-equal label expected actual)
-  (set! *tb-tests-run* (+ *tb-tests-run* 1))
-  (if (equal? expected actual)
-      (begin
-        (set! *tb-tests-passed* (+ *tb-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
 
 (display "=======================================================\n")
 (display " Starting Pass 604 (Call Stack Traceback) Test Suite\n")

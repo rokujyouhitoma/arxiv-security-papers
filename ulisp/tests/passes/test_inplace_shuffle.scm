@@ -2,22 +2,7 @@
 ;;; ULisp Test: In-Place Tail Loop Argument Shuffle (Issue #546)
 ;;; =======================================================================
 
-(define *tests-passed* 0)
-(define *tests-failed* 0)
 
-(define (assert-true test-name expr)
-  (if expr
-      (begin
-        (set! *tests-passed* (+ *tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *tests-failed* (+ *tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (newline)
-        (exit 1))))
 
 (display "=======================================================")
 (newline)

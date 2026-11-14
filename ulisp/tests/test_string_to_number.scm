@@ -3,49 +3,22 @@
 ;;; Conforms to Issue #652
 ;;; =======================================================================
 
-(define *test-failures* (vector 0))
+(test-begin "string-to-number")
 
-(define (test-pass name)
-  (write-string "  [PASS] ")
-  (write-string name)
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal name actual expected)
+     (test-equal name expected actual))))
 
-(define (test-fail name expected actual)
-  (vector-set! *test-failures* 0 (+ (vector-ref *test-failures* 0) 1))
-  (write-string "  [FAIL] ")
-  (write-string name)
-  (write-string " (expected ")
-  (write expected)
-  (write-string ", got ")
-  (write actual)
-  (write-string ")")
-  (write-char #\newline)
-  (flush-output-port))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true name cond)
+     (test-assert name cond))))
 
-(define (test-equal? a b)
-  (cond
-    ((eqv? a b) #t)
-    ((and (string? a) (string? b)) (string=? a b))
-    ((and (pair? a) (pair? b))
-     (and (test-equal? (car a) (car b))
-          (test-equal? (cdr a) (cdr b))))
-    (else #f)))
-
-(define (assert-equal name actual expected)
-  (if (test-equal? actual expected)
-      (test-pass name)
-      (test-fail name expected actual)))
-
-(define (assert-true name cond)
-  (if cond
-      (test-pass name)
-      (test-fail name #t #f)))
-
-(define (assert-false name cond)
-  (if (not cond)
-      (test-pass name)
-      (test-fail name #f #t)))
+(define-syntax assert-false
+  (syntax-rules ()
+    ((assert-false name cond)
+     (test-assert name (not cond)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Basic Decimal Parsing (radix 10)
@@ -210,19 +183,5 @@
               (read (open-input-string "(+ #x10 #b101)"))
               '(+ 16 5))
 
-;;; -----------------------------------------------------------------------
-;;; Summary & Exit
-;;; -----------------------------------------------------------------------
-(write-string "=== ULisp R7RS string->number Tests Completed: ")
-(if (= (vector-ref *test-failures* 0) 0)
-    (begin
-      (write-string "ALL TESTS PASSED ===")
-      (write-char #\newline)
-      (flush-output-port)
-      #t)
-    (begin
-      (write-string "FAILURES ENCOUNTERED ===")
-      (write-char #\newline)
-      (flush-output-port)
-      (exit 1)))
+(test-end "string-to-number")
 

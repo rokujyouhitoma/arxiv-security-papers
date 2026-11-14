@@ -3,29 +3,9 @@
 ;;; Issue #539
 ;;; =======================================================================
 
-(define *total-tests* (cons 0 '()))
-(define *passed-tests* (cons 0 '()))
 
-(define (test-assert name condition)
-  (set-car! *total-tests* (+ (car *total-tests*) 1))
-  (if condition
-      (begin
-        (set-car! *passed-tests* (+ (car *passed-tests*) 1))
-        (display "  [PASS] ")
-        (display name)
-        (newline))
-      (begin
-        (display "  [FAIL] ")
-        (display name)
-        (newline)
-        (exit 1))))
 
-(display "=======================================================")
-(newline)
-(display " Starting Pass 05 Top-level Direct Call Test Suite (#539)")
-(newline)
-(display "=======================================================")
-(newline)
+(test-begin "Top-level Direct Call")
 
 ;; Test 1: Desugaring generates %program without hoisting into letrec
 (let* ((input '((define (square x) (* x x))
@@ -87,14 +67,4 @@
                    ((memq (car e) '(%make-closure %make-closure-env)) #t)
                    (else (or (has-mc? (car e)) (has-mc? (cdr e))))))))
 
-(newline)
-(display "=======================================================")
-(newline)
-(display " Top-level Direct Call Tests: ")
-(display (car *passed-tests*))
-(display "/")
-(display (car *total-tests*))
-(display " passed.")
-(newline)
-(display "=======================================================")
-(newline)
+(test-end "Top-level Direct Call")

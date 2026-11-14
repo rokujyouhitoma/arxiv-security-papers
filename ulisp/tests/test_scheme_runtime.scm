@@ -6,45 +6,17 @@
 ;;; low-level I/O primitives, value printer, and entrypoint orchestration.
 ;;; =======================================================================
 
-(define *runtime-failures* (vector 0))
+(test-begin "pure-scheme-runtime")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *runtime-failures* 0 (+ (vector-ref *runtime-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (or (eqv? actual expected)
-               (and (string? actual) (string? expected) (string=? actual expected))))
-      (begin
-        (vector-set! *runtime-failures* 0 (+ (vector-ref *runtime-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
-
-(write-string "=======================================================\n")
-(write-string " Starting Pure Scheme Runtime (Pre-Scheme) Test Suite (#580)\n")
-(write-string "=======================================================\n")
-(flush-output-port)
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
 ;;; --- Group 1: I/O Primitives (io.scm) ---
 (write-string "--- Group 1: I/O Primitives (io.scm) ---\n")
@@ -112,15 +84,4 @@
 (assert-true (procedure? runtime-main) "runtime-main procedure exists")
 
 ;;; --- Summary ---
-(write-string "=======================================================\n")
-(if (= (vector-ref *runtime-failures* 0) 0)
-    (begin
-      (write-string " SUCCESS: ALL PURE SCHEME RUNTIME TESTS PASSED!\n")
-      (write-string "=======================================================\n")
-      (flush-output-port)
-      #t)
-    (begin
-      (write-string " FAILURE: Some runtime tests failed!\n")
-      (write-string "=======================================================\n")
-      (flush-output-port)
-      (exit 1)))
+(test-end "pure-scheme-runtime")

@@ -7175,8 +7175,9 @@
             (begin
               (if (not prev-trace)
                   (disable-nanopass-trace!))
-              (if (and verify-mode (not (verify-pass-output 'lir current-ast)))
-                  (error "IR Verifier Invariant Violation in final LIR" current-ast))
+              (if verify-mode
+                  (if (not (verify-pass-output 'lir current-ast))
+                      (error "IR Verifier Invariant Violation in final LIR" current-ast)))
               current-ast)
             (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
               (loop (cdr ps) next-ast)))))))

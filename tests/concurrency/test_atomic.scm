@@ -5,46 +5,17 @@
 
 (load "ulisp/runtime/concurrency/atomic.scm")
 
-(define *test-atomic-failures* (vector 0))
-(define *test-atomic-passes* (vector 0))
+(test-begin "concurrency-atomic")
 
-(define (assert-true val msg)
-  (if (not val)
-      (begin
-        (vector-set! *test-atomic-failures* 0 (+ (vector-ref *test-atomic-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-atomic-passes* 0 (+ (vector-ref *test-atomic-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-true
+  (syntax-rules ()
+    ((assert-true val msg)
+     (test-assert msg val))))
 
-(define (assert-equal actual expected msg)
-  (if (not (eqv? actual expected))
-      (begin
-        (vector-set! *test-atomic-failures* 0 (+ (vector-ref *test-atomic-failures* 0) 1))
-        (write-string "FAIL: ")
-        (write-string msg)
-        (write-string " (expected ")
-        (if (integer? expected) (write-string (number->string expected)) (write-string "<val>"))
-        (write-string ", got ")
-        (if (integer? actual) (write-string (number->string actual)) (write-string "<val>"))
-        (write-string ")\n")
-        (flush-output-port)
-        #f)
-      (begin
-        (vector-set! *test-atomic-passes* 0 (+ (vector-ref *test-atomic-passes* 0) 1))
-        (write-string "PASS: ")
-        (write-string msg)
-        (write-char #\newline)
-        (flush-output-port)
-        #t)))
+(define-syntax assert-equal
+  (syntax-rules ()
+    ((assert-equal actual expected msg)
+     (test-equal msg expected actual))))
 
 (write-string "=======================================================\n")
 (write-string " Starting Low-Level Atomic Primitives Test Suite (#631)\n")
@@ -227,18 +198,5 @@
   (assert-true caught-cas "atomic-cas! rejects pair (CWE-843 mitigation)")
   (assert-true caught-stamped "atomic-stamped-cas! rejects plain atomic-box (CWE-843 mitigation)"))
 
-;; -----------------------------------------------------------------------
-;; Summary
-;; -----------------------------------------------------------------------
-(write-string "=======================================================\n")
-(write-string " Atomic Primitives Test Summary: ")
-(write-string (number->string (vector-ref *test-atomic-passes* 0)))
-(write-string " passed, ")
-(write-string (number->string (vector-ref *test-atomic-failures* 0)))
-(write-string " failed.\n")
-(write-string "=======================================================\n")
-(flush-output-port)
-
-(if (> (vector-ref *test-atomic-failures* 0) 0)
-    (error "test_atomic: one or more assertions failed" (vector-ref *test-atomic-failures* 0)))
+(test-end "concurrency-atomic")
 

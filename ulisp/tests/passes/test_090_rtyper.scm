@@ -3,30 +3,8 @@
 ;;; Conforms to DSN-33 Architecture Specification & Issue #518
 ;;; =======================================================================
 
-(define *rtyper-tests-run* 0)
-(define *rtyper-tests-passed* 0)
 
-(define (assert-true label cond)
-  (set! *rtyper-tests-run* (+ *rtyper-tests-run* 1))
-  (if cond
-      (begin
-        (set! *rtyper-tests-passed* (+ *rtyper-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (display "  [FAIL] ") (display label) (newline)
-        (error "Assertion failed:" label))))
 
-(define (assert-equal label expected actual)
-  (set! *rtyper-tests-run* (+ *rtyper-tests-run* 1))
-  (if (type-equal? expected actual)
-      (begin
-        (set! *rtyper-tests-passed* (+ *rtyper-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
 
 (display "=======================================================")
 (newline)

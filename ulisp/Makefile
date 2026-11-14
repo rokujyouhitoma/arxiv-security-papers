@@ -142,7 +142,7 @@ build/compiler_passes.scm: $(PASSES_LIB)
 	cat $^ > $@
 
 lint_sexpr:
-	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) $(ULISP_LARGE_LIBS) tests/test_numeric_tower.scm tests/test_aarch64_qemu_smoke.scm lib/srfi/1.sld lib/scheme/list.sld tests/test_srfi1.scm lib/srfi/64.sld tests/test_srfi_64.scm lib/srfi/78.sld tests/test_srfi_78.scm lib/srfi/252.sld tests/test_srfi_252.scm lib/srfi/69.sld lib/srfi/125.sld lib/scheme/hash-table.sld tests/test_hashtable.scm lib/scheme/file.sld tests/test_file_port.scm tests/test_string_to_number.scm tests/test_max_min.scm lib/srfi/28.sld tests/test_format.scm lib/srfi/132.sld lib/srfi/95.sld lib/scheme/sort.sld tests/test_sort.scm lib/scheme/write.sld tests/test_printer.scm runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm $(ROOT_DIR)/tests/concurrency/test_context_switch_aarch64.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/futex.scm lib/ulisp/concurrency/futex.sld $(ROOT_DIR)/tests/concurrency/test_futex.scm runtime/concurrency/registry.scm lib/ulisp/concurrency/registry.sld $(ROOT_DIR)/tests/concurrency/test_registry.scm runtime/concurrency/crash_logger.scm lib/ulisp/concurrency/crash_logger.sld $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm runtime/concurrency/io_uring.scm lib/ulisp/concurrency/io_uring.sld $(ROOT_DIR)/tests/concurrency/test_io_uring.scm runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm runtime/concurrency/eval_adapter.scm lib/ulisp/concurrency/eval_adapter.sld $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/inline_hotpath.sld $(ROOT_DIR)/tests/concurrency/test_pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
+	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) $(ULISP_LARGE_LIBS) tests/passes/common.scm tests/test_numeric_tower.scm tests/test_aarch64_qemu_smoke.scm lib/srfi/1.sld lib/scheme/list.sld tests/test_srfi1.scm lib/srfi/64.sld tests/test_srfi_64.scm lib/srfi/78.sld tests/test_srfi_78.scm lib/srfi/252.sld tests/test_srfi_252.scm lib/srfi/69.sld lib/srfi/125.sld lib/scheme/hash-table.sld tests/test_hashtable.scm lib/scheme/file.sld tests/test_file_port.scm tests/test_string_to_number.scm tests/test_max_min.scm lib/srfi/28.sld tests/test_format.scm lib/srfi/132.sld lib/srfi/95.sld lib/scheme/sort.sld tests/test_sort.scm lib/scheme/write.sld tests/test_printer.scm runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm $(ROOT_DIR)/tests/concurrency/test_context_switch_aarch64.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/futex.scm lib/ulisp/concurrency/futex.sld $(ROOT_DIR)/tests/concurrency/test_futex.scm runtime/concurrency/registry.scm lib/ulisp/concurrency/registry.sld $(ROOT_DIR)/tests/concurrency/test_registry.scm runtime/concurrency/crash_logger.scm lib/ulisp/concurrency/crash_logger.sld $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm runtime/concurrency/io_uring.scm lib/ulisp/concurrency/io_uring.sld $(ROOT_DIR)/tests/concurrency/test_io_uring.scm runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm runtime/concurrency/eval_adapter.scm lib/ulisp/concurrency/eval_adapter.sld $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/inline_hotpath.sld $(ROOT_DIR)/tests/concurrency/test_pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
 
 test_lint_sexpr:
 	@$(PYTHON) tests/test_lint_sexpr.py
@@ -209,50 +209,51 @@ NANOPASS_TESTS = tests/passes/test_000_compiler_diagnostics.scm \
                  tests/passes/test_160_backend_c.scm \
                  tests/passes/test_extern_symbols.scm
 
-test_all_passes: build/compiler_passes.scm
+PASS_COMMON = tests/passes/common.scm
+
+test_all_passes: build/compiler_passes.scm $(PASS_COMMON)
 	@echo "=== Running 1:1 Nanopass Unit Tests (Batch Runner for $(words $(NANOPASS_TESTS)) Passes) ==="
 	@mkdir -p build
-	cat build/compiler_passes.scm $(NANOPASS_TESTS) > build/test_all_passes_batch_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) $(NANOPASS_TESTS) > build/test_all_passes_batch_runner.scm
+	@echo "(assert-report)" >> build/test_all_passes_batch_runner.scm
 	@$(RUN_SCHEME) build/test_all_passes_batch_runner.scm
 	@echo "SUCCESS: All $(words $(NANOPASS_TESTS)) 1:1 Nanopass Unit Tests PASSED!"
 
-test_extern_symbols: build/compiler_passes.scm
-	@cat build/compiler_passes.scm tests/passes/test_extern_symbols.scm > build/runner_temp.scm
+test_extern_symbols: build/compiler_passes.scm $(PASS_COMMON)
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_extern_symbols.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
-test_power_assert: build/compiler_passes.scm
-	@cat build/compiler_passes.scm tests/passes/test_power_assert.scm > build/runner_temp.scm
+test_power_assert: build/compiler_passes.scm $(PASS_COMMON)
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_power_assert.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
-test_traceback: build/compiler_passes.scm
-	@cat build/compiler_passes.scm tests/passes/test_traceback.scm > build/runner_temp.scm
+test_traceback: build/compiler_passes.scm $(PASS_COMMON)
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_traceback.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
-test_140: build/compiler_passes.scm
-	@cat build/compiler_passes.scm tests/passes/test_140_backend_x86_64.scm > build/runner_temp.scm
+test_140: build/compiler_passes.scm $(PASS_COMMON)
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_140_backend_x86_64.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
-test_143: build/compiler_passes.scm
-	@cat build/compiler_passes.scm tests/passes/test_143_backend_x86_peephole.scm > build/runner_temp.scm
+test_143: build/compiler_passes.scm $(PASS_COMMON)
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_143_backend_x86_peephole.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
-test_144a: build/compiler_passes.scm
-	@cat build/compiler_passes.scm tests/passes/test_144a_x86_assembler.scm > build/runner_temp.scm
+test_144a: build/compiler_passes.scm $(PASS_COMMON)
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_144a_x86_assembler.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
-test_elf64: build/compiler_passes.scm
-	@cat build/compiler_passes.scm tests/passes/test_elf64_builder.scm > build/runner_temp.scm
+test_elf64: build/compiler_passes.scm $(PASS_COMMON)
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_elf64_builder.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
-test_144: build/compiler_passes.scm
-	@cat build/compiler_passes.scm tests/passes/test_144_backend_x86_elf.scm > build/runner_temp.scm
+test_144: build/compiler_passes.scm $(PASS_COMMON)
+	@cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_144_backend_x86_elf.scm > build/runner_temp.scm
 	@$(RUN_SCHEME) build/runner_temp.scm
 
-
-
-test_library: build/compiler_passes.scm
+test_library: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_library.scm > build/test_library_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_library.scm > build/test_library_runner.scm
 	@$(RUN_SCHEME) build/test_library_runner.scm
 	$(AS) $(ASFLAGS) build/test_library.s -o build/test_library.o
 	$(LD) $(LDFLAGS) build/test_library.o -o build/test_library
@@ -537,44 +538,44 @@ bench_concurrency_gate: $(COMPILER_DEP) build/ulisp_stdlib.o build/context.o bui
 		--current $(ROOT_DIR)/build/current_concurrency.json \
 		--baseline $(ROOT_DIR)/docs/benchmarks/baseline_concurrency.json
 
-test_lvn: build/compiler_passes.scm
+test_lvn: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_lvn.scm > build/test_lvn_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_lvn.scm > build/test_lvn_runner.scm
 	@$(RUN_SCHEME) build/test_lvn_runner.scm
 
-test_annotator: build/compiler_passes.scm
+test_annotator: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_annotator.scm > build/test_annotator_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_annotator.scm > build/test_annotator_runner.scm
 	@$(RUN_SCHEME) build/test_annotator_runner.scm
 
-test_rtyper: build/compiler_passes.scm
+test_rtyper: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_rtyper.scm > build/test_rtyper_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_rtyper.scm > build/test_rtyper_runner.scm
 	@$(RUN_SCHEME) build/test_rtyper_runner.scm
 
-test_stackmap: build/compiler_passes.scm
+test_stackmap: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_stackmap.scm > build/test_stackmap_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_stackmap.scm > build/test_stackmap_runner.scm
 	@$(RUN_SCHEME) build/test_stackmap_runner.scm
 
-test_contify: build/compiler_passes.scm
+test_contify: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_contify.scm > build/test_contify_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_contify.scm > build/test_contify_runner.scm
 	@$(RUN_SCHEME) build/test_contify_runner.scm
 
-test_alias_escape: build/compiler_passes.scm
+test_alias_escape: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_alias_escape.scm > build/test_alias_escape_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_alias_escape.scm > build/test_alias_escape_runner.scm
 	@$(RUN_SCHEME) build/test_alias_escape_runner.scm
 
-test_toplevel: build/compiler_passes.scm
+test_toplevel: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_toplevel_direct_call.scm > build/test_toplevel_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_toplevel_direct_call.scm > build/test_toplevel_runner.scm
 	@$(RUN_SCHEME) build/test_toplevel_runner.scm
 
-test_loop_reg: build/compiler_passes.scm
+test_loop_reg: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_loop_register_allocation.scm > build/test_loop_reg_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_loop_register_allocation.scm > build/test_loop_reg_runner.scm
 	@$(RUN_SCHEME) build/test_loop_reg_runner.scm
 	$(AS) $(ASFLAGS) build/test_loop_reg.s -o build/test_loop_reg.o
 	$(LD) $(LDFLAGS) build/test_loop_reg.o -o build/test_loop_reg
@@ -582,9 +583,9 @@ test_loop_reg: build/compiler_passes.scm
 	@res=$$(./build/test_loop_reg); echo "Output: $$res"; test "$$res" = "499999500000"
 	@echo "SUCCESS: loop_sum output 499999500000 matches expected exactly!"
 
-test_branch_fusion: build/compiler_passes.scm
+test_branch_fusion: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_branch_fusion.scm > build/test_branch_fusion_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_branch_fusion.scm > build/test_branch_fusion_runner.scm
 	@$(RUN_SCHEME) build/test_branch_fusion_runner.scm
 	$(AS) $(ASFLAGS) build/test_predicates_fusion.s -o build/test_predicates_fusion.o
 	$(LD) $(LDFLAGS) build/test_predicates_fusion.o -o build/test_predicates_fusion
@@ -592,9 +593,9 @@ test_branch_fusion: build/compiler_passes.scm
 	@res=$$(./build/test_predicates_fusion); echo "Output: $$res"; test "$$res" = "255"
 	@echo "SUCCESS: branch fusion predicates output 255 (1+2+4+8+16+32+64+128) matches expected!"
 
-test_inplace_shuffle: build/compiler_passes.scm
+test_inplace_shuffle: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_inplace_shuffle.scm > build/test_inplace_shuffle_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_inplace_shuffle.scm > build/test_inplace_shuffle_runner.scm
 	@$(RUN_SCHEME) build/test_inplace_shuffle_runner.scm
 	$(AS) $(ASFLAGS) build/test_inplace_shuffle.s -o build/test_inplace_shuffle.o
 	$(LD) $(LDFLAGS) build/test_inplace_shuffle.o -o build/test_inplace_shuffle
@@ -612,9 +613,9 @@ test_inplace_shuffle: build/compiler_passes.scm
 	@res=$$(./build/test_countdown); echo "Output: $$res"; test "$$res" = "5050"
 	@echo "SUCCESS: countdown sum(1..100) output 5050 matches expected exactly!"
 
-test_lir: build/compiler_passes.scm
+test_lir: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
-	cat build/compiler_passes.scm tests/passes/test_lir.scm > build/test_lir_runner.scm
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/passes/test_lir.scm > build/test_lir_runner.scm
 	@$(RUN_SCHEME) build/test_lir_runner.scm
 
 test_lir_suite: compiler.scm

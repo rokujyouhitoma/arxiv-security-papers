@@ -12,32 +12,9 @@
 ;;; 7. End-to-end LIR generation with `%alloc-stack`
 ;;; =======================================================================
 
-(define *ae-tests-passed* 0)
-(define *ae-tests-failed* 0)
 
-(define (assert-equal test-name expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *ae-tests-passed* (+ *ae-tests-passed* 1))
-        (display "  [PASS] ")
-        (display test-name)
-        (newline))
-      (begin
-        (set! *ae-tests-failed* (+ *ae-tests-failed* 1))
-        (display "  [FAIL] ")
-        (display test-name)
-        (display " -> Expected: ")
-        (display expected)
-        (display " but got: ")
-        (display actual)
-        (newline)
-        (exit 1))))
 
-(define (assert-true test-name expr)
-  (assert-equal test-name #t (if expr #t #f)))
 
-(define (assert-false test-name expr)
-  (assert-equal test-name #f (if expr #t #f)))
 
 (display "=======================================================")
 (newline)

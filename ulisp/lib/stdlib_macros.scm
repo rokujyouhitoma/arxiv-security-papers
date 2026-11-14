@@ -153,6 +153,136 @@
 (define -nan.0 +nan.0)
 
 ;;; -----------------------------------------------------------------------
+;;; SRFI 64 Test Suite Macros (Issue #819, Issue #822)
+;;; Enables test targets linked against ulisp_stdlib.o to use SRFI 64
+;;; -----------------------------------------------------------------------
+(define-syntax test-begin
+  (syntax-rules ()
+    ((test-begin suite-name)
+     (%test-begin suite-name #f))
+    ((test-begin suite-name count)
+     (%test-begin suite-name count))))
+
+(define-syntax test-end
+  (syntax-rules ()
+    ((test-end)
+     (%test-end #f))
+    ((test-end suite-name)
+     (%test-end suite-name))))
+
+(define-syntax %test-comp1body
+  (syntax-rules ()
+    ((%test-comp1body r expr)
+     (let ()
+       (if (%test-on-test-begin r)
+           (let ()
+             (test-result-set! r 'expected-value #t)
+             (let ((res (guard (ex (else #f)) expr)))
+               (test-result-set! r 'actual-value res)
+               (%test-on-test-end r (if res #t #f)))))
+       (%test-report-result)))))
+
+(define-syntax %test-comp2body
+  (syntax-rules ()
+    ((%test-comp2body r comp expected expr)
+     (let ()
+       (if (%test-on-test-begin r)
+           (let ((exp expected))
+             (test-result-set! r 'expected-value exp)
+             (let ((res (guard (ex (else (list 'unhandled-exception ex)))
+                          expr)))
+               (test-result-set! r 'actual-value res)
+               (let ((compared (if (and (pair? res) (eq? (car res) 'unhandled-exception))
+                                   #f
+                                   (comp exp res))))
+                 (%test-on-test-end r compared)))))
+       (%test-report-result)))))
+
+(define-syntax test-assert
+  (syntax-rules ()
+    ((test-assert tname test-expression)
+     (let ((r (test-runner-get)))
+       (test-result-alist! r (list (cons 'test-name tname)))
+       (%test-comp1body r test-expression)))
+    ((test-assert test-expression)
+     (let ((r (test-runner-get)))
+       (test-result-alist! r '())
+       (%test-comp1body r test-expression)))))
+
+(define-syntax %test-comp2
+  (syntax-rules ()
+    ((%test-comp2 comp tname expected expr)
+     (let ((r (test-runner-get)))
+       (test-result-alist! r (list (cons 'test-name tname)))
+       (%test-comp2body r comp expected expr)))
+    ((%test-comp2 comp expected expr)
+     (let ((r (test-runner-get)))
+       (test-result-alist! r '())
+       (%test-comp2body r comp expected expr)))))
+
+(define-syntax test-equal
+  (syntax-rules ()
+    ((test-equal . rest)
+     (%test-comp2 equal? . rest))))
+
+(define-syntax test-eqv
+  (syntax-rules ()
+    ((test-eqv . rest)
+     (%test-comp2 eqv? . rest))))
+
+(define-syntax test-eq
+  (syntax-rules ()
+    ((test-eq . rest)
+     (%test-comp2 eq? . rest))))
+
+(define-syntax test-approximate
+  (syntax-rules ()
+    ((test-approximate tname expected expr error)
+     (%test-comp2 (%test-approximate= error) tname expected expr))
+    ((test-approximate expected expr error)
+     (%test-comp2 (%test-approximate= error) expected expr))))
+
+(define-syntax %test-error-body
+  (syntax-rules ()
+    ((%test-error-body r etype expr)
+     (let ()
+       (if (%test-on-test-begin r)
+           (let ()
+             (test-result-set! r 'expected-error etype)
+             (let ((caught (guard (ex (else
+                                       (cond
+                                         ((procedure? etype) (etype ex))
+                                         ((eq? etype #t) #t)
+                                         ((error-object? ex) #t)
+                                         (else #t))))
+                             (let ((v expr))
+                               'no-error-raised))))
+               (test-result-set! r 'actual-value caught)
+               (%test-on-test-end r (not (eq? caught 'no-error-raised))))))
+       (%test-report-result)))))
+
+(define-syntax test-error
+  (syntax-rules ()
+    ((test-error name etype expr)
+     (let ((r (test-runner-get)))
+       (test-result-alist! r (list (cons 'test-name name)))
+       (%test-error-body r etype expr)))
+    ((test-error arg1 expr)
+     (let ((r (test-runner-get))
+           (a1 arg1))
+       (if (string? a1)
+           (begin
+             (test-result-alist! r (list (cons 'test-name a1)))
+             (%test-error-body r #t expr))
+           (begin
+             (test-result-alist! r '())
+             (%test-error-body r a1 expr)))))
+    ((test-error expr)
+     (let ((r (test-runner-get)))
+       (test-result-alist! r '())
+       (%test-error-body r #t expr)))))
+
+;;; -----------------------------------------------------------------------
 ;;; Pre-intern Desugared Compiler Symbols in Reader Table
 ;;; -----------------------------------------------------------------------
 (quote (make-vector-fill

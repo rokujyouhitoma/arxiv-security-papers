@@ -4,23 +4,8 @@
 ;;; Refactored to include 1-line Picopass S-expression tests per Issue #762 (DSN-33-01 T4.1)
 ;;; =======================================================================
 
-(define *pass-tests-passed* 0)
-(define *pass-tests-failed* 0)
 
-(define (assert-equal label expected actual)
-  (if (equal? expected actual)
-      (begin
-        (set! *pass-tests-passed* (+ *pass-tests-passed* 1))
-        (display "  [PASS] ") (display label) (newline))
-      (begin
-        (set! *pass-tests-failed* (+ *pass-tests-failed* 1))
-        (display "  [FAIL] ") (display label)
-        (display " -> Expected: ") (write expected)
-        (display " but got: ") (write actual) (newline)
-        (error "Assertion failed:" label))))
 
-(define (assert-true label cond)
-  (assert-equal label #t (if cond #t #f)))
 
 (display "=======================================================") (newline)
 (display " Starting Pass 026 (Constructor Desugaring) Unit Test") (newline)
