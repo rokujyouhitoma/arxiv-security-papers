@@ -1411,6 +1411,9 @@
     (build-x86-64-elf-obj . "build-x86-64-elf-obj")
     (assemble-stream-to-elf-obj . "assemble-stream-to-elf-obj")))
 
+;; True in AOT-compiled binaries where uninterned symbol->string returns "?"
+(define *aot-fast-sym-hash?* (= (string-length (symbol->string '%%ulisp-probe%%)) 1))
+
 (define (symbol->raw-name sym)
   (if (not (symbol? sym))
       (if (string? sym) sym (number->string sym))
@@ -1420,7 +1423,9 @@
             (let ((known (assq sym *known-compiler-symbols*)))
               (if known
                   (cdr known)
-                  (let ((entry (assq sym (car *symbol-table*))))
+                  (let ((entry (if *aot-fast-sym-hash?*
+                                   (assq sym (vector-ref *symbol-table-buckets* (symbol->hash-idx sym)))
+                                   (assq sym (car *symbol-table*)))))
                     (if (and entry (pair? (cdr entry)) (pair? (cddr entry)))
                         (caddr entry)
                         s))))))))
@@ -1555,7 +1560,12 @@
 
 (define (symbol->hash-idx sym)
   (if (symbol? sym)
-      (string-fast-hash-1024 (symbol->raw-name sym))
+      (if *aot-fast-sym-hash?*
+          (let* ((h (symbol->integer sym))
+                 (pos-h (if (< h 0) (- 0 h) h)))
+            ;; Mix bits since compile-time symbol->integer values are multiples of 4.
+            (modulo (+ pos-h (quotient pos-h 4)) 1024))
+          (string-fast-hash-1024 (symbol->raw-name sym)))
       0))
 
 (define *fn-label-cache* (make-vector 1024 '()))

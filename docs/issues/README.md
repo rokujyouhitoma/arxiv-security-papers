@@ -13,10 +13,14 @@
 | **811** | 型推論不能な変数のチャネル境界通過時における静的コンパイル警告の導入 | Feature | Medium | New | [811-warn-on-untyped-variable-crossing-channel-boundary.md](811-warn-on-untyped-variable-crossing-channel-boundary.md) |
 | **812** | AArch64 QEMU 回帰ターゲットにおける stdlib include パス解決失敗とコンテキストスイッチテストの SIGSEGV | Bug | Medium | New | [812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md](812-fix-aarch64-qemu-regression-stdlib-include-path-and-context-switch-segfault.md) |
 | **814** | 143_backend_x86_peephole.scm の define-picopass 化と fuse-window-rules への移行 | Feature | Medium | New | [814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md](814-migrate-x86-peephole-to-picopass-and-fuse-window-rules.md) |
+| **816** | 090_rtyper のエスケープ走査 O(N) 化と 133_lir_peephole ウィンドウマッチングのヒープアロケーション削減 | Feature | High | New | [816-optimize-rtyper-escape-pruning-and-lir-peephole-window-allocation.md](816-optimize-rtyper-escape-pruning-and-lir-peephole-window-allocation.md) |
+| **817** | コンパイラ内部連想リストのベクタハッシュテーブル化と 050_cp0 における map/for-each インライン展開による AOT 実行高速化 | Feature | High | New | [817-hash-table-compiler-registries-and-inline-higher-order-list-ops-in-cp0.md](817-hash-table-compiler-registries-and-inline-higher-order-list-ops-in-cp0.md) |
+| **818** | Makefile テストランナー RUN_SCHEME の Gauche (gosh) 優先化とモジュラー並列ブートストラップ検証の統合 | Feature | Medium | New | [818-prioritize-gauche-in-test-runner-and-enable-modular-parallel-bootstrap-verify.md](818-prioritize-gauche-in-test-runner-and-enable-modular-parallel-bootstrap-verify.md) |
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **815** | nanopass-catamorphism-step の O(1) 浅層ディスパッチ化と *nanopass-term-memo* ハッシュバケット化によるコンパイル時間 90% 削減 | Feature | 2026-11-14 | [closed/815-optimize-nanopass-catamorphism-shallow-dispatch-and-term-memo-buckets.md](closed/815-optimize-nanopass-catamorphism-shallow-dispatch-and-term-memo-buckets.md) |
 | **813** | fuse-rules 後順 (Bottom-Up) 融合モード `:order post` の導入と 050_cp0 / 100_contify 移行および Femtopass 解析キャッシュ実接続 | Feature | 2026-11-14 | [closed/813-implement-fuse-rules-post-order-and-connect-femtopass-cache.md](closed/813-implement-fuse-rules-post-order-and-connect-femtopass-cache.md) |
 | **810** | safepoint 挿入除外判定の名前プレフィックス廃止と declare no-safepoints 構文の導入 | Feature | 2026-11-14 | [closed/810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md](closed/810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md) |
 | **809** | %synapse-safepoint-poll! の LIR コード未生成の修正および aarch64 向けスタブの提供 | Bug | 2026-11-13 | [closed/809-fix-safepoint-poll-lir-code-emission-and-add-aarch64-stub.md](closed/809-fix-safepoint-poll-lir-code-emission-and-add-aarch64-stub.md) |

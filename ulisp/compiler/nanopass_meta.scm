@@ -114,13 +114,13 @@
   (if (not (symbol? var))
       #f
       (let* ((lang-name (if (nanopass-language? lang) (nanopass-lang-name lang) 'unknown))
-             (var-str (symbol->raw-name var))
-             (lang-str (symbol->raw-name lang-name))
-             (h (modulo (+ (string-fast-hash-1024 var-str) (* (string-fast-hash-1024 lang-str) 31)) 1024))
+             ;; Fast path: compute 1024-bucket hash directly from symbol indices before calling symbol->raw-name
+             (h (modulo (+ (symbol->hash-idx var) (* (symbol->hash-idx lang-name) 31)) 1024))
              (bucket (vector-ref *classify-meta-var-cache* h)))
         (let loop ((entries bucket))
           (if (null? entries)
-              (let* ((res (nanopass-classify-meta-var-uncached var-str lang))
+              (let* ((var-str (symbol->raw-name var))
+                     (res (nanopass-classify-meta-var-uncached var-str lang))
                      (new-entry (cons (cons var lang-name) res)))
                 (vector-set! *classify-meta-var-cache* h (cons new-entry bucket))
                 res)
@@ -376,7 +376,7 @@
   (nanopass-ast-valid-nt? lang-name expr
                           (nanopass-lang-entry (nanopass-lookup-language lang-name))))
 
-(define (nanopass-check-valid-node expr nt-name lang)
+(define (nanopass-check-node-mode expr nt-name lang deep?)
   ;; Check if expr is a list starting with an explicitly removed production head
   ;; (Only if it is not re-introduced as an active keyword in this language)
   (if (and (pair? expr)
@@ -394,11 +394,17 @@
                 (if (null? ps)
                     #f
                     (let ((p (car ps)))
-                      (if (nanopass-production-matches? p expr lang nt-name)
+                      (if (nanopass-production-matches-mode? p expr lang nt-name deep?)
                           #t
                           (check-p (cdr ps)))))))))))
 
-(define (nanopass-production-matches? prod expr lang curr-nt)
+(define (nanopass-check-valid-node expr nt-name lang)
+  (nanopass-check-node-mode expr nt-name lang #t))
+
+(define (nanopass-check-shallow-node expr nt-name lang)
+  (nanopass-check-node-mode expr nt-name lang #f))
+
+(define (nanopass-production-matches-mode? prod expr lang curr-nt deep?)
   (cond
     ((symbol? prod)
      (let ((cls (nanopass-classify-meta-var prod lang)))
@@ -407,7 +413,11 @@
          ((eq? (car cls) 'terminal)
           (nanopass-terminal-matches? (cadr cls) expr))
          ((eq? (car cls) 'nonterminal)
-          (nanopass-check-valid-node expr (cadr cls) lang))
+          (if deep?
+              (nanopass-check-valid-node expr (cadr cls) lang)
+              (if (eq? (cadr cls) curr-nt)
+                  #t
+                  (nanopass-check-shallow-node expr (cadr cls) lang))))
          (else #f))))
     ((pair? prod)
      (if (not (pair? expr))
@@ -427,16 +437,24 @@
                         #f
                         (and (if (eq? (car cls) 'terminal)
                                  (nanopass-terminal-matches? (cadr cls) (car expr))
-                                 (nanopass-check-valid-node (car expr) (cadr cls) lang))
-                             (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)))
+                                 (if deep?
+                                     (nanopass-check-valid-node (car expr) (cadr cls) lang)
+                                     #t))
+                             (nanopass-match-subforms-mode (cdr prod) (cdr expr) lang curr-nt deep?)))
                     ;; Keyword-headed production: (if ...), (cond ...), (let ...), (%program ...), etc.
                     (if (eq? head (car expr))
-                        (nanopass-match-subforms (cdr prod) (cdr expr) lang curr-nt)
+                        (nanopass-match-subforms-mode (cdr prod) (cdr expr) lang curr-nt deep?)
                         #f))))
              (else #f)))))
     (else (equal? prod expr))))
 
-(define (nanopass-match-subforms prod-rest expr-rest lang curr-nt)
+(define (nanopass-production-matches? prod expr lang curr-nt)
+  (nanopass-production-matches-mode? prod expr lang curr-nt #t))
+
+(define (nanopass-production-matches-shallow? prod expr lang curr-nt)
+  (nanopass-production-matches-mode? prod expr lang curr-nt #f))
+
+(define (nanopass-match-subforms-mode prod-rest expr-rest lang curr-nt deep?)
   (cond
     ((and (null? prod-rest) (null? expr-rest)) #t)
     ((or (null? prod-rest) (null? expr-rest))
@@ -447,16 +465,22 @@
     ((eq? (car prod-rest) '...) #t)
     ((and (pair? (cdr prod-rest)) (eq? (cadr prod-rest) '...))
      (let ((item-pat (car prod-rest)))
-       (let loop ((es expr-rest))
-         (if (null? es)
-             #t
-             (and (pair? es)
-                  (nanopass-match-subpattern item-pat (car es) lang curr-nt)
-                  (loop (cdr es)))))))
+       ;; Fast shallow path for nonterminal ellipsis (e ...), (a ...), etc.: check proper list spine only.
+       (if (and (not deep?)
+                (symbol? item-pat)
+                (let ((cls (nanopass-classify-meta-var item-pat lang)))
+                  (and cls (eq? (car cls) 'nonterminal))))
+           (nanopass-proper-list? expr-rest)
+           (let loop ((es expr-rest))
+             (if (null? es)
+                 #t
+                 (and (pair? es)
+                      (nanopass-match-subpattern-mode item-pat (car es) lang curr-nt deep?)
+                      (loop (cdr es))))))))
     ((pair? (car prod-rest))
      (and (pair? expr-rest)
-          (nanopass-match-subpattern (car prod-rest) (car expr-rest) lang curr-nt)
-          (nanopass-match-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt)))
+          (nanopass-match-subpattern-mode (car prod-rest) (car expr-rest) lang curr-nt deep?)
+          (nanopass-match-subforms-mode (cdr prod-rest) (cdr expr-rest) lang curr-nt deep?)))
     (else
      (and (pair? expr-rest)
           (let* ((p (car prod-rest))
@@ -464,26 +488,42 @@
             (if cls
                 (if (eq? (car cls) 'terminal)
                     (nanopass-terminal-matches? (cadr cls) (car expr-rest))
-                    (nanopass-check-valid-node (car expr-rest) (cadr cls) lang))
+                    (if deep?
+                        (nanopass-check-valid-node (car expr-rest) (cadr cls) lang)
+                        #t))
                 (equal? p (car expr-rest))))
-          (nanopass-match-subforms (cdr prod-rest) (cdr expr-rest) lang curr-nt)))))
+          (nanopass-match-subforms-mode (cdr prod-rest) (cdr expr-rest) lang curr-nt deep?)))))
 
-(define (nanopass-match-subpattern pat val lang curr-nt)
+(define (nanopass-match-subforms prod-rest expr-rest lang curr-nt)
+  (nanopass-match-subforms-mode prod-rest expr-rest lang curr-nt #t))
+
+(define (nanopass-match-subforms-shallow prod-rest expr-rest lang curr-nt)
+  (nanopass-match-subforms-mode prod-rest expr-rest lang curr-nt #f))
+
+(define (nanopass-match-subpattern-mode pat val lang curr-nt deep?)
   (cond
     ((symbol? pat)
      (let ((cls (nanopass-classify-meta-var pat lang)))
        (if cls
            (if (eq? (car cls) 'terminal)
                (nanopass-terminal-matches? (cadr cls) val)
-               (nanopass-check-valid-node val (cadr cls) lang))
+               (if deep?
+                   (nanopass-check-valid-node val (cadr cls) lang)
+                   #t))
            (equal? pat val))))
     ((pair? pat)
      (if (null? val)
          (or (eq? (car pat) '...)
              (and (pair? (cdr pat)) (eq? (cadr pat) '...)))
          (and (pair? val)
-              (nanopass-match-subforms pat val lang curr-nt))))
+              (nanopass-match-subforms-mode pat val lang curr-nt deep?))))
     (else (equal? pat val))))
+
+(define (nanopass-match-subpattern pat val lang curr-nt)
+  (nanopass-match-subpattern-mode pat val lang curr-nt #t))
+
+(define (nanopass-match-subpattern-shallow pat val lang curr-nt)
+  (nanopass-match-subpattern-mode pat val lang curr-nt #f))
 
 ;;; Parser & Unparser Procs
 (define (nanopass-parse-nt lang-name expr nt-name)
@@ -1505,7 +1545,7 @@
 
 ;;; Find the matching production for `ir` in `lang` (searching `nt-name` first, then all nonterminals)
 ;;; Returns `(cons matched-nt prod)` or `#f`.
-(define (nanopass-find-matching-production ir nt-name lang)
+(define (nanopass-find-matching-production-mode ir nt-name lang deep?)
   (let* ((nts (nanopass-lang-nonterminals lang))
          (try-nt
           (lambda (nt-entry)
@@ -1514,7 +1554,9 @@
               (let loop ((ps prods))
                 (cond
                   ((null? ps) #f)
-                  ((nanopass-production-matches? (car ps) ir lang curr-nt)
+                  ((if deep?
+                       (nanopass-production-matches? (car ps) ir lang curr-nt)
+                       (nanopass-production-matches-shallow? (car ps) ir lang curr-nt))
                    (cons curr-nt (car ps)))
                   (else (loop (cdr ps))))))))
          (primary-entry (if (symbol? nt-name) (assq nt-name nts) #f))
@@ -1531,6 +1573,12 @@
                         (loop-nts (cdr rest))
                         (let ((m (try-nt e)))
                           (if m m (loop-nts (cdr rest))))))))))))
+
+(define (nanopass-find-matching-production ir nt-name lang)
+  (nanopass-find-matching-production-mode ir nt-name lang #t))
+
+(define (nanopass-find-matching-production-shallow ir nt-name lang)
+  (nanopass-find-matching-production-mode ir nt-name lang #f))
 
 ;;; Schema-driven subpattern transformer
 ;;; When `pat` is a nonterminal meta-variable (e.g. `d` for `Def`), if `target-nt` is `Def`
@@ -1550,7 +1598,7 @@
              (if (and (eq? target-nt 'Def)
                       (pair? val)
                       (eq? (car val) 'define))
-                 (let ((sub-match (nanopass-find-matching-production val 'Def lang)))
+                 (let ((sub-match (nanopass-find-matching-production-shallow val 'Def lang)))
                    (if (and sub-match (pair? (cdr sub-match)))
                        (nanopass-schema-transform-node (cdr sub-match) val lang 'Def call-recurse)
                        (call-recurse val)))
@@ -1638,7 +1686,7 @@
      ;; Delegate to the sub-production that matched `ir` inside that nonterminal.
      (let ((cls (nanopass-classify-meta-var prod lang)))
        (if (and cls (eq? (car cls) 'nonterminal))
-           (let ((sub-match (nanopass-find-matching-production ir (cadr cls) lang)))
+           (let ((sub-match (nanopass-find-matching-production-shallow ir (cadr cls) lang)))
              (if (and sub-match (not (equal? (cdr sub-match) prod)))
                  (nanopass-schema-transform-node (cdr sub-match) ir lang (car sub-match) call-recurse)
                  ir))
@@ -1805,7 +1853,7 @@
     ((symbol? prod)
      (let ((cls (nanopass-classify-meta-var prod lang)))
        (if (and cls (eq? (car cls) 'nonterminal))
-           (let ((sub-match (nanopass-find-matching-production ir (cadr cls) lang)))
+           (let ((sub-match (nanopass-find-matching-production-shallow ir (cadr cls) lang)))
              (if (and sub-match (not (equal? (cdr sub-match) prod)))
                  (nanopass-schema-analyze-node (cdr sub-match) ir lang acc step-acc)
                  acc))
@@ -1831,60 +1879,45 @@
     (else acc)))
 
 (define (nanopass-catamorphism-step lang-in lang-out nt-name ir recurse-fn extra-args extra-out)
-  (let ((extra-args (if (pair? extra-args) extra-args '()))
-        (extra-out (if (pair? extra-out) extra-out '()))
-        (lang (nanopass-lookup-language-opt lang-in)))
-    (if (eq? lang-out '*)
-        ;; Pure Analyzer mode: default for unmatched atom is accumulator (if threaded) or #f
-        (cond
-          ((not (pair? ir))
-           (if (and (pair? extra-args) (pair? extra-out))
-               (car (reverse extra-args))
-               #f))
-          (else
-           (if (pair? extra-args)
-               (let* ((rev-extra (reverse extra-args))
-                      (initial-acc (car rev-extra))
-                      (prefix (reverse (cdr rev-extra)))
-                      (step-acc
-                       (lambda (item cur-acc)
-                         (nanopass-apply-list recurse-fn (cons item (append prefix (list cur-acc))))))
-                      (matched (if lang (nanopass-find-matching-production ir nt-name lang) #f)))
-                 (if matched
-                     (nanopass-schema-analyze-node (cdr matched) ir lang initial-acc step-acc)
-                     (let ((elements (if (symbol? (car ir)) (cdr ir) ir)))
-                       (let loop ((cur elements) (acc initial-acc))
-                         (cond
-                           ((null? cur) acc)
-                           ((not (pair? cur))
-                            (step-acc cur acc))
-                           (else
-                            (loop (cdr cur) (step-acc (car cur) acc))))))))
-               #f)))
-        ;; Transform mode: reconstruct AST according to define-language schema while propagating inherited attributes
-        (let ((call-recurse
-               (lambda (node)
-                 (if (or (not (car *nanopass-term-memo-enabled?*))
-                         (not (car *nanopass-term-memo-active?*))
-                         (not (pair? node))
-                         (pair? extra-args))
-                     (if (null? extra-args)
-                         (recurse-fn node)
-                         (nanopass-apply-list recurse-fn (cons node extra-args)))
-                     (let ((hit (assq node (car *nanopass-term-memo*))))
-                       (if hit
-                           (begin
-                             (set-car! *nanopass-term-memo-stats* (+ (car *nanopass-term-memo-stats*) 1))
-                             (cdr hit))
-                           (begin
-                             (set-cdr! *nanopass-term-memo-stats* (+ (cdr *nanopass-term-memo-stats*) 1))
-                             (let ((res (recurse-fn node)))
-                               (set-car! *nanopass-term-memo*
-                                         (cons (cons node res) (car *nanopass-term-memo*)))
-                               res))))))))
-          (if (not (pair? ir))
-              ir
-              (let ((matched (if lang (nanopass-find-matching-production ir nt-name lang) #f)))
+  ;; Fast path for atomic IR nodes: avoid language lookup and closure allocation
+  (if (not (pair? ir))
+      (if (eq? lang-out '*)
+          (if (and (pair? extra-args) (pair? extra-out))
+              (car (reverse extra-args))
+              #f)
+          ir)
+      (let ((extra-args (if (pair? extra-args) extra-args '()))
+            (extra-out (if (pair? extra-out) extra-out '()))
+            (lang (nanopass-lookup-language-opt lang-in)))
+        (if (eq? lang-out '*)
+            ;; Pure Analyzer mode
+            (if (pair? extra-args)
+                (let* ((rev-extra (reverse extra-args))
+                       (initial-acc (car rev-extra))
+                       (prefix (reverse (cdr rev-extra)))
+                       (step-acc
+                        (lambda (item cur-acc)
+                          (nanopass-apply-list recurse-fn (cons item (append prefix (list cur-acc))))))
+                       (matched (if lang (nanopass-find-matching-production-shallow ir nt-name lang) #f)))
+                  (if matched
+                      (nanopass-schema-analyze-node (cdr matched) ir lang initial-acc step-acc)
+                      (let ((elements (if (symbol? (car ir)) (cdr ir) ir)))
+                        (let loop ((cur elements) (acc initial-acc))
+                          (cond
+                            ((null? cur) acc)
+                            ((not (pair? cur))
+                             (step-acc cur acc))
+                            (else
+                             (loop (cdr cur) (step-acc (car cur) acc))))))))
+                #f)
+            ;; Transform mode: reconstruct AST according to shallow schema while propagating inherited attributes
+            (let ((call-recurse
+                   (if (null? extra-args)
+                       (lambda (node)
+                         (nanopass-memoize-step node recurse-fn))
+                       (lambda (node)
+                         (nanopass-apply-list recurse-fn (cons node extra-args))))))
+              (let ((matched (if lang (nanopass-find-matching-production-shallow ir nt-name lang) #f)))
                 (if matched
                     (nanopass-schema-transform-node (cdr matched) ir lang (car matched) call-recurse)
                     (nanopass-fallback-transform-node ir call-recurse))))))))
@@ -2385,11 +2418,43 @@
       '()
       (nanopass-hash-cons (car es) (nanopass-hash-cons-list (cdr es)))))
 
-;;; 14.2 Scoped Term DAG Catamorphism Memoization
-(define *nanopass-term-memo* (cons '() '()))
+;;; 14.2 Scoped Term DAG Catamorphism Memoization (256-bucket O(1) hash table)
+(define *nanopass-term-memo-bucket-count* 256)
+(define *nanopass-term-memo-bucket-limit* 16)
+
+(define (nanopass-make-term-memo-table)
+  (make-vector *nanopass-term-memo-bucket-count* '()))
+
+;; *nanopass-term-memo* stores (cons bucket-vector entry-count) for O(1) stats reporting.
+(define *nanopass-term-memo* (cons (nanopass-make-term-memo-table) 0))
 (define *nanopass-term-memo-enabled?* (cons #t '()))
 (define *nanopass-term-memo-active?* (cons #f '()))
 (define *nanopass-term-memo-stats* (cons 0 0)) ; (cons hits misses)
+
+(define (nanopass-atom-hash x)
+  (cond
+    ((symbol? x) (symbol->hash-idx x))
+    ((integer? x) (modulo (if (< x 0) (- 0 x) x) 1024))
+    ((boolean? x) (if x 3 7))
+    ((char? x) (modulo (char->integer x) 1024))
+    ((null? x) 11)
+    ((pair? x)
+     (let ((a (car x)))
+       (cond
+         ((symbol? a) (+ 17 (symbol->hash-idx a)))
+         ((and (pair? a) (symbol? (car a))) (+ 41 (* (symbol->hash-idx (car a)) 7)))
+         (else 29))))
+    (else 37)))
+
+(define (nanopass-term-memo-bucket-idx node)
+  (let* ((a (car node))
+         (d (cdr node))
+         (h1 (nanopass-atom-hash a))
+         (h2 (if (pair? d) (nanopass-atom-hash (car d)) 13))
+         (h3 (if (and (pair? d) (pair? (cdr d)))
+                 (nanopass-atom-hash (cadr d))
+                 19)))
+    (modulo (+ h1 (+ (* h2 37) (* h3 131))) *nanopass-term-memo-bucket-count*)))
 
 (define (enable-nanopass-term-memo!)
   (set-car! *nanopass-term-memo-enabled?* #t))
@@ -2398,14 +2463,20 @@
   (set-car! *nanopass-term-memo-enabled?* #f))
 
 (define (nanopass-term-memo-reset!)
-  (set-car! *nanopass-term-memo* '())
+  (let ((tbl (car *nanopass-term-memo*)))
+    (let loop ((i 0))
+      (if (< i *nanopass-term-memo-bucket-count*)
+          (begin
+            (vector-set! tbl i '())
+            (loop (+ i 1))))))
+  (set-cdr! *nanopass-term-memo* 0)
   (set-car! *nanopass-term-memo-stats* 0)
   (set-cdr! *nanopass-term-memo-stats* 0))
 
 (define (nanopass-term-memo-stats)
   (list (cons 'hits (car *nanopass-term-memo-stats*))
         (cons 'misses (cdr *nanopass-term-memo-stats*))
-        (cons 'entries (length (car *nanopass-term-memo*)))))
+        (cons 'entries (cdr *nanopass-term-memo*))))
 
 (define (nanopass-term-memo-hit-rate)
   (let ((hits (car *nanopass-term-memo-stats*))
@@ -2417,15 +2488,19 @@
 
 (define (with-nanopass-term-memo thunk)
   (let ((old-memo (car *nanopass-term-memo*))
+        (old-count (cdr *nanopass-term-memo*))
         (old-active (car *nanopass-term-memo-active?*)))
-    (set-car! *nanopass-term-memo* '())
+    (set-car! *nanopass-term-memo* (nanopass-make-term-memo-table))
+    (set-cdr! *nanopass-term-memo* 0)
     (set-car! *nanopass-term-memo-active?* #t)
     (let ((res (guard (ex (else
                             (set-car! *nanopass-term-memo* old-memo)
+                            (set-cdr! *nanopass-term-memo* old-count)
                             (set-car! *nanopass-term-memo-active?* old-active)
                             (raise ex)))
                  (thunk))))
       (set-car! *nanopass-term-memo* old-memo)
+      (set-cdr! *nanopass-term-memo* old-count)
       (set-car! *nanopass-term-memo-active?* old-active)
       res)))
 
@@ -2434,16 +2509,27 @@
           (not (car *nanopass-term-memo-active?*))
           (not (pair? node)))
       (transform-fn node)
-      (let ((hit (assq node (car *nanopass-term-memo*))))
+      (let* ((tbl (car *nanopass-term-memo*))
+             (b-idx (nanopass-term-memo-bucket-idx node))
+             (bucket (vector-ref tbl b-idx))
+             (hit (assq node bucket)))
         (if hit
             (begin
               (set-car! *nanopass-term-memo-stats* (+ (car *nanopass-term-memo-stats*) 1))
               (cdr hit))
             (begin
               (set-cdr! *nanopass-term-memo-stats* (+ (cdr *nanopass-term-memo-stats*) 1))
-              (let ((res (transform-fn node)))
-                (set-car! *nanopass-term-memo*
-                          (cons (cons node res) (car *nanopass-term-memo*)))
+              (let* ((res (transform-fn node))
+                     (cur-bucket (vector-ref tbl b-idx)))
+                ;; Bound per-bucket chain depth so worst-case lookup stays O(1) on large ASTs.
+                (if (< (length cur-bucket) *nanopass-term-memo-bucket-limit*)
+                    (begin
+                      (vector-set! tbl b-idx (cons (cons node res) cur-bucket))
+                      (set-cdr! *nanopass-term-memo* (+ (cdr *nanopass-term-memo*) 1)))
+                    (let loop ((cur cur-bucket) (i 1) (acc '()))
+                      (if (or (null? cur) (>= i *nanopass-term-memo-bucket-limit*))
+                          (vector-set! tbl b-idx (cons (cons node res) (reverse acc)))
+                          (loop (cdr cur) (+ i 1) (cons (car cur) acc)))))
                 res))))))
 
 ;;; =======================================================================

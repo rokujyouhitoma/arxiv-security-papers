@@ -1859,6 +1859,79 @@
                   (%return))
                 fwd))
 
+;;; =======================================================================
+;;; Section 25: Shallow Production Dispatch, 256-Bucket Term Memo & Symbol Hash (Issue #815)
+;;; =======================================================================
+
+;; 25.1 Shallow production dispatch distinguishes arities and avoids recursive re-validation
+(let ((l-core (nanopass-lookup-language 'L_core)))
+  (let ((m-if2 (nanopass-find-matching-production-shallow '(if #t 1) 'Expr l-core))
+        (m-if3 (nanopass-find-matching-production-shallow '(if #t 1 2) 'Expr l-core))
+        (m-let (nanopass-find-matching-production-shallow '(let ((x 1)) x) 'Expr l-core))
+        (m-quote (nanopass-find-matching-production-shallow '(quote foo) 'Expr l-core))
+        (m-app (nanopass-find-matching-production-shallow '(f x y) 'Expr l-core))
+        (m-shallow-nested (nanopass-find-matching-production-shallow '(if (let* ((z 1)) z) 1 2) 'Expr l-core))
+        (m-deep-nested (nanopass-find-matching-production '(if (let* ((z 1)) z) 1 2) 'Expr l-core)))
+    (assert-true "Shallow dispatch matches 2-arg if" (pair? m-if2))
+    (assert-equal "Shallow dispatch 2-arg if arity" 3 (length (cdr m-if2)))
+    (assert-true "Shallow dispatch matches 3-arg if" (pair? m-if3))
+    (assert-equal "Shallow dispatch 3-arg if arity" 4 (length (cdr m-if3)))
+    (assert-equal "Shallow dispatch matches let head" 'let (car (cdr m-let)))
+    (assert-equal "Shallow dispatch matches quote head" 'quote (car (cdr m-quote)))
+    (assert-equal "Shallow dispatch matches application NT" 'Expr (car m-app))
+    (assert-true "Shallow dispatch accepts nested un-desugared child" (pair? m-shallow-nested))
+    (assert-false "Deep dispatch rejects nested un-desugared child" m-deep-nested)))
+
+;; 25.2 256-bucket *nanopass-term-memo* hit/miss/entries & bucket depth limit
+(assert-equal "Term memo bucket count is 256" 256 *nanopass-term-memo-bucket-count*)
+(assert-equal "Term memo bucket depth limit is 16" 16 *nanopass-term-memo-bucket-limit*)
+
+(with-nanopass-term-memo
+  (lambda ()
+    (nanopass-term-memo-reset!)
+    (let* ((node (list '+ 1 2))
+           (r1 (nanopass-memoize-step node (lambda (n) (list 'tx n))))
+           (r2 (nanopass-memoize-step node (lambda (n) (list 'should-not-recompute n))))
+           (st (nanopass-term-memo-stats)))
+      (assert-equal "256-bucket term memo returns cached result on hit" r1 r2)
+      (assert-equal "256-bucket term memo records 1 hit" 1 (cdr (assq 'hits st)))
+      (assert-equal "256-bucket term memo records 1 miss" 1 (cdr (assq 'misses st)))
+      (assert-equal "256-bucket term memo records 1 entry" 1 (cdr (assq 'entries st))))
+    (nanopass-term-memo-reset!)
+    ;; Force exact same hash bucket for 25 distinct cons cells sharing (car), (cadr), (caddr)
+    (let loop ((i 0))
+      (if (< i 25)
+          (let ((n (list '+ 1 2 i)))
+            (nanopass-memoize-step n (lambda (x) i))
+            (loop (+ i 1)))))
+    (let* ((probe (list '+ 1 2 99))
+           (b-idx (nanopass-term-memo-bucket-idx probe))
+           (bucket-len (length (vector-ref (car *nanopass-term-memo*) b-idx)))
+           (st (nanopass-term-memo-stats)))
+      (assert-equal "Same-bucket collision caps chain length at 16"
+                    *nanopass-term-memo-bucket-limit*
+                    bucket-len)
+      (assert-equal "Same-bucket collision caps total entries at 16"
+                    *nanopass-term-memo-bucket-limit*
+                    (cdr (assq 'entries st))))))
+
+;; 25.3 nanopass-classify-meta-var cache hit/miss consistency
+(let ((l-core (nanopass-lookup-language 'L_core)))
+  (let ((c1 (nanopass-classify-meta-var 'e0 l-core))
+        (c2 (nanopass-classify-meta-var 'e0 l-core))
+        (cx1 (nanopass-classify-meta-var 'x* l-core))
+        (cx2 (nanopass-classify-meta-var 'x* l-core))
+        (cn1 (nanopass-classify-meta-var 'not-a-mv-xyz l-core))
+        (cn2 (nanopass-classify-meta-var 'not-a-mv-xyz l-core)))
+    (assert-equal "classify-meta-var hit matches miss for e0" c1 c2)
+    (assert-true "classify-meta-var recognizes e0" (pair? c1))
+    (assert-equal "classify-meta-var hit matches miss for x*" cx1 cx2)
+    (assert-true "classify-meta-var recognizes x*" (pair? cx1))
+    (assert-equal "classify-meta-var hit matches miss for non-meta-var" cn1 cn2)
+    (assert-false "classify-meta-var returns #f for non-meta-var" cn1)
+    (assert-false "classify-meta-var returns #f for non-symbol"
+                  (nanopass-classify-meta-var 123 l-core))))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)
