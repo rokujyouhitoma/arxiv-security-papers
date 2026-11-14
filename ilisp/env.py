@@ -1568,6 +1568,35 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         p = str(prefix) if prefix is not None else "g"
         return Symbol.intern(f"{p}{_gensym_counter}")
 
+    def prim_bitwise_and(*args: Any) -> int:
+        res = -1
+        for a in args:
+            res &= int(a)
+        return res
+
+    def prim_bitwise_ior(*args: Any) -> int:
+        res = 0
+        for a in args:
+            res |= int(a)
+        return res
+
+    def prim_bitwise_xor(*args: Any) -> int:
+        res = 0
+        for a in args:
+            res ^= int(a)
+        return res
+
+    def prim_bitwise_not(a: Any) -> int:
+        return ~int(a)
+
+    def prim_arithmetic_shift(n: Any, count: Any) -> int:
+        n_val = int(n)
+        cnt = int(count)
+        if cnt >= 0:
+            return n_val << cnt
+        else:
+            return n_val >> (-cnt)
+
     def prim_numerator(q: Any) -> int:
         from fractions import Fraction
 
@@ -1985,6 +2014,11 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "procedure?": prim_procedure_p,
         "string->symbol": prim_string_to_symbol,
         "gensym": prim_gensym,
+        "bitwise-and": prim_bitwise_and,
+        "bitwise-ior": prim_bitwise_ior,
+        "bitwise-xor": prim_bitwise_xor,
+        "bitwise-not": prim_bitwise_not,
+        "arithmetic-shift": prim_arithmetic_shift,
         "numerator": prim_numerator,
         "denominator": prim_denominator,
         "rationalize": prim_rationalize,

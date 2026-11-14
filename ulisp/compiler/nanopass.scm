@@ -683,7 +683,7 @@
                             (list loop-var ir-var (string->symbol "*nanopass-redispatch-limit*")))))
                 (if post?
                     (list 'let (list (list ir-var cata-call)) redispatch-expr)
-                    redispatch-expr))))))
+                    redispatch-expr)))))
     (if (eq? l-out '*)
         cascade-res
         (let ((s-var (unique-symbol "__span_"))
@@ -699,7 +699,7 @@
                                   (list 'if (list (string->symbol "ast-has-span?") res-var)
                                         res-var
                                         (list (string->symbol "ast-with-span") res-var s-var)))))
-                cascade-res))))
+                cascade-res)))))
 
 (define (nanopass-build-rules-cascade rules l-in l-out nt-name in-arg-list extra-out enable-redispatch?)
   (nanopass-build-rules-cascade-with-order rules l-in l-out nt-name in-arg-list extra-out enable-redispatch? 'pre))
@@ -1106,7 +1106,7 @@
                                  (list 'let (list (list res-var cascade))
                                        (list 'if (list 'and res-var (list 'not (list (string->symbol "ast-has-span?") res-var)))
                                              (list (string->symbol "ast-with-span") res-var s-var)
-                                             res-var)))))
+                                             res-var))))
                      cascade)))
             (else cascade))))
     ;; Register rule descriptor at compile-time for downstream pass fusion (e.g. fuse-rules)
@@ -1143,7 +1143,7 @@
                 (if opt-mandatory
                     (list (list (string->symbol "register-mandatory-picopass!") (list 'quote name)))
                     '())
-                (list (list 'quote name)))))))
+                (list (list 'quote name))))))))
 
 (define (nanopass-expand-define-picopass form)
   (nanopass-expand-rule-dsl form 'pico))

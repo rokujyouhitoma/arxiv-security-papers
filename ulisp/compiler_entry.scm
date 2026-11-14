@@ -48,6 +48,7 @@
 (include "compiler/pass_manager.scm")
 (include "compiler/dataflow.scm")
 (include "compiler/scope.scm")
+(include "compiler/eval_in_language.scm")
 
 ;; Frontend Passes
 (include "frontend/frontend_lang.scm")

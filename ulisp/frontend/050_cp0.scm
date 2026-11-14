@@ -189,11 +189,25 @@
                  (cbody (caddr c)))
              (list 'let (list (list var val)) cbody)))))))
 
+(define (cp0-all-const-args? args)
+  (let loop ((as args))
+    (if (null? as)
+        #t
+        (and (const? (car as)) (loop (cdr as))))))
+
+(define (cp0-fold-expr op args)
+  (let ((folded (fold-const-op op args)))
+    (if folded
+        folded
+        (if (and (symbol? op) (cp0-all-const-args? args) (ctfe-pure-prim? op))
+            (eval-in-language 'L_core (cons op args))
+            #f))))
+
 (define-picopass rule-cp0-const-fold
   :reads '() :writes '()
   (Expr
-    ((,op ,args ...) (guard (and (symbol? op) (fold-const-op op args)))
-     (fold-const-op op args))))
+    ((,op ,args ...) (guard (and (symbol? op) (cp0-fold-expr op args)))
+     (cp0-fold-expr op args))))
 
 (define-picopass rule-cp0-inline-map-for-each
   :reads '(map for-each lambda) :writes '(letrec lambda if let begin)
