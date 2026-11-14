@@ -266,25 +266,37 @@
         (type-meet (type-env-lookup var env) (cdr info))
         (type-env-lookup var env))))
 
-;;; Global Type Tables for Whole-Program Traceability
-(define *global-type-env* (cons '() '()))
-(define *expr-type-table* (cons '() '()))
+;;; Global Type Tables for Whole-Program Traceability (256-slot hash buckets)
+(define *annotator-bucket-count* 256)
+(define *global-type-env* (make-vector 256 '()))
+(define *expr-type-table* (make-vector 256 '()))
+
+(define (annotator-bucket-idx sym)
+  (modulo (symbol->hash-idx sym) *annotator-bucket-count*))
 
 (define (reset-type-annotations!)
-  (set-car! *global-type-env* '())
-  (set-car! *expr-type-table* '()))
+  (let loop ((i 0))
+    (if (< i *annotator-bucket-count*)
+        (begin
+          (vector-set! *global-type-env* i '())
+          (vector-set! *expr-type-table* i '())
+          (loop (+ i 1))))))
 
 (define (record-var-type! var type)
-  (set-car! *global-type-env* (cons (cons var type) (car *global-type-env*))))
+  (let ((idx (annotator-bucket-idx var)))
+    (vector-set! *global-type-env* idx
+                 (cons (cons var type) (vector-ref *global-type-env* idx)))))
 
 (define (get-var-type var)
-  (type-env-lookup var (car *global-type-env*)))
+  (type-env-lookup var (vector-ref *global-type-env* (annotator-bucket-idx var))))
 
 (define (record-expr-type! expr-id type)
-  (set-car! *expr-type-table* (cons (cons expr-id type) (car *expr-type-table*))))
+  (let ((idx (annotator-bucket-idx expr-id)))
+    (vector-set! *expr-type-table* idx
+                 (cons (cons expr-id type) (vector-ref *expr-type-table* idx)))))
 
 (define (get-expr-type expr-id)
-  (type-env-lookup expr-id (car *expr-type-table*)))
+  (type-env-lookup expr-id (vector-ref *expr-type-table* (annotator-bucket-idx expr-id))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. Abstract Evaluation Engine for ANF Expressions

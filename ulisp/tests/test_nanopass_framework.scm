@@ -2006,6 +2006,93 @@
   (assert-false "expr-size-le? quickly rejects deep AST over budget 40"
                 (expr-size-le? deep 40)))
 
+;;; =======================================================================
+;;; Section 27: Hash-Bucketed Rule Registry & Femtopass Analysis Cache (#817)
+;;; =======================================================================
+
+;; 27.1 Hash-bucketed *nanopass-rule-buckets* preserves rule lookup & deduplication
+(define-picopass test-rule-bucket-alpha
+  (Expr
+    ((bucket-probe ,x) (list 'bucket-ok x))))
+
+(let ((desc-sym (nanopass-lookup-rule 'test-rule-bucket-alpha))
+      (desc-proc (nanopass-lookup-rule test-rule-bucket-alpha))
+      (desc-prev (nanopass-lookup-rule 'test-direct-guard-rule)))
+  (assert-true "nanopass-lookup-rule finds symbol in hash bucket"
+               (rule-descriptor? desc-sym))
+  (assert-true "nanopass-lookup-rule finds procedure via proc alist"
+               (rule-descriptor? desc-proc))
+  (assert-true "nanopass-lookup-rule returns identical descriptor for sym and proc"
+               (eq? desc-sym desc-proc))
+  (assert-true "previously registered rule remains accessible in hash bucket"
+               (rule-descriptor? desc-prev))
+  (assert-false "nanopass-lookup-rule-opt returns #f for missing symbol"
+                (nanopass-lookup-rule-opt 'nonexistent-bucket-rule-xyz)))
+
+;; Re-registering test-rule-bucket-alpha must update in-place without duplicating entry
+(define count-before-rereg
+  (length (filter (lambda (r) (eq? (rule-name r) 'test-rule-bucket-alpha))
+                  (nanopass-get-all-rules))))
+
+(define-picopass test-rule-bucket-alpha
+  (Expr
+    ((bucket-probe ,x) (list 'bucket-ok-v2 x))))
+
+(let ((matches (filter (lambda (r) (eq? (rule-name r) 'test-rule-bucket-alpha))
+                       (nanopass-get-all-rules)))
+      (res (test-rule-bucket-alpha '(bucket-probe 42))))
+  (assert-equal "prior rule-name count before re-registration is 1"
+                1
+                count-before-rereg)
+  (assert-equal "re-registering rule updates bucket without duplicating ordered list"
+                1
+                (length matches))
+  (assert-equal "re-registered rule descriptor executes updated body"
+                '(bucket-ok-v2 42)
+                res))
+
+;; 27.2 Hash-bucketed *femto-analysis-cache* (lookup, hit/miss stats, node & tag invalidation)
+(femto-cache-reset!)
+(femto-register-attr-dependencies! 'bucket-test-attr '(pure const))
+(femto-register-attr-dependencies! 'bucket-other-attr '(effects))
+
+(let ((n1 '(+ 1 2))
+      (n2 '(let ((a 10)) (+ a 20)))
+      (n3 '(set! x 99))
+      (calls 0))
+  (let ((v1 (femto-get-cached-attr 'bucket-test-attr n1
+              (lambda () (set! calls (+ calls 1)) 101)))
+        (v2 (femto-get-cached-attr 'bucket-other-attr n2
+              (lambda () (set! calls (+ calls 1)) 202)))
+        (v1-hit (femto-get-cached-attr 'bucket-test-attr n1
+                  (lambda () (set! calls (+ calls 1)) 999)))
+        (v3 (femto-get-cached-attr 'bucket-test-attr n3
+              (lambda () (set! calls (+ calls 1)) 303))))
+    (assert-equal "femto cache miss computes initial value" 101 v1)
+    (assert-equal "femto cache hit returns cached value without recomputing" 101 v1-hit)
+    (assert-equal "femto cache miss invoked compute-thunk exact number of misses" 3 calls)
+    (assert-equal "second distinct node computes expected attr" 202 v2)
+    (assert-equal "third distinct node computes expected attr" 303 v3))
+  (let ((st1 (femto-cache-stats)))
+    (assert-equal "femto-cache-stats tracks hits=1" 1 (cdr (assq 'hits st1)))
+    (assert-equal "femto-cache-stats tracks misses=3" 3 (cdr (assq 'misses st1)))
+    (assert-equal "femto-cache-stats tracks entries=3" 3 (cdr (assq 'entries st1))))
+  ;; Per-node invalidation drops n1 only (entries: 3 -> 2)
+  (femto-cache-invalidate-node! n1)
+  (assert-equal "femto-cache-invalidate-node! reduces entries count to 2"
+                2
+                (cdr (assq 'entries (femto-cache-stats))))
+  ;; Tag invalidation drops bucket-test-attr (n3) while preserving bucket-other-attr (n2)
+  (femto-cache-invalidate-tags! '(const))
+  (assert-equal "tag invalidation preserves unaffected attribute node entries=1"
+                1
+                (cdr (assq 'entries (femto-cache-stats))))
+  ;; Wildcard tag invalidation clears all remaining entries (entries: 1 -> 0)
+  (femto-cache-invalidate-tags! '*)
+  (assert-equal "wildcard tag invalidation empties hash buckets entries=0"
+                0
+                (cdr (assq 'entries (femto-cache-stats)))))
+
 (display "=======================================================") (newline)
 (display " Nanopass Framework: All ")
 (display *nanopass-tests-passed*)

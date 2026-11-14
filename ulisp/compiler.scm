@@ -1187,6 +1187,12 @@
     (bindings . "bindings")
     (bodies . "bodies")
     (spec . "spec")
+    (%make-closure . "%make-closure")
+    (%make-closure-env . "%make-closure-env")
+    (%closure-ref . "%closure-ref")
+    (%closure-set! . "%closure-set!")
+    (%cont-fun . "%cont-fun")
+    (%cont-call . "%cont-call")
     (%direct-call . "%direct-call")
     (%call-closure . "%call-closure")
     (%tail-call . "%tail-call")
@@ -2684,7 +2690,7 @@
   (set-car! *picopass-firing-log* '()))
 
 (define (record-picopass-firing! rule-name old-ir new-ir)
-  (if (pair? (car *femto-analysis-cache*))
+  (if (> (cdr *femto-analysis-cache*) 0)
       (begin
         (femto-cache-invalidate-node! old-ir)
         (let ((desc (nanopass-lookup-rule rule-name)))
@@ -3113,10 +3119,29 @@
 ;;; First-Class Rule Descriptor & Registry Engine (DSN-33-01 T2.1)
 ;;; =======================================================================
 
-;;; Global rule repository: (cons (list (cons key desc) ...) '())
+;;; Global rule repository:
+;;;   *nanopass-rule-buckets* : 256-slot vector of ((sym . desc) ...)
+;;;   *nanopass-rule-procs*   : alist of ((proc . desc) ...)
+;;;   *nanopass-rules*        : (cons (list (cons name desc) ...) '()) in registration order
+(define *nanopass-rule-bucket-count* 256)
+
+(define (nanopass-make-rule-buckets)
+  (make-vector *nanopass-rule-bucket-count* '()))
+
+(define (nanopass-rule-bucket-idx sym)
+  (modulo (symbol->hash-idx sym) *nanopass-rule-bucket-count*))
+
+(define *nanopass-rule-buckets* (nanopass-make-rule-buckets))
+(define *nanopass-rule-procs* (cons '() '()))
 (define *nanopass-rules* (cons '() '()))
 
 (define (nanopass-clear-rules!)
+  (let loop ((i 0))
+    (if (< i *nanopass-rule-bucket-count*)
+        (begin
+          (vector-set! *nanopass-rule-buckets* i '())
+          (loop (+ i 1)))))
+  (set-car! *nanopass-rule-procs* '())
   (set-car! *nanopass-rules* '()))
 
 (define (nanopass-get-all-rules)
@@ -3165,31 +3190,44 @@
 (define (nanopass-register-rule! desc)
   (if (not (rule-descriptor? desc))
       (error "nanopass-register-rule!: invalid rule descriptor" desc)
-      (let ((name (rule-name desc))
-            (proc (rule-proc desc)))
-        (let* ((curr (car *nanopass-rules*))
-               (filtered (let loop ((rem curr))
-                           (cond ((null? rem) '())
-                                 ((and (symbol? (caar rem)) (eq? (caar rem) name))
-                                  (loop (cdr rem)))
-                                 ((and proc (eq? (caar rem) proc))
-                                  (loop (cdr rem)))
-                                 (else (cons (car rem) (loop (cdr rem)))))))
-               (with-name (cons (cons name desc) filtered))
-               (with-proc (if proc (cons (cons proc desc) with-name) with-name)))
-          (set-car! *nanopass-rules* with-proc)
-          name))))
+      (let* ((name (rule-name desc))
+             (proc (rule-proc desc))
+             (b-idx (nanopass-rule-bucket-idx name))
+             (bucket (vector-ref *nanopass-rule-buckets* b-idx))
+             (filt-bucket (let loop ((rem bucket))
+                            (cond ((null? rem) '())
+                                  ((eq? (caar rem) name) (loop (cdr rem)))
+                                  (else (cons (car rem) (loop (cdr rem))))))))
+        (vector-set! *nanopass-rule-buckets* b-idx (cons (cons name desc) filt-bucket))
+        (if proc
+            (let ((filt-procs (let loop ((rem (car *nanopass-rule-procs*)))
+                                (cond ((null? rem) '())
+                                      ((or (eq? (caar rem) proc)
+                                           (eq? (rule-name (cdar rem)) name))
+                                       (loop (cdr rem)))
+                                      (else (cons (car rem) (loop (cdr rem))))))))
+              (set-car! *nanopass-rule-procs* (cons (cons proc desc) filt-procs))))
+        (let ((filt-all (let loop ((rem (car *nanopass-rules*)))
+                          (cond ((null? rem) '())
+                                ((eq? (caar rem) name) (loop (cdr rem)))
+                                (else (cons (car rem) (loop (cdr rem))))))))
+          (set-car! *nanopass-rules* (cons (cons name desc) filt-all)))
+        name)))
 
 (define (nanopass-lookup-rule-opt name-or-proc)
   (cond
     ((rule-descriptor? name-or-proc)
      name-or-proc)
     ((symbol? name-or-proc)
-     (let ((entry (assq name-or-proc (car *nanopass-rules*))))
+     (let* ((b-idx (nanopass-rule-bucket-idx name-or-proc))
+            (entry (assq name-or-proc (vector-ref *nanopass-rule-buckets* b-idx))))
        (if entry (cdr entry) #f)))
     (else
-     (let ((entry (assq name-or-proc (car *nanopass-rules*))))
-       (if entry (cdr entry) #f)))))
+     (let ((entry (assq name-or-proc (car *nanopass-rule-procs*))))
+       (if entry
+           (cdr entry)
+           (let ((fallback (assq name-or-proc (car *nanopass-rules*))))
+             (if fallback (cdr fallback) #f)))))))
 
 (define (nanopass-lookup-rule name-or-proc)
   (let ((desc (nanopass-lookup-rule-opt name-or-proc)))
@@ -4357,12 +4395,45 @@
 ;;; Part 13: Femtopass Analysis Cache & Invalidation Protocol (DSN-33-01 T5.1)
 ;;; =======================================================================
 
-(define *femto-analysis-cache* (cons '() '()))
+(define *femto-cache-bucket-count* 256)
+
+(define (femto-make-cache-buckets)
+  (make-vector *femto-cache-bucket-count* '()))
+
+(define (femto-atom-hash x)
+  (cond
+    ((symbol? x) (symbol->hash-idx x))
+    ((integer? x) (modulo (if (< x 0) (- 0 x) x) 256))
+    ((boolean? x) (if x 3 7))
+    ((null? x) 11)
+    ((pair? x)
+     (let ((a (car x)))
+       (if (symbol? a) (+ 17 (symbol->hash-idx a)) 29)))
+    (else 37)))
+
+(define (femto-node-bucket-idx node)
+  (if (pair? node)
+      (let* ((a (car node))
+             (d (cdr node))
+             (h1 (femto-atom-hash a))
+             (h2 (if (pair? d) (femto-atom-hash (car d)) 13))
+             (h3 (if (and (pair? d) (pair? (cdr d))) (femto-atom-hash (cadr d)) 19)))
+        (modulo (+ h1 (+ (* h2 37) (* h3 131))) *femto-cache-bucket-count*))
+      (modulo (femto-atom-hash node) *femto-cache-bucket-count*)))
+
+;; *femto-analysis-cache* stores (cons bucket-vector entry-count) for O(1) lookup and stats
+(define *femto-analysis-cache* (cons (femto-make-cache-buckets) 0))
 (define *femto-cache-stats* (cons 0 0)) ; (cons hits misses)
 (define *femto-attr-tag-dependencies* (cons '() '())) ; alist of (attr-name . tag-list)
 
 (define (femto-cache-reset!)
-  (set-car! *femto-analysis-cache* '())
+  (let ((tbl (car *femto-analysis-cache*)))
+    (let loop ((i 0))
+      (if (< i *femto-cache-bucket-count*)
+          (begin
+            (vector-set! tbl i '())
+            (loop (+ i 1))))))
+  (set-cdr! *femto-analysis-cache* 0)
   (set-car! *femto-cache-stats* 0)
   (set-cdr! *femto-cache-stats* 0))
 
@@ -4375,8 +4446,10 @@
     (set-car! *femto-attr-tag-dependencies* (cons (cons attr-name tags) filtered))))
 
 (define (femto-get-cached-attr attr-name node compute-thunk)
-  (let* ((table (car *femto-analysis-cache*))
-         (node-entry (assq node table)))
+  (let* ((tbl (car *femto-analysis-cache*))
+         (b-idx (femto-node-bucket-idx node))
+         (bucket (vector-ref tbl b-idx))
+         (node-entry (assq node bucket)))
     (if node-entry
         (let ((attr-entry (assq attr-name (cdr node-entry))))
           (if attr-entry
@@ -4387,44 +4460,72 @@
                 (set-cdr! *femto-cache-stats* (+ (cdr *femto-cache-stats*) 1))
                 (set-cdr! node-entry (cons (cons attr-name computed-val) (cdr node-entry)))
                 computed-val)))
-        (let ((computed-val (compute-thunk)))
+        (let* ((computed-val (compute-thunk))
+               (cur-bucket (vector-ref tbl b-idx))
+               (cur-entry (assq node cur-bucket)))
           (set-cdr! *femto-cache-stats* (+ (cdr *femto-cache-stats*) 1))
-          (set-car! *femto-analysis-cache*
-                    (cons (cons node (list (cons attr-name computed-val))) table))
+          (if cur-entry
+              (set-cdr! cur-entry (cons (cons attr-name computed-val) (cdr cur-entry)))
+              (begin
+                (vector-set! tbl b-idx (cons (cons node (list (cons attr-name computed-val))) cur-bucket))
+                (set-cdr! *femto-analysis-cache* (+ (cdr *femto-analysis-cache*) 1))))
           computed-val))))
 
+(define (femto-filter-bucket-attrs nodes changed-tags deps)
+  (let loop ((rem nodes) (acc '()))
+    (if (null? rem)
+        (reverse acc)
+        (let* ((node-entry (car rem))
+               (node (car node-entry))
+               (attrs (cdr node-entry))
+               (surviving-attrs
+                (filter (lambda (attr-cell)
+                          (let* ((attr-name (car attr-cell))
+                                 (tag-entry (assq attr-name deps)))
+                            (if (not tag-entry)
+                                #t
+                                (not (nanopass-set-intersects? (cdr tag-entry) changed-tags)))))
+                        attrs)))
+          (if (null? surviving-attrs)
+              (loop (cdr rem) acc)
+              (loop (cdr rem) (cons (cons node surviving-attrs) acc)))))))
+
 (define (femto-cache-invalidate-tags! changed-tags)
-  (if (or (eq? changed-tags '*)
-          (and (list? changed-tags) (memq '* changed-tags)))
-      (set-car! *femto-analysis-cache* '())
-      (let ((deps (car *femto-attr-tag-dependencies*)))
-        (let loop ((nodes (car *femto-analysis-cache*)) (new-table '()))
-          (if (null? nodes)
-              (set-car! *femto-analysis-cache* (reverse new-table))
-              (let* ((node-entry (car nodes))
-                     (node (car node-entry))
-                     (attrs (cdr node-entry))
-                     (surviving-attrs
-                      (filter (lambda (attr-cell)
-                                (let* ((attr-name (car attr-cell))
-                                       (tag-entry (assq attr-name deps)))
-                                  (if (not tag-entry)
-                                      #t
-                                      (not (nanopass-set-intersects? (cdr tag-entry) changed-tags)))))
-                              attrs)))
-                (if (null? surviving-attrs)
-                    (loop (cdr nodes) new-table)
-                    (loop (cdr nodes) (cons (cons node surviving-attrs) new-table)))))))))
+  (let ((tbl (car *femto-analysis-cache*)))
+    (if (or (eq? changed-tags '*)
+            (and (list? changed-tags) (memq '* changed-tags)))
+        (begin
+          (let loop ((i 0))
+            (if (< i *femto-cache-bucket-count*)
+                (begin
+                  (vector-set! tbl i '())
+                  (loop (+ i 1)))))
+          (set-cdr! *femto-analysis-cache* 0))
+        (let ((deps (car *femto-attr-tag-dependencies*)))
+          (let loop ((i 0) (total 0))
+            (if (>= i *femto-cache-bucket-count*)
+                (set-cdr! *femto-analysis-cache* total)
+                (let ((bucket (vector-ref tbl i)))
+                  (if (null? bucket)
+                      (loop (+ i 1) total)
+                      (let ((new-bucket (femto-filter-bucket-attrs bucket changed-tags deps)))
+                        (vector-set! tbl i new-bucket)
+                        (loop (+ i 1) (+ total (length new-bucket))))))))))))
 
 (define (femto-cache-invalidate-node! node)
-  (let ((table (car *femto-analysis-cache*)))
-    (set-car! *femto-analysis-cache*
-              (filter (lambda (entry) (not (eq? (car entry) node))) table))))
+  (let* ((tbl (car *femto-analysis-cache*))
+         (b-idx (femto-node-bucket-idx node))
+         (bucket (vector-ref tbl b-idx)))
+    (if (assq node bucket)
+        (begin
+          (vector-set! tbl b-idx
+                       (filter (lambda (entry) (not (eq? (car entry) node))) bucket))
+          (set-cdr! *femto-analysis-cache* (max 0 (- (cdr *femto-analysis-cache*) 1)))))))
 
 (define (femto-cache-stats)
   (list (cons 'hits (car *femto-cache-stats*))
         (cons 'misses (cdr *femto-cache-stats*))
-        (cons 'entries (length (car *femto-analysis-cache*)))))
+        (cons 'entries (cdr *femto-analysis-cache*))))
 
 (define (femto-cache-hit-rate)
   (let ((hits (car *femto-cache-stats*))
@@ -12189,12 +12290,27 @@
                         (loop (cdr xs) (cdr es)))))))))
 
 (define (cp0-has-dead-letrec-binding? x* e* body)
-  (let* ((bindings (cp0-zip-bindings x* e*))
-         (reduced (dce-letrec bindings body)))
-    (not (and (pair? reduced)
-              (eq? (car reduced) 'letrec)
-              (eq? (caddr reduced) body)
-              (= (length (cadr reduced)) (length bindings))))))
+  (if (and (pair? x*)
+           (null? (cdr x*))
+           (pair? body)
+           (eq? (car body) (car x*)))
+      #f
+      (let* ((bindings (cp0-zip-bindings x* e*))
+             (reduced (dce-letrec bindings body)))
+        (not (and (pair? reduced)
+                  (eq? (car reduced) 'letrec)
+                  (eq? (caddr reduced) body)
+                  (= (length (cadr reduced)) (length bindings)))))))
+
+(define (cp0-inlineable-unary-lambda? fn)
+  (and (pair? fn)
+       (eq? (car fn) 'lambda)
+       (pair? (cdr fn))
+       (pair? (cadr fn))
+       (symbol? (caadr fn))
+       (null? (cdadr fn))
+       (pair? (cddr fn))
+       (null? (cdddr fn))))
 
 (define (cp0-call-values-reducible? p c)
   (or (and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
@@ -12279,6 +12395,39 @@
     ((,op ,args ...) (guard (and (symbol? op) (fold-const-op op args)))
      (fold-const-op op args))))
 
+(define-picopass rule-cp0-inline-map-for-each
+  :reads '(map for-each lambda) :writes '(letrec lambda if let begin)
+  (Expr
+    ((map ,fn ,ls) (guard (cp0-inlineable-unary-lambda? fn))
+     (let ((param (caadr fn))
+           (fbody (caddr fn))
+           (loop-sym (unique-symbol "__cp0_map_loop_"))
+           (cur-sym (unique-symbol "__cp0_map_cur_"))
+           (acc-sym (unique-symbol "__cp0_map_acc_"))
+           (val-sym (unique-symbol "__cp0_map_val_")))
+       (list 'letrec
+             (list (list loop-sym
+                         (list 'lambda (list cur-sym acc-sym)
+                               (list 'if (list 'pair? cur-sym)
+                                     (list 'let (list (list val-sym (list 'let (list (list param (list 'car cur-sym))) fbody)))
+                                           (list loop-sym (list 'cdr cur-sym) (list 'cons val-sym acc-sym)))
+                                     (list 'reverse acc-sym)))))
+             (list loop-sym ls ''()))))
+    ((for-each ,fn ,ls) (guard (cp0-inlineable-unary-lambda? fn))
+     (let ((param (caadr fn))
+           (fbody (caddr fn))
+           (loop-sym (unique-symbol "__cp0_fe_loop_"))
+           (cur-sym (unique-symbol "__cp0_fe_cur_")))
+       (list 'letrec
+             (list (list loop-sym
+                         (list 'lambda (list cur-sym)
+                               (list 'if (list 'pair? cur-sym)
+                                     (list 'begin
+                                           (list 'let (list (list param (list 'car cur-sym))) fbody)
+                                           (list loop-sym (list 'cdr cur-sym)))
+                                     #f))))
+             (list loop-sym ls))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: cp0-opt
 ;;; Bottom-up CP0 optimization: Constant Folding, Branch Pruning, and DCE
@@ -12292,6 +12441,7 @@
       rule-cp0-dead-let
       rule-cp0-dead-letrec
       rule-cp0-call-values
+      rule-cp0-inline-map-for-each
       rule-cp0-const-fold)))
 
 (define (cp0-expr expr)
@@ -13316,25 +13466,37 @@
         (type-meet (type-env-lookup var env) (cdr info))
         (type-env-lookup var env))))
 
-;;; Global Type Tables for Whole-Program Traceability
-(define *global-type-env* (cons '() '()))
-(define *expr-type-table* (cons '() '()))
+;;; Global Type Tables for Whole-Program Traceability (256-slot hash buckets)
+(define *annotator-bucket-count* 256)
+(define *global-type-env* (make-vector 256 '()))
+(define *expr-type-table* (make-vector 256 '()))
+
+(define (annotator-bucket-idx sym)
+  (modulo (symbol->hash-idx sym) *annotator-bucket-count*))
 
 (define (reset-type-annotations!)
-  (set-car! *global-type-env* '())
-  (set-car! *expr-type-table* '()))
+  (let loop ((i 0))
+    (if (< i *annotator-bucket-count*)
+        (begin
+          (vector-set! *global-type-env* i '())
+          (vector-set! *expr-type-table* i '())
+          (loop (+ i 1))))))
 
 (define (record-var-type! var type)
-  (set-car! *global-type-env* (cons (cons var type) (car *global-type-env*))))
+  (let ((idx (annotator-bucket-idx var)))
+    (vector-set! *global-type-env* idx
+                 (cons (cons var type) (vector-ref *global-type-env* idx)))))
 
 (define (get-var-type var)
-  (type-env-lookup var (car *global-type-env*)))
+  (type-env-lookup var (vector-ref *global-type-env* (annotator-bucket-idx var))))
 
 (define (record-expr-type! expr-id type)
-  (set-car! *expr-type-table* (cons (cons expr-id type) (car *expr-type-table*))))
+  (let ((idx (annotator-bucket-idx expr-id)))
+    (vector-set! *expr-type-table* idx
+                 (cons (cons expr-id type) (vector-ref *expr-type-table* idx)))))
 
 (define (get-expr-type expr-id)
-  (type-env-lookup expr-id (car *expr-type-table*)))
+  (type-env-lookup expr-id (vector-ref *expr-type-table* (annotator-bucket-idx expr-id))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. Abstract Evaluation Engine for ANF Expressions
@@ -13686,18 +13848,28 @@
 
 (define *unboxed-functions* (cons '() '()))
 (define *unboxed-ret-functions* (cons '() '()))
-(define *rtyper-facts* (cons '() '()))
+(define *rtyper-fact-bucket-count* 256)
+(define *rtyper-facts* (make-vector 256 '()))
+
+(define (rtyper-fact-bucket-idx sym)
+  (modulo (symbol->hash-idx sym) *rtyper-fact-bucket-count*))
 
 (define (reset-rtyper!)
   (set-car! *unboxed-functions* '())
   (set-car! *unboxed-ret-functions* '())
-  (set-car! *rtyper-facts* '()))
+  (let loop ((i 0))
+    (if (< i *rtyper-fact-bucket-count*)
+        (begin
+          (vector-set! *rtyper-facts* i '())
+          (loop (+ i 1))))))
 
 (define (record-rtyper-fact! var fact)
-  (set-car! *rtyper-facts* (cons (cons var fact) (car *rtyper-facts*))))
+  (let ((idx (rtyper-fact-bucket-idx var)))
+    (vector-set! *rtyper-facts* idx
+                 (cons (cons var fact) (vector-ref *rtyper-facts* idx)))))
 
 (define (get-rtyper-fact var)
-  (let ((e (assq var (car *rtyper-facts*))))
+  (let ((e (assq var (vector-ref *rtyper-facts* (rtyper-fact-bucket-idx var)))))
     (if e (cdr e) #f)))
 
 (define (record-unboxed-fn! name)
