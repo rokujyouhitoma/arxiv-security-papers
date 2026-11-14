@@ -89,6 +89,58 @@
                 #t
                 (eq? untouched (cadr (car (cadr opt))))))
 
+;; 7. Inline unary lambda map -> tail-recursive letrec
+(let* ((opt (cp0-optimize '(map (lambda (x) (+ x 1)) '(1 2 3))))
+       (opt-empty (cp0-optimize '(map (lambda (x) (+ x 1)) '()))))
+  (assert-equal "map with unary lambda expands to letrec"
+                'letrec
+                (car opt))
+  (assert-equal "inlined map evaluates identically on non-empty list"
+                '(2 3 4)
+                (eval opt (interaction-environment)))
+  (assert-equal "inlined map evaluates identically on empty list"
+                '()
+                (eval opt-empty (interaction-environment))))
+
+;; 8. Inline unary lambda for-each -> tail-recursive letrec preserving order
+(let* ((opt (cp0-optimize '(for-each (lambda (x) (set! acc (cons x acc))) '(1 2 3))))
+       (opt-empty (cp0-optimize '(for-each (lambda (x) (set! acc (cons x acc))) '()))))
+  (assert-equal "for-each with unary lambda expands to letrec"
+                'letrec
+                (car opt))
+  (assert-equal "inlined for-each preserves left-to-right side-effect order"
+                '(3 2 1)
+                (eval `(let ((acc '())) ,opt acc) (interaction-environment)))
+  (assert-equal "inlined for-each handles empty list without running body"
+                '()
+                (eval `(let ((acc '())) ,opt-empty acc) (interaction-environment))))
+
+;; 9. Multi-arg map, non-lambda fn, and rest-arg lambda remain unexpanded
+(assert-equal "multi-arg map is left unexpanded"
+              'map
+              (car (cp0-optimize '(map + xs ys))))
+(assert-equal "for-each with variable fn is left unexpanded"
+              'for-each
+              (car (cp0-optimize '(for-each f xs))))
+(assert-equal "map with rest-arg lambda is left unexpanded"
+              'map
+              (car (cp0-optimize '(map (lambda xs (length xs)) '(1 2)))))
+
+;; 10. Hygienic shadowing and contify compatibility (%cont-fun lowering)
+(let* ((opt-shadow (cp0-optimize '(map (lambda (cons) (+ cons 10)) '(1 2 3))))
+       (opt-open (cp0-optimize '(map (lambda (x) (+ x 1)) xs)))
+       (contified (contify-opt opt-open)))
+  (assert-equal "map expansion stays hygienic when parameter shadows cons"
+                '(11 12 13)
+                (eval opt-shadow (interaction-environment)))
+  (assert-equal "inlined map letrec lowers to %cont-fun via pass-100-contify"
+                #t
+                (let has-sym? ((node contified))
+                  (cond
+                    ((eq? node '%cont-fun) #t)
+                    ((pair? node) (or (has-sym? (car node)) (has-sym? (cdr node))))
+                    (else #f)))))
+
 (display "=======================================================") (newline)
 (display " Pass 050: All ") (display *pass-tests-passed*) (display " tests passed!") (newline)
 (display "=======================================================") (newline)

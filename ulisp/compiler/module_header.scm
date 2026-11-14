@@ -178,6 +178,7 @@
   femto-cache-reset!
   femto-cache-stats
   femto-cache-hit-rate
-  expr-size-le?)
+  expr-size-le?
+  symbol->hash-idx)
 
 

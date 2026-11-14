@@ -90,12 +90,27 @@
                         (loop (cdr xs) (cdr es)))))))))
 
 (define (cp0-has-dead-letrec-binding? x* e* body)
-  (let* ((bindings (cp0-zip-bindings x* e*))
-         (reduced (dce-letrec bindings body)))
-    (not (and (pair? reduced)
-              (eq? (car reduced) 'letrec)
-              (eq? (caddr reduced) body)
-              (= (length (cadr reduced)) (length bindings))))))
+  (if (and (pair? x*)
+           (null? (cdr x*))
+           (pair? body)
+           (eq? (car body) (car x*)))
+      #f
+      (let* ((bindings (cp0-zip-bindings x* e*))
+             (reduced (dce-letrec bindings body)))
+        (not (and (pair? reduced)
+                  (eq? (car reduced) 'letrec)
+                  (eq? (caddr reduced) body)
+                  (= (length (cadr reduced)) (length bindings)))))))
+
+(define (cp0-inlineable-unary-lambda? fn)
+  (and (pair? fn)
+       (eq? (car fn) 'lambda)
+       (pair? (cdr fn))
+       (pair? (cadr fn))
+       (symbol? (caadr fn))
+       (null? (cdadr fn))
+       (pair? (cddr fn))
+       (null? (cdddr fn))))
 
 (define (cp0-call-values-reducible? p c)
   (or (and (pair? p) (eq? (car p) 'lambda) (null? (cadr p))
@@ -180,6 +195,39 @@
     ((,op ,args ...) (guard (and (symbol? op) (fold-const-op op args)))
      (fold-const-op op args))))
 
+(define-picopass rule-cp0-inline-map-for-each
+  :reads '(map for-each lambda) :writes '(letrec lambda if let begin)
+  (Expr
+    ((map ,fn ,ls) (guard (cp0-inlineable-unary-lambda? fn))
+     (let ((param (caadr fn))
+           (fbody (caddr fn))
+           (loop-sym (unique-symbol "__cp0_map_loop_"))
+           (cur-sym (unique-symbol "__cp0_map_cur_"))
+           (acc-sym (unique-symbol "__cp0_map_acc_"))
+           (val-sym (unique-symbol "__cp0_map_val_")))
+       (list 'letrec
+             (list (list loop-sym
+                         (list 'lambda (list cur-sym acc-sym)
+                               (list 'if (list 'pair? cur-sym)
+                                     (list 'let (list (list val-sym (list 'let (list (list param (list 'car cur-sym))) fbody)))
+                                           (list loop-sym (list 'cdr cur-sym) (list 'cons val-sym acc-sym)))
+                                     (list 'reverse acc-sym)))))
+             (list loop-sym ls ''()))))
+    ((for-each ,fn ,ls) (guard (cp0-inlineable-unary-lambda? fn))
+     (let ((param (caadr fn))
+           (fbody (caddr fn))
+           (loop-sym (unique-symbol "__cp0_fe_loop_"))
+           (cur-sym (unique-symbol "__cp0_fe_cur_")))
+       (list 'letrec
+             (list (list loop-sym
+                         (list 'lambda (list cur-sym)
+                               (list 'if (list 'pair? cur-sym)
+                                     (list 'begin
+                                           (list 'let (list (list param (list 'car cur-sym))) fbody)
+                                           (list loop-sym (list 'cdr cur-sym)))
+                                     #f))))
+             (list loop-sym ls))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: cp0-opt
 ;;; Bottom-up CP0 optimization: Constant Folding, Branch Pruning, and DCE
@@ -193,6 +241,7 @@
       rule-cp0-dead-let
       rule-cp0-dead-letrec
       rule-cp0-call-values
+      rule-cp0-inline-map-for-each
       rule-cp0-const-fold)))
 
 (define (cp0-expr expr)

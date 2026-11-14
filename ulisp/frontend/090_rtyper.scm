@@ -9,18 +9,28 @@
 
 (define *unboxed-functions* (cons '() '()))
 (define *unboxed-ret-functions* (cons '() '()))
-(define *rtyper-facts* (cons '() '()))
+(define *rtyper-fact-bucket-count* 256)
+(define *rtyper-facts* (make-vector 256 '()))
+
+(define (rtyper-fact-bucket-idx sym)
+  (modulo (symbol->hash-idx sym) *rtyper-fact-bucket-count*))
 
 (define (reset-rtyper!)
   (set-car! *unboxed-functions* '())
   (set-car! *unboxed-ret-functions* '())
-  (set-car! *rtyper-facts* '()))
+  (let loop ((i 0))
+    (if (< i *rtyper-fact-bucket-count*)
+        (begin
+          (vector-set! *rtyper-facts* i '())
+          (loop (+ i 1))))))
 
 (define (record-rtyper-fact! var fact)
-  (set-car! *rtyper-facts* (cons (cons var fact) (car *rtyper-facts*))))
+  (let ((idx (rtyper-fact-bucket-idx var)))
+    (vector-set! *rtyper-facts* idx
+                 (cons (cons var fact) (vector-ref *rtyper-facts* idx)))))
 
 (define (get-rtyper-fact var)
-  (let ((e (assq var (car *rtyper-facts*))))
+  (let ((e (assq var (vector-ref *rtyper-facts* (rtyper-fact-bucket-idx var)))))
     (if e (cdr e) #f)))
 
 (define (record-unboxed-fn! name)
