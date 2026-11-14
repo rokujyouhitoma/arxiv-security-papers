@@ -61,6 +61,8 @@
     (%jump-cond str lbl)
     (%jump-if-zero lbl)
     (%direct-jump lbl)
+    (%switch opnd lbl (opnd ...) (sc ...))
+    (%switch opnd lbl (sc ...))
     (%return)
     (%return opnd)
 
@@ -145,6 +147,9 @@
   (SafepointEntry (sm)
     (lbl frame_size bitmap)
     (str frame_size bitmap))
+  (SwitchCase (sc)
+    (opnd lbl)
+    (opnd lbl (opnd ...)))
   (FunctionDecl (f)
     (%lir-function lbl (params (x ...)) (frame-size frame_size) (body inst ...)))
   (MainDecl (m)

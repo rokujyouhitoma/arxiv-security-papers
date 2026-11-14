@@ -2,7 +2,8 @@
 ID: 827
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-11-15
 ---
 
 # [FEAT] Pass 132 Braun SSA の任意 CFG (基本ブロック・多方向分岐・goto) 汎用対応化 (ID: 827)
@@ -27,11 +28,11 @@ Pass 132（`ulisp/lir/132_lir_braun_ssa.scm`）で実装されている Braun et
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lir/132_lir_braun_ssa.scm](../../ulisp/lir/132_lir_braun_ssa.scm): 任意 CFG（switch, goto, ループ・バックエッジ）対応、再帰的自明 Phi 除去、および未完了ブロック封印（`seal-block!`）プロトコルの完全実装
-- [ ] [ulisp/lir/lir_lang.scm](../../ulisp/lir/lir_lang.scm): 基本ブロック終端子（Terminator）における `%switch` 多方向分岐構文の形式定義確認・同期
-- [ ] [ulisp/tests/passes/test_132_lir_braun_ssa.scm](../../ulisp/tests/passes/test_132_lir_braun_ssa.scm): 既存 Braun SSA 単体テスト（リグレッションなし確認）
-- [ ] [ulisp/tests/test_braun_ssa_arbitrary_cfg.scm](../../ulisp/tests/test_braun_ssa_arbitrary_cfg.scm): 前方・後方 goto、多分岐 switch、相互再帰ループ、mem2reg 昇格、自明 Phi 連鎖除去の包括的単体テスト（新規作成）
-- [ ] [ulisp/Makefile](../../ulisp/Makefile): `test_braun_ssa_arbitrary_cfg` ターゲット追加および検証スイート統合
+- [x] [ulisp/lir/132_lir_braun_ssa.scm](../../ulisp/lir/132_lir_braun_ssa.scm): 任意 CFG（switch, goto, ループ・バックエッジ）対応、再帰的自明 Phi 除去、および未完了ブロック封印（`seal-block!`）プロトコルの完全実装
+- [x] [ulisp/lir/lir_lang.scm](../../ulisp/lir/lir_lang.scm): 基本ブロック終端子（Terminator）における `%switch` 多方向分岐構文の形式定義確認・同期
+- [x] [ulisp/tests/passes/test_132_lir_braun_ssa.scm](../../ulisp/tests/passes/test_132_lir_braun_ssa.scm): 既存 Braun SSA 単体テスト（リグレッションなし確認）
+- [x] [ulisp/tests/test_braun_ssa_arbitrary_cfg.scm](../../ulisp/tests/test_braun_ssa_arbitrary_cfg.scm): 前方・後方 goto、多分岐 switch、相互再帰ループ、mem2reg 昇格、自明 Phi 連鎖除去の包括的単体テスト（新規作成）
+- [x] [ulisp/Makefile](../../ulisp/Makefile): `test_braun_ssa_arbitrary_cfg` ターゲット追加および検証スイート統合
 
 ---
 
@@ -80,9 +81,9 @@ Target Branch: `feat/827-braun-ssa-arbitrary-cfg`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/lir/132_lir_braun_ssa.scm` にて未完了ブロックの遅延解決、`seal-block!` プロトコル、および再帰的自明 Phi 除去が仕様通り実装されていること。
-- [ ] `%switch` 多分岐終端子および任意 `goto` 制御フローからのブロック引数 LIR 変換（`braun-cfg->lir`）が完全動作すること。
-- [ ] mem2reg 昇格ヘルパーにより、アドレス非取得スタック変数が SSA 仮想レジスタへ昇格されること。
-- [ ] 単体テスト `test_braun_ssa_arbitrary_cfg.scm`（全テストケース）および既存の `test_132_lir_braun_ssa.scm` が 100% PASS すること。
-- [ ] `make -C ulisp verify_zero_gauche` および `make -C ulisp lint_sexpr` が PASS すること。
-- [ ] 既存の 782 件の Nanopass 単体テストおよび 3-Stage セルフホスティングブートストラップ（`test_pure_bootstrap.sh`）にリグレッションがないこと。
+- [x] `ulisp/lir/132_lir_braun_ssa.scm` にて未完了ブロックの遅延解決、`seal-block!` プロトコル、および再帰的自明 Phi 除去が仕様通り実装されていること。
+- [x] `%switch` 多分岐終端子および任意 `goto` 制御フローからのブロック引数 LIR 変換（`braun-cfg->lir`）が完全動作すること。
+- [x] mem2reg 昇格ヘルパーにより、アドレス非取得スタック変数が SSA 仮想レジスタへ昇格されること。
+- [x] 単体テスト `test_braun_ssa_arbitrary_cfg.scm`（全テストケース）および既存の `test_132_lir_braun_ssa.scm` が 100% PASS すること。
+- [x] `make -C ulisp verify_zero_gauche` および `make -C ulisp lint_sexpr` が PASS すること。
+- [x] 既存の 782 件の Nanopass 単体テストおよび 3-Stage セルフホスティングブートストラップ（`test_pure_bootstrap.sh`）にリグレッションがないこと。

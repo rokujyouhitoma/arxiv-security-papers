@@ -16314,6 +16314,8 @@
     (%jump-cond str lbl)
     (%jump-if-zero lbl)
     (%direct-jump lbl)
+    (%switch opnd lbl (opnd ...) (sc ...))
+    (%switch opnd lbl (sc ...))
     (%return)
     (%return opnd)
 
@@ -16398,6 +16400,9 @@
   (SafepointEntry (sm)
     (lbl frame_size bitmap)
     (str frame_size bitmap))
+  (SwitchCase (sc)
+    (opnd lbl)
+    (opnd lbl (opnd ...)))
   (FunctionDecl (f)
     (%lir-function lbl (params (x ...)) (frame-size frame_size) (body inst ...)))
   (MainDecl (m)
@@ -16612,6 +16617,51 @@
            (if (and (= (length inst) 2) (symbol? (cadr inst)))
                #t
                (lir-report-error "%direct-jump format must be (%direct-jump <lbl>)" inst)))
+
+          ((%switch)
+           ;; Format: (%switch <val> <def-lbl> (<def-args>...) ((<case-val> <case-lbl> (<case-args>...))...))
+           ;; or:     (%switch <val> <def-lbl> ((<case-val> <case-lbl>)...))
+           (cond
+             ((= (length inst) 4)
+              (if (and (lir-valid-operand? (cadr inst))
+                       (symbol? (caddr inst))
+                       (list? (cadddr inst)))
+                  (let c-loop ((cs (cadddr inst)))
+                    (if (null? cs) #t
+                        (let ((c (car cs)))
+                          (if (and (list? c) (= (length c) 2)
+                                   (lir-valid-operand? (car c))
+                                   (symbol? (cadr c)))
+                              (c-loop (cdr cs))
+                              (lir-report-error "Invalid switch case format in %switch" c)))))
+                  (lir-report-error "Invalid 4-argument %switch format" inst)))
+             ((= (length inst) 5)
+              (if (and (lir-valid-operand? (cadr inst))
+                       (symbol? (caddr inst))
+                       (list? (cadddr inst))
+                       (list? (car (cddddr inst))))
+                  (and (let a-loop ((as (cadddr inst)))
+                         (if (null? as) #t
+                             (if (lir-atomic-operand? (car as))
+                                 (a-loop (cdr as))
+                                 (lir-report-error "%switch default argument must be atomic" (car as)))))
+                       (let c-loop ((cs (car (cddddr inst))))
+                         (if (null? cs) #t
+                             (let ((c (car cs)))
+                               (if (and (list? c) (= (length c) 3)
+                                        (lir-valid-operand? (car c))
+                                        (symbol? (cadr c))
+                                        (list? (caddr c)))
+                                   (let ca-loop ((cas (caddr c)))
+                                     (if (null? cas)
+                                         (c-loop (cdr cs))
+                                         (if (lir-atomic-operand? (car cas))
+                                             (ca-loop (cdr cas))
+                                             (lir-report-error "%switch case argument must be atomic" (car cas)))))
+                                   (lir-report-error "Invalid switch case with arguments format in %switch" c))))))
+                  (lir-report-error "Invalid 5-argument %switch format" inst)))
+             (else
+              (lir-report-error "Invalid %switch arity" inst))))
 
           ((%return)
            (if (or (= (length inst) 1)
@@ -17002,6 +17052,17 @@
      (lir-sp-push-jump! pending (list '%jump-if-zero (cadr inst) #f inst)))
     ((%direct-jump)
      (lir-sp-push-jump! pending (list '%direct-jump (cadr inst) #f inst)))
+    ((%switch)
+     (let* ((def-lbl (caddr inst))
+            (def-args (if (and (= (length inst) 5) (list? (cadddr inst))) (cadddr inst) '()))
+            (cases (if (= (length inst) 5) (car (cddddr inst)) (cadddr inst))))
+       (lir-sp-push-jump! pending (list '%jump def-lbl (if (list? def-args) (length def-args) #f) inst))
+       (for-each
+        (lambda (c)
+          (let ((c-lbl (cadr c))
+                (c-args (if (and (= (length c) 3) (list? (caddr c))) (caddr c) '())))
+            (lir-sp-push-jump! pending (list '%jump c-lbl (if (list? c-args) (length c-args) #f) inst))))
+        cases)))
     (else #t)))
 
 (define (lir-sp-check-block-params params)
@@ -17196,12 +17257,38 @@
                    (else
                     (loop (cdr is))))))
               ((or (eq? (car inst) '%jump-cond)
-                   (eq? (car inst) '%jump-if-zero))
+                   (eq? (car inst) '%jump-if-zero)
+                   (eq? (car inst) '%direct-jump))
                (let ((target (if (eq? (car inst) '%jump-cond) (caddr inst) (cadr inst))))
                  (if (and (not (symbol-hash-set-contains? label-set target))
                           (not (symbol-hash-set-contains? known-set target)))
                      (lir-report-error "Undefined jump condition target" target)
                      (loop (cdr is)))))
+              ((eq? (car inst) '%switch)
+               (let* ((def-lbl (caddr inst))
+                      (def-args (if (and (= (length inst) 5) (list? (cadddr inst))) (cadddr inst) '()))
+                      (cases (if (= (length inst) 5) (car (cddddr inst)) (cadddr inst)))
+                      (def-expected (symbol-hash-table-ref arity-tbl def-lbl #f)))
+                 (cond
+                   ((and (not (symbol-hash-set-contains? label-set def-lbl))
+                         (not (symbol-hash-set-contains? known-set def-lbl)))
+                    (lir-report-error "Undefined switch default target" def-lbl))
+                   ((and def-expected (pair? def-args) (not (= (length def-args) def-expected)))
+                    (lir-report-error "%switch default argument count mismatch with %block" inst))
+                   (else
+                    (for-each
+                     (lambda (c)
+                       (let* ((c-lbl (cadr c))
+                              (c-args (if (and (= (length c) 3) (list? (caddr c))) (caddr c) '()))
+                              (c-expected (symbol-hash-table-ref arity-tbl c-lbl #f)))
+                         (cond
+                           ((and (not (symbol-hash-set-contains? label-set c-lbl))
+                                 (not (symbol-hash-set-contains? known-set c-lbl)))
+                            (lir-report-error "Undefined switch case target" c-lbl))
+                           ((and c-expected (pair? c-args) (not (= (length c-args) c-expected)))
+                            (lir-report-error "%switch case argument count mismatch with %block" inst)))))
+                     cases)
+                    (loop (cdr is))))))
               (else
                (loop (cdr is)))))))))
 
@@ -19897,13 +19984,14 @@
 ;;; ULisp Compiler Pass 132: Braun et al. (2013) SSA & Block Arguments Engine
 ;;; =======================================================================
 
-;;; Conforms to DSN-33 Section 8.1 & Issue #523
+;;; Conforms to DSN-33 Section 8.1, DSN-33-02 Section 6.1 & Issue #827
 ;;; =======================================================================
 
 (define (make-braun-cfg)
   (list (cons 'blocks '())            ; (label . (insts ...))
         (cons 'order '())             ; (lbl1 lbl2 ...)
         (cons 'preds '())             ; (label . (pred1 pred2 ...))
+        (cons 'succs '())             ; (label . (succ1 succ2 ...))
         (cons 'sealed '())            ; (lbl1 lbl2 ...)
         (cons 'params '())            ; (label . (p1 p2 ...))
         (cons 'defs '())              ; ((var . lbl) . val)
@@ -19912,6 +20000,8 @@
         (cons 'replacements '())      ; (param . canonical-val)
         (cons 'terminators '())       ; (label . terminator-inst)
         (cons 'rep-types '())         ; (val/param . rep-type)
+        (cons 'phi-users '())         ; (val . ((user-param . user-block-lbl) ...))
+        (cons 'param-vars '())        ; (param . var)
         (cons 'current-block #f)))
 
 ;;; -----------------------------------------------------------------------
@@ -19984,28 +20074,56 @@
   (let ((order (braun-cfg-ref cfg 'order))
         (blocks (braun-cfg-ref cfg 'blocks))
         (preds (braun-cfg-ref cfg 'preds))
+        (succs (braun-cfg-ref cfg 'succs))
         (params (braun-cfg-ref cfg 'params))
         (incomplete (braun-cfg-ref cfg 'incomplete))
         (terms (braun-cfg-ref cfg 'terminators)))
     (braun-cfg-set! cfg 'order (append order (list label)))
     (braun-cfg-set! cfg 'blocks (cons (cons label '()) blocks))
     (braun-cfg-set! cfg 'preds (cons (cons label '()) preds))
+    (braun-cfg-set! cfg 'succs (cons (cons label '()) succs))
     (braun-cfg-set! cfg 'params (cons (cons label '()) params))
     (braun-cfg-set! cfg 'incomplete (cons (cons label '()) incomplete))
     (braun-cfg-set! cfg 'terminators (cons (cons label #f) terms))
     (braun-cfg-set! cfg 'current-block label)
     label))
 
+(define (braun-update-sealed-block-edge! cfg from-lbl to-lbl)
+  (let ((params (braun-get-params cfg to-lbl)))
+    (for-each
+     (lambda (param)
+       (let ((var (braun-get-param-var cfg param)))
+         (if var
+             (let ((val (braun-read-variable cfg var from-lbl)))
+               (braun-set-incoming! cfg param from-lbl val)
+               (braun-try-remove-trivial! cfg to-lbl param '())))))
+     params)))
+
 (define (braun-add-edge! cfg from-lbl to-lbl)
   (let* ((preds (braun-cfg-ref cfg 'preds))
-         (entry (assq to-lbl preds)))
-    (if entry
-        (if (not (memq from-lbl (cdr entry)))
-            (set-cdr! entry (append (cdr entry) (list from-lbl))))
-        (braun-cfg-set! cfg 'preds (cons (list to-lbl from-lbl) preds)))))
+         (p-entry (assq to-lbl preds))
+         (succs (braun-cfg-ref cfg 'succs))
+         (s-entry (assq from-lbl succs)))
+    ;; Update preds
+    (if p-entry
+        (if (not (memq from-lbl (cdr p-entry)))
+            (set-cdr! p-entry (append (cdr p-entry) (list from-lbl))))
+        (braun-cfg-set! cfg 'preds (cons (list to-lbl from-lbl) preds)))
+    ;; Update succs
+    (if s-entry
+        (if (not (memq to-lbl (cdr s-entry)))
+            (set-cdr! s-entry (append (cdr s-entry) (list to-lbl))))
+        (braun-cfg-set! cfg 'succs (cons (list from-lbl to-lbl) succs)))
+    ;; If to-lbl is already sealed, dynamically update its block arguments
+    (if (memq to-lbl (braun-cfg-ref cfg 'sealed))
+        (braun-update-sealed-block-edge! cfg from-lbl to-lbl))))
 
 (define (braun-get-preds cfg block-lbl)
   (let ((entry (assq block-lbl (braun-cfg-ref cfg 'preds))))
+    (if entry (cdr entry) '())))
+
+(define (braun-get-succs cfg block-lbl)
+  (let ((entry (assq block-lbl (braun-cfg-ref cfg 'succs))))
     (if entry (cdr entry) '())))
 
 (define (braun-get-params cfg block-lbl)
@@ -20020,6 +20138,17 @@
             (set-cdr! entry (append (cdr entry) (list param))))
         (braun-cfg-set! cfg 'params (cons (list block-lbl param) params)))))
 
+(define (braun-set-param-var! cfg param var)
+  (let* ((pvars (braun-cfg-ref cfg 'param-vars))
+         (entry (assq param pvars)))
+    (if entry
+        (set-cdr! entry var)
+        (braun-cfg-set! cfg 'param-vars (cons (cons param var) pvars)))))
+
+(define (braun-get-param-var cfg param)
+  (let ((entry (assq param (braun-cfg-ref cfg 'param-vars))))
+    (if entry (cdr entry) #f)))
+
 (define (braun-write-variable! cfg var block-lbl val)
   (let* ((defs (braun-cfg-ref cfg 'defs))
          (key (cons var block-lbl))
@@ -20029,11 +20158,42 @@
         (braun-cfg-set! cfg 'defs (cons (cons key val) defs)))))
 
 (define (braun-resolve-val cfg val)
-  (let* ((reps (braun-cfg-ref cfg 'replacements))
-         (entry (assq val reps)))
-    (if entry
-        (braun-resolve-val cfg (cdr entry))
-        val)))
+  (let loop ((v val) (visited '()))
+    (if (or (not (symbol? v)) (memq v visited))
+        v
+        (let* ((reps (braun-cfg-ref cfg 'replacements))
+               (entry (assq v reps)))
+          (if entry
+              (loop (cdr entry) (cons v visited))
+              v)))))
+
+(define (braun-member? x lst)
+  (let loop ((xs lst))
+    (cond
+      ((null? xs) #f)
+      ((equal? (car xs) x) #t)
+      (else (loop (cdr xs))))))
+
+(define (braun-add-phi-user! cfg val param block-lbl)
+  (if (symbol? val)
+      (let* ((users-map (braun-cfg-ref cfg 'phi-users))
+             (entry (assq val users-map))
+             (item (cons param block-lbl)))
+        (if entry
+            (if (not (braun-member? item (cdr entry)))
+                (set-cdr! entry (cons item (cdr entry))))
+            (braun-cfg-set! cfg 'phi-users (cons (list val item) users-map))))))
+
+(define (braun-get-phi-users cfg val)
+  (let ((entry (assq val (braun-cfg-ref cfg 'phi-users))))
+    (if entry (cdr entry) '())))
+
+(define (braun-find-block-of-param cfg param)
+  (let loop ((blocks (braun-cfg-ref cfg 'params)))
+    (if (null? blocks) #f
+        (if (memq param (cdar blocks))
+            (caar blocks)
+            (loop (cdr blocks))))))
 
 (define (braun-set-incoming! cfg param pred val)
   (let* ((inc (braun-cfg-ref cfg 'incoming))
@@ -20041,7 +20201,9 @@
          (entry (assoc key inc)))
     (if entry
         (set-cdr! entry val)
-        (braun-cfg-set! cfg 'incoming (cons (cons key val) inc)))))
+        (braun-cfg-set! cfg 'incoming (cons (cons key val) inc))))
+  (let ((b-lbl (braun-find-block-of-param cfg param)))
+    (if b-lbl (braun-add-phi-user! cfg val param b-lbl))))
 
 (define (braun-get-incoming cfg param pred)
   (let* ((inc (braun-cfg-ref cfg 'incoming))
@@ -20049,32 +20211,51 @@
          (entry (assoc key inc)))
     (if entry (cdr entry) #f)))
 
-(define (braun-try-remove-trivial! cfg block-lbl param)
-  (let* ((preds (braun-get-preds cfg block-lbl)))
-    (let loop ((ps preds) (same #f) (trivial? #t))
-      (if (null? ps)
-          (if trivial?
-              (let ((replacement (if same same param)))
-                (if (not (equal? replacement param))
-                    (begin
-                      (let ((reps (braun-cfg-ref cfg 'replacements)))
-                        (braun-cfg-set! cfg 'replacements (cons (cons param replacement) reps)))
-                      (let* ((params (braun-cfg-ref cfg 'params))
-                             (p-entry (assq block-lbl params)))
-                        (if p-entry
-                            (set-cdr! p-entry (filter (lambda (p) (not (eq? p param))) (cdr p-entry)))))
-                      replacement)
-                    param))
-              param)
-          (let* ((pred (car ps))
-                 (op (braun-resolve-val cfg (braun-get-incoming cfg param pred))))
-            (cond
-              ((or (equal? op param) (equal? op same))
-               (loop (cdr ps) same trivial?))
-              ((eq? same #f)
-               (loop (cdr ps) op trivial?))
-              (else
-               (loop '() same #f))))))))
+;;; Braun et al. (2013) Section 3.2: Recursive Trivial Phi Elimination
+(define (braun-try-remove-trivial! cfg block-lbl param visited)
+  (if (memq param visited)
+        param ;; Cycle detected: break recursion safely (CWE-400 defense)
+        (let* ((preds (braun-get-preds cfg block-lbl)))
+          (let loop ((ps preds) (same #f) (trivial? #t))
+            (if (null? ps)
+                (if trivial?
+                    (let ((replacement (if same same param)))
+                      (if (not (equal? replacement param))
+                          (begin
+                            ;; 1. Register canonical replacement
+                            (let ((reps (braun-cfg-ref cfg 'replacements)))
+                              (braun-cfg-set! cfg 'replacements (cons (cons param replacement) reps)))
+                            ;; 2. Remove param from block's parameter list
+                            (let* ((params (braun-cfg-ref cfg 'params))
+                                   (p-entry (assq block-lbl params)))
+                              (if p-entry
+                                  (set-cdr! p-entry (filter (lambda (p) (not (eq? p param))) (cdr p-entry)))))
+                            ;; 3. Braun 2013: Recursively check all users of this phi
+                            (let ((users (braun-get-phi-users cfg param))
+                                  (new-visited (cons param visited)))
+                              (for-each
+                               (lambda (u-pair)
+                                 (let ((user-param (car u-pair))
+                                       (user-block (cdr u-pair)))
+                                   (if (and user-block (memq user-param (braun-get-params cfg user-block)))
+                                       (braun-try-remove-trivial! cfg user-block user-param new-visited))))
+                               users))
+                            replacement)
+                          param))
+                    param)
+                (let* ((pred (car ps))
+                       (raw-op (braun-get-incoming cfg param pred))
+                       (op (if raw-op (braun-resolve-val cfg raw-op) param)))
+                  (cond
+                    ((or (equal? op param) (equal? op same))
+                     ;; Unique value so far or self-reference: ignore
+                     (loop (cdr ps) same trivial?))
+                    ((eq? same #f)
+                     ;; First non-self operand encountered
+                     (loop (cdr ps) op trivial?))
+                    (else
+                     ;; Multiple distinct operands: non-trivial phi!
+                     (loop '() same #f))))))))) 
 
 (define (braun-add-arguments! cfg block-lbl param var)
   (let ((preds (braun-get-preds cfg block-lbl)))
@@ -20083,7 +20264,7 @@
        (let ((val (braun-read-variable cfg var pred)))
          (braun-set-incoming! cfg param pred val)))
      preds)
-    (braun-try-remove-trivial! cfg block-lbl param)))
+    (braun-try-remove-trivial! cfg block-lbl param '())))
 
 (define (braun-read-variable-recursive cfg var block-lbl)
   (let* ((sealed (braun-cfg-ref cfg 'sealed))
@@ -20092,6 +20273,7 @@
         ;; Incomplete CFG: block not sealed yet
         (let ((param (unique-label-sym (string-append "ba_" (symbol->string var) "_"))))
           (braun-add-param! cfg block-lbl param)
+          (braun-set-param-var! cfg param var)
           (let* ((incomp (braun-cfg-ref cfg 'incomplete))
                  (entry (assq block-lbl incomp)))
             (if entry
@@ -20113,6 +20295,7 @@
              ;; Multiple predecessors: create block argument
              (let ((param (unique-label-sym (string-append "ba_" (symbol->string var) "_"))))
                (braun-add-param! cfg block-lbl param)
+               (braun-set-param-var! cfg param var)
                (braun-write-variable! cfg var block-lbl param)
                (let ((resolved (braun-add-arguments! cfg block-lbl param var)))
                  (braun-write-variable! cfg var block-lbl resolved)
@@ -20141,6 +20324,11 @@
                  (braun-add-arguments! cfg block-lbl param var)))
              (reverse incomps)))))))
 
+(define (braun-seal-all-blocks! cfg)
+  (let ((order (braun-cfg-ref cfg 'order)))
+    (for-each (lambda (b) (braun-seal-block! cfg b)) order)
+    cfg))
+
 (define (braun-emit-inst! cfg block-lbl inst)
   (let* ((blocks (braun-cfg-ref cfg 'blocks))
          (entry (assq block-lbl blocks)))
@@ -20162,6 +20350,28 @@
 (define (braun-get-terminator cfg block-lbl)
   (let ((entry (assq block-lbl (braun-cfg-ref cfg 'terminators))))
     (if entry (cdr entry) #f)))
+
+(define (braun-auto-add-terminator-edges! cfg block-lbl term)
+  (if (pair? term)
+      (case (car term)
+        ((%jump %direct-jump)
+         (braun-add-edge! cfg block-lbl (cadr term)))
+        ((%jump-if)
+         (braun-add-edge! cfg block-lbl (caddr term))
+         (let ((else-lbl (if (= (length term) 4) (cadddr term) (car (cddddr term)))))
+           (braun-add-edge! cfg block-lbl else-lbl)))
+        ((%jump-if-false)
+         (braun-add-edge! cfg block-lbl (caddr term)))
+        ((%switch)
+         (let* ((def-lbl (caddr term))
+                (cases (if (= (length term) 5) (car (cddddr term)) (cadddr term))))
+           (braun-add-edge! cfg block-lbl def-lbl)
+           (for-each
+            (lambda (c)
+              (let ((c-lbl (if (pair? (cdr c)) (cadr c) (cdr c))))
+                (braun-add-edge! cfg block-lbl c-lbl)))
+            cases)))
+        (else #f))))
 
 ;;; Path Splitting & Join Block Bypass for Braun SSA CFG (Chambers & Ungar 1989)
 (define (braun-cfg-path-split! cfg)
@@ -20221,6 +20431,13 @@
                                       (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
                                     target-params)))
                     (list (list '%jump target args))))
+                 ((eq? (car term) '%direct-jump)
+                  (let* ((target (cadr term))
+                         (target-params (braun-get-params cfg target))
+                         (args (map (lambda (p)
+                                      (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
+                                    target-params)))
+                    (list (list '%direct-jump target args))))
                  ((eq? (car term) '%jump-if-false)
                   (let* ((cond-var (braun-resolve-val cfg (cadr term)))
                          (else-lbl (caddr term))
@@ -20242,15 +20459,224 @@
                                            (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
                                          else-params)))
                     (list (list '%jump-if cond-var then-lbl then-args else-lbl else-args))))
+                 ((eq? (car term) '%switch)
+                  (let* ((cond-var (braun-resolve-val cfg (cadr term)))
+                         (def-lbl (caddr term))
+                         (cases (if (pair? (cdddr term)) (cadddr term) '()))
+                         (def-params (braun-get-params cfg def-lbl))
+                         (def-args (map (lambda (p)
+                                          (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
+                                        def-params))
+                         (lowered-cases
+                          (map (lambda (c)
+                                 (let* ((c-val (car c))
+                                        (c-lbl (if (pair? (cdr c)) (cadr c) (cdr c)))
+                                        (c-params (braun-get-params cfg c-lbl))
+                                        (c-args (map (lambda (p)
+                                                       (braun-resolve-val cfg (braun-get-incoming cfg p lbl)))
+                                                     c-params)))
+                                   (list c-val c-lbl c-args)))
+                               cases)))
+                    (list (list '%switch cond-var def-lbl def-args lowered-cases))))
                  ((eq? (car term) '%return)
                   (let ((val (if (pair? (cdr term))
                                  (braun-resolve-val cfg (cadr term))
                                  '%rax)))
                     (list (list '%return val))))
-                 (else (list term))))
+                 (else
+                  (list (map (lambda (elem) (braun-resolve-val cfg elem)) term)))))
               (block-body (append insts term-inst)))
          (cons '%block (cons lbl (cons params block-body)))))
      order)))
+
+;;; -----------------------------------------------------------------------
+;;; Dominator Tree & Dominance Frontiers (Cooper et al. 2001)
+;;; -----------------------------------------------------------------------
+(define (braun-block-rpo-index order b)
+  (let loop ((os order) (idx 0))
+    (cond
+      ((null? os) 999999)
+      ((eq? (car os) b) idx)
+      (else (loop (cdr os) (+ idx 1))))))
+
+(define (braun-intersect-doms order idom b1 b2)
+  (let loop ((finger1 b1) (finger2 b2))
+    (cond
+      ((eq? finger1 finger2) finger1)
+      ((> (braun-block-rpo-index order finger1) (braun-block-rpo-index order finger2))
+       (let ((p1 (assq finger1 idom)))
+         (if (and p1 (not (eq? (cdr p1) finger1)))
+             (loop (cdr p1) finger2)
+             finger2)))
+      (else
+       (let ((p2 (assq finger2 idom)))
+         (if (and p2 (not (eq? (cdr p2) finger2)))
+             (loop finger1 (cdr p2))
+             finger1))))))
+
+(define (braun-compute-dominators cfg)
+  (let* ((order (braun-cfg-ref cfg 'order)))
+    (if (null? order) '()
+        (let* ((entry (car order))
+               (idom (map (lambda (b) (cons b (if (eq? b entry) entry #f))) order)))
+          (let outer-loop ((changed? #t))
+            (if (not changed?)
+                (filter (lambda (entry) (cdr entry)) idom)
+                (let inner-loop ((bs (cdr order)) (any-change? #f))
+                  (if (null? bs)
+                      (outer-loop any-change?)
+                      (let* ((b (car bs))
+                             (preds (braun-get-preds cfg b))
+                             (processed-preds (filter (lambda (p)
+                                                        (let ((cell (assq p idom)))
+                                                          (and cell (cdr cell))))
+                                                      preds)))
+                        (if (null? processed-preds)
+                            (inner-loop (cdr bs) any-change?)
+                            (let* ((new-idom
+                                    (let fold-p ((ps (cdr processed-preds))
+                                                 (acc (car processed-preds)))
+                                      (if (null? ps) acc
+                                          (fold-p (cdr ps)
+                                                  (braun-intersect-doms order idom (car ps) acc)))))
+                                   (cur (assq b idom)))
+                              (if (not (eq? (cdr cur) new-idom))
+                                  (begin
+                                    (set-cdr! cur new-idom)
+                                    (inner-loop (cdr bs) #t))
+                                  (inner-loop (cdr bs) any-change?)))))))))))))
+
+(define (braun-compute-dominance-frontiers cfg idom-map)
+  (let* ((order (braun-cfg-ref cfg 'order))
+         (df-map (map (lambda (b) (cons b '())) order)))
+    (for-each
+     (lambda (b)
+       (let ((preds (braun-get-preds cfg b)))
+         (if (and (pair? preds) (pair? (cdr preds)))
+             (let ((b-idom-entry (assq b idom-map)))
+               (if b-idom-entry
+                   (let ((b-idom (cdr b-idom-entry)))
+                     (for-each
+                      (lambda (p)
+                        (let runner-loop ((runner p))
+                          (if (and (not (eq? runner b-idom))
+                                   (assq runner idom-map))
+                              (begin
+                                (let ((df-entry (assq runner df-map)))
+                                  (if (and df-entry (not (memq b (cdr df-entry))))
+                                      (set-cdr! df-entry (cons b (cdr df-entry)))))
+                                (let ((r-idom-entry (assq runner idom-map)))
+                                  (if (and r-idom-entry (not (eq? (cdr r-idom-entry) runner)))
+                                      (runner-loop (cdr r-idom-entry))))))))
+                      preds)))))))
+     order)
+    df-map))
+
+;;; -----------------------------------------------------------------------
+;;; CFG Verification (Integrity & Invariant Check)
+;;; -----------------------------------------------------------------------
+(define (braun-verify-cfg cfg)
+  (let ((order (braun-cfg-ref cfg 'order))
+        (sealed (braun-cfg-ref cfg 'sealed))
+        (incomplete (braun-cfg-ref cfg 'incomplete)))
+    ;; 1. All blocks must be sealed
+    (for-each
+     (lambda (b)
+       (if (not (memq b sealed))
+           (error "Braun CFG verification failure: block not sealed:" b)))
+     order)
+    ;; 2. Incomplete entries must be empty
+    (for-each
+     (lambda (inc-pair)
+       (if (and (pair? (cdr inc-pair)) (not (null? (cdr inc-pair))))
+           (error "Braun CFG verification failure: unresolved incomplete variables in block:" (car inc-pair))))
+     incomplete)
+    ;; 3. Check every block parameter has incoming values from all predecessors
+    (for-each
+     (lambda (b)
+       (let ((params (braun-get-params cfg b))
+             (preds (braun-get-preds cfg b)))
+         (for-each
+          (lambda (param)
+            (for-each
+             (lambda (pred)
+               (let ((inc (braun-get-incoming cfg param pred)))
+                 (if (not inc)
+                     (error "Braun CFG verification failure: missing incoming value for param:" param "from pred:" pred "in block:" b))))
+             preds))
+          params)))
+     order)
+    ;; 4. Check terminator targets exist in CFG
+    (for-each
+     (lambda (b)
+       (let ((term (braun-get-terminator cfg b)))
+         (if term
+             (case (car term)
+               ((%jump %direct-jump)
+                (if (not (memq (cadr term) order))
+                    (error "Braun CFG verification failure: unknown jump target in block:" b (cadr term))))
+               ((%jump-if)
+                (if (not (memq (caddr term) order))
+                    (error "Braun CFG verification failure: unknown then-target in block:" b (caddr term)))
+                (if (not (memq (car (cddddr term)) order))
+                    (error "Braun CFG verification failure: unknown else-target in block:" b (car (cddddr term)))))
+               ((%jump-if-false)
+                (if (not (memq (caddr term) order))
+                    (error "Braun CFG verification failure: unknown else-target in block:" b (caddr term))))
+               ((%switch)
+                (let ((def-lbl (caddr term))
+                      (cases (if (pair? (cdddr term)) (cadddr term) '())))
+                  (if (not (memq def-lbl order))
+                      (error "Braun CFG verification failure: unknown switch default target:" def-lbl))
+                  (for-each
+                   (lambda (c)
+                     (let ((c-lbl (if (pair? (cdr c)) (cadr c) (cdr c))))
+                       (if (not (memq c-lbl order))
+                           (error "Braun CFG verification failure: unknown switch case target:" c-lbl))))
+                   cases)))
+               (else #t)))))
+     order)
+    #t))
+
+;;; -----------------------------------------------------------------------
+;;; mem2reg Stack Variable Promotion (DSN-38 Section 2 D1)
+;;; -----------------------------------------------------------------------
+(define (braun-promote-alloca-to-ssa cfg candidate-offsets)
+  (let ((order (braun-cfg-ref cfg 'order)))
+    (for-each
+     (lambda (b)
+       (let* ((insts (braun-get-insts cfg b))
+              (new-insts
+               (let loop ((is insts) (acc '()))
+                 (if (null? is) (reverse acc)
+                     (let ((inst (car is)))
+                       (cond
+                         ;; (%store %rsp offset val)
+                         ((and (pair? inst) (eq? (car inst) '%store)
+                               (eq? (cadr inst) '%rsp)
+                               (braun-member? (caddr inst) candidate-offsets))
+                          (let* ((offset (caddr inst))
+                                 (val (cadddr inst))
+                                 (var (string->symbol (string-append "stk_" (number->string offset)))))
+                            (braun-write-variable! cfg var b (braun-resolve-val cfg val))
+                            (loop (cdr is) acc)))
+                         ;; (%load dst %rsp offset)
+                         ((and (pair? inst) (eq? (car inst) '%load)
+                               (eq? (caddr inst) '%rsp)
+                               (braun-member? (cadddr inst) candidate-offsets))
+                          (let* ((dst (cadr inst))
+                                 (offset (cadddr inst))
+                                 (var (string->symbol (string-append "stk_" (number->string offset))))
+                                 (val (braun-read-variable cfg var b)))
+                            (loop (cdr is) (cons (list '%mov dst (braun-resolve-val cfg val)) acc))))
+                         (else
+                          (loop (cdr is) (cons inst acc)))))))))
+         ;; Update block instructions
+         (let ((blocks (braun-cfg-ref cfg 'blocks)))
+           (let ((entry (assq b blocks)))
+             (if entry (set-cdr! entry new-insts))))))
+     order)
+    #t))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 133: LIR Peephole Optimization & Dead Code Elimination
 ;;; Conforms to DSN-33 Architecture Specification & Issues #595, #767
@@ -21042,6 +21468,42 @@
       ((%jump-if-zero)
        (let ((lbl (cadr inst)))
          (list (list 'jcc 'je lbl))))
+
+      ((%direct-jump)
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (append (if (pair? args) (select-x86-parallel-copy lbl args) '())
+                 (list (list 'jmp (lower-lir-opnd lbl))))))
+
+      ((%switch)
+       ;; (%switch val def-lbl def-args cases)
+       (let* ((val (cadr inst))
+              (def-lbl (caddr inst))
+              (def-args (cadddr inst))
+              (cases (if (pair? (cddddr inst)) (car (cddddr inst)) '()))
+              (val-opnd (lower-lir-opnd val))
+              (switch-end (unique-label-sym "L_switch_end_")))
+         (let loop ((cs cases) (acc '()))
+           (if (null? cs)
+               ;; Default branch
+               (backend-concat
+                (list (reverse acc)
+                      (if (pair? def-args) (select-x86-parallel-copy def-lbl def-args) '())
+                      (list (list 'jmp (lower-lir-opnd def-lbl))
+                            (list '%label switch-end))))
+               (let* ((case-entry (car cs))
+                      (c-val (car case-entry))
+                      (c-lbl (cadr case-entry))
+                      (c-args (if (pair? (cddr case-entry)) (caddr case-entry) '()))
+                      (next-case (unique-label-sym "L_case_next_")))
+                 (loop (cdr cs)
+                       (cons (backend-concat
+                              (list (list (list 'cmp val-opnd (lower-lir-opnd c-val))
+                                          (list 'jcc 'jne next-case))
+                                    (if (pair? c-args) (select-x86-parallel-copy c-lbl c-args) '())
+                                    (list (list 'jmp (lower-lir-opnd c-lbl))
+                                          (list '%label next-case))))
+                             acc)))))))
 
       ((%return)
        (list (list 'ret)))
@@ -28513,6 +28975,36 @@
        (let ((lbl (cadr inst)))
          (emit (string-append "    b.eq " (if (symbol? lbl) (symbol->string lbl) lbl)))))
 
+      ((%direct-jump)
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (if (pair? args)
+             (emit-arm-parallel-copy lbl args))
+         (emit (string-append "    b " (if (symbol? lbl) (symbol->string lbl) lbl)))))
+
+      ((%switch)
+       ;; (%switch val def-lbl def-args cases)
+       (let* ((val (cadr inst))
+              (def-lbl (caddr inst))
+              (def-args (cadddr inst))
+              (cases (if (pair? (cddddr inst)) (car (cddddr inst)) '()))
+              (val-str (arm-operand->str val)))
+         (for-each
+          (lambda (c)
+            (let* ((c-val (car c))
+                   (c-lbl (cadr c))
+                   (c-args (if (pair? (cddr c)) (caddr c) '()))
+                   (next-c (unique-label-sym "L_arm_case_next_")))
+              (emit (string-append "    cmp " val-str ", " (arm-operand->str c-val)))
+              (emit (string-append "    b.ne " (symbol->string next-c)))
+              (if (pair? c-args) (emit-arm-parallel-copy c-lbl c-args))
+              (emit (string-append "    b " (if (symbol? c-lbl) (symbol->string c-lbl) c-lbl)))
+              (emit (string-append (symbol->string next-c) ":"))))
+          cases)
+         ;; Default
+         (if (pair? def-args) (emit-arm-parallel-copy def-lbl def-args))
+         (emit (string-append "    b " (if (symbol? def-lbl) (symbol->string def-lbl) def-lbl)))))
+
       ((%jump-cond)
        (let* ((cond-op (cadr inst))
               (lbl (caddr inst))
@@ -29926,6 +30418,36 @@
       ((%jump-if-zero)
        (let ((lbl (cadr inst)))
          (emit (string-append "    if (cmp_s1 == cmp_s2) goto " (c-sanitize-label lbl) ";"))))
+
+      ((%direct-jump)
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (if (pair? args)
+             (emit-c-parallel-copy lbl args))
+         (emit (string-append "    goto " (c-sanitize-label lbl) ";"))))
+
+      ((%switch)
+       ;; (%switch val def-lbl def-args cases)
+       (let* ((val (cadr inst))
+              (def-lbl (caddr inst))
+              (def-args (cadddr inst))
+              (cases (if (pair? (cddddr inst)) (car (cddddr inst)) '())))
+         (emit (string-append "    switch (" (c-operand->str val) ") {"))
+         (for-each
+          (lambda (c)
+            (let ((c-val (car c))
+                  (c-lbl (cadr c))
+                  (c-args (if (pair? (cddr c)) (caddr c) '())))
+              (emit (string-append "    case " (c-operand->str c-val) ": {"))
+              (if (pair? c-args) (emit-c-parallel-copy c-lbl c-args))
+              (emit (string-append "        goto " (c-sanitize-label c-lbl) ";"))
+              (emit "    }")))
+          cases)
+         (emit "    default: {")
+         (if (pair? def-args) (emit-c-parallel-copy def-lbl def-args))
+         (emit (string-append "        goto " (c-sanitize-label def-lbl) ";"))
+         (emit "    }")
+         (emit "    }")))
 
       ((%return)
        (emit "    return;"))

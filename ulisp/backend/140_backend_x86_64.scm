@@ -433,6 +433,42 @@
        (let ((lbl (cadr inst)))
          (list (list 'jcc 'je lbl))))
 
+      ((%direct-jump)
+       (let* ((lbl (cadr inst))
+              (args (if (pair? (cddr inst)) (caddr inst) '())))
+         (append (if (pair? args) (select-x86-parallel-copy lbl args) '())
+                 (list (list 'jmp (lower-lir-opnd lbl))))))
+
+      ((%switch)
+       ;; (%switch val def-lbl def-args cases)
+       (let* ((val (cadr inst))
+              (def-lbl (caddr inst))
+              (def-args (cadddr inst))
+              (cases (if (pair? (cddddr inst)) (car (cddddr inst)) '()))
+              (val-opnd (lower-lir-opnd val))
+              (switch-end (unique-label-sym "L_switch_end_")))
+         (let loop ((cs cases) (acc '()))
+           (if (null? cs)
+               ;; Default branch
+               (backend-concat
+                (list (reverse acc)
+                      (if (pair? def-args) (select-x86-parallel-copy def-lbl def-args) '())
+                      (list (list 'jmp (lower-lir-opnd def-lbl))
+                            (list '%label switch-end))))
+               (let* ((case-entry (car cs))
+                      (c-val (car case-entry))
+                      (c-lbl (cadr case-entry))
+                      (c-args (if (pair? (cddr case-entry)) (caddr case-entry) '()))
+                      (next-case (unique-label-sym "L_case_next_")))
+                 (loop (cdr cs)
+                       (cons (backend-concat
+                              (list (list (list 'cmp val-opnd (lower-lir-opnd c-val))
+                                          (list 'jcc 'jne next-case))
+                                    (if (pair? c-args) (select-x86-parallel-copy c-lbl c-args) '())
+                                    (list (list 'jmp (lower-lir-opnd c-lbl))
+                                          (list '%label next-case))))
+                             acc)))))))
+
       ((%return)
        (list (list 'ret)))
 
