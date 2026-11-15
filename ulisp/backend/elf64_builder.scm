@@ -546,7 +546,7 @@
       (elf64-set-u64-le! bv off val)))
 
 (define (elf64-build-rel-symtab sym-table globl-syms weak-syms sym-types reloc-records)
-  ;; Collect unique named symbols from globl-syms, weak-syms, and string targets in reloc-records
+  ;; Collect unique named symbols from globl-syms, weak-syms, sym-types, and string targets in reloc-records
   (let* ((add-uniq (lambda (s lst)
                      (if (asm-str-list-member? s lst)
                          lst
@@ -555,16 +555,26 @@
                (if (null? gs) acc (loop (cdr gs) (add-uniq (car gs) acc)))))
          (s2 (let loop ((ws weak-syms) (acc s1))
                (if (null? ws) acc (loop (cdr ws) (add-uniq (car ws) acc)))))
-         (named-syms (let loop ((rs reloc-records) (acc s2))
-                       (if (null? rs)
+         (non-local-syms (let loop ((rs reloc-records) (acc s2))
+                           (if (null? rs)
+                               (reverse acc)
+                               (let ((tgt (caddr (car rs))))
+                                 (if (string? tgt)
+                                     (loop (cdr rs) (add-uniq tgt acc))
+                                     (loop (cdr rs) acc))))))
+         ;; Local symbols: symbols in sym-types that are not globl or weak
+         (local-syms (let loop ((st sym-types) (acc '()))
+                       (if (null? st)
                            (reverse acc)
-                           (let ((tgt (caddr (car rs))))
-                             (if (string? tgt)
-                                 (loop (cdr rs) (add-uniq tgt acc))
-                                 (loop (cdr rs) acc))))))
+                           (let ((s (caar st)))
+                             (if (or (asm-str-list-member? s non-local-syms) (asm-str-list-member? s acc))
+                                 (loop (cdr st) acc)
+                                 (loop (cdr st) (cons s acc)))))))
+         (first-global-idx (+ 7 (length local-syms)))
+         (ordered-syms (append local-syms non-local-syms))
          ;; Assign string table offsets and symbol indices (starting at 7)
          (syms-meta
-           (let loop ((syms named-syms) (idx 7) (stroff 1) (acc '()))
+           (let loop ((syms ordered-syms) (idx 7) (stroff 1) (acc '()))
              (if (null? syms)
                  (reverse acc)
                  (let* ((name (car syms))
@@ -618,7 +628,9 @@
                  (soff (caddr m))
                  (off (* idx 24))
                  (is-weak? (asm-str-list-member? name weak-syms))
-                 (bind (if is-weak? 2 1)) ;; 2=STB_WEAK, 1=STB_GLOBAL
+                 (is-globl? (or (asm-str-list-member? name globl-syms)
+                                (not (asm-str-list-member? name local-syms))))
+                 (bind (cond (is-weak? 2) (is-globl? 1) (else 0))) ;; 0=STB_LOCAL, 1=STB_GLOBAL, 2=STB_WEAK
                  (def-entry (assoc name sym-table))
                  (type-entry (assoc name sym-types))
                  (stt (if type-entry
@@ -636,7 +648,7 @@
             (elf64-set-u64-le! symtab-bv (+ off 8) st-val)
             (elf64-set-u64-le! symtab-bv (+ off 16) 0)
             (sym-loop (cdr ms)))))
-    (list symtab-bv strtab-bv sym-idx-map)))
+    (list symtab-bv strtab-bv sym-idx-map first-global-idx)))
 
 (define (elf64-build-rela-section sec-name reloc-records sym-idx-map)
   (let* ((sec-rels (let loop ((rs reloc-records) (acc '()))
@@ -683,6 +695,7 @@
          (symtab-bv (car sym-res))
          (strtab-bv (cadr sym-res))
          (sym-idx-map (caddr sym-res))
+         (first-global-idx (if (> (length sym-res) 3) (cadddr sym-res) 7))
          (rela-text-bv (elf64-build-rela-section 'text reloc-records sym-idx-map))
          (rela-rodata-bv (elf64-build-rela-section 'rodata reloc-records sym-idx-map))
          (rela-data-bv (elf64-build-rela-section 'data reloc-records sym-idx-map))
@@ -763,8 +776,8 @@
     (elf64-write-shdr! elf-bv shoff 11 108 4 64 0 rela-globals-off rela-globals-len 13 6 8 24)
     ;; 12: .note.GNU-stack (SHT_PROGBITS=1, flags=0)
     (elf64-write-shdr! elf-bv shoff 12 132 1 0 0 symtab-off 0 0 0 1 0)
-    ;; 13: .symtab (SHT_SYMTAB=2, flags=0, link=14 (.strtab), info=7 (first non-local symbol))
-    (elf64-write-shdr! elf-bv shoff 13 148 2 0 0 symtab-off symtab-len 14 7 8 24)
+    ;; 13: .symtab (SHT_SYMTAB=2, flags=0, link=14 (.strtab), info=first-global-idx (first non-local symbol))
+    (elf64-write-shdr! elf-bv shoff 13 148 2 0 0 symtab-off symtab-len 14 first-global-idx 8 24)
     ;; 14: .strtab (SHT_STRTAB=3)
     (elf64-write-shdr! elf-bv shoff 14 156 3 0 0 strtab-off strtab-len 0 0 1 0)
     ;; 15: .shstrtab (SHT_STRTAB=3)
