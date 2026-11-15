@@ -267,6 +267,45 @@
   sbi-sha256-bytevector
   sbi-sha256-string
   sbi-sha256-file
-  sbi-sha256-hex)
+  sbi-sha256-hex
+  *pass-analysis-contracts*
+  *pass-proc-analysis-contracts*
+  *nanopass-pre-pass-analysis-hook*
+  *nanopass-post-pass-analysis-hook*
+  normalize-analysis-spec-list
+  alist-upsert-eq
+  register-pass-analysis-contract!
+  register-pass-proc-analysis-contract!
+  lookup-pass-analysis-contract
+  reset-pass-analysis-contracts!
+  nanopass-invoke-pre-pass-analysis!
+  nanopass-invoke-post-pass-analysis!
+  set-pass-analysis-contract!
+  pass-analysis-contract
+  pass-requires-analyses
+  pass-preserves-analyses
+  pass-invalidates-analyses
+  make-analysis-descriptor
+  register-analysis-property!
+  lookup-analysis-property
+  require-analysis
+  invalidate-analysis!
+  invalidate-all-analyses!
+  ensure-pass-required-analyses!
+  apply-pass-analysis-invalidation!
+  reset-analysis-cache!
+  analysis-cache-stats
+  analysis-valid?
+  get-cached-analysis
+  analysis-compute-count
+  analysis-hit-count
+  analysis-invalidation-count
+  init-default-analysis-properties!
+  *last-fixpoint-iterations*
+  *last-fixpoint-converged?*
+  last-fixpoint-iterations
+  last-fixpoint-converged?
+  resolve-fixpoint-pass-descriptor
+  run-pass-fixpoint)
 
 

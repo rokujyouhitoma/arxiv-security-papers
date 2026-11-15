@@ -7,23 +7,89 @@
 ;;; (define-pass pass-name : L_in (ir extra_in ...) -> L_out (extra_out ...) body ...)
 ;;; or (define-pass pass-name : L_in (ir extra_in ...) -> * (extra_out ...) body ...)
 ;;; or (define-pass pass-name (ir extra_in ...) body ...)
+;;; Also supports declarative analysis contracts (:requires ...), (:preserves ...), (:invalidates ...).
+(define (nanopass-analysis-contract-clause? c)
+  (and (pair? c)
+       (memq (car c) '(:requires requires :preserves preserves :invalidates invalidates))))
+
+(define (nanopass-analysis-contract-keyword? x)
+  (and (symbol? x)
+       (memq x '(:requires :preserves :invalidates))))
+
+(define (nanopass-extract-analysis-contracts clauses)
+  (let loop ((rem clauses)
+             (clean-rev '())
+             (has-contract? #f)
+             (reqs '())
+             (pres #f)
+             (invs '()))
+    (if (null? rem)
+        (list (reverse clean-rev) has-contract? reqs pres invs)
+        (let ((c (car rem)))
+          (cond
+            ((nanopass-analysis-contract-clause? c)
+             (let ((tag (car c))
+                   (vals (normalize-analysis-spec-list (cdr c))))
+               (cond
+                 ((memq tag '(:requires requires))
+                  (loop (cdr rem) clean-rev #t (append reqs vals) pres invs))
+                 ((memq tag '(:preserves preserves))
+                  (let ((cur-pres (if pres pres '())))
+                    (loop (cdr rem) clean-rev #t reqs (append cur-pres vals) invs)))
+                 (else
+                  (loop (cdr rem) clean-rev #t reqs pres (append invs vals))))))
+            ((and (nanopass-analysis-contract-keyword? c) (pair? (cdr rem)))
+             (let ((vals (normalize-analysis-spec-list (cadr rem))))
+               (cond
+                 ((eq? c ':requires)
+                  (loop (cddr rem) clean-rev #t (append reqs vals) pres invs))
+                 ((eq? c ':preserves)
+                  (let ((cur-pres (if pres pres '())))
+                    (loop (cddr rem) clean-rev #t reqs (append cur-pres vals) invs)))
+                 (else
+                  (loop (cddr rem) clean-rev #t reqs pres (append invs vals))))))
+            (else
+             (loop (cdr rem) (cons c clean-rev) has-contract? reqs pres invs)))))))
+
+(define (nanopass-split-leading-contracts forms)
+  (let loop ((rem forms) (c-rev '()))
+    (cond
+      ((null? rem) (cons (reverse c-rev) '()))
+      ((nanopass-analysis-contract-clause? (car rem))
+       (loop (cdr rem) (cons (car rem) c-rev)))
+      ((and (nanopass-analysis-contract-keyword? (car rem)) (pair? (cdr rem)))
+       (loop (cddr rem) (cons (list (car rem) (cadr rem)) c-rev)))
+      (else (cons (reverse c-rev) rem)))))
+
 (define (nanopass-parse-pass-header form)
-  (let ((name (cadr form))
-        (rest (cddr form)))
-    (if (and (pair? rest) (eq? (car rest) ':))
-        (let* ((l-in (cadr rest))
-               (in-args (caddr rest))
-               (in-arg-list (if (pair? in-args) in-args (list in-args)))
-               (after-arrow (cddddr rest))
-               (l-out (car after-arrow))
-               (has-extra-out? (and (pair? (cdr after-arrow)) (list? (cadr after-arrow))))
-               (extra-out (if has-extra-out? (cadr after-arrow) '()))
-               (clauses (if has-extra-out? (cddr after-arrow) (cdr after-arrow))))
-          (list name l-in in-arg-list l-out extra-out clauses))
-        (let* ((in-args (car rest))
-               (in-arg-list (if (pair? in-args) in-args (list in-args)))
-               (clauses (cdr rest)))
-          (list name 'L_src in-arg-list 'L_core '() clauses)))))
+  (let* ((name (cadr form))
+         (rest (cddr form))
+         (split (nanopass-split-leading-contracts rest))
+         (leading-contracts (car split))
+         (rest-after (cdr split)))
+    (cond
+      ((and (pair? rest-after) (eq? (car rest-after) ':))
+       (let* ((l-in (cadr rest-after))
+              (in-args (caddr rest-after))
+              (in-arg-list (if (pair? in-args) in-args (list in-args)))
+              (after-arrow (cddddr rest-after))
+              (l-out (car after-arrow))
+              (has-extra-out? (and (pair? (cdr after-arrow)) (list? (cadr after-arrow))))
+              (extra-out (if has-extra-out? (cadr after-arrow) '()))
+              (clauses (if has-extra-out? (cddr after-arrow) (cdr after-arrow))))
+         (list name l-in in-arg-list l-out extra-out (append leading-contracts clauses))))
+      ((and (pair? rest-after)
+            (pair? (car rest-after))
+            (not (nanopass-analysis-contract-clause? (car rest-after)))
+            (not (memq (caar rest-after)
+                       '(definitions entry fuse-rules fuse-tree-rules fuse-post-rules fuse-window-rules
+                         Expr Stmt Program TopLevel Instruction InstructionList))))
+       (let* ((in-args (car rest-after))
+              (in-arg-list (if (pair? in-args) in-args (list in-args)))
+              (clauses (cdr rest-after)))
+         (list name 'L_src in-arg-list 'L_core '() (append leading-contracts clauses))))
+      (else
+       (list name 'L_src '(ir) 'L_core '() (append leading-contracts rest-after))))))
 
 ;;; Linearize pattern to handle duplicate variables (e.g. ((%mov ,r ,r) . ,rest))
 (define (nanopass-linearize-pattern pat)
@@ -779,8 +845,16 @@
          (in-arg-list (caddr parsed))
          (l-out (cadddr parsed))
          (extra-out (car (cddddr parsed)))
-         (clauses (cadr (cddddr parsed)))
+         (raw-clauses (cadr (cddddr parsed)))
+         (contract-info (nanopass-extract-analysis-contracts raw-clauses))
+         (clauses (car contract-info))
+         (has-contract? (cadr contract-info))
+         (req-list (caddr contract-info))
+         (pres-list (cadddr contract-info))
+         (inv-list (car (cddddr contract-info)))
          (all-fused-specs (nanopass-extract-all-pass-rule-specs clauses)))
+    (if has-contract?
+        (register-pass-analysis-contract! name req-list pres-list inv-list))
     ;; Validate schema coverage between l-in and l-out against eliminated rules (DSN-33-01 T3.2)
     (if (and (pair? all-fused-specs)
              (symbol? l-in) (symbol? l-out)
@@ -813,33 +887,57 @@
           (let* ((final-entry (if entry-nt entry-nt 'Expr))
                  (ir-var (car in-arg-list))
                  (res-var (unique-symbol "__res_"))
-                 (body-call (cons final-entry in-arg-list)))
-            (list 'define (cons name in-arg-list)
-                  (list 'letrec
-                        (append (reverse defs) (reverse nt-procs))
+                 (body-call (cons final-entry in-arg-list))
+                 (trace-tail
+                  (if force-trace?
+                      (list 'begin
+                            (list 'if (list 'not (list (string->symbol "nanopass-in-pipeline-runner?")))
+                                  (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
+                                  #f)
+                            res-var)
+                      (list 'begin
+                            (list 'if (list 'and (list (string->symbol "nanopass-trace-enabled?"))
+                                                 (list 'not (list (string->symbol "nanopass-in-pipeline-runner?"))))
+                                  (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
+                                  #f)
+                            res-var)))
+                 (inner-let
+                  (list 'let (list (list res-var body-call))
                         (list 'begin
-                              (list (string->symbol "set-current-pass!") (list 'quote name))
+                              (if has-contract?
+                                  (list (string->symbol "nanopass-invoke-post-pass-analysis!") (list 'quote name) ir-var res-var)
+                                  #f)
                               (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
-                                    (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-in) ir-var ''entry)
+                                    (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-out) res-var ''exit)
                                     #f)
-                              (list (string->symbol "with-call-frame") (list 'quote name) ir-var
-                                    (list 'lambda '()
-                                          (list 'let (list (list res-var body-call))
-                                                (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
-                                                      (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-out) res-var ''exit)
-                                                      #f)
-                                                (if force-trace?
-                                                    (list 'begin
-                                                          (list 'if (list 'not (list (string->symbol "nanopass-in-pipeline-runner?")))
-                                                                (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
-                                                                #f)
-                                                          res-var)
-                                                    (list 'begin
-                                                          (list 'if (list 'and (list (string->symbol "nanopass-trace-enabled?"))
-                                                                               (list 'not (list (string->symbol "nanopass-in-pipeline-runner?"))))
-                                                                (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
-                                                                #f)
-                                                          res-var)))))))))
+                              trace-tail)))
+                 (frame-thunk
+                  (if has-contract?
+                      (list 'lambda '()
+                            (list 'begin
+                                  (list (string->symbol "nanopass-invoke-pre-pass-analysis!") (list 'quote name) ir-var)
+                                  inner-let))
+                      (list 'lambda '() inner-let)))
+                 (def-form
+                  (list 'define (cons name in-arg-list)
+                        (list 'letrec
+                              (append (reverse defs) (reverse nt-procs))
+                              (list 'begin
+                                    (list (string->symbol "set-current-pass!") (list 'quote name))
+                                    (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
+                                          (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-in) ir-var ''entry)
+                                          #f)
+                                    (list (string->symbol "with-call-frame") (list 'quote name) ir-var frame-thunk))))))
+            (if has-contract?
+                (list 'begin
+                      def-form
+                      (list (string->symbol "register-pass-proc-analysis-contract!")
+                            name
+                            (list 'quote name)
+                            (list 'quote req-list)
+                            (list 'quote pres-list)
+                            (list 'quote inv-list)))
+                def-form))
           (let ((c (car rest)))
             (cond
               ;; (definitions def1 def2 ...)

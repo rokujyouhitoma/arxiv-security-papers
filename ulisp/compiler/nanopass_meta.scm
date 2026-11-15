@@ -3614,6 +3614,81 @@
 (define (lir-data-dag-raw-edges dag) (caddr dag))
 (define (lir-data-dag-waw-edges dag) (cadddr dag))
 
+;;; -----------------------------------------------------------------------
+;;; Part 17: Pass-Level Analysis Contracts & Cache Registry Hooks (Issue #840)
+;;; -----------------------------------------------------------------------
+
+(define *pass-analysis-contracts* (cons '() '()))
+(define *pass-proc-analysis-contracts* (cons '() '()))
+(define *nanopass-pre-pass-analysis-hook* (cons #f '()))
+(define *nanopass-post-pass-analysis-hook* (cons #f '()))
+
+(define (normalize-analysis-spec-list spec)
+  (cond
+    ((or (not spec) (null? spec)) '())
+    ((eq? spec 'all) '(all))
+    ((and (pair? spec) (eq? (car spec) 'quote) (pair? (cdr spec)))
+     (normalize-analysis-spec-list (cadr spec)))
+    ((and (list? spec) (= (length spec) 1) (list? (car spec)))
+     (car spec))
+    ((list? spec) spec)
+    (else (list spec))))
+
+(define (alist-upsert-eq alist key val)
+  (let loop ((rem alist) (acc '()) (found? #f))
+    (cond
+      ((null? rem)
+       (let ((rev (reverse acc)))
+         (if found? rev (cons (cons key val) rev))))
+      ((eq? (caar rem) key)
+       (loop (cdr rem) (cons (cons key val) acc) #t))
+      (else
+       (loop (cdr rem) (cons (car rem) acc) found?)))))
+
+(define (register-pass-analysis-contract! pass-id requires preserves invalidates)
+  (let* ((req-list (normalize-analysis-spec-list requires))
+         (pres-list (if preserves (normalize-analysis-spec-list preserves) #f))
+         (inv-list (normalize-analysis-spec-list invalidates))
+         (contract (list pass-id req-list pres-list inv-list)))
+    (set-car! *pass-analysis-contracts*
+              (alist-upsert-eq (car *pass-analysis-contracts*) pass-id contract))
+    contract))
+
+(define (register-pass-proc-analysis-contract! proc pass-id requires preserves invalidates)
+  (let ((contract (register-pass-analysis-contract! pass-id requires preserves invalidates)))
+    (if (procedure? proc)
+        (set-car! *pass-proc-analysis-contracts*
+                  (alist-upsert-eq (car *pass-proc-analysis-contracts*) proc contract)))
+    contract))
+
+(define (lookup-pass-analysis-contract key)
+  (cond
+    ((symbol? key)
+     (let ((e (assq key (car *pass-analysis-contracts*))))
+       (if e (cdr e) #f)))
+    ((procedure? key)
+     (let ((e (assq key (car *pass-proc-analysis-contracts*))))
+       (if e (cdr e) #f)))
+    (else #f)))
+
+(define (reset-pass-analysis-contracts!)
+  (set-car! *pass-analysis-contracts* '())
+  (set-car! *pass-proc-analysis-contracts* '()))
+
+(define (nanopass-invoke-pre-pass-analysis! pass-id ir)
+  (let ((hook (car *nanopass-pre-pass-analysis-hook*)))
+    (if (and (not (nanopass-in-pipeline-runner?))
+             (procedure? hook))
+        (hook pass-id ir)
+        #f)))
+
+(define (nanopass-invoke-post-pass-analysis! pass-id in-ir out-ir)
+  (let ((hook (car *nanopass-post-pass-analysis-hook*)))
+    (if (and (not (nanopass-in-pipeline-runner?))
+             (procedure? hook))
+        (hook pass-id in-ir out-ir)
+        #f)))
+
 
 
 
