@@ -49,6 +49,7 @@
                     #f)))))))
 
 (define (car* x) (car x))
+(define (cdr* x) (cdr x))
 (define (cadr x) (safe-car (safe-cdr x)))
 (define (cddr x) (safe-cdr (safe-cdr x)))
 (define (cdar x) (safe-cdr (safe-car x)))
@@ -171,6 +172,31 @@
     ((not (pair? (car ls))) (assoc item (cdr ls)))
     ((equal? (caar ls) item) (car ls))
     (else (assoc item (cdr ls)))))
+
+(define (memv item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((or (eq? (car ls) item)
+         (and (number? (car ls)) (number? item) (= (car ls) item))
+         (and (char? (car ls)) (char? item) (char=? (car ls) item)))
+     ls)
+    (else (memv item (cdr ls)))))
+
+(define (assv item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((not (pair? (car ls))) (assv item (cdr ls)))
+    ((or (eq? (caar ls) item)
+         (and (number? (caar ls)) (number? item) (= (caar ls) item))
+         (and (char? (caar ls)) (char? item) (char=? (caar ls) item)))
+     (car ls))
+    (else (assv item (cdr ls)))))
+
+(define (member item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((equal? (car ls) item) ls)
+    (else (member item (cdr ls)))))
 
 (define (length ls)
   (let loop ((l ls) (n 0))
@@ -351,7 +377,7 @@
   (let* ((ctor-name (if (pair? ctor-spec) (car ctor-spec) ctor-spec))
          (ctor-args (if (pair? ctor-spec) (cdr ctor-spec) '()))
          (tag (string->symbol (string-append "%%record-type-" (symbol->string type-name))))
-         (field-names (map car field-specs))
+         (field-names (map car* field-specs))
          (vec-args (map (lambda (f) (if (memq f ctor-args) f #f)) field-names))
          (ctor-def (list 'define (cons ctor-name ctor-args)
                          (cons 'vector (cons (list 'quote tag) vec-args))))

@@ -201,7 +201,7 @@
             (cond
               ((char=? ch #\\) (loop (+ i 1) (string-append acc "\\\\")))
               ((char=? ch #\") (loop (+ i 1) (string-append acc "\\\"")))
-              (else (loop (+ i 1) (string-append acc (make-string 1 ch))))))))))
+              (else (loop (+ i 1) (string-append acc (string ch))))))))))
 
 (define (c-inline-asm-addr-expr opnd)
   (cond

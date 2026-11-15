@@ -88,13 +88,17 @@
 (define (reset-affine-signatures!)
   (set! *affine-sig-registry* '()))
 
-(define (lookup-affine-signature fn-name . opt-sig-env)
-  (let ((sig-env (if (pair? opt-sig-env) (car opt-sig-env) '())))
-    (cond
-      ((assq fn-name sig-env) => cdr)
-      ((assq fn-name *affine-sig-registry*) => cdr)
-      ((assq fn-name *default-affine-signatures*) => cdr)
-      (else #f))))
+(define (lookup-affine-signature-impl fn-name sig-env)
+  (cond
+    ((assq fn-name sig-env) => cdr)
+    ((assq fn-name *affine-sig-registry*) => cdr)
+    ((assq fn-name *default-affine-signatures*) => cdr)
+    (else #f)))
+
+(define lookup-affine-signature
+  (case-lambda
+    ((fn-name) (lookup-affine-signature-impl fn-name '()))
+    ((fn-name sig-env) (lookup-affine-signature-impl fn-name sig-env))))
 
 (define (%parse-return-type type-expr)
   (cond
@@ -157,9 +161,8 @@
        (or then-t else-t)))
     (else #f)))
 
-(define (scan-form-signatures forms . opt-base-env)
-  (let* ((base (if (pair? opt-base-env) (car opt-base-env) '()))
-         (extract-one-pass
+(define (scan-form-signatures-impl forms base)
+  (let ((extract-one-pass
            (lambda (cur-env)
              (let loop ((fs forms) (acc cur-env))
                (if (null? fs)
@@ -232,6 +235,11 @@
                 cur-env
                 (fixpoint-loop (+ iter 1) next-env)))))))
 
+(define scan-form-signatures
+  (case-lambda
+    ((forms) (scan-form-signatures-impl forms '()))
+    ((forms base-env) (scan-form-signatures-impl forms base-env))))
+
 (define (linear-constructor-op? op)
   (memq op '(make-channel
              make-spsc-channel
@@ -249,26 +257,29 @@
       (null? expr)
       (and (pair? expr) (eq? (car expr) 'quote))))
 
-(define (linear-constructor-expr? expr env . opt-sig-env)
-  (let ((sig-env (if (pair? opt-sig-env) (car opt-sig-env) '())))
-    (cond
-      ((symbol? expr)
-       (eq? (lin-env-lookup env expr) 'available))
-      ((not (pair? expr)) #f)
-      ((linear-constructor-op? (car expr)) #t)
-      ((and (eq? (car expr) '!linear) (pair? (cdr expr))) #t)
-      ((and (eq? (car expr) ':) (pair? (cdr expr)))
-       (or (linear-type? (cadr expr))
-           (and (pair? (cddr expr)) (linear-type? (caddr expr)))))
-      ((and (symbol? (car expr))
-            (let ((ret-ty (lookup-affine-signature (car expr) sig-env)))
-              (and ret-ty (linear-type? ret-ty))))
-       #t)
-      (else #f))))
+(define (linear-constructor-expr-impl? expr env sig-env)
+  (cond
+    ((symbol? expr)
+     (eq? (lin-env-lookup env expr) 'available))
+    ((not (pair? expr)) #f)
+    ((linear-constructor-op? (car expr)) #t)
+    ((and (eq? (car expr) '!linear) (pair? (cdr expr))) #t)
+    ((and (eq? (car expr) ':) (pair? (cdr expr)))
+     (or (linear-type? (cadr expr))
+         (and (pair? (cddr expr)) (linear-type? (caddr expr)))))
+    ((and (symbol? (car expr))
+          (let ((ret-ty (lookup-affine-signature-impl (car expr) sig-env)))
+            (and ret-ty (linear-type? ret-ty))))
+     #t)
+    (else #f)))
 
-(define (infer-linear-binding? var val-expr env . opt-sig-env)
-  (let ((sig-env (if (pair? opt-sig-env) (car opt-sig-env) '())))
-    (cond
+(define linear-constructor-expr?
+  (case-lambda
+    ((expr env) (linear-constructor-expr-impl? expr env '()))
+    ((expr env sig-env) (linear-constructor-expr-impl? expr env sig-env))))
+
+(define (infer-linear-binding-impl? var val-expr env sig-env)
+  (cond
       ;; 1. Explicit linear constructor call: (make-channel ...)
       ((and (pair? val-expr) (linear-constructor-op? (car val-expr)))
        #t)
@@ -310,7 +321,7 @@
       ;; 6. Function call returning a linear type via sig-env or registry (Issue #792)
       ((and (pair? val-expr)
             (symbol? (car val-expr))
-            (let ((ret-ty (lookup-affine-signature (car val-expr) sig-env)))
+            (let ((ret-ty (lookup-affine-signature-impl (car val-expr) sig-env)))
               (and ret-ty (linear-type? ret-ty))))
        #t)
       ;; 7. Known non-linear literal or primitive arithmetic (CWE-843 False-Positive Protection)
@@ -321,7 +332,12 @@
        #f)
       ;; NOTE (Issue #792): Variable name heuristic (linear-variable-name-hint?) is completely eliminated!
       ;; Variables named result, response, etc. will NEVER be inferred as linear.
-      (else #f))))
+      (else #f)))
+
+(define infer-linear-binding?
+  (case-lambda
+    ((var val-expr env) (infer-linear-binding-impl? var val-expr env '()))
+    ((var val-expr env sig-env) (infer-linear-binding-impl? var val-expr env sig-env))))
 
 (define (kernel-formal-var f)
   (cond
@@ -608,9 +624,10 @@
     (else
      (list 'ok env))))
 
-(define (validate-affine-ast expr init-env . opt-sig-env)
-  (let ((sig-env (if (pair? opt-sig-env) (car opt-sig-env) '())))
-    (validate-affine-ast-internal expr init-env sig-env)))
+(define validate-affine-ast
+  (case-lambda
+    ((expr init-env) (validate-affine-ast-internal expr init-env '()))
+    ((expr init-env sig-env) (validate-affine-ast-internal expr init-env sig-env))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. AST Transformation with Automatic RAII Drop Injection
@@ -800,71 +817,77 @@
     (else
      (cons expr env))))
 
-(define (transform-affine-expr expr env . opt-sig-env)
-  (let ((sig-env (if (pair? opt-sig-env) (car opt-sig-env) '())))
-    (transform-affine-expr-internal expr env sig-env)))
+(define transform-affine-expr
+  (case-lambda
+    ((expr env) (transform-affine-expr-internal expr env '()))
+    ((expr env sig-env) (transform-affine-expr-internal expr env sig-env))))
 
-(define (check-affine-expr expr . opt-args)
-  (let ((env (if (pair? opt-args) (car opt-args) '()))
-        (sig-env (if (and (pair? opt-args) (pair? (cdr opt-args))) (cadr opt-args) '())))
-    (car (transform-affine-expr expr env sig-env))))
+(define check-affine-expr
+  (case-lambda
+    ((expr) (car (transform-affine-expr-internal expr '() '())))
+    ((expr env) (car (transform-affine-expr-internal expr env '())))
+    ((expr env sig-env) (car (transform-affine-expr-internal expr env sig-env)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. ASC Kernel Transformation & Kernel-Level RAII Drop
 ;;; -----------------------------------------------------------------------
 
-(define (check-affine-kernel kernel-node . opt-sig-env)
-  (let ((sig-env (if (pair? opt-sig-env) (car opt-sig-env) '())))
-    (if (or (not (pair? kernel-node)) (not (eq? (car kernel-node) '%asc-kernel)))
-        kernel-node
-        (let* ((header (cadr kernel-node))
-               (kname (car header))
-               (formals (cdr header))
-               (raw-formals (map kernel-formal-var formals))
-               (norm-header (cons kname raw-formals))
-               (body (if (pair? (cddr kernel-node))
-                         (if (and (pair? (caddr kernel-node)) (eq? (car (caddr kernel-node)) 'begin))
-                             (caddr kernel-node)
-                             (cons 'begin (cddr kernel-node)))
-                         '(begin #f)))
-               ;; Initialize environment with linear formals (typed or hinted)
-               (init-env (let loop ((fs formals) (acc '()))
-                           (if (null? fs)
-                               acc
-                               (let* ((f (car fs))
-                                      (var (kernel-formal-var f)))
-                                 (if (kernel-formal-linear? f)
-                                     (loop (cdr fs) (lin-env-add-available acc var))
-                                     (loop (cdr fs) acc))))))
-               ;; Validate first: report diagnostic errors on forbidden syntax or use-after-move
-               (validation (validate-affine-ast body init-env sig-env)))
-          (cond
-            ((and (pair? validation) (eq? (car validation) 'error))
-             (let ((err-type (cadr validation))
-                   (irritant (caddr validation)))
-               (cond
-                 ((eq? err-type 'forbidden-syntax)
-                  (error "[AFFINE-COMPILER-ERROR] Forbidden side-effect or control-flow syntax in ASC kernel" irritant))
-                 ((eq? err-type 'use-after-move)
-                  (error "[AFFINE-LINEARITY-VIOLATION] Use-After-Move detected: variable has already been transferred" irritant))
-                 (else
-                  (error "[AFFINE-ERROR] Affine type check failed" validation)))))
-            (else
-             ;; Validation passed: perform transformation with automatic RAII drop
-             (let* ((body-r (transform-affine-expr body init-env sig-env))
-                    (transformed-body (car body-r))
-                    (final-env (cdr body-r))
-                    (unconsumed (lin-env-unconsumed final-env))
-                    (wrapped-body
-                      (if (null? unconsumed)
-                          transformed-body
-                          (let ((res-sym (string->symbol "__kernel_res")))
-                            (list 'let (list (list res-sym transformed-body))
-                                  (cons 'begin
-                                        (append
-                                          (map (lambda (v) (list '%affine-drop! v)) unconsumed)
-                                          (list res-sym))))))))
-               (list '%asc-kernel norm-header wrapped-body))))))))
+(define (check-affine-kernel-impl kernel-node sig-env)
+  (if (or (not (pair? kernel-node)) (not (eq? (car kernel-node) '%asc-kernel)))
+      kernel-node
+      (let* ((header (cadr kernel-node))
+             (kname (car header))
+             (formals (cdr header))
+             (raw-formals (map kernel-formal-var formals))
+             (norm-header (cons kname raw-formals))
+             (body (if (pair? (cddr kernel-node))
+                       (if (and (pair? (caddr kernel-node)) (eq? (car (caddr kernel-node)) 'begin))
+                           (caddr kernel-node)
+                           (cons 'begin (cddr kernel-node)))
+                       '(begin #f)))
+             ;; Initialize environment with linear formals (typed or hinted)
+             (init-env (let loop ((fs formals) (acc '()))
+                         (if (null? fs)
+                             acc
+                             (let* ((f (car fs))
+                                    (var (kernel-formal-var f)))
+                               (if (kernel-formal-linear? f)
+                                   (loop (cdr fs) (lin-env-add-available acc var))
+                                   (loop (cdr fs) acc))))))
+             ;; Validate first: report diagnostic errors on forbidden syntax or use-after-move
+             (validation (validate-affine-ast-internal body init-env sig-env)))
+        (cond
+          ((and (pair? validation) (eq? (car validation) 'error))
+           (let ((err-type (cadr validation))
+                 (irritant (caddr validation)))
+             (cond
+               ((eq? err-type 'forbidden-syntax)
+                (error "[AFFINE-COMPILER-ERROR] Forbidden side-effect or control-flow syntax in ASC kernel" irritant))
+               ((eq? err-type 'use-after-move)
+                (error "[AFFINE-LINEARITY-VIOLATION] Use-After-Move detected: variable has already been transferred" irritant))
+               (else
+                (error "[AFFINE-ERROR] Affine type check failed" validation)))))
+          (else
+           ;; Validation passed: perform transformation with automatic RAII drop
+           (let* ((body-r (transform-affine-expr-internal body init-env sig-env))
+                  (transformed-body (car body-r))
+                  (final-env (cdr body-r))
+                  (unconsumed (lin-env-unconsumed final-env))
+                  (wrapped-body
+                    (if (null? unconsumed)
+                        transformed-body
+                        (let ((res-sym (string->symbol "__kernel_res")))
+                          (list 'let (list (list res-sym transformed-body))
+                                (cons 'begin
+                                      (append
+                                        (map (lambda (v) (list '%affine-drop! v)) unconsumed)
+                                        (list res-sym))))))))
+             (list '%asc-kernel norm-header wrapped-body)))))))
+
+(define check-affine-kernel
+  (case-lambda
+    ((kernel-node) (check-affine-kernel-impl kernel-node '()))
+    ((kernel-node sig-env) (check-affine-kernel-impl kernel-node sig-env))))
 
 (define (check-affine-pass forms)
   (let ((sig-env (scan-form-signatures forms)))

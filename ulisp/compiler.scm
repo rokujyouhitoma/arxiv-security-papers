@@ -49,6 +49,7 @@
                     #f)))))))
 
 (define (car* x) (car x))
+(define (cdr* x) (cdr x))
 (define (cadr x) (safe-car (safe-cdr x)))
 (define (cddr x) (safe-cdr (safe-cdr x)))
 (define (cdar x) (safe-cdr (safe-car x)))
@@ -171,6 +172,31 @@
     ((not (pair? (car ls))) (assoc item (cdr ls)))
     ((equal? (caar ls) item) (car ls))
     (else (assoc item (cdr ls)))))
+
+(define (memv item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((or (eq? (car ls) item)
+         (and (number? (car ls)) (number? item) (= (car ls) item))
+         (and (char? (car ls)) (char? item) (char=? (car ls) item)))
+     ls)
+    (else (memv item (cdr ls)))))
+
+(define (assv item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((not (pair? (car ls))) (assv item (cdr ls)))
+    ((or (eq? (caar ls) item)
+         (and (number? (caar ls)) (number? item) (= (caar ls) item))
+         (and (char? (caar ls)) (char? item) (char=? (caar ls) item)))
+     (car ls))
+    (else (assv item (cdr ls)))))
+
+(define (member item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((equal? (car ls) item) ls)
+    (else (member item (cdr ls)))))
 
 (define (length ls)
   (let loop ((l ls) (n 0))
@@ -351,7 +377,7 @@
   (let* ((ctor-name (if (pair? ctor-spec) (car ctor-spec) ctor-spec))
          (ctor-args (if (pair? ctor-spec) (cdr ctor-spec) '()))
          (tag (string->symbol (string-append "%%record-type-" (symbol->string type-name))))
-         (field-names (map car field-specs))
+         (field-names (map car* field-specs))
          (vec-args (map (lambda (f) (if (memq f ctor-args) f #f)) field-names))
          (ctor-def (list 'define (cons ctor-name ctor-args)
                          (cons 'vector (cons (list 'quote tag) vec-args))))
@@ -6064,7 +6090,7 @@
                     ((char=? c1 #\%)
                      (let ((reg-tok (inline-asm-match-reg-token template (+ i 2))))
                        (if reg-tok
-                           (loop (+ i 2 (string-length reg-tok))
+                           (loop (+ (+ i 2) (string-length reg-tok))
                                  (cons (inline-asm-string-downcase reg-tok) acc))
                            (loop (+ i 2)
                                  (cons (if (eq? mode 'c) "%%" "%") acc)))))
@@ -6095,7 +6121,7 @@
                                       (idx (inline-asm-find-named-idx (string->symbol nm-str) out-plans in-plans))
                                       (repl (if idx
                                                 (inline-asm-format-operand-by-idx idx c1 out-plans in-plans mem-ptr-map)
-                                                (string-append "%" (make-string 1 c1) "[" nm-str "]"))))
+                                                (string-append "%" (string c1) "[" nm-str "]"))))
                                  (loop (if (< j len) (+ j 1) j) (cons repl acc)))
                                (find-close2 (+ j 1))))
                          (let scan-idx2 ((j (+ i 2)) (idx 0))
@@ -8250,11 +8276,33 @@
                       '())))
        (list #t reqs pres invs)))))
 
-(define (make-pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? . contract-opts)
+(define (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? contract-opts)
   (let ((parsed (parse-pass-descriptor-contract-opts contract-opts)))
     (if (car parsed)
         (register-pass-proc-analysis-contract! pass-fn id (cadr parsed) (caddr parsed) (cadddr parsed))))
   (list 'pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?))
+
+(cond-expand
+  (ulisp
+   (define (make-pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?)
+     (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? '())))
+  (else
+   (define make-pass-descriptor
+     (case-lambda
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? '()))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2 o3)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2 o3)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2 o3 o4)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2 o3 o4)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2 o3 o4 o5)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2 o3 o4 o5)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2 o3 o4 o5 o6)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2 o3 o4 o5 o6)))))))
 
 (define (pass-descriptor? obj)
   (and (pair? obj) (eq? (car obj) 'pass-descriptor)))
@@ -8395,7 +8443,7 @@
         (error "lookup-analysis-property: unregistered analysis property" name))))
 
 (define (list-analysis-properties)
-  (map car (car *analysis-property-registry*)))
+  (map car* (car *analysis-property-registry*)))
 
 (define (analysis-dep-creates-cycle? target-name start-deps)
   (let walk ((queue start-deps) (visited '()))
@@ -8424,7 +8472,7 @@
       (else
        (loop (cdr rem) deps doc)))))
 
-(define (register-analysis-property! name compute-fn . opts)
+(define (register-analysis-property-opts! name compute-fn opts)
   (let* ((parsed (parse-register-analysis-opts opts))
          (deps (car parsed))
          (doc (cdr parsed)))
@@ -8435,18 +8483,32 @@
                 (alist-upsert-eq (car *analysis-property-registry*) name desc))
       name)))
 
+(define register-analysis-property!
+  (case-lambda
+    ((name compute-fn)
+     (register-analysis-property-opts! name compute-fn '()))
+    ((name compute-fn o1)
+     (register-analysis-property-opts! name compute-fn (list o1)))
+    ((name compute-fn o1 o2)
+     (register-analysis-property-opts! name compute-fn (list o1 o2)))
+    ((name compute-fn o1 o2 o3)
+     (register-analysis-property-opts! name compute-fn (list o1 o2 o3)))
+    ((name compute-fn o1 o2 o3 o4)
+     (register-analysis-property-opts! name compute-fn (list o1 o2 o3 o4)))))
+
 ;; Cache entry vector: #(name valid? value ast compute-count hit-count invalidation-count)
 (define (lookup-analysis-cache-entry name)
   (let ((e (assq name (car *analysis-property-cache*))))
     (if e (cdr e) #f)))
 
-(define (analysis-valid? name . maybe-ast)
-  (let ((entry (lookup-analysis-cache-entry name)))
-    (and entry
-         (vector-ref entry 1)
-         (or (null? maybe-ast)
-             (eq? (vector-ref entry 3) (car maybe-ast)))
-         #t)))
+(define analysis-valid?
+  (case-lambda
+    ((name)
+     (let ((entry (lookup-analysis-cache-entry name)))
+       (if (and entry (vector-ref entry 1)) #t #f)))
+    ((name ast)
+     (let ((entry (lookup-analysis-cache-entry name)))
+       (if (and entry (vector-ref entry 1) (eq? (vector-ref entry 3) ast)) #t #f)))))
 
 (define (get-cached-analysis name)
   (let ((entry (lookup-analysis-cache-entry name)))
@@ -8466,13 +8528,12 @@
   (let ((entry (lookup-analysis-cache-entry name)))
     (if entry (vector-ref entry 6) 0)))
 
-(define (require-analysis name . maybe-ast)
+(define (require-analysis-impl name explicit-ast? maybe-ast-val)
   (if (null? (car *analysis-property-registry*))
       (init-default-analysis-properties!))
   (if (memq name (car *analysis-visiting-stack*))
       (raise (list 'analysis-cycle-error name (reverse (cons name (car *analysis-visiting-stack*))))))
-  (let* ((explicit-ast? (pair? maybe-ast))
-         (ast (if explicit-ast? (car maybe-ast) (car *current-analysis-ast*))))
+  (let ((ast (if explicit-ast? maybe-ast-val (car *current-analysis-ast*))))
     (if explicit-ast?
         (set-car! *current-analysis-ast* ast))
     (let ((entry (lookup-analysis-cache-entry name)))
@@ -8491,7 +8552,7 @@
             (let ((val (guard (ex (else
                                     (set-car! *analysis-visiting-stack* saved-stack)
                                     (raise ex)))
-                         (for-each (lambda (d) (require-analysis d ast)) deps)
+                         (for-each (lambda (d) (require-analysis-impl d #t ast)) deps)
                          ((analysis-desc-compute-fn desc) ast))))
               (set-car! *analysis-visiting-stack* saved-stack)
               (let ((cur-entry (lookup-analysis-cache-entry name)))
@@ -8507,6 +8568,11 @@
               (pm-stats-inc! 1)
               (pm-stats-inc! 2)
               val))))))
+
+(define require-analysis
+  (case-lambda
+    ((name) (require-analysis-impl name #f #f))
+    ((name ast) (require-analysis-impl name #t ast))))
 
 (define (analysis-direct-dependents prop-name)
   (let loop ((reg (car *analysis-property-registry*)) (acc '()))
@@ -8602,7 +8668,7 @@
     ((and (eq? (car expr) 'let) (pair? (cdr expr)) (list? (cadr expr)))
      (let ((bs (cadr expr))
            (body (cddr expr)))
-       (let* ((vars (map car bs))
+       (let* ((vars (map car* bs))
               (rhs-fvs (let loop ((xs bs) (acc '()))
                          (if (null? xs) acc
                              (loop (cdr xs)
@@ -8613,7 +8679,7 @@
          (pm-list-union rhs-fvs body-fvs))))
     ((and (eq? (car expr) 'letrec) (pair? (cdr expr)) (list? (cadr expr)))
      (let* ((bs (cadr expr))
-            (vars (map car bs))
+            (vars (map car* bs))
             (nb (pm-list-union vars bound))
             (rhs-fvs (let loop ((xs bs) (acc '()))
                        (if (null? xs) acc
@@ -8634,15 +8700,15 @@
            (loop (cdr xs) (pm-list-union (pm-ast-collect-free-vars (car xs) bound) acc)))))))
 
 (define (pm-ast-use-counts ast)
-  (let ((counts '()))
+  (let ((counts-cell (cons '() '())))
     (letrec ((visit
               (lambda (x)
                 (cond
                   ((symbol? x)
-                   (let ((e (assq x counts)))
+                   (let ((e (assq x (car counts-cell))))
                      (if e
                          (set-cdr! e (+ (cdr e) 1))
-                         (set! counts (cons (cons x 1) counts)))))
+                         (set-car! counts-cell (cons (cons x 1) (car counts-cell))))))
                   ((not (pair? x)) #f)
                   ((eq? (car x) 'quote) #f)
                   ((and (memq (car x) '(let let*)) (pair? (cdr x)) (list? (cadr x)))
@@ -8656,7 +8722,7 @@
                   (else
                    (for-each visit (cdr x)))))))
       (visit ast)
-      (reverse counts))))
+      (reverse (car counts-cell)))))
 
 (define (pm-extract-cfg-blocks ast)
   (cond
@@ -8688,7 +8754,7 @@
             (cons 'use-counts (pm-ast-use-counts ast)))))
 
 (define (pm-compute-reaching-defs ast)
-  (let ((defs '()))
+  (let ((defs-cell (cons '() '())))
     (letrec ((walk
               (lambda (x)
                 (cond
@@ -8696,18 +8762,18 @@
                   ((eq? (car x) 'quote) #f)
                   ((and (memq (car x) '(let let* letrec)) (pair? (cdr x)) (list? (cadr x)))
                    (for-each (lambda (b)
-                               (set! defs (cons (cons (car b) (cadr b)) defs))
+                               (set-car! defs-cell (cons (cons (car b) (cadr b)) (car defs-cell)))
                                (walk (cadr b)))
                              (cadr x))
                    (for-each walk (cddr x)))
                   ((and (eq? (car x) 'define) (pair? (cdr x)))
                    (let ((nm (if (pair? (cadr x)) (car (cadr x)) (cadr x))))
-                     (set! defs (cons (cons nm (cddr x)) defs)))
+                     (set-car! defs-cell (cons (cons nm (cddr x)) (car defs-cell))))
                    (for-each walk (cddr x)))
                   (else
                    (if (pair? (cdr x)) (for-each walk (cdr x))))))))
       (walk ast)
-      (reverse defs))))
+      (reverse (car defs-cell)))))
 
 (define (pm-compute-alias-sets ast)
   (let ((rdefs (get-cached-analysis 'reaching-defs)))
@@ -9524,7 +9590,7 @@
            (else
             (error "run-pass-fixpoint: unexpected option" k)))))))
 
-(define (run-pass-fixpoint pass-specs initial-ast . opts)
+(define (run-pass-fixpoint-opts pass-specs initial-ast opts)
   (let* ((parsed (parse-fixpoint-opts opts))
          (max-iters (car parsed))
          (equiv-fn (cadr parsed))
@@ -9553,6 +9619,19 @@
                       (iter-loop next-iter cur-ast)))
                 (pass-loop (cdr ps)
                            (run-single-pass (car ps) cur-ast verify-mode trace-mode))))))))
+
+(define run-pass-fixpoint
+  (case-lambda
+    ((pass-specs initial-ast)
+     (run-pass-fixpoint-opts pass-specs initial-ast '()))
+    ((pass-specs initial-ast o1)
+     (run-pass-fixpoint-opts pass-specs initial-ast (list o1)))
+    ((pass-specs initial-ast o1 o2)
+     (run-pass-fixpoint-opts pass-specs initial-ast (list o1 o2)))
+    ((pass-specs initial-ast o1 o2 o3)
+     (run-pass-fixpoint-opts pass-specs initial-ast (list o1 o2 o3)))
+    ((pass-specs initial-ast o1 o2 o3 o4)
+     (run-pass-fixpoint-opts pass-specs initial-ast (list o1 o2 o3 o4)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Default Pass Registry Initialization
@@ -9650,9 +9729,9 @@
     (make-pass-descriptor 'pass-035-scope-resolve "Lexical Scope Resolution and Alpha-Conversion" 'frontend 0
       (lambda (forms) (scope-resolve-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
   (register-pass!
-    (make-pass-descriptor 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
+    (make-pass-descriptor-with-opts 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
       (lambda (forms) (check-arity-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t
-      ':preserves '(all)))
+      (list ':preserves '(all))))
   (register-pass!
     (make-pass-descriptor 'pass-050-cp0 "CP0 Source Optimization" 'frontend 1
       (lambda (forms) (cp0-optimize forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
@@ -9685,13 +9764,13 @@
     (make-pass-descriptor 'pass-131-lower-managed-dialect "Lower Managed Runtime Dialect" 'middle 0
       (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
   (register-pass!
-    (make-pass-descriptor 'pass-128-lir-branch-fusion "LIR Branch Fusion" 'middle 2
+    (make-pass-descriptor-with-opts 'pass-128-lir-branch-fusion "LIR Branch Fusion" 'middle 2
       (lambda (lir) (lir-fuse-branches lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f
-      ':invalidates '(cfg-dominators variable-liveness)))
+      (list ':invalidates '(cfg-dominators variable-liveness))))
   (register-pass!
-    (make-pass-descriptor 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
+    (make-pass-descriptor-with-opts 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
       (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_canonical '(pass-130-lir) #f
-      ':preserves '(cfg-dominators) ':invalidates '(variable-liveness alias-sets)))
+      (list ':preserves '(cfg-dominators) ':invalidates '(variable-liveness alias-sets))))
   ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)
   (let loop ((hooks (car *pass-registry-init-hooks*)))
     (if (not (null? hooks))
@@ -10425,42 +10504,61 @@
 ;;; 4. Global Binding Registry (*binding-registry*)
 ;;; -----------------------------------------------------------------------
 
-(define *binding-by-id-table* (cons '() '()))
-(define *binding-by-sym-table* (cons '() '()))
+(define *binding-table-size* 1024)
+(define *binding-by-id-buckets* (make-vector 1024 '()))
+(define *binding-by-sym-buckets* (make-vector 1024 '()))
+(define *all-bindings-list* (cons '() '()))
 
 (define (reset-binding-registry!)
   (reset-binding-id-counter!)
   (reset-hygiene-scope-counter!)
-  (set-car! *binding-by-id-table* '())
-  (set-car! *binding-by-sym-table* '()))
+  (let loop ((i 0))
+    (if (< i *binding-table-size*)
+        (begin
+          (vector-set! *binding-by-id-buckets* i '())
+          (vector-set! *binding-by-sym-buckets* i '())
+          (loop (+ i 1)))))
+  (set-car! *all-bindings-list* '()))
 
 (define (register-binding! b)
   (if (not (binding? b))
       (binding-error! "register-binding!: expected <binding>" b))
   (let* ((id (binding-id b))
          (usym (binding-unique-sym b))
-         (id-entry (assv id (car *binding-by-id-table*)))
-         (sym-entry (assq usym (car *binding-by-sym-table*))))
+         (id-idx (modulo id *binding-table-size*))
+         (id-bucket (vector-ref *binding-by-id-buckets* id-idx))
+         (id-entry (assv id id-bucket))
+         (sym-idx (symbol->hash-idx usym))
+         (sym-bucket (vector-ref *binding-by-sym-buckets* sym-idx))
+         (sym-entry (assq usym sym-bucket)))
     (if id-entry
         (set-cdr! id-entry b)
-        (set-car! *binding-by-id-table*
-                  (cons (cons id b) (car *binding-by-id-table*))))
+        (begin
+          (vector-set! *binding-by-id-buckets* id-idx (cons (cons id b) id-bucket))
+          (set-car! *all-bindings-list* (cons b (car *all-bindings-list*)))))
     (if sym-entry
         (set-cdr! sym-entry b)
-        (set-car! *binding-by-sym-table*
-                  (cons (cons usym b) (car *binding-by-sym-table*))))
+        (vector-set! *binding-by-sym-buckets* sym-idx (cons (cons usym b) sym-bucket)))
     b))
 
 (define (lookup-binding-by-id id)
-  (let ((entry (assv id (car *binding-by-id-table*))))
-    (if entry (cdr entry) #f)))
+  (if (integer? id)
+      (let* ((idx (modulo id *binding-table-size*))
+             (bucket (vector-ref *binding-by-id-buckets* idx))
+             (entry (assv id bucket)))
+        (if entry (cdr entry) #f))
+      #f))
 
 (define (lookup-binding-by-symbol sym)
-  (let ((entry (assq sym (car *binding-by-sym-table*))))
-    (if entry (cdr entry) #f)))
+  (if (symbol? sym)
+      (let* ((idx (symbol->hash-idx sym))
+             (bucket (vector-ref *binding-by-sym-buckets* idx))
+             (entry (assq sym bucket)))
+        (if entry (cdr entry) #f))
+      #f))
 
 (define (all-registered-bindings)
-  (reverse (map cdr (car *binding-by-id-table*))))
+  (reverse (car *all-bindings-list*)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Binding ID Set Public API
@@ -10684,7 +10782,7 @@
           (set-car! cc (append (car cc) (list child)))))
     child))
 
-(define (scope-bind! node orig-sym alpha-sym . kind-opt)
+(define (scope-bind-impl! node orig-sym alpha-sym kind-opt)
   (let ((bc (scope-node-bindings-cell node)))
     (set-car! bc (cons (cons orig-sym alpha-sym) (car bc))))
   (let* ((existing (if (not (eq? orig-sym alpha-sym))
@@ -10714,6 +10812,11 @@
     (let ((nbc (scope-node-ns-bindings-cell node)))
       (set-car! nbc (cons b (car nbc))))
     b))
+
+(define scope-bind!
+  (case-lambda
+    ((node orig-sym alpha-sym) (scope-bind-impl! node orig-sym alpha-sym '()))
+    ((node orig-sym alpha-sym kind) (scope-bind-impl! node orig-sym alpha-sym (list kind)))))
 
 (define (scope-lookup-local node orig-sym)
   (let ((entry (assq orig-sym (scope-node-bindings node))))
@@ -10769,8 +10872,10 @@
            (car bs))
           (else (loop (cdr bs)))))))
 
-(define (scope-lookup-binding-local node sym . ns-opt)
-  (scope-lookup-binding-local-ns node sym (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+(define scope-lookup-binding-local
+  (case-lambda
+    ((node sym) (scope-lookup-binding-local-ns node sym 'ordinary))
+    ((node sym ns) (scope-lookup-binding-local-ns node sym ns))))
 
 (define (scope-lookup-binding-ns node sym ns)
   (if (not (scope-node? node))
@@ -10785,24 +10890,30 @@
                       found
                       (loop (scope-node-parent curr)))))))))
 
-(define (scope-lookup-binding node sym . ns-opt)
-  (scope-lookup-binding-ns node sym (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+(define scope-lookup-binding
+  (case-lambda
+    ((node sym) (scope-lookup-binding-ns node sym 'ordinary))
+    ((node sym ns) (scope-lookup-binding-ns node sym ns))))
 
-(define (scope-lookup-hygienic node sym use-scope-set . ns-opt)
+(define (scope-lookup-hygienic-ns node sym use-scope-set ns)
   (if (not (scope-node? node))
       #f
-      (let ((ns (if (pair? ns-opt) (car ns-opt) 'ordinary)))
-        (let collect ((curr node) (cands '()))
-          (if (not (scope-node? curr))
-              (resolve-hygienic-binding (reverse cands) use-scope-set)
-              (let scan ((bs (scope-node-ns-bindings curr)) (acc cands))
-                (if (null? bs)
-                    (collect (scope-node-parent curr) acc)
-                    (let ((b (car bs)))
-                      (if (and (eq? (binding-namespace b) ns)
-                               (eq? (binding-source-name b) sym))
-                          (scan (cdr bs) (cons b acc))
-                          (scan (cdr bs) acc))))))))))
+      (let collect ((curr node) (cands '()))
+        (if (not (scope-node? curr))
+            (resolve-hygienic-binding (reverse cands) use-scope-set)
+            (let scan ((bs (scope-node-ns-bindings curr)) (acc cands))
+              (if (null? bs)
+                  (collect (scope-node-parent curr) acc)
+                  (let ((b (car bs)))
+                    (if (and (eq? (binding-namespace b) ns)
+                             (eq? (binding-source-name b) sym))
+                        (scan (cdr bs) (cons b acc))
+                        (scan (cdr bs) acc)))))))))
+
+(define scope-lookup-hygienic
+  (case-lambda
+    ((node sym use-scope-set) (scope-lookup-hygienic-ns node sym use-scope-set 'ordinary))
+    ((node sym use-scope-set ns) (scope-lookup-hygienic-ns node sym use-scope-set ns))))
 
 (define (scope-lookup-kind node sym)
   (let ((b (scope-lookup-binding node sym 'ordinary)))
@@ -10911,8 +11022,14 @@
             (set-car! bc (cons (cons source-name u-sym) (car bc)))))
       b)))
 
-(define (scope-define! node source-name kind . opts)
-  (scope-define-opts node source-name kind opts))
+(define scope-define!
+  (case-lambda
+    ((node source-name kind)
+     (scope-define-opts node source-name kind '()))
+    ((node source-name kind o1)
+     (scope-define-opts node source-name kind (list o1)))
+    ((node source-name kind o1 o2)
+     (scope-define-opts node source-name kind (list o1 o2)))))
 
 (define (make-scope-manager)
   (let ((root (make-scope-node #f 'top-level)))
@@ -10942,18 +11059,28 @@
     (set-car! (caddr mgr) parent)
     parent))
 
-(define (scope-manager-define! mgr sym kind . opts)
-  (scope-define-opts (scope-manager-current mgr) sym kind opts))
+(define scope-manager-define!
+  (case-lambda
+    ((mgr sym kind)
+     (scope-define-opts (scope-manager-current mgr) sym kind '()))
+    ((mgr sym kind o1)
+     (scope-define-opts (scope-manager-current mgr) sym kind (list o1)))
+    ((mgr sym kind o1 o2)
+     (scope-define-opts (scope-manager-current mgr) sym kind (list o1 o2)))))
 
-(define (scope-manager-lookup mgr sym . ns-opt)
-  (scope-lookup-binding-ns (scope-manager-current mgr)
-                           sym
-                           (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+(define scope-manager-lookup
+  (case-lambda
+    ((mgr sym)
+     (scope-lookup-binding-ns (scope-manager-current mgr) sym 'ordinary))
+    ((mgr sym ns)
+     (scope-lookup-binding-ns (scope-manager-current mgr) sym ns))))
 
-(define (scope-manager-lookup-local mgr sym . ns-opt)
-  (scope-lookup-binding-local-ns (scope-manager-current mgr)
-                                 sym
-                                 (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+(define scope-manager-lookup-local
+  (case-lambda
+    ((mgr sym)
+     (scope-lookup-binding-local-ns (scope-manager-current mgr) sym 'ordinary))
+    ((mgr sym ns)
+     (scope-lookup-binding-local-ns (scope-manager-current mgr) sym ns))))
 
 (define (scope-manager-lookup-kind mgr sym)
   (scope-lookup-kind (scope-manager-current mgr) sym))
@@ -11058,8 +11185,29 @@
             (else
              (loop (cdr ds) acc)))))))
 
+(define (scope-make-symbol-set syms)
+  (let ((v (make-vector 1024 '())))
+    (let loop ((xs syms))
+      (if (pair? xs)
+          (let* ((s (car xs))
+                 (idx (symbol->hash-idx s))
+                 (bucket (vector-ref v idx)))
+            (if (not (memq s bucket))
+                (vector-set! v idx (cons s bucket)))
+            (loop (cdr xs)))
+          v))))
+
+(define (scope-symbol-set-contains? v sym)
+  (if (and (vector? v) (symbol? sym))
+      (let* ((idx (symbol->hash-idx sym))
+             (bucket (vector-ref v idx)))
+        (if (memq sym bucket) #t #f))
+      #f))
+
 (define (scope-known-global-or-prim? sym globals)
-  (or (if (memq sym globals) #t #f)
+  (or (if (vector? globals)
+          (scope-symbol-set-contains? globals sym)
+          (if (memq sym globals) #t #f))
       (scope-primitive-symbol? sym)))
 
 ;;; -----------------------------------------------------------------------
@@ -11126,15 +11274,19 @@
        (cond
          (alpha-sym
           ;; Propagate free-variable usage & Binding IDs up the lexical contour tree
-          (let ((b (lookup-binding-by-symbol alpha-sym)))
-            (let propagate ((curr scope))
-              (if (and (scope-node? curr)
-                       (not (scope-lookup-local curr expr)))
-                  (begin
-                    (scope-record-free-var! curr expr)
-                    (if (binding? b)
-                        (scope-record-free-binding-id! curr (binding-id b)))
-                    (propagate (scope-node-parent curr))))))
+          (if (not (scope-lookup-local scope expr))
+              (let ((b (lookup-binding-by-symbol alpha-sym)))
+                (let propagate ((curr scope))
+                  (if (and (scope-node? curr)
+                           (not (eq? (scope-node-kind curr) 'top-level))
+                           (not (scope-lookup-local curr expr)))
+                      (if (memq expr (scope-node-free-vars curr))
+                          #t
+                          (begin
+                            (scope-record-free-var! curr expr)
+                            (if (binding? b)
+                                (scope-record-free-binding-id! curr (binding-id b)))
+                            (propagate (scope-node-parent curr))))))))
           alpha-sym)
          ((scope-known-global-or-prim? expr globals)
           expr)
@@ -11343,7 +11495,7 @@
   (let* ((defs (cadr prog-expr))
          (main (caddr prog-expr))
          (top-defines (collect-top-level-defines defs))
-         (all-globals (append top-defines base-globals))
+         (all-globals (scope-make-symbol-set (append top-defines base-globals)))
          (top-scope (make-scope-node #f 'top-level))
          (_set-root (set-car! *last-resolved-scope-tree* top-scope))
          (_reg-defs
@@ -11361,12 +11513,12 @@
                                        'function
                                        'variable)))
                         (if (symbol? def-name)
-                            (scope-define! top-scope def-name kind
-                                           ':unique-sym def-name
-                                           ':storage-class 'global
-                                           ':visibility 'global
-                                           ':source-span d-span
-                                           ':no-legacy-bind #t))))
+                            (scope-define-opts top-scope def-name kind
+                                               (list ':unique-sym def-name
+                                                     ':storage-class 'global
+                                                     ':visibility 'global
+                                                     ':source-span d-span
+                                                     ':no-legacy-bind #t)))))
                   (reg-loop (cdr ds))))))
          (converted-defs
           (let loop ((ds defs) (acc '()))
@@ -12340,136 +12492,148 @@
 (define-macro (define-value-repr . args)
   (expand-define-value-repr (cons 'define-value-repr args)))
 
+(define (%nan-box-base-unit) 2251799813685248)
+(define (default-nan-box-base) (* 4095 (%nan-box-base-unit)))
+
 ;;; -----------------------------------------------------------------------
 ;;; 5. Standard Value Representation Specifications
 ;;; -----------------------------------------------------------------------
 
 ;; 5.1 ULisp 64-bit Tagged Scheme Representation (Default)
-(define-value-repr repr:scheme-64bit-tagged
-  (:word-bits 64)
-  (:aliases scheme-standard scheme-64bit-tagged)
-  (:fixnum
-    (:shift 2)
-    (:tag-bits 0)
-    (:tag-mask 3)
-    (:step 4))
-  (:immediates
-    (:boolean-false 47)
-    (:boolean-true  111)
-    (:boolean-mask  -65)
-    (:null          63)
-    (:eof           79)
-    (:void          111)
-    (:char-shift    8)
-    (:char-op-shift 6)
-    (:char-tag      14)
-    (:char-mask     255)
-    (:symbol-shift  6)
-    (:symbol-tag    2)
-    (:symbol-mask   255))
-  (:pointer
-    (:align 8)
-    (:tag-bits 0)
-    (:tag-mask 7)
-    (:untag-mask -8)
-    (:pair-tag       1)
-    (:closure-tag    1)
-    (:string-tag     3)
-    (:vector-tag     5)
-    (:bytevector-tag 7)
-    (:flonum-tag     11)
-    (:flonum-cell-bytes 16)
-    (:flonum-offset  -3)))
+(define repr:scheme-64bit-tagged
+  (register-value-repr!
+    (make-value-repr-from-clauses
+      'repr:scheme-64bit-tagged
+      '((:word-bits 64)
+        (:aliases scheme-standard scheme-64bit-tagged)
+        (:fixnum
+          (:shift 2)
+          (:tag-bits 0)
+          (:tag-mask 3)
+          (:step 4))
+        (:immediates
+          (:boolean-false 47)
+          (:boolean-true  111)
+          (:boolean-mask  -65)
+          (:null          63)
+          (:eof           79)
+          (:void          111)
+          (:char-shift    8)
+          (:char-op-shift 6)
+          (:char-tag      14)
+          (:char-mask     255)
+          (:symbol-shift  6)
+          (:symbol-tag    2)
+          (:symbol-mask   255))
+        (:pointer
+          (:align 8)
+          (:tag-bits 0)
+          (:tag-mask 7)
+          (:untag-mask -8)
+          (:pair-tag       1)
+          (:closure-tag    1)
+          (:string-tag     3)
+          (:vector-tag     5)
+          (:bytevector-tag 7)
+          (:flonum-tag     11)
+          (:flonum-cell-bytes 16)
+          (:flonum-offset  -3))))))
 
 (define scheme-standard repr:scheme-64bit-tagged)
 
 ;; 5.2 C-Language Unboxed Native Representation (Zero Tag Overhead)
-(define-value-repr repr:c-unboxed
-  (:word-bits 64)
-  (:aliases c-unboxed c-native)
-  (:fixnum
-    (:shift 0)
-    (:tag-bits 0)
-    (:tag-mask 0)
-    (:step 1))
-  (:immediates
-    (:boolean-false 0)
-    (:boolean-true  1)
-    (:boolean-mask  -2)
-    (:null          0)
-    (:eof           -1)
-    (:void          0)
-    (:char-shift    0)
-    (:char-op-shift 0)
-    (:char-tag      0)
-    (:char-mask     255)
-    (:symbol-shift  0)
-    (:symbol-tag    0)
-    (:symbol-mask   0))
-  (:pointer
-    (:align 1)
-    (:tag-bits 0)
-    (:tag-mask 0)
-    (:untag-mask -1)
-    (:pair-tag       0)
-    (:closure-tag    0)
-    (:string-tag     0)
-    (:vector-tag     0)
-    (:bytevector-tag 0)
-    (:flonum-tag     0)
-    (:flonum-cell-bytes 8)
-    (:flonum-offset  0)))
+(define repr:c-unboxed
+  (register-value-repr!
+    (make-value-repr-from-clauses
+      'repr:c-unboxed
+      '((:word-bits 64)
+        (:aliases c-unboxed c-native)
+        (:fixnum
+          (:shift 0)
+          (:tag-bits 0)
+          (:tag-mask 0)
+          (:step 1))
+        (:immediates
+          (:boolean-false 0)
+          (:boolean-true  1)
+          (:boolean-mask  -2)
+          (:null          0)
+          (:eof           -1)
+          (:void          0)
+          (:char-shift    0)
+          (:char-op-shift 0)
+          (:char-tag      0)
+          (:char-mask     255)
+          (:symbol-shift  0)
+          (:symbol-tag    0)
+          (:symbol-mask   0))
+        (:pointer
+          (:align 1)
+          (:tag-bits 0)
+          (:tag-mask 0)
+          (:untag-mask -1)
+          (:pair-tag       0)
+          (:closure-tag    0)
+          (:string-tag     0)
+          (:vector-tag     0)
+          (:bytevector-tag 0)
+          (:flonum-tag     0)
+          (:flonum-cell-bytes 8)
+          (:flonum-offset  0))))))
 
 (define c-unboxed repr:c-unboxed)
 
 ;; 5.3 64-bit IEEE 754 Quiet NaN-Boxing Representation
-;; Quiet NaN base: 0x7FF8000000000000 = 9221120237041090560
+;; Quiet NaN base: 0x7FF8000000000000 = (* 4095 2251799813685248) = 9221120237041090560
 ;; 48-bit payload mask: 0x0000FFFFFFFFFFFF = 281474976710655
 ;; Tag unit (1 << 48): 281474976710656
-(define-value-repr repr:nan-boxing-64bit
-  (:word-bits 64)
-  (:aliases nan-boxing-64bit nan-boxed)
-  (:fixnum
-    (:shift 0)
-    (:tag-bits 0)
-    (:tag-mask 0)
-    (:step 1))
-  (:immediates
-    (:boolean-false 2)
-    (:boolean-true  3)
-    (:boolean-mask  -2)
-    (:null          4)
-    (:eof           5)
-    (:void          6)
-    (:char-shift    8)
-    (:char-op-shift 8)
-    (:char-tag      7)
-    (:char-mask     255)
-    (:symbol-shift  8)
-    (:symbol-tag    8)
-    (:symbol-mask   255))
-  (:pointer
-    (:align 8)
-    (:tag-bits 0)
-    (:tag-mask 0)
-    (:untag-mask -8)
-    (:pair-tag       0)
-    (:closure-tag    0)
-    (:string-tag     0)
-    (:vector-tag     0)
-    (:bytevector-tag 0)
-    (:flonum-tag     0)
-    (:flonum-cell-bytes 8)
-    (:flonum-offset  0))
-  (:nan-box
-    (:enabled #t)
-    (:nan-base 9221120237041090560)
-    (:payload-mask 281474976710655)
-    (:tag-shift 48)
-    (:tag-unit 281474976710656)
-    (:fixnum-nan-tag 1)
-    (:imm-nan-tag 2)
-    (:pointer-nan-tag 3)))
+(define repr:nan-boxing-64bit
+  (register-value-repr!
+    (make-value-repr-from-clauses
+      'repr:nan-boxing-64bit
+      '((:word-bits 64)
+        (:aliases nan-boxing-64bit nan-boxed)
+        (:fixnum
+          (:shift 0)
+          (:tag-bits 0)
+          (:tag-mask 0)
+          (:step 1))
+        (:immediates
+          (:boolean-false 2)
+          (:boolean-true  3)
+          (:boolean-mask  -2)
+          (:null          4)
+          (:eof           5)
+          (:void          6)
+          (:char-shift    8)
+          (:char-op-shift 8)
+          (:char-tag      7)
+          (:char-mask     255)
+          (:symbol-shift  8)
+          (:symbol-tag    8)
+          (:symbol-mask   255))
+        (:pointer
+          (:align 8)
+          (:tag-bits 0)
+          (:tag-mask 0)
+          (:untag-mask -8)
+          (:pair-tag       0)
+          (:closure-tag    0)
+          (:string-tag     0)
+          (:vector-tag     0)
+          (:bytevector-tag 0)
+          (:flonum-tag     0)
+          (:flonum-cell-bytes 8)
+          (:flonum-offset  0))
+        (:nan-box
+          (:enabled #t)
+          (:nan-base 0)
+          (:payload-mask 281474976710655)
+          (:tag-shift 48)
+          (:tag-unit 281474976710656)
+          (:fixnum-nan-tag 1)
+          (:imm-nan-tag 2)
+          (:pointer-nan-tag 3))))))
 
 (define nan-boxing-64bit repr:nan-boxing-64bit)
 
@@ -12480,32 +12644,38 @@
 ;;; 6. Representation Query & Immediate Encoding API
 ;;; -----------------------------------------------------------------------
 
-(define (resolve-opt-repr opt-args)
-  (if (null? opt-args)
-      (current-value-repr)
-      (get-value-repr (car opt-args))))
+(define (repr-nan-boxed-with? r)
+  (if (value-repr-prop r 'nan-box ':enabled #f) #t #f))
 
-(define (repr-nan-boxed? . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (if (value-repr-prop r 'nan-box ':enabled #f) #t #f)))
+(define repr-nan-boxed?
+  (case-lambda
+    (() (repr-nan-boxed-with? (current-value-repr)))
+    ((opt-repr) (repr-nan-boxed-with? (get-value-repr opt-repr)))))
 
-(define (repr-requires-boxing? . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (or (> (value-repr-prop r 'fixnum ':shift 0) 0)
-        (> (value-repr-prop r 'fixnum ':tag-mask 0) 0)
-        (repr-nan-boxed? r))))
+(define (repr-requires-boxing-with? r)
+  (or (> (value-repr-prop r 'fixnum ':shift 0) 0)
+      (> (value-repr-prop r 'fixnum ':tag-mask 0) 0)
+      (repr-nan-boxed-with? r)))
 
-(define (repr-fixnum-shift . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'fixnum ':shift 0)))
+(define repr-requires-boxing?
+  (case-lambda
+    (() (repr-requires-boxing-with? (current-value-repr)))
+    ((opt-repr) (repr-requires-boxing-with? (get-value-repr opt-repr)))))
 
-(define (repr-fixnum-tag . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'fixnum ':tag-bits 0)))
+(define repr-fixnum-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'fixnum ':shift 0))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'fixnum ':shift 0))))
 
-(define (repr-fixnum-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'fixnum ':tag-mask 0)))
+(define repr-fixnum-tag
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'fixnum ':tag-bits 0))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'fixnum ':tag-bits 0))))
+
+(define repr-fixnum-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'fixnum ':tag-mask 0))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'fixnum ':tag-mask 0))))
 
 (define (repr-arithmetic-shift n count)
   (cond
@@ -12519,20 +12689,24 @@
            (- q 1)
            q)))))
 
-(define (repr-fixnum-step . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r)))
+(define (repr-fixnum-step-with r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0)))
     (value-repr-prop r 'fixnum ':step (repr-arithmetic-shift 1 shift))))
 
-(define (repr-encode-fixnum n . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r))
-         (tag (repr-fixnum-tag r)))
-    (if (repr-nan-boxed? r)
-        (let ((nan-base (value-repr-prop r 'nan-box ':nan-base 9221120237041090560))
-              (tag-unit (value-repr-prop r 'nan-box ':tag-unit 281474976710656))
-              (fx-nan-tag (value-repr-prop r 'nan-box ':fixnum-nan-tag 1))
-              (mask (value-repr-prop r 'nan-box ':payload-mask 281474976710655)))
+(define repr-fixnum-step
+  (case-lambda
+    (() (repr-fixnum-step-with (current-value-repr)))
+    ((opt-repr) (repr-fixnum-step-with (get-value-repr opt-repr)))))
+
+(define (repr-encode-fixnum-with n r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0))
+        (tag (value-repr-prop r 'fixnum ':tag-bits 0)))
+    (if (repr-nan-boxed-with? r)
+        (let* ((raw-nan-base (value-repr-prop r 'nan-box ':nan-base 0))
+               (nan-base (if (= raw-nan-base 0) (default-nan-box-base) raw-nan-base))
+               (tag-unit (value-repr-prop r 'nan-box ':tag-unit 281474976710656))
+               (fx-nan-tag (value-repr-prop r 'nan-box ':fixnum-nan-tag 1))
+               (mask (value-repr-prop r 'nan-box ':payload-mask 281474976710655)))
           (ctfe-bitwise-ior (+ nan-base (* fx-nan-tag tag-unit))
                             (ctfe-bitwise-and n mask)))
         (let ((shifted (repr-arithmetic-shift n shift)))
@@ -12540,10 +12714,14 @@
               shifted
               (ctfe-bitwise-ior shifted tag))))))
 
-(define (repr-decode-fixnum encoded . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r)))
-    (if (repr-nan-boxed? r)
+(define repr-encode-fixnum
+  (case-lambda
+    ((n) (repr-encode-fixnum-with n (current-value-repr)))
+    ((n opt-repr) (repr-encode-fixnum-with n (get-value-repr opt-repr)))))
+
+(define (repr-decode-fixnum-with encoded r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0)))
+    (if (repr-nan-boxed-with? r)
         (let* ((mask (value-repr-prop r 'nan-box ':payload-mask 281474976710655))
                (raw (ctfe-bitwise-and encoded mask))
                (sign-bit (repr-arithmetic-shift 1 47)))
@@ -12552,114 +12730,154 @@
               raw))
         (repr-arithmetic-shift encoded (- shift)))))
 
-(define (repr-encode-boolean b . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (if b
-        (value-repr-prop r 'immediates ':boolean-true 111)
-        (value-repr-prop r 'immediates ':boolean-false 47))))
+(define repr-decode-fixnum
+  (case-lambda
+    ((encoded) (repr-decode-fixnum-with encoded (current-value-repr)))
+    ((encoded opt-repr) (repr-decode-fixnum-with encoded (get-value-repr opt-repr)))))
 
-(define (repr-boolean-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':boolean-mask -65)))
+(define (repr-encode-boolean-with b r)
+  (if b
+      (value-repr-prop r 'immediates ':boolean-true 111)
+      (value-repr-prop r 'immediates ':boolean-false 47)))
 
-(define (repr-encode-null . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':null 63)))
+(define repr-encode-boolean
+  (case-lambda
+    ((b) (repr-encode-boolean-with b (current-value-repr)))
+    ((b opt-repr) (repr-encode-boolean-with b (get-value-repr opt-repr)))))
 
-(define (repr-encode-eof . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':eof 79)))
+(define repr-boolean-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':boolean-mask -65))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':boolean-mask -65))))
 
-(define (repr-encode-void . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':void 111)))
+(define repr-encode-null
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':null 63))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':null 63))))
 
-(define (repr-char-shift . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':char-shift 8)))
+(define repr-encode-eof
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':eof 79))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':eof 79))))
 
-(define (repr-char-op-shift . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':char-op-shift 6)))
+(define repr-encode-void
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':void 111))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':void 111))))
 
-(define (repr-char-tag . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':char-tag 14)))
+(define repr-char-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':char-shift 8))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':char-shift 8))))
 
-(define (repr-char-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':char-mask 255)))
+(define repr-char-op-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':char-op-shift 6))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':char-op-shift 6))))
 
-(define (repr-encode-char ch . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (code (if (char? ch) (char->integer ch) ch))
-         (shift (repr-char-shift r))
-         (tag (repr-char-tag r)))
+(define repr-char-tag
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':char-tag 14))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':char-tag 14))))
+
+(define repr-char-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':char-mask 255))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':char-mask 255))))
+
+(define (repr-encode-char-with ch r)
+  (let ((code (if (char? ch) (char->integer ch) ch))
+        (shift (value-repr-prop r 'immediates ':char-shift 8))
+        (tag (value-repr-prop r 'immediates ':char-tag 14)))
     (+ (repr-arithmetic-shift code shift) tag)))
 
-(define (repr-symbol-shift . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':symbol-shift 6)))
+(define repr-encode-char
+  (case-lambda
+    ((ch) (repr-encode-char-with ch (current-value-repr)))
+    ((ch opt-repr) (repr-encode-char-with ch (get-value-repr opt-repr)))))
 
-(define (repr-symbol-tag . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':symbol-tag 2)))
+(define repr-symbol-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':symbol-shift 6))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':symbol-shift 6))))
 
-(define (repr-symbol-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':symbol-mask 255)))
+(define repr-symbol-tag
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':symbol-tag 2))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':symbol-tag 2))))
 
-(define (repr-encode-immediate expr . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (cond
-      ((integer? expr) (repr-encode-fixnum expr r))
-      ((boolean? expr) (repr-encode-boolean expr r))
-      ((char? expr)    (repr-encode-char expr r))
-      ((null? expr)    (repr-encode-null r))
-      (else
-       (value-repr-error! "repr-encode-immediate: unsupported immediate expression" expr)))))
+(define repr-symbol-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':symbol-mask 255))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':symbol-mask 255))))
+
+(define (repr-encode-immediate-with expr r)
+  (cond
+    ((integer? expr) (repr-encode-fixnum-with expr r))
+    ((boolean? expr) (repr-encode-boolean-with expr r))
+    ((char? expr)    (repr-encode-char-with expr r))
+    ((null? expr)    (value-repr-prop r 'immediates ':null 63))
+    (else
+     (value-repr-error! "repr-encode-immediate: unsupported immediate expression" expr))))
+
+(define repr-encode-immediate
+  (case-lambda
+    ((expr) (repr-encode-immediate-with expr (current-value-repr)))
+    ((expr opt-repr) (repr-encode-immediate-with expr (get-value-repr opt-repr)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 7. Heap Pointer Tag & Field Offset Calculator
 ;;; -----------------------------------------------------------------------
 
-(define (repr-pointer-align . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'pointer ':align 8)))
+(define repr-pointer-align
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'pointer ':align 8))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'pointer ':align 8))))
 
-(define (repr-pointer-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'pointer ':tag-mask 7)))
+(define repr-pointer-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'pointer ':tag-mask 7))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'pointer ':tag-mask 7))))
 
-(define (repr-pointer-untag-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'pointer ':untag-mask (- (repr-pointer-align r)))))
+(define (repr-pointer-untag-mask-with r)
+  (value-repr-prop r 'pointer ':untag-mask (- (value-repr-prop r 'pointer ':align 8))))
 
-(define (repr-heap-tag kind . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (case kind
-      ((pair)       (value-repr-prop r 'pointer ':pair-tag 1))
-      ((closure procedure) (value-repr-prop r 'pointer ':closure-tag 1))
-      ((string)     (value-repr-prop r 'pointer ':string-tag 3))
-      ((vector)     (value-repr-prop r 'pointer ':vector-tag 5))
-      ((bytevector) (value-repr-prop r 'pointer ':bytevector-tag 7))
-      ((flonum)     (value-repr-prop r 'pointer ':flonum-tag 11))
-      (else         (value-repr-prop r 'pointer ':tag-bits 0)))))
+(define repr-pointer-untag-mask
+  (case-lambda
+    (() (repr-pointer-untag-mask-with (current-value-repr)))
+    ((opt-repr) (repr-pointer-untag-mask-with (get-value-repr opt-repr)))))
 
-(define (repr-field-offset kind byte-offset . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (tag (repr-heap-tag kind r)))
-    (- byte-offset tag)))
+(define (repr-heap-tag-with kind r)
+  (case kind
+    ((pair)       (value-repr-prop r 'pointer ':pair-tag 1))
+    ((closure procedure) (value-repr-prop r 'pointer ':closure-tag 1))
+    ((string)     (value-repr-prop r 'pointer ':string-tag 3))
+    ((vector)     (value-repr-prop r 'pointer ':vector-tag 5))
+    ((bytevector) (value-repr-prop r 'pointer ':bytevector-tag 7))
+    ((flonum)     (value-repr-prop r 'pointer ':flonum-tag 11))
+    (else         (value-repr-prop r 'pointer ':tag-bits 0))))
+
+(define repr-heap-tag
+  (case-lambda
+    ((kind) (repr-heap-tag-with kind (current-value-repr)))
+    ((kind opt-repr) (repr-heap-tag-with kind (get-value-repr opt-repr)))))
+
+(define (repr-field-offset-with kind byte-offset r)
+  (- byte-offset (repr-heap-tag-with kind r)))
+
+(define repr-field-offset
+  (case-lambda
+    ((kind byte-offset) (repr-field-offset-with kind byte-offset (current-value-repr)))
+    ((kind byte-offset opt-repr) (repr-field-offset-with kind byte-offset (get-value-repr opt-repr)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Boxing & Unboxing LIR Code Generators
 ;;; -----------------------------------------------------------------------
 
-(define (repr-emit-box-fixnum dst src . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r))
-         (tag (repr-fixnum-tag r))
-         (mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
+(define (repr-emit-box-fixnum-with dst src r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0))
+        (tag (value-repr-prop r 'fixnum ':tag-bits 0))
+        (mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
     (cond
       ((and (= shift 0) (= tag 0))
        mov-prefix)
@@ -12672,20 +12890,28 @@
                (list (list '%shl dst shift)
                      (list '%bit-or dst tag)))))))
 
-(define (repr-emit-unbox-fixnum dst src . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r))
-         (mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
+(define repr-emit-box-fixnum
+  (case-lambda
+    ((dst src) (repr-emit-box-fixnum-with dst src (current-value-repr)))
+    ((dst src opt-repr) (repr-emit-box-fixnum-with dst src (get-value-repr opt-repr)))))
+
+(define (repr-emit-unbox-fixnum-with dst src r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0))
+        (mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
     (if (= shift 0)
         mov-prefix
         (append mov-prefix (list (list '%sar dst shift))))))
 
-(define (repr-emit-box-flonum dst src . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (fl-tag (repr-heap-tag 'flonum r))
+(define repr-emit-unbox-fixnum
+  (case-lambda
+    ((dst src) (repr-emit-unbox-fixnum-with dst src (current-value-repr)))
+    ((dst src opt-repr) (repr-emit-unbox-fixnum-with dst src (get-value-repr opt-repr)))))
+
+(define (repr-emit-box-flonum-with dst src r)
+  (let* ((fl-tag (repr-heap-tag-with 'flonum r))
          (cell-bytes (value-repr-prop r 'pointer ':flonum-cell-bytes 16))
          (fl-offset (value-repr-prop r 'pointer ':flonum-offset (- 8 fl-tag))))
-    (if (or (not (repr-requires-boxing? r)) (repr-nan-boxed? r) (= fl-tag 0))
+    (if (or (not (repr-requires-boxing-with? r)) (repr-nan-boxed-with? r) (= fl-tag 0))
         ;; Unboxed or NaN-boxed float representation: no heap allocation needed
         (if (equal? dst src)
             '()
@@ -12696,15 +12922,24 @@
               (list '%add '%r12 cell-bytes)
               (list '%store-typed 'f64 dst fl-offset src)))))
 
-(define (repr-emit-unbox-flonum dst src . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (fl-tag (repr-heap-tag 'flonum r))
+(define repr-emit-box-flonum
+  (case-lambda
+    ((dst src) (repr-emit-box-flonum-with dst src (current-value-repr)))
+    ((dst src opt-repr) (repr-emit-box-flonum-with dst src (get-value-repr opt-repr)))))
+
+(define (repr-emit-unbox-flonum-with dst src r)
+  (let* ((fl-tag (repr-heap-tag-with 'flonum r))
          (fl-offset (value-repr-prop r 'pointer ':flonum-offset (- 8 fl-tag))))
-    (if (or (not (repr-requires-boxing? r)) (repr-nan-boxed? r) (= fl-tag 0))
+    (if (or (not (repr-requires-boxing-with? r)) (repr-nan-boxed-with? r) (= fl-tag 0))
         (if (equal? dst src)
             '()
             (list (list '%fmov dst src)))
         (list (list '%load-typed 'f64 dst src fl-offset)))))
+
+(define repr-emit-unbox-flonum
+  (case-lambda
+    ((dst src) (repr-emit-unbox-flonum-with dst src (current-value-repr)))
+    ((dst src opt-repr) (repr-emit-unbox-flonum-with dst src (get-value-repr opt-repr)))))
 
 (define (repr-emit-type-tag-check dst src mask expected-tag)
   (let ((mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
@@ -13237,7 +13472,7 @@
   (let* ((rem (- total-len start-off))
          (mod64 (modulo (+ rem 9) 64))
          (pad-zeros (if (= mod64 0) 0 (- 64 mod64)))
-         (padded-len (+ rem 1 pad-zeros 8))
+         (padded-len (+ (+ (+ rem 1) pad-zeros) 8))
          (out (make-bytevector padded-len 0)))
     (let copy-loop ((i 0))
       (if (< i rem)
@@ -13269,10 +13504,10 @@
             (let load-loop ((i 0))
               (if (< i 16)
                   (let* ((p (+ base (* i 4)))
-                         (wval (+ (* (bytevector-u8-ref padded p) 16777216)
-                                  (* (bytevector-u8-ref padded (+ p 1)) 65536)
-                                  (* (bytevector-u8-ref padded (+ p 2)) 256)
-                                  (bytevector-u8-ref padded (+ p 3)))))
+                         (wval (+ (+ (* (bytevector-u8-ref padded p) 16777216)
+                                     (* (bytevector-u8-ref padded (+ p 1)) 65536))
+                                  (+ (* (bytevector-u8-ref padded (+ p 2)) 256)
+                                     (bytevector-u8-ref padded (+ p 3))))))
                     (vector-set! w i wval)
                     (load-loop (+ i 1)))))
             ;; W[16..63]
@@ -13750,7 +13985,7 @@
     (else
      (sbi-error! "Unsupported Scheme object type in SBI serializer" x))))
 
-(define (sbi-serialize ir . rest)
+(define (sbi-serialize-impl ir rest)
   (let* ((ir-kind (if (pair? rest) (sbi-ir-kind->code (car rest)) *sbi-ir-hir*))
          (raw-deps (if (and (pair? rest) (pair? (cdr rest))) (cadr rest) '()))
          (deps (sbi-normalize-deps raw-deps))
@@ -13759,8 +13994,8 @@
          (dep-count (length deps))
          (sym-count (vector-ref st 1))
          (node-count (vector-ref st 4))
-         (flags (+ (if (vector-ref st 13) 1 0)
-                   (if (vector-ref st 14) 2 0)
+         (flags (+ (+ (if (vector-ref st 13) 1 0)
+                      (if (vector-ref st 14) 2 0))
                    (if (> dep-count 0) 4 0)))
          (payload-w (sbi-make-writer)))
     ;; Section 1: Dependency header table
@@ -13795,6 +14030,12 @@
       (sbi-buf-bytes! hdr-w payload-bv)
       (sbi-writer->bytevector hdr-w))))
 
+(define sbi-serialize
+  (case-lambda
+    ((ir) (sbi-serialize-impl ir '()))
+    ((ir ir-kind) (sbi-serialize-impl ir (list ir-kind)))
+    ((ir ir-kind deps) (sbi-serialize-impl ir (list ir-kind deps)))))
+
 ;;; -----------------------------------------------------------------------
 ;;; 9. Acyclic DAG IR Deserializer (.sbi v2 Reader & Security Verifier)
 ;;; -----------------------------------------------------------------------
@@ -13804,10 +14045,10 @@
      (* (bytevector-u8-ref bv (+ off 1)) 256)))
 
 (define (sbi-read-u32-le bv off)
-  (+ (bytevector-u8-ref bv off)
-     (* (bytevector-u8-ref bv (+ off 1)) 256)
-     (* (bytevector-u8-ref bv (+ off 2)) 65536)
-     (* (bytevector-u8-ref bv (+ off 3)) 16777216)))
+  (+ (+ (bytevector-u8-ref bv off)
+        (* (bytevector-u8-ref bv (+ off 1)) 256))
+     (+ (* (bytevector-u8-ref bv (+ off 2)) 65536)
+        (* (bytevector-u8-ref bv (+ off 3)) 16777216))))
 
 (define (sbi-binary-bytevector? bv)
   (and (bytevector? bv)
@@ -14111,13 +14352,20 @@
 ;;; 10. File Read/Write API, PCH Cache Validation & Compatibility Layer
 ;;; -----------------------------------------------------------------------
 
-(define (sbi-write-file path ir . rest)
-  (let* ((bv (cond
-               ((null? rest) (sbi-serialize ir))
-               ((null? (cdr rest)) (sbi-serialize ir (car rest)))
-               (else (sbi-serialize ir (car rest) (cadr rest))))))
-    (sbi-write-file-bytes path bv)
-    bv))
+(define sbi-write-file
+  (case-lambda
+    ((path ir)
+     (let ((bv (sbi-serialize-impl ir '())))
+       (sbi-write-file-bytes path bv)
+       bv))
+    ((path ir ir-kind)
+     (let ((bv (sbi-serialize-impl ir (list ir-kind))))
+       (sbi-write-file-bytes path bv)
+       bv))
+    ((path ir ir-kind deps)
+     (let ((bv (sbi-serialize-impl ir (list ir-kind deps))))
+       (sbi-write-file-bytes path bv)
+       bv))))
 
 (define (sbi-read-file-full path)
   (let ((bytes (sbi-read-file-bytes path)))
@@ -14241,7 +14489,7 @@
              (main-bodies-rev '()))
     (if (null? ms)
         (let* ((merged-strings (sbi-merge-assoc-by-key
-                                 (reverse all-strings-rev) car))
+                                 (reverse all-strings-rev) car*))
                (merged-stackmaps (reverse all-stackmaps-rev))
                (merged-funcs (sbi-merge-assoc-by-key
                                (reverse all-funcs-rev) cadr))
@@ -16419,6 +16667,30 @@
       (error "format [SRFI 28]: too few arguments (requires format-string)")
       (list '%format (car args) (cons 'list (cdr args)))))
 
+(define (desugar-math-binop-fold op a b c rest)
+  (let loop ((acc (list op a b)) (xs (cons c rest)))
+    (if (null? xs)
+        acc
+        (loop (list op acc (car xs)) (cdr xs)))))
+
+(define (desugar-make-string-fill k ch)
+  (let ((n-sym (unique-symbol "ms_n_"))
+        (c-sym (unique-symbol "ms_c_"))
+        (s-sym (unique-symbol "ms_s_"))
+        (i-sym (unique-symbol "ms_i_"))
+        (loop-sym (unique-symbol "ms_loop_")))
+    (list 'let (list (list n-sym k) (list c-sym ch))
+          (list 'let (list (list s-sym (list 'make-string n-sym)))
+                (list 'letrec
+                      (list (list loop-sym
+                                  (list 'lambda (list i-sym)
+                                        (list 'if (list '< i-sym n-sym)
+                                              (list 'begin
+                                                    (list 'string-set! s-sym i-sym c-sym)
+                                                    (list loop-sym (list '+ i-sym 1)))
+                                              s-sym))))
+                      (list loop-sym 0))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Pass 026 Picopass Rule Definitions (DSN-33-01 T4.1)
 ;;; -----------------------------------------------------------------------
@@ -16441,6 +16713,7 @@
 
 (define-picopass rule-desugar-string-ops
   (Expr
+    ((make-string ,k ,ch) (desugar-make-string-fill k ch))
     ((string . ,args) (desugar-string args))
     ((string-append . ,args) (desugar-string-append args))
     ((string-copy . ,args) (desugar-string-copy args))
@@ -16467,6 +16740,8 @@
 
 (define-picopass rule-desugar-math-variadic
   (Expr
+    ((+ ,a ,b ,c . ,rest) (desugar-math-binop-fold '+ a b c rest))
+    ((* ,a ,b ,c . ,rest) (desugar-math-binop-fold '* a b c rest))
     ((gcd . ,args) (desugar-gcd args))
     ((lcm . ,args) (desugar-lcm args))
     ((max . ,args) (desugar-max args))
@@ -16899,6 +17174,10 @@
                   (list 'let all-bindings (make-body-expr bodies)))))
         (list test-expr clause-body))))
 
+;; NOTE: Fixed >6-arg case-lambda without rest uses exact max-k so caller/callee
+;; stack param counts agree cleanly (keeping 8 for <=6/rest per Issue #609).
+;; Compiler self-hosting sources must stay <= 6 fixed parameters on mixed-arity
+;; case-lambda for bin/ulisp-boot SysV ABI register-only compatibility.
 (define (desugar-case-lambda clauses)
   (if (null? clauses)
       (let ((n-sym (unique-symbol "cl_n_")))
@@ -16917,7 +17196,9 @@
                           (let ((k (cadar infos)))
                             (loop (cdr infos) (if (> k m) k m))))))
              (num-params (let ((target (if has-rest? (+ max-k 4) max-k)))
-                           (if (> target 8) target 8)))
+                           (if (or has-rest? (<= target 6))
+                               (if (> target 8) target 8)
+                               target)))
              (params (make-cl-params num-params))
              (n-sym (unique-symbol "cl_n_"))
              (dispatch-expr
@@ -23242,11 +23523,13 @@
       #t
       (validate-core-lir prog)))
 
-(define (validate-lir prog . maybe-dialect)
-  (let ((dialect (if (pair? maybe-dialect) (car maybe-dialect) #f)))
-    (if (eq? dialect 'core)
-        (validate-core-lir prog)
-        (validate-lir-general prog))))
+(define validate-lir
+  (case-lambda
+    ((prog) (validate-lir-general prog))
+    ((prog dialect)
+     (if (eq? dialect 'core)
+         (validate-core-lir prog)
+         (validate-lir-general prog)))))
 
 (define (validate-lir-general prog)
   (cond
@@ -26207,24 +26490,9 @@
              (repr-emit-unbox-flonum dst src)))
 
           ;; 8. Runtime Continuations, Exceptions and Multiple Values
-          ((%capture-cc)
-           (list (list '%c-call "ulisp_capture_cc" 0)))
-
-          ((%push-handler)
-           (list (list '%c-call "ulisp_push_handler" 0)))
-
-          ((%pop-handler)
-           (list (list '%c-call "ulisp_pop_handler" 0)))
-
-          ((%raise)
-           (list (list '%c-call "ulisp_raise" 0)))
-
-          ((%set-values-count)
-           (let ((cnt (cadr inst)))
-             (list (list '%global-set! 'ulisp_values_count cnt))))
-
-          ((%store-values-buf)
-           (list (list '%c-call "ulisp_store_values" 0)))
+          ;; Handled directly by native backend code generators (e.g. 140_backend_x86_64.scm)
+          ((%capture-cc %push-handler %pop-handler %raise %set-values-count %store-values-buf)
+           (list inst))
 
           ;; 9. Nested SSA Blocks: (%block lbl params . body)
           ((%block)
@@ -37736,7 +38004,7 @@
             (cond
               ((char=? ch #\\) (loop (+ i 1) (string-append acc "\\\\")))
               ((char=? ch #\") (loop (+ i 1) (string-append acc "\\\"")))
-              (else (loop (+ i 1) (string-append acc (make-string 1 ch))))))))))
+              (else (loop (+ i 1) (string-append acc (string ch))))))))))
 
 (define (c-inline-asm-addr-expr opnd)
   (cond

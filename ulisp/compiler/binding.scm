@@ -192,42 +192,61 @@
 ;;; 4. Global Binding Registry (*binding-registry*)
 ;;; -----------------------------------------------------------------------
 
-(define *binding-by-id-table* (cons '() '()))
-(define *binding-by-sym-table* (cons '() '()))
+(define *binding-table-size* 1024)
+(define *binding-by-id-buckets* (make-vector 1024 '()))
+(define *binding-by-sym-buckets* (make-vector 1024 '()))
+(define *all-bindings-list* (cons '() '()))
 
 (define (reset-binding-registry!)
   (reset-binding-id-counter!)
   (reset-hygiene-scope-counter!)
-  (set-car! *binding-by-id-table* '())
-  (set-car! *binding-by-sym-table* '()))
+  (let loop ((i 0))
+    (if (< i *binding-table-size*)
+        (begin
+          (vector-set! *binding-by-id-buckets* i '())
+          (vector-set! *binding-by-sym-buckets* i '())
+          (loop (+ i 1)))))
+  (set-car! *all-bindings-list* '()))
 
 (define (register-binding! b)
   (if (not (binding? b))
       (binding-error! "register-binding!: expected <binding>" b))
   (let* ((id (binding-id b))
          (usym (binding-unique-sym b))
-         (id-entry (assv id (car *binding-by-id-table*)))
-         (sym-entry (assq usym (car *binding-by-sym-table*))))
+         (id-idx (modulo id *binding-table-size*))
+         (id-bucket (vector-ref *binding-by-id-buckets* id-idx))
+         (id-entry (assv id id-bucket))
+         (sym-idx (symbol->hash-idx usym))
+         (sym-bucket (vector-ref *binding-by-sym-buckets* sym-idx))
+         (sym-entry (assq usym sym-bucket)))
     (if id-entry
         (set-cdr! id-entry b)
-        (set-car! *binding-by-id-table*
-                  (cons (cons id b) (car *binding-by-id-table*))))
+        (begin
+          (vector-set! *binding-by-id-buckets* id-idx (cons (cons id b) id-bucket))
+          (set-car! *all-bindings-list* (cons b (car *all-bindings-list*)))))
     (if sym-entry
         (set-cdr! sym-entry b)
-        (set-car! *binding-by-sym-table*
-                  (cons (cons usym b) (car *binding-by-sym-table*))))
+        (vector-set! *binding-by-sym-buckets* sym-idx (cons (cons usym b) sym-bucket)))
     b))
 
 (define (lookup-binding-by-id id)
-  (let ((entry (assv id (car *binding-by-id-table*))))
-    (if entry (cdr entry) #f)))
+  (if (integer? id)
+      (let* ((idx (modulo id *binding-table-size*))
+             (bucket (vector-ref *binding-by-id-buckets* idx))
+             (entry (assv id bucket)))
+        (if entry (cdr entry) #f))
+      #f))
 
 (define (lookup-binding-by-symbol sym)
-  (let ((entry (assq sym (car *binding-by-sym-table*))))
-    (if entry (cdr entry) #f)))
+  (if (symbol? sym)
+      (let* ((idx (symbol->hash-idx sym))
+             (bucket (vector-ref *binding-by-sym-buckets* idx))
+             (entry (assq sym bucket)))
+        (if entry (cdr entry) #f))
+      #f))
 
 (define (all-registered-bindings)
-  (reverse (map cdr (car *binding-by-id-table*))))
+  (reverse (car *all-bindings-list*)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Binding ID Set Public API

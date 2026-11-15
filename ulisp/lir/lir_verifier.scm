@@ -1273,11 +1273,13 @@
       #t
       (validate-core-lir prog)))
 
-(define (validate-lir prog . maybe-dialect)
-  (let ((dialect (if (pair? maybe-dialect) (car maybe-dialect) #f)))
-    (if (eq? dialect 'core)
-        (validate-core-lir prog)
-        (validate-lir-general prog))))
+(define validate-lir
+  (case-lambda
+    ((prog) (validate-lir-general prog))
+    ((prog dialect)
+     (if (eq? dialect 'core)
+         (validate-core-lir prog)
+         (validate-lir-general prog)))))
 
 (define (validate-lir-general prog)
   (cond

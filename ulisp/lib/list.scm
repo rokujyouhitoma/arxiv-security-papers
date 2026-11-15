@@ -139,6 +139,38 @@
     ((eq? (caar ls) item) (car ls))
     (else (assq item (cdr ls)))))
 
+(define (memv item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((or (eq? (car ls) item)
+         (and (number? (car ls)) (number? item) (= (car ls) item))
+         (and (char? (car ls)) (char? item) (char=? (car ls) item)))
+     ls)
+    (else (memv item (cdr ls)))))
+
+(define (assv item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((not (pair? (car ls))) (assv item (cdr ls)))
+    ((or (eq? (caar ls) item)
+         (and (number? (caar ls)) (number? item) (= (caar ls) item))
+         (and (char? (caar ls)) (char? item) (char=? (caar ls) item)))
+     (car ls))
+    (else (assv item (cdr ls)))))
+
+(define (member item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((%default-equal? (car ls) item) ls)
+    (else (member item (cdr ls)))))
+
+(define (assoc item ls)
+  (cond
+    ((not (pair? ls)) #f)
+    ((not (pair? (car ls))) (assoc item (cdr ls)))
+    ((%default-equal? (caar ls) item) (car ls))
+    (else (assoc item (cdr ls)))))
+
 ;; ---------------------------------------------------------------------
 ;; §6.10 Control features: apply & multi-argument map / for-each
 ;; ---------------------------------------------------------------------

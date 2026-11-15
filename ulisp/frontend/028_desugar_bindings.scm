@@ -181,6 +181,10 @@
                   (list 'let all-bindings (make-body-expr bodies)))))
         (list test-expr clause-body))))
 
+;; NOTE: Fixed >6-arg case-lambda without rest uses exact max-k so caller/callee
+;; stack param counts agree cleanly (keeping 8 for <=6/rest per Issue #609).
+;; Compiler self-hosting sources must stay <= 6 fixed parameters on mixed-arity
+;; case-lambda for bin/ulisp-boot SysV ABI register-only compatibility.
 (define (desugar-case-lambda clauses)
   (if (null? clauses)
       (let ((n-sym (unique-symbol "cl_n_")))
@@ -199,7 +203,9 @@
                           (let ((k (cadar infos)))
                             (loop (cdr infos) (if (> k m) k m))))))
              (num-params (let ((target (if has-rest? (+ max-k 4) max-k)))
-                           (if (> target 8) target 8)))
+                           (if (or has-rest? (<= target 6))
+                               (if (> target 8) target 8)
+                               target)))
              (params (make-cl-params num-params))
              (n-sym (unique-symbol "cl_n_"))
              (dispatch-expr

@@ -59,6 +59,11 @@
     ((string-append s1 s2 s3 s4 s5) (string-append2 s1 (string-append2 s2 (string-append2 s3 (string-append2 s4 s5)))))
     ((string-append s1 s2 s3 s4 s5 s6 ...) (string-append2 s1 (string-append s2 s3 s4 s5 s6 ...)))))
 
+(define-syntax string->number
+  (syntax-rules ()
+    ((string->number s) (string->number-core s 10 #f))
+    ((string->number s r) (string->number-core s r #t))))
+
 ;; Declare inter-module extern identifiers so the compiler's reader interns them into *symbol-registry*
 (define-syntax %declare-extern-identifiers
   (syntax-rules ()
@@ -306,6 +311,13 @@
   last-fixpoint-iterations
   last-fixpoint-converged?
   resolve-fixpoint-pass-descriptor
+  make-pass-descriptor-with-opts
+  scope-define-opts
+  cdr*
+  memv
+  assv
+  member
+  string->number-core
   run-pass-fixpoint)
 
 

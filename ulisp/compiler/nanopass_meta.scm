@@ -3286,7 +3286,7 @@
                     ((char=? c1 #\%)
                      (let ((reg-tok (inline-asm-match-reg-token template (+ i 2))))
                        (if reg-tok
-                           (loop (+ i 2 (string-length reg-tok))
+                           (loop (+ (+ i 2) (string-length reg-tok))
                                  (cons (inline-asm-string-downcase reg-tok) acc))
                            (loop (+ i 2)
                                  (cons (if (eq? mode 'c) "%%" "%") acc)))))
@@ -3317,7 +3317,7 @@
                                       (idx (inline-asm-find-named-idx (string->symbol nm-str) out-plans in-plans))
                                       (repl (if idx
                                                 (inline-asm-format-operand-by-idx idx c1 out-plans in-plans mem-ptr-map)
-                                                (string-append "%" (make-string 1 c1) "[" nm-str "]"))))
+                                                (string-append "%" (string c1) "[" nm-str "]"))))
                                  (loop (if (< j len) (+ j 1) j) (cons repl acc)))
                                (find-close2 (+ j 1))))
                          (let scan-idx2 ((j (+ i 2)) (idx 0))

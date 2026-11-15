@@ -47,11 +47,33 @@
                       '())))
        (list #t reqs pres invs)))))
 
-(define (make-pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? . contract-opts)
+(define (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? contract-opts)
   (let ((parsed (parse-pass-descriptor-contract-opts contract-opts)))
     (if (car parsed)
         (register-pass-proc-analysis-contract! pass-fn id (cadr parsed) (caddr parsed) (cadddr parsed))))
   (list 'pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?))
+
+(cond-expand
+  (ulisp
+   (define (make-pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?)
+     (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? '())))
+  (else
+   (define make-pass-descriptor
+     (case-lambda
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? '()))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2 o3)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2 o3)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2 o3 o4)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2 o3 o4)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2 o3 o4 o5)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2 o3 o4 o5)))
+       ((id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? o1 o2 o3 o4 o5 o6)
+        (make-pass-descriptor-with-opts id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? (list o1 o2 o3 o4 o5 o6)))))))
 
 (define (pass-descriptor? obj)
   (and (pair? obj) (eq? (car obj) 'pass-descriptor)))
@@ -192,7 +214,7 @@
         (error "lookup-analysis-property: unregistered analysis property" name))))
 
 (define (list-analysis-properties)
-  (map car (car *analysis-property-registry*)))
+  (map car* (car *analysis-property-registry*)))
 
 (define (analysis-dep-creates-cycle? target-name start-deps)
   (let walk ((queue start-deps) (visited '()))
@@ -221,7 +243,7 @@
       (else
        (loop (cdr rem) deps doc)))))
 
-(define (register-analysis-property! name compute-fn . opts)
+(define (register-analysis-property-opts! name compute-fn opts)
   (let* ((parsed (parse-register-analysis-opts opts))
          (deps (car parsed))
          (doc (cdr parsed)))
@@ -232,18 +254,32 @@
                 (alist-upsert-eq (car *analysis-property-registry*) name desc))
       name)))
 
+(define register-analysis-property!
+  (case-lambda
+    ((name compute-fn)
+     (register-analysis-property-opts! name compute-fn '()))
+    ((name compute-fn o1)
+     (register-analysis-property-opts! name compute-fn (list o1)))
+    ((name compute-fn o1 o2)
+     (register-analysis-property-opts! name compute-fn (list o1 o2)))
+    ((name compute-fn o1 o2 o3)
+     (register-analysis-property-opts! name compute-fn (list o1 o2 o3)))
+    ((name compute-fn o1 o2 o3 o4)
+     (register-analysis-property-opts! name compute-fn (list o1 o2 o3 o4)))))
+
 ;; Cache entry vector: #(name valid? value ast compute-count hit-count invalidation-count)
 (define (lookup-analysis-cache-entry name)
   (let ((e (assq name (car *analysis-property-cache*))))
     (if e (cdr e) #f)))
 
-(define (analysis-valid? name . maybe-ast)
-  (let ((entry (lookup-analysis-cache-entry name)))
-    (and entry
-         (vector-ref entry 1)
-         (or (null? maybe-ast)
-             (eq? (vector-ref entry 3) (car maybe-ast)))
-         #t)))
+(define analysis-valid?
+  (case-lambda
+    ((name)
+     (let ((entry (lookup-analysis-cache-entry name)))
+       (if (and entry (vector-ref entry 1)) #t #f)))
+    ((name ast)
+     (let ((entry (lookup-analysis-cache-entry name)))
+       (if (and entry (vector-ref entry 1) (eq? (vector-ref entry 3) ast)) #t #f)))))
 
 (define (get-cached-analysis name)
   (let ((entry (lookup-analysis-cache-entry name)))
@@ -263,13 +299,12 @@
   (let ((entry (lookup-analysis-cache-entry name)))
     (if entry (vector-ref entry 6) 0)))
 
-(define (require-analysis name . maybe-ast)
+(define (require-analysis-impl name explicit-ast? maybe-ast-val)
   (if (null? (car *analysis-property-registry*))
       (init-default-analysis-properties!))
   (if (memq name (car *analysis-visiting-stack*))
       (raise (list 'analysis-cycle-error name (reverse (cons name (car *analysis-visiting-stack*))))))
-  (let* ((explicit-ast? (pair? maybe-ast))
-         (ast (if explicit-ast? (car maybe-ast) (car *current-analysis-ast*))))
+  (let ((ast (if explicit-ast? maybe-ast-val (car *current-analysis-ast*))))
     (if explicit-ast?
         (set-car! *current-analysis-ast* ast))
     (let ((entry (lookup-analysis-cache-entry name)))
@@ -288,7 +323,7 @@
             (let ((val (guard (ex (else
                                     (set-car! *analysis-visiting-stack* saved-stack)
                                     (raise ex)))
-                         (for-each (lambda (d) (require-analysis d ast)) deps)
+                         (for-each (lambda (d) (require-analysis-impl d #t ast)) deps)
                          ((analysis-desc-compute-fn desc) ast))))
               (set-car! *analysis-visiting-stack* saved-stack)
               (let ((cur-entry (lookup-analysis-cache-entry name)))
@@ -304,6 +339,11 @@
               (pm-stats-inc! 1)
               (pm-stats-inc! 2)
               val))))))
+
+(define require-analysis
+  (case-lambda
+    ((name) (require-analysis-impl name #f #f))
+    ((name ast) (require-analysis-impl name #t ast))))
 
 (define (analysis-direct-dependents prop-name)
   (let loop ((reg (car *analysis-property-registry*)) (acc '()))
@@ -399,7 +439,7 @@
     ((and (eq? (car expr) 'let) (pair? (cdr expr)) (list? (cadr expr)))
      (let ((bs (cadr expr))
            (body (cddr expr)))
-       (let* ((vars (map car bs))
+       (let* ((vars (map car* bs))
               (rhs-fvs (let loop ((xs bs) (acc '()))
                          (if (null? xs) acc
                              (loop (cdr xs)
@@ -410,7 +450,7 @@
          (pm-list-union rhs-fvs body-fvs))))
     ((and (eq? (car expr) 'letrec) (pair? (cdr expr)) (list? (cadr expr)))
      (let* ((bs (cadr expr))
-            (vars (map car bs))
+            (vars (map car* bs))
             (nb (pm-list-union vars bound))
             (rhs-fvs (let loop ((xs bs) (acc '()))
                        (if (null? xs) acc
@@ -431,15 +471,15 @@
            (loop (cdr xs) (pm-list-union (pm-ast-collect-free-vars (car xs) bound) acc)))))))
 
 (define (pm-ast-use-counts ast)
-  (let ((counts '()))
+  (let ((counts-cell (cons '() '())))
     (letrec ((visit
               (lambda (x)
                 (cond
                   ((symbol? x)
-                   (let ((e (assq x counts)))
+                   (let ((e (assq x (car counts-cell))))
                      (if e
                          (set-cdr! e (+ (cdr e) 1))
-                         (set! counts (cons (cons x 1) counts)))))
+                         (set-car! counts-cell (cons (cons x 1) (car counts-cell))))))
                   ((not (pair? x)) #f)
                   ((eq? (car x) 'quote) #f)
                   ((and (memq (car x) '(let let*)) (pair? (cdr x)) (list? (cadr x)))
@@ -453,7 +493,7 @@
                   (else
                    (for-each visit (cdr x)))))))
       (visit ast)
-      (reverse counts))))
+      (reverse (car counts-cell)))))
 
 (define (pm-extract-cfg-blocks ast)
   (cond
@@ -485,7 +525,7 @@
             (cons 'use-counts (pm-ast-use-counts ast)))))
 
 (define (pm-compute-reaching-defs ast)
-  (let ((defs '()))
+  (let ((defs-cell (cons '() '())))
     (letrec ((walk
               (lambda (x)
                 (cond
@@ -493,18 +533,18 @@
                   ((eq? (car x) 'quote) #f)
                   ((and (memq (car x) '(let let* letrec)) (pair? (cdr x)) (list? (cadr x)))
                    (for-each (lambda (b)
-                               (set! defs (cons (cons (car b) (cadr b)) defs))
+                               (set-car! defs-cell (cons (cons (car b) (cadr b)) (car defs-cell)))
                                (walk (cadr b)))
                              (cadr x))
                    (for-each walk (cddr x)))
                   ((and (eq? (car x) 'define) (pair? (cdr x)))
                    (let ((nm (if (pair? (cadr x)) (car (cadr x)) (cadr x))))
-                     (set! defs (cons (cons nm (cddr x)) defs)))
+                     (set-car! defs-cell (cons (cons nm (cddr x)) (car defs-cell))))
                    (for-each walk (cddr x)))
                   (else
                    (if (pair? (cdr x)) (for-each walk (cdr x))))))))
       (walk ast)
-      (reverse defs))))
+      (reverse (car defs-cell)))))
 
 (define (pm-compute-alias-sets ast)
   (let ((rdefs (get-cached-analysis 'reaching-defs)))
@@ -1321,7 +1361,7 @@
            (else
             (error "run-pass-fixpoint: unexpected option" k)))))))
 
-(define (run-pass-fixpoint pass-specs initial-ast . opts)
+(define (run-pass-fixpoint-opts pass-specs initial-ast opts)
   (let* ((parsed (parse-fixpoint-opts opts))
          (max-iters (car parsed))
          (equiv-fn (cadr parsed))
@@ -1350,6 +1390,19 @@
                       (iter-loop next-iter cur-ast)))
                 (pass-loop (cdr ps)
                            (run-single-pass (car ps) cur-ast verify-mode trace-mode))))))))
+
+(define run-pass-fixpoint
+  (case-lambda
+    ((pass-specs initial-ast)
+     (run-pass-fixpoint-opts pass-specs initial-ast '()))
+    ((pass-specs initial-ast o1)
+     (run-pass-fixpoint-opts pass-specs initial-ast (list o1)))
+    ((pass-specs initial-ast o1 o2)
+     (run-pass-fixpoint-opts pass-specs initial-ast (list o1 o2)))
+    ((pass-specs initial-ast o1 o2 o3)
+     (run-pass-fixpoint-opts pass-specs initial-ast (list o1 o2 o3)))
+    ((pass-specs initial-ast o1 o2 o3 o4)
+     (run-pass-fixpoint-opts pass-specs initial-ast (list o1 o2 o3 o4)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Default Pass Registry Initialization
@@ -1447,9 +1500,9 @@
     (make-pass-descriptor 'pass-035-scope-resolve "Lexical Scope Resolution and Alpha-Conversion" 'frontend 0
       (lambda (forms) (scope-resolve-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
   (register-pass!
-    (make-pass-descriptor 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
+    (make-pass-descriptor-with-opts 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
       (lambda (forms) (check-arity-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t
-      ':preserves '(all)))
+      (list ':preserves '(all))))
   (register-pass!
     (make-pass-descriptor 'pass-050-cp0 "CP0 Source Optimization" 'frontend 1
       (lambda (forms) (cp0-optimize forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
@@ -1482,13 +1535,13 @@
     (make-pass-descriptor 'pass-131-lower-managed-dialect "Lower Managed Runtime Dialect" 'middle 0
       (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
   (register-pass!
-    (make-pass-descriptor 'pass-128-lir-branch-fusion "LIR Branch Fusion" 'middle 2
+    (make-pass-descriptor-with-opts 'pass-128-lir-branch-fusion "LIR Branch Fusion" 'middle 2
       (lambda (lir) (lir-fuse-branches lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f
-      ':invalidates '(cfg-dominators variable-liveness)))
+      (list ':invalidates '(cfg-dominators variable-liveness))))
   (register-pass!
-    (make-pass-descriptor 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
+    (make-pass-descriptor-with-opts 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
       (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_canonical '(pass-130-lir) #f
-      ':preserves '(cfg-dominators) ':invalidates '(variable-liveness alias-sets)))
+      (list ':preserves '(cfg-dominators) ':invalidates '(variable-liveness alias-sets))))
   ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)
   (let loop ((hooks (car *pass-registry-init-hooks*)))
     (if (not (null? hooks))
