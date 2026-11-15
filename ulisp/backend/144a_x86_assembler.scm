@@ -401,6 +401,118 @@
                          (tok-loop (+ j 1))))))))))))
 
 ;; -----------------------------------------------------------------------
+;; 3.1 Data Directives & Section Helpers (Issue #830)
+;; -----------------------------------------------------------------------
+(define (asm-split-by-comma tokens)
+  (let loop ((rest tokens) (cur '()) (acc '()))
+    (cond
+      ((null? rest)
+       (if (null? cur)
+           (reverse acc)
+           (reverse (cons (reverse cur) acc))))
+      ((string=? (car rest) ",")
+       (if (null? cur)
+           (loop (cdr rest) '() acc)
+           (loop (cdr rest) '() (cons (reverse cur) acc))))
+      (else
+       (loop (cdr rest) (cons (car rest) cur) acc)))))
+
+(define (asm-tokens->string toks)
+  (let loop ((ts toks) (acc ""))
+    (if (null? ts)
+        (asm-trim-string acc)
+        (loop (cdr ts) (if (= (string-length acc) 0) (car ts) (string-append acc " " (car ts)))))))
+
+(define (asm-parse-data-expr str)
+  (let ((str (asm-trim-string str)))
+    (cond
+      ((= (string-length str) 0)
+       (cons 'num 0))
+      ((and (>= (string-length str) 2)
+            (char=? (string-ref str 0) #\")
+            (char=? (string-ref str (- (string-length str) 1)) #\"))
+       (cons 'str (substring str 1 (- (string-length str) 1))))
+      (else
+       (let ((num (safe-string->number str)))
+         (if num
+             (cons 'num num)
+             (let* ((len (string-length str))
+                    (op-pos (let loop ((i 1))
+                              (if (>= i len)
+                                  #f
+                                  (let ((c (string-ref str i)))
+                                    (if (or (char=? c #\+) (char=? c #\-))
+                                        i
+                                        (loop (+ i 1))))))))
+               (if op-pos
+                   (let* ((sym (asm-trim-string (substring str 0 op-pos)))
+                          (sign (if (char=? (string-ref str op-pos) #\-) -1 1))
+                          (rest-str (asm-trim-string (substring str (+ op-pos 1) len)))
+                          (addend-num (safe-string->number rest-str))
+                          (addend (if addend-num (* sign addend-num) 0)))
+                     (cons 'sym (cons sym addend)))
+                   (cons 'sym (cons str 0))))))))))
+
+(define (asm-string->bytes str null-term?)
+  (let loop ((i 0) (acc '()))
+    (if (>= i (string-length str))
+        (reverse (if null-term? (cons 0 acc) acc))
+        (loop (+ i 1) (cons (char->integer (string-ref str i)) acc)))))
+
+(define (asm-make-byte-list count val)
+  (let ((b (modulo (if (< val 0) (+ val 256) val) 256)))
+    (let loop ((i 0) (acc '()))
+      (if (< i count)
+          (loop (+ i 1) (cons b acc))
+          acc))))
+
+(define (asm-parse-fill-args groups)
+  (let* ((repeat-group (if (pair? groups) (car groups) '("0")))
+         (repeat-expr (asm-parse-data-expr (asm-tokens->string repeat-group)))
+         (repeat (if (eq? (car repeat-expr) 'num) (cdr repeat-expr) 0))
+         (size-group (if (and (pair? groups) (pair? (cdr groups))) (cadr groups) '("1")))
+         (size-expr (asm-parse-data-expr (asm-tokens->string size-group)))
+         (size (if (eq? (car size-expr) 'num) (cdr size-expr) 1))
+         (val-group (if (and (pair? groups) (pair? (cdr groups)) (pair? (cddr groups))) (caddr groups) '("0")))
+         (val-expr (asm-parse-data-expr (asm-tokens->string val-group)))
+         (val (if (eq? (car val-expr) 'num) (cdr val-expr) 0)))
+    (list (if (> repeat 0) repeat 0)
+          (if (> size 0) size 1)
+          val)))
+
+(define (asm-generate-fill-bytes repeat size val)
+  (let* ((chunk (cond
+                  ((= size 1) (list (modulo (if (< val 0) (+ val 256) val) 256)))
+                  ((= size 2) (split-u16-le val))
+                  ((= size 4) (split-u32-le val))
+                  ((= size 8) (split-u64-le val))
+                  (else
+                   (let loop ((i 0) (acc '()))
+                     (if (< i size)
+                         (loop (+ i 1) (cons (modulo val 256) acc))
+                         acc))))))
+    (let rep-loop ((r repeat) (acc '()))
+      (if (<= r 0)
+          acc
+          (rep-loop (- r 1) (append chunk acc))))))
+
+(define (asm-canonical-section tok)
+  (let* ((s (if (string? tok) tok (symbol->string tok)))
+         (len (string-length s))
+         (clean-s (if (and (>= len 2) (char=? (string-ref s 0) #\") (char=? (string-ref s (- len 1)) #\"))
+                      (substring s 1 (- len 1))
+                      s)))
+    (cond
+      ((or (string=? clean-s ".text") (string-starts-with? clean-s ".text")) 'text)
+      ((or (string=? clean-s ".rodata") (string-starts-with? clean-s ".rodata")) 'rodata)
+      ((or (string=? clean-s ".data") (string-starts-with? clean-s ".data")) 'data)
+      ((or (string=? clean-s ".bss") (string-starts-with? clean-s ".bss")) 'bss)
+      ((or (string=? clean-s ".init_array") (string-starts-with? clean-s ".init_array")) 'init_array)
+      ((or (string=? clean-s "ulisp_globals_sec") (string-starts-with? clean-s "ulisp_globals_sec")) 'ulisp_globals_sec)
+      ((string-starts-with? clean-s ".note") 'note)
+      (else 'text))))
+
+;; -----------------------------------------------------------------------
 ;; 4. Direct x86-64 Instruction Encoding Engine
 ;; -----------------------------------------------------------------------
 ;; Operand AST definitions:
@@ -1087,6 +1199,9 @@
 (define (assemble-x86-lines lines)
   (let ((file-table-box (cons '() '()))
         (line-table-box (cons '() '()))
+        (globl-box (cons '() '()))
+        (weak-box (cons '() '()))
+        (types-box (cons '() '()))
         (sym-map (make-symbol-map 8192)))
     (let pass1-loop ((lines-rest lines)
                    (sym-table '())
@@ -1163,8 +1278,52 @@
                         ((string-starts-with? clean ".section .init_array")
                          (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
                                      'data text-len rodata-len data-len bss-len entry-off))
+                        ((or (string=? first ".section") (string=? first ".pushsection"))
+                         (let ((target (if (pair? (cdr tokens)) (asm-canonical-section (cadr tokens)) 'text)))
+                           (case target
+                             ((text) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops 'text text-len rodata-len data-len bss-len entry-off))
+                             ((data) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops 'data text-len rodata-len data-len bss-len entry-off))
+                             ((rodata) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops 'rodata text-len rodata-len data-len bss-len entry-off))
+                             ((bss) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops 'bss text-len rodata-len data-len bss-len entry-off))
+                             ((init_array) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops 'data text-len rodata-len data-len bss-len entry-off))
+                             ((ulisp_globals_sec) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops 'rodata text-len rodata-len data-len bss-len entry-off))
+                             (else (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops cur-sec text-len rodata-len data-len bss-len entry-off)))))
+
+                        ;; Symbol binding and type directives (Issue #830)
+                        ((string=? first ".globl")
+                         (let ((groups (asm-split-by-comma (cdr tokens))))
+                           (for-each (lambda (g)
+                                       (let ((sym (asm-tokens->string g)))
+                                         (if (> (string-length sym) 0)
+                                             (set-car! globl-box (cons sym (car globl-box))))))
+                                     groups)
+                           (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
+                                       cur-sec text-len rodata-len data-len bss-len entry-off)))
+                        ((string=? first ".weak")
+                         (let ((groups (asm-split-by-comma (cdr tokens))))
+                           (for-each (lambda (g)
+                                       (let ((sym (asm-tokens->string g)))
+                                         (if (> (string-length sym) 0)
+                                             (set-car! weak-box (cons sym (car weak-box))))))
+                                     groups)
+                           (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
+                                       cur-sec text-len rodata-len data-len bss-len entry-off)))
+                        ((string=? first ".type")
+                         (if (and (pair? (cdr tokens)) (pair? (cddr tokens)))
+                             (let* ((sym (cadr tokens))
+                                    (rest-toks (cddr tokens))
+                                    (type-tok (if (and (string=? (car rest-toks) ",") (pair? (cdr rest-toks)))
+                                                  (cadr rest-toks)
+                                                  (car rest-toks)))
+                                    (stt (cond
+                                           ((or (string=? type-tok "@function") (string=? type-tok "%function")) 2)
+                                           ((or (string=? type-tok "@object") (string=? type-tok "%object")) 1)
+                                           (else 0))))
+                               (set-car! types-box (cons (cons sym stt) (car types-box)))))
+                         (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
+                                     cur-sec text-len rodata-len data-len bss-len entry-off))
+
                         ((or (string-starts-with? clean ".section .note")
-                             (string=? first ".globl") (string=? first ".weak") (string=? first ".type")
                              (string=? first ".intel_syntax"))
                          (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
                                      cur-sec text-len rodata-len data-len bss-len entry-off))
@@ -1223,106 +1382,142 @@
 
                         ;; Data directives: .byte
                         ((string=? first ".byte")
-                         (let byte-loop ((ts (cdr tokens))
-                                         (cur-text-ops text-ops) (cur-rodata-ops rodata-ops) (cur-data-ops data-ops)
-                                         (cur-tlen text-len) (cur-rlen rodata-len) (cur-dlen data-len))
-                           (if (pair? ts)
-                               (if (string=? (car ts) ",")
-                                   (byte-loop (cdr ts) cur-text-ops cur-rodata-ops cur-data-ops cur-tlen cur-rlen cur-dlen)
-                                   (let* ((b-num (safe-string->number (car ts)))
-                                          (b (if b-num b-num 0)))
-                                     (case cur-sec
-                                       ((text)
-                                        (byte-loop (cdr ts) (cons (list b) cur-text-ops) cur-rodata-ops cur-data-ops
-                                                   (+ cur-tlen 1) cur-rlen cur-dlen))
-                                       ((data)
-                                        (byte-loop (cdr ts) cur-text-ops cur-rodata-ops (cons (list b) cur-data-ops)
-                                                   cur-tlen cur-rlen (+ cur-dlen 1)))
-                                       (else
-                                        (byte-loop (cdr ts) cur-text-ops (cons (list b) cur-rodata-ops) cur-data-ops
-                                                   cur-tlen (+ cur-rlen 1) cur-dlen)))))
-                               (pass1-loop (cdr lines-rest) sym-table relocs
-                                           cur-text-ops cur-rodata-ops cur-data-ops cur-sec
-                                           cur-tlen cur-rlen cur-dlen bss-len entry-off))))
-
-                        ;; Data directives: .quad
-                        ((string=? first ".quad")
-                         (let* ((args (cdr tokens))
-                                (arg-str (let loop ((ts args) (acc ""))
-                                           (if (null? ts) (asm-trim-string acc)
-                                               (loop (cdr ts) (string-append acc (car ts) " ")))))
-                                (num (safe-string->number arg-str)))
-                           (if num
-                               (let ((bs (split-u64-le num)))
+                         (let* ((groups (asm-split-by-comma (cdr tokens))))
+                           (let byte-loop ((gs groups)
+                                           (cur-ops (case cur-sec ((text) text-ops) ((data) data-ops) (else rodata-ops)))
+                                           (cur-len (case cur-sec ((text) text-len) ((data) data-len) (else rodata-len))))
+                             (if (null? gs)
                                  (case cur-sec
-                                   ((text)
-                                    (pass1-loop (cdr lines-rest) sym-table relocs (cons bs text-ops) rodata-ops data-ops
-                                                cur-sec (+ text-len 8) rodata-len data-len bss-len entry-off))
-                                   ((data)
-                                    (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops (cons bs data-ops)
-                                                cur-sec text-len rodata-len (+ data-len 8) bss-len entry-off))
-                                   (else
-                                    (pass1-loop (cdr lines-rest) sym-table relocs text-ops (cons bs rodata-ops) data-ops
-                                                cur-sec text-len (+ rodata-len 8) data-len bss-len entry-off))))
-                               (let* ((plus-pos (let loop ((i 0))
-                                                  (if (or (>= i (string-length arg-str)) (char=? (string-ref arg-str i) #\+))
-                                                      i
-                                                      (loop (+ i 1)))))
-                                      (sym-name (asm-trim-string (if (< plus-pos (string-length arg-str))
-                                                                     (substring arg-str 0 plus-pos)
-                                                                     arg-str)))
-                                      (addend (if (< plus-pos (string-length arg-str))
-                                                  (let ((n (safe-string->number (asm-trim-string (substring arg-str (+ plus-pos 1) (string-length arg-str))))))
-                                                    (if n n 0))
-                                                  0)))
-                                 (case cur-sec
-                                   ((data)
-                                    (pass1-loop (cdr lines-rest) sym-table
-                                                (cons (list 'abs64 'data data-len sym-name addend) relocs)
-                                                text-ops rodata-ops (cons '(0 0 0 0 0 0 0 0) data-ops)
-                                                cur-sec text-len rodata-len (+ data-len 8) bss-len entry-off))
-                                   (else
-                                    (pass1-loop (cdr lines-rest) sym-table
-                                                (cons (list 'abs64 'rodata rodata-len sym-name addend) relocs)
-                                                text-ops (cons '(0 0 0 0 0 0 0 0) rodata-ops) data-ops
-                                                cur-sec text-len (+ rodata-len 8) data-len bss-len entry-off)))))))
+                                   ((text) (pass1-loop (cdr lines-rest) sym-table relocs cur-ops rodata-ops data-ops cur-sec cur-len rodata-len data-len bss-len entry-off))
+                                   ((data) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops cur-ops cur-sec text-len rodata-len cur-len bss-len entry-off))
+                                   (else   (pass1-loop (cdr lines-rest) sym-table relocs text-ops cur-ops data-ops cur-sec text-len cur-len data-len bss-len entry-off)))
+                                 (let* ((g (car gs))
+                                        (expr (asm-parse-data-expr (asm-tokens->string g)))
+                                        (val (if (eq? (car expr) 'num) (cdr expr) 0))
+                                        (b (modulo (if (< val 0) (+ val 256) val) 256)))
+                                   (byte-loop (cdr gs) (cons (list b) cur-ops) (+ cur-len 1)))))))
 
-                        ;; Data directives: .asciz / .ascii
-                        ((or (string=? first ".asciz") (string=? first ".ascii"))
-                         (let* ((null-term? (string=? first ".asciz"))
-                                (str-tok (if (pair? (cdr tokens)) (cadr tokens) ""))
-                                (bytes (let loop ((i 0) (acc '()))
-                                         (if (>= i (string-length str-tok))
-                                             (reverse (if null-term? (cons 0 acc) acc))
-                                             (loop (+ i 1) (cons (char->integer (string-ref str-tok i)) acc)))))
-                                (blen (length bytes)))
-                           (case cur-sec
-                             ((text)
-                              (pass1-loop (cdr lines-rest) sym-table relocs (cons bytes text-ops) rodata-ops data-ops
-                                          cur-sec (+ text-len blen) rodata-len data-len bss-len entry-off))
-                             ((data)
-                              (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops (cons bytes data-ops)
-                                          cur-sec text-len rodata-len (+ data-len blen) bss-len entry-off))
-                             (else
-                              (pass1-loop (cdr lines-rest) sym-table relocs text-ops (cons bytes rodata-ops) data-ops
-                                          cur-sec text-len (+ rodata-len blen) data-len bss-len entry-off)))))
+                        ;; Data directives: .short / .2byte
+                        ((or (string=? first ".short") (string=? first ".2byte"))
+                         (let* ((groups (asm-split-by-comma (cdr tokens))))
+                           (let short-loop ((gs groups)
+                                            (cur-ops (case cur-sec ((text) text-ops) ((data) data-ops) (else rodata-ops)))
+                                            (cur-len (case cur-sec ((text) text-len) ((data) data-len) (else rodata-len))))
+                             (if (null? gs)
+                                 (case cur-sec
+                                   ((text) (pass1-loop (cdr lines-rest) sym-table relocs cur-ops rodata-ops data-ops cur-sec cur-len rodata-len data-len bss-len entry-off))
+                                   ((data) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops cur-ops cur-sec text-len rodata-len cur-len bss-len entry-off))
+                                   (else   (pass1-loop (cdr lines-rest) sym-table relocs text-ops cur-ops data-ops cur-sec text-len cur-len data-len bss-len entry-off)))
+                                 (let* ((g (car gs))
+                                        (expr (asm-parse-data-expr (asm-tokens->string g)))
+                                        (val (if (eq? (car expr) 'num) (cdr expr) 0))
+                                        (bs (split-u16-le val)))
+                                   (short-loop (cdr gs) (cons bs cur-ops) (+ cur-len 2)))))))
+
+                        ;; Data directives: .long / .4byte
+                        ((or (string=? first ".long") (string=? first ".4byte"))
+                         (let* ((groups (asm-split-by-comma (cdr tokens))))
+                           (let long-loop ((gs groups)
+                                           (cur-ops (case cur-sec ((text) text-ops) ((data) data-ops) (else rodata-ops)))
+                                           (cur-len (case cur-sec ((text) text-len) ((data) data-len) (else rodata-len)))
+                                           (cur-rels relocs))
+                             (if (null? gs)
+                                 (case cur-sec
+                                   ((text) (pass1-loop (cdr lines-rest) sym-table cur-rels cur-ops rodata-ops data-ops cur-sec cur-len rodata-len data-len bss-len entry-off))
+                                   ((data) (pass1-loop (cdr lines-rest) sym-table cur-rels text-ops rodata-ops cur-ops cur-sec text-len rodata-len cur-len bss-len entry-off))
+                                   (else   (pass1-loop (cdr lines-rest) sym-table cur-rels text-ops cur-ops data-ops cur-sec text-len cur-len data-len bss-len entry-off)))
+                                 (let* ((g (car gs))
+                                        (expr (asm-parse-data-expr (asm-tokens->string g))))
+                                   (if (eq? (car expr) 'num)
+                                       (let ((bs (split-u32-le (cdr expr))))
+                                         (long-loop (cdr gs) (cons bs cur-ops) (+ cur-len 4) cur-rels))
+                                       (let* ((sym-info (cdr expr))
+                                              (sym-name (car sym-info))
+                                              (addend (cdr sym-info))
+                                              (new-rel (list 'abs32 cur-sec cur-len sym-name addend)))
+                                         (long-loop (cdr gs) (cons '(0 0 0 0) cur-ops) (+ cur-len 4) (cons new-rel cur-rels)))))))))
+
+                        ;; Data directives: .quad / .8byte
+                        ((or (string=? first ".quad") (string=? first ".8byte"))
+                         (let* ((groups (asm-split-by-comma (cdr tokens))))
+                           (let quad-loop ((gs groups)
+                                           (cur-ops (case cur-sec ((text) text-ops) ((data) data-ops) (else rodata-ops)))
+                                           (cur-len (case cur-sec ((text) text-len) ((data) data-len) (else rodata-len)))
+                                           (cur-rels relocs))
+                             (if (null? gs)
+                                 (case cur-sec
+                                   ((text) (pass1-loop (cdr lines-rest) sym-table cur-rels cur-ops rodata-ops data-ops cur-sec cur-len rodata-len data-len bss-len entry-off))
+                                   ((data) (pass1-loop (cdr lines-rest) sym-table cur-rels text-ops rodata-ops cur-ops cur-sec text-len rodata-len cur-len bss-len entry-off))
+                                   (else   (pass1-loop (cdr lines-rest) sym-table cur-rels text-ops cur-ops data-ops cur-sec text-len cur-len data-len bss-len entry-off)))
+                                 (let* ((g (car gs))
+                                        (expr (asm-parse-data-expr (asm-tokens->string g))))
+                                   (if (eq? (car expr) 'num)
+                                       (let ((bs (split-u64-le (cdr expr))))
+                                         (quad-loop (cdr gs) (cons bs cur-ops) (+ cur-len 8) cur-rels))
+                                       (let* ((sym-info (cdr expr))
+                                              (sym-name (car sym-info))
+                                              (addend (cdr sym-info))
+                                              (new-rel (list 'abs64 cur-sec cur-len sym-name addend)))
+                                         (quad-loop (cdr gs) (cons '(0 0 0 0 0 0 0 0) cur-ops) (+ cur-len 8) (cons new-rel cur-rels)))))))))
+
+                        ;; Data directives: .string / .asciz / .ascii
+                        ((or (string=? first ".string") (string=? first ".asciz") (string=? first ".ascii"))
+                         (let* ((null-term? (not (string=? first ".ascii")))
+                                (groups (asm-split-by-comma (cdr tokens))))
+                           (let str-loop ((gs groups)
+                                          (cur-ops (case cur-sec ((text) text-ops) ((data) data-ops) (else rodata-ops)))
+                                          (cur-len (case cur-sec ((text) text-len) ((data) data-len) (else rodata-len))))
+                             (if (null? gs)
+                                 (case cur-sec
+                                   ((text) (pass1-loop (cdr lines-rest) sym-table relocs cur-ops rodata-ops data-ops cur-sec cur-len rodata-len data-len bss-len entry-off))
+                                   ((data) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops cur-ops cur-sec text-len rodata-len cur-len bss-len entry-off))
+                                   (else   (pass1-loop (cdr lines-rest) sym-table relocs text-ops cur-ops data-ops cur-sec text-len cur-len data-len bss-len entry-off)))
+                                 (let* ((g (car gs))
+                                        (expr (asm-parse-data-expr (asm-tokens->string g)))
+                                        (raw-str (cond
+                                                   ((eq? (car expr) 'str) (cdr expr))
+                                                   ((pair? g) (car g))
+                                                   (else "")))
+                                        (bs (asm-string->bytes raw-str null-term?))
+                                        (blen (length bs)))
+                                   (str-loop (cdr gs) (cons bs cur-ops) (+ cur-len blen)))))))
 
                         ;; Data directives: .space / .zero
                         ((or (string=? first ".space") (string=? first ".zero"))
-                         (let ((cnt (if (pair? (cdr tokens)) (safe-string->number (cadr tokens)) 0)))
-                           (if (and cnt (> cnt 0))
-                               (case cur-sec
-                                 ((bss)
-                                  (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
-                                              cur-sec text-len rodata-len data-len (+ bss-len cnt) entry-off))
-                                 ((data)
-                                  (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops (cons (cons 'pad-zero cnt) data-ops)
-                                              cur-sec text-len rodata-len (+ data-len cnt) bss-len entry-off))
-                                 (else
-                                  (pass1-loop (cdr lines-rest) sym-table relocs text-ops (cons (cons 'pad-zero cnt) rodata-ops) data-ops
-                                              cur-sec text-len (+ rodata-len cnt) data-len bss-len entry-off)))
-                               (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops
-                                           cur-sec text-len rodata-len data-len bss-len entry-off))))
+                         (let* ((groups (asm-split-by-comma (cdr tokens)))
+                                (cnt-expr (if (pair? groups) (asm-parse-data-expr (asm-tokens->string (car groups))) '(num . 0)))
+                                (cnt (if (eq? (car cnt-expr) 'num) (cdr cnt-expr) 0))
+                                (val-expr (if (and (pair? groups) (pair? (cdr groups))) (asm-parse-data-expr (asm-tokens->string (cadr groups))) '(num . 0)))
+                                (val (if (eq? (car val-expr) 'num) (cdr val-expr) 0)))
+                           (if (<= cnt 0)
+                               (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops cur-sec text-len rodata-len data-len bss-len entry-off)
+                               (if (eq? cur-sec 'bss)
+                                   (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops cur-sec text-len rodata-len data-len (+ bss-len cnt) entry-off)
+                                   (let ((op (if (= val 0) (cons 'pad-zero cnt) (asm-make-byte-list cnt val))))
+                                     (case cur-sec
+                                       ((text) (pass1-loop (cdr lines-rest) sym-table relocs (cons op text-ops) rodata-ops data-ops cur-sec (+ text-len cnt) rodata-len data-len bss-len entry-off))
+                                       ((data) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops (cons op data-ops) cur-sec text-len rodata-len (+ data-len cnt) bss-len entry-off))
+                                       (else   (pass1-loop (cdr lines-rest) sym-table relocs text-ops (cons op rodata-ops) data-ops cur-sec text-len (+ rodata-len cnt) data-len bss-len entry-off))))))))
+
+                        ;; Data directives: .fill
+                        ((string=? first ".fill")
+                         (let* ((groups (asm-split-by-comma (cdr tokens)))
+                                (fill-params (asm-parse-fill-args groups))
+                                (repeat (car fill-params))
+                                (size (cadr fill-params))
+                                (val (caddr fill-params))
+                                (total-bytes (* repeat size)))
+                           (if (<= total-bytes 0)
+                               (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops cur-sec text-len rodata-len data-len bss-len entry-off)
+                               (if (eq? cur-sec 'bss)
+                                   (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops data-ops cur-sec text-len rodata-len data-len (+ bss-len total-bytes) entry-off)
+                                   (let ((op (if (= val 0)
+                                                 (cons 'pad-zero total-bytes)
+                                                 (asm-generate-fill-bytes repeat size val))))
+                                     (case cur-sec
+                                       ((text) (pass1-loop (cdr lines-rest) sym-table relocs (cons op text-ops) rodata-ops data-ops cur-sec (+ text-len total-bytes) rodata-len data-len bss-len entry-off))
+                                       ((data) (pass1-loop (cdr lines-rest) sym-table relocs text-ops rodata-ops (cons op data-ops) cur-sec text-len rodata-len (+ data-len total-bytes) bss-len entry-off))
+                                       (else   (pass1-loop (cdr lines-rest) sym-table relocs text-ops (cons op rodata-ops) data-ops cur-sec text-len (+ rodata-len total-bytes) data-len bss-len entry-off))))))))
 
                         ;; Instruction
                         (else
@@ -1448,16 +1643,29 @@
                        (elf64-set-u32-le! text-bv patch-off diff)))
 
                     ((abs64)
-                     (let ((target-bv (if (eq? sec 'data) data-bv rodata-bv)))
-                       (elf64-set-u64-le! target-bv patch-off target-vaddr))))
+                     (let ((target-bv (case sec
+                                        ((text) text-bv)
+                                        ((data) data-bv)
+                                        (else rodata-bv))))
+                       (elf64-set-u64-le! target-bv patch-off target-vaddr)))
+
+                    ((abs32 abs32s)
+                     (let ((target-bv (case sec
+                                        ((text) text-bv)
+                                        ((data) data-bv)
+                                        (else rodata-bv))))
+                       (elf64-set-u32-le! target-bv patch-off target-vaddr))))
                   (reloc-loop (cdr rels)))
                 #t))
 
-          ;; Return tuple: (text-bv rodata-bv data-bv bss-size entry-offset file-table line-table sym-table)
+          ;; Return tuple: (text-bv rodata-bv data-bv bss-size entry-offset file-table line-table sym-table globl-syms weak-syms sym-types)
           (list text-bv rodata-bv data-bv bss-len (if (= entry-off -1) 0 entry-off)
                 (reverse (car file-table-box))
                 (reverse (car line-table-box))
-                sym-table))))))
+                sym-table
+                (reverse (car globl-box))
+                (reverse (car weak-box))
+                (reverse (car types-box))))))))
 
 ;; -----------------------------------------------------------------------
 ;; 6. Relocatable ELF64 Object (ET_REL) 2-Pass Assembler (Issue #783)
@@ -1589,43 +1797,46 @@
                                    (pass1-loop (cdr lines-rest) cur-sec))))
 
                             ;; Section switching directives
-                            ((string=? first ".text")
+                            ((or (string=? first ".text") (string-starts-with? clean ".section .text"))
                              (pass1-loop (cdr lines-rest) 'text))
-                            ((or (string=? first ".data") (string=? first ".section .data"))
+                            ((or (string=? first ".data") (string-starts-with? clean ".section .data"))
                              (pass1-loop (cdr lines-rest) 'data))
-                            ((or (string=? first ".rodata") (string=? first ".section .rodata"))
+                            ((or (string=? first ".rodata") (string-starts-with? clean ".section .rodata"))
                              (pass1-loop (cdr lines-rest) 'rodata))
-                            ((string=? first ".bss")
+                            ((or (string=? first ".bss") (string-starts-with? clean ".section .bss"))
                              (pass1-loop (cdr lines-rest) 'bss))
                             ((string-starts-with? clean ".section ulisp_globals_sec")
                              (pass1-loop (cdr lines-rest) 'ulisp_globals_sec))
                             ((string-starts-with? clean ".section .init_array")
                              (pass1-loop (cdr lines-rest) 'init_array))
-                            ((string-starts-with? clean ".section .data")
-                             (pass1-loop (cdr lines-rest) 'data))
-                            ((string-starts-with? clean ".section .rodata")
-                             (pass1-loop (cdr lines-rest) 'rodata))
-                            ((string-starts-with? clean ".section .text")
-                             (pass1-loop (cdr lines-rest) 'text))
-                            ((string-starts-with? clean ".section .bss")
-                             (pass1-loop (cdr lines-rest) 'bss))
+                            ((or (string=? first ".section") (string=? first ".pushsection"))
+                             (let ((target (if (pair? (cdr tokens)) (asm-canonical-section (cadr tokens)) 'text)))
+                               (if (eq? target 'note)
+                                   (pass1-loop (cdr lines-rest) cur-sec)
+                                   (pass1-loop (cdr lines-rest) target))))
 
                             ;; Symbol binding & type directives
                             ((string=? first ".globl")
-                             (if (pair? (cdr tokens))
-                                 (let ((sym (cadr tokens)))
-                                   (if (not (symbol-map-contains? globl-map sym))
-                                       (begin
-                                         (symbol-map-set! globl-map sym #t)
-                                         (vector-set! globl-box 0 (cons sym (vector-ref globl-box 0)))))))
+                             (let ((groups (asm-split-by-comma (cdr tokens))))
+                               (for-each (lambda (g)
+                                           (let ((sym (asm-tokens->string g)))
+                                             (if (> (string-length sym) 0)
+                                                 (if (not (symbol-map-contains? globl-map sym))
+                                                     (begin
+                                                       (symbol-map-set! globl-map sym #t)
+                                                       (vector-set! globl-box 0 (cons sym (vector-ref globl-box 0))))))))
+                                         groups))
                              (pass1-loop (cdr lines-rest) cur-sec))
                             ((string=? first ".weak")
-                             (if (pair? (cdr tokens))
-                                 (let ((sym (cadr tokens)))
-                                   (if (not (symbol-map-contains? weak-map sym))
-                                       (begin
-                                         (symbol-map-set! weak-map sym #t)
-                                         (vector-set! weak-box 0 (cons sym (vector-ref weak-box 0)))))))
+                             (let ((groups (asm-split-by-comma (cdr tokens))))
+                               (for-each (lambda (g)
+                                           (let ((sym (asm-tokens->string g)))
+                                             (if (> (string-length sym) 0)
+                                                 (if (not (symbol-map-contains? weak-map sym))
+                                                     (begin
+                                                       (symbol-map-set! weak-map sym #t)
+                                                       (vector-set! weak-box 0 (cons sym (vector-ref weak-box 0))))))))
+                                         groups))
                              (pass1-loop (cdr lines-rest) cur-sec))
                             ((string=? first ".type")
                              (if (and (pair? (cdr tokens)) (pair? (cddr tokens)))
@@ -1662,60 +1873,97 @@
 
                             ;; Data directives: .byte
                             ((string=? first ".byte")
-                             (let byte-loop ((ts (cdr tokens)))
-                               (if (pair? ts)
-                                   (begin
-                                     (if (not (string=? (car ts) ","))
-                                         (let* ((b-num (safe-string->number (car ts)))
-                                                (b (if b-num b-num 0)))
-                                           (add-sec-op! cur-sec (list b) 1)))
-                                     (byte-loop (cdr ts)))
-                                   (pass1-loop (cdr lines-rest) cur-sec))))
+                             (let ((groups (asm-split-by-comma (cdr tokens))))
+                               (for-each (lambda (g)
+                                           (let* ((expr (asm-parse-data-expr (asm-tokens->string g)))
+                                                  (val (if (eq? (car expr) 'num) (cdr expr) 0))
+                                                  (b (modulo (if (< val 0) (+ val 256) val) 256)))
+                                             (add-sec-op! cur-sec (list b) 1)))
+                                         groups))
+                             (pass1-loop (cdr lines-rest) cur-sec))
 
-                            ;; Data directives: .quad
-                            ((string=? first ".quad")
-                             (let* ((args (cdr tokens))
-                                    (arg-str (let loop ((ts args) (acc ""))
-                                               (if (null? ts) (asm-trim-string acc)
-                                                   (loop (cdr ts) (string-append acc (car ts) " ")))))
-                                    (num (safe-string->number arg-str)))
-                               (if num
-                                   (begin
-                                     (add-sec-op! cur-sec (split-u64-le num) 8)
-                                     (pass1-loop (cdr lines-rest) cur-sec))
-                                   (let* ((plus-pos (let loop ((i 0))
-                                                      (if (or (>= i (string-length arg-str)) (char=? (string-ref arg-str i) #\+))
-                                                          i
-                                                          (loop (+ i 1)))))
-                                          (sym-name (asm-trim-string (if (< plus-pos (string-length arg-str))
-                                                                         (substring arg-str 0 plus-pos)
-                                                                         arg-str)))
-                                          (addend (if (< plus-pos (string-length arg-str))
-                                                      (let ((n (safe-string->number (asm-trim-string (substring arg-str (+ plus-pos 1) (string-length arg-str))))))
-                                                        (if n n 0))
-                                                      0))
-                                          (cur-len (get-sec-len cur-sec)))
-                                     (vector-set! relocs-box 0 (cons (list 'abs64 cur-sec cur-len sym-name addend) (vector-ref relocs-box 0)))
-                                     (add-sec-op! cur-sec '(0 0 0 0 0 0 0 0) 8)
-                                     (pass1-loop (cdr lines-rest) cur-sec)))))
+                            ;; Data directives: .short / .2byte
+                            ((or (string=? first ".short") (string=? first ".2byte"))
+                             (let ((groups (asm-split-by-comma (cdr tokens))))
+                               (for-each (lambda (g)
+                                           (let* ((expr (asm-parse-data-expr (asm-tokens->string g)))
+                                                  (val (if (eq? (car expr) 'num) (cdr expr) 0)))
+                                             (add-sec-op! cur-sec (split-u16-le val) 2)))
+                                         groups))
+                             (pass1-loop (cdr lines-rest) cur-sec))
 
-                            ;; Data directives: .asciz / .ascii
-                            ((or (string=? first ".asciz") (string=? first ".ascii"))
-                             (let* ((null-term? (string=? first ".asciz"))
-                                    (str-tok (if (pair? (cdr tokens)) (cadr tokens) ""))
-                                    (bytes (let loop ((i 0) (acc '()))
-                                             (if (>= i (string-length str-tok))
-                                                 (reverse (if null-term? (cons 0 acc) acc))
-                                                 (loop (+ i 1) (cons (char->integer (string-ref str-tok i)) acc)))))
-                                    (blen (length bytes)))
-                               (add-sec-op! cur-sec bytes blen)
-                               (pass1-loop (cdr lines-rest) cur-sec)))
+                            ;; Data directives: .long / .4byte
+                            ((or (string=? first ".long") (string=? first ".4byte"))
+                             (let ((groups (asm-split-by-comma (cdr tokens))))
+                               (for-each (lambda (g)
+                                           (let* ((expr (asm-parse-data-expr (asm-tokens->string g))))
+                                             (if (eq? (car expr) 'num)
+                                                 (add-sec-op! cur-sec (split-u32-le (cdr expr)) 4)
+                                                 (let* ((sym-info (cdr expr))
+                                                        (sym-name (car sym-info))
+                                                        (addend (cdr sym-info))
+                                                        (cur-len (get-sec-len cur-sec)))
+                                                   (vector-set! relocs-box 0 (cons (list 'abs32 cur-sec cur-len sym-name addend) (vector-ref relocs-box 0)))
+                                                   (add-sec-op! cur-sec '(0 0 0 0) 4)))))
+                                         groups))
+                             (pass1-loop (cdr lines-rest) cur-sec))
+
+                            ;; Data directives: .quad / .8byte
+                            ((or (string=? first ".quad") (string=? first ".8byte"))
+                             (let ((groups (asm-split-by-comma (cdr tokens))))
+                               (for-each (lambda (g)
+                                           (let* ((expr (asm-parse-data-expr (asm-tokens->string g))))
+                                             (if (eq? (car expr) 'num)
+                                                 (add-sec-op! cur-sec (split-u64-le (cdr expr)) 8)
+                                                 (let* ((sym-info (cdr expr))
+                                                        (sym-name (car sym-info))
+                                                        (addend (cdr sym-info))
+                                                        (cur-len (get-sec-len cur-sec)))
+                                                   (vector-set! relocs-box 0 (cons (list 'abs64 cur-sec cur-len sym-name addend) (vector-ref relocs-box 0)))
+                                                   (add-sec-op! cur-sec '(0 0 0 0 0 0 0 0) 8)))))
+                                         groups))
+                             (pass1-loop (cdr lines-rest) cur-sec))
+
+                            ;; Data directives: .string / .asciz / .ascii
+                            ((or (string=? first ".string") (string=? first ".asciz") (string=? first ".ascii"))
+                             (let* ((null-term? (not (string=? first ".ascii")))
+                                    (groups (asm-split-by-comma (cdr tokens))))
+                               (for-each (lambda (g)
+                                           (let* ((expr (asm-parse-data-expr (asm-tokens->string g)))
+                                                  (raw-str (cond
+                                                             ((eq? (car expr) 'str) (cdr expr))
+                                                             ((pair? g) (car g))
+                                                             (else "")))
+                                                  (bs (asm-string->bytes raw-str null-term?)))
+                                             (add-sec-op! cur-sec bs (length bs))))
+                                         groups))
+                             (pass1-loop (cdr lines-rest) cur-sec))
 
                             ;; Data directives: .space / .zero
                             ((or (string=? first ".space") (string=? first ".zero"))
-                             (let ((cnt (if (pair? (cdr tokens)) (safe-string->number (cadr tokens)) 0)))
-                               (if (and cnt (> cnt 0))
-                                   (add-sec-op! cur-sec (cons 'pad-zero cnt) cnt))
+                             (let* ((groups (asm-split-by-comma (cdr tokens)))
+                                    (cnt-expr (if (pair? groups) (asm-parse-data-expr (asm-tokens->string (car groups))) '(num . 0)))
+                                    (cnt (if (eq? (car cnt-expr) 'num) (cdr cnt-expr) 0))
+                                    (val-expr (if (and (pair? groups) (pair? (cdr groups))) (asm-parse-data-expr (asm-tokens->string (cadr groups))) '(num . 0)))
+                                    (val (if (eq? (car val-expr) 'num) (cdr val-expr) 0)))
+                               (if (> cnt 0)
+                                   (if (= val 0)
+                                       (add-sec-op! cur-sec (cons 'pad-zero cnt) cnt)
+                                       (add-sec-op! cur-sec (asm-make-byte-list cnt val) cnt)))
+                               (pass1-loop (cdr lines-rest) cur-sec)))
+
+                            ;; Data directives: .fill
+                            ((string=? first ".fill")
+                             (let* ((groups (asm-split-by-comma (cdr tokens)))
+                                    (fill-params (asm-parse-fill-args groups))
+                                    (repeat (car fill-params))
+                                    (size (cadr fill-params))
+                                    (val (caddr fill-params))
+                                    (total-bytes (* repeat size)))
+                               (if (> total-bytes 0)
+                                   (if (= val 0)
+                                       (add-sec-op! cur-sec (cons 'pad-zero total-bytes) total-bytes)
+                                       (add-sec-op! cur-sec (asm-generate-fill-bytes repeat size val) total-bytes)))
                                (pass1-loop (cdr lines-rest) cur-sec)))
 
                             ;; Instruction
@@ -1798,11 +2046,13 @@
                                           ((rel32) 4)       ;; R_X86_64_PLT32 (4)
                                           ((rip_disp32) 2)  ;; R_X86_64_PC32 (2)
                                           ((abs64) 1)       ;; R_X86_64_64 (1)
+                                          ((abs32) 10)      ;; R_X86_64_32 (10)
+                                          ((abs32s) 11)     ;; R_X86_64_32S (11)
                                           (else 2)))
                                 (base-addend (case type
                                                ((rel32) (- addend 4))
                                                ((rip_disp32) (- (- addend 4) adj))
-                                               ((abs64) addend)
+                                               ((abs64 abs32 abs32s) addend)
                                                (else addend))))
                            (if (and sym-entry (not is-exported?))
                                ;; Local symbol defined in target-sec: relocate against section symbol (1..6)
