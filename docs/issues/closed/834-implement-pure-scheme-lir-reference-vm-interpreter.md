@@ -2,7 +2,7 @@
 ID: 834
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 (ID: 834)
@@ -64,19 +64,19 @@ DSN-33-02 §7.1 および S1 マイルストーン（基盤整備 ＆ Reference 
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/vm/lir_interpreter.scm](../../ulisp/vm/lir_interpreter.scm):
+- [x] [ulisp/vm/lir_interpreter.scm](../../ulisp/vm/lir_interpreter.scm):
   - 新設：LIR Reference VM コア実装（`<lir-vm>` レコード、仮想レジスタ、64-bit リニアメモリ、ステータス、トラップ）。
   - 新設：リニアメモリ・Little-Endian 読込・書込エンジン（`u8`〜`u64`, `i8`〜`i64`, `f32`, `f64`）。
   - 新設：LIR オペランド評価器（レジスタ、即値、スタックスロット、メモリオフセット、SIB、文字列参照）。
   - 新設：命令ディスパッチャ（ALU、オーバーフロー算術、ビット演算、Typed メモリ、条件フラグ、SSA ブロック遷移）。
   - 新設：呼出規約・関数フレーム管理（`%direct-call`, `%c-call`, `%return`）。
   - 新設：ステップ実行・トレーシング・デバッグフック（`lir-vm-step!`, `set-lir-vm-tracer!`）。
-- [ ] [ulisp/tests/test_lir_interpreter.scm](../../ulisp/tests/test_lir_interpreter.scm):
+- [x] [ulisp/tests/test_lir_interpreter.scm](../../ulisp/tests/test_lir_interpreter.scm):
   - 新設：参照 VM の網羅的単体テストスイート（算術、ビット演算、オーバーフロー、メモリ、SSA、多方向分岐、関数呼出し、再帰、浮動小数点、トラップ）。
-- [ ] [ulisp/Makefile](../../ulisp/Makefile):
+- [x] [ulisp/Makefile](../../ulisp/Makefile):
   - `test_lir_interpreter` ターゲットの新設および `test:` 依存関係への追加。
-- [ ] [docs/issues/README.md](README.md):
-  - Issue #834 のステータスを `Open (In Progress)` へ更新。
+- [x] [docs/issues/README.md](README.md):
+  - Issue #834 のステータスを `Closed (Completed)` へ更新。
 
 ---
 
@@ -227,11 +227,11 @@ Target Branch: `feat/834-pure-scheme-lir-reference-vm`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/vm/lir_interpreter.scm` が純粋 Scheme で実装され、外部依存ゼロで読み込み可能であること。
-- [ ] 64-bit 汎用レジスタ、XMM 浮動小数点レジスタ、EFLAGS 条件フラグ、および 16MB リニアメモリモデルが完全に動作すること。
-- [ ] 基本 ALU、符号なし演算、Issue #828 オーバーフロー算術、および Issue #826 型付きロード/ストア命令が仕様通り実行できること。
-- [ ] SSA `%block` 引数の並列コピー、`%jump-if`/`%jump-cond` 条件分岐、および `%direct-call`/`%return` 関数呼出し・再帰が正確に動作すること。
-- [ ] メモリ境界外アクセス、ゼロ除算、および Fuel 枯渇に対する安全トラップ（THREAT-834-1〜834-4）が 100% 機能すること。
-- [ ] 単体テスト `ulisp/tests/test_lir_interpreter.scm` の全テストケースが 100% PASS すること。
-- [ ] `make -C ulisp test_lir_interpreter` が正常終了し、`make test` に統合されていること。
-- [ ] `docs/issues/README.md` のステータスが更新されていること。
+- [x] `ulisp/vm/lir_interpreter.scm` が純粋 Scheme で実装され、外部依存ゼロで読み込み可能であること。
+- [x] 64-bit 汎用レジスタ、XMM 浮動小数点レジスタ、EFLAGS 条件フラグ、および 16MB リニアメモリモデルが完全に動作すること。
+- [x] 基本 ALU、符号なし演算、Issue #828 オーバーフロー算術、および Issue #826 型付きロード/ストア命令が仕様通り実行できること。
+- [x] SSA `%block` 引数の並列コピー、`%jump-if`/`%jump-cond` 条件分岐、および `%direct-call`/`%return` 関数呼出し・再帰が正確に動作すること。
+- [x] メモリ境界外アクセス、ゼロ除算、および Fuel 枯渇に対する安全トラップ（THREAT-834-1〜834-4）が 100% 機能すること。
+- [x] 単体テスト `ulisp/tests/test_lir_interpreter.scm` の全テストケースが 100% PASS すること。
+- [x] `make -C ulisp test_lir_interpreter` が正常終了し、`make test` に統合されていること。
+- [x] `docs/issues/README.md` のステータスが更新されていること。

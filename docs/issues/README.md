@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **834** | 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 | Feature | High | In Progress | [834-implement-pure-scheme-lir-reference-vm-interpreter.md](834-implement-pure-scheme-lir-reference-vm-interpreter.md) |
 | **835** | Core Machine LIR と Managed Runtime Dialect の完全直交分離 | Feature | High | New | [835-separate-core-machine-lir-from-managed-runtime-dialect.md](835-separate-core-machine-lir-from-managed-runtime-dialect.md) |
 | **836** | `define-value-repr` による値表現・ボクシング方式のプラグイン化 | Feature | Medium | New | [836-plugin-value-representation-and-boxing-scheme.md](836-plugin-value-representation-and-boxing-scheme.md) |
 | **837** | 構文解析後の一意束縛解決 (Binding ID) とスコープ環境管理の共通基盤化 | Feature | Medium | New | [837-unify-symbol-binding-resolution-and-scope-environment.md](837-unify-symbol-binding-resolution-and-scope-environment.md) |
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **834** | 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 | Feature | 2026-11-15 | [834-implement-pure-scheme-lir-reference-vm-interpreter.md](closed/834-implement-pure-scheme-lir-reference-vm-interpreter.md) |
 | **833** | コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン (Diagnostic Reporter) の導入 | Feature | 2026-11-15 | [833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md](closed/833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md) |
 | **832** | 純粋 Scheme による多倍長整数 (Bignum) および IEEE 754 相互変換標準ライブラリの実装 | Feature | 2026-11-15 | [832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md](closed/832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md) |
 | **831** | 160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証 | Feature | 2026-11-15 | [831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md](closed/831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md) |
