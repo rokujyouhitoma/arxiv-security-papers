@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **833** | コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン (Diagnostic Reporter) の導入 | Feature | Low | New | [833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md](833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md) |
+| **833** | コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン (Diagnostic Reporter) の導入 | Feature | Medium | In Progress | [833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md](833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md) |
 | **834** | 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 | Feature | High | New | [834-implement-pure-scheme-lir-reference-vm-interpreter.md](834-implement-pure-scheme-lir-reference-vm-interpreter.md) |
 | **835** | Core Machine LIR と Managed Runtime Dialect の完全直交分離 | Feature | High | New | [835-separate-core-machine-lir-from-managed-runtime-dialect.md](835-separate-core-machine-lir-from-managed-runtime-dialect.md) |
 | **836** | `define-value-repr` による値表現・ボクシング方式のプラグイン化 | Feature | Medium | New | [836-plugin-value-representation-and-boxing-scheme.md](836-plugin-value-representation-and-boxing-scheme.md) |
