@@ -24,6 +24,16 @@
     ((read) (port-read *stdin-port*))
     ((read p) (port-read p))))
 
+(define-syntax read-u8
+  (syntax-rules ()
+    ((read-u8) (port-read-u8 *stdin-port*))
+    ((read-u8 p) (port-read-u8 p))))
+
+(define-syntax write-u8
+  (syntax-rules ()
+    ((write-u8 b) (port-write-u8 b *stdout-port*))
+    ((write-u8 b p) (port-write-u8 b p))))
+
 (define-syntax write-bytevector
   (syntax-rules ()
     ((write-bytevector bv)
@@ -225,6 +235,38 @@
   scope-manager-pop!
   free-binding-ids
   closure-capture-binding-ids
-  symbol->hash-idx)
+  symbol->hash-idx
+  open-binary-input-file
+  open-binary-output-file
+  port-read-u8
+  port-write-u8
+  bitwise-and
+  bitwise-ior
+  source-span?
+  make-source-span
+  %make-source-span-raw
+  span-file
+  span-start-line
+  span-start-col
+  span-end-line
+  span-end-col
+  span-macro-origin
+  span-node-id
+  sbi-serialize
+  sbi-deserialize
+  sbi-deserialize-full
+  sbi-write-file
+  sbi-read-file
+  sbi-read-file-full
+  sbi-binary-bytevector?
+  sbi-binary-file?
+  sbi-import-forms
+  sbi-cache-valid?
+  sbi-load-or-build-pch
+  sbi-merge-lir-modules
+  sbi-sha256-bytevector
+  sbi-sha256-string
+  sbi-sha256-file
+  sbi-sha256-hex)
 
 

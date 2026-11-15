@@ -153,6 +153,16 @@
     ((and (pair? a) (pair? b))
      (and (equal? (car a) (car b))
           (equal? (cdr a) (cdr b))))
+    ((and (vector? a) (vector? b))
+     (let ((la (vector-length a))
+           (lb (vector-length b)))
+       (if (not (= la lb))
+           #f
+           (let loop ((i 0))
+             (cond
+               ((>= i la) #t)
+               ((equal? (vector-ref a i) (vector-ref b i)) (loop (+ i 1)))
+               (else #f))))))
     (else #f)))
 
 (define (assoc item ls)
@@ -257,6 +267,8 @@
               current-error-port
               open-input-file
               open-output-file
+              open-binary-input-file
+              open-binary-output-file
               open-input-string
               open-output-string
               get-output-string
