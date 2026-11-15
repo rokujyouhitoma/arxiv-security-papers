@@ -195,6 +195,7 @@
 
 (define (builtin-fixed-arity op)
   (cond
+    ((memq op '(write-char write-u8 write-string flush-output-port read-char peek-char)) #f)
     ((eq? op '-) #f)
     ((zero-arg-prim? op) 0)
     ((memq op '(open-output-string)) 0)

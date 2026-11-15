@@ -59,7 +59,7 @@
         63)))
 
 ;; ---------------------------------------------------------------------
-;; §6.8 Vectors: vector-append2
+;; §6.8 Vectors: vector-append2 / vector-append
 ;; ---------------------------------------------------------------------
 (define (vector-append2 v1 v2)
   (let* ((len1 (vector-length v1))
@@ -68,6 +68,48 @@
     (vector-copy-range! res 0 v1 0 len1)
     (vector-copy-range! res len1 v2 0 len2)
     res))
+
+(define vector-copy
+  (case-lambda
+    ((vec)
+     (vector-copy-range vec 0 (vector-length vec)))
+    ((vec start)
+     (vector-copy-range vec start (vector-length vec)))
+    ((vec start end)
+     (vector-copy-range vec start end))))
+
+(define vector-copy!
+  (case-lambda
+    ((to at from)
+     (vector-copy-range! to at from 0 (vector-length from)))
+    ((to at from start)
+     (vector-copy-range! to at from start (vector-length from)))
+    ((to at from start end)
+     (vector-copy-range! to at from start end))))
+
+(define-syntax vector-copy!
+  (syntax-rules ()
+    ((vector-copy! to at from)
+     (let ((f from))
+       (vector-copy-range! to at f 0 (vector-length f))))
+    ((vector-copy! to at from start)
+     (let ((f from))
+       (vector-copy-range! to at f start (vector-length f))))
+    ((vector-copy! to at from start end)
+     (vector-copy-range! to at from start end))))
+
+
+(define vector-append
+  (case-lambda
+    (() (%make-vector 0))
+    ((v) v)
+    ((v1 v2) (vector-append2 v1 v2))
+    ((v1 v2 . rest)
+     (let loop ((acc (vector-append2 v1 v2)) (rs rest))
+       (if (null? rs)
+           acc
+           (loop (vector-append2 acc (car rs)) (cdr rs)))))))
+
 
 ;; ---------------------------------------------------------------------
 ;; §6.8 Vectors: vector->list / vector->list-range / list->vector

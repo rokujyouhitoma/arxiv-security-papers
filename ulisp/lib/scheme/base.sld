@@ -48,6 +48,10 @@
     syntax-error
     let-syntax
     letrec-syntax
+    ...
+    =>
+    _
+    else
 
     ;; §6.1 Equivalence predicates
     eq?
@@ -219,6 +223,8 @@
     string-copy
     string-copy!
     string-fill!
+    string-map
+    string-for-each
 
     ;; §6.8 Vectors
     vector?
@@ -234,6 +240,9 @@
     vector-copy
     vector-copy!
     vector-fill!
+    vector-append
+    vector-map
+    vector-for-each
 
     ;; §6.9 Bytevectors
     bytevector?
@@ -310,6 +319,7 @@
     write-string
     write-bytevector
     flush-output-port
+    newline
 
     ;; §6.14 System interface
     features)
@@ -326,4 +336,5 @@
            "../exception.scm"
            "../continuation.scm"
            "../port.scm"
+           "../printer.scm"
            "../posix.scm"))

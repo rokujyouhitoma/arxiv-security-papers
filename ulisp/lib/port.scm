@@ -455,37 +455,60 @@
     (else
      (%write-char ch))))
 
-(define (port-write-string str p)
-  (cond
-    ((string-output-port? p)
-     (let ((slen (string-length str)))
-       (let loop ((i 0))
-         (if (< i slen)
-             (begin
-               (port-write-char (string-ref str i) p)
-               (loop (+ i 1)))
-             #t))))
-    ((file-output-port? p)
-     (let* ((fd (cadr p))
-            (slen (string-length str)))
-       (if (>= slen 4096)
-           (begin
-             (port-flush-output p)
-             (sys-write fd (%ptr-untag str) slen)
-             #t)
-           (let loop ((i 0))
-             (if (< i slen)
+(define (port-write-string-range str p start end)
+  (let ((count (- end start)))
+    (if (<= count 0)
+        #t
+        (cond
+          ((string-output-port? p)
+           (let loop ((i start))
+             (if (< i end)
                  (begin
                    (port-write-char (string-ref str i) p)
                    (loop (+ i 1)))
-                 #t)))))
-    ((and (pair? p) (eq? (car p) '%standard-output-port) (= (cadr p) 2))
-     (let ((slen (string-length str)))
-       (if (> slen 0)
-           (sys-write 2 (%ptr-untag str) slen)
-           0)))
-    (else
-     (%write-string str))))
+                 #t)))
+          ((file-output-port? p)
+           (let ((fd (cadr p)))
+             (port-flush-output p)
+             (sys-write fd (%ptr-add (%ptr-untag str) start) count)
+             #t))
+          ((and (pair? p) (eq? (car p) '%standard-output-port) (= (cadr p) 2))
+           (sys-write 2 (%ptr-add (%ptr-untag str) start) count)
+           #t)
+          ((and (pair? p) (eq? (car p) '%standard-output-port))
+           (let ((fd (cadr p)))
+             (if (= fd 1) (ulisp-flush) #t)
+             (sys-write fd (%ptr-add (%ptr-untag str) start) count)
+             #t))
+          (else
+           (let loop ((i start))
+             (if (< i end)
+                 (begin
+                   (%write-char (string-ref str i))
+                   (loop (+ i 1)))
+                 #t)))))))
+
+(define (port-write-string str p)
+  (port-write-string-range str p 0 (string-length str)))
+
+(define (port-read-string k p)
+  (if (<= k 0)
+      ""
+      (let ((ch (port-read-char p)))
+        (if (eof-object? ch)
+            ch
+            (let ((str (make-string k)))
+              (string-set! str 0 ch)
+              (let loop ((i 1))
+                (if (< i k)
+                    (let ((next-ch (port-read-char p)))
+                      (if (eof-object? next-ch)
+                          (substring str 0 i)
+                          (begin
+                            (string-set! str i next-ch)
+                            (loop (+ i 1)))))
+                    str)))))))
+
 
 ;;; -----------------------------------------------------------------------
 ;;; §6.13.1 High-Level Port Control & File Port Procedures
@@ -665,6 +688,170 @@
     ((flush-output-port) (port-flush-output (current-output-port)))
     ((flush-output-port p) (port-flush-output p))))
 
+;;; -----------------------------------------------------------------------
+;;; §6.13.2 R7RS Port Query & Readiness Predicates
+;;; -----------------------------------------------------------------------
+
+(define (port-char-ready? p)
+  (cond
+    ((string-input-port? p) #t)
+    ((bytevector-input-port? p) #t)
+    ((file-input-port? p)
+     (let* ((pos-cell (cadddr p))
+            (len-cell (car (cddddr p)))
+            (pos (car pos-cell))
+            (len (car len-cell)))
+       (if (< pos len)
+           #t
+           (let ((fd (cadr p)))
+             (sys-fd-ready? fd)))))
+    ((standard-input-port? p)
+     (sys-fd-ready? (cadr p)))
+    (else #t)))
+
+(define (port-u8-ready? p)
+  (port-char-ready? p))
+
+(define (port-read-bytevector! bv p start end)
+  (let ((count (- end start)))
+    (if (<= count 0)
+        0
+        (let ((b (port-read-u8 p)))
+          (if (eof-object? b)
+              b
+              (begin
+                (bytevector-u8-set! bv start b)
+                (let loop ((i (+ start 1)) (n 1))
+                  (if (< i end)
+                      (let ((next-b (port-read-u8 p)))
+                        (if (eof-object? next-b)
+                            n
+                            (begin
+                              (bytevector-u8-set! bv i next-b)
+                              (loop (+ i 1) (+ n 1)))))
+                      n))))))))
+
+(define (port-read-bytevector k p)
+  (if (<= k 0)
+      (%make-bytevector 0)
+      (let ((bv (%make-bytevector k)))
+        (let ((n (port-read-bytevector! bv p 0 k)))
+          (if (eof-object? n)
+              n
+              (if (< n k)
+                  (bytevector-copy-range bv 0 n)
+                  bv))))))
+
+;;; -----------------------------------------------------------------------
+;;; §6.13.3 R7RS Standard Port Input/Output First-Class Procedures
+;;; -----------------------------------------------------------------------
+
+(define char-ready?
+  (case-lambda
+    (() (port-char-ready? (current-input-port)))
+    ((p) (port-char-ready? p))))
+
+(define u8-ready?
+  (case-lambda
+    (() (port-u8-ready? (current-input-port)))
+    ((p) (port-u8-ready? p))))
+
+(define flush-output-port
+  (case-lambda
+    (() (port-flush-output (current-output-port)))
+    ((p) (port-flush-output p))))
+
+(define read-char
+  (case-lambda
+    (() (port-read-char (current-input-port)))
+    ((p) (port-read-char p))))
+
+(define peek-char
+  (case-lambda
+    (() (port-peek-char (current-input-port)))
+    ((p) (port-peek-char p))))
+
+(define read-line
+  (case-lambda
+    (() (port-read-line (current-input-port)))
+    ((p) (port-read-line p))))
+
+(define read-string
+  (case-lambda
+    ((k) (port-read-string k (current-input-port)))
+    ((k p) (port-read-string k p))))
+
+(define read-u8
+  (case-lambda
+    (() (port-read-u8 (current-input-port)))
+    ((p) (port-read-u8 p))))
+
+(define peek-u8
+  (case-lambda
+    (() (port-peek-u8 (current-input-port)))
+    ((p) (port-peek-u8 p))))
+
+(define write-char
+  (case-lambda
+    ((c) (port-write-char c (current-output-port)))
+    ((c p) (port-write-char c p))))
+
+(define write-u8
+  (case-lambda
+    ((b) (port-write-u8 b (current-output-port)))
+    ((b p) (port-write-u8 b p))))
+
+(define write-string
+  (case-lambda
+    ((s) (port-write-string-range s (current-output-port) 0 (string-length s)))
+    ((s p) (port-write-string-range s p 0 (string-length s)))
+    ((s p start) (port-write-string-range s p start (string-length s)))
+    ((s p start end) (port-write-string-range s p start end))))
+
+(define write-bytevector
+  (case-lambda
+    ((bv) (port-write-bytevector-range bv (current-output-port) 0 (bytevector-length bv)))
+    ((bv p) (port-write-bytevector-range bv p 0 (bytevector-length bv)))
+    ((bv p start) (port-write-bytevector-range bv p start (bytevector-length bv)))
+    ((bv p start end) (port-write-bytevector-range bv p start end))))
+
+(define read-bytevector!
+  (case-lambda
+    ((bv)
+     (port-read-bytevector! bv (current-input-port) 0 (bytevector-length bv)))
+    ((bv p)
+     (port-read-bytevector! bv p 0 (bytevector-length bv)))
+    ((bv p start)
+     (port-read-bytevector! bv p start (bytevector-length bv)))
+    ((bv p start end)
+     (port-read-bytevector! bv p start end))))
+
+(define read-bytevector
+  (case-lambda
+    ((k)
+     (port-read-bytevector k (current-input-port)))
+    ((k p)
+     (port-read-bytevector k p))))
+
+;;; -----------------------------------------------------------------------
+;;; §6.13.4 R7RS Port Inline Syntax (Direct Inlining & Boot Arity Bypass)
+;;; -----------------------------------------------------------------------
+
+(define-syntax char-ready?
+  (syntax-rules ()
+    ((char-ready?) (port-char-ready? (current-input-port)))
+    ((char-ready? p) (port-char-ready? p))))
+
+(define-syntax u8-ready?
+  (syntax-rules ()
+    ((u8-ready?) (port-u8-ready? (current-input-port)))
+    ((u8-ready? p) (port-u8-ready? p))))
+
+(define-syntax flush-output-port
+  (syntax-rules ()
+    ((flush-output-port) (port-flush-output (current-output-port)))
+    ((flush-output-port p) (port-flush-output p))))
+
 (define-syntax read-char
   (syntax-rules ()
     ((read-char) (port-read-char (current-input-port)))
@@ -679,6 +866,11 @@
   (syntax-rules ()
     ((read-line) (port-read-line (current-input-port)))
     ((read-line p) (port-read-line p))))
+
+(define-syntax read-string
+  (syntax-rules ()
+    ((read-string k) (port-read-string k (current-input-port)))
+    ((read-string k p) (port-read-string k p))))
 
 (define-syntax read-u8
   (syntax-rules ()
@@ -702,41 +894,28 @@
 
 (define-syntax write-string
   (syntax-rules ()
-    ((write-string s) (port-write-string s (current-output-port)))
-    ((write-string s p) (port-write-string s p))))
+    ((write-string s) (port-write-string-range s (current-output-port) 0 (string-length s)))
+    ((write-string s p) (port-write-string-range s p 0 (string-length s)))
+    ((write-string s p start) (port-write-string-range s p start (string-length s)))
+    ((write-string s p start end) (port-write-string-range s p start end))))
 
 (define-syntax write-bytevector
   (syntax-rules ()
-    ((write-bytevector bv)
-     (let ((b bv))
-       (port-write-bytevector-range b (current-output-port) 0 (bytevector-length b))))
-    ((write-bytevector bv p)
-     (let ((b bv))
-       (port-write-bytevector-range b p 0 (bytevector-length b))))
-    ((write-bytevector bv p start)
-     (let ((b bv))
-       (port-write-bytevector-range b p start (bytevector-length b))))
-    ((write-bytevector bv p start end)
-     (port-write-bytevector-range bv p start end))))
+    ((write-bytevector bv) (port-write-bytevector-range bv (current-output-port) 0 (bytevector-length bv)))
+    ((write-bytevector bv p) (port-write-bytevector-range bv p 0 (bytevector-length bv)))
+    ((write-bytevector bv p start) (port-write-bytevector-range bv p start (bytevector-length bv)))
+    ((write-bytevector bv p start end) (port-write-bytevector-range bv p start end))))
 
-(define (port-char-ready? p)
-  (cond
-    ((string-input-port? p) #t)
-    ((bytevector-input-port? p) #t)
-    ((file-input-port? p) #t)
-    ((standard-input-port? p) #t)
-    (else #t)))
-
-(define (port-u8-ready? p)
-  (port-char-ready? p))
-
-(define-syntax char-ready?
+(define-syntax read-bytevector!
   (syntax-rules ()
-    ((char-ready?) (port-char-ready? (current-input-port)))
-    ((char-ready? p) (port-char-ready? p))))
+    ((read-bytevector! bv) (port-read-bytevector! bv (current-input-port) 0 (bytevector-length bv)))
+    ((read-bytevector! bv p) (port-read-bytevector! bv p 0 (bytevector-length bv)))
+    ((read-bytevector! bv p start) (port-read-bytevector! bv p start (bytevector-length bv)))
+    ((read-bytevector! bv p start end) (port-read-bytevector! bv p start end))))
 
-(define-syntax u8-ready?
+(define-syntax read-bytevector
   (syntax-rules ()
-    ((u8-ready?) (port-u8-ready? (current-input-port)))
-    ((u8-ready? p) (port-u8-ready? p))))
+    ((read-bytevector k) (port-read-bytevector k (current-input-port)))
+    ((read-bytevector k p) (port-read-bytevector k p))))
+
 

@@ -26,24 +26,24 @@
 
 (define-syntax write-char
   (syntax-rules ()
-    ((write-char c) (port-write-char c *stdout-port*))
+    ((write-char c) (port-write-char c (current-output-port)))
     ((write-char c p) (port-write-char c p))))
 
 (define-syntax write-u8
   (syntax-rules ()
-    ((write-u8 byte) (port-write-u8 byte *stdout-port*))
+    ((write-u8 byte) (port-write-u8 byte (current-output-port)))
     ((write-u8 byte p) (port-write-u8 byte p))))
 
 (define-syntax write-string
   (syntax-rules ()
-    ((write-string s) (port-write-string s *stdout-port*))
+    ((write-string s) (port-write-string s (current-output-port)))
     ((write-string s p) (port-write-string s p))))
 
 (define-syntax write-bytevector
   (syntax-rules ()
     ((write-bytevector bv)
      (let ((b bv))
-       (port-write-bytevector-range b *stdout-port* 0 (bytevector-length b))))
+       (port-write-bytevector-range b (current-output-port) 0 (bytevector-length b))))
     ((write-bytevector bv p)
      (let ((b bv))
        (port-write-bytevector-range b p 0 (bytevector-length b))))
@@ -55,7 +55,7 @@
 
 (define-syntax flush-output-port
   (syntax-rules ()
-    ((flush-output-port) (port-flush-output *stdout-port*))
+    ((flush-output-port) (port-flush-output (current-output-port)))
     ((flush-output-port p) (port-flush-output p))))
 
 (define-syntax read
@@ -65,37 +65,37 @@
 
 (define-syntax read-char
   (syntax-rules ()
-    ((read-char) (port-read-char *stdin-port*))
+    ((read-char) (port-read-char (current-input-port)))
     ((read-char p) (port-read-char p))))
 
 (define-syntax peek-char
   (syntax-rules ()
-    ((peek-char) (port-peek-char *stdin-port*))
+    ((peek-char) (port-peek-char (current-input-port)))
     ((peek-char p) (port-peek-char p))))
 
 (define-syntax read-line
   (syntax-rules ()
-    ((read-line) (port-read-line *stdin-port*))
+    ((read-line) (port-read-line (current-input-port)))
     ((read-line p) (port-read-line p))))
 
 (define-syntax read-u8
   (syntax-rules ()
-    ((read-u8) (port-read-u8 *stdin-port*))
+    ((read-u8) (port-read-u8 (current-input-port)))
     ((read-u8 p) (port-read-u8 p))))
 
 (define-syntax peek-u8
   (syntax-rules ()
-    ((peek-u8) (port-peek-u8 *stdin-port*))
+    ((peek-u8) (port-peek-u8 (current-input-port)))
     ((peek-u8 p) (port-peek-u8 p))))
 
 (define-syntax char-ready?
   (syntax-rules ()
-    ((char-ready?) (port-char-ready? *stdin-port*))
+    ((char-ready?) (port-char-ready? (current-input-port)))
     ((char-ready? p) (port-char-ready? p))))
 
 (define-syntax u8-ready?
   (syntax-rules ()
-    ((u8-ready?) (port-u8-ready? *stdin-port*))
+    ((u8-ready?) (port-u8-ready? (current-input-port)))
     ((u8-ready? p) (port-u8-ready? p))))
 
 ;;; -----------------------------------------------------------------------

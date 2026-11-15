@@ -157,12 +157,19 @@
      (cons 'bytevector-copy-range args))))
 
 (define (desugar-bytevector-copy! args)
-  (if (null? (cdddr args))
-      (let ((from-sym (unique-symbol "from_")))
-        (list 'let (list (list from-sym (caddr args)))
-              (list 'bytevector-copy-range! (car args) (cadr args)
-                    from-sym 0 (list 'bytevector-length from-sym))))
-      (cons 'bytevector-copy-range! args)))
+  (cond
+    ((null? (cdddr args))
+     (let ((from-sym (unique-symbol "from_")))
+       (list 'let (list (list from-sym (caddr args)))
+             (list 'bytevector-copy-range! (car args) (cadr args)
+                   from-sym 0 (list 'bytevector-length from-sym)))))
+    ((null? (cddddr args))
+     (let ((from-sym (unique-symbol "from_")))
+       (list 'let (list (list from-sym (caddr args)))
+             (list 'bytevector-copy-range! (car args) (cadr args)
+                   from-sym (cadddr args) (list 'bytevector-length from-sym)))))
+    (else
+     (cons 'bytevector-copy-range! args))))
 
 (define (desugar-vector args)
   (let* ((len (length args))
@@ -209,12 +216,19 @@
      (cons 'vector-copy-range args))))
 
 (define (desugar-vector-copy! args)
-  (if (null? (cdddr args))
-      (let ((from-sym (unique-symbol "from_")))
-        (list 'let (list (list from-sym (caddr args)))
-              (list 'vector-copy-range! (car args) (cadr args)
-                    from-sym 0 (list 'vector-length from-sym))))
-      (cons 'vector-copy-range! args)))
+  (cond
+    ((null? (cdddr args))
+     (let ((from-sym (unique-symbol "from_")))
+       (list 'let (list (list from-sym (caddr args)))
+             (list 'vector-copy-range! (car args) (cadr args)
+                   from-sym 0 (list 'vector-length from-sym)))))
+    ((null? (cddddr args))
+     (let ((from-sym (unique-symbol "from_")))
+       (list 'let (list (list from-sym (caddr args)))
+             (list 'vector-copy-range! (car args) (cadr args)
+                   from-sym (cadddr args) (list 'vector-length from-sym)))))
+    (else
+     (cons 'vector-copy-range! args))))
 
 (define (desugar-vector-fill! args)
   (cond

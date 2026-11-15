@@ -481,4 +481,36 @@
    (define (features)
      '(r7rs ulisp exact-closed ieee-float full-unicode little-endian x86-64 lp64 posix linux unix gnu-linux srfi-14 srfi-64 srfi-78 srfi-116 srfi-117 srfi-127 srfi-134 srfi-146 srfi-193 srfi-252))))
 
+;;; -----------------------------------------------------------------------
+;;; Non-blocking FD readiness check via POSIX poll / ppoll (Issue #849)
+;;; -----------------------------------------------------------------------
+;; struct pollfd { int fd; short events; short revents; } = 8 bytes
+;; POLLIN = 1, POLLERR = 8, POLLHUP = 16. Events = 1.
+(cond-expand
+  ((or aarch64 arm64)
+   (define *sys-poll* 73)) ; ppoll syscall on aarch64
+  (else
+   (define *sys-poll* 7)))  ; poll syscall on x86_64
+
+(define (sys-fd-ready? fd)
+  (if (< fd 0)
+      #t
+      (let* ((cell (cons 0 0))
+             (ptr (%ptr-untag cell)))
+        (%raw-store! ptr 0 (%to-raw fd))
+        (%raw-store! ptr 4 (%to-raw 1))
+        (%raw-store! ptr 6 0)
+        (let ((ret (cond-expand
+                     ((or aarch64 arm64)
+                      (%to-fixnum (%raw-syscall (%to-raw *sys-poll*) ptr (%to-raw 1) 0 0 0 0)))
+                     (else
+                      (%to-fixnum (%raw-syscall (%to-raw *sys-poll*) ptr (%to-raw 1) 0 0 0 0))))))
+          (let ((revents (%to-fixnum (%raw-load-u8 ptr 6))))
+            (%raw-store! ptr 0 0)
+            (%raw-store! ptr 8 0)
+            (if (> ret 0)
+                (not (= (bitwise-and revents 25) 0))
+                #f))))))
+
+
 

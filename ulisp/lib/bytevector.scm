@@ -65,7 +65,7 @@
                   #f))))))
 
 ;; ---------------------------------------------------------------------
-;; §6.9 Bytevectors: bytevector-append2
+;; §6.9 Bytevectors: bytevector-append2 / bytevector-append
 ;; ---------------------------------------------------------------------
 (define (bytevector-append2 bv1 bv2)
   (let* ((len1 (bytevector-length bv1))
@@ -74,6 +74,48 @@
     (bytevector-copy-range! res 0 bv1 0 len1)
     (bytevector-copy-range! res len1 bv2 0 len2)
     res))
+
+(define bytevector-copy
+  (case-lambda
+    ((bv)
+     (bytevector-copy-range bv 0 (bytevector-length bv)))
+    ((bv start)
+     (bytevector-copy-range bv start (bytevector-length bv)))
+    ((bv start end)
+     (bytevector-copy-range bv start end))))
+
+(define bytevector-copy!
+  (case-lambda
+    ((to at from)
+     (bytevector-copy-range! to at from 0 (bytevector-length from)))
+    ((to at from start)
+     (bytevector-copy-range! to at from start (bytevector-length from)))
+    ((to at from start end)
+     (bytevector-copy-range! to at from start end))))
+
+(define-syntax bytevector-copy!
+  (syntax-rules ()
+    ((bytevector-copy! to at from)
+     (let ((f from))
+       (bytevector-copy-range! to at f 0 (bytevector-length f))))
+    ((bytevector-copy! to at from start)
+     (let ((f from))
+       (bytevector-copy-range! to at f start (bytevector-length f))))
+    ((bytevector-copy! to at from start end)
+     (bytevector-copy-range! to at from start end))))
+
+
+(define bytevector-append
+  (case-lambda
+    (() (%make-bytevector 0))
+    ((bv) bv)
+    ((bv1 bv2) (bytevector-append2 bv1 bv2))
+    ((bv1 bv2 . rest)
+     (let loop ((acc (bytevector-append2 bv1 bv2)) (rs rest))
+       (if (null? rs)
+           acc
+           (loop (bytevector-append2 acc (car rs)) (cdr rs)))))))
+
 
 ;; ---------------------------------------------------------------------
 ;; §6.9 Bytevectors: string->utf8-range / utf8->string-range

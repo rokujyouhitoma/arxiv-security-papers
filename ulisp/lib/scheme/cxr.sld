@@ -8,6 +8,10 @@
 (define-library (scheme cxr)
   (export
     ;; §6.4 Pairs and lists (Composite accessors)
+    caar
+    cadr
+    cdar
+    cddr
     caaar
     caadr
     cadar
@@ -34,6 +38,10 @@
     cddddr)
 
   (begin
+    (define (caar x) (car (car x)))
+    (define (cadr x) (car (cdr x)))
+    (define (cdar x) (cdr (car x)))
+    (define (cddr x) (cdr (cdr x)))
     (define (caaar x) (car (car (car x))))
     (define (caadr x) (car (car (cdr x))))
     (define (cadar x) (car (cdr (car x))))

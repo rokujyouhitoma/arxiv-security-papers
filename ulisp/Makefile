@@ -887,6 +887,15 @@ test_ports: $(COMPILER_DEP)
 	$(LD) $(LDFLAGS) build/test_ports.o -o build/test_ports
 	./build/test_ports
 
+test_phase1_r7rs: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_phase1_r7rs.scm > build/test_phase1_r7rs_input.scm
+	$(ULISP_COMPILER) build/test_phase1_r7rs_input.scm > build/test_phase1_r7rs.s
+	$(AS) $(ASFLAGS) build/test_phase1_r7rs.s -o build/test_phase1_r7rs.o
+	$(LD) $(LDFLAGS) build/test_phase1_r7rs.o -o build/test_phase1_r7rs
+	./build/test_phase1_r7rs
+
+
 test_reader_eof: $(COMPILER_DEP) build/ulisp_stdlib.o
 	@mkdir -p build
 	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > build/test_reader_eof_input.scm

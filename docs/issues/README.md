@@ -6,12 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **847** | R7RS ポート I/O 未実装手続き (read-string, read-bytevector, read-bytevector!) の実装 | Feature | High | New | [847-implement-missing-r7rs-io-read-string-and-bytevector.md](847-implement-missing-r7rs-io-read-string-and-bytevector.md) |
-| **848** | マクロ限定 I/O 手続きおよびベクタ操作の第一級手続き (First-Class Procedures) 化 | Feature | High | New | [848-reify-macro-only-io-and-vector-operations-to-first-class-procedures.md](848-reify-macro-only-io-and-vector-operations-to-first-class-procedures.md) |
-| **849** | char-ready? および u8-ready? のノンブロッキング入力準備状態判定の実装 | Feature | Medium | New | [849-implement-true-non-blocking-readiness-for-char-and-u8-ready.md](849-implement-true-non-blocking-readiness-for-char-and-u8-ready.md) |
-| **850** | R7RS case 構文におけるパイプライン句 ((<datum> ...) => <proc>) の脱糖サポート | Feature | Medium | New | [850-implement-r7rs-case-syntax-pipeline-arrow-clause.md](850-implement-r7rs-case-syntax-pipeline-arrow-clause.md) |
-| **851** | AOT ネイティブ算術演算子における数値塔ジェネリックディスパッチ統合と inexact? 判定の是正 | Feature | High | New | [851-integrate-generic-numeric-tower-dispatch-and-fix-inexact-predicate-in-aot.md](851-integrate-generic-numeric-tower-dispatch-and-fix-inexact-predicate-in-aot.md) |
-| **852** | R7RS 標準ライブラリ定義 (base.sld, cxr.sld, r5rs.sld) のエクスポート漏れシンボルの補完 | Feature | High | New | [852-complete-missing-r7rs-standard-library-exports-in-base-cxr-and-r5rs.md](852-complete-missing-r7rs-standard-library-exports-in-base-cxr-and-r5rs.md) |
 | **853** | SRFI 133 ベクタ操作ライブラリおよび (scheme vector) モジュールの完全実装 | Feature | Medium | New | [853-implement-srfi-133-vector-library-and-scheme-vector-module.md](853-implement-srfi-133-vector-library-and-scheme-vector-module.md) |
 | **854** | SRFI 101 純粋関数型ランダムアクセスリスト ((scheme rlist)) の実装 | Feature | Medium | New | [854-implement-srfi-101-purely-functional-random-access-lists.md](854-implement-srfi-101-purely-functional-random-access-lists.md) |
 | **855** | SRFI 135 不変テキストライブラリ ((scheme text)) の実装 | Feature | Medium | New | [855-implement-srfi-135-immutable-texts.md](855-implement-srfi-135-immutable-texts.md) |
@@ -30,6 +24,12 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **852** | R7RS 標準ライブラリ定義 (base.sld, cxr.sld, r5rs.sld) のエクスポート漏れシンボルの補完 | Feature | 2026-11-16 | [852-complete-missing-r7rs-standard-library-exports-in-base-cxr-and-r5rs.md](closed/852-complete-missing-r7rs-standard-library-exports-in-base-cxr-and-r5rs.md) |
+| **851** | AOT ネイティブ算術演算子における数値塔ジェネリックディスパッチ統合と inexact? 判定の是正 | Feature | 2026-11-16 | [851-integrate-generic-numeric-tower-dispatch-and-fix-inexact-predicate-in-aot.md](closed/851-integrate-generic-numeric-tower-dispatch-and-fix-inexact-predicate-in-aot.md) |
+| **850** | R7RS case 構文におけるパイプライン句 ((<datum> ...) => <proc>) の脱糖サポート | Feature | 2026-11-16 | [850-implement-r7rs-case-syntax-pipeline-arrow-clause.md](closed/850-implement-r7rs-case-syntax-pipeline-arrow-clause.md) |
+| **849** | char-ready? および u8-ready? のノンブロッキング入力準備状態判定の実装 | Feature | 2026-11-16 | [849-implement-true-non-blocking-readiness-for-char-and-u8-ready.md](closed/849-implement-true-non-blocking-readiness-for-char-and-u8-ready.md) |
+| **848** | マクロ限定 I/O 手続きおよびベクタ操作の第一級手続き (First-Class Procedures) 化 | Feature | 2026-11-16 | [848-reify-macro-only-io-and-vector-operations-to-first-class-procedures.md](closed/848-reify-macro-only-io-and-vector-operations-to-first-class-procedures.md) |
+| **847** | R7RS ポート I/O 未実装手続き (read-string, read-bytevector, read-bytevector!) の実装 | Feature | 2026-11-16 | [847-implement-missing-r7rs-io-read-string-and-bytevector.md](closed/847-implement-missing-r7rs-io-read-string-and-bytevector.md) |
 | **846** | `build/ulisp-modular` および `bootstrap` ビルド失敗の修正と再発防止策の導入 | Bug | 2026-11-15 | [846-fix-ulisp-modular-and-bootstrap-arity-and-variadic-compat.md](closed/846-fix-ulisp-modular-and-bootstrap-arity-and-variadic-compat.md) |
 | **840** | Nanopass パスマネージャにおける解析結果キャッシュ自動無効化と再計算 | Feature | 2026-11-15 | [840-automate-analysis-cache-invalidation-and-recomputation-in-nanopass.md](closed/840-automate-analysis-cache-invalidation-and-recomputation-in-nanopass.md) |
 | **839** | 中間表現 (HIR/MIR/LIR) の永続化・再ロード機構 (.sbi 拡張) の整備 | Feature | 2026-11-15 | [839-implement-ir-serialization-and-deserialization-sbi-extension.md](closed/839-implement-ir-serialization-and-deserialization-sbi-extension.md) |
