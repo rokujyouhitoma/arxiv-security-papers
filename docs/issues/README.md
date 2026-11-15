@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **829** | 呼出規約 (Calling Convention) の多重化・モジュール分離とゼロオーバーヘッド C-FFI の実現 | Feature | High | New | [829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md](829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md) |
 | **830** | 144a アセンブラおよび 144 ELF リンカにおける複数セクション (.rodata/.data/.bss) と再配置の抽象化 | Feature | High | New | [830-abstract-elf-sections-and-relocations-in-144a-assembler-and-144-linker.md](830-abstract-elf-sections-and-relocations-in-144a-assembler-and-144-linker.md) |
 | **831** | 160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証 | Feature | Medium | New | [831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md](831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md) |
 | **832** | 純粋 Scheme による多倍長整数 (Bignum) および IEEE 754 相互変換標準ライブラリの実装 | Feature | Medium | New | [832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md](832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md) |
@@ -23,6 +22,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **829** | 呼出規約 (Calling Convention) の多重化・モジュール分離とゼロオーバーヘッド C-FFI の実現 | Feature | 2026-11-15 | [829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md](closed/829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md) |
 | **845** | 標準エラー出力文字出力バッファ破壊およびNanopass脱糖カバレッジ警告の解消 | Bug | 2026-11-15 | [845-fix-stderr-port-write-char-and-desugar-pass-coverage-warnings.md](closed/845-fix-stderr-port-write-char-and-desugar-pass-coverage-warnings.md) |
 | **828** | LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設 | Feature | 2026-11-15 | [828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md](closed/828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md) |
 | **827** | Pass 132 Braun SSA の任意 CFG (基本ブロック・多方向分岐・goto) 汎用対応化 | Feature | 2026-11-15 | [827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md](closed/827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md) |

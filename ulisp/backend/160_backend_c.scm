@@ -667,7 +667,7 @@
              (lbl (caddr inst)))
          (emit (string-append "    " (c-operand->str dst) " = ((uint64_t)(uintptr_t)" (c-sanitize-label lbl) ") + 3;"))))
 
-      ((%c-call)
+      ((%c-call %call-foreign)
        (let* ((func (cadr inst))
               (frame-shift (caddr inst))
               (fname (if (symbol? func) (symbol->raw-name func) func)))

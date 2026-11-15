@@ -68,6 +68,9 @@
 
     ;; Calls & ABI
     (%c-call fn_name shift)
+    (%c-call fn_name shift al_val)
+    (%call-foreign fn_name shift)
+    (%call-foreign fn_name shift al_val)
     (%call-closure shift)
     (%call-closure shift sp_lbl)
     (%call-closure shift str)

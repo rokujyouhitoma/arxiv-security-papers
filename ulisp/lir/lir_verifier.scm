@@ -250,12 +250,16 @@
                (lir-report-error "Invalid %return instruction format" inst)))
 
           ;; Calls & ABI
-          ((%c-call)
-           (if (and (= (length inst) 3)
-                    (or (symbol? (cadr inst)) (string? (cadr inst)))
-                    (integer? (caddr inst)))
+          ((%c-call %call-foreign)
+           (if (or (and (= (length inst) 3)
+                        (or (symbol? (cadr inst)) (string? (cadr inst)))
+                        (integer? (caddr inst)))
+                   (and (= (length inst) 4)
+                        (or (symbol? (cadr inst)) (string? (cadr inst)))
+                        (integer? (caddr inst))
+                        (or (integer? (cadddr inst)) (not (cadddr inst)))))
                #t
-               (lir-report-error "%c-call format must be (%c-call <fn-name> <shift>)" inst)))
+               (lir-report-error "%c-call / %call-foreign format must be (%c-call <fn-name> <shift> [<al-val>])" inst)))
 
           ((%call-closure)
            (if (or (and (= (length inst) 2) (integer? (cadr inst)))

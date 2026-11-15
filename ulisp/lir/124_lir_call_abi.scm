@@ -185,3 +185,159 @@
                         (loop (+ i 1)))))
                 (emit-lir! (list '%mov '%rax (* num-args 4)))
                 (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))))
+
+;;; -----------------------------------------------------------------------
+;;; Foreign Function Interface (C-FFI) / System V AMD64 ABI Calls
+;;; -----------------------------------------------------------------------
+
+(define (parse-foreign-args args)
+  (let loop ((as args) (rev-types '()) (rev-exprs '()))
+    (if (null? as)
+        (cons (reverse rev-types) (reverse rev-exprs))
+        (let ((item (car as)))
+          (cond
+            ((and (pair? item)
+                  (symbol? (car item))
+                  (memq (car item) '(string cstr f32 f64 float double i8 u8 i16 u16 i32 u32 i64 u64 int ptr fixnum))
+                  (pair? (cdr item))
+                  (null? (cddr item)))
+             (loop (cdr as)
+                   (cons (car item) rev-types)
+                   (cons (cadr item) rev-exprs)))
+            ((string? item)
+             (loop (cdr as)
+                   (cons 'string rev-types)
+                   (cons item rev-exprs)))
+            (else
+             (loop (cdr as)
+                   (cons 'ptr rev-types)
+                   (cons item rev-exprs))))))))
+
+(define (lir-compile-foreign-call func raw-args si env convention return-type varargs?)
+  (let* ((parsed (parse-foreign-args raw-args))
+         (arg-types (car parsed))
+         (arg-exprs (cdr parsed))
+         (num-args (length arg-exprs))
+         (layout (compute-call-abi-layout convention arg-types varargs?))
+         (locations (abi-layout-locations layout))
+         (stack-bytes (abi-layout-stack-bytes layout))
+         (al-val (abi-layout-al-val layout))
+         (eval-frame-shift (align-frame-shift (if (= num-args 0)
+                                                  (- 0 si)
+                                                  (- (* 8 (- num-args 1)) si))))
+         (aligned-si (if (= num-args 0)
+                         (- 0 eval-frame-shift)
+                         (- (* 8 (- num-args 1)) eval-frame-shift))))
+    ;; 1. Evaluate arguments sequentially and place into temporary stack slots
+    (let loop ((as arg-exprs) (types arg-types) (curr-si aligned-si) (i 0))
+      (if (not (null? as))
+          (let ((expr (car as))
+                (ty (car types)))
+            (track-lir-si! curr-si)
+            (if (and (arg-type-float? ty) (number? expr))
+                (begin
+                  (if (integer? expr)
+                      (begin
+                        (emit-lir! (list '%mov '%rax expr))
+                        (emit-lir! '(%sitofp %xmm0 %rax)))
+                      (begin
+                        (emit-lir! (list '%mov '%rax (inexact->exact (round (* expr 1000000)))))
+                        (emit-lir! '(%sitofp %xmm0 %rax))))
+                  (emit-lir! (list '%store-typed 'f64 '%rsp curr-si '%xmm0)))
+                (begin
+                  (lir-compile-expr expr curr-si env #f)
+                  (cond
+                    ((memq ty '(string cstr))
+                     (emit-lir! '(%sub %rax 3))
+                     (emit-lir! (list '%store '%rsp curr-si '%rax)))
+                    ((eq? ty 'fixnum)
+                     (emit-lir! '(%sar %rax 2))
+                     (emit-lir! (list '%store '%rsp curr-si '%rax)))
+                    ((arg-type-float? ty)
+                     (emit-lir! '(%unbox-flonum %xmm0 %rax))
+                     (emit-lir! (list '%store-typed 'f64 '%rsp curr-si '%xmm0)))
+                    (else
+                     (emit-lir! (list '%store '%rsp curr-si '%rax))))))
+            (loop (cdr as) (cdr types) (- curr-si 8) (+ i 1)))))
+
+    (let* ((end-si (- aligned-si (* num-args 8)))
+           (final-frame-shift (align-frame-shift (+ (- 0 end-si) stack-bytes))))
+      (track-lir-si! (- 0 final-frame-shift))
+
+      ;; 2. For stack spill arguments, write to outgoing stack slots
+      (let loop ((locs locations))
+        (if (not (null? locs))
+            (let ((loc (car locs)))
+              (if (eq? (abi-arg-loc-kind loc) 'stack)
+                  (let* ((idx (abi-arg-loc-index loc))
+                         (temp-slot (- aligned-si (* idx 8)))
+                         (stk-offset (abi-arg-loc-offset loc))
+                         (target-slot (- stk-offset final-frame-shift))
+                         (ty (abi-arg-loc-type loc)))
+                    (track-lir-si! target-slot)
+                    (if (arg-type-float? ty)
+                        (begin
+                          (emit-lir! (list '%load-typed 'f64 '%xmm0 '%rsp temp-slot))
+                          (emit-lir! (list '%store-typed 'f64 '%rsp target-slot '%xmm0)))
+                        (begin
+                          (emit-lir! (list '%load '%r11 '%rsp temp-slot))
+                          (emit-lir! (list '%store '%rsp target-slot '%r11))))))
+              (loop (cdr locs)))))
+
+      ;; 3. Load register arguments (GPR and XMM)
+      (let loop ((locs locations))
+        (if (not (null? locs))
+            (let ((loc (car locs)))
+              (cond
+                ((eq? (abi-arg-loc-kind loc) 'gpr)
+                 (let* ((idx (abi-arg-loc-index loc))
+                        (temp-slot (- aligned-si (* idx 8)))
+                        (reg (abi-arg-loc-target loc)))
+                   (emit-lir! (list '%load reg '%rsp temp-slot))))
+                ((eq? (abi-arg-loc-kind loc) 'xmm)
+                 (let* ((idx (abi-arg-loc-index loc))
+                        (temp-slot (- aligned-si (* idx 8)))
+                        (reg (abi-arg-loc-target loc))
+                        (ty (abi-arg-loc-type loc)))
+                   (if (eq? ty 'f32)
+                       (emit-lir! (list '%load-typed 'f32 reg '%rsp temp-slot))
+                       (emit-lir! (list '%load-typed 'f64 reg '%rsp temp-slot))))))
+              (loop (cdr locs)))))
+
+      ;; 4. Emit foreign call instruction
+      (let ((fn-name (cond
+                       ((string? func) func)
+                       ((symbol? func) (symbol->string func))
+                       (else func))))
+        (emit-lir! (list '%c-call fn-name final-frame-shift al-val)))
+
+      ;; 5. Handle return value
+      (cond
+        ((eq? return-type 'void)
+         (emit-lir! '(%mov %rax 63)))
+        ((arg-type-float? return-type)
+         (emit-lir! '(%alloc %rax 16 3))
+         (emit-lir! '(%store-typed f64 %rax 8 %xmm0)))
+        ((memq return-type '(fixnum int))
+         (emit-lir! '(%shl %rax 2)))
+        (else #t)))))
+
+(define (lir-compile-c-call expr si env tail?)
+  (let ((func (cadr expr))
+        (rest (cddr expr)))
+    (cond
+      ((and (pair? rest) (list? (car rest)))
+       (let* ((args (car rest))
+              (ret-type (if (pair? (cdr rest)) (cadr rest) 'any))
+              (varargs? (if (and (pair? (cdr rest)) (pair? (cddr rest))) (caddr rest) #f)))
+         (lir-compile-foreign-call func args si env 'sysv-abi ret-type varargs?)))
+      (else
+       (lir-compile-foreign-call func rest si env 'sysv-abi 'any #f)))))
+
+(define (lir-compile-foreign-call-expr expr si env tail?)
+  (let* ((conv (cadr expr))
+         (ret-type (caddr expr))
+         (func (cadddr expr))
+         (args (car (cddddr expr)))
+         (varargs? (if (pair? (cdr (cddddr expr))) (cadr (cddddr expr)) #f)))
+    (lir-compile-foreign-call func args si env conv ret-type varargs?)))

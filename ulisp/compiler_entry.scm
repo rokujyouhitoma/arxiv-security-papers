@@ -49,6 +49,7 @@
 (include "compiler/dataflow.scm")
 (include "compiler/scope.scm")
 (include "compiler/eval_in_language.scm")
+(include "compiler/calling_convention.scm")
 
 ;; Frontend Passes
 (include "frontend/frontend_lang.scm")

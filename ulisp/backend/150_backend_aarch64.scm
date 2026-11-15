@@ -990,7 +990,7 @@
            (emit (string-append "    add " dst-str ", " dst-str ", :lo12:" lbl-str))
            (emit (string-append "    add " dst-str ", " dst-str ", #3")))))
 
-      ((%c-call)
+      ((%c-call %call-foreign)
        (let* ((func (cadr inst))
               (frame-shift (caddr inst))
               (total-shift (arm-align-frame-shift frame-shift)))

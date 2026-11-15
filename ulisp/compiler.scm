@@ -9106,6 +9106,250 @@
           #f
           (val->ast-const res)))))
 ;;; =======================================================================
+;;; ULisp Compiler - Calling Convention Abstraction & ABI Layout Planner
+;;; Conforms to DSN-38 §2 (C2/E5/E6), DSN-33 §3.3, DSN-33-02 §5.1 & Issue #829
+;;; =======================================================================
+;;; Provides modular calling convention specifications, register mapping,
+;;; typed argument placement planning (GPR / XMM / Stack), 16-byte stack
+;;; alignment guarantees, and zero-overhead C-FFI / System V ABI support.
+;;; =======================================================================
+
+;;; -----------------------------------------------------------------------
+;;; 1. Calling Convention Identifiers & Predicates
+;;; -----------------------------------------------------------------------
+
+(define *calling-conventions*
+  '(scheme-fast
+    sysv-abi
+    aapcs64
+    cdecl))
+
+(define (calling-convention? x)
+  (and (symbol? x) (memq x *calling-conventions*) #t))
+
+(define (default-calling-convention) 'scheme-fast)
+
+;;; -----------------------------------------------------------------------
+;;; 2. Type Classification for ABI Placement
+;;; -----------------------------------------------------------------------
+
+(define *abi-float-types* '(f32 f64 float double single-float double-float))
+(define *abi-integer-types* '(i8 u8 i16 u16 i32 u32 i64 u64 int unsigned-int long unsigned-long size_t intptr_t uintptr_t ptr any obj fixnum))
+
+(define (arg-type-float? t)
+  (and (symbol? t) (memq t *abi-float-types*) #t))
+
+(define (arg-type-integer? t)
+  (or (not (symbol? t))
+      (memq t *abi-integer-types*)
+      (not (arg-type-float? t))))
+
+;;; -----------------------------------------------------------------------
+;;; 3. Machine Register Definitions by Convention
+;;; -----------------------------------------------------------------------
+
+;; System V AMD64 ABI (x86-64)
+(define *sysv-gpr-arg-registers* '(%rdi %rsi %rdx %rcx %r8 %r9))
+(define *sysv-xmm-arg-registers* '(%xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7))
+(define *sysv-callee-saved-gprs* '(%rbx %rsp %rbp %r12 %r13 %r14 %r15))
+(define *sysv-caller-saved-gprs* '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11))
+(define *sysv-return-gpr* '%rax)
+(define *sysv-return-xmm* '%xmm0)
+
+;; Scheme Internal Fast Convention (x86-64)
+;; All arguments passed in GPRs as tagged pointers or unboxed values
+(define *scheme-fast-arg-registers* '(%rdi %rsi %rdx %rcx %r8 %r9))
+(define *scheme-fast-count-reg* '%rax)
+(define *scheme-fast-closure-reg* '%r10)
+(define *scheme-fast-temp-reg* '%r11)
+(define *scheme-fast-nursery-reg* '%r12)
+(define *scheme-fast-callee-saved* '(%rbx %rsp %rbp %r12 %r13 %r14 %r15))
+
+;; ARM64 AAPCS64 ABI
+(define *aapcs64-gpr-arg-registers* '(%x0 %x1 %x2 %x3 %x4 %x5 %x6 %x7))
+(define *aapcs64-fp-arg-registers* '(%v0 %v1 %v2 %v3 %v4 %v5 %v6 %v7))
+(define *aapcs64-return-gpr* '%x0)
+(define *aapcs64-return-fp* '%v0)
+
+(define (convention-gpr-arg-registers conv)
+  (case conv
+    ((sysv-abi cdecl) *sysv-gpr-arg-registers*)
+    ((scheme-fast)    *scheme-fast-arg-registers*)
+    ((aapcs64)        *aapcs64-gpr-arg-registers*)
+    (else *sysv-gpr-arg-registers*)))
+
+(define (convention-xmm-arg-registers conv)
+  (case conv
+    ((sysv-abi) *sysv-xmm-arg-registers*)
+    ((aapcs64)  *aapcs64-fp-arg-registers*)
+    (else '())))
+
+(define (convention-stack-alignment conv)
+  (case conv
+    ((sysv-abi aapcs64) 16)
+    ((scheme-fast)      16)
+    ((cdecl)             8)
+    (else 16)))
+
+;;; -----------------------------------------------------------------------
+;;; 4. ABI Argument Location Record
+;;; -----------------------------------------------------------------------
+
+;; kind: 'gpr | 'xmm | 'stack
+(define (make-abi-arg-loc index type kind target offset)
+  (list 'abi-arg-loc index type kind target offset))
+
+(define (abi-arg-loc? x)
+  (and (pair? x) (eq? (car x) 'abi-arg-loc)))
+
+(define (abi-arg-loc-index loc)  (list-ref loc 1))
+(define (abi-arg-loc-type loc)   (list-ref loc 2))
+(define (abi-arg-loc-kind loc)   (list-ref loc 3))
+(define (abi-arg-loc-target loc) (list-ref loc 4))
+(define (abi-arg-loc-offset loc) (list-ref loc 5))
+
+;;; -----------------------------------------------------------------------
+;;; 5. Layout Result Structure
+;;; -----------------------------------------------------------------------
+
+(define (make-abi-layout conv locations num-gpr num-xmm stack-bytes padding-bytes total-shift al-val)
+  (list 'abi-layout
+        (cons 'convention conv)
+        (cons 'locations locations)
+        (cons 'num-gpr num-gpr)
+        (cons 'num-xmm num-xmm)
+        (cons 'stack-bytes stack-bytes)
+        (cons 'padding-bytes padding-bytes)
+        (cons 'total-shift total-shift)
+        (cons 'al-val al-val)))
+
+(define (abi-layout-ref layout key)
+  (let ((entry (assq key (cdr layout))))
+    (if entry (cdr entry) #f)))
+
+(define (abi-layout-locations layout)     (abi-layout-ref layout 'locations))
+(define (abi-layout-num-gpr layout)       (abi-layout-ref layout 'num-gpr))
+(define (abi-layout-num-xmm layout)       (abi-layout-ref layout 'num-xmm))
+(define (abi-layout-stack-bytes layout)   (abi-layout-ref layout 'stack-bytes))
+(define (abi-layout-padding-bytes layout) (abi-layout-ref layout 'padding-bytes))
+(define (abi-layout-total-shift layout)   (abi-layout-ref layout 'total-shift))
+(define (abi-layout-al-val layout)        (abi-layout-ref layout 'al-val))
+
+;;; -----------------------------------------------------------------------
+;;; 6. ABI Layout Planner
+;;; -----------------------------------------------------------------------
+;;; Computes the physical location (register or stack slot) for each argument
+;;; according to the chosen calling convention.
+;;;
+;;; Inputs:
+;;;   conv:       'sysv-abi | 'scheme-fast | 'aapcs64
+;;;   arg-types:  list of type symbols, e.g. '(ptr i64 f64) or list of #f/any
+;;;   varargs?:   #t if callee is a C variadic function (e.g. printf)
+;;;
+;;; Output:
+;;;   abi-layout structure containing detailed placement and stack alignment
+
+(define (compute-call-abi-layout conv arg-types varargs?)
+  (let ((gpr-regs (convention-gpr-arg-registers conv))
+        (xmm-regs (convention-xmm-arg-registers conv)))
+    (let loop ((types arg-types)
+               (idx 0)
+               (available-gprs gpr-regs)
+               (available-xmms xmm-regs)
+               (stack-offset 0)
+               (used-gpr 0)
+               (used-xmm 0)
+               (rev-locs '()))
+      (if (null? types)
+          (let* ((locs (reverse rev-locs))
+                 (stack-bytes stack-offset)
+                 ;; In System V AMD64 ABI, stack arguments must preserve 16-byte alignment
+                 (padding-bytes (if (= (modulo stack-bytes 16) 0) 0 (- 16 (modulo stack-bytes 16))))
+                 (total-shift (+ stack-bytes padding-bytes))
+                 ;; For SysV varargs, %al must hold number of XMM registers used
+                 (al-val (if (and (eq? conv 'sysv-abi) varargs?)
+                             used-xmm
+                             #f)))
+            (make-abi-layout conv locs used-gpr used-xmm stack-bytes padding-bytes total-shift al-val))
+          (let* ((t (car types))
+                 (is-float? (arg-type-float? t)))
+            (cond
+              ;; Case 1: Floating-point argument and XMM register is available
+              ((and is-float? (pair? available-xmms))
+               (let ((reg (car available-xmms)))
+                 (loop (cdr types)
+                       (+ idx 1)
+                       available-gprs
+                       (cdr available-xmms)
+                       stack-offset
+                       used-gpr
+                       (+ used-xmm 1)
+                       (cons (make-abi-arg-loc idx t 'xmm reg #f) rev-locs))))
+
+              ;; Case 2: Integer/pointer/any argument and GPR register is available
+              ((and (not is-float?) (pair? available-gprs))
+               (let ((reg (car available-gprs)))
+                 (loop (cdr types)
+                       (+ idx 1)
+                       (cdr available-gprs)
+                       available-xmms
+                       stack-offset
+                       (+ used-gpr 1)
+                       used-xmm
+                       (cons (make-abi-arg-loc idx t 'gpr reg #f) rev-locs))))
+
+              ;; Case 3: Stack spill (registers exhausted)
+              (else
+               (let ((loc-offset stack-offset))
+                 (loop (cdr types)
+                       (+ idx 1)
+                       available-gprs
+                       available-xmms
+                       (+ stack-offset 8)
+                       used-gpr
+                       used-xmm
+                       (cons (make-abi-arg-loc idx t 'stack #f loc-offset) rev-locs))))))))))
+
+;;; -----------------------------------------------------------------------
+;;; 7. Frame Shift Alignment Calculator
+;;; -----------------------------------------------------------------------
+;;; Ensures that prior to executing 'call <func>', the stack pointer rsp
+;;; satisfies (rsp + 8) % 16 == 0, guaranteeing that immediately after
+;;; call pushes the return address, callee sees rsp % 16 == 0.
+
+(define (compute-sysv-call-frame-shift current-si outgoing-stack-bytes)
+  (let* ((raw-needed (+ (- 0 current-si) outgoing-stack-bytes))
+         (shift (align-frame-shift raw-needed)))
+    shift))
+
+;;; -----------------------------------------------------------------------
+;;; 8. Function Definition Calling Convention Attributes
+;;; -----------------------------------------------------------------------
+
+(define (extract-func-calling-convention attrs)
+  (cond
+    ((not (pair? attrs)) (default-calling-convention))
+    ((assq ':calling-convention attrs)
+     => (lambda (entry)
+          (if (calling-convention? (cadr entry))
+              (cadr entry)
+              (default-calling-convention))))
+    (else (default-calling-convention))))
+
+(define (extract-func-varargs? attrs)
+  (cond
+    ((not (pair? attrs)) #f)
+    ((assq ':varargs attrs)
+     => (lambda (entry) (and (cadr entry) #t)))
+    (else #f)))
+
+(define (extract-func-return-type attrs)
+  (cond
+    ((not (pair? attrs)) 'any)
+    ((assq ':return-type attrs)
+     => (lambda (entry) (cadr entry)))
+    (else 'any)))
+;;; =======================================================================
 ;;; ULisp Compiler: Frontend Intermediate Languages Specification
 ;;; (L_cst -> L_src -> L_core -> L_anf -> L_lifted)
 ;;; Conforms to DSN-33, DSN-33-01 Architecture Specification & Issues #594, #753
@@ -16406,6 +16650,9 @@
 
     ;; Calls & ABI
     (%c-call fn_name shift)
+    (%c-call fn_name shift al_val)
+    (%call-foreign fn_name shift)
+    (%call-foreign fn_name shift al_val)
     (%call-closure shift)
     (%call-closure shift sp_lbl)
     (%call-closure shift str)
@@ -16773,12 +17020,16 @@
                (lir-report-error "Invalid %return instruction format" inst)))
 
           ;; Calls & ABI
-          ((%c-call)
-           (if (and (= (length inst) 3)
-                    (or (symbol? (cadr inst)) (string? (cadr inst)))
-                    (integer? (caddr inst)))
+          ((%c-call %call-foreign)
+           (if (or (and (= (length inst) 3)
+                        (or (symbol? (cadr inst)) (string? (cadr inst)))
+                        (integer? (caddr inst)))
+                   (and (= (length inst) 4)
+                        (or (symbol? (cadr inst)) (string? (cadr inst)))
+                        (integer? (caddr inst))
+                        (or (integer? (cadddr inst)) (not (cadddr inst)))))
                #t
-               (lir-report-error "%c-call format must be (%c-call <fn-name> <shift>)" inst)))
+               (lir-report-error "%c-call / %call-foreign format must be (%c-call <fn-name> <shift> [<al-val>])" inst)))
 
           ((%call-closure)
            (if (or (and (= (length inst) 2) (integer? (cadr inst)))
@@ -17912,6 +18163,162 @@
                         (loop (+ i 1)))))
                 (emit-lir! (list '%mov '%rax (* num-args 4)))
                 (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))))
+
+;;; -----------------------------------------------------------------------
+;;; Foreign Function Interface (C-FFI) / System V AMD64 ABI Calls
+;;; -----------------------------------------------------------------------
+
+(define (parse-foreign-args args)
+  (let loop ((as args) (rev-types '()) (rev-exprs '()))
+    (if (null? as)
+        (cons (reverse rev-types) (reverse rev-exprs))
+        (let ((item (car as)))
+          (cond
+            ((and (pair? item)
+                  (symbol? (car item))
+                  (memq (car item) '(string cstr f32 f64 float double i8 u8 i16 u16 i32 u32 i64 u64 int ptr fixnum))
+                  (pair? (cdr item))
+                  (null? (cddr item)))
+             (loop (cdr as)
+                   (cons (car item) rev-types)
+                   (cons (cadr item) rev-exprs)))
+            ((string? item)
+             (loop (cdr as)
+                   (cons 'string rev-types)
+                   (cons item rev-exprs)))
+            (else
+             (loop (cdr as)
+                   (cons 'ptr rev-types)
+                   (cons item rev-exprs))))))))
+
+(define (lir-compile-foreign-call func raw-args si env convention return-type varargs?)
+  (let* ((parsed (parse-foreign-args raw-args))
+         (arg-types (car parsed))
+         (arg-exprs (cdr parsed))
+         (num-args (length arg-exprs))
+         (layout (compute-call-abi-layout convention arg-types varargs?))
+         (locations (abi-layout-locations layout))
+         (stack-bytes (abi-layout-stack-bytes layout))
+         (al-val (abi-layout-al-val layout))
+         (eval-frame-shift (align-frame-shift (if (= num-args 0)
+                                                  (- 0 si)
+                                                  (- (* 8 (- num-args 1)) si))))
+         (aligned-si (if (= num-args 0)
+                         (- 0 eval-frame-shift)
+                         (- (* 8 (- num-args 1)) eval-frame-shift))))
+    ;; 1. Evaluate arguments sequentially and place into temporary stack slots
+    (let loop ((as arg-exprs) (types arg-types) (curr-si aligned-si) (i 0))
+      (if (not (null? as))
+          (let ((expr (car as))
+                (ty (car types)))
+            (track-lir-si! curr-si)
+            (if (and (arg-type-float? ty) (number? expr))
+                (begin
+                  (if (integer? expr)
+                      (begin
+                        (emit-lir! (list '%mov '%rax expr))
+                        (emit-lir! '(%sitofp %xmm0 %rax)))
+                      (begin
+                        (emit-lir! (list '%mov '%rax (inexact->exact (round (* expr 1000000)))))
+                        (emit-lir! '(%sitofp %xmm0 %rax))))
+                  (emit-lir! (list '%store-typed 'f64 '%rsp curr-si '%xmm0)))
+                (begin
+                  (lir-compile-expr expr curr-si env #f)
+                  (cond
+                    ((memq ty '(string cstr))
+                     (emit-lir! '(%sub %rax 3))
+                     (emit-lir! (list '%store '%rsp curr-si '%rax)))
+                    ((eq? ty 'fixnum)
+                     (emit-lir! '(%sar %rax 2))
+                     (emit-lir! (list '%store '%rsp curr-si '%rax)))
+                    ((arg-type-float? ty)
+                     (emit-lir! '(%unbox-flonum %xmm0 %rax))
+                     (emit-lir! (list '%store-typed 'f64 '%rsp curr-si '%xmm0)))
+                    (else
+                     (emit-lir! (list '%store '%rsp curr-si '%rax))))))
+            (loop (cdr as) (cdr types) (- curr-si 8) (+ i 1)))))
+
+    (let* ((end-si (- aligned-si (* num-args 8)))
+           (final-frame-shift (align-frame-shift (+ (- 0 end-si) stack-bytes))))
+      (track-lir-si! (- 0 final-frame-shift))
+
+      ;; 2. For stack spill arguments, write to outgoing stack slots
+      (let loop ((locs locations))
+        (if (not (null? locs))
+            (let ((loc (car locs)))
+              (if (eq? (abi-arg-loc-kind loc) 'stack)
+                  (let* ((idx (abi-arg-loc-index loc))
+                         (temp-slot (- aligned-si (* idx 8)))
+                         (stk-offset (abi-arg-loc-offset loc))
+                         (target-slot (- stk-offset final-frame-shift))
+                         (ty (abi-arg-loc-type loc)))
+                    (track-lir-si! target-slot)
+                    (if (arg-type-float? ty)
+                        (begin
+                          (emit-lir! (list '%load-typed 'f64 '%xmm0 '%rsp temp-slot))
+                          (emit-lir! (list '%store-typed 'f64 '%rsp target-slot '%xmm0)))
+                        (begin
+                          (emit-lir! (list '%load '%r11 '%rsp temp-slot))
+                          (emit-lir! (list '%store '%rsp target-slot '%r11))))))
+              (loop (cdr locs)))))
+
+      ;; 3. Load register arguments (GPR and XMM)
+      (let loop ((locs locations))
+        (if (not (null? locs))
+            (let ((loc (car locs)))
+              (cond
+                ((eq? (abi-arg-loc-kind loc) 'gpr)
+                 (let* ((idx (abi-arg-loc-index loc))
+                        (temp-slot (- aligned-si (* idx 8)))
+                        (reg (abi-arg-loc-target loc)))
+                   (emit-lir! (list '%load reg '%rsp temp-slot))))
+                ((eq? (abi-arg-loc-kind loc) 'xmm)
+                 (let* ((idx (abi-arg-loc-index loc))
+                        (temp-slot (- aligned-si (* idx 8)))
+                        (reg (abi-arg-loc-target loc))
+                        (ty (abi-arg-loc-type loc)))
+                   (if (eq? ty 'f32)
+                       (emit-lir! (list '%load-typed 'f32 reg '%rsp temp-slot))
+                       (emit-lir! (list '%load-typed 'f64 reg '%rsp temp-slot))))))
+              (loop (cdr locs)))))
+
+      ;; 4. Emit foreign call instruction
+      (let ((fn-name (cond
+                       ((string? func) func)
+                       ((symbol? func) (symbol->string func))
+                       (else func))))
+        (emit-lir! (list '%c-call fn-name final-frame-shift al-val)))
+
+      ;; 5. Handle return value
+      (cond
+        ((eq? return-type 'void)
+         (emit-lir! '(%mov %rax 63)))
+        ((arg-type-float? return-type)
+         (emit-lir! '(%alloc %rax 16 3))
+         (emit-lir! '(%store-typed f64 %rax 8 %xmm0)))
+        ((memq return-type '(fixnum int))
+         (emit-lir! '(%shl %rax 2)))
+        (else #t)))))
+
+(define (lir-compile-c-call expr si env tail?)
+  (let ((func (cadr expr))
+        (rest (cddr expr)))
+    (cond
+      ((and (pair? rest) (list? (car rest)))
+       (let* ((args (car rest))
+              (ret-type (if (pair? (cdr rest)) (cadr rest) 'any))
+              (varargs? (if (and (pair? (cdr rest)) (pair? (cddr rest))) (caddr rest) #f)))
+         (lir-compile-foreign-call func args si env 'sysv-abi ret-type varargs?)))
+      (else
+       (lir-compile-foreign-call func rest si env 'sysv-abi 'any #f)))))
+
+(define (lir-compile-foreign-call-expr expr si env tail?)
+  (let* ((conv (cadr expr))
+         (ret-type (caddr expr))
+         (func (cadddr expr))
+         (args (car (cddddr expr)))
+         (varargs? (if (pair? (cdr (cddddr expr))) (cadr (cddddr expr)) #f)))
+    (lir-compile-foreign-call func args si env conv ret-type varargs?)))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 125: LIR Continuation Transfer & Loop In-Place Shuffle Pass
 ;;; Conforms to DSN-33 Architecture Specification & Issue #583
@@ -19994,6 +20401,10 @@
                (error "Invalid quoted datum in LIR:" datum)))))
          ((eq? op '%direct-call)
           (lir-compile-direct-call (cadr expr) (cddr expr) si env tail?))
+         ((eq? op '%c-call)
+          (lir-compile-c-call expr si env tail?))
+         ((eq? op '%call-foreign)
+          (lir-compile-foreign-call-expr expr si env tail?))
          ((eq? op '%global-ref)
           (emit-lir! (list '%global-ref '%rax (cadr expr))))
          ((eq? op '%global-set!)
@@ -22190,14 +22601,26 @@
            (list (list '%raw-asm (string-append "    lea " (operand->str dst) ", [rip + " lbl-str "]"))
                  (list '%raw-asm (string-append "    add " (operand->str dst) ", 3"))))))
 
-      ((%c-call)
-       (let ((func (cadr inst))
-             (frame-shift (caddr inst)))
-         (let ((fname (if (symbol? func) (symbol->raw-name func) func))
-               (shift-str (small-int->string frame-shift)))
-           (list (list '%raw-asm (string-append "    sub rsp, " shift-str))
-                 (list '%raw-asm (string-append "    call " fname))
-                 (list '%raw-asm (string-append "    add rsp, " shift-str))))))
+      ((%c-call %call-foreign)
+       (let* ((func (cadr inst))
+              (frame-shift (caddr inst))
+              (al-val (if (pair? (cdddr inst)) (cadddr inst) #f))
+              (fname (if (symbol? func) (symbol->raw-name func) func))
+              (shift-str (small-int->string frame-shift))
+              (sub-part (if (> frame-shift 0)
+                            (list (list '%raw-asm (string-append "    sub rsp, " shift-str)))
+                            '()))
+              (al-part (cond
+                         ((eq? al-val 0)
+                          (list (list '%raw-asm "    xor eax, eax")))
+                         ((number? al-val)
+                          (list (list '%raw-asm (string-append "    mov al, " (number->string al-val)))))
+                         (else '())))
+              (call-part (list (list '%raw-asm (string-append "    call " fname))))
+              (add-part (if (> frame-shift 0)
+                            (list (list '%raw-asm (string-append "    add rsp, " shift-str)))
+                            '())))
+         (append sub-part (append al-part (append call-part add-part)))))
 
       ((%call-closure)
        (let ((frame-shift (cadr inst))
@@ -29856,7 +30279,7 @@
            (emit (string-append "    add " dst-str ", " dst-str ", :lo12:" lbl-str))
            (emit (string-append "    add " dst-str ", " dst-str ", #3")))))
 
-      ((%c-call)
+      ((%c-call %call-foreign)
        (let* ((func (cadr inst))
               (frame-shift (caddr inst))
               (total-shift (arm-align-frame-shift frame-shift)))
@@ -31317,7 +31740,7 @@
              (lbl (caddr inst)))
          (emit (string-append "    " (c-operand->str dst) " = ((uint64_t)(uintptr_t)" (c-sanitize-label lbl) ") + 3;"))))
 
-      ((%c-call)
+      ((%c-call %call-foreign)
        (let* ((func (cadr inst))
               (frame-shift (caddr inst))
               (fname (if (symbol? func) (symbol->raw-name func) func)))
