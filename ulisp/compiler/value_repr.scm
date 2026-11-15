@@ -195,136 +195,148 @@
 (define-macro (define-value-repr . args)
   (expand-define-value-repr (cons 'define-value-repr args)))
 
+(define (%nan-box-base-unit) 2251799813685248)
+(define (default-nan-box-base) (* 4095 (%nan-box-base-unit)))
+
 ;;; -----------------------------------------------------------------------
 ;;; 5. Standard Value Representation Specifications
 ;;; -----------------------------------------------------------------------
 
 ;; 5.1 ULisp 64-bit Tagged Scheme Representation (Default)
-(define-value-repr repr:scheme-64bit-tagged
-  (:word-bits 64)
-  (:aliases scheme-standard scheme-64bit-tagged)
-  (:fixnum
-    (:shift 2)
-    (:tag-bits 0)
-    (:tag-mask 3)
-    (:step 4))
-  (:immediates
-    (:boolean-false 47)
-    (:boolean-true  111)
-    (:boolean-mask  -65)
-    (:null          63)
-    (:eof           79)
-    (:void          111)
-    (:char-shift    8)
-    (:char-op-shift 6)
-    (:char-tag      14)
-    (:char-mask     255)
-    (:symbol-shift  6)
-    (:symbol-tag    2)
-    (:symbol-mask   255))
-  (:pointer
-    (:align 8)
-    (:tag-bits 0)
-    (:tag-mask 7)
-    (:untag-mask -8)
-    (:pair-tag       1)
-    (:closure-tag    1)
-    (:string-tag     3)
-    (:vector-tag     5)
-    (:bytevector-tag 7)
-    (:flonum-tag     11)
-    (:flonum-cell-bytes 16)
-    (:flonum-offset  -3)))
+(define repr:scheme-64bit-tagged
+  (register-value-repr!
+    (make-value-repr-from-clauses
+      'repr:scheme-64bit-tagged
+      '((:word-bits 64)
+        (:aliases scheme-standard scheme-64bit-tagged)
+        (:fixnum
+          (:shift 2)
+          (:tag-bits 0)
+          (:tag-mask 3)
+          (:step 4))
+        (:immediates
+          (:boolean-false 47)
+          (:boolean-true  111)
+          (:boolean-mask  -65)
+          (:null          63)
+          (:eof           79)
+          (:void          111)
+          (:char-shift    8)
+          (:char-op-shift 6)
+          (:char-tag      14)
+          (:char-mask     255)
+          (:symbol-shift  6)
+          (:symbol-tag    2)
+          (:symbol-mask   255))
+        (:pointer
+          (:align 8)
+          (:tag-bits 0)
+          (:tag-mask 7)
+          (:untag-mask -8)
+          (:pair-tag       1)
+          (:closure-tag    1)
+          (:string-tag     3)
+          (:vector-tag     5)
+          (:bytevector-tag 7)
+          (:flonum-tag     11)
+          (:flonum-cell-bytes 16)
+          (:flonum-offset  -3))))))
 
 (define scheme-standard repr:scheme-64bit-tagged)
 
 ;; 5.2 C-Language Unboxed Native Representation (Zero Tag Overhead)
-(define-value-repr repr:c-unboxed
-  (:word-bits 64)
-  (:aliases c-unboxed c-native)
-  (:fixnum
-    (:shift 0)
-    (:tag-bits 0)
-    (:tag-mask 0)
-    (:step 1))
-  (:immediates
-    (:boolean-false 0)
-    (:boolean-true  1)
-    (:boolean-mask  -2)
-    (:null          0)
-    (:eof           -1)
-    (:void          0)
-    (:char-shift    0)
-    (:char-op-shift 0)
-    (:char-tag      0)
-    (:char-mask     255)
-    (:symbol-shift  0)
-    (:symbol-tag    0)
-    (:symbol-mask   0))
-  (:pointer
-    (:align 1)
-    (:tag-bits 0)
-    (:tag-mask 0)
-    (:untag-mask -1)
-    (:pair-tag       0)
-    (:closure-tag    0)
-    (:string-tag     0)
-    (:vector-tag     0)
-    (:bytevector-tag 0)
-    (:flonum-tag     0)
-    (:flonum-cell-bytes 8)
-    (:flonum-offset  0)))
+(define repr:c-unboxed
+  (register-value-repr!
+    (make-value-repr-from-clauses
+      'repr:c-unboxed
+      '((:word-bits 64)
+        (:aliases c-unboxed c-native)
+        (:fixnum
+          (:shift 0)
+          (:tag-bits 0)
+          (:tag-mask 0)
+          (:step 1))
+        (:immediates
+          (:boolean-false 0)
+          (:boolean-true  1)
+          (:boolean-mask  -2)
+          (:null          0)
+          (:eof           -1)
+          (:void          0)
+          (:char-shift    0)
+          (:char-op-shift 0)
+          (:char-tag      0)
+          (:char-mask     255)
+          (:symbol-shift  0)
+          (:symbol-tag    0)
+          (:symbol-mask   0))
+        (:pointer
+          (:align 1)
+          (:tag-bits 0)
+          (:tag-mask 0)
+          (:untag-mask -1)
+          (:pair-tag       0)
+          (:closure-tag    0)
+          (:string-tag     0)
+          (:vector-tag     0)
+          (:bytevector-tag 0)
+          (:flonum-tag     0)
+          (:flonum-cell-bytes 8)
+          (:flonum-offset  0))))))
 
 (define c-unboxed repr:c-unboxed)
 
 ;; 5.3 64-bit IEEE 754 Quiet NaN-Boxing Representation
-;; Quiet NaN base: 0x7FF8000000000000 = 9221120237041090560
+;; Quiet NaN base: 0x7FF8000000000000 = (* 4095 2251799813685248) = 9221120237041090560
 ;; 48-bit payload mask: 0x0000FFFFFFFFFFFF = 281474976710655
 ;; Tag unit (1 << 48): 281474976710656
-(define-value-repr repr:nan-boxing-64bit
-  (:word-bits 64)
-  (:aliases nan-boxing-64bit nan-boxed)
-  (:fixnum
-    (:shift 0)
-    (:tag-bits 0)
-    (:tag-mask 0)
-    (:step 1))
-  (:immediates
-    (:boolean-false 2)
-    (:boolean-true  3)
-    (:boolean-mask  -2)
-    (:null          4)
-    (:eof           5)
-    (:void          6)
-    (:char-shift    8)
-    (:char-op-shift 8)
-    (:char-tag      7)
-    (:char-mask     255)
-    (:symbol-shift  8)
-    (:symbol-tag    8)
-    (:symbol-mask   255))
-  (:pointer
-    (:align 8)
-    (:tag-bits 0)
-    (:tag-mask 0)
-    (:untag-mask -8)
-    (:pair-tag       0)
-    (:closure-tag    0)
-    (:string-tag     0)
-    (:vector-tag     0)
-    (:bytevector-tag 0)
-    (:flonum-tag     0)
-    (:flonum-cell-bytes 8)
-    (:flonum-offset  0))
-  (:nan-box
-    (:enabled #t)
-    (:nan-base 9221120237041090560)
-    (:payload-mask 281474976710655)
-    (:tag-shift 48)
-    (:tag-unit 281474976710656)
-    (:fixnum-nan-tag 1)
-    (:imm-nan-tag 2)
-    (:pointer-nan-tag 3)))
+(define repr:nan-boxing-64bit
+  (register-value-repr!
+    (make-value-repr-from-clauses
+      'repr:nan-boxing-64bit
+      '((:word-bits 64)
+        (:aliases nan-boxing-64bit nan-boxed)
+        (:fixnum
+          (:shift 0)
+          (:tag-bits 0)
+          (:tag-mask 0)
+          (:step 1))
+        (:immediates
+          (:boolean-false 2)
+          (:boolean-true  3)
+          (:boolean-mask  -2)
+          (:null          4)
+          (:eof           5)
+          (:void          6)
+          (:char-shift    8)
+          (:char-op-shift 8)
+          (:char-tag      7)
+          (:char-mask     255)
+          (:symbol-shift  8)
+          (:symbol-tag    8)
+          (:symbol-mask   255))
+        (:pointer
+          (:align 8)
+          (:tag-bits 0)
+          (:tag-mask 0)
+          (:untag-mask -8)
+          (:pair-tag       0)
+          (:closure-tag    0)
+          (:string-tag     0)
+          (:vector-tag     0)
+          (:bytevector-tag 0)
+          (:flonum-tag     0)
+          (:flonum-cell-bytes 8)
+          (:flonum-offset  0))
+        (:nan-box
+          (:enabled #t)
+          (:nan-base 0)
+          (:payload-mask 281474976710655)
+          (:tag-shift 48)
+          (:tag-unit 281474976710656)
+          (:fixnum-nan-tag 1)
+          (:imm-nan-tag 2)
+          (:pointer-nan-tag 3))))))
 
 (define nan-boxing-64bit repr:nan-boxing-64bit)
 
@@ -335,32 +347,38 @@
 ;;; 6. Representation Query & Immediate Encoding API
 ;;; -----------------------------------------------------------------------
 
-(define (resolve-opt-repr opt-args)
-  (if (null? opt-args)
-      (current-value-repr)
-      (get-value-repr (car opt-args))))
+(define (repr-nan-boxed-with? r)
+  (if (value-repr-prop r 'nan-box ':enabled #f) #t #f))
 
-(define (repr-nan-boxed? . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (if (value-repr-prop r 'nan-box ':enabled #f) #t #f)))
+(define repr-nan-boxed?
+  (case-lambda
+    (() (repr-nan-boxed-with? (current-value-repr)))
+    ((opt-repr) (repr-nan-boxed-with? (get-value-repr opt-repr)))))
 
-(define (repr-requires-boxing? . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (or (> (value-repr-prop r 'fixnum ':shift 0) 0)
-        (> (value-repr-prop r 'fixnum ':tag-mask 0) 0)
-        (repr-nan-boxed? r))))
+(define (repr-requires-boxing-with? r)
+  (or (> (value-repr-prop r 'fixnum ':shift 0) 0)
+      (> (value-repr-prop r 'fixnum ':tag-mask 0) 0)
+      (repr-nan-boxed-with? r)))
 
-(define (repr-fixnum-shift . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'fixnum ':shift 0)))
+(define repr-requires-boxing?
+  (case-lambda
+    (() (repr-requires-boxing-with? (current-value-repr)))
+    ((opt-repr) (repr-requires-boxing-with? (get-value-repr opt-repr)))))
 
-(define (repr-fixnum-tag . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'fixnum ':tag-bits 0)))
+(define repr-fixnum-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'fixnum ':shift 0))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'fixnum ':shift 0))))
 
-(define (repr-fixnum-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'fixnum ':tag-mask 0)))
+(define repr-fixnum-tag
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'fixnum ':tag-bits 0))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'fixnum ':tag-bits 0))))
+
+(define repr-fixnum-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'fixnum ':tag-mask 0))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'fixnum ':tag-mask 0))))
 
 (define (repr-arithmetic-shift n count)
   (cond
@@ -374,20 +392,24 @@
            (- q 1)
            q)))))
 
-(define (repr-fixnum-step . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r)))
+(define (repr-fixnum-step-with r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0)))
     (value-repr-prop r 'fixnum ':step (repr-arithmetic-shift 1 shift))))
 
-(define (repr-encode-fixnum n . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r))
-         (tag (repr-fixnum-tag r)))
-    (if (repr-nan-boxed? r)
-        (let ((nan-base (value-repr-prop r 'nan-box ':nan-base 9221120237041090560))
-              (tag-unit (value-repr-prop r 'nan-box ':tag-unit 281474976710656))
-              (fx-nan-tag (value-repr-prop r 'nan-box ':fixnum-nan-tag 1))
-              (mask (value-repr-prop r 'nan-box ':payload-mask 281474976710655)))
+(define repr-fixnum-step
+  (case-lambda
+    (() (repr-fixnum-step-with (current-value-repr)))
+    ((opt-repr) (repr-fixnum-step-with (get-value-repr opt-repr)))))
+
+(define (repr-encode-fixnum-with n r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0))
+        (tag (value-repr-prop r 'fixnum ':tag-bits 0)))
+    (if (repr-nan-boxed-with? r)
+        (let* ((raw-nan-base (value-repr-prop r 'nan-box ':nan-base 0))
+               (nan-base (if (= raw-nan-base 0) (default-nan-box-base) raw-nan-base))
+               (tag-unit (value-repr-prop r 'nan-box ':tag-unit 281474976710656))
+               (fx-nan-tag (value-repr-prop r 'nan-box ':fixnum-nan-tag 1))
+               (mask (value-repr-prop r 'nan-box ':payload-mask 281474976710655)))
           (ctfe-bitwise-ior (+ nan-base (* fx-nan-tag tag-unit))
                             (ctfe-bitwise-and n mask)))
         (let ((shifted (repr-arithmetic-shift n shift)))
@@ -395,10 +417,14 @@
               shifted
               (ctfe-bitwise-ior shifted tag))))))
 
-(define (repr-decode-fixnum encoded . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r)))
-    (if (repr-nan-boxed? r)
+(define repr-encode-fixnum
+  (case-lambda
+    ((n) (repr-encode-fixnum-with n (current-value-repr)))
+    ((n opt-repr) (repr-encode-fixnum-with n (get-value-repr opt-repr)))))
+
+(define (repr-decode-fixnum-with encoded r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0)))
+    (if (repr-nan-boxed-with? r)
         (let* ((mask (value-repr-prop r 'nan-box ':payload-mask 281474976710655))
                (raw (ctfe-bitwise-and encoded mask))
                (sign-bit (repr-arithmetic-shift 1 47)))
@@ -407,114 +433,154 @@
               raw))
         (repr-arithmetic-shift encoded (- shift)))))
 
-(define (repr-encode-boolean b . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (if b
-        (value-repr-prop r 'immediates ':boolean-true 111)
-        (value-repr-prop r 'immediates ':boolean-false 47))))
+(define repr-decode-fixnum
+  (case-lambda
+    ((encoded) (repr-decode-fixnum-with encoded (current-value-repr)))
+    ((encoded opt-repr) (repr-decode-fixnum-with encoded (get-value-repr opt-repr)))))
 
-(define (repr-boolean-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':boolean-mask -65)))
+(define (repr-encode-boolean-with b r)
+  (if b
+      (value-repr-prop r 'immediates ':boolean-true 111)
+      (value-repr-prop r 'immediates ':boolean-false 47)))
 
-(define (repr-encode-null . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':null 63)))
+(define repr-encode-boolean
+  (case-lambda
+    ((b) (repr-encode-boolean-with b (current-value-repr)))
+    ((b opt-repr) (repr-encode-boolean-with b (get-value-repr opt-repr)))))
 
-(define (repr-encode-eof . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':eof 79)))
+(define repr-boolean-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':boolean-mask -65))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':boolean-mask -65))))
 
-(define (repr-encode-void . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':void 111)))
+(define repr-encode-null
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':null 63))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':null 63))))
 
-(define (repr-char-shift . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':char-shift 8)))
+(define repr-encode-eof
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':eof 79))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':eof 79))))
 
-(define (repr-char-op-shift . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':char-op-shift 6)))
+(define repr-encode-void
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':void 111))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':void 111))))
 
-(define (repr-char-tag . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':char-tag 14)))
+(define repr-char-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':char-shift 8))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':char-shift 8))))
 
-(define (repr-char-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':char-mask 255)))
+(define repr-char-op-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':char-op-shift 6))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':char-op-shift 6))))
 
-(define (repr-encode-char ch . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (code (if (char? ch) (char->integer ch) ch))
-         (shift (repr-char-shift r))
-         (tag (repr-char-tag r)))
+(define repr-char-tag
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':char-tag 14))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':char-tag 14))))
+
+(define repr-char-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':char-mask 255))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':char-mask 255))))
+
+(define (repr-encode-char-with ch r)
+  (let ((code (if (char? ch) (char->integer ch) ch))
+        (shift (value-repr-prop r 'immediates ':char-shift 8))
+        (tag (value-repr-prop r 'immediates ':char-tag 14)))
     (+ (repr-arithmetic-shift code shift) tag)))
 
-(define (repr-symbol-shift . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':symbol-shift 6)))
+(define repr-encode-char
+  (case-lambda
+    ((ch) (repr-encode-char-with ch (current-value-repr)))
+    ((ch opt-repr) (repr-encode-char-with ch (get-value-repr opt-repr)))))
 
-(define (repr-symbol-tag . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':symbol-tag 2)))
+(define repr-symbol-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':symbol-shift 6))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':symbol-shift 6))))
 
-(define (repr-symbol-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'immediates ':symbol-mask 255)))
+(define repr-symbol-tag
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':symbol-tag 2))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':symbol-tag 2))))
 
-(define (repr-encode-immediate expr . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (cond
-      ((integer? expr) (repr-encode-fixnum expr r))
-      ((boolean? expr) (repr-encode-boolean expr r))
-      ((char? expr)    (repr-encode-char expr r))
-      ((null? expr)    (repr-encode-null r))
-      (else
-       (value-repr-error! "repr-encode-immediate: unsupported immediate expression" expr)))))
+(define repr-symbol-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':symbol-mask 255))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':symbol-mask 255))))
+
+(define (repr-encode-immediate-with expr r)
+  (cond
+    ((integer? expr) (repr-encode-fixnum-with expr r))
+    ((boolean? expr) (repr-encode-boolean-with expr r))
+    ((char? expr)    (repr-encode-char-with expr r))
+    ((null? expr)    (value-repr-prop r 'immediates ':null 63))
+    (else
+     (value-repr-error! "repr-encode-immediate: unsupported immediate expression" expr))))
+
+(define repr-encode-immediate
+  (case-lambda
+    ((expr) (repr-encode-immediate-with expr (current-value-repr)))
+    ((expr opt-repr) (repr-encode-immediate-with expr (get-value-repr opt-repr)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 7. Heap Pointer Tag & Field Offset Calculator
 ;;; -----------------------------------------------------------------------
 
-(define (repr-pointer-align . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'pointer ':align 8)))
+(define repr-pointer-align
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'pointer ':align 8))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'pointer ':align 8))))
 
-(define (repr-pointer-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'pointer ':tag-mask 7)))
+(define repr-pointer-mask
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'pointer ':tag-mask 7))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'pointer ':tag-mask 7))))
 
-(define (repr-pointer-untag-mask . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (value-repr-prop r 'pointer ':untag-mask (- (repr-pointer-align r)))))
+(define (repr-pointer-untag-mask-with r)
+  (value-repr-prop r 'pointer ':untag-mask (- (value-repr-prop r 'pointer ':align 8))))
 
-(define (repr-heap-tag kind . opt-repr)
-  (let ((r (resolve-opt-repr opt-repr)))
-    (case kind
-      ((pair)       (value-repr-prop r 'pointer ':pair-tag 1))
-      ((closure procedure) (value-repr-prop r 'pointer ':closure-tag 1))
-      ((string)     (value-repr-prop r 'pointer ':string-tag 3))
-      ((vector)     (value-repr-prop r 'pointer ':vector-tag 5))
-      ((bytevector) (value-repr-prop r 'pointer ':bytevector-tag 7))
-      ((flonum)     (value-repr-prop r 'pointer ':flonum-tag 11))
-      (else         (value-repr-prop r 'pointer ':tag-bits 0)))))
+(define repr-pointer-untag-mask
+  (case-lambda
+    (() (repr-pointer-untag-mask-with (current-value-repr)))
+    ((opt-repr) (repr-pointer-untag-mask-with (get-value-repr opt-repr)))))
 
-(define (repr-field-offset kind byte-offset . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (tag (repr-heap-tag kind r)))
-    (- byte-offset tag)))
+(define (repr-heap-tag-with kind r)
+  (case kind
+    ((pair)       (value-repr-prop r 'pointer ':pair-tag 1))
+    ((closure procedure) (value-repr-prop r 'pointer ':closure-tag 1))
+    ((string)     (value-repr-prop r 'pointer ':string-tag 3))
+    ((vector)     (value-repr-prop r 'pointer ':vector-tag 5))
+    ((bytevector) (value-repr-prop r 'pointer ':bytevector-tag 7))
+    ((flonum)     (value-repr-prop r 'pointer ':flonum-tag 11))
+    (else         (value-repr-prop r 'pointer ':tag-bits 0))))
+
+(define repr-heap-tag
+  (case-lambda
+    ((kind) (repr-heap-tag-with kind (current-value-repr)))
+    ((kind opt-repr) (repr-heap-tag-with kind (get-value-repr opt-repr)))))
+
+(define (repr-field-offset-with kind byte-offset r)
+  (- byte-offset (repr-heap-tag-with kind r)))
+
+(define repr-field-offset
+  (case-lambda
+    ((kind byte-offset) (repr-field-offset-with kind byte-offset (current-value-repr)))
+    ((kind byte-offset opt-repr) (repr-field-offset-with kind byte-offset (get-value-repr opt-repr)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Boxing & Unboxing LIR Code Generators
 ;;; -----------------------------------------------------------------------
 
-(define (repr-emit-box-fixnum dst src . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r))
-         (tag (repr-fixnum-tag r))
-         (mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
+(define (repr-emit-box-fixnum-with dst src r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0))
+        (tag (value-repr-prop r 'fixnum ':tag-bits 0))
+        (mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
     (cond
       ((and (= shift 0) (= tag 0))
        mov-prefix)
@@ -527,20 +593,28 @@
                (list (list '%shl dst shift)
                      (list '%bit-or dst tag)))))))
 
-(define (repr-emit-unbox-fixnum dst src . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (shift (repr-fixnum-shift r))
-         (mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
+(define repr-emit-box-fixnum
+  (case-lambda
+    ((dst src) (repr-emit-box-fixnum-with dst src (current-value-repr)))
+    ((dst src opt-repr) (repr-emit-box-fixnum-with dst src (get-value-repr opt-repr)))))
+
+(define (repr-emit-unbox-fixnum-with dst src r)
+  (let ((shift (value-repr-prop r 'fixnum ':shift 0))
+        (mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))
     (if (= shift 0)
         mov-prefix
         (append mov-prefix (list (list '%sar dst shift))))))
 
-(define (repr-emit-box-flonum dst src . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (fl-tag (repr-heap-tag 'flonum r))
+(define repr-emit-unbox-fixnum
+  (case-lambda
+    ((dst src) (repr-emit-unbox-fixnum-with dst src (current-value-repr)))
+    ((dst src opt-repr) (repr-emit-unbox-fixnum-with dst src (get-value-repr opt-repr)))))
+
+(define (repr-emit-box-flonum-with dst src r)
+  (let* ((fl-tag (repr-heap-tag-with 'flonum r))
          (cell-bytes (value-repr-prop r 'pointer ':flonum-cell-bytes 16))
          (fl-offset (value-repr-prop r 'pointer ':flonum-offset (- 8 fl-tag))))
-    (if (or (not (repr-requires-boxing? r)) (repr-nan-boxed? r) (= fl-tag 0))
+    (if (or (not (repr-requires-boxing-with? r)) (repr-nan-boxed-with? r) (= fl-tag 0))
         ;; Unboxed or NaN-boxed float representation: no heap allocation needed
         (if (equal? dst src)
             '()
@@ -551,15 +625,24 @@
               (list '%add '%r12 cell-bytes)
               (list '%store-typed 'f64 dst fl-offset src)))))
 
-(define (repr-emit-unbox-flonum dst src . opt-repr)
-  (let* ((r (resolve-opt-repr opt-repr))
-         (fl-tag (repr-heap-tag 'flonum r))
+(define repr-emit-box-flonum
+  (case-lambda
+    ((dst src) (repr-emit-box-flonum-with dst src (current-value-repr)))
+    ((dst src opt-repr) (repr-emit-box-flonum-with dst src (get-value-repr opt-repr)))))
+
+(define (repr-emit-unbox-flonum-with dst src r)
+  (let* ((fl-tag (repr-heap-tag-with 'flonum r))
          (fl-offset (value-repr-prop r 'pointer ':flonum-offset (- 8 fl-tag))))
-    (if (or (not (repr-requires-boxing? r)) (repr-nan-boxed? r) (= fl-tag 0))
+    (if (or (not (repr-requires-boxing-with? r)) (repr-nan-boxed-with? r) (= fl-tag 0))
         (if (equal? dst src)
             '()
             (list (list '%fmov dst src)))
         (list (list '%load-typed 'f64 dst src fl-offset)))))
+
+(define repr-emit-unbox-flonum
+  (case-lambda
+    ((dst src) (repr-emit-unbox-flonum-with dst src (current-value-repr)))
+    ((dst src opt-repr) (repr-emit-unbox-flonum-with dst src (get-value-repr opt-repr)))))
 
 (define (repr-emit-type-tag-check dst src mask expected-tag)
   (let ((mov-prefix (if (equal? dst src) '() (list (list '%mov dst src)))))

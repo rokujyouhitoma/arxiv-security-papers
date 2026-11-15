@@ -523,7 +523,7 @@
   (let* ((rem (- total-len start-off))
          (mod64 (modulo (+ rem 9) 64))
          (pad-zeros (if (= mod64 0) 0 (- 64 mod64)))
-         (padded-len (+ rem 1 pad-zeros 8))
+         (padded-len (+ (+ (+ rem 1) pad-zeros) 8))
          (out (make-bytevector padded-len 0)))
     (let copy-loop ((i 0))
       (if (< i rem)
@@ -555,10 +555,10 @@
             (let load-loop ((i 0))
               (if (< i 16)
                   (let* ((p (+ base (* i 4)))
-                         (wval (+ (* (bytevector-u8-ref padded p) 16777216)
-                                  (* (bytevector-u8-ref padded (+ p 1)) 65536)
-                                  (* (bytevector-u8-ref padded (+ p 2)) 256)
-                                  (bytevector-u8-ref padded (+ p 3)))))
+                         (wval (+ (+ (* (bytevector-u8-ref padded p) 16777216)
+                                     (* (bytevector-u8-ref padded (+ p 1)) 65536))
+                                  (+ (* (bytevector-u8-ref padded (+ p 2)) 256)
+                                     (bytevector-u8-ref padded (+ p 3))))))
                     (vector-set! w i wval)
                     (load-loop (+ i 1)))))
             ;; W[16..63]
@@ -1036,7 +1036,7 @@
     (else
      (sbi-error! "Unsupported Scheme object type in SBI serializer" x))))
 
-(define (sbi-serialize ir . rest)
+(define (sbi-serialize-impl ir rest)
   (let* ((ir-kind (if (pair? rest) (sbi-ir-kind->code (car rest)) *sbi-ir-hir*))
          (raw-deps (if (and (pair? rest) (pair? (cdr rest))) (cadr rest) '()))
          (deps (sbi-normalize-deps raw-deps))
@@ -1045,8 +1045,8 @@
          (dep-count (length deps))
          (sym-count (vector-ref st 1))
          (node-count (vector-ref st 4))
-         (flags (+ (if (vector-ref st 13) 1 0)
-                   (if (vector-ref st 14) 2 0)
+         (flags (+ (+ (if (vector-ref st 13) 1 0)
+                      (if (vector-ref st 14) 2 0))
                    (if (> dep-count 0) 4 0)))
          (payload-w (sbi-make-writer)))
     ;; Section 1: Dependency header table
@@ -1081,6 +1081,12 @@
       (sbi-buf-bytes! hdr-w payload-bv)
       (sbi-writer->bytevector hdr-w))))
 
+(define sbi-serialize
+  (case-lambda
+    ((ir) (sbi-serialize-impl ir '()))
+    ((ir ir-kind) (sbi-serialize-impl ir (list ir-kind)))
+    ((ir ir-kind deps) (sbi-serialize-impl ir (list ir-kind deps)))))
+
 ;;; -----------------------------------------------------------------------
 ;;; 9. Acyclic DAG IR Deserializer (.sbi v2 Reader & Security Verifier)
 ;;; -----------------------------------------------------------------------
@@ -1090,10 +1096,10 @@
      (* (bytevector-u8-ref bv (+ off 1)) 256)))
 
 (define (sbi-read-u32-le bv off)
-  (+ (bytevector-u8-ref bv off)
-     (* (bytevector-u8-ref bv (+ off 1)) 256)
-     (* (bytevector-u8-ref bv (+ off 2)) 65536)
-     (* (bytevector-u8-ref bv (+ off 3)) 16777216)))
+  (+ (+ (bytevector-u8-ref bv off)
+        (* (bytevector-u8-ref bv (+ off 1)) 256))
+     (+ (* (bytevector-u8-ref bv (+ off 2)) 65536)
+        (* (bytevector-u8-ref bv (+ off 3)) 16777216))))
 
 (define (sbi-binary-bytevector? bv)
   (and (bytevector? bv)
@@ -1397,13 +1403,20 @@
 ;;; 10. File Read/Write API, PCH Cache Validation & Compatibility Layer
 ;;; -----------------------------------------------------------------------
 
-(define (sbi-write-file path ir . rest)
-  (let* ((bv (cond
-               ((null? rest) (sbi-serialize ir))
-               ((null? (cdr rest)) (sbi-serialize ir (car rest)))
-               (else (sbi-serialize ir (car rest) (cadr rest))))))
-    (sbi-write-file-bytes path bv)
-    bv))
+(define sbi-write-file
+  (case-lambda
+    ((path ir)
+     (let ((bv (sbi-serialize-impl ir '())))
+       (sbi-write-file-bytes path bv)
+       bv))
+    ((path ir ir-kind)
+     (let ((bv (sbi-serialize-impl ir (list ir-kind))))
+       (sbi-write-file-bytes path bv)
+       bv))
+    ((path ir ir-kind deps)
+     (let ((bv (sbi-serialize-impl ir (list ir-kind deps))))
+       (sbi-write-file-bytes path bv)
+       bv))))
 
 (define (sbi-read-file-full path)
   (let ((bytes (sbi-read-file-bytes path)))
@@ -1527,7 +1540,7 @@
              (main-bodies-rev '()))
     (if (null? ms)
         (let* ((merged-strings (sbi-merge-assoc-by-key
-                                 (reverse all-strings-rev) car))
+                                 (reverse all-strings-rev) car*))
                (merged-stackmaps (reverse all-stackmaps-rev))
                (merged-funcs (sbi-merge-assoc-by-key
                                (reverse all-funcs-rev) cadr))

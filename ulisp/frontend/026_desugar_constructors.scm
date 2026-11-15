@@ -313,6 +313,30 @@
       (error "format [SRFI 28]: too few arguments (requires format-string)")
       (list '%format (car args) (cons 'list (cdr args)))))
 
+(define (desugar-math-binop-fold op a b c rest)
+  (let loop ((acc (list op a b)) (xs (cons c rest)))
+    (if (null? xs)
+        acc
+        (loop (list op acc (car xs)) (cdr xs)))))
+
+(define (desugar-make-string-fill k ch)
+  (let ((n-sym (unique-symbol "ms_n_"))
+        (c-sym (unique-symbol "ms_c_"))
+        (s-sym (unique-symbol "ms_s_"))
+        (i-sym (unique-symbol "ms_i_"))
+        (loop-sym (unique-symbol "ms_loop_")))
+    (list 'let (list (list n-sym k) (list c-sym ch))
+          (list 'let (list (list s-sym (list 'make-string n-sym)))
+                (list 'letrec
+                      (list (list loop-sym
+                                  (list 'lambda (list i-sym)
+                                        (list 'if (list '< i-sym n-sym)
+                                              (list 'begin
+                                                    (list 'string-set! s-sym i-sym c-sym)
+                                                    (list loop-sym (list '+ i-sym 1)))
+                                              s-sym))))
+                      (list loop-sym 0))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Pass 026 Picopass Rule Definitions (DSN-33-01 T4.1)
 ;;; -----------------------------------------------------------------------
@@ -335,6 +359,7 @@
 
 (define-picopass rule-desugar-string-ops
   (Expr
+    ((make-string ,k ,ch) (desugar-make-string-fill k ch))
     ((string . ,args) (desugar-string args))
     ((string-append . ,args) (desugar-string-append args))
     ((string-copy . ,args) (desugar-string-copy args))
@@ -361,6 +386,8 @@
 
 (define-picopass rule-desugar-math-variadic
   (Expr
+    ((+ ,a ,b ,c . ,rest) (desugar-math-binop-fold '+ a b c rest))
+    ((* ,a ,b ,c . ,rest) (desugar-math-binop-fold '* a b c rest))
     ((gcd . ,args) (desugar-gcd args))
     ((lcm . ,args) (desugar-lcm args))
     ((max . ,args) (desugar-max args))

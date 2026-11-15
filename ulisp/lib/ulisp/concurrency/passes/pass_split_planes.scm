@@ -133,7 +133,7 @@
             (loop-name (if is-named? (cadr expr) #f))
             (bindings (if is-named? (caddr expr) (cadr expr)))
             (bodies (if is-named? (cdddr expr) (cddr expr)))
-            (vars (map car bindings))
+            (vars (map (lambda (b) (car b)) bindings))
             (vals (map cadr bindings))
             (val-fvs (%extract-free-vars-list vals bound-env))
             (inner-bound (if is-named?
@@ -158,7 +158,7 @@
     ((eq? (car expr) 'letrec)
      (let* ((bindings (cadr expr))
             (bodies (cddr expr))
-            (vars (map car bindings))
+            (vars (map (lambda (b) (car b)) bindings))
             (vals (map cadr bindings))
             (rec-env (%set-union vars bound-env))
             (val-fvs (%extract-free-vars-list vals rec-env))
@@ -261,61 +261,63 @@
      'integer)
     (else #f)))
 
-(define (classify-capture-mode var . opt-args)
-  (let* ((type-env (if (pair? opt-args) (car opt-args) '()))
-         (boundary-kind (if (and (pair? opt-args) (pair? (cdr opt-args)))
-                            (cadr opt-args)
-                            'task)))
-    (cond
-      ;; 1. Annotated variable tuple: (: v type) or (v : type)
-      ((pair? var)
-       (cond
-         ((and (eq? (car var) ':) (pair? (cdr var)) (pair? (cddr var)))
-          (let ((ty (caddr var)))
-            (cond
-              ((linear-type? ty) 'linear-move)
-              ((immediate-type? ty) 'immediate)
-              ((explicit-deep-copy-type? ty) 'deep-copy)
-              (else 'deep-copy))))
-         ((and (pair? (cdr var)) (eq? (cadr var) ':) (pair? (cddr var)))
-          (let ((ty (caddr var)))
-            (cond
-              ((linear-type? ty) 'linear-move)
-              ((immediate-type? ty) 'immediate)
-              ((explicit-deep-copy-type? ty) 'deep-copy)
-              (else 'deep-copy))))
-         ((memq (car var) '(linear-move immediate deep-copy))
-          (car var))
-         (else 'deep-copy)))
+(define (classify-capture-mode-impl var type-env boundary-kind)
+  (cond
+    ;; 1. Annotated variable tuple: (: v type) or (v : type)
+    ((pair? var)
+     (cond
+       ((and (eq? (car var) ':) (pair? (cdr var)) (pair? (cddr var)))
+        (let ((ty (caddr var)))
+          (cond
+            ((linear-type? ty) 'linear-move)
+            ((immediate-type? ty) 'immediate)
+            ((explicit-deep-copy-type? ty) 'deep-copy)
+            (else 'deep-copy))))
+       ((and (pair? (cdr var)) (eq? (cadr var) ':) (pair? (cddr var)))
+        (let ((ty (caddr var)))
+          (cond
+            ((linear-type? ty) 'linear-move)
+            ((immediate-type? ty) 'immediate)
+            ((explicit-deep-copy-type? ty) 'deep-copy)
+            (else 'deep-copy))))
+       ((memq (car var) '(linear-move immediate deep-copy))
+        (car var))
+       (else 'deep-copy)))
 
-      ;; 2. Symbol lookup in type environment (Issue #797 & Issue #811)
-      ((symbol? var)
-       (let ((binding (assq var type-env)))
-         (if binding
-             (let ((info (cdr binding)))
-               (cond
-                 ((memq info '(linear-move immediate deep-copy))
-                  info)
-                 ((linear-type? info)
-                  'linear-move)
-                 ((immediate-type? info)
-                  'immediate)
-                 ((explicit-deep-copy-type? info)
-                  ;; Explicitly declared deep-copy/any/untyped: no warning
-                  'deep-copy)
-                 (else
-                  ;; Bound to unknown/composite type without explicit annotation:
-                  ;; emit warning and fallback to deep-copy (CWE-843 / CWE-400)
-                  (emit-untyped-boundary-warning var boundary-kind)
-                  'deep-copy)))
-             (begin
-               ;; Untyped fallback: Shared-Nothing Deep Copy (CWE-362/662 safe default)
-               ;; Emit static compiler warning (Issue #811)
-               (emit-untyped-boundary-warning var boundary-kind)
-               'deep-copy))))
+    ;; 2. Symbol lookup in type environment (Issue #797 & Issue #811)
+    ((symbol? var)
+     (let ((binding (assq var type-env)))
+       (if binding
+           (let ((info (cdr binding)))
+             (cond
+               ((memq info '(linear-move immediate deep-copy))
+                info)
+               ((linear-type? info)
+                'linear-move)
+               ((immediate-type? info)
+                'immediate)
+               ((explicit-deep-copy-type? info)
+                ;; Explicitly declared deep-copy/any/untyped: no warning
+                'deep-copy)
+               (else
+                ;; Bound to unknown/composite type without explicit annotation:
+                ;; emit warning and fallback to deep-copy (CWE-843 / CWE-400)
+                (emit-untyped-boundary-warning var boundary-kind)
+                'deep-copy)))
+           (begin
+             ;; Untyped fallback: Shared-Nothing Deep Copy (CWE-362/662 safe default)
+             ;; Emit static compiler warning (Issue #811)
+             (emit-untyped-boundary-warning var boundary-kind)
+             'deep-copy))))
 
-      (else
-       (error "classify-capture-mode: expected symbol or annotated variable" var)))))
+    (else
+     (error "classify-capture-mode: expected symbol or annotated variable" var))))
+
+(define classify-capture-mode
+  (case-lambda
+    ((var) (classify-capture-mode-impl var '() 'task))
+    ((var type-env) (classify-capture-mode-impl var type-env 'task))
+    ((var type-env boundary-kind) (classify-capture-mode-impl var type-env boundary-kind))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. Plane Boundary Splitting AST Transformation
@@ -389,9 +391,8 @@
               (cons bridge-node (list kernel-node)))))))
 
 ;; Main AST recursive walk
-(define (split-planes-ast expr . opt-env)
-  (let ((type-env (if (pair? opt-env) (car opt-env) '())))
-    (cond
+(define (split-planes-ast-impl expr type-env)
+  (cond
       ((not (pair? expr))
        (cons expr '()))
 
@@ -410,16 +411,16 @@
                   (val-expr (caddr expr))
                   (val-ty (infer-expr-type val-expr))
                   (new-env (if val-ty (cons (cons var val-ty) type-env) type-env))
-                  (val-res (split-planes-ast val-expr new-env)))
+                  (val-res (split-planes-ast-impl val-expr new-env)))
              (cons (list 'define var (car val-res))
                    (cdr val-res)))
            (cons expr '())))
 
       ((eq? (car expr) 'if)
-       (let* ((t-res (split-planes-ast (cadr expr) type-env))
-              (c-res (split-planes-ast (caddr expr) type-env))
+       (let* ((t-res (split-planes-ast-impl (cadr expr) type-env))
+              (c-res (split-planes-ast-impl (caddr expr) type-env))
               (a-res (if (pair? (cdddr expr))
-                         (split-planes-ast (cadddr expr) type-env)
+                         (split-planes-ast-impl (cadddr expr) type-env)
                          (cons #f '())))
               (new-expr (if (pair? (cdddr expr))
                             (list 'if (car t-res) (car c-res) (car a-res))
@@ -431,14 +432,14 @@
        (let loop ((items (cdr expr)) (acc-items '()) (acc-k '()))
          (if (null? items)
              (cons (cons 'begin (reverse acc-items)) acc-k)
-             (let ((res (split-planes-ast (car items) type-env)))
+             (let ((res (split-planes-ast-impl (car items) type-env)))
                (loop (cdr items)
                      (cons (car res) acc-items)
                      (append acc-k (cdr res)))))))
 
       ((eq? (car expr) 'lambda)
        (let* ((formals (cadr expr))
-              (b-res (split-planes-ast (cons 'begin (cddr expr)) type-env))
+              (b-res (split-planes-ast-impl (cons 'begin (cddr expr)) type-env))
               (b-expr (car b-res))
               (actual-bodies (if (and (pair? b-expr) (eq? (car b-expr) 'begin))
                                  (cdr b-expr)
@@ -473,7 +474,7 @@
                                  (if annotated-type
                                      (cons annotated-type env)
                                      env))))))
-              (body-res (split-planes-ast (cons 'begin bodies) extended-env))
+              (body-res (split-planes-ast-impl (cons 'begin bodies) extended-env))
               (b-expr (car body-res))
               (actual-bodies (if (and (pair? b-expr) (eq? (car b-expr) 'begin))
                                  (cdr b-expr)
@@ -486,7 +487,7 @@
                      acc-k)
                (let* ((b (car bs))
                       (v (car b))
-                      (init-res (split-planes-ast (cadr b) type-env)))
+                      (init-res (split-planes-ast-impl (cadr b) type-env)))
                  (loop (cdr bs)
                        (cons (list v (car init-res)) acc-b)
                        (append acc-k (cdr init-res))))))))
@@ -496,10 +497,15 @@
        (let loop ((elems expr) (acc-elems '()) (acc-k '()))
          (if (null? elems)
              (cons (reverse acc-elems) acc-k)
-             (let ((res (split-planes-ast (car elems) type-env)))
+             (let ((res (split-planes-ast-impl (car elems) type-env)))
                (loop (cdr elems)
                      (cons (car res) acc-elems)
-                     (append acc-k (cdr res))))))))))
+                     (append acc-k (cdr res)))))))))
+
+(define split-planes-ast
+  (case-lambda
+    ((expr) (split-planes-ast-impl expr '()))
+    ((expr type-env) (split-planes-ast-impl expr type-env))))
 
 (define (split-planes-pass forms)
   (let loop ((fs forms) (res-forms '()) (res-kernels '()))

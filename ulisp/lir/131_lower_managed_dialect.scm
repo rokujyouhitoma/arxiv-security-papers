@@ -135,24 +135,9 @@
              (repr-emit-unbox-flonum dst src)))
 
           ;; 8. Runtime Continuations, Exceptions and Multiple Values
-          ((%capture-cc)
-           (list (list '%c-call "ulisp_capture_cc" 0)))
-
-          ((%push-handler)
-           (list (list '%c-call "ulisp_push_handler" 0)))
-
-          ((%pop-handler)
-           (list (list '%c-call "ulisp_pop_handler" 0)))
-
-          ((%raise)
-           (list (list '%c-call "ulisp_raise" 0)))
-
-          ((%set-values-count)
-           (let ((cnt (cadr inst)))
-             (list (list '%global-set! 'ulisp_values_count cnt))))
-
-          ((%store-values-buf)
-           (list (list '%c-call "ulisp_store_values" 0)))
+          ;; Handled directly by native backend code generators (e.g. 140_backend_x86_64.scm)
+          ((%capture-cc %push-handler %pop-handler %raise %set-values-count %store-values-buf)
+           (list inst))
 
           ;; 9. Nested SSA Blocks: (%block lbl params . body)
           ((%block)

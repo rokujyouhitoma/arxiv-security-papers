@@ -6,12 +6,12 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| *(なし)* | - | - | - | - | - |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **846** | `build/ulisp-modular` および `bootstrap` ビルド失敗の修正と再発防止策の導入 | Bug | 2026-11-15 | [846-fix-ulisp-modular-and-bootstrap-arity-and-variadic-compat.md](closed/846-fix-ulisp-modular-and-bootstrap-arity-and-variadic-compat.md) |
 | **840** | Nanopass パスマネージャにおける解析結果キャッシュ自動無効化と再計算 | Feature | 2026-11-15 | [840-automate-analysis-cache-invalidation-and-recomputation-in-nanopass.md](closed/840-automate-analysis-cache-invalidation-and-recomputation-in-nanopass.md) |
 | **839** | 中間表現 (HIR/MIR/LIR) の永続化・再ロード機構 (.sbi 拡張) の整備 | Feature | 2026-11-15 | [839-implement-ir-serialization-and-deserialization-sbi-extension.md](closed/839-implement-ir-serialization-and-deserialization-sbi-extension.md) |
 | **838** | レジスタ制約付きインライン・アセンブリ (%inline-asm) の LIR 統合 | Feature | 2026-11-15 | [838-integrate-inline-assembly-dialect-with-register-constraints-into-lir.md](closed/838-integrate-inline-assembly-dialect-with-register-constraints-into-lir.md) |

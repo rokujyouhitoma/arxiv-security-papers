@@ -116,6 +116,51 @@ class TestSexprLinter(unittest.TestCase):
         self.assertEqual(len(errs), 1)
         self.assertIn("unclosed '('", errs[0].message)
 
+    def test_compat_rejects_multi_arg_plus_and_mul(self):
+        code = "(define (f a b c) (+ a (* b c 2) 1))\n"
+        errs = lint_scheme_source("compiler/sample.scm", code)
+        self.assertEqual(len(errs), 2)
+        self.assertTrue(any("'+' expects 2 arguments" in e.message for e in errs))
+        self.assertTrue(any("'*' expects 2 arguments" in e.message for e in errs))
+
+    def test_compat_rejects_two_arg_make_string(self):
+        code = "(define (f n) (make-string n #\\a))\n"
+        errs = lint_scheme_source("<test>", code, check_compat=True)
+        self.assertEqual(len(errs), 1)
+        self.assertIn("make-string", errs[0].message)
+
+    def test_compat_rejects_dotted_variadic_define_and_lambda(self):
+        code = "(define (f a . rest) rest)\n(define g (lambda (x . ys) ys))\n"
+        errs = lint_scheme_source("<test>", code, check_compat=True)
+        self.assertEqual(len(errs), 2)
+        self.assertTrue(all("dotted variadic" in e.message for e in errs))
+
+    def test_compat_rejects_large_case_lambda(self):
+        code = "(define f (case-lambda ((a b c d e f g) a) ((a b) a)))\n"
+        errs = lint_scheme_source("<test>", code, check_compat=True)
+        self.assertEqual(len(errs), 1)
+        self.assertIn("> 6", errs[0].message)
+
+    def test_compat_rejects_first_class_car_and_cdr(self):
+        code = "(define (f xs) (list (map car xs) (map cdr xs)))\n"
+        errs = lint_scheme_source("<test>", code, check_compat=True)
+        self.assertEqual(len(errs), 2)
+        self.assertTrue(any("first-class primitive 'car'" in e.message for e in errs))
+        self.assertTrue(any("first-class primitive 'cdr'" in e.message for e in errs))
+
+    def test_compat_allows_valid_compiler_forms_and_skips_quoted_or_else_cond_expand(self):
+        code = (
+            "(define (ok a b)\n"
+            "  (let ((x (+ a b)) (s (make-string 4)))\n"
+            "    (map car* '((+ 1 2 3) (* 2 3 4)))))\n"
+            "(define g (cond-expand\n"
+            "            (ulisp (lambda (a b c d e f g) a))\n"
+            "            (else (case-lambda ((a b c d e f g h) a)))))\n"
+            "(define cl (case-lambda ((a) a) ((a b c d e f) a)))\n"
+        )
+        errs = lint_scheme_source("compiler/ok.scm", code)
+        self.assertEqual(len(errs), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

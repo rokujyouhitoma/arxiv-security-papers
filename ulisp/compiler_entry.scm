@@ -25,6 +25,21 @@
     ((read) (port-read *stdin-port*))
     ((read p) (port-read p))))
 
+(define-syntax read-u8
+  (syntax-rules ()
+    ((read-u8) (port-read-u8 *stdin-port*))
+    ((read-u8 p) (port-read-u8 p))))
+
+(define-syntax write-u8
+  (syntax-rules ()
+    ((write-u8 b) (port-write-u8 b *stdout-port*))
+    ((write-u8 b p) (port-write-u8 b p))))
+
+(define-syntax string->number
+  (syntax-rules ()
+    ((string->number s) (string->number-core s 10 #f))
+    ((string->number s r) (string->number-core s r #t))))
+
 (define-syntax write-bytevector
   (syntax-rules ()
     ((write-bytevector bv)
@@ -48,9 +63,12 @@
 (include "compiler/verifier.scm")
 (include "compiler/pass_manager.scm")
 (include "compiler/dataflow.scm")
+(include "compiler/binding.scm")
 (include "compiler/scope.scm")
 (include "compiler/eval_in_language.scm")
 (include "compiler/calling_convention.scm")
+(include "compiler/value_repr.scm")
+(include "compiler/sbi.scm")
 
 ;; Frontend Passes
 (include "frontend/frontend_lang.scm")
@@ -85,6 +103,7 @@
 (include "lir/128_lir_branch_fusion.scm")
 (include "lir/129_lir_primitives.scm")
 (include "lir/130_lir.scm")
+(include "lir/131_lower_managed_dialect.scm")
 (include "lir/131_lir_safepoint.scm")
 (include "lir/132_lir_braun_ssa.scm")
 (include "lir/133_lir_peephole.scm")

@@ -117,7 +117,7 @@
           (set-car! cc (append (car cc) (list child)))))
     child))
 
-(define (scope-bind! node orig-sym alpha-sym . kind-opt)
+(define (scope-bind-impl! node orig-sym alpha-sym kind-opt)
   (let ((bc (scope-node-bindings-cell node)))
     (set-car! bc (cons (cons orig-sym alpha-sym) (car bc))))
   (let* ((existing (if (not (eq? orig-sym alpha-sym))
@@ -147,6 +147,11 @@
     (let ((nbc (scope-node-ns-bindings-cell node)))
       (set-car! nbc (cons b (car nbc))))
     b))
+
+(define scope-bind!
+  (case-lambda
+    ((node orig-sym alpha-sym) (scope-bind-impl! node orig-sym alpha-sym '()))
+    ((node orig-sym alpha-sym kind) (scope-bind-impl! node orig-sym alpha-sym (list kind)))))
 
 (define (scope-lookup-local node orig-sym)
   (let ((entry (assq orig-sym (scope-node-bindings node))))
@@ -202,8 +207,10 @@
            (car bs))
           (else (loop (cdr bs)))))))
 
-(define (scope-lookup-binding-local node sym . ns-opt)
-  (scope-lookup-binding-local-ns node sym (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+(define scope-lookup-binding-local
+  (case-lambda
+    ((node sym) (scope-lookup-binding-local-ns node sym 'ordinary))
+    ((node sym ns) (scope-lookup-binding-local-ns node sym ns))))
 
 (define (scope-lookup-binding-ns node sym ns)
   (if (not (scope-node? node))
@@ -218,24 +225,30 @@
                       found
                       (loop (scope-node-parent curr)))))))))
 
-(define (scope-lookup-binding node sym . ns-opt)
-  (scope-lookup-binding-ns node sym (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+(define scope-lookup-binding
+  (case-lambda
+    ((node sym) (scope-lookup-binding-ns node sym 'ordinary))
+    ((node sym ns) (scope-lookup-binding-ns node sym ns))))
 
-(define (scope-lookup-hygienic node sym use-scope-set . ns-opt)
+(define (scope-lookup-hygienic-ns node sym use-scope-set ns)
   (if (not (scope-node? node))
       #f
-      (let ((ns (if (pair? ns-opt) (car ns-opt) 'ordinary)))
-        (let collect ((curr node) (cands '()))
-          (if (not (scope-node? curr))
-              (resolve-hygienic-binding (reverse cands) use-scope-set)
-              (let scan ((bs (scope-node-ns-bindings curr)) (acc cands))
-                (if (null? bs)
-                    (collect (scope-node-parent curr) acc)
-                    (let ((b (car bs)))
-                      (if (and (eq? (binding-namespace b) ns)
-                               (eq? (binding-source-name b) sym))
-                          (scan (cdr bs) (cons b acc))
-                          (scan (cdr bs) acc))))))))))
+      (let collect ((curr node) (cands '()))
+        (if (not (scope-node? curr))
+            (resolve-hygienic-binding (reverse cands) use-scope-set)
+            (let scan ((bs (scope-node-ns-bindings curr)) (acc cands))
+              (if (null? bs)
+                  (collect (scope-node-parent curr) acc)
+                  (let ((b (car bs)))
+                    (if (and (eq? (binding-namespace b) ns)
+                             (eq? (binding-source-name b) sym))
+                        (scan (cdr bs) (cons b acc))
+                        (scan (cdr bs) acc)))))))))
+
+(define scope-lookup-hygienic
+  (case-lambda
+    ((node sym use-scope-set) (scope-lookup-hygienic-ns node sym use-scope-set 'ordinary))
+    ((node sym use-scope-set ns) (scope-lookup-hygienic-ns node sym use-scope-set ns))))
 
 (define (scope-lookup-kind node sym)
   (let ((b (scope-lookup-binding node sym 'ordinary)))
@@ -344,8 +357,14 @@
             (set-car! bc (cons (cons source-name u-sym) (car bc)))))
       b)))
 
-(define (scope-define! node source-name kind . opts)
-  (scope-define-opts node source-name kind opts))
+(define scope-define!
+  (case-lambda
+    ((node source-name kind)
+     (scope-define-opts node source-name kind '()))
+    ((node source-name kind o1)
+     (scope-define-opts node source-name kind (list o1)))
+    ((node source-name kind o1 o2)
+     (scope-define-opts node source-name kind (list o1 o2)))))
 
 (define (make-scope-manager)
   (let ((root (make-scope-node #f 'top-level)))
@@ -375,18 +394,28 @@
     (set-car! (caddr mgr) parent)
     parent))
 
-(define (scope-manager-define! mgr sym kind . opts)
-  (scope-define-opts (scope-manager-current mgr) sym kind opts))
+(define scope-manager-define!
+  (case-lambda
+    ((mgr sym kind)
+     (scope-define-opts (scope-manager-current mgr) sym kind '()))
+    ((mgr sym kind o1)
+     (scope-define-opts (scope-manager-current mgr) sym kind (list o1)))
+    ((mgr sym kind o1 o2)
+     (scope-define-opts (scope-manager-current mgr) sym kind (list o1 o2)))))
 
-(define (scope-manager-lookup mgr sym . ns-opt)
-  (scope-lookup-binding-ns (scope-manager-current mgr)
-                           sym
-                           (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+(define scope-manager-lookup
+  (case-lambda
+    ((mgr sym)
+     (scope-lookup-binding-ns (scope-manager-current mgr) sym 'ordinary))
+    ((mgr sym ns)
+     (scope-lookup-binding-ns (scope-manager-current mgr) sym ns))))
 
-(define (scope-manager-lookup-local mgr sym . ns-opt)
-  (scope-lookup-binding-local-ns (scope-manager-current mgr)
-                                 sym
-                                 (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+(define scope-manager-lookup-local
+  (case-lambda
+    ((mgr sym)
+     (scope-lookup-binding-local-ns (scope-manager-current mgr) sym 'ordinary))
+    ((mgr sym ns)
+     (scope-lookup-binding-local-ns (scope-manager-current mgr) sym ns))))
 
 (define (scope-manager-lookup-kind mgr sym)
   (scope-lookup-kind (scope-manager-current mgr) sym))
@@ -491,8 +520,29 @@
             (else
              (loop (cdr ds) acc)))))))
 
+(define (scope-make-symbol-set syms)
+  (let ((v (make-vector 1024 '())))
+    (let loop ((xs syms))
+      (if (pair? xs)
+          (let* ((s (car xs))
+                 (idx (symbol->hash-idx s))
+                 (bucket (vector-ref v idx)))
+            (if (not (memq s bucket))
+                (vector-set! v idx (cons s bucket)))
+            (loop (cdr xs)))
+          v))))
+
+(define (scope-symbol-set-contains? v sym)
+  (if (and (vector? v) (symbol? sym))
+      (let* ((idx (symbol->hash-idx sym))
+             (bucket (vector-ref v idx)))
+        (if (memq sym bucket) #t #f))
+      #f))
+
 (define (scope-known-global-or-prim? sym globals)
-  (or (if (memq sym globals) #t #f)
+  (or (if (vector? globals)
+          (scope-symbol-set-contains? globals sym)
+          (if (memq sym globals) #t #f))
       (scope-primitive-symbol? sym)))
 
 ;;; -----------------------------------------------------------------------
@@ -559,15 +609,19 @@
        (cond
          (alpha-sym
           ;; Propagate free-variable usage & Binding IDs up the lexical contour tree
-          (let ((b (lookup-binding-by-symbol alpha-sym)))
-            (let propagate ((curr scope))
-              (if (and (scope-node? curr)
-                       (not (scope-lookup-local curr expr)))
-                  (begin
-                    (scope-record-free-var! curr expr)
-                    (if (binding? b)
-                        (scope-record-free-binding-id! curr (binding-id b)))
-                    (propagate (scope-node-parent curr))))))
+          (if (not (scope-lookup-local scope expr))
+              (let ((b (lookup-binding-by-symbol alpha-sym)))
+                (let propagate ((curr scope))
+                  (if (and (scope-node? curr)
+                           (not (eq? (scope-node-kind curr) 'top-level))
+                           (not (scope-lookup-local curr expr)))
+                      (if (memq expr (scope-node-free-vars curr))
+                          #t
+                          (begin
+                            (scope-record-free-var! curr expr)
+                            (if (binding? b)
+                                (scope-record-free-binding-id! curr (binding-id b)))
+                            (propagate (scope-node-parent curr))))))))
           alpha-sym)
          ((scope-known-global-or-prim? expr globals)
           expr)
@@ -776,7 +830,7 @@
   (let* ((defs (cadr prog-expr))
          (main (caddr prog-expr))
          (top-defines (collect-top-level-defines defs))
-         (all-globals (append top-defines base-globals))
+         (all-globals (scope-make-symbol-set (append top-defines base-globals)))
          (top-scope (make-scope-node #f 'top-level))
          (_set-root (set-car! *last-resolved-scope-tree* top-scope))
          (_reg-defs
@@ -794,12 +848,12 @@
                                        'function
                                        'variable)))
                         (if (symbol? def-name)
-                            (scope-define! top-scope def-name kind
-                                           ':unique-sym def-name
-                                           ':storage-class 'global
-                                           ':visibility 'global
-                                           ':source-span d-span
-                                           ':no-legacy-bind #t))))
+                            (scope-define-opts top-scope def-name kind
+                                               (list ':unique-sym def-name
+                                                     ':storage-class 'global
+                                                     ':visibility 'global
+                                                     ':source-span d-span
+                                                     ':no-legacy-bind #t)))))
                   (reg-loop (cdr ds))))))
          (converted-defs
           (let loop ((ds defs) (acc '()))
