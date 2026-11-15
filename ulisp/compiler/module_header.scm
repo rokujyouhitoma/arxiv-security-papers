@@ -183,6 +183,20 @@
   femto-cache-stats
   femto-cache-hit-rate
   expr-size-le?
+  define-value-repr
+  repr:scheme-64bit-tagged
+  repr:c-unboxed
+  repr:nan-boxing-64bit
+  scheme-standard
+  c-unboxed
+  nan-boxing-64bit
+  current-value-repr
+  with-value-repr
+  repr-encode-immediate
+  repr-emit-box-fixnum
+  repr-emit-unbox-fixnum
+  repr-emit-box-flonum
+  repr-emit-unbox-flonum
   symbol->hash-idx)
 
 

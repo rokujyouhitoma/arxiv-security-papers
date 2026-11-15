@@ -1620,7 +1620,14 @@
     (assemble-and-build-elf-obj . "assemble-and-build-elf-obj")
     (emit-x86-64-elf-obj . "emit-x86-64-elf-obj")
     (build-x86-64-elf-obj . "build-x86-64-elf-obj")
-    (assemble-stream-to-elf-obj . "assemble-stream-to-elf-obj")))
+    (assemble-stream-to-elf-obj . "assemble-stream-to-elf-obj")
+    (define-value-repr . "define-value-repr")
+    (repr:scheme-64bit-tagged . "repr:scheme-64bit-tagged")
+    (repr:c-unboxed . "repr:c-unboxed")
+    (repr:nan-boxing-64bit . "repr:nan-boxing-64bit")
+    (scheme-standard . "scheme-standard")
+    (c-unboxed . "c-unboxed")
+    (nan-boxing-64bit . "nan-boxing-64bit")))
 
 ;; True in AOT-compiled binaries where uninterned symbol->string returns "?"
 (define *aot-fast-sym-hash?* (= (string-length (symbol->string '%%ulisp-probe%%)) 1))

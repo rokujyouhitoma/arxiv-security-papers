@@ -2,7 +2,8 @@
 ID: 836
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-11-15
 ---
 
 # [FEAT] `define-value-repr` による値表現・ボクシング方式のプラグイン化 (ID: 836)
@@ -24,28 +25,28 @@ ID: 836
 ## 2. トレーサビリティ / Traceability
 
 - **設計仕様書**:
-  - [DSN-33-02 (ULisp 多言語フロントエンド統合および機械型付き LIR 拡張設計書)](../designs/DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md): §5.1 (`define-value-repr` による値表現・ボクシングのプラグイン化), §2.2 (Scheme インタプリタのゼロコスト FFI)
-  - [DSN-33 (ULisp Underlying x86 Native AOT Compiler Architecture)](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md): §2.1 (Tagged Pointer メモリモデル & 即値表現)
-  - [LIR 正典仕様書 (ULisp Canonical LIR Specification)](../../ulisp/docs/spec_lir.md): §3 (ボクシング命令・型付きメモリアクセス仕様)
+  - [DSN-33-02 (ULisp 多言語フロントエンド統合および機械型付き LIR 拡張設計書)](../../designs/DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md): §5.1 (`define-value-repr` による値表現・ボクシングのプラグイン化), §2.2 (Scheme インタプリタのゼロコスト FFI)
+  - [DSN-33 (ULisp Underlying x86 Native AOT Compiler Architecture)](../../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md): §2.1 (Tagged Pointer メモリモデル & 即値表現)
+  - [LIR 正典仕様書 (ULisp Canonical LIR Specification)](../../../ulisp/docs/spec_lir.md): §3 (ボクシング命令・型付きメモリアクセス仕様)
 - **関連 Issue**:
-  - [Issue #826 (機械型を備えた Typed LIR への移行とボクシング操作の直交分離)](closed/826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md)
-  - [Issue #829 (呼出規約の多重化・モジュール分離とゼロオーバーヘッド C-FFI の実現)](closed/829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md)
-  - [Issue #834 (純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装)](closed/834-implement-pure-scheme-lir-reference-vm-interpreter.md)
-  - [Issue #835 (Core Machine LIR と Managed Runtime Dialect の完全直交分離)](closed/835-separate-core-machine-lir-from-managed-runtime-dialect.md)
+  - [Issue #826 (機械型を備えた Typed LIR への移行とボクシング操作の直交分離)](826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md)
+  - [Issue #829 (呼出規約の多重化・モジュール分離とゼロオーバーヘッド C-FFI の実現)](829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md)
+  - [Issue #834 (純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装)](834-implement-pure-scheme-lir-reference-vm-interpreter.md)
+  - [Issue #835 (Core Machine LIR と Managed Runtime Dialect の完全直交分離)](835-separate-core-machine-lir-from-managed-runtime-dialect.md)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/compiler/value_repr.scm](../../ulisp/compiler/value_repr.scm): `define-value-repr` 宣言マクロ、値表現スペック構造体・レジストリ、標準表現スペック（`repr:scheme-64bit-tagged`, `repr:c-unboxed`, `repr:nan-boxing-64bit`）、即値エンコーダ、ポインタオフセット計算器、およびボクシング／アンボクシング LIR コード生成器の実装
-- [ ] [ulisp/frontend/090_rtyper.scm](../../ulisp/frontend/090_rtyper.scm): S-RTyper におけるアクティブ値表現スペック（`current-value-repr` / `repr-requires-boxing?`）との連携インターフェース追加
-- [ ] [ulisp/lir/129_lir_primitives.scm](../../ulisp/lir/129_lir_primitives.scm): `fxadd1`, `fxsub1`, `fixnum?`, `null?`, `boolean?`, `char?`, `symbol?`, `pair?`, `string?`, `vector?`, `bytevector?`, `car`, `cdr` 等のタグ・マスク・オフセット計算への `value_repr.scm` 定数・ヘルパ適用
-- [ ] [ulisp/lir/130_lir.scm](../../ulisp/lir/130_lir.scm): `lir-immediate` における即値エンコーディングの `repr-encode-immediate` への統合
-- [ ] [ulisp/lir/131_lower_managed_dialect.scm](../../ulisp/lir/131_lower_managed_dialect.scm): Pass 131 の `%box-fixnum`, `%unbox-fixnum`, `%managed-box`, `%managed-unbox` 展開における `repr-emit-box-fixnum` / `repr-emit-unbox-fixnum` / `repr-emit-box-flonum` / `repr-emit-unbox-flonum` の呼び出し統合
-- [ ] [ulisp/compiler/module_header.scm](../../ulisp/compiler/module_header.scm): モジュール分割コンパイル用 `%declare-extern-identifiers` への `value_repr.scm` 公開シンボル登録
-- [ ] [ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm): シンボル文字列変換テーブルへの新規識別子登録（必要な場合）
-- [ ] [ulisp/Makefile](../../ulisp/Makefile): `COMPILER_BASE` への `compiler/value_repr.scm` 追加および `test_value_representation` テストターゲットの登録
-- [ ] [ulisp/tests/test_value_representation.scm](../../ulisp/tests/test_value_representation.scm): `define-value-repr` マクロ・3種の表現スペック・LIR コード生成・Pass 131 Lowering・Reference VM 実行検証を網羅する単体テストスイート
+- [x] [ulisp/compiler/value_repr.scm](../../../ulisp/compiler/value_repr.scm): `define-value-repr` 宣言マクロ、値表現スペック構造体・レジストリ、標準表現スペック（`repr:scheme-64bit-tagged`, `repr:c-unboxed`, `repr:nan-boxing-64bit`）、即値エンコーダ、ポインタオフセット計算器、およびボクシング／アンボクシング LIR コード生成器の実装
+- [x] [ulisp/frontend/090_rtyper.scm](../../../ulisp/frontend/090_rtyper.scm): S-RTyper におけるアクティブ値表現スペック（`current-value-repr` / `repr-requires-boxing?`）との連携インターフェース追加
+- [x] [ulisp/lir/129_lir_primitives.scm](../../../ulisp/lir/129_lir_primitives.scm): `fxadd1`, `fxsub1`, `fixnum?`, `null?`, `boolean?`, `char?`, `symbol?`, `pair?`, `string?`, `vector?`, `bytevector?`, `car`, `cdr` 等のタグ・マスク・オフセット計算への `value_repr.scm` 定数・ヘルパ適用
+- [x] [ulisp/lir/130_lir.scm](../../../ulisp/lir/130_lir.scm): `lir-immediate` における即値エンコーディングの `repr-encode-immediate` への統合
+- [x] [ulisp/lir/131_lower_managed_dialect.scm](../../../ulisp/lir/131_lower_managed_dialect.scm): Pass 131 の `%box-fixnum`, `%unbox-fixnum`, `%managed-box`, `%managed-unbox` 展開における `repr-emit-box-fixnum` / `repr-emit-unbox-fixnum` / `repr-emit-box-flonum` / `repr-emit-unbox-flonum` の呼び出し統合
+- [x] [ulisp/compiler/module_header.scm](../../../ulisp/compiler/module_header.scm): モジュール分割コンパイル用 `%declare-extern-identifiers` への `value_repr.scm` 公開シンボル登録
+- [x] [ulisp/compiler/helpers.scm](../../../ulisp/compiler/helpers.scm): シンボル文字列変換テーブルへの新規識別子登録（必要な場合）
+- [x] [ulisp/Makefile](../../../ulisp/Makefile): `COMPILER_BASE` への `compiler/value_repr.scm` 追加および `test_value_representation` テストターゲットの登録
+- [x] [ulisp/tests/test_value_representation.scm](../../../ulisp/tests/test_value_representation.scm): `define-value-repr` マクロ・3種の表現スペック・LIR コード生成・Pass 131 Lowering・Reference VM 実行検証を網羅する単体テストスイート
 
 ---
 
@@ -157,8 +158,8 @@ Target Branch: `feat/836-plugin-value-representation`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp/compiler/value_repr.scm` が実装され、`define-value-repr` マクロによって `repr:scheme-64bit-tagged`（`scheme-standard`）、`repr:c-unboxed`（`c-unboxed`）、`repr:nan-boxing-64bit` が宣言的に定義されていること。
-- [ ] `ulisp/lir/130_lir.scm`, `ulisp/lir/129_lir_primitives.scm`, `ulisp/lir/131_lower_managed_dialect.scm` における即値・タグ・ボクシングのマジックナンバーが `value_repr.scm` の API 呼び出しに集約されていること。
-- [ ] `with-value-repr` により `repr:scheme-64bit-tagged` と `repr:c-unboxed` を切り替えて同一のコードジェネレータ・Pass 131 Lowering を駆動でき、それぞれ適切な LIR 命令列（タグシフト付き vs シフトなし恒等命令）が出力されること。
-- [ ] 新規単体テストスイート `ulisp/tests/test_value_representation.scm`（`make -C ulisp test_value_representation`）が 100% PASS すること。
-- [ ] 既存の全テストスイート（`test_lir_dialect_separation`, `test_typed_lir`, `test_lir_interpreter`, `test_passes` 等）および `make py_compile && make static_analysis` に一切の回帰がないこと。
+- [x] `ulisp/compiler/value_repr.scm` が実装され、`define-value-repr` マクロによって `repr:scheme-64bit-tagged`（`scheme-standard`）、`repr:c-unboxed`（`c-unboxed`）、`repr:nan-boxing-64bit` が宣言的に定義されていること。
+- [x] `ulisp/lir/130_lir.scm`, `ulisp/lir/129_lir_primitives.scm`, `ulisp/lir/131_lower_managed_dialect.scm` における即値・タグ・ボクシングのマジックナンバーが `value_repr.scm` の API 呼び出しに集約されていること。
+- [x] `with-value-repr` により `repr:scheme-64bit-tagged` と `repr:c-unboxed` を切り替えて同一のコードジェネレータ・Pass 131 Lowering を駆動でき、それぞれ適切な LIR 命令列（タグシフト付き vs シフトなし恒等命令）が出力されること。
+- [x] 新規単体テストスイート `ulisp/tests/test_value_representation.scm`（`make -C ulisp test_value_representation`）が 100% PASS すること。
+- [x] 既存の全テストスイート（`test_lir_dialect_separation`, `test_typed_lir`, `test_lir_interpreter`, `test_passes` 等）および `make py_compile && make static_analysis` に一切の回帰がないこと。

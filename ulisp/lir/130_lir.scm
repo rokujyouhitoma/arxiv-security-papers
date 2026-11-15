@@ -80,14 +80,8 @@
 
 (define (lir-immediate expr)
   (cond
-    ((integer? expr)
-     (* expr 4))
-    ((boolean? expr)
-     (if expr 111 47))   ; 0x6F: #t, 0x2F: #f
-    ((char? expr)
-     (+ (* (char->integer expr) 256) 14))
-    ((null? expr)
-     63)                 ; 0x3F: '()
+    ((or (integer? expr) (boolean? expr) (char? expr) (null? expr))
+     (repr-encode-immediate expr))
     ((string? expr)
      (let ((label (intern-string expr)))
        (list '%string-ref label)))))

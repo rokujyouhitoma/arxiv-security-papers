@@ -24,6 +24,19 @@
           (vector-set! *rtyper-facts* i '())
           (loop (+ i 1))))))
 
+(define (rtyper-current-repr-requires-boxing?)
+  (repr-requires-boxing? (current-value-repr)))
+
+(define (rtyper-wrap-box-fixnum expr)
+  (if (rtyper-current-repr-requires-boxing?)
+      (list '%box-fixnum expr)
+      expr))
+
+(define (rtyper-wrap-unbox-fixnum expr)
+  (if (rtyper-current-repr-requires-boxing?)
+      (list '%unbox-fixnum expr)
+      expr))
+
 (define (record-rtyper-fact! var fact)
   (let ((idx (rtyper-fact-bucket-idx var)))
     (vector-set! *rtyper-facts* idx
