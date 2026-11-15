@@ -41,6 +41,7 @@
 
 ;; Compiler Base Infrastructure
 (include "compiler/helpers.scm")
+(include "compiler/diagnostic.scm")
 (include "compiler/primitives.scm")
 (include "compiler/nanopass_meta.scm")
 (include "compiler/nanopass.scm")

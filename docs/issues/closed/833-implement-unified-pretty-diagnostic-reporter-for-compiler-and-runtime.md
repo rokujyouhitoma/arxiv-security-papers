@@ -2,7 +2,7 @@
 ID: 833
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン (Diagnostic Reporter) の導入 (ID: 833)
@@ -57,27 +57,27 @@ Issue #824 で導入された第一級ソース位置情報（`<source-span>`）
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/compiler/diagnostic.scm](../../ulisp/compiler/diagnostic.scm):
+- [x] [ulisp/compiler/diagnostic.scm](../../ulisp/compiler/diagnostic.scm):
   - 新設：`<diagnostic>` レコード定義（`level`, `code`, `span`, `message`, `labels`, `notes`, `help`）。
   - 新設：ソースファイル行キャッシュ（`*source-file-line-cache*`）および遅延行スニペット抽出機構。
   - 新設：ANSI カラー制御モジュール（`--color=auto|always|never` および `NO_COLOR` 判定）。
   - 新設：Rustc / Clang スタイルのマルチライン整形・キャレット・下線ハイライト描画エンジン。
   - 新設：マクロ展開来歴スタックトレース可視化エンジン。
-- [ ] [ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm):
+- [x] [ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm):
   - `compiler-diagnostic-report` を新診断エンジンへ委譲・統一。
   - `report-diagnostic`、`emit-diagnostic-error`、`emit-diagnostic-warning`、`emit-diagnostic-note` API の新設。
   - 既存の `recommend-similar-symbols`（レーベンシュタイン距離）と `help: did you mean ...` 連携。
-- [ ] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm):
+- [x] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm):
   - CLI 引数 `--color`, `--color=auto|always|never`, `--no-color` のパースと診断カラーモード設定。
   - 累積エラー数（`*diagnostic-error-count*`）・警告数（`*diagnostic-warning-count*`）の集計と、終了時サマリー出力。
-- [ ] [ulisp/compiler_entry.scm](../../ulisp/compiler_entry.scm):
+- [x] [ulisp/compiler_entry.scm](../../ulisp/compiler_entry.scm):
   - `(include "compiler/diagnostic.scm")` の追加。
-- [ ] [ulisp/Makefile](../../ulisp/Makefile):
+- [x] [ulisp/Makefile](../../ulisp/Makefile):
   - `COMPILER_BASE` 変数への `compiler/diagnostic.scm` 追加。
   - `test_diagnostic_reporter` ターゲット新設および `make test` 統合。
-- [ ] [ulisp/tests/test_diagnostic_reporter.scm](../../ulisp/tests/test_diagnostic_reporter.scm):
+- [x] [ulisp/tests/test_diagnostic_reporter.scm](../../ulisp/tests/test_diagnostic_reporter.scm):
   - 新設：診断オブジェクト生成、スニペット抽出、キャレット位置、マルチライン描画、カラー切替、制御文字サニタイズ、マクロ追跡の網羅的テストスイート。
-- [ ] [docs/issues/README.md](README.md): Issue 台帳のステータス更新。
+- [x] [docs/issues/README.md](README.md): Issue 台帳のステータス更新。
 
 ---
 
@@ -177,12 +177,12 @@ Target Branch: `feat/833-unified-pretty-diagnostic-reporter`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/compiler/diagnostic.scm` が純粋 Scheme で実装され、`<diagnostic>` レコード、ソース行キャッシュ、ANSI カラー制御、スニペット・キャレット・下線描画エンジンが提供されること。
-- [ ] Rustc / Clang スタイルの診断出力（`error[code]: msg`, `--> file:line:col`, ガター ` | `, キャレット `^^^^`）が決定論的にレンダリングされること。
-- [ ] `--color=never`、`--no-color`、および `NO_COLOR` 環境変数設定時に、一切の ANSI エスケープシーケンスを含まない純粋なプレーンテキストが出力されること。
-- [ ] 不正な列番号、負の座標、行末超過スパンが与えられた場合でも、境界外参照例外を起こさず安全にフォールバックすること（THREAT-833-2 緩和）。
-- [ ] 入力ソース内の制御文字および端末エスケープコードが安全にサニタイズされて出力されること（THREAT-833-3 緩和）。
-- [ ] マクロ展開元（`span-macro-origin`）が存在する場合、`= note: expanded from macro ...` として展開階層が明示されること。
-- [ ] `ulisp/tests/test_diagnostic_reporter.scm` が作成され、全テスト項目が 100% PASS すること。
-- [ ] `make -C ulisp test` に上記テストが統合され、既存の全テストスイートおよび 3-Stage セルフホスティングブートストラップ検証を通過すること。
-- [ ] リポジトリ内の全ドキュメントにおいて、内部リンクが相対パスのみで構成されていること。
+- [x] `ulisp/compiler/diagnostic.scm` が純粋 Scheme で実装され、`<diagnostic>` レコード、ソース行キャッシュ、ANSI カラー制御、スニペット・キャレット・下線描画エンジンが提供されること。
+- [x] Rustc / Clang スタイルの診断出力（`error[code]: msg`, `--> file:line:col`, ガター ` | `, キャレット `^^^^`）が決定論的にレンダリングされること。
+- [x] `--color=never`、`--no-color`、および `NO_COLOR` 環境変数設定時に、一切の ANSI エスケープシーケンスを含まない純粋なプレーンテキストが出力されること。
+- [x] 不正な列番号、負の座標、行末超過スパンが与えられた場合でも、境界外参照例外を起こさず安全にフォールバックすること（THREAT-833-2 緩和）。
+- [x] 入力ソース内の制御文字および端末エスケープコードが安全にサニタイズされて出力されること（THREAT-833-3 緩和）。
+- [x] マクロ展開元（`span-macro-origin`）が存在する場合、`= note: expanded from macro ...` として展開階層が明示されること。
+- [x] `ulisp/tests/test_diagnostic_reporter.scm` が作成され、全テスト項目が 100% PASS すること。
+- [x] `make -C ulisp test` に上記テストが統合され、既存の全テストスイートおよび 3-Stage セルフホスティングブートストラップ検証を通過すること。
+- [x] リポジトリ内の全ドキュメントにおいて、内部リンクが相対パスのみで構成されていること。
