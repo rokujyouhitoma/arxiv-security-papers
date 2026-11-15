@@ -24,7 +24,8 @@
   (terminals
     (symbol (x lbl var cond_op sp_lbl mty))
     (integer (n offset shift frame_size bytes tag si cnt bitmap line col))
-    (string (str fn_name)))
+    (string (str fn_name))
+    (boolean (bool_val)))
   (Register (reg)
     %rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
     %r8  %r9  %r10 %r11 %r12 %r13 %r14 %r15 %al
@@ -46,6 +47,21 @@
     lval
     n
     lbl)
+  (AsmOutSpec (asm_out)
+    (lval str)
+    (x str)
+    (x str lval))
+  (AsmInSpec (asm_in)
+    (opnd str)
+    (x str opnd))
+  (AsmClobber (asm_clob)
+    str
+    x)
+  (AsmClause (asm_clause)
+    (:outputs (asm_out ...))
+    (:inputs (asm_in ...))
+    (:clobbers (asm_clob ...))
+    (:volatile? bool_val))
   (Inst (inst)
     ;; Debug & Source Location
     (%loc n line col)
@@ -147,7 +163,8 @@
     (%syscall)
     (%syscall si)
     (%memory-fence)
-    (%atomic-cas! reg1 reg2 reg3))
+    (%atomic-cas! reg1 reg2 reg3)
+    (%inline-asm str asm_clause ...))
   (StringEntry (se)
     (lbl str)
     (str1 str2))
@@ -200,7 +217,8 @@
   (terminals
     (symbol (x lbl var cond_op sp_lbl mty))
     (integer (n offset shift frame_size bytes tag si cnt bitmap line col))
-    (string (str fn_name)))
+    (string (str fn_name))
+    (boolean (bool_val)))
   (Register (reg)
     %rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
     %r8  %r9  %r10 %r11 %r12 %r13 %r14 %r15 %al
@@ -222,6 +240,21 @@
     lval
     n
     lbl)
+  (AsmOutSpec (asm_out)
+    (lval str)
+    (x str)
+    (x str lval))
+  (AsmInSpec (asm_in)
+    (opnd str)
+    (x str opnd))
+  (AsmClobber (asm_clob)
+    str
+    x)
+  (AsmClause (asm_clause)
+    (:outputs (asm_out ...))
+    (:inputs (asm_in ...))
+    (:clobbers (asm_clob ...))
+    (:volatile? bool_val))
   (Inst (inst)
     ;; Pseudo / Raw-Only Instructions
     (%nop)
@@ -331,6 +364,7 @@
     (%syscall si)
     (%memory-fence)
     (%atomic-cas! reg1 reg2 reg3)
+    (%inline-asm str asm_clause ...)
 
     ;; Runtime / GC / CC / Values
     (%alloc opnd bytes tag)

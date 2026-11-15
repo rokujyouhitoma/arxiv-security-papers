@@ -184,6 +184,230 @@
                (emit (string-append "    " (c-operand->str loc) " = " (c-operand->str arg) ";"))))
             (loop (cdr ps) (cdr as) (+ i 1)))))))
 
+(define (c-inline-asm-join strs sep)
+  (if (null? strs)
+      ""
+      (let loop ((xs (cdr strs)) (acc (car strs)))
+        (if (null? xs)
+            acc
+            (loop (cdr xs) (string-append acc sep (car xs)))))))
+
+(define (c-inline-asm-escape str)
+  (let ((len (string-length str)))
+    (let loop ((i 0) (acc ""))
+      (if (>= i len)
+          acc
+          (let ((ch (string-ref str i)))
+            (cond
+              ((char=? ch #\\) (loop (+ i 1) (string-append acc "\\\\")))
+              ((char=? ch #\") (loop (+ i 1) (string-append acc "\\\"")))
+              (else (loop (+ i 1) (string-append acc (make-string 1 ch))))))))))
+
+(define (c-inline-asm-addr-expr opnd)
+  (cond
+    ((and (pair? opnd) (eq? (car opnd) '%stack))
+     (string-append "(uint64_t)(uintptr_t)(reg_rsp + (" (c-offset->str (cadr opnd)) "))"))
+    ((and (pair? opnd) (eq? (car opnd) '%mem))
+     (string-append "(uint64_t)(uintptr_t)(" (c-base-ptr-str (cadr opnd)) " + (" (c-offset->str (caddr opnd)) "))"))
+    (else
+     (string-append "(uint64_t)(" (c-operand->str opnd) ")"))))
+
+(define (c-inline-asm-alloc-mem-ptrs out-plans in-plans init-used)
+  (let loop-o ((os out-plans) (used init-used) (acc '()))
+    (if (not (null? os))
+        (let ((op (car os)))
+          (if (eq? (list-ref op 4) 'mem)
+              (let ((ptr (inline-asm-first-free-gpr used)))
+                (if (not ptr)
+                    (error "Exhausted GPRs allocating C inline-asm memory pointer:" op)
+                    (loop-o (cdr os)
+                            (cons ptr used)
+                            (cons (list (list-ref op 0) ptr (list-ref op 2)) acc))))
+              (loop-o (cdr os) used acc)))
+        (let loop-i ((is in-plans) (used used) (acc acc))
+          (if (null? is)
+              (reverse acc)
+              (let ((ip (car is)))
+                (if (eq? (list-ref ip 3) 'mem)
+                    (let ((ptr (inline-asm-first-free-gpr used)))
+                      (if (not ptr)
+                          (error "Exhausted GPRs allocating C inline-asm memory pointer:" ip)
+                          (loop-i (cdr is)
+                                  (cons ptr used)
+                                  (cons (list (list-ref ip 0) ptr (list-ref ip 2)) acc))))
+                    (loop-i (cdr is) used acc))))))))
+
+(define (emit-c-inline-asm inst)
+  (let* ((plan (inline-asm-allocate-plan inst))
+         (template (car plan))
+         (out-plans (cadr plan))
+         (in-plans (caddr plan))
+         (clobbers (cadddr plan))
+         (volatile? (car (cddddr plan)))
+         (used-regs (car (cdr (cddddr plan))))
+         (mem-ptrs (c-inline-asm-alloc-mem-ptrs out-plans in-plans used-regs))
+         (mem-ptr-map (map (lambda (e) (cons (car e) (cadr e))) mem-ptrs))
+         (has-mem-opnd? (not (null? mem-ptrs)))
+         (expanded (inline-asm-expand-template template out-plans in-plans 'c mem-ptr-map))
+         (lines (inline-asm-split-lines expanded))
+         (asm-body (if (null? lines)
+                       "nop"
+                       (c-inline-asm-join (map c-inline-asm-escape lines) "\\n\\t")))
+         (asm-literal (string-append "\".intel_syntax noprefix\\n\\t" asm-body "\\n\\t.att_syntax prefix\\n\\t\""))
+         ;; Build per-GPR descriptor list: (list reg written? init-expr-or-#f)
+         ;; Collect all distinct carrier GPRs + mem-ptr GPRs
+         (all-bound-regs
+          (inline-asm-dedup-regs
+           (append
+            (let loop-o ((os out-plans) (acc '()))
+              (if (null? os) (reverse acc)
+                  (if (eq? (list-ref (car os) 4) 'reg)
+                      (loop-o (cdr os) (cons (list-ref (car os) 5) acc))
+                      (loop-o (cdr os) acc))))
+            (append
+             (let loop-i ((is in-plans) (acc '()))
+               (if (null? is) (reverse acc)
+                   (let ((k (list-ref (car is) 3))
+                         (c (list-ref (car is) 4)))
+                     (if (and (or (eq? k 'reg) (eq? k 'tied))
+                              (inline-asm-normalize-reg-sym c))
+                         (loop-i (cdr is) (cons c acc))
+                         (loop-i (cdr is) acc)))))
+             (map cadr mem-ptrs)))))
+         (reg-specs
+          (map
+           (lambda (r)
+             (let* ((out-match
+                     (let loop ((os out-plans))
+                       (cond
+                         ((null? os) #f)
+                         ((and (eq? (list-ref (car os) 4) 'reg)
+                               (eq? (list-ref (car os) 5) r))
+                          (car os))
+                         (else (loop (cdr os))))))
+                    (in-match
+                     (let loop ((is in-plans))
+                       (cond
+                         ((null? is) #f)
+                         ((and (or (eq? (list-ref (car is) 3) 'reg)
+                                   (eq? (list-ref (car is) 3) 'tied))
+                               (eq? (list-ref (car is) 4) r))
+                          (car is))
+                         (else (loop (cdr is))))))
+                    (mem-match
+                     (let loop ((ms mem-ptrs))
+                       (cond
+                         ((null? ms) #f)
+                         ((eq? (cadr (car ms)) r) (car ms))
+                         (else (loop (cdr ms))))))
+                    (written? (or (and out-match #t) (memq r clobbers)))
+                    (init-expr
+                     (cond
+                       (in-match (string-append "(uint64_t)(" (c-operand->str (list-ref in-match 2)) ")"))
+                       ((and out-match (list-ref out-match 3))
+                        (string-append "(uint64_t)(" (c-operand->str (list-ref out-match 2)) ")"))
+                       (mem-match (c-inline-asm-addr-expr (caddr mem-match)))
+                       (else #f))))
+               (list r written? init-expr)))
+           all-bound-regs)))
+    (emit "    {")
+    ;; Stage all initial expressions into C temporaries before pinning physical registers
+    (let loop-init ((rs reg-specs) (i 0))
+      (if (not (null? rs))
+          (let ((init-expr (caddr (car rs))))
+            (if init-expr
+                (emit (string-append "        uint64_t __asm_init_" (number->string i) " = " init-expr ";")))
+            (loop-init (cdr rs) (+ i 1)))))
+    ;; Declare pinned physical register variables
+    (let loop-decl ((rs reg-specs) (i 0))
+      (if (not (null? rs))
+          (let* ((r (car (car rs)))
+                 (r-str (inline-asm-reg->sized-str r #f))
+                 (init-expr (caddr (car rs))))
+            (if init-expr
+                (emit (string-append "        register uint64_t __asm_reg_" r-str " __asm__(\"" r-str "\") = __asm_init_" (number->string i) ";"))
+                (emit (string-append "        register uint64_t __asm_reg_" r-str " __asm__(\"" r-str "\");")))
+            (loop-decl (cdr rs) (+ i 1)))))
+    ;; Build GCC output, input, and clobber operand lists
+    (let* ((c-outputs
+            (let loop ((rs reg-specs) (acc '()))
+              (if (null? rs)
+                  (reverse acc)
+                  (let* ((spec (car rs))
+                         (r (car spec))
+                         (written? (cadr spec))
+                         (init-expr (caddr spec))
+                         (r-str (inline-asm-reg->sized-str r #f)))
+                    (if written?
+                        (loop (cdr rs)
+                              (cons (string-append (if init-expr "\"+r\"" "\"=r\"") "(__asm_reg_" r-str ")") acc))
+                        (loop (cdr rs) acc))))))
+           (c-inputs
+            (let loop ((rs reg-specs) (acc '()))
+              (if (null? rs)
+                  (reverse acc)
+                  (let* ((spec (car rs))
+                         (r (car spec))
+                         (written? (cadr spec))
+                         (r-str (inline-asm-reg->sized-str r #f)))
+                    (if (not written?)
+                        (loop (cdr rs)
+                              (cons (string-append "\"r\"(__asm_reg_" r-str ")") acc))
+                        (loop (cdr rs) acc))))))
+           (raw-clobs
+            (let loop ((cs clobbers) (has-mem? has-mem-opnd?) (acc '()))
+              (if (null? cs)
+                  (let ((with-mem (if (and has-mem? (not (member "\"memory\"" acc)))
+                                      (cons "\"memory\"" acc)
+                                      acc)))
+                    (reverse with-mem))
+                  (let ((c (car cs)))
+                    (cond
+                      ((eq? c 'cc)
+                       (loop (cdr cs) has-mem?
+                             (if (member "\"cc\"" acc) acc (cons "\"cc\"" acc))))
+                      ((eq? c 'memory) (loop (cdr cs) #t acc))
+                      ((memq c all-bound-regs) (loop (cdr cs) has-mem? acc))
+                      (else
+                       (let ((rc (string-append "\"" (inline-asm-reg->sized-str c #f) "\"")))
+                         (loop (cdr cs) has-mem?
+                               (if (member rc acc) acc (cons rc acc)))))))))))
+      (emit (cond
+              ((not (null? raw-clobs))
+               (string-append "        __asm__ "
+                              (if volatile? "volatile " "")
+                              "(" asm-literal
+                              " : " (c-inline-asm-join c-outputs ", ")
+                              " : " (c-inline-asm-join c-inputs ", ")
+                              " : " (c-inline-asm-join raw-clobs ", ")
+                              ");"))
+              ((not (null? c-inputs))
+               (string-append "        __asm__ "
+                              (if volatile? "volatile " "")
+                              "(" asm-literal
+                              " : " (c-inline-asm-join c-outputs ", ")
+                              " : " (c-inline-asm-join c-inputs ", ")
+                              ");"))
+              ((not (null? c-outputs))
+               (string-append "        __asm__ "
+                              (if volatile? "volatile " "")
+                              "(" asm-literal
+                              " : " (c-inline-asm-join c-outputs ", ")
+                              ");"))
+              (else
+               (string-append "        __asm__ "
+                              (if volatile? "volatile " "")
+                              "(" asm-literal ");")))))
+    ;; Write back register outputs to LIR destinations
+    (for-each
+     (lambda (op)
+       (if (eq? (list-ref op 4) 'reg)
+           (let* ((dst (list-ref op 2))
+                  (r-str (inline-asm-reg->sized-str (list-ref op 5) #f)))
+             (emit (string-append "        " (c-operand->str dst) " = (int64_t)__asm_reg_" r-str ";")))))
+     out-plans)
+    (emit "    }")))
+
 ;;; Emits a single LIR instruction to ANSI C statement
 (define (emit-c-instruction inst)
   (let ((op (car inst)))
@@ -359,6 +583,9 @@
              (new (cadddr inst)))
          (emit (string-append "    " (c-reg->str dst) " = __sync_bool_compare_and_swap((uint64_t *)((char *)(uintptr_t)" (c-reg->str box) " + 11), " (c-reg->str dst) ", " (c-reg->str new) ") ? 0x6F : 0x2F;"))
          (emit (string-append "    ulisp_gc_write_barrier((uint64_t)((char *)(uintptr_t)" (c-reg->str box) " + 11), " (c-reg->str new) ");"))))
+
+      ((%inline-asm)
+       (emit-c-inline-asm inst))
 
       ((%store-byte)
        (let ((base (cadr inst))

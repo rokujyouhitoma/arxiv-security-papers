@@ -50,7 +50,7 @@
            (let* ((dst (cadr inst))
                   (bytes (caddr inst))
                   (tag (cadddr inst))
-                  (aligned (bitwise-and (+ bytes 7) -8)))
+                  (aligned (ctfe-bitwise-and (+ bytes 7) -8)))
              (if (equal? dst '%r12)
                  (list (list '%add '%r12 aligned))
                  (list (list '%mov dst '%r12)

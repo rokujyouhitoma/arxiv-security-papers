@@ -436,7 +436,21 @@
               ;; Resolve any variables in instructions
               (insts
                (map (lambda (inst)
-                      (map (lambda (elem) (braun-resolve-val cfg elem)) inst))
+                      (if (and (pair? inst) (eq? (car inst) '%inline-asm))
+                          (let resolve-clause ((cs (cdr inst)))
+                            (if (null? cs)
+                                '()
+                                (cons
+                                 (let ((el (car cs)))
+                                   (cond
+                                     ((and (pair? el) (memq (car el) '(:inputs :outputs)))
+                                      (list (car el)
+                                            (map (lambda (entry)
+                                                   (map (lambda (sub) (braun-resolve-val cfg sub)) entry))
+                                                 (cadr el))))
+                                     (else (braun-resolve-val cfg el))))
+                                 (resolve-clause (cdr cs)))))
+                          (map (lambda (elem) (braun-resolve-val cfg elem)) inst)))
                     raw-insts))
               (term (braun-get-terminator cfg lbl))
               (term-inst
