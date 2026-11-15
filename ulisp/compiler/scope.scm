@@ -10,17 +10,63 @@
 ;;; -----------------------------------------------------------------------
 
 ;;; Scope node representation:
-;;;   (list 'scope-node parent kind bindings-cell free-vars-cell children-cell)
+;;;   (list 'scope-node parent kind bindings-cell free-vars-cell children-cell
+;;;         scope-id ns-bindings-cell free-binding-ids-cell)
 ;;;
 ;;; Fields:
 ;;;   - parent: enclosing scope-node or #f (for root/top-level)
-;;;   - kind: symbol ('top-level, 'lambda, 'let, 'letrec, '%cont-fun)
+;;;   - kind: symbol ('top-level, 'function, 'block, 'lambda, 'let, 'letrec, '%cont-fun)
 ;;;   - bindings-cell: (cons bindings '()) where bindings is ((orig-sym . alpha-sym) ...)
 ;;;   - free-vars-cell: (cons free-vars '()) where free-vars is (sym ...)
 ;;;   - children-cell: (cons children '()) where children is (scope-node ...)
+;;;   - scope-id: monotonic non-negative integer scope identifier
+;;;   - ns-bindings-cell: (cons bindings '()) where bindings is (<binding> ...)
+;;;   - free-binding-ids-cell: (cons bset '()) sorted integer set of free <binding-id>s
+
+(define *scope-id-counter* (cons 0 '()))
+(define *scope-strict-redefinition* (cons #f '()))
+(define *last-resolved-scope-tree* (cons #f '()))
+
+(define (reset-scope-id-counter!)
+  (set-car! *scope-id-counter* 0))
+
+(define (next-scope-id!)
+  (let ((id (car *scope-id-counter*)))
+    (set-car! *scope-id-counter* (+ id 1))
+    id))
+
+(define (scope-error! msg detail)
+  (raise (list 'scope-error msg detail)))
+
+(define (set-scope-strict-redefinition! bool)
+  (set-car! *scope-strict-redefinition* bool))
+
+(define (scope-strict-redefinition?)
+  (car *scope-strict-redefinition*))
+
+(define (with-strict-scope-redefinition thunk)
+  (let ((prev (scope-strict-redefinition?)))
+    (set-scope-strict-redefinition! #t)
+    (guard (ex (else
+                (set-scope-strict-redefinition! prev)
+                (raise ex)))
+      (let ((res (thunk)))
+        (set-scope-strict-redefinition! prev)
+        res))))
+
+(define (get-last-resolved-scope-tree)
+  (car *last-resolved-scope-tree*))
 
 (define (make-scope-node parent kind)
-  (list 'scope-node parent kind (cons '() '()) (cons '() '()) (cons '() '())))
+  (list 'scope-node
+        parent
+        kind
+        (cons '() '())
+        (cons '() '())
+        (cons '() '())
+        (next-scope-id!)
+        (cons '() '())
+        (cons '() '())))
 
 (define (scope-node? obj)
   (and (pair? obj) (eq? (car obj) 'scope-node)))
@@ -49,6 +95,21 @@
 (define (scope-node-children node)
   (car (scope-node-children-cell node)))
 
+(define (scope-node-id node)
+  (list-ref node 6))
+
+(define (scope-node-ns-bindings-cell node)
+  (list-ref node 7))
+
+(define (scope-node-ns-bindings node)
+  (car (scope-node-ns-bindings-cell node)))
+
+(define (scope-node-free-binding-ids-cell node)
+  (list-ref node 8))
+
+(define (scope-node-free-binding-ids node)
+  (car (scope-node-free-binding-ids-cell node)))
+
 (define (scope-enter parent kind)
   (let ((child (make-scope-node parent kind)))
     (if (scope-node? parent)
@@ -56,9 +117,36 @@
           (set-car! cc (append (car cc) (list child)))))
     child))
 
-(define (scope-bind! node orig-sym alpha-sym)
+(define (scope-bind! node orig-sym alpha-sym . kind-opt)
   (let ((bc (scope-node-bindings-cell node)))
-    (set-car! bc (cons (cons orig-sym alpha-sym) (car bc)))))
+    (set-car! bc (cons (cons orig-sym alpha-sym) (car bc))))
+  (let* ((existing (if (not (eq? orig-sym alpha-sym))
+                       (lookup-binding-by-symbol alpha-sym)
+                       #f))
+         (b (or existing
+                (let* ((k (if (pair? kind-opt)
+                              (car kind-opt)
+                              (if (eq? (scope-node-kind node) 'lambda)
+                                  'parameter
+                                  'variable)))
+                       (is-top? (eq? (scope-node-kind node) 'top-level))
+                       (sc (if is-top? 'global 'lexical))
+                       (vis (if is-top? 'global 'local))
+                       (nb (make-binding (next-binding-id!)
+                                         orig-sym
+                                         alpha-sym
+                                         k
+                                         'ordinary
+                                         (scope-node-id node)
+                                         sc
+                                         #f
+                                         vis
+                                         scope-set-empty
+                                         (current-ast-span))))
+                  (register-binding! nb)))))
+    (let ((nbc (scope-node-ns-bindings-cell node)))
+      (set-car! nbc (cons b (car nbc))))
+    b))
 
 (define (scope-lookup-local node orig-sym)
   (let ((entry (assq orig-sym (scope-node-bindings node))))
@@ -86,6 +174,226 @@
         (if (not (memq sym (car fc)))
             (set-car! fc (cons sym (car fc)))))))
 
+(define (scope-record-free-binding-id! node bid)
+  (if (and (scope-node? node) (integer? bid))
+      (let ((fc (scope-node-free-binding-ids-cell node)))
+        (set-car! fc (binding-id-set-add bid (car fc))))))
+
+;;; -----------------------------------------------------------------------
+;;; Part 1b: Multi-Namespace Lookup, C99 Lexer Hack & Scope Manager
+;;; -----------------------------------------------------------------------
+
+(define (scope-find-function-contour node)
+  (let loop ((curr node))
+    (cond
+      ((not (scope-node? curr)) node)
+      ((memq (scope-node-kind curr) '(function lambda)) curr)
+      ((not (scope-node? (scope-node-parent curr))) curr)
+      (else (loop (scope-node-parent curr))))))
+
+(define (scope-lookup-binding-local-ns node sym ns)
+  (if (not (scope-node? node))
+      #f
+      (let loop ((bs (scope-node-ns-bindings node)))
+        (cond
+          ((null? bs) #f)
+          ((and (eq? (binding-namespace (car bs)) ns)
+                (eq? (binding-source-name (car bs)) sym))
+           (car bs))
+          (else (loop (cdr bs)))))))
+
+(define (scope-lookup-binding-local node sym . ns-opt)
+  (scope-lookup-binding-local-ns node sym (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+
+(define (scope-lookup-binding-ns node sym ns)
+  (if (not (scope-node? node))
+      #f
+      (if (eq? ns 'label)
+          (scope-lookup-binding-local-ns (scope-find-function-contour node) sym 'label)
+          (let loop ((curr node))
+            (if (not (scope-node? curr))
+                #f
+                (let ((found (scope-lookup-binding-local-ns curr sym ns)))
+                  (if found
+                      found
+                      (loop (scope-node-parent curr)))))))))
+
+(define (scope-lookup-binding node sym . ns-opt)
+  (scope-lookup-binding-ns node sym (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+
+(define (scope-lookup-hygienic node sym use-scope-set . ns-opt)
+  (if (not (scope-node? node))
+      #f
+      (let ((ns (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+        (let collect ((curr node) (cands '()))
+          (if (not (scope-node? curr))
+              (resolve-hygienic-binding (reverse cands) use-scope-set)
+              (let scan ((bs (scope-node-ns-bindings curr)) (acc cands))
+                (if (null? bs)
+                    (collect (scope-node-parent curr) acc)
+                    (let ((b (car bs)))
+                      (if (and (eq? (binding-namespace b) ns)
+                               (eq? (binding-source-name b) sym))
+                          (scan (cdr bs) (cons b acc))
+                          (scan (cdr bs) acc))))))))))
+
+(define (scope-lookup-kind node sym)
+  (let ((b (scope-lookup-binding node sym 'ordinary)))
+    (if b (binding-kind b) #f)))
+
+(define (scope-typedef-name? node sym)
+  (eq? (scope-lookup-kind node sym) 'typedef))
+
+(define (scope-parse-define-opts opts)
+  (let loop ((rest opts)
+             (ns #f)
+             (u-sym #f)
+             (sc #f)
+             (ty #f)
+             (vis #f)
+             (sset scope-set-empty)
+             (span #f)
+             (strict? #f)
+             (no-legacy? #f))
+    (if (not (and (pair? rest) (pair? (cdr rest))))
+        (list ns u-sym sc ty vis sset span strict? no-legacy?)
+        (let ((k (car rest))
+              (v (cadr rest))
+              (tl (cddr rest)))
+          (cond
+            ((memq k '(:namespace namespace))
+             (loop tl v u-sym sc ty vis sset span strict? no-legacy?))
+            ((memq k '(:unique-sym unique-sym))
+             (loop tl ns v sc ty vis sset span strict? no-legacy?))
+            ((memq k '(:storage-class storage-class))
+             (loop tl ns u-sym v ty vis sset span strict? no-legacy?))
+            ((memq k '(:type-attr type-attr))
+             (loop tl ns u-sym sc v vis sset span strict? no-legacy?))
+            ((memq k '(:visibility visibility))
+             (loop tl ns u-sym sc ty v sset span strict? no-legacy?))
+            ((memq k '(:scope-set scope-set))
+             (loop tl ns u-sym sc ty vis v span strict? no-legacy?))
+            ((memq k '(:source-span source-span))
+             (loop tl ns u-sym sc ty vis sset v strict? no-legacy?))
+            ((memq k '(:strict strict))
+             (loop tl ns u-sym sc ty vis sset span v no-legacy?))
+            ((memq k '(:no-legacy-bind no-legacy-bind))
+             (loop tl ns u-sym sc ty vis sset span strict? v))
+            (else
+             (loop tl ns u-sym sc ty vis sset span strict? no-legacy?)))))))
+
+(define (scope-define-opts node source-name kind opts)
+  (if (not (scope-node? node))
+      (scope-error! "scope-define!: invalid scope-node" node))
+  (let* ((parsed (scope-parse-define-opts opts))
+         (opt-ns (list-ref parsed 0))
+         (opt-usym (list-ref parsed 1))
+         (opt-sc (list-ref parsed 2))
+         (opt-ty (list-ref parsed 3))
+         (opt-vis (list-ref parsed 4))
+         (opt-sset (list-ref parsed 5))
+         (opt-span (list-ref parsed 6))
+         (opt-strict (list-ref parsed 7))
+         (opt-no-legacy (list-ref parsed 8))
+         (ns (or opt-ns (infer-binding-namespace kind)))
+         (target-node (if (eq? ns 'label)
+                          (scope-find-function-contour node)
+                          node))
+         (sset (if (list? opt-sset) opt-sset scope-set-empty))
+         (vis (or opt-vis
+                  (if (eq? (scope-node-kind target-node) 'top-level)
+                      'global
+                      'local)))
+         (sc (or opt-sc
+                 (cond
+                   ((eq? kind 'typedef) 'typedef)
+                   ((eq? (scope-node-kind target-node) 'top-level) 'global)
+                   (else 'lexical))))
+         (span (or opt-span (current-ast-span))))
+    (if (or opt-strict (scope-strict-redefinition?))
+        (let check ((bs (scope-node-ns-bindings target-node)))
+          (if (pair? bs)
+              (let ((existing (car bs)))
+                (if (and (eq? (binding-namespace existing) ns)
+                         (eq? (binding-source-name existing) source-name)
+                         (scope-set-equal? (binding-scope-set existing) sset))
+                    (scope-error! "Redefinition of symbol in same scope"
+                                  (list source-name kind ns))
+                    (check (cdr bs)))))))
+    (let* ((u-sym (or opt-usym
+                      (if (or (memq kind '(typedef enum-const tag-struct tag-union tag-enum label macro builtin))
+                              (memq vis '(global extern)))
+                          source-name
+                          (make-alpha-symbol source-name))))
+           (b (make-binding (next-binding-id!)
+                            source-name
+                            u-sym
+                            kind
+                            ns
+                            (scope-node-id target-node)
+                            sc
+                            opt-ty
+                            vis
+                            sset
+                            span)))
+      (register-binding! b)
+      (let ((nbc (scope-node-ns-bindings-cell target-node)))
+        (set-car! nbc (cons b (car nbc))))
+      (if (and (eq? ns 'ordinary) (not opt-no-legacy))
+          (let ((bc (scope-node-bindings-cell target-node)))
+            (set-car! bc (cons (cons source-name u-sym) (car bc)))))
+      b)))
+
+(define (scope-define! node source-name kind . opts)
+  (scope-define-opts node source-name kind opts))
+
+(define (make-scope-manager)
+  (let ((root (make-scope-node #f 'top-level)))
+    (list 'scope-manager root (cons root '()))))
+
+(define (scope-manager? obj)
+  (and (pair? obj) (eq? (car obj) 'scope-manager)))
+
+(define (scope-manager-root mgr)
+  (cadr mgr))
+
+(define (scope-manager-current mgr)
+  (car (caddr mgr)))
+
+(define (scope-manager-push! mgr kind)
+  (let* ((curr (scope-manager-current mgr))
+         (child (scope-enter curr kind)))
+    (set-car! (caddr mgr) child)
+    child))
+
+(define (scope-manager-pop! mgr)
+  (let* ((curr (scope-manager-current mgr))
+         (parent (scope-node-parent curr)))
+    (if (not (scope-node? parent))
+        (scope-error! "Scope stack underflow: cannot pop root scope"
+                      (list (scope-node-id curr) (scope-node-kind curr))))
+    (set-car! (caddr mgr) parent)
+    parent))
+
+(define (scope-manager-define! mgr sym kind . opts)
+  (scope-define-opts (scope-manager-current mgr) sym kind opts))
+
+(define (scope-manager-lookup mgr sym . ns-opt)
+  (scope-lookup-binding-ns (scope-manager-current mgr)
+                           sym
+                           (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+
+(define (scope-manager-lookup-local mgr sym . ns-opt)
+  (scope-lookup-binding-local-ns (scope-manager-current mgr)
+                                 sym
+                                 (if (pair? ns-opt) (car ns-opt) 'ordinary)))
+
+(define (scope-manager-lookup-kind mgr sym)
+  (scope-lookup-kind (scope-manager-current mgr) sym))
+
+(define (scope-manager-typedef-name? mgr sym)
+  (scope-typedef-name? (scope-manager-current mgr) sym))
+
 ;;; -----------------------------------------------------------------------
 ;;; Part 2: Deterministic Alpha Symbol Generator
 ;;; -----------------------------------------------------------------------
@@ -93,7 +401,9 @@
 (define *alpha-symbol-counter* (cons 0 '()))
 
 (define (reset-alpha-symbol-counter!)
-  (set-car! *alpha-symbol-counter* 0))
+  (set-car! *alpha-symbol-counter* 0)
+  (reset-binding-registry!)
+  (reset-scope-id-counter!))
 
 (define (alpha-next-id!)
   (let ((c (car *alpha-symbol-counter*)))
@@ -166,7 +476,7 @@
   (let loop ((ds defs) (acc '()))
     (if (null? ds)
         (reverse acc)
-        (let ((d (car ds)))
+        (let ((d (ast-strip-span (car ds))))
           (cond
             ((and (pair? d) (eq? (car d) 'define) (pair? (cdr d)))
              (let ((spec (cadr d)))
@@ -220,6 +530,25 @@
 
 (define (alpha-convert-expr expr scope globals)
   (cond
+    ;; 0. Source Span / Loc Wrappers: preserve metadata & set current-ast-span
+    ((ast-has-span? expr)
+     (let ((span (ast-source-span expr))
+           (inner (ast-strip-span expr)))
+       (ast-with-span
+        (with-ast-span span
+          (lambda () (alpha-convert-expr inner scope globals)))
+        span)))
+
+    ((source-loc? expr)
+     (let ((file (source-loc-file expr))
+           (line (source-loc-line expr))
+           (col (source-loc-col expr))
+           (inner (source-loc-form expr))
+           (span (ast-source-span expr)))
+       (list '%source-loc file line col
+             (with-ast-span span
+               (lambda () (alpha-convert-expr inner scope globals))))))
+
     ;; 1. Literal Quote: datum inside (quote ...) is preserved verbatim
     ((and (pair? expr) (eq? (car expr) 'quote))
      expr)
@@ -229,13 +558,16 @@
      (let ((alpha-sym (scope-lookup scope expr)))
        (cond
          (alpha-sym
-          ;; Propagate free-variable usage up the lexical contour tree
-          (let propagate ((curr scope))
-            (if (and (scope-node? curr)
-                     (not (scope-lookup-local curr expr)))
-                (begin
-                  (scope-record-free-var! curr expr)
-                  (propagate (scope-node-parent curr)))))
+          ;; Propagate free-variable usage & Binding IDs up the lexical contour tree
+          (let ((b (lookup-binding-by-symbol alpha-sym)))
+            (let propagate ((curr scope))
+              (if (and (scope-node? curr)
+                       (not (scope-lookup-local curr expr)))
+                  (begin
+                    (scope-record-free-var! curr expr)
+                    (if (binding? b)
+                        (scope-record-free-binding-id! curr (binding-id b)))
+                    (propagate (scope-node-parent curr))))))
           alpha-sym)
          ((scope-known-global-or-prim? expr globals)
           expr)
@@ -446,17 +778,56 @@
          (top-defines (collect-top-level-defines defs))
          (all-globals (append top-defines base-globals))
          (top-scope (make-scope-node #f 'top-level))
+         (_set-root (set-car! *last-resolved-scope-tree* top-scope))
+         (_reg-defs
+          (let reg-loop ((ds defs))
+            (if (pair? ds)
+                (let* ((raw-d (car ds))
+                       (d (ast-strip-span raw-d))
+                       (d-span (ast-source-span raw-d)))
+                  (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (pair? (cddr d)))
+                      (let* ((spec (cadr d))
+                             (def-name (if (pair? spec) (car spec) spec))
+                             (val-stripped (ast-strip-span (caddr d)))
+                             (kind (if (or (pair? spec)
+                                           (and (pair? val-stripped) (eq? (car val-stripped) 'lambda)))
+                                       'function
+                                       'variable)))
+                        (if (symbol? def-name)
+                            (scope-define! top-scope def-name kind
+                                           ':unique-sym def-name
+                                           ':storage-class 'global
+                                           ':visibility 'global
+                                           ':source-span d-span
+                                           ':no-legacy-bind #t))))
+                  (reg-loop (cdr ds))))))
          (converted-defs
           (let loop ((ds defs) (acc '()))
             (if (null? ds)
                 (reverse acc)
-                (let ((d (car ds)))
-                  (if (and (pair? d) (eq? (car d) 'define))
+                (let* ((raw-d (car ds))
+                       (d (ast-strip-span raw-d))
+                       (d-span (ast-source-span raw-d)))
+                  (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (pair? (cddr d)))
                       (let* ((name (cadr d))
                              (val (caddr d))
-                             (conv-val (alpha-convert-expr val top-scope all-globals)))
-                        (loop (cdr ds) (cons (list 'define name conv-val) acc)))
-                      (loop (cdr ds) (cons (alpha-convert-expr d top-scope all-globals) acc)))))))
+                             (conv-val (if d-span
+                                           (with-ast-span d-span
+                                             (lambda () (alpha-convert-expr val top-scope all-globals)))
+                                           (alpha-convert-expr val top-scope all-globals)))
+                             (res-def (list 'define name conv-val)))
+                        (loop (cdr ds)
+                              (cons (cond
+                                      ((ast-has-span? raw-d) (ast-with-span res-def d-span))
+                                      ((source-loc? raw-d)
+                                       (list '%source-loc
+                                             (source-loc-file raw-d)
+                                             (source-loc-line raw-d)
+                                             (source-loc-col raw-d)
+                                             res-def))
+                                      (else res-def))
+                                    acc)))
+                      (loop (cdr ds) (cons (alpha-convert-expr raw-d top-scope all-globals) acc)))))))
          (converted-main (alpha-convert-expr main top-scope all-globals)))
     (list '%program converted-defs converted-main)))
 
@@ -465,6 +836,7 @@
   (if (and (pair? ast) (eq? (car ast) '%program))
       (alpha-convert-program-node ast '())
       (let* ((top-scope (make-scope-node #f 'top-level)))
+        (set-car! *last-resolved-scope-tree* top-scope)
         (alpha-convert-expr ast top-scope '()))))
 
 ;;; -----------------------------------------------------------------------

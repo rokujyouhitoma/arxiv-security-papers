@@ -2,7 +2,8 @@
 ID: 837
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-11-15
 ---
 
 # [FEAT] 構文解析後の一意束縛解決 (Binding ID) とスコープ環境管理の共通基盤化 (ID: 837)
@@ -18,27 +19,27 @@ C99 言語の複数名前空間（`ordinary`: 通常変数・関数・`typedef` 
 ## 2. トレーサビリティ / Traceability
 
 - **設計仕様書**:
-  - [DSN-33-02 (ULisp 多言語フロントエンド統合および機械型付き LIR 拡張設計書)](../designs/DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md): §2.1 (Parser & Sema / Lexer Hack), §3.2 (統一束縛解決 Binding ID とレキシカルスコープ基盤)
-  - [DSN-33 (ULisp Underlying x86 Native AOT Compiler Architecture)](../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md): Pass 0b (Hygienic Macro Expander) & Pass 035 (Lexical Scope & Alpha-Conversion)
-  - [DSN-33-01 (ULisp Pipeline / Pass / Nanopass / Picopass DAG Architecture)](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md): フロントエンド正規化パイプライン
+  - [DSN-33-02 (ULisp 多言語フロントエンド統合および機械型付き LIR 拡張設計書)](../../designs/DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md): §2.1 (Parser & Sema / Lexer Hack), §3.2 (統一束縛解決 Binding ID とレキシカルスコープ基盤)
+  - [DSN-33 (ULisp Underlying x86 Native AOT Compiler Architecture)](../../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md): Pass 0b (Hygienic Macro Expander) & Pass 035 (Lexical Scope & Alpha-Conversion)
+  - [DSN-33-01 (ULisp Pipeline / Pass / Nanopass / Picopass DAG Architecture)](../../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md): フロントエンド正規化パイプライン
 - **関連 Issue**:
-  - [Issue #824 (Nanopass AST ノードにおけるソース位置情報 Source Span とメタデータの第一級サポート)](closed/824-support-first-class-source-span-and-ast-metadata-in-nanopass.md)
-  - [Issue #825 (Nanopass AST 定数式評価器 eval-in-language およびコンパイル時計算 CTFE 基盤の導入)](closed/825-implement-eval-in-language-ast-evaluator-for-ctfe-and-constant-folding.md)
-  - [Issue #833 (コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン Diagnostic Reporter の導入)](closed/833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md)
-  - [Issue #835 (Core Machine LIR と Managed Runtime Dialect の完全直交分離)](closed/835-separate-core-machine-lir-from-managed-runtime-dialect.md)
-  - [Issue #836 (`define-value-repr` による値表現・ボクシング方式のプラグイン化)](closed/836-plugin-value-representation-and-boxing-scheme.md)
+  - [Issue #824 (Nanopass AST ノードにおけるソース位置情報 Source Span とメタデータの第一級サポート)](824-support-first-class-source-span-and-ast-metadata-in-nanopass.md)
+  - [Issue #825 (Nanopass AST 定数式評価器 eval-in-language およびコンパイル時計算 CTFE 基盤の導入)](825-implement-eval-in-language-ast-evaluator-for-ctfe-and-constant-folding.md)
+  - [Issue #833 (コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン Diagnostic Reporter の導入)](833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md)
+  - [Issue #835 (Core Machine LIR と Managed Runtime Dialect の完全直交分離)](835-separate-core-machine-lir-from-managed-runtime-dialect.md)
+  - [Issue #836 (`define-value-repr` による値表現・ボクシング方式のプラグイン化)](836-plugin-value-representation-and-boxing-scheme.md)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/compiler/binding.scm](../../ulisp/compiler/binding.scm): `<binding>` レコード定義（`id`, `source-name`, `unique-sym`, `kind`, `namespace`, `scope-id`, `storage-class`, `type-attr`, `visibility`, `scope-set`, `source-span`）、グローバル束縛レジストリ（`*binding-registry*`）、Binding ID 順序集合演算（`binding-id-set-*`）、および衛生的マクロ用 Scope Sets（`scope-set-*`, `resolve-hygienic-binding`）の実装
-- [ ] [ulisp/compiler/scope.scm](../../ulisp/compiler/scope.scm): レキシカルスコープ木の多重名前空間（`'ordinary`, `'tag`, `'label`, `'macro`）拡張、スコープ環境マネージャ（`make-scope-manager`, `scope-manager-push!`, `scope-manager-pop!`）、C99 Lexer Hack クエリ API（`scope-lookup-kind`, `scope-typedef-name?`）、同一スコープ不正再定義検知、および Pass 035 α 変換エンジンと `<binding>` レジストリの統合
-- [ ] [ulisp/frontend/040_analysis.scm](../../ulisp/frontend/040_analysis.scm): 自由変数解析と Binding ID 集合演算（`free-binding-ids`, `scope-extract-free-binding-ids`）の連携インターフェース追加
-- [ ] [ulisp/compiler/module_header.scm](../../ulisp/compiler/module_header.scm): モジュール分割コンパイル用 `%declare-extern-identifiers` への `binding.scm` / `scope.scm` 新規公開シンボルの登録
-- [ ] [ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm): AOT コンパイル用シンボル文字列変換テーブルへの新規識別子登録（必要な場合）
-- [ ] [ulisp/Makefile](../../ulisp/Makefile): `COMPILER_BASE` への `compiler/binding.scm` 追加および `test_scope_and_binding` テストターゲットの登録
-- [ ] [ulisp/tests/test_scope_and_binding.scm](../../ulisp/tests/test_scope_and_binding.scm): `<binding>` レコード、多重名前空間、C99 Lexer Hack（`typedef` とブロック変数の相互シャドウイング）、Scope Sets 衛生性解決、多重ブロックスコープ α 変換、および Binding ID 集合による自由変数計算を網羅する単体テストスイート
+- [x] [ulisp/compiler/binding.scm](../../../ulisp/compiler/binding.scm): `<binding>` レコード定義（`id`, `source-name`, `unique-sym`, `kind`, `namespace`, `scope-id`, `storage-class`, `type-attr`, `visibility`, `scope-set`, `source-span`）、グローバル束縛レジストリ（`*binding-registry*`）、Binding ID 順序集合演算（`binding-id-set-*`）、および衛生的マクロ用 Scope Sets（`scope-set-*`, `resolve-hygienic-binding`）の実装
+- [x] [ulisp/compiler/scope.scm](../../../ulisp/compiler/scope.scm): レキシカルスコープ木の多重名前空間（`'ordinary`, `'tag`, `'label`, `'macro`）拡張、スコープ環境マネージャ（`make-scope-manager`, `scope-manager-push!`, `scope-manager-pop!`）、C99 Lexer Hack クエリ API（`scope-lookup-kind`, `scope-typedef-name?`）、同一スコープ不正再定義検知、および Pass 035 α 変換エンジンと `<binding>` レジストリの統合
+- [x] [ulisp/frontend/040_analysis.scm](../../../ulisp/frontend/040_analysis.scm): 自由変数解析と Binding ID 集合演算（`free-binding-ids`, `closure-capture-binding-ids`）の連携インターフェース追加
+- [x] [ulisp/compiler/module_header.scm](../../../ulisp/compiler/module_header.scm): モジュール分割コンパイル用 `%declare-extern-identifiers` への `binding.scm` / `scope.scm` 新規公開シンボルの登録
+- [x] [ulisp/compiler/helpers.scm](../../../ulisp/compiler/helpers.scm): AOT コンパイル用シンボル文字列変換テーブルへの新規識別子登録（必要な場合）
+- [x] [ulisp/Makefile](../../../ulisp/Makefile): `COMPILER_BASE` への `compiler/binding.scm` 追加および `test_scope_and_binding` テストターゲットの登録
+- [x] [ulisp/tests/test_scope_and_binding.scm](../../../ulisp/tests/test_scope_and_binding.scm): `<binding>` レコード、多重名前空間、C99 Lexer Hack（`typedef` とブロック変数の相互シャドウイング）、Scope Sets 衛生性解決、多重ブロックスコープ α 変換、および Binding ID 集合による自由変数計算を網羅する単体テストスイート
 
 ---
 
@@ -164,8 +165,8 @@ Target Branch: `feat/837-unified-symbol-binding-resolution`
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp/compiler/binding.scm` が実装され、`<binding>` レコード、`*binding-registry*`、`binding-id-set` 集合演算、および Scope Sets（`resolve-hygienic-binding`）が動作すること。
-- [ ] `ulisp/compiler/scope.scm` が多重名前空間（`'ordinary`, `'tag`, `'label`, `'macro`）、`scope-manager`、および C99 Lexer Hack クエリ（`scope-lookup-kind`, `scope-typedef-name?`）を備え、Pass 035 α 変換時にすべての束縛を `<binding>` として登録すること。
-- [ ] 深くネストしたブロックスコープで同名変数や `typedef` 名がシャドウイングされた場合でも、各束縛が一意な `<binding-id>` と `unique-sym` に分解され、スコープ退出（pop）時に外側の可視性が正確に復元されること。
-- [ ] 新規単体テストスイート `ulisp/tests/test_scope_and_binding.scm`（`make -C ulisp test_scope_and_binding`）および既存 `make -C ulisp test_scope` が 100% PASS すること。
-- [ ] 既存の全テストスイート（`test_pass_manager`, `test_passes`, `test_nanopass_source_span` 等）および `make py_compile && make static_analysis` に一切の回帰がないこと。
+- [x] `ulisp/compiler/binding.scm` が実装され、`<binding>` レコード、`*binding-registry*`、`binding-id-set` 集合演算、および Scope Sets（`resolve-hygienic-binding`）が動作すること。
+- [x] `ulisp/compiler/scope.scm` が多重名前空間（`'ordinary`, `'tag`, `'label`, `'macro`）、`scope-manager`、および C99 Lexer Hack クエリ（`scope-lookup-kind`, `scope-typedef-name?`）を備え、Pass 035 α 変換時にすべての束縛を `<binding>` として登録すること。
+- [x] 深くネストしたブロックスコープで同名変数や `typedef` 名がシャドウイングされた場合でも、各束縛が一意な `<binding-id>` と `unique-sym` に分解され、スコープ退出（pop）時に外側の可視性が正確に復元されること。
+- [x] 新規単体テストスイート `ulisp/tests/test_scope_and_binding.scm`（`make -C ulisp test_scope_and_binding`）および既存 `make -C ulisp test_scope` が 100% PASS すること。
+- [x] 既存の全テストスイート（`test_pass_manager`, `test_passes`, `test_nanopass_source_span` 等）および `make py_compile && make static_analysis` に一切の回帰がないこと。

@@ -428,3 +428,20 @@
 (define (check-arity-all ast)
   (check-arity-expr ast '() '())
   ast)
+
+;;; -----------------------------------------------------------------------
+;;; Binding ID Set Free-Variable & Closure Capture Extraction (Issue #837)
+;;; -----------------------------------------------------------------------
+
+(define (free-binding-ids expr bound-syms)
+  (symbols->binding-id-set (free-vars expr bound-syms)))
+
+(define (closure-capture-binding-ids expr bound-syms)
+  (let ((fvars (free-vars expr bound-syms)))
+    (let loop ((vs fvars) (acc binding-id-set-empty))
+      (if (null? vs)
+          acc
+          (let ((b (lookup-binding-by-symbol (car vs))))
+            (if (and b (eq? (binding-storage-class b) 'lexical))
+                (loop (cdr vs) (binding-id-set-add (binding-id b) acc))
+                (loop (cdr vs) acc)))))))

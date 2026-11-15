@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **837** | 構文解析後の一意束縛解決 (Binding ID) とスコープ環境管理の共通基盤化 | Feature | Medium | In Progress | [837-unify-symbol-binding-resolution-and-scope-environment.md](837-unify-symbol-binding-resolution-and-scope-environment.md) |
 | **838** | レジスタ制約付きインライン・アセンブリ (%inline-asm) の LIR 統合 | Feature | Medium | New | [838-integrate-inline-assembly-dialect-with-register-constraints-into-lir.md](838-integrate-inline-assembly-dialect-with-register-constraints-into-lir.md) |
 | **839** | 中間表現 (HIR/MIR/LIR) の永続化・再ロード機構 (.sbi 拡張) の整備 | Feature | Low | New | [839-implement-ir-serialization-and-deserialization-sbi-extension.md](839-implement-ir-serialization-and-deserialization-sbi-extension.md) |
 | **840** | Nanopass パスマネージャにおける解析結果キャッシュ自動無効化と再計算 | Feature | Low | New | [840-automate-analysis-cache-invalidation-and-recomputation-in-nanopass.md](840-automate-analysis-cache-invalidation-and-recomputation-in-nanopass.md) |
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **837** | 構文解析後の一意束縛解決 (Binding ID) とスコープ環境管理の共通基盤化 | Feature | 2026-11-15 | [837-unify-symbol-binding-resolution-and-scope-environment.md](closed/837-unify-symbol-binding-resolution-and-scope-environment.md) |
 | **836** | `define-value-repr` による値表現・ボクシング方式のプラグイン化 | Feature | 2026-11-15 | [836-plugin-value-representation-and-boxing-scheme.md](closed/836-plugin-value-representation-and-boxing-scheme.md) |
 | **835** | Core Machine LIR と Managed Runtime Dialect の完全直交分離 | Feature | 2026-11-15 | [835-separate-core-machine-lir-from-managed-runtime-dialect.md](closed/835-separate-core-machine-lir-from-managed-runtime-dialect.md) |
 | **834** | 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 | Feature | 2026-11-15 | [834-implement-pure-scheme-lir-reference-vm-interpreter.md](closed/834-implement-pure-scheme-lir-reference-vm-interpreter.md) |

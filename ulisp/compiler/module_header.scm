@@ -197,6 +197,34 @@
   repr-emit-unbox-fixnum
   repr-emit-box-flonum
   repr-emit-unbox-flonum
+  make-binding
+  binding?
+  binding-id
+  binding-source-name
+  binding-unique-sym
+  binding-kind
+  binding-namespace
+  binding-scope-id
+  binding-storage-class
+  binding-type-attr
+  binding-visibility
+  binding-scope-set
+  binding-source-span
+  lookup-binding-by-id
+  lookup-binding-by-symbol
+  binding-id-set-union
+  binding-id-set-difference
+  binding-id-set-intersection
+  resolve-hygienic-binding
+  scope-define!
+  scope-lookup-binding
+  scope-lookup-kind
+  scope-typedef-name?
+  make-scope-manager
+  scope-manager-push!
+  scope-manager-pop!
+  free-binding-ids
+  closure-capture-binding-ids
   symbol->hash-idx)
 
 
