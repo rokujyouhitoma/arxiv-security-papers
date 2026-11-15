@@ -8,7 +8,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Scope Node Records & Contour Hierarchy
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 1: Scope Node & Contour Hierarchy ---\n")
+(print-group "--- Group 1: Scope Node & Contour Hierarchy ---")
 
 (define root-scope (make-scope-node #f 'top-level))
 (assert-true "1.1 root scope node created" (scope-node? root-scope))
@@ -32,7 +32,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 2: Nested Scope Shadowing
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 2: Nested Scope Shadowing ---\n")
+(print-group "--- Group 2: Nested Scope Shadowing ---")
 
 (define grand-scope (scope-enter child-scope 'let))
 (scope-bind! grand-scope 'x 'x$grand)
@@ -47,7 +47,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: Deterministic Alpha Symbol Generator
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 3: Deterministic Alpha Symbol Generator ---\n")
+(print-group "--- Group 3: Deterministic Alpha Symbol Generator ---")
 
 (reset-alpha-symbol-counter!)
 (assert-equal "3.1 first generated symbol has id 0" 'x$0 (make-alpha-symbol 'x))
@@ -57,7 +57,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 4: Alpha-Conversion of Lambda & Parameter Shadowing
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 4: Alpha-Conversion of Lambda & Parameter Shadowing ---\n")
+(print-group "--- Group 4: Alpha-Conversion of Lambda & Parameter Shadowing ---")
 
 (reset-alpha-symbol-counter!)
 (assert-equal "4.1 simple lambda parameter conversion"
@@ -77,7 +77,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 5: Alpha-Conversion of Let and Letrec Bindings
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 5: Let and Letrec Alpha-Conversion ---\n")
+(print-group "--- Group 5: Let and Letrec Alpha-Conversion ---")
 
 (reset-alpha-symbol-counter!)
 ;; In let, outer x is referenced in the inner RHS before inner x is bound
@@ -99,7 +99,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 6: Preservation of Quote Datum (No Modification of Literals)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 6: Quote Literals Preservation ---\n")
+(print-group "--- Group 6: Quote Literals Preservation ---")
 
 (reset-alpha-symbol-counter!)
 (assert-equal "6.1 quoted symbols inside datum preserved verbatim"
@@ -114,7 +114,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 7: Top-Level %program Definition Preservation
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 7: Top-Level %program Preservation ---\n")
+(print-group "--- Group 7: Top-Level %program Preservation ---")
 
 (reset-alpha-symbol-counter!)
 (define sample-prog
@@ -136,7 +136,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 8: Early Unbound Variable Detection
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 8: Early Unbound Variable Detection ---\n")
+(print-group "--- Group 8: Early Unbound Variable Detection ---")
 
 ;; Closed expression has 0 unbound variables
 (assert-equal "8.1 closed expression has no unbound vars"
@@ -174,7 +174,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 9: Pass 035 Registration & Pipeline Scheduling
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 9: Pass 035 Registration & Pipeline Verification ---\n")
+(print-group "--- Group 9: Pass 035 Registration & Pipeline Verification ---")
 
 (init-default-pass-registry!)
 (define desc-p35 (lookup-pass 'pass-035-scope-resolve))

@@ -90,6 +90,13 @@
   (display "] ===\n")
   (%safe-flush))
 
+(define (print-group title)
+  (if (%pass-verbose?)
+      (begin
+        (display title)
+        (newline)
+        (%safe-flush))))
+
 (define (test-end . maybe-suite-name)
   (let ((suite (if (pair? maybe-suite-name)
                    (car maybe-suite-name)

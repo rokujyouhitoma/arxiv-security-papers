@@ -381,9 +381,46 @@
     ((cadddr ,x) (list 'car (list 'cdr (list 'cdr (list 'cdr x)))))))
 
 ;;; -----------------------------------------------------------------------
+;;; Pass 026 Quasiquote Lowering
+;;; -----------------------------------------------------------------------
+
+(define (desugar-quasiquote-datum datum depth)
+  (cond
+    ((pair? datum)
+     (let ((head (car datum)))
+       (cond
+         ((eq? head 'quasiquote)
+          (list 'list ''quasiquote (desugar-quasiquote-datum (cadr datum) (+ depth 1))))
+         ((eq? head 'unquote)
+          (if (= depth 0)
+              (cadr datum)
+              (list 'list ''unquote (desugar-quasiquote-datum (cadr datum) (- depth 1)))))
+         ((and (pair? head) (eq? (car head) 'unquote-splicing))
+          (if (= depth 0)
+              (list 'append (cadr head) (desugar-quasiquote-datum (cdr datum) depth))
+              (list 'cons
+                    (list 'list ''unquote-splicing (desugar-quasiquote-datum (cadr head) (- depth 1)))
+                    (desugar-quasiquote-datum (cdr datum) depth))))
+         (else
+          (list 'cons
+                (desugar-quasiquote-datum head depth)
+                (desugar-quasiquote-datum (cdr datum) depth))))))
+    ((vector? datum)
+     (list 'list->vector (desugar-quasiquote-datum (vector->list datum) depth)))
+    (else
+     (list 'quote datum))))
+
+(define (desugar-quasiquote datum)
+  (desugar-quasiquote-datum datum 0))
+
+(define-picopass rule-desugar-quasiquote
+  (Expr
+    ((quasiquote ,datum) (desugar-quasiquote datum))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Constructors (fuse-rules)
 ;;; -----------------------------------------------------------------------
-(define-pass desugar-constructors : L_src (ir) -> L_core ()
+(define-pass desugar-constructors : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-list
     rule-desugar-vector
@@ -393,4 +430,5 @@
     rule-desugar-bytevector-ops
     rule-desugar-math-variadic
     rule-desugar-format
-    rule-desugar-cxr))
+    rule-desugar-cxr
+    rule-desugar-quasiquote))

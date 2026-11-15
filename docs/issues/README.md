@@ -23,6 +23,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **845** | 標準エラー出力文字出力バッファ破壊およびNanopass脱糖カバレッジ警告の解消 | Bug | 2026-11-15 | [845-fix-stderr-port-write-char-and-desugar-pass-coverage-warnings.md](closed/845-fix-stderr-port-write-char-and-desugar-pass-coverage-warnings.md) |
 | **828** | LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設 | Feature | 2026-11-15 | [828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md](closed/828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md) |
 | **827** | Pass 132 Braun SSA の任意 CFG (基本ブロック・多方向分岐・goto) 汎用対応化 | Feature | 2026-11-15 | [827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md](closed/827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md) |
 | **826** | 機械型 (i8..i64, f32, f64, ptr) を備えた Typed LIR への移行とボクシング操作の直交分離 | Feature | 2026-11-15 | [826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md](closed/826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md) |

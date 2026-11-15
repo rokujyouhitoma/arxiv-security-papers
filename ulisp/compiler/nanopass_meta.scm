@@ -2016,12 +2016,8 @@
                                     (if (memq (caar ps) acc)
                                         (loop (cdr ps) acc)
                                         (loop (cdr ps) (cons (caar ps) acc))))
-                                   (else (loop (cdr ps) acc)))))
-                   (direct-removed (nanopass-lang-removed-prods out-lang))
-                   (parents (language-parent-chain l-out)))
-              (if (memq l-in parents)
-                  (nanopass-combine-sets diff-heads direct-removed)
-                  diff-heads))
+                                   (else (loop (cdr ps) acc))))))
+              diff-heads)
             '()))))
 
 ;;; Verify that all syntax constructs removed in l-out (- ...) are covered

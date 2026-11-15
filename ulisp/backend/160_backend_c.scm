@@ -143,11 +143,18 @@
 
 (define (scan-c-blocks! insts)
   (reset-c-block-params!)
-  (for-each
-   (lambda (inst)
-     (if (and (pair? inst) (eq? (car inst) '%block))
-         (record-c-block-params! (cadr inst) (caddr inst))))
-   insts))
+  (let loop ((is insts))
+    (for-each
+     (lambda (inst)
+       (if (pair? inst)
+           (cond
+             ((eq? (car inst) '%block)
+              (record-c-block-params! (cadr inst) (caddr inst))
+              (if (pair? (cdddr inst))
+                  (loop (cdddr inst))))
+             ((eq? (car inst) '%label)
+              (record-c-block-params! (cadr inst) '())))))
+     is)))
 
 (define (c-param-location idx param)
   (cond
@@ -195,9 +202,14 @@
               (args (if (pair? (cddr inst)) (caddr inst) '())))
          (if (pair? args)
              (emit-c-parallel-copy lbl args))
-         (if (or (eq? lbl '%rdx) (eq? lbl '%rax) (eq? lbl '%rcx) (eq? lbl '%r11))
-             (emit (string-append "    ((void (*)(void))(uintptr_t)" (c-reg->str lbl) ")(); return;"))
-             (emit (string-append "    goto " (c-sanitize-label lbl) ";")))))
+         (cond
+           ((or (eq? lbl '%rdx) (eq? lbl '%rax) (eq? lbl '%rcx) (eq? lbl '%r11))
+            (emit (string-append "    ((void (*)(void))(uintptr_t)" (c-reg->str lbl) ")(); return;")))
+           ((assq lbl (car *c-block-params*))
+            (emit (string-append "    goto " (c-sanitize-label lbl) ";")))
+           (else
+            (emit "    reg_r10 = 0;")
+            (emit (string-append "    " (c-sanitize-label lbl) "(); return;"))))))
 
       ((%jump-if-false)
        (let* ((reg (cadr inst))
@@ -252,7 +264,11 @@
               (args (if (pair? (cddr inst)) (caddr inst) '())))
          (if (pair? args)
              (emit-c-parallel-copy lbl args))
-         (emit (string-append "    goto " (c-sanitize-label lbl) ";"))))
+         (if (assq lbl (car *c-block-params*))
+             (emit (string-append "    goto " (c-sanitize-label lbl) ";"))
+             (begin
+               (emit "    reg_r10 = 0;")
+               (emit (string-append "    " (c-sanitize-label lbl) "(); return;"))))))
 
       ((%switch)
        ;; (%switch val def-lbl def-args cases)

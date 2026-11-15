@@ -787,15 +787,24 @@
              (not (eq? l-out '*)))
         (let ((missing (nanopass-verify-fusion-coverage l-in l-out all-fused-specs)))
           (if (pair? missing)
-              (let ((port (cond
-                            ((and (procedure? current-error-port) (not (null? (current-error-port))))
-                             (current-error-port))
-                            (else (current-output-port)))))
-                (display "[WARN] define-pass " port)
-                (display (if (symbol? name) (symbol->string name) name) port)
-                (display ": missing desugar rules for eliminated forms: " port)
-                (write missing port)
-                (newline port)))))
+              (let* ((port (cond
+                             ((and (procedure? current-error-port) (not (null? (current-error-port))))
+                              (current-error-port))
+                             (else (current-output-port))))
+                     (formatted-missing (let loop ((rem missing) (acc "("))
+                                          (if (null? rem)
+                                              (string-append acc ")")
+                                              (let* ((s (if (symbol? (car rem)) (symbol->string (car rem)) "?"))
+                                                     (next-acc (if (string=? acc "(")
+                                                                   (string-append acc s)
+                                                                   (string-append acc " " s))))
+                                                (loop (cdr rem) next-acc))))))
+                (display (string-append "[WARN] define-pass "
+                                        (if (symbol? name) (symbol->string name) "?")
+                                        ": missing desugar rules for eliminated forms: "
+                                        formatted-missing
+                                        "\n")
+                         port)))))
     (let loop ((rest clauses)
                (defs '())
                (nt-procs '())

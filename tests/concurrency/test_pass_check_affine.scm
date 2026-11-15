@@ -9,7 +9,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Linear Variable Predicates & Environment Operations
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 1: Linear Type Predicates & Formal Invariants (Issue #797) ---\n")
+(print-group "--- Group 1: Linear Type Predicates & Formal Invariants (Issue #797) ---")
 
 ;; 1.1-1.5: Linear Type Predicates (Type-Driven, free of variable name heuristics)
 (assert-true "1.1 channel is a linear type"
@@ -52,7 +52,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 2: Forbidden Syntax & Side-Effects (CWE-362)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 2: Forbidden Syntax & Side-Effects ---\n")
+(print-group "--- Group 2: Forbidden Syntax & Side-Effects ---")
 
 (assert-true "2.1 set! is forbidden"
              (affine-forbidden-syntax? 'set!))
@@ -90,7 +90,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: Valid Linear Code Progression (Borrow & Linear Payload Move)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 3: Valid Linear Code Progression ---\n")
+(print-group "--- Group 3: Valid Linear Code Progression ---")
 
 (define valid-send-expr
   '(channel-send! tx payload))
@@ -136,7 +136,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 4: Use-After-Move Detection (CWE-416)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 4: Use-After-Move Detection ---\n")
+(print-group "--- Group 4: Use-After-Move Detection ---")
 
 ;; Send a linear payload twice
 (define double-send-payload-expr
@@ -175,7 +175,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 5: Conditional Branching Tracking
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 5: Conditional Branching Tracking ---\n")
+(print-group "--- Group 5: Conditional Branching Tracking ---")
 
 (define if-both-consume
   '(if is-ready?
@@ -194,7 +194,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 6: Automatic RAII Drop Injection
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 6: Automatic RAII Drop Injection ---\n")
+(print-group "--- Group 6: Automatic RAII Drop Injection ---")
 
 ;; Unconsumed linear formal in kernel (with explicit type annotation #797)
 (define kernel-with-unconsumed
@@ -249,7 +249,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 7: Pass Manager Injection & Pipeline Integration
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 7: Pass Manager Injection & Pipeline Integration ---\n")
+(print-group "--- Group 7: Pass Manager Injection & Pipeline Integration ---")
 
 (init-default-pass-registry!)
 (inject-synapse-split-planes-pass!)
@@ -302,7 +302,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 8: Type-Based Linearity & Provenance Analysis (Issue #749)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 8: Type-Based Linearity & Provenance Analysis (Issue #749) ---\n")
+(print-group "--- Group 8: Type-Based Linearity & Provenance Analysis (Issue #749) ---")
 
 ;; 8.1 Constructor operator recognition
 (assert-true "8.1 make-channel is recognized as linear constructor"
@@ -428,7 +428,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 9: Elimination of Name-Based Heuristics & Signature Propagation (Issue #792)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 9: Elimination of Name-Based Heuristics & Signature Propagation (Issue #792) ---\n")
+(print-group "--- Group 9: Elimination of Name-Based Heuristics & Signature Propagation (Issue #792) ---")
 
 ;; 9.1-9.2 Variable name heuristics elimination for let bindings
 (assert-false "9.1 variable 'result' bound to function call is NOT linear (CWE-843)"

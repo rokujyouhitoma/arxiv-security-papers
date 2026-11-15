@@ -9,7 +9,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: FBIP Predicates & Drop Collection
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 1: FBIP Predicates & Drop Collection ---\n")
+(print-group "--- Group 1: FBIP Predicates & Drop Collection ---")
 
 (assert-true "1.1 affine-drop-form? detects %affine-drop!"
              (affine-drop-form? '(%affine-drop! old-pair)))
@@ -42,7 +42,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 2: Cons In-Place Reuse Transformation
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 2: Cons In-Place Reuse Transformation ---\n")
+(print-group "--- Group 2: Cons In-Place Reuse Transformation ---")
 
 (define test-input-1
   '(let ((__raii_res (cons (+ h 1) t)))
@@ -84,7 +84,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: Non-Reused Allocations (Preserve Fresh Cons)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 3: Non-Reused Allocations ---\n")
+(print-group "--- Group 3: Non-Reused Allocations ---")
 
 (define test-no-drop
   '(let ((p (cons 10 20)))
@@ -101,7 +101,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 4: ASC Kernel Level FBIP Transformation
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 4: ASC Kernel FBIP Transformation ---\n")
+(print-group "--- Group 4: ASC Kernel FBIP Transformation ---")
 
 (define kernel-with-drop
   '(%asc-kernel (list-map-worker old-pair)
@@ -128,7 +128,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 5: Pass Manager Injection & Pipeline Integration
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 5: Pass Manager Injection & Pipeline Integration ---\n")
+(print-group "--- Group 5: Pass Manager Injection & Pipeline Integration ---")
 
 (init-default-pass-registry!)
 (inject-synapse-split-planes-pass!)

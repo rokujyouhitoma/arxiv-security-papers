@@ -356,8 +356,8 @@
                     (let ((pred (lvn-try-predicate-folding op opt-args vn-args env)))
                       (if (car pred)
                           (cdr pred)
-                          ;; 5. General CSE for pure primitives
-                          (if (pure-prim? op)
+                          ;; 5. General CSE for pure primitives (and allocation info for cons)
+                          (if (or (pure-prim? op) (eq? op 'cons))
                               (let* ((sorted-vns
                                       (if (and (commutative-op? op) (= (length vn-args) 2))
                                           (if (> (car vn-args) (cadr vn-args))
@@ -395,7 +395,8 @@
                                                      (lvn-record-tuple env1 tuple-key new-vn))))
                                       (list (cons op sorted-args) new-vn env2))))
                               ;; Non-pure or side-effecting call
-                              (let* ((env1 (if (memq op '(set-car! set-cdr!))
+                              (let* ((env1 (if (or (memq op '(set-car! set-cdr!))
+                                                   (not (pure-prim? op)))
                                                (lvn-invalidate-pairs env)
                                                env))
                                      (alloc-res (lvn-alloc-vn env1 (cons op opt-args) '()))

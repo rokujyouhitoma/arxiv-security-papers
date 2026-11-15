@@ -193,7 +193,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Dynamic (fuse-rules)
 ;;; -----------------------------------------------------------------------
-(define-pass desugar-dynamic : L_src (ir) -> L_core ()
+(define-pass desugar-dynamic : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-let-values
     rule-desugar-define-values

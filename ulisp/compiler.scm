@@ -2034,7 +2034,7 @@
              bytevector? bytevector-length vector? vector-length %num-args
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
              %box-flonum %unbox-flonum %sitofp %fptosi
-             + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
+             + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? %closure-ref
              %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
              %fadd %fsub %fmul %fdiv %fcmp %fmov
              %udiv %urem %shr %setb %setbe %seta %setae
@@ -2045,14 +2045,14 @@
       (boolean? x)
       (char? x)
       (null? x)
-      (and (pair? x) (eq? (car x) 'quote))))
+      (and (pair? x) (eq? (car x) 'quote) (pair? (cdr x)) (null? (cddr x)))))
 
 (define (atomic-expr? expr)
   (or (symbol? expr)
       (const? expr)))
 
 (define (extract-const-val c)
-  (if (and (pair? c) (eq? (car c) 'quote))
+  (if (and (pair? c) (eq? (car c) 'quote) (pair? (cdr c)) (null? (cddr c)))
       (cadr c)
       c))
 
@@ -4219,12 +4219,8 @@
                                     (if (memq (caar ps) acc)
                                         (loop (cdr ps) acc)
                                         (loop (cdr ps) (cons (caar ps) acc))))
-                                   (else (loop (cdr ps) acc)))))
-                   (direct-removed (nanopass-lang-removed-prods out-lang))
-                   (parents (language-parent-chain l-out)))
-              (if (memq l-in parents)
-                  (nanopass-combine-sets diff-heads direct-removed)
-                  diff-heads))
+                                   (else (loop (cdr ps) acc))))))
+              diff-heads)
             '()))))
 
 ;;; Verify that all syntax constructs removed in l-out (- ...) are covered
@@ -5956,15 +5952,24 @@
              (not (eq? l-out '*)))
         (let ((missing (nanopass-verify-fusion-coverage l-in l-out all-fused-specs)))
           (if (pair? missing)
-              (let ((port (cond
-                            ((and (procedure? current-error-port) (not (null? (current-error-port))))
-                             (current-error-port))
-                            (else (current-output-port)))))
-                (display "[WARN] define-pass " port)
-                (display (if (symbol? name) (symbol->string name) name) port)
-                (display ": missing desugar rules for eliminated forms: " port)
-                (write missing port)
-                (newline port)))))
+              (let* ((port (cond
+                             ((and (procedure? current-error-port) (not (null? (current-error-port))))
+                              (current-error-port))
+                             (else (current-output-port))))
+                     (formatted-missing (let loop ((rem missing) (acc "("))
+                                          (if (null? rem)
+                                              (string-append acc ")")
+                                              (let* ((s (if (symbol? (car rem)) (symbol->string (car rem)) "?"))
+                                                     (next-acc (if (string=? acc "(")
+                                                                   (string-append acc s)
+                                                                   (string-append acc " " s))))
+                                                (loop (cdr rem) next-acc))))))
+                (display (string-append "[WARN] define-pass "
+                                        (if (symbol? name) (symbol->string name) "?")
+                                        ": missing desugar rules for eliminated forms: "
+                                        formatted-missing
+                                        "\n")
+                         port)))))
     (let loop ((rest clauses)
                (defs '())
                (nt-procs '())
@@ -11283,9 +11288,46 @@
     ((cadddr ,x) (list 'car (list 'cdr (list 'cdr (list 'cdr x)))))))
 
 ;;; -----------------------------------------------------------------------
+;;; Pass 026 Quasiquote Lowering
+;;; -----------------------------------------------------------------------
+
+(define (desugar-quasiquote-datum datum depth)
+  (cond
+    ((pair? datum)
+     (let ((head (car datum)))
+       (cond
+         ((eq? head 'quasiquote)
+          (list 'list ''quasiquote (desugar-quasiquote-datum (cadr datum) (+ depth 1))))
+         ((eq? head 'unquote)
+          (if (= depth 0)
+              (cadr datum)
+              (list 'list ''unquote (desugar-quasiquote-datum (cadr datum) (- depth 1)))))
+         ((and (pair? head) (eq? (car head) 'unquote-splicing))
+          (if (= depth 0)
+              (list 'append (cadr head) (desugar-quasiquote-datum (cdr datum) depth))
+              (list 'cons
+                    (list 'list ''unquote-splicing (desugar-quasiquote-datum (cadr head) (- depth 1)))
+                    (desugar-quasiquote-datum (cdr datum) depth))))
+         (else
+          (list 'cons
+                (desugar-quasiquote-datum head depth)
+                (desugar-quasiquote-datum (cdr datum) depth))))))
+    ((vector? datum)
+     (list 'list->vector (desugar-quasiquote-datum (vector->list datum) depth)))
+    (else
+     (list 'quote datum))))
+
+(define (desugar-quasiquote datum)
+  (desugar-quasiquote-datum datum 0))
+
+(define-picopass rule-desugar-quasiquote
+  (Expr
+    ((quasiquote ,datum) (desugar-quasiquote datum))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Constructors (fuse-rules)
 ;;; -----------------------------------------------------------------------
-(define-pass desugar-constructors : L_src (ir) -> L_core ()
+(define-pass desugar-constructors : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-list
     rule-desugar-vector
@@ -11295,7 +11337,8 @@
     rule-desugar-bytevector-ops
     rule-desugar-math-variadic
     rule-desugar-format
-    rule-desugar-cxr))
+    rule-desugar-cxr
+    rule-desugar-quasiquote))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 027: Conditionals Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -11447,17 +11490,33 @@
     ((string-ci>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci>=? (cons a1 (cons a2 (cons a3 rest)))))
     ((string-ci=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci=? (cons a1 (cons a2 (cons a3 rest)))))))
 
+(define (desugar-when test body)
+  (if (null? body)
+      (list 'if test #f #f)
+      (list 'if test (cons 'begin body) #f)))
+
+(define (desugar-unless test body)
+  (if (null? body)
+      (list 'if test #f #f)
+      (list 'if test #f (cons 'begin body))))
+
+(define-picopass rule-desugar-when-unless
+  (Expr
+    ((when ,test . ,body) (desugar-when test body))
+    ((unless ,test . ,body) (desugar-unless test body))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Conditionals (fuse-rules)
 ;;; -----------------------------------------------------------------------
-(define-pass desugar-conditionals : L_src (ir) -> L_core ()
+(define-pass desugar-conditionals : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-cond-expand
     rule-desugar-cond
     rule-desugar-case
     rule-desugar-and
     rule-desugar-or
-    rule-desugar-chain-cmp))
+    rule-desugar-chain-cmp
+    rule-desugar-when-unless))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 028: Local Bindings Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -11741,7 +11800,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Bindings (fuse-rules)
 ;;; -----------------------------------------------------------------------
-(define-pass desugar-bindings : L_src (ir) -> L_core ()
+(define-pass desugar-bindings : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-case-lambda
     rule-desugar-let*
@@ -11945,7 +12004,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Dynamic (fuse-rules)
 ;;; -----------------------------------------------------------------------
-(define-pass desugar-dynamic : L_src (ir) -> L_core ()
+(define-pass desugar-dynamic : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-let-values
     rule-desugar-define-values
@@ -11986,6 +12045,7 @@
       rule-desugar-math-variadic
       rule-desugar-format
       rule-desugar-cxr
+      rule-desugar-quasiquote
 
       ;; --- Pass 027: Conditionals & Comparisons ---
       rule-desugar-cond-expand
@@ -11994,6 +12054,7 @@
       rule-desugar-and
       rule-desugar-or
       rule-desugar-chain-cmp
+      rule-desugar-when-unless
 
       ;; --- Pass 028: Bindings & Internal Definitions ---
       rule-desugar-case-lambda
@@ -13570,8 +13631,8 @@
                     (let ((pred (lvn-try-predicate-folding op opt-args vn-args env)))
                       (if (car pred)
                           (cdr pred)
-                          ;; 5. General CSE for pure primitives
-                          (if (pure-prim? op)
+                          ;; 5. General CSE for pure primitives (and allocation info for cons)
+                          (if (or (pure-prim? op) (eq? op 'cons))
                               (let* ((sorted-vns
                                       (if (and (commutative-op? op) (= (length vn-args) 2))
                                           (if (> (car vn-args) (cadr vn-args))
@@ -13609,7 +13670,8 @@
                                                      (lvn-record-tuple env1 tuple-key new-vn))))
                                       (list (cons op sorted-args) new-vn env2))))
                               ;; Non-pure or side-effecting call
-                              (let* ((env1 (if (memq op '(set-car! set-cdr!))
+                              (let* ((env1 (if (or (memq op '(set-car! set-cdr!))
+                                                   (not (pure-prim? op)))
                                                (lvn-invalidate-pairs env)
                                                env))
                                      (alloc-res (lvn-alloc-vn env1 (cons op opt-args) '()))
@@ -30731,11 +30793,18 @@
 
 (define (scan-c-blocks! insts)
   (reset-c-block-params!)
-  (for-each
-   (lambda (inst)
-     (if (and (pair? inst) (eq? (car inst) '%block))
-         (record-c-block-params! (cadr inst) (caddr inst))))
-   insts))
+  (let loop ((is insts))
+    (for-each
+     (lambda (inst)
+       (if (pair? inst)
+           (cond
+             ((eq? (car inst) '%block)
+              (record-c-block-params! (cadr inst) (caddr inst))
+              (if (pair? (cdddr inst))
+                  (loop (cdddr inst))))
+             ((eq? (car inst) '%label)
+              (record-c-block-params! (cadr inst) '())))))
+     is)))
 
 (define (c-param-location idx param)
   (cond
@@ -30783,9 +30852,14 @@
               (args (if (pair? (cddr inst)) (caddr inst) '())))
          (if (pair? args)
              (emit-c-parallel-copy lbl args))
-         (if (or (eq? lbl '%rdx) (eq? lbl '%rax) (eq? lbl '%rcx) (eq? lbl '%r11))
-             (emit (string-append "    ((void (*)(void))(uintptr_t)" (c-reg->str lbl) ")(); return;"))
-             (emit (string-append "    goto " (c-sanitize-label lbl) ";")))))
+         (cond
+           ((or (eq? lbl '%rdx) (eq? lbl '%rax) (eq? lbl '%rcx) (eq? lbl '%r11))
+            (emit (string-append "    ((void (*)(void))(uintptr_t)" (c-reg->str lbl) ")(); return;")))
+           ((assq lbl (car *c-block-params*))
+            (emit (string-append "    goto " (c-sanitize-label lbl) ";")))
+           (else
+            (emit "    reg_r10 = 0;")
+            (emit (string-append "    " (c-sanitize-label lbl) "(); return;"))))))
 
       ((%jump-if-false)
        (let* ((reg (cadr inst))
@@ -30840,7 +30914,11 @@
               (args (if (pair? (cddr inst)) (caddr inst) '())))
          (if (pair? args)
              (emit-c-parallel-copy lbl args))
-         (emit (string-append "    goto " (c-sanitize-label lbl) ";"))))
+         (if (assq lbl (car *c-block-params*))
+             (emit (string-append "    goto " (c-sanitize-label lbl) ";"))
+             (begin
+               (emit "    reg_r10 = 0;")
+               (emit (string-append "    " (c-sanitize-label lbl) "(); return;"))))))
 
       ((%switch)
        ;; (%switch val def-lbl def-args cases)

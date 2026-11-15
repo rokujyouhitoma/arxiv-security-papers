@@ -281,7 +281,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Bindings (fuse-rules)
 ;;; -----------------------------------------------------------------------
-(define-pass desugar-bindings : L_src (ir) -> L_core ()
+(define-pass desugar-bindings : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-case-lambda
     rule-desugar-let*

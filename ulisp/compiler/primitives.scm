@@ -62,7 +62,7 @@
              bytevector? bytevector-length vector? vector-length %num-args
              %to-raw %to-fixnum %box-fixnum %unbox-fixnum
              %box-flonum %unbox-flonum %sitofp %fptosi
-             + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
+             + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? %closure-ref
              %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
              %fadd %fsub %fmul %fdiv %fcmp %fmov
              %udiv %urem %shr %setb %setbe %seta %setae
@@ -73,14 +73,14 @@
       (boolean? x)
       (char? x)
       (null? x)
-      (and (pair? x) (eq? (car x) 'quote))))
+      (and (pair? x) (eq? (car x) 'quote) (pair? (cdr x)) (null? (cddr x)))))
 
 (define (atomic-expr? expr)
   (or (symbol? expr)
       (const? expr)))
 
 (define (extract-const-val c)
-  (if (and (pair? c) (eq? (car c) 'quote))
+  (if (and (pair? c) (eq? (car c) 'quote) (pair? (cdr c)) (null? (cddr c)))
       (cadr c)
       c))
 

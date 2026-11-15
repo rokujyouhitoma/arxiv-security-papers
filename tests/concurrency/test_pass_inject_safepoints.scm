@@ -10,8 +10,7 @@
 ;;; Group 1: AST Predicates & Construction
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 1: AST Predicates & Construction ---\n")
+(print-group "--- Group 1: AST Predicates & Construction ---")
 
 (assert-true "1.1 safepoint-poll-form? detects %synapse-safepoint-poll!"
              (safepoint-poll-form? '(%synapse-safepoint-poll!)))
@@ -44,8 +43,7 @@
 ;;; Group 2: Function Prologue Safepoint Injection
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 2: Function Prologue Safepoint Injection ---\n")
+(print-group "--- Group 2: Function Prologue Safepoint Injection ---")
 
 (let* ((orig '(lambda (x) (+ x 1)))
        (res (inject-safepoints-expr orig '())))
@@ -68,8 +66,7 @@
 ;;; Group 3: Loop Backedge & Named-Let Injection
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 3: Loop Backedge & Named-Let Injection ---\n")
+(print-group "--- Group 3: Loop Backedge & Named-Let Injection ---")
 
 ;; Infinite loop
 (let* ((orig '(let loop () (loop)))
@@ -109,8 +106,7 @@
 ;;; Group 4: ASC Kernel Transformation
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 4: ASC Kernel Transformation ---\n")
+(print-group "--- Group 4: ASC Kernel Transformation ---")
 
 (let* ((kernel '(%asc-kernel (task: (id 101))
                   (let loop ((count 100))
@@ -134,8 +130,7 @@
 ;;; Group 5: Layer 1 (R7RS) Functions & Loops Safepoint Injection (#744)
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 5: Layer 1 (R7RS) Functions & Loops Safepoint Injection (#744) ---\n")
+(print-group "--- Group 5: Layer 1 (R7RS) Functions & Loops Safepoint Injection (#744) ---")
 
 (let* ((r7rs-forms '((define (host-func x) (* x 2))
                      (let loop () (loop))))
@@ -154,8 +149,7 @@
 ;;; Group 6: Pass Manager Injection & Pipeline Integration
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 6: Pass Manager Injection & Pipeline Integration ---\n")
+(print-group "--- Group 6: Pass Manager Injection & Pipeline Integration ---")
 
 (init-default-pass-registry!)
 (inject-synapse-split-planes-pass!)
@@ -222,8 +216,7 @@
 ;;; Group 7: Default Registry Integration & Automatic Safepoint Injection (#790)
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 7: Default Registry Integration & Pipeline Hook (#790) ---\n")
+(print-group "--- Group 7: Default Registry Integration & Pipeline Hook (#790) ---")
 
 ;; Re-register hook and re-initialize default pass registry
 (register-pass-registry-init-hook! inject-synapse-safepoints-pass!)
@@ -288,8 +281,7 @@
 ;;; Group 8: Exclusion Rules & Trivial Accessor Pruning (#796)
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 8: Exclusion Rules & Trivial Accessor Pruning (#796) ---\n")
+(print-group "--- Group 8: Exclusion Rules & Trivial Accessor Pruning (#796) ---")
 
 ;; 8.1 Name prefix deprecation (#810): user procedures (make-*, task-*, etc.) DO receive safepoints
 ;; while %-prefixed and exact excluded symbols (or procedures with declare) do NOT.
@@ -372,8 +364,7 @@
 ;;; Group 9: Tail-Call Optimization (TCO) Preservation & Stack Safety (#802)
 ;;; -----------------------------------------------------------------------
 
-(newline)
-(display "--- Group 9: Tail-Call Optimization (TCO) Preservation & Stack Safety (#802) ---\n")
+(print-group "--- Group 9: Tail-Call Optimization (TCO) Preservation & Stack Safety (#802) ---")
 
 ;; Mock runtime polling definition for interpreter-level execution tests
 (define (%synapse-safepoint-poll!) #t)

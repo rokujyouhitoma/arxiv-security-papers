@@ -9,7 +9,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 1: Free Variable Capture Analysis
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 1: Free Variable Capture Analysis ---\n")
+(print-group "--- Group 1: Free Variable Capture Analysis ---")
 
 ;; 1.1 Literal constants: no free variables
 (assert-equal "1.1 numbers have no free variables"
@@ -55,7 +55,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 2: Capture Mode Classification (DSN-37 Section 8.1 & Issue #797)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 2: Capture Mode Classification (Type-Driven / No Name Heuristics) ---\n")
+(print-group "--- Group 2: Capture Mode Classification (Type-Driven / No Name Heuristics) ---")
 
 (define sample-type-env
   '((count . integer)
@@ -177,7 +177,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 3: spawn-task and with-channel Plane Boundary Splitting
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 3: Plane Boundary Splitting (AST Separation) ---\n")
+(print-group "--- Group 3: Plane Boundary Splitting (AST Separation) ---")
 
 (reset-asc-kernel-counter!)
 
@@ -236,7 +236,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 4: Full Form Transformation (split-planes-pass)
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 4: Full Form Transformation ---\n")
+(print-group "--- Group 4: Full Form Transformation ---")
 
 (reset-asc-kernel-counter!)
 
@@ -268,7 +268,7 @@
 ;;; -----------------------------------------------------------------------
 ;;; Group 5: Pass Manager Injection & Pipeline Integration
 ;;; -----------------------------------------------------------------------
-(display "\n--- Group 5: Pass Manager Injection & Pipeline Integration ---\n")
+(print-group "--- Group 5: Pass Manager Injection & Pipeline Integration ---")
 
 (init-default-pass-registry!)
 (assert-false "5.1 pass-synapse-split-planes not initially in pipeline"

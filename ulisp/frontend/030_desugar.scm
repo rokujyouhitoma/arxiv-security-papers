@@ -28,6 +28,7 @@
       rule-desugar-math-variadic
       rule-desugar-format
       rule-desugar-cxr
+      rule-desugar-quasiquote
 
       ;; --- Pass 027: Conditionals & Comparisons ---
       rule-desugar-cond-expand
@@ -36,6 +37,7 @@
       rule-desugar-and
       rule-desugar-or
       rule-desugar-chain-cmp
+      rule-desugar-when-unless
 
       ;; --- Pass 028: Bindings & Internal Definitions ---
       rule-desugar-case-lambda

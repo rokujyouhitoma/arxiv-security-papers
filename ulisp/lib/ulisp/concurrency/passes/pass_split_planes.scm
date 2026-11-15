@@ -201,6 +201,11 @@
           (if (and env-val (string=? env-val "0")) #f #t))
         '()))
 
+(define *warn-untyped-boundary-print*
+  (cons (let ((env-val (guard (ex (else #f)) (get-environment-variable "ULISP_WARN_UNTYPED_BOUNDARY_PRINT"))))
+          (if (and env-val (string=? env-val "1")) #t #f))
+        '()))
+
 (define *untyped-boundary-warnings* (cons '() '()))
 
 (define (reset-untyped-boundary-warnings!)
@@ -218,16 +223,17 @@
     (let ((entry (cons var boundary-kind)))
       (set-car! *untyped-boundary-warnings*
                 (cons entry (car *untyped-boundary-warnings*)))
-      (let ((port (%safe-error-port)))
-        (display "[WARN] pass-synapse-split-planes: Untyped variable '" port)
-        (display var port)
-        (display "' crossing " port)
-        (display boundary-kind port)
-        (display " boundary; falling back to deep-copy (CWE-843/CWE-400). Consider annotating with (: " port)
-        (display var port)
-        (display " <type>) or (: " port)
-        (display var port)
-        (display " deep-copy).\n" port)))))
+      (when (car *warn-untyped-boundary-print*)
+        (let ((port (%safe-error-port)))
+          (display "[WARN] pass-synapse-split-planes: Untyped variable '" port)
+          (display var port)
+          (display "' crossing " port)
+          (display boundary-kind port)
+          (display " boundary; falling back to deep-copy (CWE-843/CWE-400). Consider annotating with (: " port)
+          (display var port)
+          (display " <type>) or (: " port)
+          (display var port)
+          (display " deep-copy).\n" port))))))
 
 (define (linear-type? ty)
   (memq ty '(channel spsc-channel bounded-channel linear)))

@@ -15,6 +15,7 @@
 (define *current-input-port-cell* (cons *stdin-port* '()))
 (define *current-output-port-cell* (cons *stdout-port* '()))
 (define *current-error-port-cell* (cons *stderr-port* '()))
+(define *port-stderr-buf* (make-string 1))
 
 (define (current-input-port arg)
   (if (= (%num-args) 0)
@@ -449,9 +450,8 @@
              (set-car! len-cell (+ len 1))
              #t))))
     ((and (pair? p) (eq? (car p) '%standard-output-port) (= (cadr p) 2))
-     (let ((buf (cons 0 (cons 0 '()))))
-       (%raw-store! (%ptr-untag buf) 0 (%to-raw (char->integer ch)))
-       (sys-write 2 (%ptr-untag buf) 1)))
+     (string-set! *port-stderr-buf* 0 ch)
+     (sys-write-stderr *port-stderr-buf*))
     (else
      (%write-char ch))))
 

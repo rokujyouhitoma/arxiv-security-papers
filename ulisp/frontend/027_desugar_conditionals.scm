@@ -149,14 +149,30 @@
     ((string-ci>=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci>=? (cons a1 (cons a2 (cons a3 rest)))))
     ((string-ci=? ,a1 ,a2 ,a3 . ,rest) (desugar-chain-cmp 'string-ci=? (cons a1 (cons a2 (cons a3 rest)))))))
 
+(define (desugar-when test body)
+  (if (null? body)
+      (list 'if test #f #f)
+      (list 'if test (cons 'begin body) #f)))
+
+(define (desugar-unless test body)
+  (if (null? body)
+      (list 'if test #f #f)
+      (list 'if test #f (cons 'begin body))))
+
+(define-picopass rule-desugar-when-unless
+  (Expr
+    ((when ,test . ,body) (desugar-when test body))
+    ((unless ,test . ,body) (desugar-unless test body))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Conditionals (fuse-rules)
 ;;; -----------------------------------------------------------------------
-(define-pass desugar-conditionals : L_src (ir) -> L_core ()
+(define-pass desugar-conditionals : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-cond-expand
     rule-desugar-cond
     rule-desugar-case
     rule-desugar-and
     rule-desugar-or
-    rule-desugar-chain-cmp))
+    rule-desugar-chain-cmp
+    rule-desugar-when-unless))
