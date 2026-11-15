@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **831** | 160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証 | Feature | Medium | In Progress | [831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md](831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md) |
 | **832** | 純粋 Scheme による多倍長整数 (Bignum) および IEEE 754 相互変換標準ライブラリの実装 | Feature | Medium | New | [832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md](832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md) |
 | **833** | コンパイラ・マクロ展開・インタプリタ共通の統合エラー診断エンジン (Diagnostic Reporter) の導入 | Feature | Low | New | [833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md](833-implement-unified-pretty-diagnostic-reporter-for-compiler-and-runtime.md) |
 | **834** | 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 | Feature | High | New | [834-implement-pure-scheme-lir-reference-vm-interpreter.md](834-implement-pure-scheme-lir-reference-vm-interpreter.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **831** | 160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証 | Feature | 2026-11-15 | [831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md](closed/831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md) |
 | **830** | 144a アセンブラおよび 144 ELF リンカにおける複数セクション (.rodata/.data/.bss) と再配置の抽象化 | Feature | 2026-11-15 | [830-abstract-elf-sections-and-relocations-in-144a-assembler-and-144-linker.md](closed/830-abstract-elf-sections-and-relocations-in-144a-assembler-and-144-linker.md) |
 | **829** | 呼出規約 (Calling Convention) の多重化・モジュール分離とゼロオーバーヘッド C-FFI の実現 | Feature | 2026-11-15 | [829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md](closed/829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md) |
 | **845** | 標準エラー出力文字出力バッファ破壊およびNanopass脱糖カバレッジ警告の解消 | Bug | 2026-11-15 | [845-fix-stderr-port-write-char-and-desugar-pass-coverage-warnings.md](closed/845-fix-stderr-port-write-char-and-desugar-pass-coverage-warnings.md) |

@@ -57,6 +57,7 @@
     (pop opnd)
     (cqo)
     (idiv opnd)
+    (div opnd)
     (inc opnd)
     (syscall)
     (cld)

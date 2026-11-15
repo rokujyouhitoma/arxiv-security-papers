@@ -589,6 +589,10 @@
        (let ((dst (cadr inst)))
          (list (list 'neg (lower-lir-opnd dst)))))
 
+      ((%not)
+       (let ((dst (cadr inst)))
+         (list (list 'not (lower-lir-opnd dst)))))
+
       ((%imul %raw-mul)
        (let ((dst (cadr inst))
              (src (caddr inst)))
@@ -676,6 +680,14 @@
       ((%fptosi)
        (let ((dst (cadr inst)) (src (caddr inst)))
          (list (list '%raw-asm (string-append "    cvttsd2si " (reg->str dst) ", " (reg->str src))))))
+
+      ((%bitcast-f64-to-i64)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    movq " (reg->str dst) ", " (reg->str src))))))
+
+      ((%bitcast-i64-to-f64)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    movq " (reg->str dst) ", " (reg->str src))))))
 
       ((%box-flonum)
        (let ((dst (cadr inst)) (src (caddr inst)))
@@ -887,8 +899,9 @@
                       (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg8->str dst)))))))))
 
       ((%set-boolean)
-       (let ((cc (caddr inst)))
-         (list (list '%raw-asm (string-append "    " cc " al"))
+       (let* ((cc (caddr inst))
+              (cc-str (if (symbol? cc) (symbol->string cc) cc)))
+         (list (list '%raw-asm (string-append "    " cc-str " al"))
                (list '%raw-asm "    movzx eax, al")
                (list '%raw-asm "    shl rax, 6")
                (list '%raw-asm "    add rax, 0x2F"))))
@@ -1509,6 +1522,8 @@
        (emit "    cqo"))
       ((idiv)
        (emit-inst2 "idiv" (asm-opnd->str (cadr inst))))
+      ((div)
+       (emit-inst2 "div" (asm-opnd->str (cadr inst))))
       ((inc)
        (emit-inst2 "inc" (asm-opnd->str (cadr inst))))
       ((syscall)

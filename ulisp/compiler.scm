@@ -21555,6 +21555,7 @@
     (pop opnd)
     (cqo)
     (idiv opnd)
+    (div opnd)
     (inc opnd)
     (syscall)
     (cld)
@@ -22234,6 +22235,10 @@
        (let ((dst (cadr inst)))
          (list (list 'neg (lower-lir-opnd dst)))))
 
+      ((%not)
+       (let ((dst (cadr inst)))
+         (list (list 'not (lower-lir-opnd dst)))))
+
       ((%imul %raw-mul)
        (let ((dst (cadr inst))
              (src (caddr inst)))
@@ -22321,6 +22326,14 @@
       ((%fptosi)
        (let ((dst (cadr inst)) (src (caddr inst)))
          (list (list '%raw-asm (string-append "    cvttsd2si " (reg->str dst) ", " (reg->str src))))))
+
+      ((%bitcast-f64-to-i64)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    movq " (reg->str dst) ", " (reg->str src))))))
+
+      ((%bitcast-i64-to-f64)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (list (list '%raw-asm (string-append "    movq " (reg->str dst) ", " (reg->str src))))))
 
       ((%box-flonum)
        (let ((dst (cadr inst)) (src (caddr inst)))
@@ -22532,8 +22545,9 @@
                       (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg8->str dst)))))))))
 
       ((%set-boolean)
-       (let ((cc (caddr inst)))
-         (list (list '%raw-asm (string-append "    " cc " al"))
+       (let* ((cc (caddr inst))
+              (cc-str (if (symbol? cc) (symbol->string cc) cc)))
+         (list (list '%raw-asm (string-append "    " cc-str " al"))
                (list '%raw-asm "    movzx eax, al")
                (list '%raw-asm "    shl rax, 6")
                (list '%raw-asm "    add rax, 0x2F"))))
@@ -23154,6 +23168,8 @@
        (emit "    cqo"))
       ((idiv)
        (emit-inst2 "idiv" (asm-opnd->str (cadr inst))))
+      ((div)
+       (emit-inst2 "div" (asm-opnd->str (cadr inst))))
       ((inc)
        (emit-inst2 "inc" (asm-opnd->str (cadr inst))))
       ((syscall)
@@ -31446,7 +31462,10 @@
     ((symbol? opnd)
      (c-reg->str opnd))
     ((integer? opnd)
-     (number->string opnd))
+     (let ((s (number->string opnd)))
+       (if (string=? s "-9223372036854775808")
+           "(-9223372036854775807LL - 1LL)"
+           (string-append s "LL"))))
     ((pair? opnd)
      (let ((tag (car opnd)))
        (case tag
@@ -31571,6 +31590,10 @@
                  ((string=? cc "jg")  "(int64_t)cmp_s1 > (int64_t)cmp_s2")
                  ((string=? cc "jle") "(int64_t)cmp_s1 <= (int64_t)cmp_s2")
                  ((string=? cc "jl")  "(int64_t)cmp_s1 < (int64_t)cmp_s2")
+                 ((string=? cc "jb")  "(uint64_t)cmp_s1 < (uint64_t)cmp_s2")
+                 ((string=? cc "jbe") "(uint64_t)cmp_s1 <= (uint64_t)cmp_s2")
+                 ((string=? cc "ja")  "(uint64_t)cmp_s1 > (uint64_t)cmp_s2")
+                 ((string=? cc "jae") "(uint64_t)cmp_s1 >= (uint64_t)cmp_s2")
                  (else (error "Unknown jump-cond in C backend:" cc)))))
          (emit (string-append "    if (" cond-expr ") goto " (c-sanitize-label lbl) ";"))))
 
@@ -31728,6 +31751,10 @@
        (let ((dst (cadr inst)))
          (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(-(int64_t)" (c-operand->str dst) ");"))))
 
+      ((%not)
+       (let ((dst (cadr inst)))
+         (emit (string-append "    " (c-operand->str dst) " = ~" (c-operand->str dst) ";"))))
+
       ((%imul)
        (let ((dst (cadr inst))
              (src (caddr inst)))
@@ -31758,11 +31785,11 @@
                (off-str (c-offset->str offset))
                (dst-str (c-operand->str dst)))
            (case mty
-             ((i8)  (emit (string-append "    " dst-str " = (uint64_t)(*(int8_t *)(" base-str " + (" off-str ")));")))
+             ((i8)  (emit (string-append "    " dst-str " = (uint64_t)((int64_t)(*(int8_t *)(" base-str " + (" off-str "))));")))
              ((u8)  (emit (string-append "    " dst-str " = (uint64_t)(*(uint8_t *)(" base-str " + (" off-str ")));")))
-             ((i16) (emit (string-append "    " dst-str " = (uint64_t)(*(int16_t *)(" base-str " + (" off-str ")));")))
+             ((i16) (emit (string-append "    " dst-str " = (uint64_t)((int64_t)(*(int16_t *)(" base-str " + (" off-str "))));")))
              ((u16) (emit (string-append "    " dst-str " = (uint64_t)(*(uint16_t *)(" base-str " + (" off-str ")));")))
-             ((i32) (emit (string-append "    " dst-str " = (uint64_t)(*(int32_t *)(" base-str " + (" off-str ")));")))
+             ((i32) (emit (string-append "    " dst-str " = (uint64_t)((int64_t)(*(int32_t *)(" base-str " + (" off-str "))));")))
              ((u32) (emit (string-append "    " dst-str " = (uint64_t)(*(uint32_t *)(" base-str " + (" off-str ")));")))
              ((f32) (emit (string-append "    " dst-str " = (double)(*(float *)(" base-str " + (" off-str ")));")))
              ((f64) (emit (string-append "    " dst-str " = *(double *)(" base-str " + (" off-str "));")))
@@ -31806,7 +31833,10 @@
 
       ((%fcmp)
        (let ((dst (cadr inst)) (src (caddr inst)))
-         (emit (string-append "    cmp_s1 = ((double)" (c-operand->str dst) " == (double)" (c-operand->str src) ") ? 0x6F : 0x2F;"))))
+         (emit (string-append "    cmp_f1 = (double)" (c-operand->str dst) ";"))
+         (emit (string-append "    cmp_f2 = (double)" (c-operand->str src) ";"))
+         (emit "    cmp_s1 = (cmp_f1 == cmp_f2) ? 0x6F : 0x2F;")
+         (emit "    cmp_s2 = 0x6F;")))
 
       ((%sitofp)
        (let ((dst (cadr inst)) (src (caddr inst)))
@@ -31824,16 +31854,37 @@
        (let ((dst (cadr inst)) (src (caddr inst)))
          (emit (string-append "    " (c-operand->str dst) " = *(double *)(((char *)(uintptr_t)" (c-operand->str src) ") + 8);"))))
 
-      ((%trunc %zext %sext)
+      ((%bitcast-f64-to-i64)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    memcpy(&" (c-operand->str dst) ", &" (c-operand->str src) ", 8);"))))
+
+      ((%bitcast-i64-to-f64)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    memcpy(&" (c-operand->str dst) ", &" (c-operand->str src) ", 8);"))))
+
+      ((%trunc)
        (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
          (case mty
-           ((i8)  (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int8_t)" (c-operand->str src) ");")))
-           ((u8)  (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint8_t)" (c-operand->str src) ";")))
-           ((i16) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int16_t)" (c-operand->str src) ");")))
-           ((u16) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint16_t)" (c-operand->str src) ";")))
-           ((i32) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int32_t)" (c-operand->str src) ");")))
-           ((u32) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint32_t)" (c-operand->str src) ";")))
-           (else  (emit (string-append "    " (c-operand->str dst) " = (uint64_t)" (c-operand->str src) ";"))))))
+           ((i8 u8)   (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint8_t)" (c-operand->str src) ";")))
+           ((i16 u16) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint16_t)" (c-operand->str src) ";")))
+           ((i32 u32) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint32_t)" (c-operand->str src) ";")))
+           (else      (emit (string-append "    " (c-operand->str dst) " = (uint64_t)" (c-operand->str src) ";"))))))
+
+      ((%zext)
+       (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
+         (case mty
+           ((i8 u8)   (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint8_t)" (c-operand->str src) ";")))
+           ((i16 u16) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint16_t)" (c-operand->str src) ";")))
+           ((i32 u32) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)(uint32_t)" (c-operand->str src) ";")))
+           (else      (emit (string-append "    " (c-operand->str dst) " = (uint64_t)" (c-operand->str src) ";"))))))
+
+      ((%sext)
+       (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
+         (case mty
+           ((i8 u8)   (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int8_t)" (c-operand->str src) ");")))
+           ((i16 u16) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int16_t)" (c-operand->str src) ");")))
+           ((i32 u32) (emit (string-append "    " (c-operand->str dst) " = (uint64_t)((int64_t)(int32_t)" (c-operand->str src) ");")))
+           (else      (emit (string-append "    " (c-operand->str dst) " = (uint64_t)" (c-operand->str src) ";"))))))
 
       ((%cqo)
        (emit "    /* cqo */"))
@@ -31961,8 +32012,9 @@
            (emit (string-append "    " (c-reg->str (cadr inst)) " = ((uint64_t)" (c-operand->str (caddr inst)) " >= (uint64_t)" (c-operand->str (cadddr inst)) ") ? 1 : 0;"))))
 
       ((%set-boolean)
-       (let ((dst (cadr inst))
-             (cc (caddr inst)))
+       (let* ((dst (cadr inst))
+              (cc-raw (caddr inst))
+              (cc (if (symbol? cc-raw) (symbol->string cc-raw) cc-raw)))
          (cond
            ((string=? cc "sete")
             (emit (string-append "    " (c-reg->str dst) " = (cmp_s1 == cmp_s2) ? 0x6F : 0x2F;")))
@@ -31976,6 +32028,14 @@
             (emit (string-append "    " (c-reg->str dst) " = ((int64_t)cmp_s1 > (int64_t)cmp_s2) ? 0x6F : 0x2F;")))
            ((string=? cc "setge")
             (emit (string-append "    " (c-reg->str dst) " = ((int64_t)cmp_s1 >= (int64_t)cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "setb")
+            (emit (string-append "    " (c-reg->str dst) " = ((uint64_t)cmp_s1 < (uint64_t)cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "setbe")
+            (emit (string-append "    " (c-reg->str dst) " = ((uint64_t)cmp_s1 <= (uint64_t)cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "seta")
+            (emit (string-append "    " (c-reg->str dst) " = ((uint64_t)cmp_s1 > (uint64_t)cmp_s2) ? 0x6F : 0x2F;")))
+           ((string=? cc "setae")
+            (emit (string-append "    " (c-reg->str dst) " = ((uint64_t)cmp_s1 >= (uint64_t)cmp_s2) ? 0x6F : 0x2F;")))
            (else
             (error "Unknown condition code in C backend:" cc)))))
 
@@ -32709,6 +32769,8 @@
     (emit "static double reg_xmm15 ULISP_UNUSED = 0.0;")
     (emit "static uint64_t cmp_s1 ULISP_UNUSED;")
     (emit "static uint64_t cmp_s2 ULISP_UNUSED;")
+    (emit "static double cmp_f1 ULISP_UNUSED = 0.0;")
+    (emit "static double cmp_f2 ULISP_UNUSED = 0.0;")
     (emit "static char stack_mem[64 * 1024 * 1024] ULISP_UNUSED;")
     (emit "static __thread void *ulisp_handler_chain ULISP_UNUSED = NULL;")
     (emit "static uint64_t ulisp_values_count ULISP_UNUSED = 1;")
