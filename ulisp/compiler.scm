@@ -6392,6 +6392,81 @@
 (define (lir-data-dag-raw-edges dag) (caddr dag))
 (define (lir-data-dag-waw-edges dag) (cadddr dag))
 
+;;; -----------------------------------------------------------------------
+;;; Part 17: Pass-Level Analysis Contracts & Cache Registry Hooks (Issue #840)
+;;; -----------------------------------------------------------------------
+
+(define *pass-analysis-contracts* (cons '() '()))
+(define *pass-proc-analysis-contracts* (cons '() '()))
+(define *nanopass-pre-pass-analysis-hook* (cons #f '()))
+(define *nanopass-post-pass-analysis-hook* (cons #f '()))
+
+(define (normalize-analysis-spec-list spec)
+  (cond
+    ((or (not spec) (null? spec)) '())
+    ((eq? spec 'all) '(all))
+    ((and (pair? spec) (eq? (car spec) 'quote) (pair? (cdr spec)))
+     (normalize-analysis-spec-list (cadr spec)))
+    ((and (list? spec) (= (length spec) 1) (list? (car spec)))
+     (car spec))
+    ((list? spec) spec)
+    (else (list spec))))
+
+(define (alist-upsert-eq alist key val)
+  (let loop ((rem alist) (acc '()) (found? #f))
+    (cond
+      ((null? rem)
+       (let ((rev (reverse acc)))
+         (if found? rev (cons (cons key val) rev))))
+      ((eq? (caar rem) key)
+       (loop (cdr rem) (cons (cons key val) acc) #t))
+      (else
+       (loop (cdr rem) (cons (car rem) acc) found?)))))
+
+(define (register-pass-analysis-contract! pass-id requires preserves invalidates)
+  (let* ((req-list (normalize-analysis-spec-list requires))
+         (pres-list (if preserves (normalize-analysis-spec-list preserves) #f))
+         (inv-list (normalize-analysis-spec-list invalidates))
+         (contract (list pass-id req-list pres-list inv-list)))
+    (set-car! *pass-analysis-contracts*
+              (alist-upsert-eq (car *pass-analysis-contracts*) pass-id contract))
+    contract))
+
+(define (register-pass-proc-analysis-contract! proc pass-id requires preserves invalidates)
+  (let ((contract (register-pass-analysis-contract! pass-id requires preserves invalidates)))
+    (if (procedure? proc)
+        (set-car! *pass-proc-analysis-contracts*
+                  (alist-upsert-eq (car *pass-proc-analysis-contracts*) proc contract)))
+    contract))
+
+(define (lookup-pass-analysis-contract key)
+  (cond
+    ((symbol? key)
+     (let ((e (assq key (car *pass-analysis-contracts*))))
+       (if e (cdr e) #f)))
+    ((procedure? key)
+     (let ((e (assq key (car *pass-proc-analysis-contracts*))))
+       (if e (cdr e) #f)))
+    (else #f)))
+
+(define (reset-pass-analysis-contracts!)
+  (set-car! *pass-analysis-contracts* '())
+  (set-car! *pass-proc-analysis-contracts* '()))
+
+(define (nanopass-invoke-pre-pass-analysis! pass-id ir)
+  (let ((hook (car *nanopass-pre-pass-analysis-hook*)))
+    (if (and (not (nanopass-in-pipeline-runner?))
+             (procedure? hook))
+        (hook pass-id ir)
+        #f)))
+
+(define (nanopass-invoke-post-pass-analysis! pass-id in-ir out-ir)
+  (let ((hook (car *nanopass-post-pass-analysis-hook*)))
+    (if (and (not (nanopass-in-pipeline-runner?))
+             (procedure? hook))
+        (hook pass-id in-ir out-ir)
+        #f)))
+
 
 
 
@@ -6404,23 +6479,89 @@
 ;;; (define-pass pass-name : L_in (ir extra_in ...) -> L_out (extra_out ...) body ...)
 ;;; or (define-pass pass-name : L_in (ir extra_in ...) -> * (extra_out ...) body ...)
 ;;; or (define-pass pass-name (ir extra_in ...) body ...)
+;;; Also supports declarative analysis contracts (:requires ...), (:preserves ...), (:invalidates ...).
+(define (nanopass-analysis-contract-clause? c)
+  (and (pair? c)
+       (memq (car c) '(:requires requires :preserves preserves :invalidates invalidates))))
+
+(define (nanopass-analysis-contract-keyword? x)
+  (and (symbol? x)
+       (memq x '(:requires :preserves :invalidates))))
+
+(define (nanopass-extract-analysis-contracts clauses)
+  (let loop ((rem clauses)
+             (clean-rev '())
+             (has-contract? #f)
+             (reqs '())
+             (pres #f)
+             (invs '()))
+    (if (null? rem)
+        (list (reverse clean-rev) has-contract? reqs pres invs)
+        (let ((c (car rem)))
+          (cond
+            ((nanopass-analysis-contract-clause? c)
+             (let ((tag (car c))
+                   (vals (normalize-analysis-spec-list (cdr c))))
+               (cond
+                 ((memq tag '(:requires requires))
+                  (loop (cdr rem) clean-rev #t (append reqs vals) pres invs))
+                 ((memq tag '(:preserves preserves))
+                  (let ((cur-pres (if pres pres '())))
+                    (loop (cdr rem) clean-rev #t reqs (append cur-pres vals) invs)))
+                 (else
+                  (loop (cdr rem) clean-rev #t reqs pres (append invs vals))))))
+            ((and (nanopass-analysis-contract-keyword? c) (pair? (cdr rem)))
+             (let ((vals (normalize-analysis-spec-list (cadr rem))))
+               (cond
+                 ((eq? c ':requires)
+                  (loop (cddr rem) clean-rev #t (append reqs vals) pres invs))
+                 ((eq? c ':preserves)
+                  (let ((cur-pres (if pres pres '())))
+                    (loop (cddr rem) clean-rev #t reqs (append cur-pres vals) invs)))
+                 (else
+                  (loop (cddr rem) clean-rev #t reqs pres (append invs vals))))))
+            (else
+             (loop (cdr rem) (cons c clean-rev) has-contract? reqs pres invs)))))))
+
+(define (nanopass-split-leading-contracts forms)
+  (let loop ((rem forms) (c-rev '()))
+    (cond
+      ((null? rem) (cons (reverse c-rev) '()))
+      ((nanopass-analysis-contract-clause? (car rem))
+       (loop (cdr rem) (cons (car rem) c-rev)))
+      ((and (nanopass-analysis-contract-keyword? (car rem)) (pair? (cdr rem)))
+       (loop (cddr rem) (cons (list (car rem) (cadr rem)) c-rev)))
+      (else (cons (reverse c-rev) rem)))))
+
 (define (nanopass-parse-pass-header form)
-  (let ((name (cadr form))
-        (rest (cddr form)))
-    (if (and (pair? rest) (eq? (car rest) ':))
-        (let* ((l-in (cadr rest))
-               (in-args (caddr rest))
-               (in-arg-list (if (pair? in-args) in-args (list in-args)))
-               (after-arrow (cddddr rest))
-               (l-out (car after-arrow))
-               (has-extra-out? (and (pair? (cdr after-arrow)) (list? (cadr after-arrow))))
-               (extra-out (if has-extra-out? (cadr after-arrow) '()))
-               (clauses (if has-extra-out? (cddr after-arrow) (cdr after-arrow))))
-          (list name l-in in-arg-list l-out extra-out clauses))
-        (let* ((in-args (car rest))
-               (in-arg-list (if (pair? in-args) in-args (list in-args)))
-               (clauses (cdr rest)))
-          (list name 'L_src in-arg-list 'L_core '() clauses)))))
+  (let* ((name (cadr form))
+         (rest (cddr form))
+         (split (nanopass-split-leading-contracts rest))
+         (leading-contracts (car split))
+         (rest-after (cdr split)))
+    (cond
+      ((and (pair? rest-after) (eq? (car rest-after) ':))
+       (let* ((l-in (cadr rest-after))
+              (in-args (caddr rest-after))
+              (in-arg-list (if (pair? in-args) in-args (list in-args)))
+              (after-arrow (cddddr rest-after))
+              (l-out (car after-arrow))
+              (has-extra-out? (and (pair? (cdr after-arrow)) (list? (cadr after-arrow))))
+              (extra-out (if has-extra-out? (cadr after-arrow) '()))
+              (clauses (if has-extra-out? (cddr after-arrow) (cdr after-arrow))))
+         (list name l-in in-arg-list l-out extra-out (append leading-contracts clauses))))
+      ((and (pair? rest-after)
+            (pair? (car rest-after))
+            (not (nanopass-analysis-contract-clause? (car rest-after)))
+            (not (memq (caar rest-after)
+                       '(definitions entry fuse-rules fuse-tree-rules fuse-post-rules fuse-window-rules
+                         Expr Stmt Program TopLevel Instruction InstructionList))))
+       (let* ((in-args (car rest-after))
+              (in-arg-list (if (pair? in-args) in-args (list in-args)))
+              (clauses (cdr rest-after)))
+         (list name 'L_src in-arg-list 'L_core '() (append leading-contracts clauses))))
+      (else
+       (list name 'L_src '(ir) 'L_core '() (append leading-contracts rest-after))))))
 
 ;;; Linearize pattern to handle duplicate variables (e.g. ((%mov ,r ,r) . ,rest))
 (define (nanopass-linearize-pattern pat)
@@ -7176,8 +7317,16 @@
          (in-arg-list (caddr parsed))
          (l-out (cadddr parsed))
          (extra-out (car (cddddr parsed)))
-         (clauses (cadr (cddddr parsed)))
+         (raw-clauses (cadr (cddddr parsed)))
+         (contract-info (nanopass-extract-analysis-contracts raw-clauses))
+         (clauses (car contract-info))
+         (has-contract? (cadr contract-info))
+         (req-list (caddr contract-info))
+         (pres-list (cadddr contract-info))
+         (inv-list (car (cddddr contract-info)))
          (all-fused-specs (nanopass-extract-all-pass-rule-specs clauses)))
+    (if has-contract?
+        (register-pass-analysis-contract! name req-list pres-list inv-list))
     ;; Validate schema coverage between l-in and l-out against eliminated rules (DSN-33-01 T3.2)
     (if (and (pair? all-fused-specs)
              (symbol? l-in) (symbol? l-out)
@@ -7210,33 +7359,57 @@
           (let* ((final-entry (if entry-nt entry-nt 'Expr))
                  (ir-var (car in-arg-list))
                  (res-var (unique-symbol "__res_"))
-                 (body-call (cons final-entry in-arg-list)))
-            (list 'define (cons name in-arg-list)
-                  (list 'letrec
-                        (append (reverse defs) (reverse nt-procs))
+                 (body-call (cons final-entry in-arg-list))
+                 (trace-tail
+                  (if force-trace?
+                      (list 'begin
+                            (list 'if (list 'not (list (string->symbol "nanopass-in-pipeline-runner?")))
+                                  (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
+                                  #f)
+                            res-var)
+                      (list 'begin
+                            (list 'if (list 'and (list (string->symbol "nanopass-trace-enabled?"))
+                                                 (list 'not (list (string->symbol "nanopass-in-pipeline-runner?"))))
+                                  (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
+                                  #f)
+                            res-var)))
+                 (inner-let
+                  (list 'let (list (list res-var body-call))
                         (list 'begin
-                              (list (string->symbol "set-current-pass!") (list 'quote name))
+                              (if has-contract?
+                                  (list (string->symbol "nanopass-invoke-post-pass-analysis!") (list 'quote name) ir-var res-var)
+                                  #f)
                               (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
-                                    (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-in) ir-var ''entry)
+                                    (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-out) res-var ''exit)
                                     #f)
-                              (list (string->symbol "with-call-frame") (list 'quote name) ir-var
-                                    (list 'lambda '()
-                                          (list 'let (list (list res-var body-call))
-                                                (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
-                                                      (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-out) res-var ''exit)
-                                                      #f)
-                                                (if force-trace?
-                                                    (list 'begin
-                                                          (list 'if (list 'not (list (string->symbol "nanopass-in-pipeline-runner?")))
-                                                                (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
-                                                                #f)
-                                                          res-var)
-                                                    (list 'begin
-                                                          (list 'if (list 'and (list (string->symbol "nanopass-trace-enabled?"))
-                                                                               (list 'not (list (string->symbol "nanopass-in-pipeline-runner?"))))
-                                                                (list (string->symbol "nanopass-display-ast-diff") (list 'quote name) ir-var res-var)
-                                                                #f)
-                                                          res-var)))))))))
+                              trace-tail)))
+                 (frame-thunk
+                  (if has-contract?
+                      (list 'lambda '()
+                            (list 'begin
+                                  (list (string->symbol "nanopass-invoke-pre-pass-analysis!") (list 'quote name) ir-var)
+                                  inner-let))
+                      (list 'lambda '() inner-let)))
+                 (def-form
+                  (list 'define (cons name in-arg-list)
+                        (list 'letrec
+                              (append (reverse defs) (reverse nt-procs))
+                              (list 'begin
+                                    (list (string->symbol "set-current-pass!") (list 'quote name))
+                                    (list 'if (list (string->symbol "nanopass-verifier-enabled?"))
+                                          (list (string->symbol "nanopass-verify-ast") (list 'quote name) (list 'quote l-in) ir-var ''entry)
+                                          #f)
+                                    (list (string->symbol "with-call-frame") (list 'quote name) ir-var frame-thunk))))))
+            (if has-contract?
+                (list 'begin
+                      def-form
+                      (list (string->symbol "register-pass-proc-analysis-contract!")
+                            name
+                            (list 'quote name)
+                            (list 'quote req-list)
+                            (list 'quote pres-list)
+                            (list 'quote inv-list)))
+                def-form))
           (let ((c (car rest)))
             (cond
               ;; (definitions def1 def2 ...)
@@ -8038,8 +8211,49 @@
 ;;; -----------------------------------------------------------------------
 ;;; Each pass is represented as a structured 10-element tuple:
 ;;;   (list 'pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?)
+;;; Optional trailing contract args (:requires ... :preserves ... :invalidates ...
+;;; or positional (requires preserves invalidates)) register pass analysis contracts.
 
-(define (make-pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?)
+(define (parse-pass-descriptor-contract-opts opts)
+  (cond
+    ((null? opts) (list #f '() #f '()))
+    ((and (list? (car opts))
+          (pair? (car opts))
+          (pair? (caar opts))
+          (memq (caaar opts) '(requires preserves invalidates :requires :preserves :invalidates)))
+     ;; Alist form: '((requires . (...)) (preserves . (...)) (invalidates . (...)))
+     (let loop ((xs (car opts)) (reqs '()) (pres #f) (invs '()))
+       (if (null? xs)
+           (list #t reqs pres invs)
+           (let ((k (caar xs)) (v (cdar xs)))
+             (cond
+               ((memq k '(requires :requires)) (loop (cdr xs) (normalize-analysis-spec-list v) pres invs))
+               ((memq k '(preserves :preserves)) (loop (cdr xs) reqs (normalize-analysis-spec-list v) invs))
+               ((memq k '(invalidates :invalidates)) (loop (cdr xs) reqs pres (normalize-analysis-spec-list v)))
+               (else (loop (cdr xs) reqs pres invs)))))))
+    ((memq (car opts) '(:requires :preserves :invalidates requires preserves invalidates))
+     (let loop ((rem opts) (reqs '()) (pres #f) (invs '()))
+       (if (or (null? rem) (null? (cdr rem)))
+           (list #t reqs pres invs)
+           (let ((k (car rem)) (v (normalize-analysis-spec-list (cadr rem))))
+             (cond
+               ((memq k '(:requires requires)) (loop (cddr rem) (append reqs v) pres invs))
+               ((memq k '(:preserves preserves)) (loop (cddr rem) reqs (append (if pres pres '()) v) invs))
+               ((memq k '(:invalidates invalidates)) (loop (cddr rem) reqs pres (append invs v)))
+               (else (loop (cdr rem) reqs pres invs)))))))
+    (else
+     ;; Positional form: (reqs [pres [invs]])
+     (let* ((reqs (normalize-analysis-spec-list (car opts)))
+            (pres (if (pair? (cdr opts)) (normalize-analysis-spec-list (cadr opts)) #f))
+            (invs (if (and (pair? (cdr opts)) (pair? (cddr opts)))
+                      (normalize-analysis-spec-list (caddr opts))
+                      '())))
+       (list #t reqs pres invs)))))
+
+(define (make-pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory? . contract-opts)
+  (let ((parsed (parse-pass-descriptor-contract-opts contract-opts)))
+    (if (car parsed)
+        (register-pass-proc-analysis-contract! pass-fn id (cadr parsed) (caddr parsed) (cadddr parsed))))
   (list 'pass-descriptor id name category opt-level pass-fn verifier-phase in-lang out-lang prerequisites mandatory?))
 
 (define (pass-descriptor? obj)
@@ -8055,6 +8269,46 @@
 (define (pass-out-lang p) (car (cddddr (cddddr p))))
 (define (pass-prerequisites p) (cadr (cddddr (cddddr p))))
 (define (pass-mandatory? p) (caddr (cddddr (cddddr p))))
+
+(define (set-pass-analysis-contract! pass-or-id requires preserves invalidates)
+  (cond
+    ((pass-descriptor? pass-or-id)
+     (register-pass-proc-analysis-contract! (pass-fn pass-or-id) (pass-id pass-or-id) requires preserves invalidates))
+    ((procedure? pass-or-id)
+     (let ((existing (lookup-pass-analysis-contract pass-or-id)))
+       (register-pass-proc-analysis-contract! pass-or-id
+                                              (if existing (car existing) pass-or-id)
+                                              requires preserves invalidates)))
+    (else
+     (register-pass-analysis-contract! pass-or-id requires preserves invalidates))))
+
+(define (pass-analysis-contract pass-or-id)
+  (cond
+    ((pass-descriptor? pass-or-id)
+     (or (lookup-pass-analysis-contract (pass-id pass-or-id))
+         (lookup-pass-analysis-contract (pass-fn pass-or-id))))
+    ((symbol? pass-or-id)
+     (let ((direct (lookup-pass-analysis-contract pass-or-id)))
+       (if direct
+           direct
+           (if (pass-registered? pass-or-id)
+               (lookup-pass-analysis-contract (pass-fn (lookup-pass pass-or-id)))
+               #f))))
+    ((procedure? pass-or-id)
+     (lookup-pass-analysis-contract pass-or-id))
+    (else #f)))
+
+(define (pass-requires-analyses pass-or-id)
+  (let ((c (pass-analysis-contract pass-or-id)))
+    (if c (cadr c) '())))
+
+(define (pass-preserves-analyses pass-or-id)
+  (let ((c (pass-analysis-contract pass-or-id)))
+    (if c (caddr c) #f)))
+
+(define (pass-invalidates-analyses pass-or-id)
+  (let ((c (pass-analysis-contract pass-or-id)))
+    (if c (cadddr c) '())))
 
 ;;; -----------------------------------------------------------------------
 ;;; 1.1 Pipeline Descriptor Record & Accessors (DSN-33-01 T6.1 / Issue #768)
@@ -8073,6 +8327,428 @@
 (define (pipeline-desc-passes p) (cadddr p))
 (define (pipeline-desc-target-ir p) (car (cddddr p)))
 (define (pipeline-desc-options p) (cadr (cddddr p)))
+
+;;; -----------------------------------------------------------------------
+;;; 1.2 Analysis Property Registry & Cache Invalidation Engine (Issue #840)
+;;; -----------------------------------------------------------------------
+;;; Analysis descriptor record:
+;;;   (list 'analysis-descriptor name compute-fn depends-on doc)
+
+(define (make-analysis-descriptor name compute-fn depends-on doc)
+  (list 'analysis-descriptor name compute-fn depends-on doc))
+
+(define (analysis-descriptor? obj)
+  (and (pair? obj) (eq? (car obj) 'analysis-descriptor)))
+
+(define (analysis-desc-name d) (cadr d))
+(define (analysis-desc-compute-fn d) (caddr d))
+(define (analysis-desc-depends-on d) (cadddr d))
+(define (analysis-desc-doc d) (car (cddddr d)))
+
+(define *analysis-property-registry* (cons '() '()))
+(define *analysis-property-cache* (cons '() '()))
+;; Stats vector: #(hits misses recomputations invalidations preserved)
+(define *analysis-cache-stats* (vector 0 0 0 0 0))
+(define *current-analysis-ast* (cons #f '()))
+(define *analysis-visiting-stack* (cons '() '()))
+(define *pass-fixpoint-max-iterations* (cons 32 '()))
+
+(define (pass-fixpoint-max-iterations) (car *pass-fixpoint-max-iterations*))
+(define (set-pass-fixpoint-max-iterations! n) (set-car! *pass-fixpoint-max-iterations* n))
+
+(define (pm-stats-inc! idx)
+  (vector-set! *analysis-cache-stats* idx (+ (vector-ref *analysis-cache-stats* idx) 1)))
+
+(define (reset-analysis-cache!)
+  (set-car! *analysis-property-cache* '())
+  (vector-set! *analysis-cache-stats* 0 0)
+  (vector-set! *analysis-cache-stats* 1 0)
+  (vector-set! *analysis-cache-stats* 2 0)
+  (vector-set! *analysis-cache-stats* 3 0)
+  (vector-set! *analysis-cache-stats* 4 0)
+  (set-car! *current-analysis-ast* #f)
+  (set-car! *analysis-visiting-stack* '())
+  #t)
+
+(define (analysis-cache-stats)
+  (list (cons 'hits (vector-ref *analysis-cache-stats* 0))
+        (cons 'misses (vector-ref *analysis-cache-stats* 1))
+        (cons 'recomputations (vector-ref *analysis-cache-stats* 2))
+        (cons 'invalidations (vector-ref *analysis-cache-stats* 3))
+        (cons 'preserved (vector-ref *analysis-cache-stats* 4))))
+
+(define (reset-analysis-properties!)
+  (set-car! *analysis-property-registry* '())
+  (reset-analysis-cache!))
+
+(define (lookup-analysis-property-opt name)
+  (let ((e (assq name (car *analysis-property-registry*))))
+    (if e (cdr e) #f)))
+
+(define (analysis-property-registered? name)
+  (if (lookup-analysis-property-opt name) #t #f))
+
+(define (lookup-analysis-property name)
+  (let ((desc (lookup-analysis-property-opt name)))
+    (if desc
+        desc
+        (error "lookup-analysis-property: unregistered analysis property" name))))
+
+(define (list-analysis-properties)
+  (map car (car *analysis-property-registry*)))
+
+(define (analysis-dep-creates-cycle? target-name start-deps)
+  (let walk ((queue start-deps) (visited '()))
+    (cond
+      ((null? queue) #f)
+      ((eq? (car queue) target-name) #t)
+      ((memq (car queue) visited) (walk (cdr queue) visited))
+      (else
+       (let* ((cur (car queue))
+              (desc (lookup-analysis-property-opt cur))
+              (next-deps (if desc (analysis-desc-depends-on desc) '())))
+         (walk (append next-deps (cdr queue)) (cons cur visited)))))))
+
+(define (parse-register-analysis-opts opts)
+  (let loop ((rem opts) (deps '()) (doc ""))
+    (cond
+      ((null? rem) (cons deps doc))
+      ((and (memq (car rem) '(:depends-on depends-on)) (pair? (cdr rem)))
+       (loop (cddr rem) (normalize-analysis-spec-list (cadr rem)) doc))
+      ((and (memq (car rem) '(:doc doc)) (pair? (cdr rem)))
+       (loop (cddr rem) deps (cadr rem)))
+      ((list? (car rem))
+       (loop (cdr rem) (normalize-analysis-spec-list (car rem)) doc))
+      ((string? (car rem))
+       (loop (cdr rem) deps (car rem)))
+      (else
+       (loop (cdr rem) deps doc)))))
+
+(define (register-analysis-property! name compute-fn . opts)
+  (let* ((parsed (parse-register-analysis-opts opts))
+         (deps (car parsed))
+         (doc (cdr parsed)))
+    (if (analysis-dep-creates-cycle? name deps)
+        (raise (list 'analysis-cycle-error name deps)))
+    (let ((desc (make-analysis-descriptor name compute-fn deps doc)))
+      (set-car! *analysis-property-registry*
+                (alist-upsert-eq (car *analysis-property-registry*) name desc))
+      name)))
+
+;; Cache entry vector: #(name valid? value ast compute-count hit-count invalidation-count)
+(define (lookup-analysis-cache-entry name)
+  (let ((e (assq name (car *analysis-property-cache*))))
+    (if e (cdr e) #f)))
+
+(define (analysis-valid? name . maybe-ast)
+  (let ((entry (lookup-analysis-cache-entry name)))
+    (and entry
+         (vector-ref entry 1)
+         (or (null? maybe-ast)
+             (eq? (vector-ref entry 3) (car maybe-ast)))
+         #t)))
+
+(define (get-cached-analysis name)
+  (let ((entry (lookup-analysis-cache-entry name)))
+    (if (and entry (vector-ref entry 1))
+        (vector-ref entry 2)
+        #f)))
+
+(define (analysis-compute-count name)
+  (let ((entry (lookup-analysis-cache-entry name)))
+    (if entry (vector-ref entry 4) 0)))
+
+(define (analysis-hit-count name)
+  (let ((entry (lookup-analysis-cache-entry name)))
+    (if entry (vector-ref entry 5) 0)))
+
+(define (analysis-invalidation-count name)
+  (let ((entry (lookup-analysis-cache-entry name)))
+    (if entry (vector-ref entry 6) 0)))
+
+(define (require-analysis name . maybe-ast)
+  (if (null? (car *analysis-property-registry*))
+      (init-default-analysis-properties!))
+  (if (memq name (car *analysis-visiting-stack*))
+      (raise (list 'analysis-cycle-error name (reverse (cons name (car *analysis-visiting-stack*))))))
+  (let* ((explicit-ast? (pair? maybe-ast))
+         (ast (if explicit-ast? (car maybe-ast) (car *current-analysis-ast*))))
+    (if explicit-ast?
+        (set-car! *current-analysis-ast* ast))
+    (let ((entry (lookup-analysis-cache-entry name)))
+      (if (and entry
+               (vector-ref entry 1)
+               (or (not explicit-ast?)
+                   (eq? (vector-ref entry 3) ast)))
+          (begin
+            (pm-stats-inc! 0)
+            (vector-set! entry 5 (+ (vector-ref entry 5) 1))
+            (vector-ref entry 2))
+          (let* ((desc (lookup-analysis-property name))
+                 (deps (analysis-desc-depends-on desc))
+                 (saved-stack (car *analysis-visiting-stack*)))
+            (set-car! *analysis-visiting-stack* (cons name saved-stack))
+            (let ((val (guard (ex (else
+                                    (set-car! *analysis-visiting-stack* saved-stack)
+                                    (raise ex)))
+                         (for-each (lambda (d) (require-analysis d ast)) deps)
+                         ((analysis-desc-compute-fn desc) ast))))
+              (set-car! *analysis-visiting-stack* saved-stack)
+              (let ((cur-entry (lookup-analysis-cache-entry name)))
+                (if cur-entry
+                    (begin
+                      (vector-set! cur-entry 1 #t)
+                      (vector-set! cur-entry 2 val)
+                      (vector-set! cur-entry 3 ast)
+                      (vector-set! cur-entry 4 (+ (vector-ref cur-entry 4) 1)))
+                    (let ((new-entry (vector name #t val ast 1 0 0)))
+                      (set-car! *analysis-property-cache*
+                                (alist-upsert-eq (car *analysis-property-cache*) name new-entry)))))
+              (pm-stats-inc! 1)
+              (pm-stats-inc! 2)
+              val))))))
+
+(define (analysis-direct-dependents prop-name)
+  (let loop ((reg (car *analysis-property-registry*)) (acc '()))
+    (if (null? reg)
+        (reverse acc)
+        (let* ((desc (cdar reg))
+               (dname (analysis-desc-name desc))
+               (deps (analysis-desc-depends-on desc)))
+          (if (memq prop-name deps)
+              (loop (cdr reg) (cons dname acc))
+              (loop (cdr reg) acc))))))
+
+(define (mark-single-analysis-invalid! entry)
+  (if (and entry (vector-ref entry 1))
+      (begin
+        (vector-set! entry 1 #f)
+        (vector-set! entry 6 (+ (vector-ref entry 6) 1))
+        (pm-stats-inc! 3)
+        #t)
+      #f))
+
+(define (invalidate-analysis! root-name)
+  (if (eq? root-name 'all)
+      (invalidate-all-analyses!)
+      (let loop ((queue (list root-name)) (visited '()))
+        (if (pair? queue)
+            (let ((cur (car queue))
+                  (rest (cdr queue)))
+              (if (memq cur visited)
+                  (loop rest visited)
+                  (let ((entry (lookup-analysis-cache-entry cur))
+                        (dependents (analysis-direct-dependents cur)))
+                    (mark-single-analysis-invalid! entry)
+                    (if (eq? cur 'femto-attrs)
+                        (femto-cache-reset!))
+                    (loop (append dependents rest) (cons cur visited)))))))))
+
+(define (invalidate-all-analyses!)
+  (for-each (lambda (cell) (mark-single-analysis-invalid! (cdr cell)))
+            (car *analysis-property-cache*))
+  (femto-cache-reset!)
+  #t)
+
+(define (ensure-pass-required-analyses! pass-or-id input-ast)
+  (set-car! *current-analysis-ast* input-ast)
+  (let ((reqs (pass-requires-analyses pass-or-id)))
+    (if (pair? reqs)
+        (for-each (lambda (p) (require-analysis p input-ast)) reqs))))
+
+(define (apply-pass-analysis-invalidation! pass-or-id input-ast output-ast)
+  (set-car! *current-analysis-ast* output-ast)
+  (let ((pres (pass-preserves-analyses pass-or-id))
+        (invs (pass-invalidates-analyses pass-or-id))
+        (unchanged? (eq? input-ast output-ast)))
+    (if (memq 'all invs)
+        (invalidate-all-analyses!)
+        (for-each invalidate-analysis! invs))
+    (for-each
+      (lambda (cell)
+        (let ((name (car cell))
+              (entry (cdr cell)))
+          (if (vector-ref entry 1)
+              (cond
+                (unchanged?
+                 (pm-stats-inc! 4))
+                ((and pres (or (memq 'all pres) (memq name pres)))
+                 (vector-set! entry 3 output-ast)
+                 (pm-stats-inc! 4))
+                (else
+                 (mark-single-analysis-invalid! entry))))))
+      (car *analysis-property-cache*))))
+
+;;; Built-in AST/CFG Default Analysis Implementations (Issue #840)
+
+(define (pm-list-add-unique sym lst)
+  (if (memq sym lst) lst (cons sym lst)))
+
+(define (pm-list-union a b)
+  (let loop ((xs a) (acc b))
+    (if (null? xs) acc
+        (loop (cdr xs) (pm-list-add-unique (car xs) acc)))))
+
+(define (pm-list-diff a b)
+  (let loop ((xs a) (acc '()))
+    (if (null? xs) (reverse acc)
+        (loop (cdr xs) (if (memq (car xs) b) acc (cons (car xs) acc))))))
+
+(define (pm-ast-collect-free-vars expr bound)
+  (cond
+    ((symbol? expr) (if (memq expr bound) '() (list expr)))
+    ((not (pair? expr)) '())
+    ((eq? (car expr) 'quote) '())
+    ((and (eq? (car expr) 'let) (pair? (cdr expr)) (list? (cadr expr)))
+     (let ((bs (cadr expr))
+           (body (cddr expr)))
+       (let* ((vars (map car bs))
+              (rhs-fvs (let loop ((xs bs) (acc '()))
+                         (if (null? xs) acc
+                             (loop (cdr xs)
+                                   (pm-list-union (pm-ast-collect-free-vars (cadr (car xs)) bound) acc)))))
+              (body-fvs (let loop ((es body) (nb (pm-list-union vars bound)) (acc '()))
+                          (if (null? es) acc
+                              (loop (cdr es) nb (pm-list-union (pm-ast-collect-free-vars (car es) nb) acc))))))
+         (pm-list-union rhs-fvs body-fvs))))
+    ((and (eq? (car expr) 'letrec) (pair? (cdr expr)) (list? (cadr expr)))
+     (let* ((bs (cadr expr))
+            (vars (map car bs))
+            (nb (pm-list-union vars bound))
+            (rhs-fvs (let loop ((xs bs) (acc '()))
+                       (if (null? xs) acc
+                           (loop (cdr xs)
+                                 (pm-list-union (pm-ast-collect-free-vars (cadr (car xs)) nb) acc)))))
+            (body-fvs (let loop ((es (cddr expr)) (acc '()))
+                        (if (null? es) acc
+                            (loop (cdr es) (pm-list-union (pm-ast-collect-free-vars (car es) nb) acc))))))
+       (pm-list-union rhs-fvs body-fvs)))
+    ((and (eq? (car expr) 'lambda) (pair? (cdr expr)) (list? (cadr expr)))
+     (let ((nb (pm-list-union (cadr expr) bound)))
+       (let loop ((es (cddr expr)) (acc '()))
+         (if (null? es) acc
+             (loop (cdr es) (pm-list-union (pm-ast-collect-free-vars (car es) nb) acc))))))
+    (else
+     (let loop ((xs (cdr expr)) (acc '()))
+       (if (null? xs) acc
+           (loop (cdr xs) (pm-list-union (pm-ast-collect-free-vars (car xs) bound) acc)))))))
+
+(define (pm-ast-use-counts ast)
+  (let ((counts '()))
+    (letrec ((visit
+              (lambda (x)
+                (cond
+                  ((symbol? x)
+                   (let ((e (assq x counts)))
+                     (if e
+                         (set-cdr! e (+ (cdr e) 1))
+                         (set! counts (cons (cons x 1) counts)))))
+                  ((not (pair? x)) #f)
+                  ((eq? (car x) 'quote) #f)
+                  ((and (memq (car x) '(let let*)) (pair? (cdr x)) (list? (cadr x)))
+                   (for-each (lambda (b) (visit (cadr b))) (cadr x))
+                   (for-each visit (cddr x)))
+                  ((and (eq? (car x) 'letrec) (pair? (cdr x)) (list? (cadr x)))
+                   (for-each (lambda (b) (visit (cadr b))) (cadr x))
+                   (for-each visit (cddr x)))
+                  ((and (eq? (car x) 'lambda) (pair? (cdr x)))
+                   (for-each visit (cddr x)))
+                  (else
+                   (for-each visit (cdr x)))))))
+      (visit ast)
+      (reverse counts))))
+
+(define (pm-extract-cfg-blocks ast)
+  (cond
+    ((and (pair? ast) (eq? (car ast) '%cfg) (pair? (cdr ast)))
+     (cdr ast))
+    (else
+     (list (list 'entry (pm-ast-collect-free-vars ast '()) '())))))
+
+(define (pm-compute-cfg-dominators ast)
+  (let ((blocks (pm-extract-cfg-blocks ast)))
+    (let loop ((bs blocks) (doms '()) (seen '(entry)))
+      (if (null? bs)
+          (reverse doms)
+          (let* ((b (car bs))
+                 (lbl (if (pair? b) (car b) 'entry))
+                 (bdoms (pm-list-add-unique lbl seen)))
+            (loop (cdr bs) (cons (cons lbl bdoms) doms) bdoms))))))
+
+(define (pm-compute-variable-liveness ast)
+  (if (and (pair? ast) (eq? (car ast) '%cfg))
+      (let loop ((bs (cdr ast)) (res '()))
+        (if (null? bs)
+            (reverse res)
+            (let* ((b (car bs))
+                   (lbl (car b))
+                   (live (pm-ast-collect-free-vars (cdr b) '())))
+              (loop (cdr bs) (cons (cons lbl live) res)))))
+      (list (cons 'live-in (pm-ast-collect-free-vars ast '()))
+            (cons 'use-counts (pm-ast-use-counts ast)))))
+
+(define (pm-compute-reaching-defs ast)
+  (let ((defs '()))
+    (letrec ((walk
+              (lambda (x)
+                (cond
+                  ((not (pair? x)) #f)
+                  ((eq? (car x) 'quote) #f)
+                  ((and (memq (car x) '(let let* letrec)) (pair? (cdr x)) (list? (cadr x)))
+                   (for-each (lambda (b)
+                               (set! defs (cons (cons (car b) (cadr b)) defs))
+                               (walk (cadr b)))
+                             (cadr x))
+                   (for-each walk (cddr x)))
+                  ((and (eq? (car x) 'define) (pair? (cdr x)))
+                   (let ((nm (if (pair? (cadr x)) (car (cadr x)) (cadr x))))
+                     (set! defs (cons (cons nm (cddr x)) defs)))
+                   (for-each walk (cddr x)))
+                  (else
+                   (if (pair? (cdr x)) (for-each walk (cdr x))))))))
+      (walk ast)
+      (reverse defs))))
+
+(define (pm-compute-alias-sets ast)
+  (let ((rdefs (get-cached-analysis 'reaching-defs)))
+    (map (lambda (d)
+           (let ((var (car d)) (rhs (cdr d)))
+             (cons var (cond
+                         ((symbol? rhs) (list 'alias rhs))
+                         ((and (pair? rhs) (memq (car rhs) '(cons vector %make-closure)))
+                          (list 'fresh (car rhs)))
+                         (else '(scalar))))))
+         (if rdefs rdefs '()))))
+
+(define (pm-compute-free-vars ast)
+  (pm-ast-collect-free-vars ast '()))
+
+(define (pm-compute-term-hash-consing ast)
+  (list (cons 'femto (femto-cache-stats))
+        (cons 'hash-cons-entries (length (car *nanopass-hash-cons-table*)))))
+
+(define (init-default-analysis-properties!)
+  (register-analysis-property! 'cfg-dominators pm-compute-cfg-dominators '()
+                               "Control-flow graph dominator sets")
+  (register-analysis-property! 'variable-liveness pm-compute-variable-liveness '()
+                               "Variable liveness sets across blocks and expressions")
+  (register-analysis-property! 'reaching-defs pm-compute-reaching-defs '()
+                               "Reaching variable definitions across AST/CFG bindings")
+  (register-analysis-property! 'alias-sets pm-compute-alias-sets '(reaching-defs)
+                               "Pointer/alias sets derived from reaching definitions")
+  (register-analysis-property! 'free-vars pm-compute-free-vars '()
+                               "Lexical free variables in AST")
+  (register-analysis-property! 'use-counts pm-ast-use-counts '()
+                               "Symbol occurrence counts in AST")
+  (register-analysis-property! 'femto-attrs (lambda (_ast) (femto-cache-stats)) '()
+                               "Femtopass memoized AST attribute cache")
+  (register-analysis-property! 'term-hash-consing pm-compute-term-hash-consing '()
+                               "Nanopass hash-consing DAG snapshot")
+  #t)
+
+;; Connect nanopass.scm standalone pass hooks to pass_manager analysis tracker
+(set-car! *nanopass-pre-pass-analysis-hook* ensure-pass-required-analyses!)
+(set-car! *nanopass-post-pass-analysis-hook* apply-pass-analysis-invalidation!)
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Global Pass Registry
@@ -8287,6 +8963,7 @@
   (set-car! *pipeline-dump-ir* #f)
   (set-car! *pipeline-print-after-all* #f)
   (set-car! *pipeline-disabled-passes* '())
+  (reset-analysis-cache!)
   (reset-disabled-picopasses!)
   (reset-picopass-provenance!)
   (disable-picopass-provenance!))
@@ -8629,17 +9306,33 @@
          (vphase (pass-verifier-phase pass-desc))
          (invoke-pass-fn
           (lambda ()
-            (let ((prev-in-runner (nanopass-in-pipeline-runner?)))
+            (let* ((pres-list (pass-preserves-analyses pass-desc))
+                   (inv-list (pass-invalidates-analyses pass-desc))
+                   (inv-femto? (and inv-list
+                                    (or (memq 'all inv-list)
+                                        (memq 'femto-attrs inv-list))))
+                   (pres-femto? (and pres-list
+                                     (or (memq 'all pres-list)
+                                         (memq 'femto-attrs pres-list))))
+                   (prev-in-runner (nanopass-in-pipeline-runner?)))
               (set-nanopass-in-pipeline-runner! #t)
               (let ((res (guard (ex (else
                                      (set-nanopass-in-pipeline-runner! prev-in-runner)
-                                     (femto-cache-reset!)
+                                     (if inv-femto?
+                                         (femto-cache-reset!)
+                                         (if (not pres-femto?)
+                                             (femto-cache-reset!)))
                                      (raise ex)))
+                           (ensure-pass-required-analyses! pass-desc input-ast)
                            (with-nanopass-term-memo
                              (lambda ()
                                (fn input-ast))))))
                 (set-nanopass-in-pipeline-runner! prev-in-runner)
-                (femto-cache-reset!)
+                (if (not (and (not inv-femto?)
+                              (or pres-femto?
+                                  (eq? res input-ast))))
+                    (femto-cache-reset!))
+                (apply-pass-analysis-invalidation! pass-desc input-ast res)
                 res)))))
     (set-current-pass! id)
     (if (or trace-mode (nanopass-trace-enabled?) (picopass-provenance-enabled?))
@@ -8681,6 +9374,7 @@
   (if (null? (car *pass-registry*))
       (init-default-pass-registry!))
   (reset-nanopass-verification-cache!)
+  (reset-analysis-cache!)
   (femto-cache-reset!)
   (nanopass-term-memo-reset!)
   (nanopass-hash-cons-reset!)
@@ -8737,6 +9431,7 @@
          (pass-ids (pipeline-desc-passes pdesc))
          (target-ir (pipeline-desc-target-ir pdesc)))
     (reset-nanopass-verification-cache!)
+    (reset-analysis-cache!)
     (femto-cache-reset!)
     (nanopass-term-memo-reset!)
     (nanopass-hash-cons-reset!)
@@ -8764,6 +9459,100 @@
 
 (define (run-current-pipeline forms verify-mode trace-mode)
   (run-named-pipeline (current-pipeline-name) forms verify-mode trace-mode))
+
+;;; -----------------------------------------------------------------------
+;;; 7.2 Bounded Iterative Fixpoint Optimization Driver (Issue #840)
+;;; -----------------------------------------------------------------------
+
+(define *default-fixpoint-max-iterations* 32)
+(define *last-fixpoint-iterations* (cons 0 '()))
+(define *last-fixpoint-converged?* (cons #t '()))
+
+(define (last-fixpoint-iterations) (car *last-fixpoint-iterations*))
+(define (last-fixpoint-converged?) (car *last-fixpoint-converged?*))
+
+(define (resolve-fixpoint-pass-descriptor spec)
+  (cond
+   ((pass-descriptor? spec) spec)
+   ((symbol? spec)
+    (let ((desc (lookup-pass spec)))
+      (if (not desc)
+          (error "run-pass-fixpoint: pass not found in registry" spec)
+          desc)))
+   ((procedure? spec)
+    (make-pass-descriptor 'fixpoint-anon-pass "Fixpoint Pass" 'frontend 0
+      spec #f 'L_any 'L_any '() #f))
+   (else
+    (error "run-pass-fixpoint: invalid pass spec" spec))))
+
+(define (parse-fixpoint-opts opts)
+  (let loop ((rem opts)
+             (max-iters *default-fixpoint-max-iterations*)
+             (equiv-fn equal?)
+             (verify-mode #f)
+             (trace-mode #f)
+             (on-limit 'return)
+             (pos 0))
+    (if (null? rem)
+        (list max-iters equiv-fn verify-mode trace-mode on-limit)
+        (let ((k (car rem)))
+          (cond
+           ((or (eq? k ':max-iterations) (eq? k 'max-iterations))
+            (if (null? (cdr rem))
+                (error "run-pass-fixpoint: missing value for :max-iterations")
+                (loop (cddr rem) (cadr rem) equiv-fn verify-mode trace-mode on-limit pos)))
+           ((or (eq? k ':equiv?) (eq? k 'equiv?))
+            (if (null? (cdr rem))
+                (error "run-pass-fixpoint: missing value for :equiv?")
+                (loop (cddr rem) max-iters (cadr rem) verify-mode trace-mode on-limit pos)))
+           ((or (eq? k ':verify) (eq? k 'verify) (eq? k ':verify-mode) (eq? k 'verify-mode))
+            (if (null? (cdr rem))
+                (error "run-pass-fixpoint: missing value for :verify")
+                (loop (cddr rem) max-iters equiv-fn (cadr rem) trace-mode on-limit pos)))
+           ((or (eq? k ':trace) (eq? k 'trace) (eq? k ':trace-mode) (eq? k 'trace-mode))
+            (if (null? (cdr rem))
+                (error "run-pass-fixpoint: missing value for :trace")
+                (loop (cddr rem) max-iters equiv-fn verify-mode (cadr rem) on-limit pos)))
+           ((or (eq? k ':on-limit) (eq? k 'on-limit))
+            (if (null? (cdr rem))
+                (error "run-pass-fixpoint: missing value for :on-limit")
+                (loop (cddr rem) max-iters equiv-fn verify-mode trace-mode (cadr rem) pos)))
+           ((and (= pos 0) (integer? k))
+            (loop (cdr rem) k equiv-fn verify-mode trace-mode on-limit (+ pos 1)))
+           ((and (= pos 1) (procedure? k))
+            (loop (cdr rem) max-iters k verify-mode trace-mode on-limit (+ pos 1)))
+           (else
+            (error "run-pass-fixpoint: unexpected option" k)))))))
+
+(define (run-pass-fixpoint pass-specs initial-ast . opts)
+  (let* ((parsed (parse-fixpoint-opts opts))
+         (max-iters (car parsed))
+         (equiv-fn (cadr parsed))
+         (verify-mode (caddr parsed))
+         (trace-mode (cadddr parsed))
+         (on-limit (car (cddddr parsed)))
+         (descs (map resolve-fixpoint-pass-descriptor pass-specs)))
+    (if (< max-iters 0)
+        (error "run-pass-fixpoint: max-iterations must be non-negative" max-iters))
+    (let iter-loop ((iter 0) (ast initial-ast))
+      (if (>= iter max-iters)
+          (begin
+            (set-car! *last-fixpoint-iterations* iter)
+            (set-car! *last-fixpoint-converged?* #f)
+            (if (eq? on-limit 'error)
+                (raise (list 'fixpoint-max-iterations-error iter))
+                ast))
+          (let pass-loop ((ps descs) (cur-ast ast))
+            (if (null? ps)
+                (let ((next-iter (+ iter 1)))
+                  (if (equiv-fn cur-ast ast)
+                      (begin
+                        (set-car! *last-fixpoint-iterations* next-iter)
+                        (set-car! *last-fixpoint-converged?* #t)
+                        cur-ast)
+                      (iter-loop next-iter cur-ast)))
+                (pass-loop (cdr ps)
+                           (run-single-pass (car ps) cur-ast verify-mode trace-mode))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Default Pass Registry Initialization
@@ -8839,6 +9628,8 @@
 
 (define (init-default-pass-registry!)
   (reset-pass-registry!)
+  (if (null? (car *analysis-property-registry*))
+      (init-default-analysis-properties!))
   ;; Frontend Passes (Opt 0 = Mandatory, Opt 1/2 = Optimization)
   (register-pass!
     (make-pass-descriptor 'pass-010-library "Desugar Libraries and Imports" 'frontend 0
@@ -8860,7 +9651,8 @@
       (lambda (forms) (scope-resolve-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
   (register-pass!
     (make-pass-descriptor 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
-      (lambda (forms) (check-arity-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t))
+      (lambda (forms) (check-arity-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t
+      ':preserves '(all)))
   (register-pass!
     (make-pass-descriptor 'pass-050-cp0 "CP0 Source Optimization" 'frontend 1
       (lambda (forms) (cp0-optimize forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
@@ -8894,10 +9686,12 @@
       (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
   (register-pass!
     (make-pass-descriptor 'pass-128-lir-branch-fusion "LIR Branch Fusion" 'middle 2
-      (lambda (lir) (lir-fuse-branches lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f))
+      (lambda (lir) (lir-fuse-branches lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f
+      ':invalidates '(cfg-dominators variable-liveness)))
   (register-pass!
     (make-pass-descriptor 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
-      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_canonical '(pass-130-lir) #f))
+      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_canonical '(pass-130-lir) #f
+      ':preserves '(cfg-dominators) ':invalidates '(variable-liveness alias-sets)))
   ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)
   (let loop ((hooks (car *pass-registry-init-hooks*)))
     (if (not (null? hooks))
