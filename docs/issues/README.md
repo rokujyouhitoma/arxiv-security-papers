@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **828** | LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設 | Feature | Medium | In Progress | [828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md](828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md) |
 | **829** | 呼出規約 (Calling Convention) の多重化・モジュール分離とゼロオーバーヘッド C-FFI の実現 | Feature | High | New | [829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md](829-modularize-calling-conventions-for-sysv-abi-and-scheme-fast-calls.md) |
 | **830** | 144a アセンブラおよび 144 ELF リンカにおける複数セクション (.rodata/.data/.bss) と再配置の抽象化 | Feature | High | New | [830-abstract-elf-sections-and-relocations-in-144a-assembler-and-144-linker.md](830-abstract-elf-sections-and-relocations-in-144a-assembler-and-144-linker.md) |
 | **831** | 160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証 | Feature | Medium | New | [831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md](831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md) |
@@ -24,6 +23,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **828** | LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設 | Feature | 2026-11-15 | [828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md](closed/828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md) |
 | **827** | Pass 132 Braun SSA の任意 CFG (基本ブロック・多方向分岐・goto) 汎用対応化 | Feature | 2026-11-15 | [827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md](closed/827-generalize-pass-132-braun-ssa-for-arbitrary-cfg-and-goto.md) |
 | **826** | 機械型 (i8..i64, f32, f64, ptr) を備えた Typed LIR への移行とボクシング操作の直交分離 | Feature | 2026-11-15 | [826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md](closed/826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md) |
 | **825** | Nanopass AST 定数式評価器 (eval-in-language) およびコンパイル時計算 (CTFE) 基盤の導入 | Feature | 2026-11-15 | [825-implement-eval-in-language-ast-evaluator-for-ctfe-and-constant-folding.md](closed/825-implement-eval-in-language-ast-evaluator-for-ctfe-and-constant-folding.md) |

@@ -2,7 +2,8 @@
 ID: 828
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-11-15
 ---
 
 # [FEAT] LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設 (ID: 828)
@@ -25,16 +26,16 @@ ID: 828
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lir/lir_lang.scm](../../ulisp/lir/lir_lang.scm): 新設オペコード（`%add-overflow`, `%sub-overflow`, `%mul-overflow`, `%udiv`, `%urem`, `%setb`, `%setbe`, `%seta`, `%setae`）の構文定義
-- [ ] [ulisp/lir/lir_verifier.scm](../../ulisp/lir/lir_verifier.scm): オーバーフロー算術・符号なし命令のオペランド数・型・レジスタ制約の静的型整合性検証（CWE-843, CWE-190/191 防御）
-- [ ] [ulisp/lir/129_lir_primitives.scm](../../ulisp/lir/129_lir_primitives.scm): 新設命令の LIR プリミティブディスパッチ定義
-- [ ] [ulisp/lir/130_lir.scm](../../ulisp/lir/130_lir.scm): AST/ANF からの新設命令への Lowering ロジック
-- [ ] [ulisp/compiler/primitives.scm](../../ulisp/compiler/primitives.scm): 新設オペコードの述語（`binop-prim?`, `lir-primitive?` 等）登録
-- [ ] [ulisp/backend/140_backend_x86_64.scm](../../ulisp/backend/140_backend_x86_64.scm): x86_64 命令生成（`add`+`seto`/`jo`, `sub`+`seto`/`jo`, `imul`+`seto`/`jo`, `xor edx, edx`+`div`, `setb`/`setbe`/`seta`/`setae`）
-- [ ] [ulisp/backend/160_backend_c.scm](../../ulisp/backend/160_backend_c.scm): C99 バックエンド生成（`__builtin_add_overflow`, `__builtin_sub_overflow`, `__builtin_mul_overflow`, `uint64_t` キャスト除算・剰余）
-- [ ] [ulisp/backend/150_backend_aarch64.scm](../../ulisp/backend/150_backend_aarch64.scm): AArch64 バックエンド生成（`adds`+`cset vs`, `subs`+`cset vs`, `udiv`, `msub`）
-- [ ] [ulisp/tests/test_lir_overflow_and_unsigned.scm](../../ulisp/tests/test_lir_overflow_and_unsigned.scm): 演算検証テストスイート（新規作成）
-- [ ] [ulisp/Makefile](../../ulisp/Makefile): `test_lir_overflow_and_unsigned` ターゲット追加
+- [x] [ulisp/lir/lir_lang.scm](../../ulisp/lir/lir_lang.scm): 新設オペコード（`%add-overflow`, `%sub-overflow`, `%mul-overflow`, `%udiv`, `%urem`, `%setb`, `%setbe`, `%seta`, `%setae`）の構文定義
+- [x] [ulisp/lir/lir_verifier.scm](../../ulisp/lir/lir_verifier.scm): オーバーフロー算術・符号なし命令のオペランド数・型・レジスタ制約の静的型整合性検証（CWE-843, CWE-190/191 防御）
+- [x] [ulisp/lir/129_lir_primitives.scm](../../ulisp/lir/129_lir_primitives.scm): 新設命令の LIR プリミティブディスパッチ定義
+- [x] [ulisp/lir/130_lir.scm](../../ulisp/lir/130_lir.scm): AST/ANF からの新設命令への Lowering ロジック
+- [x] [ulisp/compiler/primitives.scm](../../ulisp/compiler/primitives.scm): 新設オペコードの述語（`binop-prim?`, `lir-primitive?` 等）登録
+- [x] [ulisp/backend/140_backend_x86_64.scm](../../ulisp/backend/140_backend_x86_64.scm): x86_64 命令生成（`add`+`seto`/`jo`, `sub`+`seto`/`jo`, `imul`+`seto`/`jo`, `xor edx, edx`+`div`, `setb`/`setbe`/`seta`/`setae`）
+- [x] [ulisp/backend/160_backend_c.scm](../../ulisp/backend/160_backend_c.scm): C99 バックエンド生成（`__builtin_add_overflow`, `__builtin_sub_overflow`, `__builtin_mul_overflow`, `uint64_t` キャスト除算・剰余）
+- [x] [ulisp/backend/150_backend_aarch64.scm](../../ulisp/backend/150_backend_aarch64.scm): AArch64 バックエンド生成（`adds`+`cset vs`, `subs`+`cset vs`, `udiv`, `msub`）
+- [x] [ulisp/tests/test_lir_overflow_and_unsigned.scm](../../ulisp/tests/test_lir_overflow_and_unsigned.scm): 演算検証テストスイート（新規作成）
+- [x] [ulisp/Makefile](../../ulisp/Makefile): `test_lir_overflow_and_unsigned` ターゲット追加
 
 ---
 
@@ -115,9 +116,9 @@ Target Branch: `feat/828-lir-overflow-and-unsigned-ops`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/lir/lir_lang.scm` にオーバーフロー検知付き算術命令および符号なし除算・剰余・比較命令が定義されていること。
-- [ ] `ulisp/lir/lir_verifier.scm` にて引数構造およびレジスタ制約が静的検証され、不正な型混在が検出されること。
-- [ ] x86_64 バックエンド（140）、C99 バックエンド（160）、および AArch64 バックエンド（150）で各命令が正確なマシンコード / C コードへと Lowering されること。
-- [ ] 新規単体テスト `test_lir_overflow_and_unsigned.scm` が全項目（正常系・境界値・エラー系）で 100% PASS すること。
-- [ ] `make -C ulisp verify_zero_gauche` および `make -C ulisp lint_sexpr` が PASS すること。
-- [ ] 既存の全テストスイート（782 件の Nanopass 単体テスト）およびセルフホストブートストラップ（`test_pure_bootstrap.sh`）にリグレッションがないこと。
+- [x] `ulisp/lir/lir_lang.scm` にオーバーフロー検知付き算術命令および符号なし除算・剰余・比較命令が定義されていること。
+- [x] `ulisp/lir/lir_verifier.scm` にて引数構造およびレジスタ制約が静的検証され、不正な型混在が検出されること。
+- [x] x86_64 バックエンド（140）、C99 バックエンド（160）、および AArch64 バックエンド（150）で各命令が正確なマシンコード / C コードへと Lowering されること。
+- [x] 新規単体テスト `test_lir_overflow_and_unsigned.scm` が全項目（正常系・境界値・エラー系）で 100% PASS すること。
+- [x] `make -C ulisp verify_zero_gauche` および `make -C ulisp lint_sexpr` が PASS すること。
+- [x] 既存の全テストスイート（782 件の Nanopass 単体テスト）およびセルフホストブートストラップ（`test_pure_bootstrap.sh`）にリグレッションがないこと。

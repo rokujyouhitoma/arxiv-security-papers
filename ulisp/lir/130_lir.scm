@@ -41,7 +41,9 @@
     ((not (pair? expr))
      (and (symbol? expr) (memq expr raw-env)))
     ((memq (car expr) '(%raw-add %raw-sub %raw-mul %raw-cmp %raw-load %raw-syscall %to-raw %unbox-fixnum
-                        %load-typed %fadd %fsub %fmul %fdiv %fcmp %unbox-flonum %sitofp %fptosi))
+                        %load-typed %fadd %fsub %fmul %fdiv %fcmp %unbox-flonum %sitofp %fptosi
+                        %udiv %urem %shr %setb %setbe %seta %setae
+                        %add-overflow %sub-overflow %mul-overflow))
      #t)
     ((and (eq? (car expr) '%direct-call)
           (pair? (cdr expr))

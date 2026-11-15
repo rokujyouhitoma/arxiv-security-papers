@@ -20,17 +20,23 @@
              %set-heap-ptr! %ptr-tag %ptr-untag
              %to-raw %to-fixnum
              %box-fixnum %unbox-fixnum
-             %box-flonum %unbox-flonum %sitofp %fptosi)))
+             %box-flonum %unbox-flonum %sitofp %fptosi
+             %udiv %urem %setb %setbe %seta %setae)))
 
 (define (binop-prim? op)
   (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
              bytevector-u8-ref vector-ref
              %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
              %raw-add %raw-sub %raw-mul %raw-cmp
-             %fadd %fsub %fmul %fdiv %fcmp %fmov)))
+             %fadd %fsub %fmul %fdiv %fcmp %fmov
+             %udiv %urem %shr)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!)))
+  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!
+             %udiv %urem %shr %setb %setbe %seta %setae)))
+
+(define (quadrop-prim? op)
+  (memq op '(%add-overflow %sub-overflow %mul-overflow)))
 
 (define (septop-prim? op)
   (memq op '(%raw-syscall)))
@@ -43,6 +49,7 @@
       (unary-prim? op)
       (binop-prim? op)
       (triop-prim? op)
+      (quadrop-prim? op)
       (septop-prim? op)
       (closure-prim? op)))
 
@@ -57,7 +64,9 @@
              %box-flonum %unbox-flonum %sitofp %fptosi
              + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? cons %closure-ref
              %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
-             %fadd %fsub %fmul %fdiv %fcmp %fmov)))
+             %fadd %fsub %fmul %fdiv %fcmp %fmov
+             %udiv %urem %shr %setb %setbe %seta %setae
+             %add-overflow %sub-overflow %mul-overflow)))
 
 (define (const? x)
   (or (number? x)

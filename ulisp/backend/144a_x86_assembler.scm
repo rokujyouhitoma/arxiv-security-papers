@@ -103,6 +103,7 @@
         ((rep-movsb rep) 'rep-movsb) ((push) 'push) ((pop) 'pop) ((call) 'call) ((jmp) 'jmp)
         ((je jz) 'je) ((jne jnz) 'jne) ((jb) 'jb) ((jae jnc) 'jae) ((jbe) 'jbe) ((ja) 'ja)
         ((js) 'js) ((jns) 'jns) ((jl) 'jl) ((jge) 'jge) ((jle) 'jle) ((jg) 'jg)
+        ((seto) 'seto)
         ((sete setz) 'sete) ((setne setnz) 'setne) ((setb) 'setb) ((setae) 'setae)
         ((setbe) 'setbe) ((seta) 'seta) ((setl) 'setl) ((setge) 'setge) ((setle) 'setle) ((setg) 'setg)
         ((cmove cmovz) 'cmove) ((cmovne cmovnz) 'cmovne) ((cmovl) 'cmovl) ((cmovge) 'cmovge)
@@ -136,6 +137,7 @@
           ((string=? s "jge") 'jge)
           ((string=? s "jle") 'jle)
           ((string=? s "jg") 'jg)
+          ((string=? s "seto") 'seto)
           ((or (string=? s "sete") (string=? s "setz")) 'sete)
           ((or (string=? s "setne") (string=? s "setnz")) 'setne)
           ((string=? s "setb") 'setb)
@@ -698,8 +700,9 @@
              (list 'rel32 (+ curr-off 2) sym addend))))
 
     ;; Condition Set: setcc r8 -> 0F 90+cc ModR/M
-    ((sete setz setne setnz setl setle setg setge setb setbe seta setae)
+    ((seto sete setz setne setnz setl setge setle setg setb setbe seta setae)
      (let* ((cc-code (case mnem
+                       ((seto) 144)
                        ((sete setz) 148)
                        ((setne setnz) 149)
                        ((setb) 146)
