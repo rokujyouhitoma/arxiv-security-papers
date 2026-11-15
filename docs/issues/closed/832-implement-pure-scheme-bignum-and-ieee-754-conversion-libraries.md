@@ -2,7 +2,7 @@
 ID: 832
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] 純粋 Scheme による多倍長整数 (Bignum) および IEEE 754 相互変換標準ライブラリの実装 (ID: 832)
@@ -55,12 +55,12 @@ ID: 832
 ---
 
 ## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/bignum.scm](../../ulisp/lib/bignum.scm): 純粋 Scheme による任意精度多倍長整数演算コアライブラリ（Radix-$2^{30}$、四則演算、Knuth Algorithm D、ビット演算、$2^{64}$ モジュロ演算）の実装
-- [ ] [ulisp/lib/ieee754.scm](../../ulisp/lib/ieee754.scm): 純粋 Scheme による IEEE 754 64bit（Double Precision Binary64）双方向パース／フォーマットモジュール（Clinger's Algorithm、丸め判定、Subnormal/Inf/NaN 特殊値パック）の実装
-- [ ] [ulisp/tests/test_bignum.scm](../../ulisp/tests/test_bignum.scm): 多倍長整数ライブラリの包括的単体テスト（加減乗除、ビットシフト、Knuth Algorithm D、64bit モジュロ演算、巨大階乗・フィボナッチ数検証）
-- [ ] [ulisp/tests/test_ieee754.scm](../../ulisp/tests/test_ieee754.scm): IEEE 754 双方向変換の網羅的単体テスト（Clang/GCC 出力ビット列との照合、Subnormal、極限値、NaN/Inf、往復可逆性）
-- [ ] [ulisp/Makefile](../../ulisp/Makefile): `test_bignum` および `test_ieee754` ターゲットの追加と `make test` 統合
-- [ ] [docs/issues/README.md](README.md): Issue 台帳のステータス更新
+- [x] [ulisp/lib/bignum.scm](../../ulisp/lib/bignum.scm): 純粋 Scheme による任意精度多倍長整数演算コアライブラリ（Radix-$2^{30}$、四則演算、Knuth Algorithm D、ビット演算、$2^{64}$ モジュロ演算）の実装
+- [x] [ulisp/lib/ieee754.scm](../../ulisp/lib/ieee754.scm): 純粋 Scheme による IEEE 754 64bit（Double Precision Binary64）双方向パース／フォーマットモジュール（Clinger's Algorithm、丸め判定、Subnormal/Inf/NaN 特殊値パック）の実装
+- [x] [ulisp/tests/test_bignum.scm](../../ulisp/tests/test_bignum.scm): 多倍長整数ライブラリの包括的単体テスト（加減乗除、ビットシフト、Knuth Algorithm D、64bit モジュロ演算、巨大階乗・フィボナッチ数検証）
+- [x] [ulisp/tests/test_ieee754.scm](../../ulisp/tests/test_ieee754.scm): IEEE 754 双方向変換の網羅的単体テスト（Clang/GCC 出力ビット列との照合、Subnormal、極限値、NaN/Inf、往復可逆性）
+- [x] [ulisp/Makefile](../../ulisp/Makefile): `test_bignum` および `test_ieee754` ターゲットの追加と `make test` 統合
+- [x] [docs/issues/README.md](README.md): Issue 台帳のステータス更新
 
 ---
 
@@ -145,9 +145,9 @@ Target Branch: `feat/832-pure-scheme-bignum-ieee754`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/lib/bignum.scm` が純粋 Scheme で実装され、任意精度整数の加減乗除（Knuth Algorithm D）、ビット演算、および 64bit モジュロ演算（Modulo $2^{64}$）が正しく動作すること。
-- [ ] `ulisp/lib/ieee754.scm` が純粋 Scheme で実装され、Clinger のアルゴリズムに基づく厳格な偶数丸め（Round to nearest, ties to even）とサブノーマル数・NaN・Inf のビット生成が行えること。
-- [ ] 浮動小数点リテラル（`0.1`, `0.2`, `1e308`, `2.2250738585072011e-308` 等の境界値）から生成された 64bit ビット列が、Clang/GCC の `strtod` 出力と 1 ビットの狂いもなく完全一致すること。
-- [ ] `ulisp/tests/test_bignum.scm` および `ulisp/tests/test_ieee754.scm` が作成され、全テスト項目が 100% 合格すること。
-- [ ] `make -C ulisp test` に上記テストが統合され、既存の全テストスイートおよび品質ゲート（構文チェック、ブートストラップ検証）を通過すること。
-- [ ] すべての新規コードおよびドキュメントにおいて、外部 C ライブラリへの依存がなく、内部リンクが相対パスのみで構成されていること。
+- [x] `ulisp/lib/bignum.scm` が純粋 Scheme で実装され、任意精度整数の加減乗除（Knuth Algorithm D）、ビット演算、および 64bit モジュロ演算（Modulo $2^{64}$）が正しく動作すること。
+- [x] `ulisp/lib/ieee754.scm` が純粋 Scheme で実装され、Clinger のアルゴリズムに基づく厳格な偶数丸め（Round to nearest, ties to even）とサブノーマル数・NaN・Inf のビット生成が行えること。
+- [x] 浮動小数点リテラル（`0.1`, `0.2`, `1e308`, `2.2250738585072011e-308` 等の境界値）から生成された 64bit ビット列が、Clang/GCC の `strtod` 出力と 1 ビットの狂いもなく完全一致すること。
+- [x] `ulisp/tests/test_bignum.scm` および `ulisp/tests/test_ieee754.scm` が作成され、全テスト項目が 100% 合格すること。
+- [x] `make -C ulisp test` に上記テストが統合され、既存の全テストスイートおよび品質ゲート（構文チェック、ブートストラップ検証）を通過すること。
+- [x] すべての新規コードおよびドキュメントにおいて、外部 C ライブラリへの依存がなく、内部リンクが相対パスのみで構成されていること。

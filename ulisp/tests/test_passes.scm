@@ -554,7 +554,7 @@
   (assert-equal "c mem byte" "(*(uint8_t *)(((char *)(uintptr_t)reg_rdx) + (reg_rax)))" (c-mem-byte-ref '%rdx '%rax))
 
   ;; 4. Operand formatting
-  (assert-equal "c operand int" "42" (c-operand->str 42))
+  (assert-equal "c operand int" "42LL" (c-operand->str 42))
   (assert-equal "c operand stack" "(*(uint64_t *)(reg_rsp + (-8)))" (c-operand->str '(%stack -8)))
 
   ;; 5. Target directive predicate

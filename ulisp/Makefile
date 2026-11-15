@@ -1,5 +1,5 @@
 .PHONY: all test test_aot test_jit test_c test_aarch64 test_aarch64_env test_aarch64_qemu test_freestanding bootstrap bootstrap_modular bootstrap_quick quick bootstrap_diagnose test_bootstrap_diagnostics bootstrap_verify clean distclean run_42 run_c_42 core compiler test_nanopass test_passes test_verifier test_lir_verifier test_pass_manager test_profiler test_dataflow test_scope test_runtime test_annotator test_lvn test_rtyper test_contify test_alias_escape test_lir test_lir_suite test_backend test_hierarchical stage1 stage2 stage3 bootstrap_stage1 bootstrap_stage2 bootstrap_stage3 jit bin run_jit bench bench_baseline bench_verify demo \
-        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_r7rs_cond_expand test_r7rs_include_ci test_r7rs_bytevector_ports test_r7rs_time test_srfi_141_division test_srfi_111_boxes test_srfi_145_assume test_srfi_64 test_srfi_78 test_srfi_252 test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
+        test_delimcc test_tracer test_auto_instrument test_optimizer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_r7rs_cond_expand test_r7rs_include_ci test_r7rs_bytevector_ports test_r7rs_time test_srfi_141_division test_srfi_111_boxes test_srfi_145_assume test_srfi_64 test_srfi_78 test_srfi_252 test_bignum test_ieee754 test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental test_differential_elf test_builtin_as test_builtin_ld test_onestep_compile lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_context_switch_aarch64 test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_concurrency_osal test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_concurrency_stress test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_nanopass_source_span test_eval_in_language test_typed_lir test_braun_ssa_arbitrary_cfg test_lir_overflow_and_unsigned test_sysv_abi_calls test_elf_sections_and_reloc test_fuzz_lir \
         bootstrap_pure bootstrap_pure_elf bootstrap_pure_tools test_pure_bootstrap \
         bootstrap_verify_modular bootstrap_verify_monolithic
@@ -60,7 +60,7 @@ ULISP_RUNTIME_LIBS = runtime/gc.scm runtime/io.scm runtime/printer.scm runtime/e
 
 ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/predicates.scm lib/math.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm \
                  lib/reader.scm lib/equality.scm lib/bytevector.scm \
-                 lib/vector.scm lib/promise.scm lib/exception.scm lib/values.scm \
+                 lib/vector.scm lib/bignum.scm lib/ieee754.scm lib/promise.scm lib/exception.scm lib/values.scm \
                  lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/comparator.scm \
                  lib/format.scm lib/sort.scm lib/box.scm lib/test.scm lib/check.scm lib/property.scm lib/gc.scm lib/eval.scm \
                  $(ULISP_RUNTIME_LIBS)
@@ -955,6 +955,22 @@ test_sort: $(COMPILER_DEP)
 	$(LD) $(LDFLAGS) build/test_sort.o -o build/test_sort
 	./build/test_sort
 
+test_bignum: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_bignum.scm > build/test_bignum_input.scm
+	$(ULISP_COMPILER) build/test_bignum_input.scm > build/test_bignum.s
+	$(AS) $(ASFLAGS) build/test_bignum.s -o build/test_bignum.o
+	$(LD) $(LDFLAGS) build/test_bignum.o -o build/test_bignum
+	./build/test_bignum
+
+test_ieee754: $(COMPILER_DEP)
+	@mkdir -p build
+	cat $(ULISP_STD_LIBS) tests/test_ieee754.scm > build/test_ieee754_input.scm
+	$(ULISP_COMPILER) build/test_ieee754_input.scm > build/test_ieee754.s
+	$(AS) $(ASFLAGS) build/test_ieee754.s -o build/test_ieee754.o
+	$(LD) $(LDFLAGS) build/test_ieee754.o -o build/test_ieee754
+	./build/test_ieee754
+
 test_printer: $(COMPILER_DEP)
 	@mkdir -p build
 	cat $(ULISP_STD_LIBS) tests/test_printer.scm > build/test_printer_input.scm
@@ -1719,7 +1735,7 @@ verify_zero_gauche:
 	fi
 	@echo "[PASS] Zero Gauche dependency check passed."
 
-test: verify_zero_gauche test_lint_sexpr test_r7rs_traceability test_cli_diagnostics test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_nanopass_source_span test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_concurrency_osal test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_sysv_abi_calls test_elf_sections_and_reloc test_fuzz_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
+test: verify_zero_gauche test_lint_sexpr test_r7rs_traceability test_cli_diagnostics test_reader_eof test_passes test_pass_manager test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_nanopass_source_span test_profiler test_dataflow test_scope test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_concurrency_osal test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_sysv_abi_calls test_elf_sections_and_reloc test_fuzz_lir test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_bignum test_ieee754 test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log
