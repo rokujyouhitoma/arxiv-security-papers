@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **834** | 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 | Feature | High | New | [834-implement-pure-scheme-lir-reference-vm-interpreter.md](834-implement-pure-scheme-lir-reference-vm-interpreter.md) |
+| **834** | 純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装 | Feature | High | In Progress | [834-implement-pure-scheme-lir-reference-vm-interpreter.md](834-implement-pure-scheme-lir-reference-vm-interpreter.md) |
 | **835** | Core Machine LIR と Managed Runtime Dialect の完全直交分離 | Feature | High | New | [835-separate-core-machine-lir-from-managed-runtime-dialect.md](835-separate-core-machine-lir-from-managed-runtime-dialect.md) |
 | **836** | `define-value-repr` による値表現・ボクシング方式のプラグイン化 | Feature | Medium | New | [836-plugin-value-representation-and-boxing-scheme.md](836-plugin-value-representation-and-boxing-scheme.md) |
 | **837** | 構文解析後の一意束縛解決 (Binding ID) とスコープ環境管理の共通基盤化 | Feature | Medium | New | [837-unify-symbol-binding-resolution-and-scope-environment.md](837-unify-symbol-binding-resolution-and-scope-environment.md) |
