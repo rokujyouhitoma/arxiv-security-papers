@@ -2,7 +2,8 @@
 ID: 835
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-11-15
 ---
 
 # [FEAT] Core Machine LIR と Managed Runtime Dialect の完全直交分離 (ID: 835)
@@ -29,28 +30,28 @@ ID: 835
 ## 2. トレーサビリティ / Traceability
 
 - **設計仕様書**:
-  - [DSN-38 (Synapse/ULisp C-Language Integration & Core IR Architecture)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md): §2 (B5: 型付き C の LIR 表現, E8: no-safepoint 扱い, E9: LIR 形式意味論不変条件)
-  - [DSN-33 (ULisp Underlying x86 Native AOT Compiler Architecture)](../../docs/designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md): §2.1 (メモリモデル & タグ表現), §3 (低レイヤコード生成仕様)
-  - [LIR 正典仕様書 (ULisp Canonical LIR Specification)](../../ulisp/docs/spec_lir.md): §1 (設計思想と境界契約), §3 (全 Canonical オペコード辞書), §4 (不変条件規則)
+  - [DSN-38 (Synapse/ULisp C-Language Integration & Core IR Architecture)](../../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md): §2 (B5: 型付き C の LIR 表現, E8: no-safepoint 扱い, E9: LIR 形式意味論不変条件)
+  - [DSN-33 (ULisp Underlying x86 Native AOT Compiler Architecture)](../../designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md): §2.1 (メモリモデル & タグ表現), §3 (低レイヤコード生成仕様)
+  - [LIR 正典仕様書 (ULisp Canonical LIR Specification)](../../../ulisp/docs/spec_lir.md): §1 (設計思想と境界契約), §3 (全 Canonical オペコード辞書), §4 (不変条件規則)
 - **関連 Issue**:
-  - [Issue #810 (safepoint 挿入除外判定の名前プレフィックス廃止と declare no-safepoints 構文の導入)](closed/810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md)
-  - [Issue #826 (機械型を備えた Typed LIR への移行とボクシング操作の直交分離)](closed/826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md)
-  - [Issue #828 (LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設)](closed/828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md)
-  - [Issue #831 (160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証)](closed/831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md)
-  - [Issue #834 (純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装)](closed/834-implement-pure-scheme-lir-reference-vm-interpreter.md)
+  - [Issue #810 (safepoint 挿入除外判定の名前プレフィックス廃止と declare no-safepoints 構文の導入)](810-deprecate-name-prefix-safepoint-exclusion-and-introduce-declare-no-safepoints.md)
+  - [Issue #826 (機械型を備えた Typed LIR への移行とボクシング操作の直交分離)](826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md)
+  - [Issue #828 (LIR におけるオーバーフロー検知付き算術および符号なし演算オペコードの新設)](828-implement-overflow-checked-arithmetic-and-unsigned-operations-in-lir.md)
+  - [Issue #831 (160 Portable C バックエンドにおける型付き機械語 LIR セマンティクスの完全同期と差分ファジング検証)](831-synchronize-typed-lir-semantics-in-c-backend-and-enable-differential-fuzzing.md)
+  - [Issue #834 (純粋 Scheme 製 LIR 参照インタプリタ (Reference VM) の実装)](834-implement-pure-scheme-lir-reference-vm-interpreter.md)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [ulisp/lir/lir_lang.scm](../../ulisp/lir/lir_lang.scm): Nanopass 言語階層 `L_lir_core`（純粋機械語 LIR）と `L_lir_managed`（Managed Dialect 拡張 LIR）の形式分離
-- [ ] [ulisp/lir/lir_verifier.scm](../../ulisp/lir/lir_verifier.scm): `validate-core-lir` / `verify-core-lir` による Managed 命令完全排除の静的検証エンジン追加
-- [ ] [ulisp/lir/131_lower_managed_dialect.scm](../../ulisp/lir/131_lower_managed_dialect.scm): Managed Dialect 命令（`%alloc`, `%alloc-stack`, `%box-fixnum`, `%unbox-fixnum`, `%box-flonum`, `%unbox-flonum`, `%managed-safepoint-poll`, `%managed-write-barrier` 等）から Core Machine LIR への Lowering パス本体
-- [ ] [ulisp/compiler/pass_manager.scm](../../ulisp/compiler/pass_manager.scm): パスマネージャへの `pass-131-lower-managed-dialect` 登録とパイプライン順序（130 -> 131 -> 128 -> 133）の再構成
-- [ ] [ulisp/compiler/driver.scm](../../ulisp/compiler/driver.scm): コンパイラドライバにおける C 言語/ネイティブフロントエンドからの Core LIR バイパス導線の整備
-- [ ] [ulisp/vm/lir_interpreter.scm](../../ulisp/vm/lir_interpreter.scm): 参照 VM における Core Machine LIR 実行互換性検証および必要に応じたスタブ連携
-- [ ] [ulisp/Makefile](../../ulisp/Makefile): `LIR_PASSES` への `131_lower_managed_dialect.scm` 追加および新テスト `test_lir_dialect_separation` 統合
-- [ ] [ulisp/tests/test_lir_dialect_separation.scm](../../ulisp/tests/test_lir_dialect_separation.scm): 方言分離・Lowering・Core LIR 検証・C 言語直結を網羅する単体テストスイート
+- [x] [ulisp/lir/lir_lang.scm](../../../ulisp/lir/lir_lang.scm): Nanopass 言語階層 `L_lir_core`（純粋機械語 LIR）と `L_lir_managed`（Managed Dialect 拡張 LIR）の形式分離
+- [x] [ulisp/lir/lir_verifier.scm](../../../ulisp/lir/lir_verifier.scm): `validate-core-lir` / `verify-core-lir` による Managed 命令完全排除の静的検証エンジン追加
+- [x] [ulisp/lir/131_lower_managed_dialect.scm](../../../ulisp/lir/131_lower_managed_dialect.scm): Managed Dialect 命令（`%alloc`, `%alloc-stack`, `%box-fixnum`, `%unbox-fixnum`, `%box-flonum`, `%unbox-flonum`, `%managed-safepoint-poll`, `%managed-write-barrier` 等）から Core Machine LIR への Lowering パス本体
+- [x] [ulisp/compiler/pass_manager.scm](../../../ulisp/compiler/pass_manager.scm): パスマネージャへの `pass-131-lower-managed-dialect` 登録とパイプライン順序（130 -> 131 -> 128 -> 133）の再構成
+- [x] [ulisp/compiler/driver.scm](../../../ulisp/compiler/driver.scm): コンパイラドライバにおける C 言語/ネイティブフロントエンドからの Core LIR バイパス導線の整備（既存の Direct LIR Ingestion Mode が無変更で Core LIR バイパス導線として機能することを確認済み）
+- [x] [ulisp/vm/lir_interpreter.scm](../../../ulisp/vm/lir_interpreter.scm): 参照 VM における Core Machine LIR 実行互換性検証（無変更で Lowering 後 Core Machine LIR および直接 Core LIR の正常実行を確認済み）
+- [x] [ulisp/Makefile](../../../ulisp/Makefile): `LIR_PASSES` への `131_lower_managed_dialect.scm` 追加および新テスト `test_lir_dialect_separation` 統合
+- [x] [ulisp/tests/test_lir_dialect_separation.scm](../../../ulisp/tests/test_lir_dialect_separation.scm): 方言分離・Lowering・Core LIR 検証・C 言語直結を網羅する単体テストスイート
 
 ---
 
@@ -155,10 +156,10 @@ Managed Runtime Dialect を純粋な Core Machine LIR へ Lowering するトラ�
 
 ## 6. 完了条件 / Success Criteria (DoD)
 
-- [ ] `ulisp/lir/lir_lang.scm` において `L_lir_core` と `L_lir_managed` が Nanopass DSL として形式分離定義されていること。
-- [ ] `ulisp/lir/lir_verifier.scm` において `validate-core-lir` / `verify-core-lir` が実装され、Managed 系命令の残存を静的に 100% 検出・拒絶できること。
-- [ ] `ulisp/lir/131_lower_managed_dialect.scm` が実装され、Managed Dialect 命令が純粋な Core Machine LIR 基本ブロック列へ正しく Lowering されること。
-- [ ] パスマネージャおよび `LIR_PASSES` に Pass 131 が組み込まれ、Scheme ソースからの AOT コンパイル出力が `validate-core-lir` を PASS すること。
-- [ ] 単体テストスイート `ulisp/tests/test_lir_dialect_separation.scm` が新規作成され、全テスト項目が 100% PASS すること。
-- [ ] 既存の全テストスイート（`test_typed_lir`, `test_lir_overflow_and_unsigned`, `test_lir_interpreter`, `test_passes` 等）に一切の回帰がないこと。
+- [x] `ulisp/lir/lir_lang.scm` において `L_lir_core` と `L_lir_managed` が Nanopass DSL として形式分離定義されていること。
+- [x] `ulisp/lir/lir_verifier.scm` において `validate-core-lir` / `verify-core-lir` が実装され、Managed 系命令の残存を静的に 100% 検出・拒絶できること。
+- [x] `ulisp/lir/131_lower_managed_dialect.scm` が実装され、Managed Dialect 命令が純粋な Core Machine LIR 基本ブロック列へ正しく Lowering されること。
+- [x] パスマネージャおよび `LIR_PASSES` に Pass 131 が組み込まれ、Scheme ソースからの AOT コンパイル出力が `validate-core-lir` を PASS すること。
+- [x] 単体テストスイート `ulisp/tests/test_lir_dialect_separation.scm` が新規作成され、全テスト項目が 100% PASS すること。
+- [x] 既存の全テストスイート（`test_typed_lir`, `test_lir_overflow_and_unsigned`, `test_lir_interpreter`, `test_passes` 等）に一切の回帰がないこと。
 - [ ] `make py_compile && make static_analysis` がエラー 0 件で合格すること。

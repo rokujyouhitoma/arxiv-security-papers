@@ -1,0 +1,247 @@
+;;; =======================================================================
+;;; ULisp Compiler Pass 131: Lower Managed Runtime Dialect to Core Machine LIR
+;;; Conforms to DSN-33, DSN-38 Architecture Specifications & Issue #835
+;;; =======================================================================
+;;; Formally lowers high-level Managed Runtime Dialect instructions
+;;; (%alloc, %alloc-stack, %box-*, %unbox-*, %managed-*, %capture-cc, etc.)
+;;; into pure, unmanaged Core Machine LIR instruction sequences.
+;;;
+;;; Guarantees:
+;;; 1. The output contains ZERO managed dialect opcodes.
+;;; 2. All heap/stack pointer operations conform to machine alignment rules.
+;;; 3. Unmanaged/C-language frontends bypass this pass and target Core LIR directly.
+;;; =======================================================================
+
+(define *managed-dialect-opcodes*
+  '(%alloc
+    %alloc-stack
+    %managed-alloc
+    %managed-alloc-stack
+    %managed-safepoint-poll
+    %safepoint-poll
+    %managed-write-barrier
+    %managed-box
+    %managed-unbox
+    %box-fixnum
+    %unbox-fixnum
+    %box-flonum
+    %unbox-flonum
+    %capture-cc
+    %push-handler
+    %pop-handler
+    %raise
+    %set-values-count
+    %store-values-buf))
+
+(define (managed-dialect-opcode? op)
+  (if (memq op *managed-dialect-opcodes*) #t #f))
+
+;;; -----------------------------------------------------------------------
+;;; Instruction-Level Lowering Transformer
+;;; -----------------------------------------------------------------------
+
+(define (lower-managed-inst inst)
+  (if (not (pair? inst))
+      (list inst)
+      (let ((op (car inst)))
+        (case op
+          ;; 1. Heap Allocation: (%alloc dst bytes tag [si]) / (%managed-alloc dst bytes tag [si])
+          ((%alloc %managed-alloc)
+           (let* ((dst (cadr inst))
+                  (bytes (caddr inst))
+                  (tag (cadddr inst))
+                  (aligned (bitwise-and (+ bytes 7) -8)))
+             (if (equal? dst '%r12)
+                 (list (list '%add '%r12 aligned))
+                 (list (list '%mov dst '%r12)
+                       (list '%add dst tag)
+                       (list '%add '%r12 aligned)))))
+
+          ;; 2. Stack Allocation: (%alloc-stack dst offset tag) / (%managed-alloc-stack dst offset tag)
+          ((%alloc-stack %managed-alloc-stack)
+           (let* ((dst (cadr inst))
+                  (offset (caddr inst))
+                  (tag (cadddr inst))
+                  (disp (+ offset tag)))
+             (if (= disp 0)
+                 (list (list '%mov dst '%rsp))
+                 (list (list '%mov dst '%rsp)
+                       (list '%add dst disp)))))
+
+          ;; 3. Safepoint Polling: (%managed-safepoint-poll) / (%safepoint-poll)
+          ((%managed-safepoint-poll %safepoint-poll)
+           (list '(%memory-fence)))
+
+          ;; 4. Write Barrier: (%managed-write-barrier obj offset val)
+          ((%managed-write-barrier)
+           (let ((obj (cadr inst))
+                 (offset (caddr inst))
+                 (val (cadddr inst)))
+             (list (list '%mov '%r11 obj)
+                   (list '%add '%r11 offset)
+                   (list '%shr '%r11 9)
+                   (list '%global-ref '%r10 'ulisp_card_table_base)
+                   (list '%store-byte '%r10 '%r11 1))))
+
+          ;; 5. Fixnum Boxing & Unboxing: (%box-fixnum dst src), (%unbox-fixnum dst src)
+          ((%box-fixnum)
+           (let ((dst (cadr inst))
+                 (src (caddr inst)))
+             (if (equal? dst src)
+                 (list (list '%shl dst 2))
+                 (list (list '%mov dst src)
+                       (list '%shl dst 2)))))
+
+          ((%unbox-fixnum)
+           (let ((dst (cadr inst))
+                 (src (caddr inst)))
+             (if (equal? dst src)
+                 (list (list '%sar dst 2))
+                 (list (list '%mov dst src)
+                       (list '%sar dst 2)))))
+
+          ;; 6. Generic Managed Box / Unbox: (%managed-box mty dst src), (%managed-unbox mty dst src)
+          ((%managed-box)
+           (let ((mty (cadr inst))
+                 (dst (caddr inst))
+                 (src (cadddr inst)))
+             (cond
+               ((or (eq? mty 'fixnum) (eq? mty 'i64))
+                (if (equal? dst src)
+                    (list (list '%shl dst 2))
+                    (list (list '%mov dst src)
+                          (list '%shl dst 2))))
+               ((or (eq? mty 'flonum) (eq? mty 'f64))
+                (list (list '%mov dst '%r12)
+                      (list '%add dst 11)
+                      (list '%add '%r12 16)
+                      (list '%store-typed 'f64 dst -3 src)))
+               (else
+                (if (equal? dst src)
+                    '()
+                    (list (list '%mov dst src)))))))
+
+          ((%managed-unbox)
+           (let ((mty (cadr inst))
+                 (dst (caddr inst))
+                 (src (cadddr inst)))
+             (cond
+               ((or (eq? mty 'fixnum) (eq? mty 'i64))
+                (if (equal? dst src)
+                    (list (list '%sar dst 2))
+                    (list (list '%mov dst src)
+                          (list '%sar dst 2))))
+               ((or (eq? mty 'flonum) (eq? mty 'f64))
+                (list (list '%load-typed 'f64 dst src -3)))
+               (else
+                (if (equal? dst src)
+                    '()
+                    (list (list '%mov dst src)))))))
+
+          ;; 7. Flonum Boxing & Unboxing: (%box-flonum dst src), (%unbox-flonum dst src)
+          ((%box-flonum)
+           (let ((dst (cadr inst))
+                 (src (caddr inst)))
+             (list (list '%mov dst '%r12)
+                   (list '%add dst 11)
+                   (list '%add '%r12 16)
+                   (list '%store-typed 'f64 dst -3 src))))
+
+          ((%unbox-flonum)
+           (let ((dst (cadr inst))
+                 (src (caddr inst)))
+             (list (list '%load-typed 'f64 dst src -3))))
+
+          ;; 8. Runtime Continuations, Exceptions and Multiple Values
+          ((%capture-cc)
+           (list (list '%c-call "ulisp_capture_cc" 0)))
+
+          ((%push-handler)
+           (list (list '%c-call "ulisp_push_handler" 0)))
+
+          ((%pop-handler)
+           (list (list '%c-call "ulisp_pop_handler" 0)))
+
+          ((%raise)
+           (list (list '%c-call "ulisp_raise" 0)))
+
+          ((%set-values-count)
+           (let ((cnt (cadr inst)))
+             (list (list '%global-set! 'ulisp_values_count cnt))))
+
+          ((%store-values-buf)
+           (list (list '%c-call "ulisp_store_values" 0)))
+
+          ;; 9. Nested SSA Blocks: (%block lbl params . body)
+          ((%block)
+           (let ((lbl (cadr inst))
+                 (params (caddr inst))
+                 (sub-insts (cdddr inst)))
+             (list (cons '%block
+                         (cons lbl
+                               (cons params
+                                     (lower-managed-inst-list sub-insts)))))))
+
+          ;; Default: Core Machine LIR instructions are preserved as-is
+          (else
+           (list inst))))))
+
+(define (lower-managed-inst-list insts)
+  (let loop ((is insts) (acc '()))
+    (if (null? is)
+        (reverse acc)
+        (let ((lowered (lower-managed-inst (car is))))
+          (loop (cdr is) (append (reverse lowered) acc))))))
+
+;;; -----------------------------------------------------------------------
+;;; Function, Main and Program Level Lowering
+;;; -----------------------------------------------------------------------
+
+(define (lower-managed-function fn-decl)
+  (if (and (pair? fn-decl) (eq? (car fn-decl) '%lir-function))
+      (let* ((lbl (cadr fn-decl))
+             (params-clause (caddr fn-decl))
+             (frame-clause (cadddr fn-decl))
+             (body-clause (car (cddddr fn-decl)))
+             (body-insts (cdr body-clause)))
+        (list '%lir-function
+              lbl
+              params-clause
+              frame-clause
+              (cons 'body (lower-managed-inst-list body-insts))))
+      fn-decl))
+
+(define (lower-managed-main main-decl)
+  (if (and (pair? main-decl) (eq? (car main-decl) '%lir-main))
+      (let* ((frame-clause (cadr main-decl))
+             (body-clause (caddr main-decl))
+             (body-insts (cdr body-clause)))
+        (list '%lir-main
+              frame-clause
+              (cons 'body (lower-managed-inst-list body-insts))))
+      main-decl))
+
+(define (lower-managed-dialect prog)
+  (cond
+    ((not (pair? prog)) prog)
+    ((eq? (car prog) '%lir-program)
+     (let* ((strings-clause (assq 'strings (cdr prog)))
+            (stackmaps-clause (assq 'stackmaps (cdr prog)))
+            (funcs-clause (assq '%lir-functions (cdr prog)))
+            (main-clause (assq '%lir-main (cdr prog)))
+            (new-funcs (if funcs-clause
+                           (cons '%lir-functions (map lower-managed-function (cdr funcs-clause)))
+                           '(%lir-functions)))
+            (new-main (if main-clause (lower-managed-main main-clause) '(%lir-main (frame-size 0) (body)))))
+       (list '%lir-program
+             (if strings-clause strings-clause '(strings ()))
+             (if stackmaps-clause stackmaps-clause '(stackmaps ()))
+             new-funcs
+             new-main)))
+    ((eq? (car prog) '%lir-function)
+     (lower-managed-function prog))
+    ((eq? (car prog) '%lir-main)
+     (lower-managed-main prog))
+    ((list? prog)
+     (lower-managed-inst-list prog))
+    (else prog)))

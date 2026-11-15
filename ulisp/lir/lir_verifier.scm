@@ -14,6 +14,30 @@
 (define *canonical-lir-machine-types*
   '(i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 ptr raw-bits scheme-val))
 
+(define *managed-dialect-opcodes*
+  '(%alloc
+    %alloc-stack
+    %managed-alloc
+    %managed-alloc-stack
+    %managed-safepoint-poll
+    %safepoint-poll
+    %managed-write-barrier
+    %managed-box
+    %managed-unbox
+    %box-fixnum
+    %unbox-fixnum
+    %box-flonum
+    %unbox-flonum
+    %capture-cc
+    %push-handler
+    %pop-handler
+    %raise
+    %set-values-count
+    %store-values-buf))
+
+(define (managed-dialect-opcode? op)
+  (if (memq op *managed-dialect-opcodes*) #t #f))
+
 (define (lir-machine-type? ty)
   (if (memq ty *canonical-lir-machine-types*) #t #f))
 
@@ -1014,9 +1038,76 @@
               (lir-verify-insts-single-pass (cdr body-clause) known-fn-set '%lir-main)))))))))
 
 ;;; -----------------------------------------------------------------------
-;;; Public API: validate-lir / verify-lir
+;;; Public API: validate-lir / verify-lir / validate-core-lir / verify-core-lir
+;;; Conforms to DSN-33, DSN-38 & Issue #835 (Core Machine LIR vs Managed Dialect)
 ;;; -----------------------------------------------------------------------
-(define (validate-lir prog)
+
+(define (lir-check-no-managed-insts insts fn-name)
+  (let loop ((is insts))
+    (if (null? is)
+        #t
+        (let ((inst (car is)))
+          (cond
+            ((not (pair? inst))
+             (loop (cdr is)))
+            ((eq? (car inst) '%block)
+             (and (lir-check-no-managed-insts (cdddr inst) fn-name)
+                  (loop (cdr is))))
+            ((managed-dialect-opcode? (car inst))
+             (lir-report-error
+              (string-append "Managed runtime dialect opcode forbidden in Core Machine LIR: "
+                             (symbol->string (car inst)))
+              inst)
+             #f)
+            (else
+             (loop (cdr is))))))))
+
+(define (lir-verify-core-purity prog)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
+         (main-clause (assq '%lir-main (cdr prog)))
+         (funcs (if funcs-clause (cdr funcs-clause) '())))
+    (and
+     (let f-loop ((fs funcs))
+       (if (null? fs)
+           #t
+           (let* ((fn (car fs))
+                  (lbl (if (pair? (cdr fn)) (cadr fn) '%unknown-fn))
+                  (body-clause (assq 'body (cdr fn)))
+                  (body-insts (if body-clause (cdr body-clause) '())))
+             (and (with-verifier-context (list (cons 'phase 'core-lir) (cons 'function lbl))
+                    (lambda () (lir-check-no-managed-insts body-insts lbl)))
+                  (f-loop (cdr fs))))))
+     (if main-clause
+         (let* ((body-clause (assq 'body (cdr main-clause)))
+                (body-insts (if body-clause (cdr body-clause) '())))
+           (with-verifier-context (list (cons 'phase 'core-lir) (cons 'function '%lir-main))
+             (lambda () (lir-check-no-managed-insts body-insts '%lir-main))))
+         #t))))
+
+(define (validate-core-lir prog)
+  (and (validate-lir prog)
+       (lir-verify-core-purity prog)
+       (if (and (>= (verifier-level) 3)
+                (assq 'L_lir_core (nanopass-get-languages)))
+           (if (not (nanopass-ast-valid? 'L_lir_core prog))
+               (begin
+                 (lir-report-error "Program violates L_lir_core schema invariants" prog)
+                 #f)
+               #t)
+           #t)))
+
+(define (verify-core-lir prog)
+  (if (not (verifier-enabled?))
+      #t
+      (validate-core-lir prog)))
+
+(define (validate-lir prog . maybe-dialect)
+  (let ((dialect (if (pair? maybe-dialect) (car maybe-dialect) #f)))
+    (if (eq? dialect 'core)
+        (validate-core-lir prog)
+        (validate-lir-general prog))))
+
+(define (validate-lir-general prog)
   (cond
     ((not (and (pair? prog) (eq? (car prog) '%lir-program)))
      (lir-report-error "Root of LIR AST must be %lir-program" prog))

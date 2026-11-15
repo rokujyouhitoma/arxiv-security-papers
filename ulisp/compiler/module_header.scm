@@ -87,6 +87,8 @@
   L_core
   L_anf
   L_lifted
+  L_lir_core
+  L_lir_managed
   L_lir_raw
   L_lir_canonical
   L_asm_x86
@@ -99,6 +101,8 @@
   L_core?
   L_anf?
   L_lifted?
+  L_lir_core?
+  L_lir_managed?
   L_lir_raw?
   L_lir_canonical?
   L_asm_x86?

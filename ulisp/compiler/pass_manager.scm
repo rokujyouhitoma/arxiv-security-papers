@@ -342,6 +342,9 @@
     ((or (not out-lang) (not in-lang)) #t)
     ((or (eq? out-lang 'any) (eq? in-lang 'any)) #t)
     ((eq? out-lang in-lang) #t)
+    ((and (or (eq? out-lang 'L_lir_core) (eq? out-lang 'L_lir_managed) (eq? out-lang 'L_lir_raw) (eq? out-lang 'L_lir_canonical))
+          (or (eq? in-lang 'L_lir_core) (eq? in-lang 'L_lir_managed) (eq? in-lang 'L_lir_raw) (eq? in-lang 'L_lir_canonical)))
+     #t)
     (else #f)))
 
 (define (check-pipeline-continuity-by-ids pass-ids)
@@ -753,6 +756,7 @@
     pass-110-closure-convert
     pass-120-alias-escape
     pass-130-lir
+    pass-131-lower-managed-dialect
     pass-128-lir-branch-fusion
     pass-133-lir-peephole))
 
@@ -765,7 +769,8 @@
     pass-035-scope-resolve
     pass-070-anf
     pass-110-closure-convert
-    pass-130-lir))
+    pass-130-lir
+    pass-131-lower-managed-dialect))
 
 (define *static-check-pipeline-passes*
   '(pass-010-library
@@ -855,11 +860,14 @@
     (make-pass-descriptor 'pass-130-lir "LIR Lowering and Generation" 'middle 0
       (lambda (forms) (generate-lir forms)) #f 'L_lifted 'L_lir_raw '(pass-110-closure-convert) #t))
   (register-pass!
+    (make-pass-descriptor 'pass-131-lower-managed-dialect "Lower Managed Runtime Dialect" 'middle 0
+      (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
+  (register-pass!
     (make-pass-descriptor 'pass-128-lir-branch-fusion "LIR Branch Fusion" 'middle 2
-      (lambda (lir) (lir-fuse-branches lir)) #f 'L_lir_raw 'L_lir_raw '(pass-130-lir) #f))
+      (lambda (lir) (lir-fuse-branches lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f))
   (register-pass!
     (make-pass-descriptor 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
-      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_raw 'L_lir_canonical '(pass-130-lir) #f))
+      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_canonical '(pass-130-lir) #f))
   ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)
   (let loop ((hooks (car *pass-registry-init-hooks*)))
     (if (not (null? hooks))

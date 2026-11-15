@@ -344,6 +344,8 @@
            (if (>= lvl 2) (verify-lir-safepoint data) #t))
           ((ssa 132)
            (if (>= lvl 2) (verify-ssa-ast data) #t))
+          ((core-lir core-machine-lir)
+           (verify-core-lir data))
           ((lir canonical-lir 130)
            ;; Level 1 (Boundary) or higher performs full LIR validation
            (validate-lir data))
