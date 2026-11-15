@@ -43,7 +43,7 @@
     ((memq (car expr) '(%raw-add %raw-sub %raw-mul %raw-cmp %raw-load %raw-syscall %to-raw %unbox-fixnum
                         %load-typed %fadd %fsub %fmul %fdiv %fcmp %unbox-flonum %sitofp %fptosi
                         %udiv %urem %shr %setb %setbe %seta %setae
-                        %add-overflow %sub-overflow %mul-overflow))
+                        %add-overflow %sub-overflow %mul-overflow %inline-asm))
      #t)
     ((and (eq? (car expr) '%direct-call)
           (pair? (cdr expr))
@@ -280,11 +280,103 @@
           (track-lir-si! si)
           (lir-compile-expr (caddr expr) si env #f)
           (emit-lir! (list '%global-set! (cadr expr) '%rax)))
+         ((eq? op '%inline-asm)
+          (lir-compile-inline-asm expr si env))
          (else
           ;; General procedure call
           (lir-compile-call op (cdr expr) si env tail?)))))
     (else
      (error "Invalid syntax in LIR compiler:" expr))))
+
+(define (lir-inline-asm-resolve-var var env)
+  (let ((binding (assq var env)))
+    (if (not binding)
+        var
+        (let ((info (cdr binding)))
+          (cond
+            ((number? info) (list '%stack info))
+            ((and (pair? info) (memq (car info) '(param self))) (list '%stack (cdr info)))
+            ((and (pair? info) (eq? (car info) 'reg)) (cdr info))
+            ((symbol? info) info)
+            (else var))))))
+
+(define (lir-inline-asm-lir-operand? x)
+  (or (integer? x)
+      (symbol? x)
+      (and (pair? x) (memq (car x) '(%stack %mem %reg)))))
+
+(define (lir-compile-inline-asm expr si env)
+  (let* ((parsed (inline-asm-extract-clauses expr))
+         (template (car parsed))
+         (raw-outs (cadr parsed))
+         (raw-ins (caddr parsed))
+         (clobs (cadddr parsed))
+         (volatile? (car (cddddr parsed)))
+         (cur-si-box (cons si '()))
+         (resolved-ins
+          (map
+           (lambda (in-entry)
+             (let ((ni (inline-asm-normalize-in-entry in-entry)))
+               (if (not ni)
+                   in-entry
+                   (let* ((nm (car ni))
+                          (src (cadr ni))
+                          (cstr (caddr ni))
+                          (final-src
+                           (cond
+                             ((symbol? src)
+                              (lir-inline-asm-resolve-var src env))
+                             ((lir-inline-asm-lir-operand? src)
+                              src)
+                             (else
+                              (let ((slot (car cur-si-box)))
+                                (set-car! cur-si-box (- slot 8))
+                                (track-lir-si! slot)
+                                (lir-compile-expr src slot env #f)
+                                (emit-lir! (list '%mov (list '%stack slot) '%rax))
+                                (list '%stack slot))))))
+                     (if nm
+                         (list nm cstr final-src)
+                         (list final-src cstr))))))
+           raw-ins))
+         (resolved-outs
+          (map
+           (lambda (out-entry)
+             (let ((no (inline-asm-normalize-out-entry out-entry)))
+               (if (not no)
+                   out-entry
+                   (let* ((nm (car no))
+                          (dst (cadr no))
+                          (cstr (caddr no))
+                          (final-dst
+                           (if (symbol? dst)
+                               (lir-inline-asm-resolve-var dst env)
+                               dst)))
+                     (if nm
+                         (list nm cstr final-dst)
+                         (list final-dst cstr))))))
+           raw-outs))
+         (lir-inst
+          (list '%inline-asm template
+                (list ':outputs resolved-outs)
+                (list ':inputs resolved-ins)
+                (list ':clobbers clobs)
+                (list ':volatile? volatile?))))
+    (emit-lir! lir-inst)
+    (if (pair? resolved-outs)
+        (let* ((no0 (inline-asm-normalize-out-entry (car resolved-outs)))
+               (dst0 (and no0 (cadr no0))))
+          (cond
+            ((or (and (pair? dst0) (eq? (car dst0) '%stack))
+                 (and (pair? dst0) (eq? (car dst0) '%mem)))
+             (emit-lir! (list '%mov '%rax dst0)))
+            ((and (pair? dst0) (eq? (car dst0) '%reg))
+             (if (not (eq? (inline-asm-normalize-reg-sym (cadr dst0)) '%rax))
+                 (emit-lir! (list '%mov '%rax (cadr dst0)))))
+            ((and (symbol? dst0)
+                  (let ((nr (inline-asm-normalize-reg-sym dst0)))
+                    (and nr (not (eq? nr '%rax)))))
+             (emit-lir! (list '%mov '%rax dst0))))))))
 
 ;;; Compile a single lifted %function to LIR representation
 (define (lir-compile-function fn)

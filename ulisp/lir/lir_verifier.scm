@@ -122,6 +122,175 @@
   (verifier-error 'canonical-lir msg expr))
 
 ;;; -----------------------------------------------------------------------
+;;; %inline-asm Verification Helpers (Issue #838, THREAT-838-1..3)
+;;; -----------------------------------------------------------------------
+(define (lir-inline-asm-digit? ch)
+  (let ((c (char->integer ch)))
+    (and (>= c 48) (<= c 57))))
+
+(define (lir-verify-inline-asm-template template total-opnds declared-names inst)
+  (let ((len (string-length template)))
+    (let loop ((i 0))
+      (if (>= i len)
+          #t
+          (let ((ch (string-ref template i)))
+            (if (not (char=? ch #\%))
+                (loop (+ i 1))
+                (if (>= (+ i 1) len)
+                    (lir-report-error "Trailing '%' in %inline-asm template" inst)
+                    (let ((c1 (string-ref template (+ i 1))))
+                      (cond
+                        ((char=? c1 #\%)
+                         (loop (+ i 2)))
+                        ((char=? c1 #\[)
+                         (let find-close ((j (+ i 2)))
+                           (cond
+                             ((>= j len)
+                              (lir-report-error "Unclosed '%[' named operand in %inline-asm template" inst))
+                             ((char=? (string-ref template j) #\])
+                              (if (= j (+ i 2))
+                                  (lir-report-error "Empty '%[]' named operand in %inline-asm template" inst)
+                                  (let ((nm (string->symbol (substring template (+ i 2) j))))
+                                    (if (memq nm declared-names)
+                                        (loop (+ j 1))
+                                        (lir-report-error "Undefined named operand %[...] in %inline-asm template (THREAT-838-3)" inst)))))
+                             (else (find-close (+ j 1))))))
+                        ((lir-inline-asm-digit? c1)
+                         (let scan-num ((j (+ i 1)) (idx 0))
+                           (if (and (< j len) (lir-inline-asm-digit? (string-ref template j)))
+                               (scan-num (+ j 1) (+ (* idx 10) (- (char->integer (string-ref template j)) 48)))
+                               (if (< idx total-opnds)
+                                   (loop j)
+                                   (lir-report-error "Out-of-bounds %N operand reference in %inline-asm template (THREAT-838-3)" inst)))))
+                        ((and (< (+ i 2) len)
+                              (memv c1 '(#\b #\w #\k #\q #\h #\l #\c #\n))
+                              (lir-inline-asm-digit? (string-ref template (+ i 2))))
+                         (let scan-mod ((j (+ i 2)) (idx 0))
+                           (if (and (< j len) (lir-inline-asm-digit? (string-ref template j)))
+                               (scan-mod (+ j 1) (+ (* idx 10) (- (char->integer (string-ref template j)) 48)))
+                               (if (< idx total-opnds)
+                                   (loop j)
+                                   (lir-report-error "Out-of-bounds modified %N operand reference in %inline-asm template (THREAT-838-3)" inst)))))
+                        (else
+                         (loop (+ i 2))))))))))))
+
+(define (lir-verify-inline-asm-clauses-syntax clauses inst)
+  (let loop ((cs clauses) (seen-keys '()))
+    (if (null? cs)
+        #t
+        (let ((c (car cs)))
+          (cond
+            ((not (pair? c))
+             (lir-report-error "%inline-asm clause must be a pair" inst))
+            ((not (memq (car c) '(:outputs :inputs :clobbers :volatile?)))
+             (lir-report-error "Unknown %inline-asm clause keyword" c))
+            ((memq (car c) seen-keys)
+             (lir-report-error "Duplicate %inline-asm clause keyword" c))
+            ((eq? (car c) ':volatile?)
+             (if (and (= (length c) 2) (boolean? (cadr c)))
+                 (loop (cdr cs) (cons (car c) seen-keys))
+                 (lir-report-error "%inline-asm :volatile? clause must be (:volatile? <bool>)" c)))
+            (else
+             (if (and (= (length c) 2) (list? (cadr c)))
+                 (loop (cdr cs) (cons (car c) seen-keys))
+                 (lir-report-error "%inline-asm list clause must be (:key (<entry> ...))" c))))))))
+
+(define (lir-verify-inline-asm-outputs outs inst)
+  (let loop ((os outs) (seen-regs '()) (names '()))
+    (if (null? os)
+        (cons seen-regs names)
+        (let ((no (inline-asm-normalize-out-entry (car os))))
+          (if (not no)
+              (lir-report-error "%inline-asm output spec must be (<dst> <constraint>) or (<name> <constraint> <dst>)" (car os))
+              (let ((name (car no))
+                    (dst (cadr no))
+                    (cstr (caddr no)))
+                (cond
+                  ((not (or (lir-valid-register? dst)
+                            (and (symbol? dst) (not (lir-symbol-starts-with-percent? dst)))
+                            (and (pair? dst) (eq? (car dst) '%stack)
+                                 (pair? (cdr dst)) (integer? (cadr dst)))
+                            (and (pair? dst) (eq? (car dst) '%mem) (lir-valid-operand? dst))))
+                   (lir-report-error "%inline-asm output destination must be writable location or virtual register" (car os)))
+                  ((eq? (inline-asm-normalize-reg-sym dst) '%rsp)
+                   (lir-report-error "%inline-asm cannot write directly to stack pointer %rsp (THREAT-838-1)" (car os)))
+                  (else
+                   (let ((oc (inline-asm-parse-output-constraint cstr)))
+                     (cond
+                       ((not oc)
+                        (lir-report-error "Invalid %inline-asm output constraint (THREAT-838-3)" (car os)))
+                       ((and (eq? (car oc) '=reg) (eq? (cadr oc) '%rsp))
+                        (lir-report-error "%inline-asm cannot constrain output to reserved %rsp (THREAT-838-1)" (car os)))
+                       ((and (eq? (car oc) '=reg) (memq (cadr oc) seen-regs))
+                        (lir-report-error "Duplicate fixed physical register in %inline-asm :outputs (THREAT-838-3)" (car os)))
+                       (else
+                        (let ((new-regs (if (eq? (car oc) '=reg) (cons (cadr oc) seen-regs) seen-regs))
+                              (new-names (if (symbol? name) (cons name names) names)))
+                          (loop (cdr os) new-regs new-names)))))))))))))
+
+(define (lir-verify-inline-asm-inputs ins num-outs init-names inst)
+  (let loop ((is ins) (seen-regs '()) (names init-names))
+    (if (null? is)
+        names
+        (let ((ni (inline-asm-normalize-in-entry (car is))))
+          (if (not ni)
+              (lir-report-error "%inline-asm input spec must be (<src> <constraint>) or (<name> <constraint> <src>)" (car is))
+              (let ((name (car ni))
+                    (src (cadr ni))
+                    (cstr (caddr ni)))
+                (if (not (lir-valid-operand? src))
+                    (lir-report-error "Invalid %inline-asm input operand" (car is))
+                    (let ((ic (inline-asm-parse-input-constraint cstr num-outs)))
+                      (cond
+                        ((not ic)
+                         (lir-report-error "Invalid or out-of-range %inline-asm input constraint (THREAT-838-3)" (car is)))
+                        ((and (eq? (car ic) 'imm) (not (integer? src)))
+                         (lir-report-error "%inline-asm immediate constraint ('i'/'n') requires integer operand" (car is)))
+                        ((and (eq? (car ic) 'reg) (eq? (cadr ic) '%rsp) (not (eq? src '%rsp)))
+                         (lir-report-error "%inline-asm cannot bind non-%rsp value to %rsp (THREAT-838-1)" (car is)))
+                        ((and (eq? (car ic) 'reg) (memq (cadr ic) seen-regs))
+                         (lir-report-error "Duplicate fixed physical register in %inline-asm :inputs (THREAT-838-3)" (car is)))
+                        (else
+                         (let ((new-regs (if (eq? (car ic) 'reg) (cons (cadr ic) seen-regs) seen-regs))
+                               (new-names (if (symbol? name) (cons name names) names)))
+                           (loop (cdr is) new-regs new-names))))))))))))
+
+(define (lir-verify-inline-asm-clobbers clobs inst)
+  (let loop ((cs clobs))
+    (if (null? cs)
+        #t
+        (let ((cp (inline-asm-parse-clobber (car cs))))
+          (cond
+            ((not cp)
+             (lir-report-error "Invalid %inline-asm :clobbers entry (THREAT-838-3)" (car cs)))
+            ((eq? cp '%rsp)
+             (lir-report-error "%inline-asm cannot clobber stack pointer %rsp (THREAT-838-1)" (car cs)))
+            (else
+             (loop (cdr cs))))))))
+
+(define (lir-verify-inline-asm inst)
+  (cond
+    ((not (and (pair? (cdr inst)) (string? (cadr inst))))
+     (lir-report-error "%inline-asm requires a template string as first operand" inst))
+    ((not (lir-verify-inline-asm-clauses-syntax (cddr inst) inst))
+     #f)
+    (else
+     (let* ((parsed (inline-asm-extract-clauses inst))
+            (template (car parsed))
+            (outs (cadr parsed))
+            (ins (caddr parsed))
+            (clobs (cadddr parsed))
+            (out-res (lir-verify-inline-asm-outputs outs inst)))
+       (if (not out-res)
+           #f
+           (let ((all-names (lir-verify-inline-asm-inputs ins (length outs) (cdr out-res) inst)))
+             (if (not all-names)
+                 #f
+                 (and (lir-verify-inline-asm-clobbers clobs inst)
+                      (lir-verify-inline-asm-template
+                       template (+ (length outs) (length ins)) all-names inst)))))))))
+
+;;; -----------------------------------------------------------------------
 ;;; Instruction-Level Validation
 ;;; -----------------------------------------------------------------------
 (define (lir-valid-inst? inst)
@@ -443,6 +612,9 @@
                     (lir-valid-register? (cadddr inst)))
                #t
                (lir-report-error "%atomic-cas! format must be (%atomic-cas! <dst-reg> <box-reg> <new-reg>)" inst)))
+
+          ((%inline-asm)
+           (lir-verify-inline-asm inst))
 
           ((%idiv)
            (if (and (= (length inst) 2) (lir-valid-operand? (cadr inst)))

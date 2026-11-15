@@ -1302,10 +1302,294 @@
                (list '%raw-asm "    rep movsb")
                (list '%raw-asm "    mov rax, rdx"))))
 
+      ((%inline-asm)
+       (lower-lir-inline-asm inst))
       (else
        (error (string-append "Unknown LIR opcode in x86-64 backend: "
                              (if (symbol? (car inst)) (symbol->string (car inst)) "?"))
               inst)))))
+
+(define *inline-asm-frame-size* (cons 0 '()))
+
+(define (inline-asm-raw line)
+  (list '%raw-asm (string-append "    " line)))
+
+(define (inline-asm-x86-reg-str reg)
+  (inline-asm-reg->sized-str reg #f))
+
+(define (inline-asm-x86-slot-str off)
+  (string-append "[rsp"
+                 (cond
+                   ((= off 0) "")
+                   ((> off 0) (string-append " + " (number->string off)))
+                   (else (string-append " - " (number->string (- 0 off)))))
+                 "]"))
+
+(define (inline-asm-x86-opnd-str opnd)
+  (cond
+    ((symbol? opnd) (inline-asm-x86-reg-str opnd))
+    ((integer? opnd) (number->string opnd))
+    ((pair? opnd)
+     (case (car opnd)
+       ((%reg) (inline-asm-x86-reg-str (cadr opnd)))
+       ((%stack) (inline-asm-x86-slot-str (cadr opnd)))
+       ((%mem) (inline-asm-format-mem-opnd opnd #f #f -1))
+       (else (operand->str opnd))))
+    (else (operand->str opnd))))
+
+(define (inline-asm-x86-min-stack-off out-plans in-plans init)
+  (let loop-o ((os out-plans) (m init))
+    (if (not (null? os))
+        (let ((dst (list-ref (car os) 2)))
+          (if (and (pair? dst) (eq? (car dst) '%stack) (integer? (cadr dst)) (< (cadr dst) m))
+              (loop-o (cdr os) (cadr dst))
+              (loop-o (cdr os) m)))
+        (let loop-i ((is in-plans) (m m))
+          (if (null? is)
+              m
+              (let ((src (list-ref (car is) 2)))
+                (if (and (pair? src) (eq? (car src) '%stack) (integer? (cadr src)) (< (cadr src) m))
+                    (loop-i (cdr is) (cadr src))
+                    (loop-i (cdr is) m))))))))
+
+(define (inline-asm-x86-move-to-reg-acc dst-reg src tmp-reg tmp-save-off acc)
+  (let ((src-reg (inline-asm-canonical-gpr src))
+        (dst-s (inline-asm-x86-reg-str dst-reg)))
+    (cond
+      (src-reg
+       (cond
+         ((eq? src-reg dst-reg) acc)
+         ((and tmp-save-off (eq? src-reg tmp-reg))
+          (cons (inline-asm-raw (string-append "mov " dst-s ", " (inline-asm-x86-slot-str tmp-save-off))) acc))
+         (else
+          (cons (inline-asm-raw (string-append "mov " dst-s ", " (inline-asm-x86-reg-str src-reg))) acc))))
+      ((integer? src)
+       (cons (inline-asm-raw (string-append "mov " dst-s ", " (number->string src))) acc))
+      ((and (pair? src) (eq? (car src) '%mem)
+            tmp-save-off
+            (eq? (inline-asm-canonical-gpr (cadr src)) tmp-reg))
+       (cons (inline-asm-raw (string-append "mov " dst-s ", " (inline-asm-x86-opnd-str src)))
+             (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str tmp-reg) ", " (inline-asm-x86-slot-str tmp-save-off)))
+                   acc)))
+      (else
+       (cons (inline-asm-raw (string-append "mov " dst-s ", " (inline-asm-x86-opnd-str src))) acc)))))
+
+(define (inline-asm-x86-store-acc dst src-reg acc)
+  (cond
+    ((inline-asm-canonical-gpr dst)
+     (let ((dg (inline-asm-canonical-gpr dst)))
+       (if (eq? dg src-reg)
+           acc
+           (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str dg) ", " (inline-asm-x86-reg-str src-reg))) acc))))
+    ((and (pair? dst) (eq? (car dst) '%stack))
+     (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str (cadr dst)) ", " (inline-asm-x86-reg-str src-reg))) acc))
+    ((and (pair? dst) (eq? (car dst) '%mem))
+     (cons (inline-asm-raw (string-append "mov " (inline-asm-format-mem-opnd dst #f #f -1) ", " (inline-asm-x86-reg-str src-reg))) acc))
+    (else
+     (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-opnd-str dst) ", " (inline-asm-x86-reg-str src-reg))) acc))))
+
+(define (inline-asm-x86-has-tied-input? out-idx in-plans)
+  (let loop ((is in-plans))
+    (if (null? is)
+        #f
+        (let ((ip (car is)))
+          (if (and (eq? (list-ref ip 3) 'tied) (eqv? (list-ref ip 5) out-idx))
+              #t
+              (loop (cdr is)))))))
+
+(define (inline-asm-x86-collect-moves out-plans in-plans)
+  (let loop-rw ((ops out-plans) (val-moves '()) (imm-moves '()))
+    (if (not (null? ops))
+        (let ((op (car ops)))
+          (if (and (list-ref op 3)
+                   (eq? (list-ref op 4) 'reg)
+                   (not (inline-asm-x86-has-tied-input? (car op) in-plans)))
+              (let ((c-reg (list-ref op 5))
+                    (dst (list-ref op 2)))
+                (if (integer? dst)
+                    (loop-rw (cdr ops) val-moves (cons (cons c-reg dst) imm-moves))
+                    (loop-rw (cdr ops) (cons (cons c-reg dst) val-moves) imm-moves)))
+              (loop-rw (cdr ops) val-moves imm-moves)))
+        (let loop-in ((ips in-plans) (vms (reverse val-moves)) (ims (reverse imm-moves)))
+          (if (null? ips)
+              (cons vms ims)
+              (let* ((ip (car ips))
+                     (src (list-ref ip 2))
+                     (kind (list-ref ip 3))
+                     (carrier (list-ref ip 4)))
+                (cond
+                  ((or (eq? kind 'reg)
+                       (and (eq? kind 'tied) (inline-asm-normalize-reg-sym carrier)))
+                   (if (integer? src)
+                       (loop-in (cdr ips) vms (cons (cons carrier src) ims))
+                       (loop-in (cdr ips) (cons (cons carrier src) vms) ims)))
+                  (else
+                   (loop-in (cdr ips) vms ims)))))))))
+
+(define (lower-lir-inline-asm inst)
+  (let* ((plan (inline-asm-allocate-plan inst))
+         (template (car plan))
+         (out-plans (cadr plan))
+         (in-plans (caddr plan))
+         (used-regs (car (cdr (cddddr plan))))
+         (final-dst-regs
+          (let loop ((ops out-plans) (acc '()))
+            (if (null? ops)
+                acc
+                (let* ((dst (list-ref (car ops) 2))
+                       (dg (inline-asm-canonical-gpr dst)))
+                  (if (and dg (not (eq? dg '%rsp)) (not (memq dg acc)))
+                      (loop (cdr ops) (cons dg acc))
+                      (loop (cdr ops) acc))))))
+         (moves (inline-asm-x86-collect-moves out-plans in-plans))
+         (val-moves (car moves))
+         (imm-moves (cdr moves))
+         (multi-stage? (> (length val-moves) 1))
+         (protected-stage-regs
+          (let loop ((ms val-moves) (acc '()))
+            (if (null? ms)
+                acc
+                (let* ((s (cdr (car ms)))
+                       (sr (inline-asm-canonical-gpr s))
+                       (acc1 (if (and sr (not (eq? sr '%rsp)) (not (memq sr acc))) (cons sr acc) acc))
+                       (acc2 (inline-asm-collect-mem-bases s acc1)))
+                  (loop (cdr ms) acc2)))))
+         (stage-tmp
+          (if multi-stage?
+              (or (inline-asm-first-free-gpr (append used-regs (append protected-stage-regs final-dst-regs)))
+                  (inline-asm-first-free-gpr protected-stage-regs)
+                  '%r11)
+              #f))
+         (save-regs
+          (let* ((cand (if stage-tmp (inline-asm-dedup-regs (cons stage-tmp used-regs)) used-regs)))
+            (let filter ((rs cand) (acc '()))
+              (if (null? rs)
+                  (reverse acc)
+                  (if (memq (car rs) final-dst-regs)
+                      (filter (cdr rs) acc)
+                      (filter (cdr rs) (cons (car rs) acc)))))))
+         (min-stack (inline-asm-x86-min-stack-off out-plans in-plans (- 0 (car *inline-asm-frame-size*))))
+         (scratch-base (- min-stack 64))
+         (num-saves (length save-regs))
+         (save-pairs
+          (let loop ((rs save-regs) (off scratch-base) (acc '()))
+            (if (null? rs)
+                (reverse acc)
+                (loop (cdr rs) (- off 8) (cons (cons (car rs) off) acc)))))
+         (snap-base (- scratch-base (* num-saves 8)))
+         (num-snaps (if multi-stage? (length val-moves) 0))
+         (out-tmp-base (- snap-base (* (+ num-snaps (if stage-tmp 1 0)) 8)))
+         (stage-tmp-save-off
+          (if stage-tmp
+              (let ((e (assq stage-tmp save-pairs)))
+                (if e (cdr e) (- snap-base (* num-snaps 8))))
+              #f))
+         ;; 1. Save non-output clobbered / carrier / staging registers
+         (acc1
+          (let loop ((sp save-pairs) (acc '()))
+            (if (null? sp)
+                acc
+                (let ((p (car sp)))
+                  (loop (cdr sp)
+                        (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str (cdr p)) ", " (inline-asm-x86-reg-str (car p)))) acc))))))
+         (acc2
+          (if (and stage-tmp (not (assq stage-tmp save-pairs)))
+              (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str stage-tmp-save-off) ", " (inline-asm-x86-reg-str stage-tmp))) acc1)
+              acc1))
+         ;; 2. Cycle-free parallel input/rw staging
+         (acc3
+          (cond
+            ((null? val-moves) acc2)
+            ((not multi-stage?)
+             (inline-asm-x86-move-to-reg-acc (car (car val-moves)) (cdr (car val-moves)) #f #f acc2))
+            (else
+             (let* ((a-s1
+                     (let s1 ((ms val-moves) (off snap-base) (acc acc2))
+                       (if (null? ms)
+                           acc
+                           (let* ((src (cdr (car ms)))
+                                  (a1 (inline-asm-x86-move-to-reg-acc stage-tmp src stage-tmp stage-tmp-save-off acc))
+                                  (a2 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str off) ", " (inline-asm-x86-reg-str stage-tmp))) a1)))
+                             (s1 (cdr ms) (- off 8) a2)))))
+                    (a-s2
+                     (let s2 ((ms val-moves) (off snap-base) (acc a-s1))
+                       (if (null? ms)
+                           acc
+                           (let ((dreg (car (car ms))))
+                             (s2 (cdr ms) (- off 8)
+                                 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str dreg) ", " (inline-asm-x86-slot-str off))) acc)))))))
+               a-s2))))
+         (acc4
+          (let loop ((ims imm-moves) (acc acc3))
+            (if (null? ims)
+                acc
+                (let ((im (car ims)))
+                  (loop (cdr ims)
+                        (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str (car im)) ", " (number->string (cdr im)))) acc))))))
+         ;; 3. Emit expanded inline-asm lines
+         (acc5
+          (let* ((expanded (inline-asm-expand-template template out-plans in-plans 'x86 #f))
+                 (lines (inline-asm-split-lines expanded)))
+            (let loop ((ls lines) (acc acc4))
+              (if (null? ls)
+                  acc
+                  (loop (cdr ls) (cons (inline-asm-raw (car ls)) acc))))))
+         ;; 4. Write back outputs & restore saved registers safely
+         (epilogue
+          (let loop ((ops out-plans) (off out-tmp-base) (acc acc5) (def-acc '()))
+            (if (not (null? ops))
+                (let* ((op (car ops))
+                       (kind (list-ref op 4))
+                       (dst (list-ref op 2))
+                       (carrier (list-ref op 5)))
+                  (if (not (eq? kind 'reg))
+                      (loop (cdr ops) off acc def-acc)
+                      (let ((dg (inline-asm-canonical-gpr dst)))
+                        (cond
+                          ((and dg (eq? dg carrier))
+                           (loop (cdr ops) off acc def-acc))
+                          ((or (and (pair? dst) (eq? (car dst) '%stack))
+                               (and (pair? dst) (eq? (car dst) '%mem)
+                                    (not (memq (inline-asm-canonical-gpr (cadr dst)) save-regs))))
+                           (loop (cdr ops) off (inline-asm-x86-store-acc dst carrier acc) def-acc))
+                          (else
+                           (loop (cdr ops)
+                                 (- off 8)
+                                 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str off) ", " (inline-asm-x86-reg-str carrier))) acc)
+                                 (cons (list dst off carrier) def-acc)))))))
+                ;; Phase E2: restore saved registers
+                (let* ((acc-restored
+                        (let rloop ((sp save-pairs) (a acc))
+                          (if (null? sp)
+                              a
+                              (let ((p (car sp)))
+                                (rloop (cdr sp)
+                                       (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str (car p)) ", " (inline-asm-x86-slot-str (cdr p)))) a))))))
+                       ;; Phase E3: store deferred outputs
+                       (acc-final
+                        (let dloop ((ds (reverse def-acc)) (a acc-restored))
+                          (if (null? ds)
+                              a
+                              (let* ((d (car ds))
+                                     (dst (car d))
+                                     (doff (cadr d))
+                                     (carrier (caddr d))
+                                     (dg (inline-asm-canonical-gpr dst)))
+                                (cond
+                                  (dg
+                                   (dloop (cdr ds)
+                                          (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str dg) ", " (inline-asm-x86-slot-str doff))) a)))
+                                  ((and (pair? dst) (eq? (car dst) '%mem))
+                                   (let* ((c-save (- out-tmp-base (* (+ (length def-acc) 2) 8)))
+                                          (a1 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str c-save) ", " (inline-asm-x86-reg-str carrier))) a))
+                                          (a2 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str carrier) ", " (inline-asm-x86-slot-str doff))) a1))
+                                          (a3 (cons (inline-asm-raw (string-append "mov " (inline-asm-format-mem-opnd dst #f #f -1) ", " (inline-asm-x86-reg-str carrier))) a2))
+                                          (a4 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str carrier) ", " (inline-asm-x86-slot-str c-save))) a3)))
+                                     (dloop (cdr ds) a4)))
+                                  (else
+                                   (dloop (cdr ds) (inline-asm-x86-store-acc dst carrier a)))))))))
+                  acc-final)))))
+    (reverse epilogue)))
 
 (define (has-dynamic-num-args? insts)
   (let loop ((is insts))
@@ -1340,6 +1624,7 @@
          (expected-args (if (and (list? params) (not (has-dynamic-num-args? body)))
                             (length params)
                             #f)))
+    (set-car! *inline-asm-frame-size* frame-size)
     (scan-x86-blocks! body)
     (let* ((guard-insts
             (if expected-args
@@ -1366,6 +1651,7 @@
   (let* ((frame-size-entry (assq 'frame-size (cdr main-clause)))
          (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
          (main-body (cdr (assq 'body (cdr main-clause)))))
+    (set-car! *inline-asm-frame-size* frame-size)
     (scan-x86-blocks! main-body)
     (let loop ((rest main-body) (acc '()))
       (if (null? rest)

@@ -40,7 +40,7 @@
 (define (power-of-two? n)
   (and (integer? n)
        (> n 0)
-       (= (bitwise-and n (- n 1)) 0)))
+       (= (ctfe-bitwise-and n (- n 1)) 0)))
 
 (define (validate-value-repr spec)
   (if (not (value-repr? spec))
@@ -57,7 +57,7 @@
         (if (or (not (integer? shift)) (< shift 0) (> shift 16))
             (value-repr-error! "validate-value-repr: fixnum :shift out of bounds [0, 16]" shift))
         ;; THREAT-836-1: Fixnum tag must fit within fixnum mask
-        (if (not (= (bitwise-and fx-tag fx-mask) fx-tag))
+        (if (not (= (ctfe-bitwise-and fx-tag fx-mask) fx-tag))
             (value-repr-error! "validate-value-repr: fixnum :tag-bits exceeds :tag-mask" (list fx-tag fx-mask)))
         ;; THREAT-836-3: Pointer alignment must be power of two
         (if (not (power-of-two? align))
@@ -70,7 +70,7 @@
                     (value-repr-error! "validate-value-repr: heap pointer tag violates alignment boundary" (list t align))
                     (check-tags (cdr tags))))))
         ;; THREAT-836-1: When fixnum mask > 0 and pointer tags > 0, check tag disjointness
-        (if (and (> fx-mask 0) (> pair-tag 0) (= (bitwise-and pair-tag fx-mask) fx-tag))
+        (if (and (> fx-mask 0) (> pair-tag 0) (= (ctfe-bitwise-and pair-tag fx-mask) fx-tag))
             (value-repr-error! "validate-value-repr: pair-tag collides with fixnum tag" (list pair-tag fx-tag fx-mask)))
         #t)))
 
@@ -388,19 +388,19 @@
               (tag-unit (value-repr-prop r 'nan-box ':tag-unit 281474976710656))
               (fx-nan-tag (value-repr-prop r 'nan-box ':fixnum-nan-tag 1))
               (mask (value-repr-prop r 'nan-box ':payload-mask 281474976710655)))
-          (bitwise-ior (+ nan-base (* fx-nan-tag tag-unit))
-                       (bitwise-and n mask)))
+          (ctfe-bitwise-ior (+ nan-base (* fx-nan-tag tag-unit))
+                            (ctfe-bitwise-and n mask)))
         (let ((shifted (repr-arithmetic-shift n shift)))
           (if (= tag 0)
               shifted
-              (bitwise-ior shifted tag))))))
+              (ctfe-bitwise-ior shifted tag))))))
 
 (define (repr-decode-fixnum encoded . opt-repr)
   (let* ((r (resolve-opt-repr opt-repr))
          (shift (repr-fixnum-shift r)))
     (if (repr-nan-boxed? r)
         (let* ((mask (value-repr-prop r 'nan-box ':payload-mask 281474976710655))
-               (raw (bitwise-and encoded mask))
+               (raw (ctfe-bitwise-and encoded mask))
                (sign-bit (repr-arithmetic-shift 1 47)))
           (if (>= raw sign-bit)
               (- raw (+ mask 1))
