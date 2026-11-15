@@ -118,6 +118,10 @@
                    (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'asm)))
                (set-current-target-arch! 'x86_64)
                (loop (cdr forms) 'x86_64 gc-mode verify trace debug))
+              ((or (eq? first '--target-sbi)
+                   (and (pair? first) (eq? (car first) '!target) (pair? (cdr first)) (eq? (cadr first) 'sbi)))
+               (set-current-target-arch! 'sbi)
+               (loop (cdr forms) 'sbi gc-mode verify trace debug))
               ((and (pair? first) (eq? (car first) '!target) (pair? (cdr first)))
                (set-current-target-arch! (cadr first))
                (loop (cdr forms) (cadr first) gc-mode verify trace debug))
@@ -142,13 +146,16 @@
                    (and (pair? first) (or (eq? (car first) '!module) (eq? (car first) '--module))))
                (set-module-mode! #t)
                (loop (cdr forms) target gc-mode verify trace debug))
-              ;; Import SBI directive
+              ;; Import SBI / PCH directive (supports binary .sbi v2 and legacy text .sbi v1)
               ((and (pair? first)
                     (or (eq? (car first) '!import-sbi)
-                        (eq? (car first) '--import-sbi))
+                        (eq? (car first) '--import-sbi)
+                        (eq? (car first) '!include-pch)
+                        (eq? (car first) '--include-pch))
                     (pair? (cdr first)))
                (let* ((path (cadr first))
-                      (imported-forms (slurp-single-file (if (symbol? path) (symbol->string path) path))))
+                      (path-str (if (symbol? path) (symbol->string path) path))
+                      (imported-forms (sbi-import-forms path-str)))
                  (loop (append imported-forms (cdr forms)) target gc-mode verify trace debug)))
               ;; Emit SBI directive
               ((and (pair? first)
@@ -237,7 +244,11 @@
                       (loop (cdr forms) target gc-mode verify trace debug)))
                    ((string-starts-with? str "--import-sbi=")
                     (let* ((sbipath (substring str 13 (string-length str)))
-                           (imported-forms (slurp-single-file sbipath)))
+                           (imported-forms (sbi-import-forms sbipath)))
+                      (loop (append imported-forms (cdr forms)) target gc-mode verify trace debug)))
+                   ((string-starts-with? str "--include-pch=")
+                    (let* ((pchpath (substring str 14 (string-length str)))
+                           (imported-forms (sbi-import-forms pchpath)))
                       (loop (append imported-forms (cdr forms)) target gc-mode verify trace debug)))
                    (else
                     (list target gc-mode forms verify trace debug)))))
@@ -415,7 +426,9 @@
   (display "  --ld                  Static linker: link multiple ELF64 objects (.o) into executable\n")
   (display "  --target-elf          Emit standalone ELF64 static executable directly\n")
   (display "  -g                    Generate minimal DWARF debug information for GDB / perf\n")
-  (display "  -b, --target <tgt>    Specify compilation target (x86_64, obj, elf, c, aarch64, lir)\n")
+  (display "  -b, --target <tgt>    Specify compilation target (x86_64, obj, elf, c, aarch64, lir, sbi)\n")
+  (display "  --emit-pch            Emit Precompiled Header (.sbi v2) snapshot for parsed forms\n")
+  (display "  -include-pch <file>   Load Precompiled Header (.sbi v2) or legacy .sbi snapshot\n")
   (display "  -O0, -O1, -O2         Optimization level (0: minimal, 1: standard, 2: aggressive)\n")
   (display "  --color[=WHEN]        Control colored diagnostics (auto, always, never)\n")
   (display "  --no-color            Disable colored diagnostics (same as --color=never)\n")
@@ -434,6 +447,9 @@
 (define (print-compiler-version)
   (display "ULisp AOT Native Compiler 2.0 (x86-64 / AArch64 / C)\n")
   (display "Copyright (c) 2026 The ULisp Authors.\n"))
+
+(define *cli-pch-files* (cons '() '()))
+(define *cli-emit-pch* (cons #f '()))
 
 (define (parse-cli-arguments args)
   (let loop ((rest args)
@@ -510,6 +526,22 @@
              (loop (cdr rest) in-file in-files out-file inline-expr target entry-sym opt-level verbose quiet time-passes dump-ir allow-extern module-name nostdlib))
             ((string=? arg "--target-lir")
              (loop (cdr rest) in-file in-files out-file inline-expr 'lir entry-sym opt-level verbose quiet time-passes dump-ir allow-extern module-name nostdlib))
+            ((string=? arg "--target-sbi")
+             (loop (cdr rest) in-file in-files out-file inline-expr 'sbi entry-sym opt-level verbose quiet time-passes dump-ir allow-extern module-name nostdlib))
+            ((string=? arg "--emit-pch")
+             (set-car! *cli-emit-pch* #t)
+             (loop (cdr rest) in-file in-files out-file inline-expr 'sbi entry-sym opt-level verbose quiet time-passes dump-ir allow-extern module-name nostdlib))
+            ((or (string=? arg "-include-pch") (string=? arg "--include-pch"))
+             (if (pair? (cdr rest))
+                 (begin
+                   (set-car! *cli-pch-files* (cons (cadr rest) (car *cli-pch-files*)))
+                   (loop (cddr rest) in-file in-files out-file inline-expr target entry-sym opt-level verbose quiet time-passes dump-ir allow-extern module-name nostdlib))
+                 (begin
+                   (display-stderr "ulisp: error: -include-pch requires an argument\n")
+                   (exit 1))))
+            ((string-starts-with? arg "--include-pch=")
+             (set-car! *cli-pch-files* (cons (substring arg 14 (string-length arg)) (car *cli-pch-files*)))
+             (loop (cdr rest) in-file in-files out-file inline-expr target entry-sym opt-level verbose quiet time-passes dump-ir allow-extern module-name nostdlib))
             ((or (string=? arg "-b") (string=? arg "-t") (string=? arg "--target"))
              (if (pair? (cdr rest))
                  (loop (cddr rest) in-file in-files out-file inline-expr (string->symbol (cadr rest)) entry-sym opt-level verbose quiet time-passes dump-ir allow-extern module-name nostdlib)
@@ -688,6 +720,7 @@
        ((string-ends-with? cli-out-file ".s") 'x86_64)
        ((string-ends-with? cli-out-file ".o") 'obj)
        ((string-ends-with? cli-out-file ".lir") 'lir)
+       ((string-ends-with? cli-out-file ".sbi") 'sbi)
        ((string-ends-with? cli-out-file ".c") 'c)
        (else 'elf)))
     (else directive-target)))
@@ -725,10 +758,16 @@
         (set-allow-extern-symbols! #t)
         (set-current-module-id! cli-module-name)))
 
-  ;; 2. Lazy Output Redirection (called later upon successful LIR compilation)
+  ;; 2. Lazy Output Redirection & Precompiled SBI Input Check
+  (let ((cli-in-binary-sbi?
+          (and cli-in-file
+               (not (string=? cli-in-file "-"))
+               (not (eq? cli-target 'ld-mode))
+               (not (eq? cli-target 'as-mode))
+               (sbi-binary-file? cli-in-file))))
 
-  ;; 3. Redirect stdin if input file is specified (and not -)
-  (if (and cli-in-file (not (string=? cli-in-file "-")) (not (eq? cli-target 'ld-mode)))
+  ;; 3. Redirect stdin if input file is specified (and not -) and not binary .sbi
+  (if (and cli-in-file (not (string=? cli-in-file "-")) (not (eq? cli-target 'ld-mode)) (not cli-in-binary-sbi?))
       (let ((in-fd (sys-open cli-in-file 0 0)))
         (if (< in-fd 0)
             (begin
@@ -756,27 +795,35 @@
         (set-car! *cli-active-output-file* #f)
         (exit 0)))
 
-  ;; 4. Read forms
+  ;; 4. Read forms (prepending any -include-pch files)
   (let* ((src-name (if (and cli-in-file (not (string=? cli-in-file "-"))) cli-in-file "stdin.scm"))
          (dbg? (debug-symbols-enabled?))
-         (raw (cond
-                (cli-inline-expr
-                 (if (procedure? diagnostic-register-source-string!)
-                     (diagnostic-register-source-string! src-name cli-inline-expr))
-                 (read-all-forms-from-string cli-inline-expr))
-                (dbg?
-                 (let* ((text (read-all-chars-to-string))
-                        (starts (scan-toplevel-datum-starts text))
-                        (plain (read-all-forms-from-string text)))
-                   (if (procedure? diagnostic-register-source-string!)
-                       (diagnostic-register-source-string! src-name text))
-                   (wrap-forms-with-locs plain starts src-name)))
-                (else (read-all-forms))))
+         (raw-input (cond
+                      (cli-in-binary-sbi?
+                       (sbi-import-forms cli-in-file))
+                      (cli-inline-expr
+                       (if (procedure? diagnostic-register-source-string!)
+                           (diagnostic-register-source-string! src-name cli-inline-expr))
+                       (read-all-forms-from-string cli-inline-expr))
+                      (dbg?
+                       (let* ((text (read-all-chars-to-string))
+                              (starts (scan-toplevel-datum-starts text))
+                              (plain (read-all-forms-from-string text)))
+                         (if (procedure? diagnostic-register-source-string!)
+                             (diagnostic-register-source-string! src-name text))
+                         (wrap-forms-with-locs plain starts src-name)))
+                      (else (read-all-forms))))
+         (raw (let pch-loop ((pchs (car *cli-pch-files*)) (acc raw-input))
+                (if (null? pchs)
+                    acc
+                    (pch-loop (cdr pchs) (cons (list '!include-pch (car pchs)) acc)))))
          (directives (extract-directives-and-forms raw))
+         (raw-is-lir? (and (pair? raw) (pair? (car raw)) (eq? (caar raw) '%lir-program)))
          (target (resolve-default-target cli-target cli-out-file (car directives)))
          (dummy-target-set (set-current-target-arch! target))
          (gc-mode (cadr directives))
          (prelude-needed? (and (not cli-nostdlib)
+                               (not raw-is-lir?)
                                (or (eq? target 'elf) (eq? target 'obj))))
          (macros-path (if prelude-needed? (find-ulisp-stdlib-macros) #f))
          (actual-raw (if (and prelude-needed? macros-path (not (forms-include-stdlib-macros? raw)))
@@ -785,7 +832,7 @@
          (actual-directives (if (eq? actual-raw raw)
                                 directives
                                 (extract-directives-and-forms actual-raw)))
-         (forms (if (and dbg? (not cli-inline-expr))
+         (forms (if (and dbg? (not cli-inline-expr) (not raw-is-lir?))
                     (begin
                       (set-current-source-file! src-name)
                       (register-source-file! src-name)
@@ -797,47 +844,74 @@
     (if debug-mode
         (enable-call-stack-trace!))
     (if (not (null? forms))
-        (cond
-          ;; 1. LIR Intermediate Output Mode (--target-lir or (!target lir))
-          ((eq? target 'lir)
-           (let ((lir (compile-to-lir forms verify-mode trace-mode)))
-             (open-and-redirect-output-file! cli-out-file)
-             (dump-lir-ast lir)
-             (if (pipeline-time-passes?)
-                 (print-pass-timing-report))))
-          ;; 2. Direct LIR Ingestion Mode (Input is already a Canonical LIR S-expression)
-          ((and (pair? forms) (pair? (car forms)) (eq? (caar forms) '%lir-program))
-           (let ((lir (car forms)))
-             (reset-pass-timings!)
-             (if verify-mode
-                 (begin
-                   (enable-verifier!)
-                   (verify-pass-output 'lir lir)))
-             (open-and-redirect-output-file! cli-out-file)
-             (compile-backend lir target gc-mode)
-             (if (pipeline-time-passes?)
-                 (print-pass-timing-report))))
-          ;; 3. Standard Full Pipeline (Frontend -> LIR -> Backend)
-          (else
-           (let ((lir (compile-to-lir forms verify-mode trace-mode)))
-             (cond
-               ((and (eq? target 'elf) (not cli-nostdlib))
-                (let ((stdlib-path (find-ulisp-stdlib-object)))
-                  (if (not stdlib-path)
-                      (begin
-                        (display-stderr "ulisp: error: cannot locate standard library object (ulisp_stdlib.o). Run 'make -C ulisp build/ulisp_stdlib.o' or set ULISP_STDLIB\n")
-                        (compiler-abort-and-cleanup! 1))
-                      (let* ((user-obj-bv (build-x86-64-elf-obj lir gc-mode))
-                             (bin-bv (link-elf64-relocatable-objects (list user-obj-bv stdlib-path) cli-entry-sym)))
-                        (open-and-redirect-output-file! cli-out-file)
-                        (write-elf64-bytevector bin-bv)
-                        (if (pipeline-time-passes?)
-                            (print-pass-timing-report))))))
-               (else
-                (open-and-redirect-output-file! cli-out-file)
-                (compile-backend lir target gc-mode)
-                (if (pipeline-time-passes?)
-                    (print-pass-timing-report))))))))
+        (let ((forms-are-lir? (and (pair? forms) (pair? (car forms)) (eq? (caar forms) '%lir-program))))
+          (cond
+            ;; 1. LIR Intermediate Output Mode (--target-lir or (!target lir))
+            ((eq? target 'lir)
+             (let ((lir (if forms-are-lir?
+                            (let ((merged (if (null? (cdr forms)) (car forms) (sbi-merge-lir-modules forms))))
+                              (reset-pass-timings!)
+                              (if verify-mode
+                                  (begin
+                                    (enable-verifier!)
+                                    (verify-pass-output 'lir merged)))
+                              merged)
+                            (compile-to-lir forms verify-mode trace-mode))))
+               (open-and-redirect-output-file! cli-out-file)
+               (dump-lir-ast lir)
+               (if (pipeline-time-passes?)
+                   (print-pass-timing-report))))
+            ;; 1b. Scheme Binary Interface Output Mode (--target=sbi, --emit-pch, or -o out.sbi)
+            ((eq? target 'sbi)
+             (let* ((deps (if (and cli-in-file (not (string=? cli-in-file "-"))
+                                   (sbi-safe-dep-path? cli-in-file)
+                                   (file-readable? cli-in-file))
+                              (list cli-in-file)
+                              '()))
+                    (bv (if (car *cli-emit-pch*)
+                            (sbi-serialize forms 'pch deps)
+                            (let ((lir (if forms-are-lir?
+                                           (if (null? (cdr forms)) (car forms) (sbi-merge-lir-modules forms))
+                                           (compile-to-lir forms verify-mode trace-mode))))
+                              (sbi-serialize lir 'lir deps)))))
+               (if (and cli-out-file (not (string=? cli-out-file "-")))
+                   (sbi-write-file-bytes cli-out-file bv)
+                   (write-bytevector bv))
+               (if (pipeline-time-passes?)
+                   (print-pass-timing-report))))
+            ;; 2. Direct LIR Ingestion Mode (Input is already a Canonical LIR S-expression)
+            (forms-are-lir?
+             (let ((lir (if (null? (cdr forms)) (car forms) (sbi-merge-lir-modules forms))))
+               (reset-pass-timings!)
+               (if verify-mode
+                   (begin
+                     (enable-verifier!)
+                     (verify-pass-output 'lir lir)))
+               (open-and-redirect-output-file! cli-out-file)
+               (compile-backend lir target gc-mode)
+               (if (pipeline-time-passes?)
+                   (print-pass-timing-report))))
+            ;; 3. Standard Full Pipeline (Frontend -> LIR -> Backend)
+            (else
+             (let ((lir (compile-to-lir forms verify-mode trace-mode)))
+               (cond
+                 ((and (eq? target 'elf) (not cli-nostdlib))
+                  (let ((stdlib-path (find-ulisp-stdlib-object)))
+                    (if (not stdlib-path)
+                        (begin
+                          (display-stderr "ulisp: error: cannot locate standard library object (ulisp_stdlib.o). Run 'make -C ulisp build/ulisp_stdlib.o' or set ULISP_STDLIB\n")
+                          (compiler-abort-and-cleanup! 1))
+                        (let* ((user-obj-bv (build-x86-64-elf-obj lir gc-mode))
+                               (bin-bv (link-elf64-relocatable-objects (list user-obj-bv stdlib-path) cli-entry-sym)))
+                          (open-and-redirect-output-file! cli-out-file)
+                          (write-elf64-bytevector bin-bv)
+                          (if (pipeline-time-passes?)
+                              (print-pass-timing-report))))))
+                 (else
+                  (open-and-redirect-output-file! cli-out-file)
+                  (compile-backend lir target gc-mode)
+                  (if (pipeline-time-passes?)
+                      (print-pass-timing-report)))))))))
     ;; Flush and finalize output file permissions upon 100% success (Issue #785)
     (if (car *compiler-in-error*)
         (compiler-abort-and-cleanup! 1)
@@ -848,5 +922,5 @@
                  (sys-chmod cli-out-file 493)) ; 0755
                 (else #f)))
           (set-car! *cli-active-output-file* #f)
-          (exit 0)))))
+          (exit 0))))))
 
