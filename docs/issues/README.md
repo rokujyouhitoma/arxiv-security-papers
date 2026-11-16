@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **854** | SRFI 101 純粋関数型ランダムアクセスリスト ((scheme rlist)) の実装 | Feature | Medium | New | [854-implement-srfi-101-purely-functional-random-access-lists.md](854-implement-srfi-101-purely-functional-random-access-lists.md) |
 | **855** | SRFI 135 不変テキストライブラリ ((scheme text)) の実装 | Feature | Medium | New | [855-implement-srfi-135-immutable-texts.md](855-implement-srfi-135-immutable-texts.md) |
 | **856** | SRFI 124 エフェメロン ((scheme ephemeron)) と 2-Space GC 協調回収の実装 | Feature | Medium | New | [856-implement-srfi-124-ephemerons-and-gc-coordination.md](856-implement-srfi-124-ephemerons-and-gc-coordination.md) |
 | **857** | SRFI 151 ビット演算包括ライブラリおよび (scheme bitwise) の実装 | Feature | Medium | New | [857-implement-srfi-151-bitwise-operations-and-scheme-bitwise.md](857-implement-srfi-151-bitwise-operations-and-scheme-bitwise.md) |
@@ -23,6 +22,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **854** | SRFI 101 純粋関数型ランダムアクセスリスト ((scheme rlist)) の実装 | Feature | 2026-11-16 | [854-implement-srfi-101-purely-functional-random-access-lists.md](closed/854-implement-srfi-101-purely-functional-random-access-lists.md) |
 | **853** | SRFI 133 ベクタ操作ライブラリおよび (scheme vector) モジュールの完全実装 | Feature | 2026-11-16 | [853-implement-srfi-133-vector-library-and-scheme-vector-module.md](closed/853-implement-srfi-133-vector-library-and-scheme-vector-module.md) |
 | **852** | R7RS 標準ライブラリ定義 (base.sld, cxr.sld, r5rs.sld) のエクスポート漏れシンボルの補完 | Feature | 2026-11-16 | [852-complete-missing-r7rs-standard-library-exports-in-base-cxr-and-r5rs.md](closed/852-complete-missing-r7rs-standard-library-exports-in-base-cxr-and-r5rs.md) |
 | **851** | AOT ネイティブ算術演算子における数値塔ジェネリックディスパッチ統合と inexact? 判定の是正 | Feature | 2026-11-16 | [851-integrate-generic-numeric-tower-dispatch-and-fix-inexact-predicate-in-aot.md](closed/851-integrate-generic-numeric-tower-dispatch-and-fix-inexact-predicate-in-aot.md) |
