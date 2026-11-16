@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **855** | SRFI 135 不変テキストライブラリ ((scheme text)) の実装 | Feature | Medium | New | [855-implement-srfi-135-immutable-texts.md](855-implement-srfi-135-immutable-texts.md) |
+| **855** | SRFI 135 不変テキストライブラリ ((scheme text)) の実装 | Feature | Medium | In Progress | [855-implement-srfi-135-immutable-texts.md](855-implement-srfi-135-immutable-texts.md) |
 | **856** | SRFI 124 エフェメロン ((scheme ephemeron)) と 2-Space GC 協調回収の実装 | Feature | Medium | New | [856-implement-srfi-124-ephemerons-and-gc-coordination.md](856-implement-srfi-124-ephemerons-and-gc-coordination.md) |
 | **857** | SRFI 151 ビット演算包括ライブラリおよび (scheme bitwise) の実装 | Feature | Medium | New | [857-implement-srfi-151-bitwise-operations-and-scheme-bitwise.md](857-implement-srfi-151-bitwise-operations-and-scheme-bitwise.md) |
 | **858** | SRFI 143 Fixnums 特化高速演算ライブラリおよび (scheme fixnum) の実装 | Feature | Medium | New | [858-implement-srfi-143-fixnums-and-scheme-fixnum.md](858-implement-srfi-143-fixnums-and-scheme-fixnum.md) |
