@@ -90,7 +90,8 @@
        (emit-lir! (list '%jump-cond "jne" lbl-false))
        ;; 4. Load vector[0] and check if eq to 'ulisp-flonum-tag
        (emit-lir! (list '%load '%rdx '%rax 3))
-       (emit-lir! (list '%cmp '%rdx flonum-sym-id))
+       (emit-lir! (list '%mov '%rcx flonum-sym-id))
+       (emit-lir! '(%cmp %rdx %rcx))
        (emit-lir! (list '%jump-if-zero lbl-true))
        ;; False branch
        (emit-lir! (list '%label lbl-false))

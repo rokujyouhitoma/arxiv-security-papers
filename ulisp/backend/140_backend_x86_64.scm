@@ -868,11 +868,13 @@
          (list (list 'xor (lower-lir-opnd dst) (lower-lir-opnd src)))))
 
       ((%cmp %raw-cmp)
-       (let ((s1 (cadr inst))
-             (s2 (caddr inst)))
-         (if (and (pair? s2) (eq? (car s2) '%imm)
-                  (let ((v (cadr s2)))
-                    (or (< v -2147483648) (> v 2147483647))))
+       (let* ((s1 (cadr inst))
+              (s2 (caddr inst))
+              (v (cond
+                   ((number? s2) s2)
+                   ((and (pair? s2) (eq? (car s2) '%imm) (number? (cadr s2))) (cadr s2))
+                   (else #f))))
+         (if (and v (or (< v -2147483648) (> v 2147483647)))
              (list (list 'mov 'r11 (lower-lir-opnd s2))
                    (list 'cmp (lower-lir-opnd s1) 'r11))
              (list (list 'cmp (lower-lir-opnd s1) (lower-lir-opnd s2))))))

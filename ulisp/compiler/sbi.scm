@@ -959,7 +959,7 @@
                 (sbi-buf-sleb128! nw x)
                 (sbi-ht-set! fht x idx)
                 idx))))
-       ((inexact? x)
+       ((and (vector? x) (= (vector-length x) 2) (eq? (vector-ref x 0) 'ulisp-flonum-tag))
         (let* ((sidx (sbi-intern-string! st (number->string x)))
                (key (list *sbi-tag-flonum* sidx)))
           (sbi-encode-compound-node! st key
