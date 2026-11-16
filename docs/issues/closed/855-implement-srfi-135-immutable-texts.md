@@ -2,7 +2,7 @@
 ID: 855
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] SRFI 135 不変テキストライブラリ ((scheme text)) の実装 (ID: 855)
@@ -234,33 +234,33 @@ ULisp における不変テキスト型 `text` は、効率的なメモリ共有
 
 Target Branch: `feat/855-implement-srfi-135-immutable-texts`
 
-- [ ] **Step 1: コアデータ構造・述語・基本構築子の実装 (`ulisp/lib/text.scm`)**
+- [x] **Step 1: コアデータ構造・述語・基本構築子の実装 (`ulisp/lib/text.scm`)**
   - タグ付き表現（`ulisp-text-leaf`, `ulisp-text-slice`, `ulisp-text-concat`, `ulisp-text-repeat`）の定義。
   - `text?`, `textual?`, `textual-null?`, `make-text`, `text`, `text-tabulate`, `text-unfold`, `text-unfold-right` の実装。
   - `text-length`, `textual-length`, `text-ref`, `textual-ref` の実装。
-- [ ] **Step 2: 選択・スライス・パディング・トリム・置換の実装 (`ulisp/lib/text.scm`)**
+- [x] **Step 2: 選択・スライス・パディング・トリム・置換の実装 (`ulisp/lib/text.scm`)**
   - `subtext`, `subtextual` ($O(1)$ スライスノード生成および正規化）。
   - `textual-copy`, `textual-take`, `textual-drop`, `textual-take-right`, `textual-drop-right`。
   - `textual-pad`, `textual-pad-right`, `textual-trim`, `textual-trim-right`, `textual-trim-both`。
   - `textual-replace` の実装。
-- [ ] **Step 3: 比較・接頭接尾・探索・大文字小文字変換の実装 (`ulisp/lib/text.scm`)**
+- [x] **Step 3: 比較・接頭接尾・探索・大文字小文字変換の実装 (`ulisp/lib/text.scm`)**
   - 辞書順比較 `textual=?`, `textual<?`, `textual>?`, `textual<=?`, `textual>=?` および大文字小文字無視版 (`-ci`)。
   - `textual-prefix-length`, `textual-suffix-length`, `textual-prefix?`, `textual-suffix?`。
   - `textual-index`, `textual-index-right`, `textual-skip`, `textual-skip-right`, `textual-contains`, `textual-contains-right`。
   - `textual-upcase`, `textual-downcase`, `textual-foldcase`, `textual-titlecase`。
-- [ ] **Step 4: 連結・高階関数・反復分割・エンコーディング相互変換の実装 (`ulisp/lib/text.scm`)**
+- [x] **Step 4: 連結・高階関数・反復分割・エンコーディング相互変換の実装 (`ulisp/lib/text.scm`)**
   - `textual-append`, `textual-concatenate`, `textual-concatenate-reverse`, `textual-join`。
   - `textual-fold`, `textual-fold-right`, `textual-map`, `textual-for-each`, `textual-map-index`, `textual-for-each-index`, `textual-count`, `textual-filter`, `textual-remove`。
   - `textual-replicate`, `textual-split`。
   - 文字列・ベクタ・リスト・UTF-8 / UTF-16 相互変換群（全 16 種）。
-- [ ] **Step 5: R7RS / SRFI ライブラリ定義の配備**
+- [x] **Step 5: R7RS / SRFI ライブラリ定義の配備**
   - `ulisp/lib/scheme/text.sld` : `(scheme text)` モジュール定義
   - `ulisp/lib/srfi/135.sld` : `(srfi 135)` モジュール定義
   - Traceability ヘッダー規約（`Traceability: ulisp/docs/ref_r7rs_compliance.md`）の遵守。
-- [ ] **Step 6: 単体テストスイートの作成と Makefile 統合**
+- [x] **Step 6: 単体テストスイートの作成と Makefile 統合**
   - `ulisp/tests/test_srfi_135.scm` を作成し、全 12 カテゴリ、82 手続きの網羅テストを実装。
   - `ulisp/Makefile` に `test_srfi_135` ターゲットを追加し、`ULISP_LARGE_LIBS` と `lint_sexpr` に登録。
-- [ ] **Step 7: 品質ゲート検証とドキュメント更新**
+- [x] **Step 7: 品質ゲート検証とドキュメント更新**
   - `make -C ulisp lint_sexpr` および `make -C ulisp test_r7rs_traceability` の 100% PASS を確認。
   - `make -C ulisp test_srfi_135` の実行および全 PASS 確認。
   - `ulisp/docs/ref_r7rs_compliance.md` の SRFI 135 ステータスを `◎` に更新。
@@ -268,10 +268,10 @@ Target Branch: `feat/855-implement-srfi-135-immutable-texts`
 ---
 
 ## 8. 完了条件 / Definition of Done (DoD)
-- [ ] `ulisp/lib/text.scm` に SRFI 135 の全 82 種の手続きが完全実装されていること。
-- [ ] `text-length` が $O(1)$、`subtext` が $O(1)$（構造共有）、`text-ref` が対数または定数時間で動作すること。
-- [ ] `(scheme text)` および `(srfi 135)` が正常にインポート可能であること。
-- [ ] `ulisp/tests/test_srfi_135.scm` のテストケースがすべて PASS すること。
-- [ ] `make -C ulisp lint_sexpr` および `make -C ulisp test_r7rs_traceability` が正常に通過すること。
-- [ ] `ulisp/docs/ref_r7rs_compliance.md` が最新のステータスに更新されていること。
-- [ ] ドキュメント内のすべての内部リンクが相対パスで記述されていること。
+- [x] `ulisp/lib/text.scm` に SRFI 135 の全 82 種の手続きが完全実装されていること。
+- [x] `text-length` が $O(1)$、`subtext` が $O(1)$（構造共有）、`text-ref` が対数または定数時間で動作すること。
+- [x] `(scheme text)` および `(srfi 135)` が正常にインポート可能であること。
+- [x] `ulisp/tests/test_srfi_135.scm` のテストケースがすべて PASS すること。
+- [x] `make -C ulisp lint_sexpr` および `make -C ulisp test_r7rs_traceability` が正常に通過すること。
+- [x] `ulisp/docs/ref_r7rs_compliance.md` が最新のステータスに更新されていること。
+- [x] ドキュメント内のすべての内部リンクが相対パスで記述されていること。
