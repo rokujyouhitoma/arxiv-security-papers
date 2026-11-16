@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **856** | SRFI 124 エフェメロン ((scheme ephemeron)) と 2-Space GC 協調回収の実装 | Feature | Medium | In Progress | [856-implement-srfi-124-ephemerons-and-gc-coordination.md](856-implement-srfi-124-ephemerons-and-gc-coordination.md) |
 | **857** | SRFI 151 ビット演算包括ライブラリおよび (scheme bitwise) の実装 | Feature | Medium | New | [857-implement-srfi-151-bitwise-operations-and-scheme-bitwise.md](857-implement-srfi-151-bitwise-operations-and-scheme-bitwise.md) |
 | **858** | SRFI 143 Fixnums 特化高速演算ライブラリおよび (scheme fixnum) の実装 | Feature | Medium | New | [858-implement-srfi-143-fixnums-and-scheme-fixnum.md](858-implement-srfi-143-fixnums-and-scheme-fixnum.md) |
 | **859** | Yellow Docket 構文拡張マクロ (SRFI 8, 26, 31, 2, 61) の脱糖実装 | Feature | High | New | [859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md](859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **856** | SRFI 124 エフェメロン ((scheme ephemeron)) と 2-Space GC 協調回収の実装 | Feature | 2026-11-17 | [856-implement-srfi-124-ephemerons-and-gc-coordination.md](closed/856-implement-srfi-124-ephemerons-and-gc-coordination.md) |
 | **855** | SRFI 135 不変テキストライブラリ ((scheme text)) の実装 | Feature | 2026-11-16 | [855-implement-srfi-135-immutable-texts.md](closed/855-implement-srfi-135-immutable-texts.md) |
 | **854** | SRFI 101 純粋関数型ランダムアクセスリスト ((scheme rlist)) の実装 | Feature | 2026-11-16 | [854-implement-srfi-101-purely-functional-random-access-lists.md](closed/854-implement-srfi-101-purely-functional-random-access-lists.md) |
 | **853** | SRFI 133 ベクタ操作ライブラリおよび (scheme vector) モジュールの完全実装 | Feature | 2026-11-16 | [853-implement-srfi-133-vector-library-and-scheme-vector-module.md](closed/853-implement-srfi-133-vector-library-and-scheme-vector-module.md) |

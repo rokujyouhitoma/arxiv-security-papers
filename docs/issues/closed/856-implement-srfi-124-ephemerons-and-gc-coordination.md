@@ -2,7 +2,7 @@
 ID: 856
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] SRFI 124 エフェメロン ((scheme ephemeron)) と 2-Space GC 協調回収の実装 (ID: 856)
@@ -211,13 +211,13 @@ ulisp/
 
 ## 8. 完了条件 / Definition of Done (DoD)
 
-- [ ] `(scheme ephemeron)` および `(srfi 124)` がロード・利用可能であること。
-- [ ] 全 6 手続き (`make-ephemeron`, `ephemeron?`, `ephemeron-broken?`, `ephemeron-key`, `ephemeron-datum`, `reference-barrier`) が仕様通り動作すること。
-- [ ] キーが外部から到達可能な間は、GC が実行されてもエフェメロンが保持されデータが維持されること。
-- [ ] キーが外部から到達不能になった場合、GC 実行後に `ephemeron-broken?` が `#t` となり、データが回収され `ephemeron-key`/`ephemeron-datum` が `#f` を返すこと。
-- [ ] キーと値の循環参照が存在する場合でも、外部参照がなくなれば漏れなく回収されること。
-- [ ] GC 実行中に新たなヒープメモリの割り当てが一切発生しないこと（侵入型リンクリストによるゼロ・アロケーション保証）。
-- [ ] `ulisp/tests/test_gc_ephemeron.scm` の全テストが PASS すること。
-- [ ] 既存の 2-Space GC テスト、世代別 GC テスト、ストレスプロファイルテストがすべて PASS すること。
-- [ ] `ulisp/docs/ref_r7rs_compliance.md` が更新されていること。
-- [ ] 絶対パス（`/workspace/` 等）が一切含まれていないこと。
+- [x] `(scheme ephemeron)` および `(srfi 124)` がロード・利用可能であること。
+- [x] 全 6 手続き (`make-ephemeron`, `ephemeron?`, `ephemeron-broken?`, `ephemeron-key`, `ephemeron-datum`, `reference-barrier`) が仕様通り動作すること。
+- [x] キーが外部から到達可能な間は、GC が実行されてもエフェメロンが保持されデータが維持されること。
+- [x] キーが外部から到達不能になった場合、GC 実行後に `ephemeron-broken?` が `#t` となり、データが回収され `ephemeron-key`/`ephemeron-datum` が `#f` を返すこと。
+- [x] キーと値の循環参照が存在する場合でも、外部参照がなくなれば漏れなく回収されること。
+- [x] GC 実行中に新たなヒープメモリの割り当てが一切発生しないこと（侵入型リンクリストによるゼロ・アロケーション保証）。
+- [x] `ulisp/tests/test_gc_ephemeron.scm` の全テストが PASS すること。
+- [x] 既存の 2-Space GC テスト、世代別 GC テスト、ストレスプロファイルテストがすべて PASS すること。
+- [x] `ulisp/docs/ref_r7rs_compliance.md` が更新されていること。
+- [x] 絶対パス（`/workspace/` 等）が一切含まれていないこと。

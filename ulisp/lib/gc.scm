@@ -48,6 +48,18 @@
 (define (gc-major-count)  (%to-fixnum (%raw-load (%get-gc-state-ptr) 64)))
 (define (gc-remset-ptr)   (%raw-load (%get-gc-state-ptr) 72))
 (define (gc-remset-count) (%to-fixnum (%raw-load (%get-gc-state-ptr) 80)))
+
+;; Extract object type (1: pair, 2: closure, 3: string, 5: vector, 7: bytevector) from header
+(define (gc-hdr-type hdr)
+  (bitwise-and hdr 255))
+
+;; Extract payload bytes from header
+(define (gc-hdr-payload-bytes hdr)
+  (quotient hdr 65536))
+
+;; Extract number of closure fields from header
+(define (gc-hdr-num-fields hdr)
+  (bitwise-and (quotient hdr 256) 255))
 (define (gc-gen-mode)     (%to-fixnum (%raw-load (%get-gc-state-ptr) 88)))
 (define (gc-max-size)     (%to-fixnum (%raw-load (%get-gc-state-ptr) 96)))
 (define (gc-growth-count) (%to-fixnum (%raw-load (%get-gc-state-ptr) 104)))
@@ -113,6 +125,20 @@
   (= (bitwise-and (%to-fixnum (%raw-load (%get-gc-state-ptr) 160)) 1) 1))
 (define (set-gc-stats-mode! v)
   (%raw-store! (%get-gc-state-ptr) 160 (%to-raw (if v 1 0))))
+
+;; Ephemeron GC Coordination State (Issue #856 / SRFI 124)
+;; [184]: pending_ephemerons pointer (intrusive linked list head)
+(define (gc-pending-ephemerons)
+  (%raw-load (%get-gc-state-ptr) 184))
+
+(define (set-gc-pending-ephemerons! ptr)
+  (%raw-store! (%get-gc-state-ptr) 184 ptr))
+
+;; Global variables section boundaries (Issue #856)
+;; [192]: __start_ulisp_globals_sec
+;; [200]: __stop_ulisp_globals_sec
+(define (gc-globals-start) (%raw-load (%get-gc-state-ptr) 192))
+(define (gc-globals-stop)  (%raw-load (%get-gc-state-ptr) 200))
 
 ;;; Query current GC execution profile (Issue #567)
 ;;; Returns symbol: 'standard, 'compiler, 'server, 'none, 'dual-space, or 'stress
@@ -237,8 +263,8 @@
         hdr
         ;; Not yet copied: allocate in to-space
         (let* ((to-free (gc-free))
-               (type (bitwise-and hdr 255))
-               (payload-bytes (quotient hdr 65536))
+               (type (gc-hdr-type hdr))
+               (payload-bytes (gc-hdr-payload-bytes hdr))
                (total-bytes (+ payload-bytes 8))
                (new-orig (%ptr-add to-free 8))
                (new-val (%ptr-tag-add new-orig tag)))
@@ -279,8 +305,8 @@
   (let scan-loop ((scan new-from))
     (if (< scan new-free)
         (let* ((hdr (%raw-load scan 0))
-               (type (bitwise-and hdr 255))
-               (payload-bytes (quotient hdr 65536))
+               (type (gc-hdr-type hdr))
+               (payload-bytes (gc-hdr-payload-bytes hdr))
                (payload-addr (%ptr-add scan 8)))
           (cond
             ;; Type 1: Pair
@@ -291,7 +317,7 @@
                (%raw-store! payload-addr 8 (gc-relocate-ptr c2 old-from old-size diff))))
             ;; Type 2: Closure
             ((= type 2)
-             (let ((num-fields (bitwise-and (quotient hdr 256) 255)))
+             (let ((num-fields (gc-hdr-num-fields hdr)))
                (let f-loop ((i 1))
                  (if (< i num-fields)
                      (let* ((slot-addr (%ptr-add payload-addr (* i 8)))
@@ -300,7 +326,7 @@
                        (f-loop (+ i 1)))))))
             ;; Type 5: Vector
             ((= type 5)
-             (let ((vec-len (quotient (%raw-load payload-addr 0) 4)))
+             (let ((vec-len (%raw-load payload-addr 0)))
                (let vec-loop ((i 0))
                  (if (< i vec-len)
                      (let* ((slot-addr (%ptr-add payload-addr (* (+ i 1) 8)))
@@ -330,6 +356,20 @@
                 (if (and (>= slot-addr old-from) (< slot-addr (%ptr-add old-from old-size)))
                     (%raw-store! remset (* i 8) (+ slot-addr diff)))
                 (loop (+ i 1))))))))
+
+;; Relocate global variable pointers after mremap move
+(define (gc-relocate-globals! old-from old-size diff)
+  (let ((start (gc-globals-start))
+        (stop  (gc-globals-stop)))
+    (if (and (> start 0) (> stop start))
+        (let loop ((curr start))
+          (if (< curr stop)
+              (let ((gvar-ptr (%raw-load curr 0)))
+                (if (> gvar-ptr 0)
+                    (let ((val (%raw-load gvar-ptr 0)))
+                      (if (gc-in-old-mature? val old-from old-size)
+                          (%raw-store! gvar-ptr 0 (gc-relocate-ptr val old-from old-size diff)))))
+                (loop (%ptr-add curr 8))))))))
 
 ;; Mature space usage & available capacity (all in Scheme fixnum bytes)
 (define (gc-mature-used)
@@ -380,7 +420,8 @@
                                 (set-gc-mature-free! new-free)
                                 (gc-relocate-mature-objects! new-from new-free old-from old-size diff)
                                 (gc-relocate-stack! deepest-sp (gc-gen-bottom) old-from old-size diff)
-                                (gc-relocate-remset! old-from old-size diff)))
+                                (gc-relocate-remset! old-from old-size diff)
+                                (gc-relocate-globals! old-from old-size diff)))
                           #t))))))
         #f)))
 
@@ -408,8 +449,8 @@
                     (< addr (%ptr-add (gc-mature-from) (gc-mature-size))))))
         hdr
         ;; Not yet promoted: allocate in mature space
-        (let* ((type (bitwise-and hdr 255))
-               (payload-bytes (quotient hdr 65536))
+        (let* ((type (gc-hdr-type hdr))
+               (payload-bytes (gc-hdr-payload-bytes hdr))
                (total-bytes (+ payload-bytes 8)))
           (gc-ensure-mature-capacity! total-bytes (%get-rsp))
           (let* ((m-free (gc-mature-free))
@@ -434,13 +475,134 @@
       (gc-copy-object val)
       val))
 
+;;; -----------------------------------------------------------------------
+;;; Ephemeron GC Coordination Engine (SRFI 124 & Issue #856)
+;;; -----------------------------------------------------------------------
+
+;; Predicate: check if a vector payload corresponds to an <ephemeron> record
+(define (gc-ephemeron-payload? payload-addr)
+  (and (>= (%raw-load payload-addr 0) 5)
+       (eq? (%raw-load payload-addr 8) '%%record-type-<ephemeron>)))
+
+;; Key reachability predicate for Dual-Space GC (Mode 0)
+(define (gc-key-reachable-dual-space? key)
+  (if (gc-heap-pointer? key)
+      (let* ((orig (%ptr-untag key))
+             (hdr (%raw-load (%ptr-add orig -8) 0)))
+        (and (not (= (%ptr-tag hdr) 0))
+             (let ((addr (%ptr-untag hdr)))
+               (and (>= addr (gc-to))
+                    (< addr (gc-free))))))
+      #t)) ; Immediates (fixnum, boolean, char, symbol, null) are always reachable
+
+;; Get forwarded address of an already copied object in Dual-Space GC
+(define (gc-get-forwarded-addr key)
+  (if (gc-heap-pointer? key)
+      (let* ((orig (%ptr-untag key))
+             (hdr (%raw-load (%ptr-add orig -8) 0)))
+        (if (and (not (= (%ptr-tag hdr) 0))
+                 (let ((addr (%ptr-untag hdr)))
+                   (and (>= addr (gc-to))
+                        (< addr (gc-free)))))
+            hdr
+            key))
+      key))
+
+;; Fixed-point resolution loop for Dual-Space GC
+(define (gc-resolve-ephemerons-dual-space!)
+  (let fixed-point-loop ()
+    (let list-loop ((prev 0) (curr (gc-pending-ephemerons)) (progress #f))
+      (if (not (= curr 0))
+          (let* ((next (%raw-load curr 40))
+                 (key (%raw-load curr 16)))
+            (if (gc-key-reachable-dual-space? key)
+                ;; Key is reachable: update key, copy datum, resume Cheney scan, unlink
+                (let ((scan-before (gc-free)))
+                  ;; Update key to forwarded pointer
+                  (%raw-store! curr 16 (gc-get-forwarded-addr key))
+                  ;; Copy datum to to-space
+                  (let ((datum (%raw-load curr 24)))
+                    (%raw-store! curr 24 (gc-copy-if-heap datum)))
+                  ;; Resume Cheney scan to copy any objects reachable from datum
+                  (gc-cheney-scan! scan-before)
+                  ;; Unlink curr from pending list
+                  (if (= prev 0)
+                      (set-gc-pending-ephemerons! next)
+                      (%raw-store! prev 40 next))
+                  (list-loop prev next #t))
+                ;; Key not yet reachable in this pass: retain in pending list
+                (list-loop curr next progress)))
+          ;; Repeat while any ephemeron was newly resolved
+          (if progress
+              (fixed-point-loop)
+              #t)))))
+
+;; Key reachability predicate for Generational GC (Mode 1: Minor GC)
+(define (gc-key-reachable-generational? key)
+  (if (gc-nursery-pointer? key)
+      (let* ((orig (%ptr-untag key))
+             (hdr (%raw-load (%ptr-add orig -8) 0)))
+        (and (not (= (%ptr-tag hdr) 0))
+             (let ((addr (%ptr-untag hdr)))
+               (and (>= addr (gc-mature-from))
+                    (< addr (%ptr-add (gc-mature-from) (gc-mature-size)))))))
+      #t))
+
+;; Get promoted address of an already copied nursery object
+(define (gc-get-promoted-addr key)
+  (if (gc-nursery-pointer? key)
+      (let* ((orig (%ptr-untag key))
+             (hdr (%raw-load (%ptr-add orig -8) 0)))
+        (if (and (not (= (%ptr-tag hdr) 0))
+                 (let ((addr (%ptr-untag hdr)))
+                   (and (>= addr (gc-mature-from))
+                        (< addr (%ptr-add (gc-mature-from) (gc-mature-size))))))
+            hdr
+            key))
+      key))
+
+;; Fixed-point resolution loop for Generational GC (Minor GC)
+(define (gc-resolve-ephemerons-generational!)
+  (let fixed-point-loop ()
+    (let list-loop ((prev 0) (curr (gc-pending-ephemerons)) (progress #f))
+      (if (not (= curr 0))
+          (let* ((next (%raw-load curr 40))
+                 (key (%raw-load curr 16)))
+            (if (gc-key-reachable-generational? key)
+                (let ((scan-before (gc-mature-free)))
+                  (%raw-store! curr 16 (gc-get-promoted-addr key))
+                  (let ((datum (%raw-load curr 24)))
+                    (if (gc-nursery-pointer? datum)
+                        (%raw-store! curr 24 (gc-promote-object datum))))
+                  (gc-minor-cheney-scan! scan-before)
+                  (if (= prev 0)
+                      (set-gc-pending-ephemerons! next)
+                      (%raw-store! prev 40 next))
+                  (list-loop prev next #t))
+                (list-loop curr next progress)))
+          (if progress
+              (fixed-point-loop)
+              #t)))))
+
+;; Breaking phase: break all unresolved ephemerons remaining in pending list
+(define (gc-break-ephemerons!)
+  (let loop ((curr (gc-pending-ephemerons)))
+    (if (not (= curr 0))
+        (let ((next (%raw-load curr 40)))
+          (%raw-store! curr 16 #f)
+          (%raw-store! curr 24 #f)
+          (%raw-store! curr 32 #t)
+          (%raw-store! curr 40 #f)
+          (loop next))))
+  (set-gc-pending-ephemerons! 0))
+
 ;;; Cheney breadth-first scan through copied objects in to-space
 (define (gc-cheney-scan! scan-start)
   (let scan-loop ((scan scan-start))
     (if (< scan (gc-free))
         (let* ((hdr (%raw-load scan 0))
-               (type (bitwise-and hdr 255))
-               (payload-bytes (quotient hdr 65536))
+               (type (gc-hdr-type hdr))
+               (payload-bytes (gc-hdr-payload-bytes hdr))
                (payload-addr (%ptr-add scan 8)))
           (cond
             ;; Type 1: Pair (2 pointer fields: car, cdr)
@@ -449,7 +611,7 @@
              (%raw-store! payload-addr 8 (gc-copy-if-heap (%raw-load payload-addr 8))))
             ;; Type 2: Closure (slot 0 is code_ptr, slots 1..N-1 are captured vars)
             ((= type 2)
-             (let ((num-fields (bitwise-and (quotient hdr 256) 255)))
+             (let ((num-fields (gc-hdr-num-fields hdr)))
                (let field-loop ((i 1))
                  (if (< i num-fields)
                      (let ((slot-addr (%ptr-add payload-addr (* i 8))))
@@ -458,12 +620,18 @@
             ;; Type 3: String (pure byte buffer, no pointers)
             ;; Type 5: Vector (slot 0 is length, slots 1..len are Scheme values)
             ((= type 5)
-             (let ((vec-len (quotient (%raw-load payload-addr 0) 4)))
-               (let vec-loop ((i 0))
-                 (if (< i vec-len)
-                     (let ((slot-addr (%ptr-add payload-addr (* (+ i 1) 8))))
-                       (%raw-store! slot-addr 0 (gc-copy-if-heap (%raw-load slot-addr 0)))
-                       (vec-loop (+ i 1)))))))
+             (if (gc-ephemeron-payload? payload-addr)
+                 ;; Ephemeron: defer tracing key (slot 1) and datum (slot 2)
+                 (let ((prev (gc-pending-ephemerons)))
+                   (%raw-store! payload-addr 40 prev)
+                   (set-gc-pending-ephemerons! payload-addr))
+                 ;; Normal vector: trace all element slots
+                 (let ((vec-len (%raw-load payload-addr 0)))
+                   (let vec-loop ((i 0))
+                     (if (< i vec-len)
+                         (let ((slot-addr (%ptr-add payload-addr (* (+ i 1) 8))))
+                           (%raw-store! slot-addr 0 (gc-copy-if-heap (%raw-load slot-addr 0)))
+                           (vec-loop (+ i 1))))))))
             (else #t))
           (scan-loop (%ptr-add scan (+ payload-bytes 8)))))))
 
@@ -472,8 +640,8 @@
   (let scan-loop ((scan scan-start))
     (if (< scan (gc-mature-free))
         (let* ((hdr (%raw-load scan 0))
-               (type (bitwise-and hdr 255))
-               (payload-bytes (quotient hdr 65536))
+               (type (gc-hdr-type hdr))
+               (payload-bytes (gc-hdr-payload-bytes hdr))
                (payload-addr (%ptr-add scan 8)))
           (cond
             ;; Type 1: Pair
@@ -486,7 +654,7 @@
                    (%raw-store! payload-addr 8 (gc-promote-object c2)))))
             ;; Type 2: Closure
             ((= type 2)
-             (let ((num-fields (bitwise-and (quotient hdr 256) 255)))
+             (let ((num-fields (gc-hdr-num-fields hdr)))
                (let f-loop ((i 1))
                  (if (< i num-fields)
                      (let* ((slot-addr (%ptr-add payload-addr (* i 8)))
@@ -496,14 +664,20 @@
                        (f-loop (+ i 1)))))))
             ;; Type 5: Vector
             ((= type 5)
-             (let ((vec-len (quotient (%raw-load payload-addr 0) 4)))
-               (let vec-loop ((i 0))
-                 (if (< i vec-len)
-                     (let* ((slot-addr (%ptr-add payload-addr (* (+ i 1) 8)))
-                            (v (%raw-load slot-addr 0)))
-                       (if (gc-nursery-pointer? v)
-                           (%raw-store! slot-addr 0 (gc-promote-object v)))
-                       (vec-loop (+ i 1)))))))
+             (if (gc-ephemeron-payload? payload-addr)
+                 ;; Ephemeron: defer tracing key and datum
+                 (let ((prev (gc-pending-ephemerons)))
+                   (%raw-store! payload-addr 40 prev)
+                   (set-gc-pending-ephemerons! payload-addr))
+                 ;; Normal vector: promote nursery pointers
+                 (let ((vec-len (%raw-load payload-addr 0)))
+                   (let vec-loop ((i 0))
+                     (if (< i vec-len)
+                         (let* ((slot-addr (%ptr-add payload-addr (* (+ i 1) 8)))
+                                (v (%raw-load slot-addr 0)))
+                           (if (gc-nursery-pointer? v)
+                               (%raw-store! slot-addr 0 (gc-promote-object v)))
+                           (vec-loop (+ i 1))))))))
             (else #t))
           (scan-loop (%ptr-add scan (+ payload-bytes 8)))))))
 
@@ -598,6 +772,34 @@
                   (%raw-store! sp 0 (gc-promote-object val))))
             (conserv-loop (%ptr-add sp 8)))))))
 
+;;; Scan Global Variables across linked modules (Generational Minor GC) (Issue #856)
+(define (gc-scan-globals-generational!)
+  (let ((start (gc-globals-start))
+        (stop  (gc-globals-stop)))
+    (if (and (> start 0) (> stop start))
+        (let loop ((curr start))
+          (if (< curr stop)
+              (let ((gvar-ptr (%raw-load curr 0)))
+                (if (> gvar-ptr 0)
+                    (let ((val (%raw-load gvar-ptr 0)))
+                      (if (gc-nursery-pointer? val)
+                          (%raw-store! gvar-ptr 0 (gc-promote-object val)))))
+                (loop (%ptr-add curr 8))))))))
+
+;;; Scan Global Variables across linked modules (Classic Dual-Space GC) (Issue #856)
+(define (gc-scan-globals!)
+  (let ((start (gc-globals-start))
+        (stop  (gc-globals-stop)))
+    (if (and (> start 0) (> stop start))
+        (let loop ((curr start))
+          (if (< curr stop)
+              (let ((gvar-ptr (%raw-load curr 0)))
+                (if (> gvar-ptr 0)
+                    (let ((val (%raw-load gvar-ptr 0)))
+                      (if (gc-heap-pointer? val)
+                          (%raw-store! gvar-ptr 0 (gc-copy-object val)))))
+                (loop (%ptr-add curr 8))))))))
+
 ;;; Scan Remembered Set (slots in mature objects pointing to nursery)
 (define (gc-scan-remset!)
   (let ((remset (gc-remset-ptr))
@@ -622,14 +824,21 @@
 
 ;;; Perform Minor GC: promote live nursery objects to mature space, reset nursery pointer
 (define (gc-minor-collect! current-rsp)
+  (set-gc-pending-ephemerons! 0)
   (let ((scan-start (gc-mature-free))
         (deepest-sp (%get-rsp)))
     ;; 1. Scan execution stack using Exact GC Stackmaps
     (gc-scan-roots-generational! deepest-sp (gc-gen-bottom))
+    ;; 1.1 Scan global variables
+    (gc-scan-globals-generational!)
     ;; 2. Scan remembered set
     (gc-scan-remset!)
     ;; 3. Cheney scan mature space to transitively promote nursery objects
     (gc-minor-cheney-scan! scan-start)
+    ;; 3.1 Fixed-point ephemeron resolution
+    (gc-resolve-ephemerons-generational!)
+    ;; 3.2 Break remaining unreachable ephemerons
+    (gc-break-ephemerons!)
     ;; 4. Check mature space occupancy & trigger dynamic growth if > 70% (Issue #566)
     (gc-check-mature-growth! deepest-sp)
     ;; 5. Reset nursery allocation bump pointer back to nursery-base (cost = 0!)
@@ -645,13 +854,20 @@
   (if (= (gc-gen-mode) 1)
       (gc-minor-collect! current-rsp)
       (begin
+        (set-gc-pending-ephemerons! 0)
         (set-gc-free! (gc-to))
         (let ((scan-start (gc-to))
               (deepest-sp (%get-rsp)))
           ;; 1. Scan execution stack using Exact GC Stackmaps
           (gc-scan-roots! deepest-sp (gc-bottom))
+          ;; 1.1 Scan global variables
+          (gc-scan-globals!)
           ;; 2. Cheney breadth-first scan to transitively copy reachable subgraph
           (gc-cheney-scan! scan-start)
+          ;; 2.1 Fixed-point ephemeron resolution
+          (gc-resolve-ephemerons-dual-space!)
+          ;; 2.2 Break remaining unreachable ephemerons
+          (gc-break-ephemerons!)
           ;; 3. Swap from-space and to-space
           (let ((new-heap-ptr (gc-free))
                 (old-from (gc-from)))

@@ -1826,6 +1826,19 @@
                   (emit (string-append "static void " lbl-str "(void);"))))
               funcs)
     (emit "")
+    ;; Fallback definitions of runtime arithmetic operations if not defined in program
+    (let ((c-has-fn? (lambda (name)
+                       (let loop ((fs funcs))
+                         (cond
+                           ((null? fs) #f)
+                           ((string=? (c-sanitize-label (cadar fs)) name) #t)
+                           (else (loop (cdr fs))))))))
+      (for-each
+       (lambda (name)
+         (if (not (c-has-fn? name))
+             (emit (string-append "static void " name "(void) { ulisp_unhandled_exception(0); }"))))
+       '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq")))
+    (emit "")
     ;; Emit string literals
     (if (not (null? (car *strings*)))
         (let loop ((ss (reverse (car *strings*))))

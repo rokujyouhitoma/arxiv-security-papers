@@ -31,6 +31,7 @@
 (include "lib/format.scm")
 (include "lib/sort.scm")
 (include "lib/box.scm")
+(include "lib/ephemeron.scm")
 (include "lib/test.scm")
 (include "lib/check.scm")
 (include "lib/property.scm")

@@ -161,14 +161,14 @@
 (define (member item ls)
   (cond
     ((not (pair? ls)) #f)
-    ((%default-equal? (car ls) item) ls)
+    ((or (eq? (car ls) item) (%default-equal? (car ls) item)) ls)
     (else (member item (cdr ls)))))
 
 (define (assoc item ls)
   (cond
     ((not (pair? ls)) #f)
     ((not (pair? (car ls))) (assoc item (cdr ls)))
-    ((%default-equal? (caar ls) item) (car ls))
+    ((or (eq? (caar ls) item) (%default-equal? (caar ls) item)) (car ls))
     (else (assoc item (cdr ls)))))
 
 ;; ---------------------------------------------------------------------

@@ -1781,7 +1781,22 @@
                          (else "e"))))
            (emit-inst2 (string-append "set" cc-str) (asm-opnd->str dst)))))
       ((jmp)
-       (emit-inst2 "jmp" (asm-opnd->str (cadr inst))))
+       (let ((target (cadr inst)))
+         (cond
+           ((string? target)
+            (emit-inst2 "jmp" target))
+           ((and (symbol? target)
+                 (let ((s (symbol->raw-name target)))
+                   (and (> (string-length s) 0)
+                        (char=? (string-ref s 0) #\.))))
+            (emit-inst2 "jmp" (asm-label->str target)))
+           ((memq target '(%rax rax %rbx rbx %rcx rcx %rdx rdx
+                           %rsi rsi %rdi rdi %rbp rbp %rsp rsp
+                           %r8  r8  %r9  r9  %r10 r10 %r11 r11
+                           %r12 r12 %r13 r13 %r14 r14 %r15 r15))
+            (emit-inst2 "jmp" (asm-opnd->str target)))
+           (else
+            (emit-inst2 "jmp" (asm-label->str target))))))
       ((jcc)
        (let ((cc (cadr inst))
              (lbl (caddr inst)))
@@ -1797,9 +1812,19 @@
                           (let ((s (symbol->raw-name cc)))
                             (if (string=? s "?") "je" s)))
                          (else "je"))))
-           (emit-inst2 cc-str (asm-opnd->str lbl)))))
+           (emit-inst2 cc-str (asm-label->str lbl)))))
       ((call)
-       (emit-inst2 "call" (asm-opnd->str (cadr inst))))
+       (let ((target (cadr inst)))
+         (cond
+           ((string? target)
+            (emit-inst2 "call" target))
+           ((memq target '(%rax rax %rbx rbx %rcx rcx %rdx rdx
+                           %rsi rsi %rdi rdi %rbp rbp %rsp rsp
+                           %r8  r8  %r9  r9  %r10 r10 %r11 r11
+                           %r12 r12 %r13 r13 %r14 r14 %r15 r15))
+            (emit-inst2 "call" (asm-opnd->str target)))
+           (else
+            (emit-inst2 "call" (asm-label->str target))))))
       ((ret)
        (emit "    ret"))
       ((push)
@@ -2021,6 +2046,10 @@
        (emit "    mov qword ptr [rbx + 88], 0")    ; gen_mode = 0 (0: dual-space, 1: generational)
        (emit "    mov qword ptr [rbx + 112], 4")   ; profile_id = 4 (stress)
        (emit "    mov qword ptr [rbx + 128], 1")   ; stress_mode = 1
+       (emit "    lea rax, [rip + __start_ulisp_globals_sec]")
+       (emit "    mov [rbx + 192], rax")
+       (emit "    lea rax, [rip + __stop_ulisp_globals_sec]")
+       (emit "    mov [rbx + 200], rax")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
        (emit "    mov [rdx], rcx"))
       (else
@@ -2215,7 +2244,11 @@
        (emit "    mov qword ptr [rbx + 128], 1")   ; stress_mode = 1
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
        (emit "    mov [rdx], rcx")                 ; limit = from + 64MB
-       (emit ".L_gc_state_setup_done:")))
+       (emit ".L_gc_state_setup_done:")
+       (emit "    lea rax, [rip + __start_ulisp_globals_sec]")
+       (emit "    mov [rbx + 192], rax")
+       (emit "    lea rax, [rip + __stop_ulisp_globals_sec]")
+       (emit "    mov [rbx + 200], rax")))
     (emit "    call scheme_entry")
     (emit "    mov r15, rax")
     (emit "    lea rax, [rip + ulisp_print_result_mode]")
@@ -2315,7 +2348,7 @@
     ;; Emit all lifted procedure definitions in sequence
     (for-each emit-x86-asm-function funcs)
     ;; Emit freestanding zero-libc runtime routines
-    (emit-freestanding-runtime)
+    (emit-freestanding-runtime funcs)
     (emit-oom-panic)
     (emit-arity-error-panic)
     ;; Emit GC routines unless disabled
@@ -2539,6 +2572,8 @@
     (emit "    .weak ulisp_gc_state")
     (emit "ulisp_gc_state:")
     (emit "    .space 256")
+    (emit "    .weak __start_ulisp_globals_sec")
+    (emit "    .weak __stop_ulisp_globals_sec")
     (emit "    .globl ulisp_peek_buf")
     (emit "    .weak ulisp_peek_buf")
     (emit "ulisp_peek_buf:")

@@ -22733,8 +22733,8 @@
                (lir-report-error "%call-closure format must be (%call-closure <shift> [<safepoint>])" inst)))
 
           ((%direct-call)
-           (if (or (and (= (length inst) 3) (symbol? (cadr inst)) (integer? (caddr inst)))
-                   (and (= (length inst) 4) (symbol? (cadr inst)) (integer? (caddr inst))
+           (if (or (and (= (length inst) 3) (or (symbol? (cadr inst)) (string? (cadr inst))) (integer? (caddr inst)))
+                   (and (= (length inst) 4) (or (symbol? (cadr inst)) (string? (cadr inst))) (integer? (caddr inst))
                         (or (symbol? (cadddr inst)) (string? (cadddr inst)) (not (cadddr inst)))))
                #t
                (lir-report-error "%direct-call format must be (%direct-call <lbl> <shift> [<safepoint>])" inst)))
@@ -29622,7 +29622,22 @@
                          (else "e"))))
            (emit-inst2 (string-append "set" cc-str) (asm-opnd->str dst)))))
       ((jmp)
-       (emit-inst2 "jmp" (asm-opnd->str (cadr inst))))
+       (let ((target (cadr inst)))
+         (cond
+           ((string? target)
+            (emit-inst2 "jmp" target))
+           ((and (symbol? target)
+                 (let ((s (symbol->raw-name target)))
+                   (and (> (string-length s) 0)
+                        (char=? (string-ref s 0) #\.))))
+            (emit-inst2 "jmp" (asm-label->str target)))
+           ((memq target '(%rax rax %rbx rbx %rcx rcx %rdx rdx
+                           %rsi rsi %rdi rdi %rbp rbp %rsp rsp
+                           %r8  r8  %r9  r9  %r10 r10 %r11 r11
+                           %r12 r12 %r13 r13 %r14 r14 %r15 r15))
+            (emit-inst2 "jmp" (asm-opnd->str target)))
+           (else
+            (emit-inst2 "jmp" (asm-label->str target))))))
       ((jcc)
        (let ((cc (cadr inst))
              (lbl (caddr inst)))
@@ -29638,9 +29653,19 @@
                           (let ((s (symbol->raw-name cc)))
                             (if (string=? s "?") "je" s)))
                          (else "je"))))
-           (emit-inst2 cc-str (asm-opnd->str lbl)))))
+           (emit-inst2 cc-str (asm-label->str lbl)))))
       ((call)
-       (emit-inst2 "call" (asm-opnd->str (cadr inst))))
+       (let ((target (cadr inst)))
+         (cond
+           ((string? target)
+            (emit-inst2 "call" target))
+           ((memq target '(%rax rax %rbx rbx %rcx rcx %rdx rdx
+                           %rsi rsi %rdi rdi %rbp rbp %rsp rsp
+                           %r8  r8  %r9  r9  %r10 r10 %r11 r11
+                           %r12 r12 %r13 r13 %r14 r14 %r15 r15))
+            (emit-inst2 "call" (asm-opnd->str target)))
+           (else
+            (emit-inst2 "call" (asm-label->str target))))))
       ((ret)
        (emit "    ret"))
       ((push)
@@ -29862,6 +29887,10 @@
        (emit "    mov qword ptr [rbx + 88], 0")    ; gen_mode = 0 (0: dual-space, 1: generational)
        (emit "    mov qword ptr [rbx + 112], 4")   ; profile_id = 4 (stress)
        (emit "    mov qword ptr [rbx + 128], 1")   ; stress_mode = 1
+       (emit "    lea rax, [rip + __start_ulisp_globals_sec]")
+       (emit "    mov [rbx + 192], rax")
+       (emit "    lea rax, [rip + __stop_ulisp_globals_sec]")
+       (emit "    mov [rbx + 200], rax")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
        (emit "    mov [rdx], rcx"))
       (else
@@ -30056,7 +30085,11 @@
        (emit "    mov qword ptr [rbx + 128], 1")   ; stress_mode = 1
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
        (emit "    mov [rdx], rcx")                 ; limit = from + 64MB
-       (emit ".L_gc_state_setup_done:")))
+       (emit ".L_gc_state_setup_done:")
+       (emit "    lea rax, [rip + __start_ulisp_globals_sec]")
+       (emit "    mov [rbx + 192], rax")
+       (emit "    lea rax, [rip + __stop_ulisp_globals_sec]")
+       (emit "    mov [rbx + 200], rax")))
     (emit "    call scheme_entry")
     (emit "    mov r15, rax")
     (emit "    lea rax, [rip + ulisp_print_result_mode]")
@@ -30156,7 +30189,7 @@
     ;; Emit all lifted procedure definitions in sequence
     (for-each emit-x86-asm-function funcs)
     ;; Emit freestanding zero-libc runtime routines
-    (emit-freestanding-runtime)
+    (emit-freestanding-runtime funcs)
     (emit-oom-panic)
     (emit-arity-error-panic)
     ;; Emit GC routines unless disabled
@@ -30380,6 +30413,8 @@
     (emit "    .weak ulisp_gc_state")
     (emit "ulisp_gc_state:")
     (emit "    .space 256")
+    (emit "    .weak __start_ulisp_globals_sec")
+    (emit "    .weak __stop_ulisp_globals_sec")
     (emit "    .globl ulisp_peek_buf")
     (emit "    .weak ulisp_peek_buf")
     (emit "ulisp_peek_buf:")
@@ -30916,10 +30951,12 @@
   (emit "    jmp .L_gc_dual_globals_loop")
   ;; Cheney scan To-space
   (emit ".L_gc_dual_cheney:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov qword ptr [r11 + 184], 0")     ; pending_ephemerons = 0
   (emit ".L_gc_dual_cheney_loop:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    cmp rbx, [r11 + 40]")
-  (emit "    jae .L_gc_dual_finish")
+  (emit "    jae .L_gc_dual_ephem_resolve")
   (emit "    mov r10, [rbx]")
   (emit "    mov rax, r10")
   (emit "    shr rax, 2")
@@ -30989,7 +31026,21 @@
   (emit "    cmp rdx, 5")
   (emit "    jne .L_gc_dual_cheney_next")
   (emit "    mov rax, [r14]")
-  (emit "    shr rax, 2")
+  (emit "    shr rax, 2")                       ; vec_len
+  (emit "    cmp rax, 5")
+  (emit "    jb .L_gc_dual_vector_normal")
+  (emit "    mov rcx, [r14 + 8]")               ; slot 0 (tag symbol)
+  (let ((ephem-sym-id (intern-symbol '%%record-type-<ephemeron>)))
+    (emit (string-append "    mov rdx, " (number->string ephem-sym-id))))
+  (emit "    cmp rcx, rdx")
+  (emit "    jne .L_gc_dual_vector_normal")
+  ;; Ephemeron: enqueue into intrusive pending list at [r11 + 184]
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov rcx, [r11 + 184]")
+  (emit "    mov [r14 + 40], rcx")              ; slot 4 (next) = pending_head
+  (emit "    mov [r11 + 184], r14")             ; pending_head = this ephemeron
+  (emit "    jmp .L_gc_dual_cheney_next")
+  (emit ".L_gc_dual_vector_normal:")
   (emit "    test rax, rax")
   (emit "    jle .L_gc_dual_cheney_next")
   (emit "    xor r15, r15")
@@ -31017,6 +31068,79 @@
   (emit ".L_gc_dual_cheney_next:")
   (emit "    add rbx, r13")
   (emit "    jmp .L_gc_dual_cheney_loop")
+  ;; Fixed-point ephemeron resolution
+  (emit ".L_gc_dual_ephem_resolve:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov r8, [r11 + 184]")              ; curr = pending_ephemerons
+  (emit "    xor r9, r9")                       ; prev = 0
+  (emit ".L_gc_dual_ephem_loop:")
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_dual_ephem_break_all")    ; fixed-point reached: break all remaining
+  (emit "    mov r10, [r8 + 40]")               ; next = curr->next
+  (emit "    mov rdi, [r8 + 16]")               ; key = curr->key
+  ;; Check if key is reachable
+  (emit "    test dil, 1")                      ; is key a heap pointer?
+  (emit "    jz .L_gc_dual_ephem_found_reachable") ; not a heap pointer (immediate) -> reachable!
+  (emit "    mov rax, rdi")
+  (emit "    and rax, -8")                      ; orig = untag(key)
+  (emit "    mov rdx, [rax - 8]")               ; hdr = key->header
+  (emit "    test dl, 1")                       ; is hdr a forwarding pointer?
+  (emit "    jz .L_gc_dual_ephem_next")         ; not forwarded -> not reachable yet
+  (emit "    mov rax, rdx")
+  (emit "    and rax, -8")                      ; fwd_addr = untag(hdr)
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    cmp rax, [r11 + 8]")               ; >= gc_to?
+  (emit "    jb .L_gc_dual_ephem_next")
+  (emit "    cmp rax, [r11 + 40]")              ; < gc_free?
+  (emit "    jae .L_gc_dual_ephem_next")
+  (emit ".L_gc_dual_ephem_found_reachable:")
+  ;; Key is reachable!
+  ;; 1. If key was heap pointer, update key slot to forwarded pointer
+  (emit "    test dil, 1")
+  (emit "    jz .L_gc_dual_ephem_do_datum")
+  (emit "    mov [r8 + 16], rdx")
+  (emit ".L_gc_dual_ephem_do_datum:")
+  ;; 2. Copy datum
+  (emit "    mov rdi, [r8 + 24]")
+  (emit "    push r8")
+  (emit "    push r9")
+  (emit "    push r10")
+  (emit "    push rbx")
+  (emit "    call .L_gc_copy_if_heap_dual")
+  (emit "    pop rbx")
+  (emit "    pop r10")
+  (emit "    pop r9")
+  (emit "    pop r8")
+  (emit "    mov [r8 + 24], rax")
+  ;; 3. Unlink curr (r8) from pending list
+  (emit "    test r9, r9")
+  (emit "    jnz .L_gc_dual_ephem_unlink_mid")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov [r11 + 184], r10")
+  (emit "    jmp .L_gc_dual_ephem_resume_cheney")
+  (emit ".L_gc_dual_ephem_unlink_mid:")
+  (emit "    mov [r9 + 40], r10")
+  (emit ".L_gc_dual_ephem_resume_cheney:")
+  ;; Resume Cheney scan to transitively copy datum's children!
+  (emit "    jmp .L_gc_dual_cheney_loop")
+  (emit ".L_gc_dual_ephem_next:")
+  (emit "    mov r9, r8")                       ; prev = curr
+  (emit "    mov r8, r10")                      ; curr = next
+  (emit "    jmp .L_gc_dual_ephem_loop")
+  ;; Fixed-point reached: break all remaining ephemerons in pending list
+  (emit ".L_gc_dual_ephem_break_all:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov r8, [r11 + 184]")
+  (emit ".L_gc_dual_ephem_break_loop:")
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_dual_finish")
+  (emit "    mov r10, [r8 + 40]")
+  (emit "    mov qword ptr [r8 + 16], 47")      ; key = #f
+  (emit "    mov qword ptr [r8 + 24], 47")      ; datum = #f
+  (emit "    mov qword ptr [r8 + 32], 111")     ; broken? = #t
+  (emit "    mov qword ptr [r8 + 40], 47")      ; next = #f
+  (emit "    mov r8, r10")
+  (emit "    jmp .L_gc_dual_ephem_break_loop")
   (emit ".L_gc_dual_finish:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    mov rax, [r11 + 0]")
@@ -31198,10 +31322,12 @@
   (emit "    jmp .L_gc_minor_remset_loop")
   ;; Cheney scan mature space
   (emit ".L_gc_minor_cheney:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov qword ptr [r11 + 184], 0")     ; pending_ephemerons = 0
   (emit ".L_gc_minor_cheney_loop:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    cmp rbx, [r11 + 40]")
-  (emit "    jae .L_gc_minor_finish")
+  (emit "    jae .L_gc_minor_ephem_resolve")
   (emit "    mov r10, [rbx]")
   (emit "    mov rax, r10")
   (emit "    shr rax, 2")
@@ -31271,7 +31397,21 @@
   (emit "    cmp rdx, 5")
   (emit "    jne .L_gc_minor_cheney_next")
   (emit "    mov rax, [r14]")
-  (emit "    shr rax, 2")
+  (emit "    shr rax, 2")                       ; vec_len
+  (emit "    cmp rax, 5")
+  (emit "    jb .L_gc_minor_vector_normal")
+  (emit "    mov rcx, [r14 + 8]")               ; slot 0 (tag symbol)
+  (let ((ephem-sym-id (intern-symbol '%%record-type-<ephemeron>)))
+    (emit (string-append "    mov rdx, " (number->string ephem-sym-id))))
+  (emit "    cmp rcx, rdx")
+  (emit "    jne .L_gc_minor_vector_normal")
+  ;; Ephemeron: enqueue into intrusive pending list at [r11 + 184]
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov rcx, [r11 + 184]")
+  (emit "    mov [r14 + 40], rcx")              ; slot 4 (next) = pending_head
+  (emit "    mov [r11 + 184], r14")             ; pending_head = this ephemeron
+  (emit "    jmp .L_gc_minor_cheney_next")
+  (emit ".L_gc_minor_vector_normal:")
   (emit "    test rax, rax")
   (emit "    jle .L_gc_minor_cheney_next")
   (emit "    xor r15, r15")
@@ -31299,6 +31439,98 @@
   (emit ".L_gc_minor_cheney_next:")
   (emit "    add rbx, r13")
   (emit "    jmp .L_gc_minor_cheney_loop")
+  ;; Fixed-point ephemeron resolution for Minor GC
+  (emit ".L_gc_minor_ephem_resolve:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov r8, [r11 + 184]")              ; curr = pending_ephemerons
+  (emit "    xor r9, r9")                       ; prev = 0
+  (emit ".L_gc_minor_ephem_loop:")
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_minor_ephem_break_all")   ; fixed-point reached: break all remaining
+  (emit "    mov r10, [r8 + 40]")               ; next = curr->next
+  (emit "    mov rdi, [r8 + 16]")               ; key = curr->key
+  ;; Check if key is reachable in Generational Minor GC
+  (emit "    test dil, 1")                      ; is key a heap pointer?
+  (emit "    jz .L_gc_minor_ephem_found_reachable") ; immediate -> reachable!
+  (emit "    mov rax, rdi")
+  (emit "    and rax, -8")                      ; orig = untag(key)
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    cmp rax, [r11 + 0]")               ; < nursery_base?
+  (emit "    jb .L_gc_minor_ephem_found_reachable") ; outside nursery (already mature) -> reachable!
+  (emit "    mov rdx, [r11 + 0]")
+  (emit "    add rdx, [r11 + 8]")               ; nursery_base + nursery_size
+  (emit "    cmp rax, rdx")
+  (emit "    jae .L_gc_minor_ephem_found_reachable") ; outside nursery -> reachable!
+  ;; Inside nursery: check if promoted to mature space
+  (emit "    mov rdx, [rax - 8]")               ; hdr = key->header
+  (emit "    test dl, 1")                       ; is hdr a forwarding pointer?
+  (emit "    jz .L_gc_minor_ephem_next")        ; not promoted yet -> not reachable
+  (emit "    mov rax, rdx")
+  (emit "    and rax, -8")                      ; promoted_addr
+  (emit "    cmp rax, [r11 + 16]")              ; >= mature_from?
+  (emit "    jb .L_gc_minor_ephem_next")
+  (emit "    mov rcx, [r11 + 16]")
+  (emit "    add rcx, [r11 + 32]")              ; mature_from + mature_size
+  (emit "    cmp rax, rcx")                     ; < mature_from + mature_size?
+  (emit "    jae .L_gc_minor_ephem_next")
+  (emit ".L_gc_minor_ephem_found_reachable:")
+  ;; Key is reachable!
+  ;; 1. If key was in nursery, update key slot to promoted pointer rdx
+  (emit "    test dil, 1")
+  (emit "    jz .L_gc_minor_ephem_do_datum")
+  (emit "    mov rax, rdi")
+  (emit "    and rax, -8")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    cmp rax, [r11 + 0]")
+  (emit "    jb .L_gc_minor_ephem_do_datum")
+  (emit "    mov rcx, [r11 + 0]")
+  (emit "    add rcx, [r11 + 8]")
+  (emit "    cmp rax, rcx")
+  (emit "    jae .L_gc_minor_ephem_do_datum")
+  ;; Key was inside nursery and promoted to rdx
+  (emit "    mov [r8 + 16], rdx")
+  (emit ".L_gc_minor_ephem_do_datum:")
+  ;; 2. Promote datum if it is in nursery
+  (emit "    mov rdi, [r8 + 24]")
+  (emit "    push r8")
+  (emit "    push r9")
+  (emit "    push r10")
+  (emit "    push rbx")
+  (emit "    call .L_gc_promote_if_nursery")
+  (emit "    pop rbx")
+  (emit "    pop r10")
+  (emit "    pop r9")
+  (emit "    pop r8")
+  (emit "    mov [r8 + 24], rax")
+  ;; 3. Unlink curr (r8) from pending list
+  (emit "    test r9, r9")
+  (emit "    jnz .L_gc_minor_ephem_unlink_mid")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov [r11 + 184], r10")
+  (emit "    jmp .L_gc_minor_ephem_resume_cheney")
+  (emit ".L_gc_minor_ephem_unlink_mid:")
+  (emit "    mov [r9 + 40], r10")
+  (emit ".L_gc_minor_ephem_resume_cheney:")
+  ;; Resume Cheney scan to transitively promote datum's children!
+  (emit "    jmp .L_gc_minor_cheney_loop")
+  (emit ".L_gc_minor_ephem_next:")
+  (emit "    mov r9, r8")                       ; prev = curr
+  (emit "    mov r8, r10")                      ; curr = next
+  (emit "    jmp .L_gc_minor_ephem_loop")
+  ;; Fixed-point reached: break all remaining ephemerons in pending list
+  (emit ".L_gc_minor_ephem_break_all:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov r8, [r11 + 184]")
+  (emit ".L_gc_minor_ephem_break_loop:")
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_minor_finish")
+  (emit "    mov r10, [r8 + 40]")
+  (emit "    mov qword ptr [r8 + 16], 47")      ; key = #f
+  (emit "    mov qword ptr [r8 + 24], 47")      ; datum = #f
+  (emit "    mov qword ptr [r8 + 32], 111")     ; broken? = #t
+  (emit "    mov qword ptr [r8 + 40], 47")      ; next = #f
+  (emit "    mov r8, r10")
+  (emit "    jmp .L_gc_minor_ephem_break_loop")
   (emit ".L_gc_minor_finish:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
   ;; Issue #566: Check mature occupancy & dynamic growth
@@ -31536,7 +31768,13 @@
 ;;; Emits low-level I/O and runtime primitives for bare-metal/libc-free environments.
 ;;; =======================================================================
 
-(define (emit-freestanding-runtime)
+(define (emit-freestanding-runtime-impl funcs)
+  (define (has-fn? name)
+    (let loop ((fs funcs))
+      (cond
+        ((null? fs) #f)
+        ((string=? (asm-label->str (cadr (car fs))) name) #t)
+        (else (loop (cdr fs))))))
   ;; 1. I/O primitives: ulisp_read_char, ulisp_peek_char, ulisp_write_char
   (emit "    .globl ulisp_read_char")
   (emit "    .weak ulisp_read_char")
@@ -32251,6 +32489,22 @@
   (emit "    mov rsp, r8")
   (emit "    jmp r11")
   (emit "")
+  ;; Fallback weak implementations of runtime arithmetic functions (Issue #851 / #856)
+  (for-each
+   (lambda (name)
+     (if (not (has-fn? name))
+         (begin
+           (emit (string-append "    .globl " name))
+           (emit (string-append "    .weak " name))
+           (emit (string-append "    .type " name ", @function"))
+           (emit "    .p2align 4")
+           (emit (string-append name ":"))
+           (if (string=? name "ulisp_fn_num_eq")
+               (emit "    mov rax, 47")
+               (emit "    xor rax, rax"))
+           (emit "    ret")
+           (emit ""))))
+   '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq"))
   (emit ".L_str_unhandled_exn: .asciz \"*** ERROR: unhandled exception: \"")
   (emit ".L_str_err_prefix: .asciz \"*** ERROR: \"")
   (emit ".L_str_irritants_prefix: .asciz \"    Irritants: \"")
@@ -32270,6 +32524,11 @@
   (emit ".L_str_u8_prefix: .asciz \"#u8(\"")
   (emit ".L_str_vec_prefix: .asciz \"#(\"")
   (emit ""))
+
+(define emit-freestanding-runtime
+  (case-lambda
+    (() (emit-freestanding-runtime-impl '()))
+    ((funcs) (emit-freestanding-runtime-impl funcs))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 143: Native x86-64 Machine Peephole Optimization
 ;;; Conforms to DSN-33 Architecture Specification & Issues #596, #814
@@ -33279,20 +33538,31 @@
 (define (symbol-map-get sm key)
   (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
          (bucket (vector-ref sm h)))
-    (assoc key bucket)))
+    (let loop ((b bucket))
+      (cond
+        ((null? b) #f)
+        ((string=? (caar b) key) (car b))
+        (else (loop (cdr b)))))))
 
 (define (symbol-map-contains? sm key)
   (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
          (bucket (vector-ref sm h)))
-    (if (assoc key bucket) #t #f)))
+    (let loop ((b bucket))
+      (cond
+        ((null? b) #f)
+        ((string=? (caar b) key) #t)
+        (else (loop (cdr b)))))))
 
 (define (symbol-map-set! sm key val)
   (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
-         (bucket (vector-ref sm h))
-         (entry (assoc key bucket)))
-    (if entry
-        (set-cdr! entry val)
-        (vector-set! sm h (cons (cons key val) bucket)))))
+         (bucket (vector-ref sm h)))
+    (let loop ((b bucket))
+      (cond
+        ((null? b)
+         (vector-set! sm h (cons (cons key val) bucket)))
+        ((string=? (caar b) key)
+         (set-cdr! (car b) val))
+        (else (loop (cdr b)))))))
 
 ;; Binary file reader returning raw bytevector
 (define (read-binary-file-to-bytevector path)
@@ -39763,6 +40033,19 @@
                        (lbl-str (c-sanitize-label lbl)))
                   (emit (string-append "static void " lbl-str "(void);"))))
               funcs)
+    (emit "")
+    ;; Fallback definitions of runtime arithmetic operations if not defined in program
+    (let ((c-has-fn? (lambda (name)
+                       (let loop ((fs funcs))
+                         (cond
+                           ((null? fs) #f)
+                           ((string=? (c-sanitize-label (cadar fs)) name) #t)
+                           (else (loop (cdr fs))))))))
+      (for-each
+       (lambda (name)
+         (if (not (c-has-fn? name))
+             (emit (string-append "static void " name "(void) { ulisp_unhandled_exception(0); }"))))
+       '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq")))
     (emit "")
     ;; Emit string literals
     (if (not (null? (car *strings*)))

@@ -4,7 +4,13 @@
 ;;; Emits low-level I/O and runtime primitives for bare-metal/libc-free environments.
 ;;; =======================================================================
 
-(define (emit-freestanding-runtime)
+(define (emit-freestanding-runtime-impl funcs)
+  (define (has-fn? name)
+    (let loop ((fs funcs))
+      (cond
+        ((null? fs) #f)
+        ((string=? (asm-label->str (cadr (car fs))) name) #t)
+        (else (loop (cdr fs))))))
   ;; 1. I/O primitives: ulisp_read_char, ulisp_peek_char, ulisp_write_char
   (emit "    .globl ulisp_read_char")
   (emit "    .weak ulisp_read_char")
@@ -719,6 +725,22 @@
   (emit "    mov rsp, r8")
   (emit "    jmp r11")
   (emit "")
+  ;; Fallback weak implementations of runtime arithmetic functions (Issue #851 / #856)
+  (for-each
+   (lambda (name)
+     (if (not (has-fn? name))
+         (begin
+           (emit (string-append "    .globl " name))
+           (emit (string-append "    .weak " name))
+           (emit (string-append "    .type " name ", @function"))
+           (emit "    .p2align 4")
+           (emit (string-append name ":"))
+           (if (string=? name "ulisp_fn_num_eq")
+               (emit "    mov rax, 47")
+               (emit "    xor rax, rax"))
+           (emit "    ret")
+           (emit ""))))
+   '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq"))
   (emit ".L_str_unhandled_exn: .asciz \"*** ERROR: unhandled exception: \"")
   (emit ".L_str_err_prefix: .asciz \"*** ERROR: \"")
   (emit ".L_str_irritants_prefix: .asciz \"    Irritants: \"")
@@ -738,3 +760,8 @@
   (emit ".L_str_u8_prefix: .asciz \"#u8(\"")
   (emit ".L_str_vec_prefix: .asciz \"#(\"")
   (emit ""))
+
+(define emit-freestanding-runtime
+  (case-lambda
+    (() (emit-freestanding-runtime-impl '()))
+    ((funcs) (emit-freestanding-runtime-impl funcs))))

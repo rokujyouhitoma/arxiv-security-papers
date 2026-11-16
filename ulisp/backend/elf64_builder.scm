@@ -848,20 +848,31 @@
 (define (symbol-map-get sm key)
   (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
          (bucket (vector-ref sm h)))
-    (assoc key bucket)))
+    (let loop ((b bucket))
+      (cond
+        ((null? b) #f)
+        ((string=? (caar b) key) (car b))
+        (else (loop (cdr b)))))))
 
 (define (symbol-map-contains? sm key)
   (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
          (bucket (vector-ref sm h)))
-    (if (assoc key bucket) #t #f)))
+    (let loop ((b bucket))
+      (cond
+        ((null? b) #f)
+        ((string=? (caar b) key) #t)
+        (else (loop (cdr b)))))))
 
 (define (symbol-map-set! sm key val)
   (let* ((h (modulo (elf64-string-hash key) (vector-length sm)))
-         (bucket (vector-ref sm h))
-         (entry (assoc key bucket)))
-    (if entry
-        (set-cdr! entry val)
-        (vector-set! sm h (cons (cons key val) bucket)))))
+         (bucket (vector-ref sm h)))
+    (let loop ((b bucket))
+      (cond
+        ((null? b)
+         (vector-set! sm h (cons (cons key val) bucket)))
+        ((string=? (caar b) key)
+         (set-cdr! (car b) val))
+        (else (loop (cdr b)))))))
 
 ;; Binary file reader returning raw bytevector
 (define (read-binary-file-to-bytevector path)

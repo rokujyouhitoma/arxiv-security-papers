@@ -293,10 +293,12 @@
   (emit "    jmp .L_gc_dual_globals_loop")
   ;; Cheney scan To-space
   (emit ".L_gc_dual_cheney:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov qword ptr [r11 + 184], 0")     ; pending_ephemerons = 0
   (emit ".L_gc_dual_cheney_loop:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    cmp rbx, [r11 + 40]")
-  (emit "    jae .L_gc_dual_finish")
+  (emit "    jae .L_gc_dual_ephem_resolve")
   (emit "    mov r10, [rbx]")
   (emit "    mov rax, r10")
   (emit "    shr rax, 2")
@@ -366,7 +368,21 @@
   (emit "    cmp rdx, 5")
   (emit "    jne .L_gc_dual_cheney_next")
   (emit "    mov rax, [r14]")
-  (emit "    shr rax, 2")
+  (emit "    shr rax, 2")                       ; vec_len
+  (emit "    cmp rax, 5")
+  (emit "    jb .L_gc_dual_vector_normal")
+  (emit "    mov rcx, [r14 + 8]")               ; slot 0 (tag symbol)
+  (let ((ephem-sym-id (intern-symbol '%%record-type-<ephemeron>)))
+    (emit (string-append "    mov rdx, " (number->string ephem-sym-id))))
+  (emit "    cmp rcx, rdx")
+  (emit "    jne .L_gc_dual_vector_normal")
+  ;; Ephemeron: enqueue into intrusive pending list at [r11 + 184]
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov rcx, [r11 + 184]")
+  (emit "    mov [r14 + 40], rcx")              ; slot 4 (next) = pending_head
+  (emit "    mov [r11 + 184], r14")             ; pending_head = this ephemeron
+  (emit "    jmp .L_gc_dual_cheney_next")
+  (emit ".L_gc_dual_vector_normal:")
   (emit "    test rax, rax")
   (emit "    jle .L_gc_dual_cheney_next")
   (emit "    xor r15, r15")
@@ -394,6 +410,79 @@
   (emit ".L_gc_dual_cheney_next:")
   (emit "    add rbx, r13")
   (emit "    jmp .L_gc_dual_cheney_loop")
+  ;; Fixed-point ephemeron resolution
+  (emit ".L_gc_dual_ephem_resolve:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov r8, [r11 + 184]")              ; curr = pending_ephemerons
+  (emit "    xor r9, r9")                       ; prev = 0
+  (emit ".L_gc_dual_ephem_loop:")
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_dual_ephem_break_all")    ; fixed-point reached: break all remaining
+  (emit "    mov r10, [r8 + 40]")               ; next = curr->next
+  (emit "    mov rdi, [r8 + 16]")               ; key = curr->key
+  ;; Check if key is reachable
+  (emit "    test dil, 1")                      ; is key a heap pointer?
+  (emit "    jz .L_gc_dual_ephem_found_reachable") ; not a heap pointer (immediate) -> reachable!
+  (emit "    mov rax, rdi")
+  (emit "    and rax, -8")                      ; orig = untag(key)
+  (emit "    mov rdx, [rax - 8]")               ; hdr = key->header
+  (emit "    test dl, 1")                       ; is hdr a forwarding pointer?
+  (emit "    jz .L_gc_dual_ephem_next")         ; not forwarded -> not reachable yet
+  (emit "    mov rax, rdx")
+  (emit "    and rax, -8")                      ; fwd_addr = untag(hdr)
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    cmp rax, [r11 + 8]")               ; >= gc_to?
+  (emit "    jb .L_gc_dual_ephem_next")
+  (emit "    cmp rax, [r11 + 40]")              ; < gc_free?
+  (emit "    jae .L_gc_dual_ephem_next")
+  (emit ".L_gc_dual_ephem_found_reachable:")
+  ;; Key is reachable!
+  ;; 1. If key was heap pointer, update key slot to forwarded pointer
+  (emit "    test dil, 1")
+  (emit "    jz .L_gc_dual_ephem_do_datum")
+  (emit "    mov [r8 + 16], rdx")
+  (emit ".L_gc_dual_ephem_do_datum:")
+  ;; 2. Copy datum
+  (emit "    mov rdi, [r8 + 24]")
+  (emit "    push r8")
+  (emit "    push r9")
+  (emit "    push r10")
+  (emit "    push rbx")
+  (emit "    call .L_gc_copy_if_heap_dual")
+  (emit "    pop rbx")
+  (emit "    pop r10")
+  (emit "    pop r9")
+  (emit "    pop r8")
+  (emit "    mov [r8 + 24], rax")
+  ;; 3. Unlink curr (r8) from pending list
+  (emit "    test r9, r9")
+  (emit "    jnz .L_gc_dual_ephem_unlink_mid")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov [r11 + 184], r10")
+  (emit "    jmp .L_gc_dual_ephem_resume_cheney")
+  (emit ".L_gc_dual_ephem_unlink_mid:")
+  (emit "    mov [r9 + 40], r10")
+  (emit ".L_gc_dual_ephem_resume_cheney:")
+  ;; Resume Cheney scan to transitively copy datum's children!
+  (emit "    jmp .L_gc_dual_cheney_loop")
+  (emit ".L_gc_dual_ephem_next:")
+  (emit "    mov r9, r8")                       ; prev = curr
+  (emit "    mov r8, r10")                      ; curr = next
+  (emit "    jmp .L_gc_dual_ephem_loop")
+  ;; Fixed-point reached: break all remaining ephemerons in pending list
+  (emit ".L_gc_dual_ephem_break_all:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov r8, [r11 + 184]")
+  (emit ".L_gc_dual_ephem_break_loop:")
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_dual_finish")
+  (emit "    mov r10, [r8 + 40]")
+  (emit "    mov qword ptr [r8 + 16], 47")      ; key = #f
+  (emit "    mov qword ptr [r8 + 24], 47")      ; datum = #f
+  (emit "    mov qword ptr [r8 + 32], 111")     ; broken? = #t
+  (emit "    mov qword ptr [r8 + 40], 47")      ; next = #f
+  (emit "    mov r8, r10")
+  (emit "    jmp .L_gc_dual_ephem_break_loop")
   (emit ".L_gc_dual_finish:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    mov rax, [r11 + 0]")
@@ -575,10 +664,12 @@
   (emit "    jmp .L_gc_minor_remset_loop")
   ;; Cheney scan mature space
   (emit ".L_gc_minor_cheney:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov qword ptr [r11 + 184], 0")     ; pending_ephemerons = 0
   (emit ".L_gc_minor_cheney_loop:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    cmp rbx, [r11 + 40]")
-  (emit "    jae .L_gc_minor_finish")
+  (emit "    jae .L_gc_minor_ephem_resolve")
   (emit "    mov r10, [rbx]")
   (emit "    mov rax, r10")
   (emit "    shr rax, 2")
@@ -648,7 +739,21 @@
   (emit "    cmp rdx, 5")
   (emit "    jne .L_gc_minor_cheney_next")
   (emit "    mov rax, [r14]")
-  (emit "    shr rax, 2")
+  (emit "    shr rax, 2")                       ; vec_len
+  (emit "    cmp rax, 5")
+  (emit "    jb .L_gc_minor_vector_normal")
+  (emit "    mov rcx, [r14 + 8]")               ; slot 0 (tag symbol)
+  (let ((ephem-sym-id (intern-symbol '%%record-type-<ephemeron>)))
+    (emit (string-append "    mov rdx, " (number->string ephem-sym-id))))
+  (emit "    cmp rcx, rdx")
+  (emit "    jne .L_gc_minor_vector_normal")
+  ;; Ephemeron: enqueue into intrusive pending list at [r11 + 184]
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov rcx, [r11 + 184]")
+  (emit "    mov [r14 + 40], rcx")              ; slot 4 (next) = pending_head
+  (emit "    mov [r11 + 184], r14")             ; pending_head = this ephemeron
+  (emit "    jmp .L_gc_minor_cheney_next")
+  (emit ".L_gc_minor_vector_normal:")
   (emit "    test rax, rax")
   (emit "    jle .L_gc_minor_cheney_next")
   (emit "    xor r15, r15")
@@ -676,6 +781,98 @@
   (emit ".L_gc_minor_cheney_next:")
   (emit "    add rbx, r13")
   (emit "    jmp .L_gc_minor_cheney_loop")
+  ;; Fixed-point ephemeron resolution for Minor GC
+  (emit ".L_gc_minor_ephem_resolve:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov r8, [r11 + 184]")              ; curr = pending_ephemerons
+  (emit "    xor r9, r9")                       ; prev = 0
+  (emit ".L_gc_minor_ephem_loop:")
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_minor_ephem_break_all")   ; fixed-point reached: break all remaining
+  (emit "    mov r10, [r8 + 40]")               ; next = curr->next
+  (emit "    mov rdi, [r8 + 16]")               ; key = curr->key
+  ;; Check if key is reachable in Generational Minor GC
+  (emit "    test dil, 1")                      ; is key a heap pointer?
+  (emit "    jz .L_gc_minor_ephem_found_reachable") ; immediate -> reachable!
+  (emit "    mov rax, rdi")
+  (emit "    and rax, -8")                      ; orig = untag(key)
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    cmp rax, [r11 + 0]")               ; < nursery_base?
+  (emit "    jb .L_gc_minor_ephem_found_reachable") ; outside nursery (already mature) -> reachable!
+  (emit "    mov rdx, [r11 + 0]")
+  (emit "    add rdx, [r11 + 8]")               ; nursery_base + nursery_size
+  (emit "    cmp rax, rdx")
+  (emit "    jae .L_gc_minor_ephem_found_reachable") ; outside nursery -> reachable!
+  ;; Inside nursery: check if promoted to mature space
+  (emit "    mov rdx, [rax - 8]")               ; hdr = key->header
+  (emit "    test dl, 1")                       ; is hdr a forwarding pointer?
+  (emit "    jz .L_gc_minor_ephem_next")        ; not promoted yet -> not reachable
+  (emit "    mov rax, rdx")
+  (emit "    and rax, -8")                      ; promoted_addr
+  (emit "    cmp rax, [r11 + 16]")              ; >= mature_from?
+  (emit "    jb .L_gc_minor_ephem_next")
+  (emit "    mov rcx, [r11 + 16]")
+  (emit "    add rcx, [r11 + 32]")              ; mature_from + mature_size
+  (emit "    cmp rax, rcx")                     ; < mature_from + mature_size?
+  (emit "    jae .L_gc_minor_ephem_next")
+  (emit ".L_gc_minor_ephem_found_reachable:")
+  ;; Key is reachable!
+  ;; 1. If key was in nursery, update key slot to promoted pointer rdx
+  (emit "    test dil, 1")
+  (emit "    jz .L_gc_minor_ephem_do_datum")
+  (emit "    mov rax, rdi")
+  (emit "    and rax, -8")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    cmp rax, [r11 + 0]")
+  (emit "    jb .L_gc_minor_ephem_do_datum")
+  (emit "    mov rcx, [r11 + 0]")
+  (emit "    add rcx, [r11 + 8]")
+  (emit "    cmp rax, rcx")
+  (emit "    jae .L_gc_minor_ephem_do_datum")
+  ;; Key was inside nursery and promoted to rdx
+  (emit "    mov [r8 + 16], rdx")
+  (emit ".L_gc_minor_ephem_do_datum:")
+  ;; 2. Promote datum if it is in nursery
+  (emit "    mov rdi, [r8 + 24]")
+  (emit "    push r8")
+  (emit "    push r9")
+  (emit "    push r10")
+  (emit "    push rbx")
+  (emit "    call .L_gc_promote_if_nursery")
+  (emit "    pop rbx")
+  (emit "    pop r10")
+  (emit "    pop r9")
+  (emit "    pop r8")
+  (emit "    mov [r8 + 24], rax")
+  ;; 3. Unlink curr (r8) from pending list
+  (emit "    test r9, r9")
+  (emit "    jnz .L_gc_minor_ephem_unlink_mid")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov [r11 + 184], r10")
+  (emit "    jmp .L_gc_minor_ephem_resume_cheney")
+  (emit ".L_gc_minor_ephem_unlink_mid:")
+  (emit "    mov [r9 + 40], r10")
+  (emit ".L_gc_minor_ephem_resume_cheney:")
+  ;; Resume Cheney scan to transitively promote datum's children!
+  (emit "    jmp .L_gc_minor_cheney_loop")
+  (emit ".L_gc_minor_ephem_next:")
+  (emit "    mov r9, r8")                       ; prev = curr
+  (emit "    mov r8, r10")                      ; curr = next
+  (emit "    jmp .L_gc_minor_ephem_loop")
+  ;; Fixed-point reached: break all remaining ephemerons in pending list
+  (emit ".L_gc_minor_ephem_break_all:")
+  (emit "    lea r11, [rip + ulisp_gc_state]")
+  (emit "    mov r8, [r11 + 184]")
+  (emit ".L_gc_minor_ephem_break_loop:")
+  (emit "    test r8, r8")
+  (emit "    jz .L_gc_minor_finish")
+  (emit "    mov r10, [r8 + 40]")
+  (emit "    mov qword ptr [r8 + 16], 47")      ; key = #f
+  (emit "    mov qword ptr [r8 + 24], 47")      ; datum = #f
+  (emit "    mov qword ptr [r8 + 32], 111")     ; broken? = #t
+  (emit "    mov qword ptr [r8 + 40], 47")      ; next = #f
+  (emit "    mov r8, r10")
+  (emit "    jmp .L_gc_minor_ephem_break_loop")
   (emit ".L_gc_minor_finish:")
   (emit "    lea r11, [rip + ulisp_gc_state]")
   ;; Issue #566: Check mature occupancy & dynamic growth

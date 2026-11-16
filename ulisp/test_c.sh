@@ -45,9 +45,9 @@ assert_c() {
     if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
         code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/bytevector.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ delay || "$expr" =~ force || "$expr" =~ promise ]]; then
-        code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/vector.scm\") (include \"lib/promise.scm\")"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/list.scm\") (include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/vector.scm\") (include \"lib/promise.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ define-record-type || "$expr" =~ vector ]]; then
-        code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/vector.scm\")"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/list.scm\") (include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/vector.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ parameter || "$expr" =~ dynamic-wind ]]; then
         code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/continuation.scm\") (include \"lib/parameter.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ list-copy || "$expr" =~ make-list ]]; then
@@ -334,8 +334,8 @@ assert_c "42" "(letrec ((loop (lambda (n) (delay-force (if (= n 0) (delay 42) (l
 assert_c "100" "(force (force (delay (delay 100))))"
 
 echo "--- Step 14: Standalone R7RS Test Suites (test_*.scm) ---"
-run_test_file_c "tests/test_record.scm" "lib/char.scm lib/string.scm lib/vector.scm" "R7RS define-record-type suite"
-run_test_file_c "tests/test_promise.scm" "lib/char.scm lib/string.scm lib/vector.scm lib/promise.scm" "R7RS delay/force/promise suite"
+run_test_file_c "tests/test_record.scm" "lib/list.scm lib/char.scm lib/string.scm lib/vector.scm" "R7RS define-record-type suite"
+run_test_file_c "tests/test_promise.scm" "lib/list.scm lib/char.scm lib/string.scm lib/vector.scm lib/promise.scm" "R7RS delay/force/promise suite"
 run_test_file_c "tests/test_stdlib_r7rs.scm" "lib/list.scm lib/predicates.scm lib/char.scm lib/string.scm lib/vector.scm lib/bytevector.scm lib/equality.scm lib/math.scm" "R7RS standard sequence library suite"
 
 echo "--- Step 15: R7RS Iteration (Issue 559: do) ---"

@@ -462,8 +462,8 @@
                (lir-report-error "%call-closure format must be (%call-closure <shift> [<safepoint>])" inst)))
 
           ((%direct-call)
-           (if (or (and (= (length inst) 3) (symbol? (cadr inst)) (integer? (caddr inst)))
-                   (and (= (length inst) 4) (symbol? (cadr inst)) (integer? (caddr inst))
+           (if (or (and (= (length inst) 3) (or (symbol? (cadr inst)) (string? (cadr inst))) (integer? (caddr inst)))
+                   (and (= (length inst) 4) (or (symbol? (cadr inst)) (string? (cadr inst))) (integer? (caddr inst))
                         (or (symbol? (cadddr inst)) (string? (cadddr inst)) (not (cadddr inst)))))
                #t
                (lir-report-error "%direct-call format must be (%direct-call <lbl> <shift> [<safepoint>])" inst)))
