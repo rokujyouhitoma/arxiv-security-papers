@@ -42,14 +42,16 @@ assert_c() {
 
     # Prepend (!target c) and optional stdlib via R7RS (include ...)
     local code
-    if [[ "$expr" =~ bytevector || "$expr" =~ utf8 ]]; then
-        code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/bytevector.scm\")"$'\n'"$expr"
-    elif [[ "$expr" =~ delay || "$expr" =~ force || "$expr" =~ promise ]]; then
-        code="(!target c)"$'\n'"(include \"lib/list.scm\") (include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/vector.scm\") (include \"lib/promise.scm\")"$'\n'"$expr"
-    elif [[ "$expr" =~ define-record-type || "$expr" =~ vector ]]; then
-        code="(!target c)"$'\n'"(include \"lib/list.scm\") (include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/vector.scm\")"$'\n'"$expr"
+    if [[ "$expr" =~ delay || "$expr" =~ force || "$expr" =~ promise ]]; then
+        code="(!target c)"$'\n'"(include \"lib/promise.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ parameter || "$expr" =~ dynamic-wind ]]; then
-        code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/continuation.scm\") (include \"lib/parameter.scm\")"$'\n'"$expr"
+        code="(!target c)"$'\n'"(include \"lib/continuation.scm\") (include \"lib/parameter.scm\")"$'\n'"$expr"
+    elif [[ "$expr" =~ utf8 ]]; then
+        code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/bytevector.scm\")"$'\n'"$expr"
+    elif [[ "$expr" =~ bytevector-copy || "$expr" =~ "bytevector=?" || "$expr" =~ bytevector-append || "$expr" =~ bytevector-\>list || "$expr" =~ list-\>bytevector || "$expr" =~ "make-bytevector 3 42" || "$expr" =~ "make-bytevector 5 0" ]]; then
+        code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/bytevector.scm\")"$'\n'"$expr"
+    elif [[ "$expr" =~ string-\>vector || "$expr" =~ vector-\>string || "$expr" =~ vector-copy || "$expr" =~ vector-fill || "$expr" =~ vector-append || "$expr" =~ vector-map || "$expr" =~ vector-for-each || "$expr" =~ vector-\>list || "$expr" =~ list-\>vector || "$expr" =~ "make-vector 3 42" || "$expr" =~ "make-vector 5 0" ]]; then
+        code="(!target c)"$'\n'"(include \"lib/list.scm\") (include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/vector.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ list-copy || "$expr" =~ make-list ]]; then
         code="(!target c)"$'\n'"(include \"lib/list.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ string-copy || "$expr" =~ string-fill || "$expr" =~ string-map || "$expr" =~ string-for-each || "$expr" =~ string-\>list || "$expr" =~ list-\>string || "$expr" =~ "string<" || "$expr" =~ "string>" || "$expr" =~ "string=" || "$expr" =~ string-ci || "$expr" =~ string-upcase || "$expr" =~ string-downcase || "$expr" =~ string-foldcase ]]; then
