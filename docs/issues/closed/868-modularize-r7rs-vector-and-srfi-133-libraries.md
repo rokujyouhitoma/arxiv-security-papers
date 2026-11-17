@@ -2,7 +2,7 @@
 ID: 868
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] lib/vector.scm (R7RS Base) と lib/srfi/133.scm (SRFI 133) のモジュール分離と依存関係解消 (ID: 868)
@@ -45,12 +45,12 @@ ID: 868
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/vector.scm](../../ulisp/lib/vector.scm) : R7RS-small 基本手続き（184 行）に純化し、SRFI 133 手続きを分離
-- [ ] [ulisp/lib/srfi/133.scm](../../ulisp/lib/srfi/133.scm) : 新規作成。SRFI 133 固有の 40+ 手続きを配置
-- [ ] [ulisp/lib/scheme/vector.sld](../../ulisp/lib/scheme/vector.sld) : `lib/vector.scm` と `lib/srfi/133.scm` の両方を include するよう更新
-- [ ] [ulisp/lib/srfi/133.sld](../../ulisp/lib/srfi/133.sld) : 同上
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) : `test_srfi_133` ターゲットおよび `lint_sexpr` ターゲットに `lib/srfi/133.scm` を追加
-- [ ] [ulisp/test_c.sh](../../ulisp/test_c.sh) : `lib/vector.scm` 単体 include への最適化反映
+- [x] [ulisp/lib/vector.scm](../../ulisp/lib/vector.scm) : R7RS-small 基本手続き（184 行）に純化し、SRFI 133 手続きを分離
+- [x] [ulisp/lib/srfi/133.scm](../../ulisp/lib/srfi/133.scm) : 新規作成。SRFI 133 固有の 40+ 手続きを配置
+- [x] [ulisp/lib/scheme/vector.sld](../../ulisp/lib/scheme/vector.sld) : `lib/vector.scm` と `lib/srfi/133.scm` の両方を include するよう更新
+- [x] [ulisp/lib/srfi/133.sld](../../ulisp/lib/srfi/133.sld) : 同上
+- [x] [ulisp/Makefile](../../ulisp/Makefile) : `test_srfi_133` ターゲットおよび `lint_sexpr` ターゲットに `lib/srfi/133.scm` を追加
+- [x] [ulisp/test_c.sh](../../ulisp/test_c.sh) : `lib/vector.scm` 単体 include への最適化反映
 
 ---
 
@@ -139,11 +139,30 @@ Target Branch: `feat/868-modularize-r7rs-vector-and-srfi-133-libraries`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `lib/vector.scm` が R7RS-small 基本手続きのみの 184 行に純化され、単独で include 可能なこと。
-- [ ] `lib/srfi/133.scm` が独立モジュールとして作成され、SRFI 133 手続きが正常に定義されていること。
-- [ ] `ulisp/lib/scheme/vector.sld` および `ulisp/lib/srfi/133.sld` から全 SRFI 133 手続きが正常にエクスポートされること。
-- [ ] `make -C ulisp test_srfi_133`（全 63 テスト）が 100% PASS すること。
-- [ ] `make -C ulisp test_c`（全 143 テスト）が 100% PASS すること。
-- [ ] `make -C ulisp bootstrap` による自己ホスト固定点が正常にパスすること。
-- [ ] リポジトリ全域において絶対パス違反が 0 件であること。
-- [ ] Conventional Commits 規約に準拠したコミットが作成され、Issue がクローズされること。
+- [x] `lib/vector.scm` が R7RS-small 基本手続きのみの 184 行に純化され、単独で include 可能なこと。
+- [x] `lib/srfi/133.scm` が独立モジュールとして作成され、SRFI 133 手続きが正常に定義されていること。
+- [x] `ulisp/lib/scheme/vector.sld` および `ulisp/lib/srfi/133.sld` から全 SRFI 133 手続きが正常にエクスポートされること。
+- [x] `make -C ulisp test_srfi_133`（全 63 テスト）が 100% PASS すること。
+- [x] `make -C ulisp test_c`（全 143 テスト）が 100% PASS すること。
+- [x] `make -C ulisp bootstrap` による自己ホスト固定点が正常にパスすること。
+- [x] リポジトリ全域において絶対パス違反が 0 件であること。
+- [x] Conventional Commits 規約に準拠したコミットが作成され、Issue がクローズされること。
+
+---
+
+## 7. 完了サマリー / Completion Summary
+- **モジュール分離と純化**:
+  - `ulisp/lib/vector.scm` を 848 行から 184 行（R7RS-small 基本ベクタライブラリ）に純化。
+  - `list->vector` 内の `(length lst)` を内部計測ループで自己完結化し、`lib/list.scm`（747 行）への暗黙依存を完全解消（単体 include が可能）。
+  - 新規ファイル `ulisp/lib/srfi/133.scm` を作成し、SRFI 133 固有の 38 フォーム（40+ 手続き）を配置。
+  - `ulisp/lib/scheme/vector.sld` および `ulisp/lib/srfi/133.sld` を `(include "../vector.scm" "133.scm")` に更新。
+- **ビルド・テスト性能改善結果**:
+  - `make -C ulisp lint_sexpr`: 全 214 ファイル `[PASS]`（括弧整合性 100% 検証）。
+  - `make -C ulisp test_srfi_133`: 全 63 テスト `[PASS]`。
+  - `make -C ulisp bootstrap`: Stage 2 と Stage 3 の bit-for-bit 完全一致（固定点収束）確認。
+  - `time make -C ulisp test_c`: 全 143 テスト `[PASS]`（エラー 0 件、GCC 警告 0 件）。
+    - 実行時間: **62 秒 (1分02秒)**！
+    - **初期 276 秒 → Issue #866 後 124 秒 → Issue #867 後 109 秒 → Issue #868 後 62 秒**（**累計 214 秒短縮 / 77.5% 削減 / 4.5 倍高速化**達成）。
+  - `make -C ulisp test_passes`: 全 784 単体テスト `[PASS]`。
+  - リポジトリ品質ゲート (`make py_compile`, `make check_format`, `make static_analysis`): 全 617 ファイル `PASS`。
+  - 絶対パス違反: 0 件確認。

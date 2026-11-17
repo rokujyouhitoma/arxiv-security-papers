@@ -65,4 +65,4 @@
     string->vector
     vector->string)
 
-  (include "lib/vector.scm"))
+  (include "lib/vector.scm" "lib/srfi/133.scm"))
