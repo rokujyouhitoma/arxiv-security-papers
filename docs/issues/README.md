@@ -15,7 +15,6 @@
 | **863** | SRFI 214 動的可変長ベクタ ((scheme flexvector)) の実装 | Feature | Medium | New | [863-implement-srfi-214-flexvectors.md](863-implement-srfi-214-flexvectors.md) |
 | **864** | SRFI 48 中級フォーマット文字列 API ((scheme format)) の実装 | Feature | Medium | New | [864-implement-srfi-48-intermediate-format-strings.md](864-implement-srfi-48-intermediate-format-strings.md) |
 | **865** | SRFI 189 Maybe and Either オプショナルコンテナ ((scheme maybe)) の実装 | Feature | Medium | New | [865-implement-srfi-189-maybe-and-either-optional-containers.md](865-implement-srfi-189-maybe-and-either-optional-containers.md) |
-| **867** | make-vector および make-bytevector 充填コンストラクタのインライン脱糖 | Feature | High | In Progress | [867-inline-desugar-make-vector-and-make-bytevector-constructors.md](867-inline-desugar-make-vector-and-make-bytevector-constructors.md) |
 | **868** | lib/vector.scm (R7RS Base) と lib/srfi/133.scm (SRFI 133) のモジュール分離と依存関係解消 | Feature | High | New | [868-modularize-r7rs-vector-and-srfi-133-libraries.md](868-modularize-r7rs-vector-and-srfi-133-libraries.md) |
 | **869** | bootstrap.sh および Makefile におけるマルチコア並列ビルドの標準化による自己ホスト高速化 | Feature | Medium | New | [869-enable-parallel-modular-compilation-for-fast-bootstrap.md](869-enable-parallel-modular-compilation-for-fast-bootstrap.md) |
 
@@ -23,6 +22,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **867** | make-vector および make-bytevector 充填コンストラクタのインライン脱糖 | Feature | 2026-11-18 | [867-inline-desugar-make-vector-and-make-bytevector-constructors.md](closed/867-inline-desugar-make-vector-and-make-bytevector-constructors.md) |
 | **866** | test_c.sh のライブラリ過剰 include 解消による C バックエンドテスト大幅高速化 | Bug | 2026-11-18 | [866-optimize-test-c-library-includes-for-high-speed-execution.md](closed/866-optimize-test-c-library-includes-for-high-speed-execution.md) |
 | **856** | SRFI 124 エフェメロン ((scheme ephemeron)) と 2-Space GC 協調回収の実装 | Feature | 2026-11-17 | [856-implement-srfi-124-ephemerons-and-gc-coordination.md](closed/856-implement-srfi-124-ephemerons-and-gc-coordination.md) |
 | **855** | SRFI 135 不変テキストライブラリ ((scheme text)) の実装 | Feature | 2026-11-16 | [855-implement-srfi-135-immutable-texts.md](closed/855-implement-srfi-135-immutable-texts.md) |

@@ -48,9 +48,9 @@ assert_c() {
         code="(!target c)"$'\n'"(include \"lib/continuation.scm\") (include \"lib/parameter.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ utf8 ]]; then
         code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/bytevector.scm\")"$'\n'"$expr"
-    elif [[ "$expr" =~ bytevector-copy || "$expr" =~ "bytevector=?" || "$expr" =~ bytevector-append || "$expr" =~ bytevector-\>list || "$expr" =~ list-\>bytevector || "$expr" =~ "make-bytevector 3 42" || "$expr" =~ "make-bytevector 5 0" ]]; then
+    elif [[ "$expr" =~ bytevector-copy || "$expr" =~ "bytevector=?" || "$expr" =~ bytevector-append || "$expr" =~ bytevector-\>list || "$expr" =~ list-\>bytevector ]]; then
         code="(!target c)"$'\n'"(include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/bytevector.scm\")"$'\n'"$expr"
-    elif [[ "$expr" =~ string-\>vector || "$expr" =~ vector-\>string || "$expr" =~ vector-copy || "$expr" =~ vector-fill || "$expr" =~ vector-append || "$expr" =~ vector-map || "$expr" =~ vector-for-each || "$expr" =~ vector-\>list || "$expr" =~ list-\>vector || "$expr" =~ "make-vector 3 42" || "$expr" =~ "make-vector 5 0" ]]; then
+    elif [[ "$expr" =~ string-\>vector || "$expr" =~ vector-\>string || "$expr" =~ vector-copy || "$expr" =~ vector-fill || "$expr" =~ vector-append || "$expr" =~ vector-map || "$expr" =~ vector-for-each || "$expr" =~ vector-\>list || "$expr" =~ list-\>vector ]]; then
         code="(!target c)"$'\n'"(include \"lib/list.scm\") (include \"lib/char.scm\") (include \"lib/string.scm\") (include \"lib/vector.scm\")"$'\n'"$expr"
     elif [[ "$expr" =~ list-copy || "$expr" =~ make-list ]]; then
         code="(!target c)"$'\n'"(include \"lib/list.scm\")"$'\n'"$expr"

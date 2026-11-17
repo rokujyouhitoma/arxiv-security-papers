@@ -75,18 +75,26 @@
               (rule-desugar-list '(foo 1 2)))
 
 ;; 6. rule-desugar-vector
-(assert-equal "rule-desugar-vector make-vector"
+(assert-equal "rule-desugar-vector make-vector 1 arg"
               '(%make-vector 10)
               (rule-desugar-vector '(make-vector 10)))
+
+(let ((mv2 (rule-desugar-vector '(make-vector 3 42))))
+  (assert-true "rule-desugar-vector make-vector 2 args returns let"
+               (and (pair? mv2) (eq? (car mv2) 'let))))
 
 (assert-equal "rule-desugar-vector vector-append"
               '(vector-append2 a b)
               (rule-desugar-vector '(vector-append a b)))
 
 ;; 7. rule-desugar-bytevector
-(assert-equal "rule-desugar-bytevector make-bytevector"
+(assert-equal "rule-desugar-bytevector make-bytevector 1 arg"
               '(%make-bytevector 16)
               (rule-desugar-bytevector '(make-bytevector 16)))
+
+(let ((mbv2 (rule-desugar-bytevector '(make-bytevector 3 42))))
+  (assert-true "rule-desugar-bytevector make-bytevector 2 args returns let"
+               (and (pair? mbv2) (eq? (car mbv2) 'let))))
 
 (assert-equal "rule-desugar-bytevector bytevector-append"
               '(bytevector-append2 x y)

@@ -138,10 +138,30 @@
                    (desugar-bytevector-append (reverse left))
                    (desugar-bytevector-append rest))))))))
 
+(define (desugar-make-bytevector-fill k byte)
+  (let ((n-sym (unique-symbol "mbv_n_"))
+        (b-sym (unique-symbol "mbv_b_"))
+        (bv-sym (unique-symbol "mbv_bv_"))
+        (i-sym (unique-symbol "mbv_i_"))
+        (loop-sym (unique-symbol "mbv_loop_")))
+    (list 'let (list (list n-sym k) (list b-sym byte))
+          (list 'let (list (list bv-sym (list '%make-bytevector n-sym)))
+                (list 'if (list '= b-sym 0)
+                      bv-sym
+                      (list 'letrec
+                            (list (list loop-sym
+                                        (list 'lambda (list i-sym)
+                                              (list 'if (list '< i-sym n-sym)
+                                                    (list 'begin
+                                                          (list 'bytevector-u8-set! bv-sym i-sym b-sym)
+                                                          (list loop-sym (list '+ i-sym 1)))
+                                                    bv-sym))))
+                            (list loop-sym 0)))))))
+
 (define (desugar-make-bytevector args)
   (if (null? (cdr args))
       (list '%make-bytevector (car args))
-      (list 'make-bytevector-fill (car args) (cadr args))))
+      (desugar-make-bytevector-fill (car args) (cadr args))))
 
 (define (desugar-bytevector-copy args)
   (cond
@@ -197,10 +217,28 @@
                    (desugar-vector-append (reverse left))
                    (desugar-vector-append rest))))))))
 
+(define (desugar-make-vector-fill k fill)
+  (let ((n-sym (unique-symbol "mv_n_"))
+        (f-sym (unique-symbol "mv_f_"))
+        (v-sym (unique-symbol "mv_v_"))
+        (i-sym (unique-symbol "mv_i_"))
+        (loop-sym (unique-symbol "mv_loop_")))
+    (list 'let (list (list n-sym k) (list f-sym fill))
+          (list 'let (list (list v-sym (list '%make-vector n-sym)))
+                (list 'letrec
+                      (list (list loop-sym
+                                  (list 'lambda (list i-sym)
+                                        (list 'if (list '< i-sym n-sym)
+                                              (list 'begin
+                                                    (list 'vector-set! v-sym i-sym f-sym)
+                                                    (list loop-sym (list '+ i-sym 1)))
+                                              v-sym))))
+                      (list loop-sym 0))))))
+
 (define (desugar-make-vector args)
   (if (null? (cdr args))
       (list '%make-vector (car args))
-      (list 'make-vector-fill (car args) (cadr args))))
+      (desugar-make-vector-fill (car args) (cadr args))))
 
 (define (desugar-vector-copy args)
   (cond

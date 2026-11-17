@@ -2,7 +2,7 @@
 ID: 867
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] make-vector および make-bytevector 充填コンストラクタのインライン脱糖 (ID: 867)
@@ -138,10 +138,23 @@ Target Branch: `feat/867-inline-desugar-make-vector-and-make-bytevector-construc
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `(make-vector 3 42)` がライブラリ include なしでネイティブ C / x86-64 バックエンドで評価可能となり、`#(42 42 42)` を生成すること。
-- [ ] `(make-bytevector 3 42)` がライブラリ include なしで評価可能となり、`#u8(42 42 42)` を生成すること。
-- [ ] `make -C ulisp test_passes` の全単体テストが正常に PASS すること。
-- [ ] `make -C ulisp test_c` の全 143 テストが正常に PASS すること。
-- [ ] `make -C ulisp bootstrap` による自己ホスト固定点が正常にパスすること。
-- [ ] リポジトリ全域において絶対パス違反が 0 件であること。
-- [ ] Conventional Commits 規約に準拠したコミットが作成され、Issue がクローズされること。
+- [x] `(make-vector 3 42)` がライブラリ include なしでネイティブ C / x86-64 バックエンドで評価可能となり、`#(42 42 42)` を生成すること。
+- [x] `(make-bytevector 3 42)` がライブラリ include なしで評価可能となり、`#u8(42 42 42)` を生成すること。
+- [x] `make -C ulisp test_passes` の全 784 単体テストが正常に PASS すること。
+- [x] `make -C ulisp test_c` の全 143 テストが正常に PASS すること。
+- [x] `make -C ulisp bootstrap` による自己ホスト固定点（Stage 2 & Stage 3 bit-for-bit identical）が正常に収束・パスすること。
+- [x] リポジトリ全域において絶対パス違反が 0 件であること。
+- [x] Conventional Commits 規約に準拠したコミットが作成され、Issue がクローズされること。
+
+---
+
+## 7. 実装・検証結果サマリー
+- **ブランチ**: `feat/867-inline-desugar-make-vector-and-make-bytevector-constructors`
+- **成果**:
+  - `ulisp/frontend/026_desugar_constructors.scm` (Pass 026) に `desugar-make-vector-fill` および `desugar-make-bytevector-fill` を実装。
+  - `make-vector` 2 引数呼び出し（`(make-vector k fill)`）をインラインの `let` + `%make-vector` + `letrec loop` + `vector-set!` へ脱糖。
+  - `make-bytevector` 2 引数呼び出し（`(make-bytevector k byte)`）をインラインの `let` + `%make-bytevector` + `(if (= byte 0) bv ...)` + `letrec loop` + `bytevector-u8-set!` へ脱糖。0 充填時は O(1) 即座返却。
+  - `ulisp/test_c.sh` の `assert_c` include 判定から `make-vector 3 42`, `make-vector 5 0`, `make-bytevector 3 42`, `make-bytevector 5 0` を除外してゼロ include 化。
+  - `make -C ulisp test_c` 実行時間: **1分49秒（109秒）**（Issue 866 の 124 秒からさらに 15 秒短縮、元 276 秒から合計 **167 秒 / 61% 削減**）。
+  - `make -C ulisp test_passes`: 全 784 単体テスト 100% PASS。
+  - `make -C ulisp bootstrap`: Stage 2 / Stage 3 の bit-for-bit 完全一致により自己ホスト収束・固定点検証完了。`bin/ulisp-boot` 更新完了。
