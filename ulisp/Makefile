@@ -1649,6 +1649,9 @@ bootstrap:
 bootstrap_modular:
 	./bootstrap.sh --modular
 
+bootstrap_serial:
+	./bootstrap.sh --split-link
+
 bootstrap_quick quick:
 	./bootstrap.sh --quick
 
