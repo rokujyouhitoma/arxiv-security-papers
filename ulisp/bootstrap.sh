@@ -15,7 +15,7 @@ FULL_BOOTSTRAP="${FULL_BOOTSTRAP:-0}"
 BOOTSTRAP_FROM_ILISP="${BOOTSTRAP_FROM_ILISP:-0}"
 BOOTSTRAP_WITH_GOSH="${BOOTSTRAP_WITH_GOSH:-0}"
 BOOTSTRAP_SPLIT_LINK="${BOOTSTRAP_SPLIT_LINK:-1}"
-BOOTSTRAP_MODULAR="${BOOTSTRAP_MODULAR:-0}"
+BOOTSTRAP_MODULAR="${BOOTSTRAP_MODULAR:-auto}"
 BOOTSTRAP_EMIT_ELF="${BOOTSTRAP_EMIT_ELF:-0}"
 BOOTSTRAP_PURE="${BOOTSTRAP_PURE:-0}"
 BOOTSTRAP_PURE_ELF="${BOOTSTRAP_PURE_ELF:-0}"
@@ -95,8 +95,8 @@ while [ $# -gt 0 ]; do
             echo "  --pure, --pure-self-host    Run self-contained bootstrap using ULisp builtin tools (no host ld/python)"
             echo "  --pure-elf                  Run Direct-to-ELF bootstrap mode (--target-elf) without intermediate .s files"
             echo "  --pure-tools                Run builtin toolchain bootstrap using ULisp --as and --ld"
-            echo "  --modular                   Run 5-module parallel incremental bootstrap (make -j)"
-            echo "  --split-link                Bootstrap compiler_entry.scm linked with ulisp_stdlib.o (default)"
+            echo "  --modular                   Run 5-module parallel incremental bootstrap (make -j) (default)"
+            echo "  --split-link                Bootstrap compiler_entry.scm linked with ulisp_stdlib.o (serial fallback)"
             echo "  --monolithic                Bootstrap monolithic ulisp_core.scm (stdlib + runtime + compiler)"
             echo "  --emit-elf                  Use Direct-to-ELF backend (--target-elf) for smoke test verification"
             echo "  --test                      Run post-bootstrap test suite (test_incremental)"
@@ -114,6 +114,22 @@ while [ $# -gt 0 ]; do
             ;;
     esac
 done
+
+# Auto-resolve bootstrap mode (Issue #869)
+if [ "$BOOTSTRAP_MODULAR" = "auto" ]; then
+    if [ "${BOOTSTRAP_PURE:-0}" = "1" ] || \
+       [ "${BOOTSTRAP_PURE_ELF:-0}" = "1" ] || \
+       [ "${USE_BUILTIN_TOOLS:-0}" = "1" ] || \
+       [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "0" ] || \
+       [ "${BOOTSTRAP_FROM_ILISP:-0}" = "1" ] || \
+       [ "${BOOTSTRAP_WITH_GOSH:-0}" = "1" ]; then
+        # Pure isolated mode or monolithic mode requires serial compilation
+        BOOTSTRAP_MODULAR=0
+    else
+        # Standard native environment: activate high-speed parallel modular bootstrap
+        BOOTSTRAP_MODULAR=1
+    fi
+fi
 
 mkdir -p "$BUILD_DIR"
 
