@@ -143,7 +143,15 @@
        (if (<= c 0) val (loop (* val 2) (- c 1)))))
     (else
      (let loop ((val n) (c (- count)))
-       (if (<= c 0) val (loop (quotient val 2) (- c 1)))))))
+       (if (<= c 0)
+           val
+           (let ((next (if (>= val 0)
+                           (quotient val 2)
+                           (let ((q (quotient val 2)))
+                             (if (= (* q 2) val)
+                                 q
+                                 (- q 1))))))
+             (loop next (- c 1))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Primitive Operator Evaluation

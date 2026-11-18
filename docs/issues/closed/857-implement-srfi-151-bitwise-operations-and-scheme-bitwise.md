@@ -2,7 +2,7 @@
 ID: 857
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] SRFI 151 ビット演算包括ライブラリおよび (scheme bitwise) の実装 (ID: 857)
@@ -39,11 +39,11 @@ R7RS-large Tangerine Edition においてビット操作の標準仕様とされ
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/bitwise.scm](../../ulisp/lib/bitwise.scm) : SRFI 151 規定の全手続き実装（基本論理、シフト、計数、フィールド操作、反復・生成、リスト/ベクタ変換）
-- [ ] [ulisp/lib/scheme/bitwise.sld](../../ulisp/lib/scheme/bitwise.sld) : R7RS-large `(scheme bitwise)` モジュール定義
-- [ ] [ulisp/lib/srfi/151.sld](../../ulisp/lib/srfi/151.sld) : SRFI 151 `(srfi 151)` モジュール定義
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) : `test_srfi_151` ターゲットおよび `lint_sexpr` 検査対象への追加
-- [ ] [ulisp/tests/test_srfi_151.scm](../../ulisp/tests/test_srfi_151.scm) : SRFI 151 網羅的テストスイート作成
+- [x] [ulisp/lib/bitwise.scm](../../ulisp/lib/bitwise.scm) : SRFI 151 規定の全手続き実装（基本論理、シフト、計数、フィールド操作、反復・生成、リスト/ベクタ変換）
+- [x] [ulisp/lib/scheme/bitwise.sld](../../ulisp/lib/scheme/bitwise.sld) : R7RS-large `(scheme bitwise)` モジュール定義
+- [x] [ulisp/lib/srfi/151.sld](../../ulisp/lib/srfi/151.sld) : SRFI 151 `(srfi 151)` モジュール定義
+- [x] [ulisp/Makefile](../../ulisp/Makefile) : `test_srfi_151` ターゲットおよび `lint_sexpr` 検査対象への追加
+- [x] [ulisp/tests/test_srfi_151.scm](../../ulisp/tests/test_srfi_151.scm) : SRFI 151 網羅的テストスイート作成
 
 ---
 
@@ -160,11 +160,11 @@ graph TD
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/lib/bitwise.scm` に SRFI 151 規定の全手続き（62 手続き + 7 別名）が正しく実装されていること。
-- [ ] `(scheme bitwise)` および `(srfi 151)` から全手続きがインポート可能であること。
-- [ ] 正数・負数（2の補数表現）および 62-bit Fixnum の全域でビット演算が数学的に正しく動作すること。
-- [ ] `make -C ulisp test_srfi_151` がエラー 0 件で 100% PASS すること。
-- [ ] `make -C ulisp lint_sexpr` が全ファイルで PASS すること。
-- [ ] `make -C ulisp bootstrap` による 5 モジュール並列自己ホスト固定点が完全一致すること。
-- [ ] リポジトリ全域において絶対パス違反が 0 件であること。
-- [ ] Conventional Commits 規約に準拠したコミットが作成され、Issue がクローズされること。
+- [x] `ulisp/lib/bitwise.scm` に SRFI 151 規定の全手続き（62 手続き + 7 別名）が正しく実装されていること。
+- [x] `(scheme bitwise)` および `(srfi 151)` から全手続きがインポート可能であること。
+- [x] 正数・負数（2の補数表現）および 62-bit Fixnum の全域でビット演算が数学的に正しく動作すること。
+- [x] `make -C ulisp test_srfi_151` がエラー 0 件で 100% PASS すること。
+- [x] `make -C ulisp lint_sexpr` が全ファイルで PASS すること。
+- [x] `make -C ulisp bootstrap` による 5 モジュール並列自己ホスト固定点が完全一致すること。
+- [x] リポジトリ全域において絶対パス違反が 0 件であること。
+- [x] Conventional Commits 規約に準拠したコミットが作成され、Issue がクローズされること。
