@@ -345,7 +345,7 @@ Scheme Working Group 2 (WG2) が主導する **R7RS-large** は、Scheme コミ�
 
 | 仕様番号 / SRFI | ライブラリ識別子 | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :--- | :---: | :--- | :--- |
-| **SRFI 115** | `(scheme regex)` | Scheme Regular Expressions (正規表現 SRE) | **×** | - | S 式ベースの正規表現 (SRE: Scheme Regular Expressions) パーサおよびマッチングエンジン（未実装） |
+| **SRFI 115** | `(scheme regex)` | Scheme Regular Expressions (正規表現 SRE) | **◎** | #860 | S 式ベースの正規表現 (SRE) パーサ、CPS バックトラックマッチャー、キャプチャ、および高水準置換・分割 API |
 | **SRFI 141** | `(scheme division)` | Integer Division (6 モードの整数除算) | **◎** | [ulisp/lib/math.scm](../lib/math.scm)<br>[ulisp/lib/srfi/141.sld](../lib/srfi/141.sld)<br>[ulisp/lib/scheme/division.sld](../lib/scheme/division.sld) | R7RS-large Tangerine Edition / SRFI 141 整数除算全 6 モード完備 (floor, truncate, ceiling, round, euclidean, centered) の除算・剰余・多値除算 ([Issue #662](../../docs/issues/closed/662-implement-srfi-141-integer-division.md)) |
 | **SRFI 143** | `(scheme fixnum)` | Fixnums (Fixnum 専用演算) | **◎** | [ulisp/lib/fixnum.scm](../lib/fixnum.scm)<br>[ulisp/lib/srfi/143.sld](../lib/srfi/143.sld)<br>[ulisp/lib/scheme/fixnum.sld](../lib/scheme/fixnum.sld) | R7RS-large Tangerine Edition / SRFI 143 Fixnum 演算全 47 手続き + 3 定数完備 ([Issue #858](../../docs/issues/closed/858-implement-srfi-143-fixnums-and-scheme-fixnum.md)) |
 | **SRFI 144** | `(scheme flonum)` | Flonums (浮動小数点数演算) | **×** | - | 浮動小数点型非対応のため未実装 |

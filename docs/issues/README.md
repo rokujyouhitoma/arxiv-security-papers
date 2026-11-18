@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **860** | SRFI 115 S 式正規表現エンジン (SRE) および (scheme regex) の実装 | Feature | Medium | New | [860-implement-srfi-115-scheme-regular-expressions-sre.md](860-implement-srfi-115-scheme-regular-expressions-sre.md) |
+| **860** | SRFI 115 S 式正規表現エンジン (SRE) および (scheme regex) の実装 | Feature | Medium | Closed | [860-implement-srfi-115-scheme-regular-expressions-sre.md](closed/860-implement-srfi-115-scheme-regular-expressions-sre.md) |
 | **861** | 多倍長整数 (Bignum) のネイティブ AOT ランタイム完全統合と Tangerine Tower 適合 | Feature | Medium | New | [861-integrate-bignum-arithmetic-into-native-aot-compiler-and-runtime.md](861-integrate-bignum-arithmetic-into-native-aot-compiler-and-runtime.md) |
 | **862** | SRFI 180 RFC 8259 準拠 JSON パーサおよびジェネレータ ((scheme json)) の実装 | Feature | Medium | New | [862-implement-srfi-180-json-parser-and-serializer.md](862-implement-srfi-180-json-parser-and-serializer.md) |
 | **863** | SRFI 214 動的可変長ベクタ ((scheme flexvector)) の実装 | Feature | Medium | New | [863-implement-srfi-214-flexvectors.md](863-implement-srfi-214-flexvectors.md) |

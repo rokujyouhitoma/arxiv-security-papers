@@ -15771,9 +15771,11 @@
                  tmpl)))))
     ((pair? tmpl)
      (cond
-       ;; Quote remains untransformed except for variables if not pure
+       ;; Quote preserves literal symbols without hygienic renaming, but expands pattern variables
        ((eq? (car tmpl) 'quote)
-        tmpl)
+        (cons 'quote
+              (map (lambda (x) (expand-template x env literals '()))
+                   (cdr tmpl))))
        ;; Ellipsis repetition in template: (elem ... . rest)
        ((and (pair? (cdr tmpl)) (ellipsis? (cadr tmpl)))
         (let* ((elem-tmpl (car tmpl))
