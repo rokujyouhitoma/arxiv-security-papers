@@ -15557,6 +15557,7 @@
   (memq sym '(if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
               let-syntax letrec-syntax cond-expand include include-ci assume assert
               cond case and or when unless delay delay-force do case-lambda
+              receive rec and-let* cut cute <> <...>
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
               vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector vector->string vector->string-range
@@ -16902,6 +16903,18 @@
            (desugar-cond (cdr clauses)))
           ((eq? (car c) 'else)
            (cons 'begin (cdr c)))
+          ;; SRFI 61: (<generator> <guard> => <receiver>)
+          ((and (pair? (cdr c)) (pair? (cddr c)) (eq? (caddr c) '=>) (pair? (cdddr c)))
+           (let ((gen (car c))
+                 (guard (cadr c))
+                 (receiver (cadddr c))
+                 (vals-sym (unique-symbol "cond_vals_")))
+             (list 'call-with-values (list 'lambda '() gen)
+                   (list 'case-lambda
+                         (list vals-sym
+                               (list 'if (cons 'apply (cons guard (list vals-sym)))
+                                     (cons 'apply (cons receiver (list vals-sym)))
+                                     (desugar-cond (cdr clauses))))))))
           ((and (pair? (cdr c)) (eq? (cadr c) '=>))
            (let ((tmp (unique-symbol "cond_tmp_")))
              (list 'let (list (list tmp (car c)))
@@ -17059,6 +17072,47 @@
     ((unless ,test . ,body) (desugar-unless test body))))
 
 ;;; -----------------------------------------------------------------------
+;;; SRFI 2: AND-LET* (Conditional binding short-circuit syntax)
+;;; -----------------------------------------------------------------------
+
+(define (desugar-and-let* claws bodies)
+  (cond
+    ((null? claws)
+     (make-body-expr (if (null? bodies) (list #t) bodies)))
+    ((not (pair? claws))
+     (error "Malformed and-let* claw list:" claws))
+    (else
+     (let ((claw (car claws))
+           (rest (cdr claws)))
+       (cond
+         ;; 1. (<variable> <expression>)
+         ((and (pair? claw) (pair? (cdr claw)) (null? (cddr claw)) (symbol? (car claw)))
+          (let ((var (car claw))
+                (expr (cadr claw)))
+            (list 'let (list (list var expr))
+                  (list 'if var
+                        (desugar-and-let* rest bodies)
+                        #f))))
+         ;; 2. (<expression>)
+         ((and (pair? claw) (null? (cdr claw)))
+          (let ((expr (car claw)))
+            (list 'if expr
+                  (desugar-and-let* rest bodies)
+                  #f)))
+         ;; 3. <variable> (symbol)
+         ((symbol? claw)
+          (list 'if claw
+                (desugar-and-let* rest bodies)
+                #f))
+         (else
+          (error "Malformed and-let* claw:" claw)))))))
+
+(define-picopass rule-desugar-and-let*
+  (Expr
+    ((and-let* ,claws . ,bodies) (guard (list? claws))
+     (desugar-and-let* claws bodies))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Conditionals (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-conditionals : L_src (ir) -> L_src ()
@@ -17069,7 +17123,8 @@
     rule-desugar-and
     rule-desugar-or
     rule-desugar-chain-cmp
-    rule-desugar-when-unless))
+    rule-desugar-when-unless
+    rule-desugar-and-let*))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 028: Local Bindings Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -17363,6 +17418,125 @@
      (desugar-internal-define spec rest-def '()))))
 
 ;;; -----------------------------------------------------------------------
+;;; SRFI 31: REC (Recursive evaluation special form)
+;;; -----------------------------------------------------------------------
+
+(define (desugar-rec spec bodies)
+  (cond
+    ;; (rec (<var> . <formals>) . <body>)
+    ((pair? spec)
+     (let* ((var (car spec))
+            (formals (cdr spec))
+            (self-sym (unique-symbol "rec_self_")))
+       (if (list? formals)
+           (let ((inner-args (map (lambda (p) (unique-symbol "rec_arg_")) formals)))
+             (list 'let
+                   (list (list self-sym
+                               (list 'lambda (cons self-sym formals)
+                                     (list 'let (list (list var (list 'lambda inner-args
+                                                                      (cons self-sym (cons self-sym inner-args)))))
+                                           (make-body-expr bodies)))))
+                   (list 'lambda formals
+                         (cons self-sym (cons self-sym formals)))))
+           (let ((rest-arg (unique-symbol "rec_rest_")))
+             (list 'let
+                   (list (list self-sym
+                               (list 'case-lambda
+                                     (list (cons self-sym formals)
+                                           (list 'let (list (list var (list 'case-lambda
+                                                                            (list rest-arg
+                                                                                  (cons 'apply (cons self-sym (cons self-sym (list rest-arg))))))))
+                                                 (make-body-expr bodies))))))
+                   (list 'case-lambda
+                         (list formals
+                               (list 'let (list (list rest-arg formals))
+                                     (cons 'apply (cons self-sym (cons self-sym (list rest-arg))))))))))))
+    ;; (rec <var> (lambda <formals> . <body>)) -> redirect to procedure rec
+    ((and (symbol? spec) (pair? bodies) (pair? (car bodies)) (eq? (caar bodies) 'lambda))
+     (let ((lambda-form (car bodies)))
+       (desugar-rec (cons spec (cadr lambda-form)) (cddr lambda-form))))
+    ;; (rec <var> <expr>)
+    ((symbol? spec)
+     (let ((expr (if (pair? bodies) (car bodies) #f)))
+       (list 'letrec
+             (list (list spec expr))
+             spec)))
+    (else
+     (error "Malformed rec form:" spec))))
+
+(define-picopass rule-desugar-rec
+  (Expr
+    ((rec ,spec . ,bodies) (desugar-rec spec bodies))))
+
+;;; -----------------------------------------------------------------------
+;;; SRFI 26: CUT / CUTE (Parameter specialization without currying)
+;;; -----------------------------------------------------------------------
+
+(define (%cut-slot? x) (and (symbol? x) (eq? x '<>)))
+(define (%cut-rest-slot? x) (and (symbol? x) (eq? x '<...>)))
+
+(define (desugar-cut args)
+  (if (null? args)
+      (error "cut: expected at least one argument (procedure or slot)")
+      (let loop ((rest args)
+                 (params '())
+                 (call-args '())
+                 (rest-var #f))
+        (if (null? rest)
+            (if rest-var
+                (let ((formals (if (null? params)
+                                   rest-var
+                                   (let build-formals ((ps params))
+                                     (if (null? (cdr ps))
+                                         (cons (car ps) rest-var)
+                                         (cons (car ps) (build-formals (cdr ps))))))))
+                  (list 'case-lambda
+                        (list formals
+                              (cons 'apply (cons (car call-args) (append (cdr call-args) (list rest-var)))))))
+                (list 'lambda params call-args))
+            (let ((a (car rest)))
+              (cond
+                ((%cut-slot? a)
+                 (let ((v (unique-symbol "cut_arg_")))
+                   (loop (cdr rest) (append params (list v)) (append call-args (list v)) rest-var)))
+                ((%cut-rest-slot? a)
+                 (if (not (null? (cdr rest)))
+                     (error "cut: <...> must be the last argument in cut/cute:" args)
+                     (let ((rv (unique-symbol "cut_rest_")))
+                       (loop (cdr rest) params call-args rv))))
+                (else
+                 (loop (cdr rest) params (append call-args (list a)) rest-var))))))))
+
+(define (desugar-cute args)
+  (if (null? args)
+      (error "cute: expected at least one argument (procedure or slot)")
+      (let loop ((rest args)
+                 (let-bindings '())
+                 (cut-args '()))
+        (if (null? rest)
+            (let ((cut-expr (desugar-cut (reverse cut-args))))
+              (if (null? let-bindings)
+                  cut-expr
+                  (list 'let (reverse let-bindings) cut-expr)))
+            (let ((a (car rest)))
+              (cond
+                ((or (%cut-slot? a) (%cut-rest-slot? a))
+                 (loop (cdr rest) let-bindings (cons a cut-args)))
+                (else
+                 (let ((t (unique-symbol "cute_tmp_")))
+                   (loop (cdr rest)
+                         (cons (list t a) let-bindings)
+                         (cons t cut-args))))))))))
+
+(define-picopass rule-desugar-cut
+  (Expr
+    ((cut . ,args) (desugar-cut args))))
+
+(define-picopass rule-desugar-cute
+  (Expr
+    ((cute . ,args) (desugar-cute args))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Bindings (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-bindings : L_src (ir) -> L_src ()
@@ -17373,7 +17547,10 @@
     rule-desugar-named-let
     rule-desugar-multi-body
     rule-desugar-do
-    rule-desugar-internal-define))
+    rule-desugar-internal-define
+    rule-desugar-rec
+    rule-desugar-cut
+    rule-desugar-cute))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 029: Dynamic Environment & Multiple Values Desugaring Pass
 ;;; Conforms to DSN-33 Architecture Specification & Nanopass Standard
@@ -17567,6 +17744,24 @@
       (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))))
 
 ;;; -----------------------------------------------------------------------
+;;; SRFI 8: RECEIVE (Binding to multiple values)
+;;; -----------------------------------------------------------------------
+
+(define (desugar-receive formals expr bodies)
+  (if (list? formals)
+      (list 'call-with-values
+            (list 'lambda '() expr)
+            (cons 'lambda (cons formals bodies)))
+      (list 'call-with-values
+            (list 'lambda '() expr)
+            (list 'case-lambda (cons formals bodies)))))
+
+(define-picopass rule-desugar-receive
+  (Expr
+    ((receive ,formals ,expr . ,bodies)
+     (desugar-receive formals expr bodies))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Dynamic (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-dynamic : L_src (ir) -> L_src ()
@@ -17579,6 +17774,7 @@
     rule-desugar-parameter-ops
     rule-desugar-values
     rule-desugar-error-assume
+    rule-desugar-receive
     atto-no-unexpanded-let-syntax))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 030: Core Syntax Desugaring & Normalization Pass
@@ -17620,6 +17816,7 @@
       rule-desugar-or
       rule-desugar-chain-cmp
       rule-desugar-when-unless
+      rule-desugar-and-let*
 
       ;; --- Pass 028: Bindings & Internal Definitions ---
       rule-desugar-case-lambda
@@ -17629,6 +17826,9 @@
       rule-desugar-multi-body
       rule-desugar-do
       rule-desugar-internal-define
+      rule-desugar-rec
+      rule-desugar-cut
+      rule-desugar-cute
 
       ;; --- Pass 029: Dynamic Environment & Values ---
       rule-desugar-let-values
@@ -17639,6 +17839,7 @@
       rule-desugar-parameter-ops
       rule-desugar-values
       rule-desugar-error-assume
+      rule-desugar-receive
       atto-no-unexpanded-let-syntax)))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 2: Static Scope & Free-Variable Analysis Pass

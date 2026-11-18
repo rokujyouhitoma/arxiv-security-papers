@@ -14,6 +14,18 @@
            (desugar-cond (cdr clauses)))
           ((eq? (car c) 'else)
            (cons 'begin (cdr c)))
+          ;; SRFI 61: (<generator> <guard> => <receiver>)
+          ((and (pair? (cdr c)) (pair? (cddr c)) (eq? (caddr c) '=>) (pair? (cdddr c)))
+           (let ((gen (car c))
+                 (guard (cadr c))
+                 (receiver (cadddr c))
+                 (vals-sym (unique-symbol "cond_vals_")))
+             (list 'call-with-values (list 'lambda '() gen)
+                   (list 'case-lambda
+                         (list vals-sym
+                               (list 'if (cons 'apply (cons guard (list vals-sym)))
+                                     (cons 'apply (cons receiver (list vals-sym)))
+                                     (desugar-cond (cdr clauses))))))))
           ((and (pair? (cdr c)) (eq? (cadr c) '=>))
            (let ((tmp (unique-symbol "cond_tmp_")))
              (list 'let (list (list tmp (car c)))
@@ -171,6 +183,47 @@
     ((unless ,test . ,body) (desugar-unless test body))))
 
 ;;; -----------------------------------------------------------------------
+;;; SRFI 2: AND-LET* (Conditional binding short-circuit syntax)
+;;; -----------------------------------------------------------------------
+
+(define (desugar-and-let* claws bodies)
+  (cond
+    ((null? claws)
+     (make-body-expr (if (null? bodies) (list #t) bodies)))
+    ((not (pair? claws))
+     (error "Malformed and-let* claw list:" claws))
+    (else
+     (let ((claw (car claws))
+           (rest (cdr claws)))
+       (cond
+         ;; 1. (<variable> <expression>)
+         ((and (pair? claw) (pair? (cdr claw)) (null? (cddr claw)) (symbol? (car claw)))
+          (let ((var (car claw))
+                (expr (cadr claw)))
+            (list 'let (list (list var expr))
+                  (list 'if var
+                        (desugar-and-let* rest bodies)
+                        #f))))
+         ;; 2. (<expression>)
+         ((and (pair? claw) (null? (cdr claw)))
+          (let ((expr (car claw)))
+            (list 'if expr
+                  (desugar-and-let* rest bodies)
+                  #f)))
+         ;; 3. <variable> (symbol)
+         ((symbol? claw)
+          (list 'if claw
+                (desugar-and-let* rest bodies)
+                #f))
+         (else
+          (error "Malformed and-let* claw:" claw)))))))
+
+(define-picopass rule-desugar-and-let*
+  (Expr
+    ((and-let* ,claws . ,bodies) (guard (list? claws))
+     (desugar-and-let* claws bodies))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Conditionals (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-conditionals : L_src (ir) -> L_src ()
@@ -181,4 +234,5 @@
     rule-desugar-and
     rule-desugar-or
     rule-desugar-chain-cmp
-    rule-desugar-when-unless))
+    rule-desugar-when-unless
+    rule-desugar-and-let*))

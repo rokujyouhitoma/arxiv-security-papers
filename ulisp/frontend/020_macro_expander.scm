@@ -26,6 +26,7 @@
   (memq sym '(if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
               let-syntax letrec-syntax cond-expand include include-ci assume assert
               cond case and or when unless delay delay-force do case-lambda
+              receive rec and-let* cut cute <> <...>
               cons car cdr pair? null? list append not eq? eqv? equal?
               list-copy make-list
               vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector vector->string vector->string-range
