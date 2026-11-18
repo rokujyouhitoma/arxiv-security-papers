@@ -2,7 +2,7 @@
 ID: 858
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] SRFI 143 Fixnums 特化高速演算ライブラリおよび (scheme fixnum) の実装 (ID: 858)
@@ -26,13 +26,13 @@ ULisp はスタンドアロン 62-bit 即値 Fixnum アーキテクチャ（下�
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/fixnum.scm](../../ulisp/lib/fixnum.scm) (新規作成: SRFI 143 手続き群の完全実装)
-- [ ] [ulisp/lib/scheme/fixnum.sld](../../ulisp/lib/scheme/fixnum.sld) (新規作成: `(scheme fixnum)` ライブラリ定義)
-- [ ] [ulisp/lib/srfi/143.sld](../../ulisp/lib/srfi/143.sld) (新規作成: `(srfi 143)` ライブラリ定義)
-- [ ] [ulisp/tests/test_srfi_143.scm](../../ulisp/tests/test_srfi_143.scm) (新規作成: 包括的単体テストスイート)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`ULISP_LARGE_LIBS`, `test_srfi_143`, `test:` ターゲットの登録)
-- [ ] [ulisp/docs/ref_r7rs_compliance.md](../../ulisp/docs/ref_r7rs_compliance.md) (SRFI 143 および `(scheme fixnum)` のトレーサビリティ反映)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳更新)
+- [x] [ulisp/lib/fixnum.scm](../../ulisp/lib/fixnum.scm) (新規作成: SRFI 143 手続き群の完全実装)
+- [x] [ulisp/lib/scheme/fixnum.sld](../../ulisp/lib/scheme/fixnum.sld) (新規作成: `(scheme fixnum)` ライブラリ定義)
+- [x] [ulisp/lib/srfi/143.sld](../../ulisp/lib/srfi/143.sld) (新規作成: `(srfi 143)` ライブラリ定義)
+- [x] [ulisp/tests/test_srfi_143.scm](../../ulisp/tests/test_srfi_143.scm) (新規作成: 包括的単体テストスイート)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`ULISP_LARGE_LIBS`, `test_srfi_143`, `test:` ターゲットの登録)
+- [x] [ulisp/docs/ref_r7rs_compliance.md](../../ulisp/docs/ref_r7rs_compliance.md) (SRFI 143 および `(scheme fixnum)` のトレーサビリティ反映)
+- [x] [docs/issues/README.md](README.md) (Issue 台帳更新)
 
 ---
 
@@ -141,10 +141,10 @@ Target Branch: `feat/858-implement-srfi-143-fixnums-and-scheme-fixnum`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/lib/fixnum.scm` が作成され、SRFI 143 規定の全手続き（定数3、述語13、算術9、キャリー3、丸め除算6、ビット演算16の計47手続き）が完全実装されていること。
-- [ ] `(scheme fixnum)` および `(srfi 143)` の `.sld` ライブラリファイルが作成されていること。
-- [ ] `ulisp/tests/test_srfi_143.scm` が作成され、全テストが 100% PASS すること。
-- [ ] `python3 scripts/verify_r7rs_traceability.py` が 100% PASS すること。
-- [ ] `make -C ulisp bootstrap` による自己ホスト 5 モジュール並列ビルドが固定点収束すること。
-- [ ] `make -C ulisp test` の全テストスイートがエラーなく完走すること。
-- [ ] 絶対パスリンクが排除され、相対パスのみが使用されていること。
+- [x] `ulisp/lib/fixnum.scm` が作成され、SRFI 143 規定の全手続き（定数3、述語13、算術9、キャリー3、丸め除算6、ビット演算16の計47手続き）が完全実装されていること。
+- [x] `(scheme fixnum)` および `(srfi 143)` の `.sld` ライブラリファイルが作成されていること。
+- [x] `ulisp/tests/test_srfi_143.scm` が作成され、全テストが 100% PASS すること。
+- [x] `python3 scripts/verify_r7rs_traceability.py` が 100% PASS すること。
+- [x] `make -C ulisp bootstrap` による自己ホスト 5 モジュール並列ビルドが固定点収束すること。
+- [x] `make -C ulisp test` の全テストスイートがエラーなく完走すること。
+- [x] 絶対パスリンクが排除され、相対パスのみが使用されていること。
