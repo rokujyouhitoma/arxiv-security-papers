@@ -291,6 +291,125 @@
      (desugar-internal-define spec rest-def '()))))
 
 ;;; -----------------------------------------------------------------------
+;;; SRFI 31: REC (Recursive evaluation special form)
+;;; -----------------------------------------------------------------------
+
+(define (desugar-rec spec bodies)
+  (cond
+    ;; (rec (<var> . <formals>) . <body>)
+    ((pair? spec)
+     (let* ((var (car spec))
+            (formals (cdr spec))
+            (self-sym (unique-symbol "rec_self_")))
+       (if (list? formals)
+           (let ((inner-args (map (lambda (p) (unique-symbol "rec_arg_")) formals)))
+             (list 'let
+                   (list (list self-sym
+                               (list 'lambda (cons self-sym formals)
+                                     (list 'let (list (list var (list 'lambda inner-args
+                                                                      (cons self-sym (cons self-sym inner-args)))))
+                                           (make-body-expr bodies)))))
+                   (list 'lambda formals
+                         (cons self-sym (cons self-sym formals)))))
+           (let ((rest-arg (unique-symbol "rec_rest_")))
+             (list 'let
+                   (list (list self-sym
+                               (list 'case-lambda
+                                     (list (cons self-sym formals)
+                                           (list 'let (list (list var (list 'case-lambda
+                                                                            (list rest-arg
+                                                                                  (cons 'apply (cons self-sym (cons self-sym (list rest-arg))))))))
+                                                 (make-body-expr bodies))))))
+                   (list 'case-lambda
+                         (list formals
+                               (list 'let (list (list rest-arg formals))
+                                     (cons 'apply (cons self-sym (cons self-sym (list rest-arg))))))))))))
+    ;; (rec <var> (lambda <formals> . <body>)) -> redirect to procedure rec
+    ((and (symbol? spec) (pair? bodies) (pair? (car bodies)) (eq? (caar bodies) 'lambda))
+     (let ((lambda-form (car bodies)))
+       (desugar-rec (cons spec (cadr lambda-form)) (cddr lambda-form))))
+    ;; (rec <var> <expr>)
+    ((symbol? spec)
+     (let ((expr (if (pair? bodies) (car bodies) #f)))
+       (list 'letrec
+             (list (list spec expr))
+             spec)))
+    (else
+     (error "Malformed rec form:" spec))))
+
+(define-picopass rule-desugar-rec
+  (Expr
+    ((rec ,spec . ,bodies) (desugar-rec spec bodies))))
+
+;;; -----------------------------------------------------------------------
+;;; SRFI 26: CUT / CUTE (Parameter specialization without currying)
+;;; -----------------------------------------------------------------------
+
+(define (%cut-slot? x) (and (symbol? x) (eq? x '<>)))
+(define (%cut-rest-slot? x) (and (symbol? x) (eq? x '<...>)))
+
+(define (desugar-cut args)
+  (if (null? args)
+      (error "cut: expected at least one argument (procedure or slot)")
+      (let loop ((rest args)
+                 (params '())
+                 (call-args '())
+                 (rest-var #f))
+        (if (null? rest)
+            (if rest-var
+                (let ((formals (if (null? params)
+                                   rest-var
+                                   (let build-formals ((ps params))
+                                     (if (null? (cdr ps))
+                                         (cons (car ps) rest-var)
+                                         (cons (car ps) (build-formals (cdr ps))))))))
+                  (list 'case-lambda
+                        (list formals
+                              (cons 'apply (cons (car call-args) (append (cdr call-args) (list rest-var)))))))
+                (list 'lambda params call-args))
+            (let ((a (car rest)))
+              (cond
+                ((%cut-slot? a)
+                 (let ((v (unique-symbol "cut_arg_")))
+                   (loop (cdr rest) (append params (list v)) (append call-args (list v)) rest-var)))
+                ((%cut-rest-slot? a)
+                 (if (not (null? (cdr rest)))
+                     (error "cut: <...> must be the last argument in cut/cute:" args)
+                     (let ((rv (unique-symbol "cut_rest_")))
+                       (loop (cdr rest) params call-args rv))))
+                (else
+                 (loop (cdr rest) params (append call-args (list a)) rest-var))))))))
+
+(define (desugar-cute args)
+  (if (null? args)
+      (error "cute: expected at least one argument (procedure or slot)")
+      (let loop ((rest args)
+                 (let-bindings '())
+                 (cut-args '()))
+        (if (null? rest)
+            (let ((cut-expr (desugar-cut (reverse cut-args))))
+              (if (null? let-bindings)
+                  cut-expr
+                  (list 'let (reverse let-bindings) cut-expr)))
+            (let ((a (car rest)))
+              (cond
+                ((or (%cut-slot? a) (%cut-rest-slot? a))
+                 (loop (cdr rest) let-bindings (cons a cut-args)))
+                (else
+                 (let ((t (unique-symbol "cute_tmp_")))
+                   (loop (cdr rest)
+                         (cons (list t a) let-bindings)
+                         (cons t cut-args))))))))))
+
+(define-picopass rule-desugar-cut
+  (Expr
+    ((cut . ,args) (desugar-cut args))))
+
+(define-picopass rule-desugar-cute
+  (Expr
+    ((cute . ,args) (desugar-cute args))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Bindings (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-bindings : L_src (ir) -> L_src ()
@@ -301,4 +420,7 @@
     rule-desugar-named-let
     rule-desugar-multi-body
     rule-desugar-do
-    rule-desugar-internal-define))
+    rule-desugar-internal-define
+    rule-desugar-rec
+    rule-desugar-cut
+    rule-desugar-cute))

@@ -38,6 +38,7 @@
       rule-desugar-or
       rule-desugar-chain-cmp
       rule-desugar-when-unless
+      rule-desugar-and-let*
 
       ;; --- Pass 028: Bindings & Internal Definitions ---
       rule-desugar-case-lambda
@@ -47,6 +48,9 @@
       rule-desugar-multi-body
       rule-desugar-do
       rule-desugar-internal-define
+      rule-desugar-rec
+      rule-desugar-cut
+      rule-desugar-cute
 
       ;; --- Pass 029: Dynamic Environment & Values ---
       rule-desugar-let-values
@@ -57,4 +61,5 @@
       rule-desugar-parameter-ops
       rule-desugar-values
       rule-desugar-error-assume
+      rule-desugar-receive
       atto-no-unexpanded-let-syntax)))

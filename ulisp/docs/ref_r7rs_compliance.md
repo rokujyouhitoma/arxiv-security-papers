@@ -367,10 +367,10 @@ R7RS-large Yellow Docket は、高度なマクロ展開器、構文制御、多�
 
 | 仕様番号 / SRFI | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
-| **SRFI 8** | RECEIVE (多値受け取り構文: `receive`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | `call-with-values` への単純マクロ脱糖で完全動作 |
-| **SRFI 26** | Notation for Specializing Parameters (`cut`, `cute`) | **◎** | [Pass 020](../frontend/020_macro_expander.scm) | スロット部分適用・即時評価部分適用マクロ展開器で完全動作 |
-| **SRFI 31** | Special form REC for recursive evaluation (`rec`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 自己再帰式束縛構文 (`(rec (f x) ...)` / `(rec name val)`)。名前付き `letrec` への脱糖で動作 |
-| **SRFI 61** | A more general `cond` clause (一般化 cond ガード) | **◎** | [Pass 030](../frontend/030_desugar.scm) | 任意個の戻り値を受け取る `(=> guard-proc receiver)` 構文サポート |
+| **SRFI 8** | `(srfi 8)` | RECEIVE (多値受け取り構文: `receive`) | **◎** | [Pass 029](../frontend/029_desugar_dynamic.scm)<br>[Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/8.sld](../lib/srfi/8.sld) | `call-with-values` への多値脱糖完全サポート ([Issue #859](../../docs/issues/closed/859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md)) |
+| **SRFI 26** | `(srfi 26)` | Notation for Specializing Parameters (`cut`, `cute`) | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/26.sld](../lib/srfi/26.sld) | スロット `<>`、レスト `<...>` 部分適用および `cute` 即時評価脱糖完全準拠 ([Issue #859](../../docs/issues/closed/859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md)) |
+| **SRFI 31** | `(srfi 31)` | Special form REC for recursive evaluation (`rec`) | **◎** | [Pass 028](../frontend/028_desugar_bindings.scm)<br>[Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/31.sld](../lib/srfi/31.sld) | 自己再帰式束縛構文 (`(rec (f x) ...)` / `(rec name val)`)。`letrec` への完全脱糖 ([Issue #859](../../docs/issues/closed/859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md)) |
+| **SRFI 61** | `(srfi 61)` | A more general `cond` clause (一般化 cond ガード) | **◎** | [Pass 027](../frontend/027_desugar_conditionals.scm)<br>[Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/61.sld](../lib/srfi/61.sld) | `(<generator> <guard> => <receiver>)` 一般化ガード節の多値・単値完全脱糖 ([Issue #859](../../docs/issues/closed/859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md)) |
 | **SRFI 139** | Syntax Parameters (`define-syntax-parameter`, `syntax-parameterize`) | **×** | - | レキシカルに再束縛可能な構文パラメータ（未実装） |
 | **SRFI 188** | Splicing `let-syntax` and `letrec-syntax` | **×** | - | 定義文脈で内部定義をスプライシング展開する局所マクロ構文（未実装） |
 | **SRFI 210** | Procedures and syntax for multiple values | **×** | - | `list/mv`, `coalesce`, `with-values`, `case-receive` 等の多値拡張手続き・構文群（未実装） |
@@ -412,7 +412,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 | 仕様番号 / SRFI | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
 | **SRFI 0** | Feature-based conditional expansion (`cond-expand`) | **◎** | [Pass 010](../frontend/010_library.scm) | R7RS-small §4.2.1 に正式採択。プラットフォーム機能判定 |
-| **SRFI 2** | AND-LET* (条件付き束縛構文) | **◎** | [Pass 030](../frontend/030_desugar.scm) | `and` / `let*` へのマクロ展開で容易に実現可能 |
+| **SRFI 2** | `(srfi 2)` | AND-LET* (条件付き束縛構文) | **◎** | [Pass 027](../frontend/027_desugar_conditionals.scm)<br>[Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/2.sld](../lib/srfi/2.sld) | `and-let*` 短絡束縛連鎖の完全脱糖 ([Issue #859](../../docs/issues/closed/859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md)) |
 | **SRFI 6** | Basic String Ports | **◎** | [ulisp/lib/port.scm](../lib/port.scm) | R7RS-small §6.13.1 に正式採択。`open-input-string`, `open-output-string`, `get-output-string` 完備 |
 | **SRFI 9** | Defining Record Types (`define-record-type`) | **◎** | [Pass 030](../frontend/030_desugar.scm)<br>[ulisp/lib/srfi/9.sld](../lib/srfi/9.sld) | R7RS-small §5.5 に正式採択。完全サポート ([Issue #549](../../docs/issues/closed/549-implement-r7rs-define-record-type-macro.md), [Issue #824](../../docs/issues/closed/824-support-first-class-source-span-and-ast-metadata-in-nanopass.md)) |
 | **SRFI 11** | Syntax for multiple values (`let-values`, `let*-values`) | **◎** | [Pass 030](../frontend/030_desugar.scm) | R7RS-small §4.2.2 に正式採択。完全サポート ([Issue #538](../../docs/issues/closed/538-implement-r7rs-multiple-values-call-with-values.md)) |

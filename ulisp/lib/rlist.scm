@@ -288,7 +288,7 @@
 (define (ra-list-set ls i val)
   (if (or (not (integer? i)) (< i 0))
       (error "ra-list-set: index must be a non-negative integer" i)
-      (let rec ((cur ls) (j i))
+      (let loop ((cur ls) (j i))
         (if (not (ra-pair? cur))
             (error "ra-list-set: index out of bounds" i)
             (let ((s (%ra-pair-size cur)))
@@ -298,7 +298,7 @@
                                  (%ra-pair-rest cur))
                   (%make-ra-pair s
                                  (%ra-pair-tree cur)
-                                 (rec (%ra-pair-rest cur) (- j s)))))))))
+                                 (loop (%ra-pair-rest cur) (- j s)))))))))
 
 (define (%ra-tree-ref-update size tree i proc)
   (if (zero? i)
@@ -331,7 +331,7 @@
 (define (ra-list-ref/update ls i proc)
   (if (or (not (integer? i)) (< i 0))
       (error "ra-list-ref/update: index must be a non-negative integer" i)
-      (let rec ((cur ls) (j i))
+      (let loop ((cur ls) (j i))
         (if (not (ra-pair? cur))
             (error "ra-list-ref/update: index out of bounds" i)
             (let ((s (%ra-pair-size cur)))
@@ -342,7 +342,7 @@
                       (values old-val
                               (%make-ra-pair s new-tree (%ra-pair-rest cur)))))
                   (call-with-values
-                    (lambda () (rec (%ra-pair-rest cur) (- j s)))
+                    (lambda () (loop (%ra-pair-rest cur) (- j s)))
                     (lambda (old-val new-rest)
                       (values old-val
                               (%make-ra-pair s (%ra-pair-tree cur) new-rest))))))))))

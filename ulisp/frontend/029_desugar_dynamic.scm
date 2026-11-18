@@ -191,6 +191,24 @@
       (error "syntax-error [R7RS §4.3.1]: unexpanded let-syntax encountered in desugar" args))))
 
 ;;; -----------------------------------------------------------------------
+;;; SRFI 8: RECEIVE (Binding to multiple values)
+;;; -----------------------------------------------------------------------
+
+(define (desugar-receive formals expr bodies)
+  (if (list? formals)
+      (list 'call-with-values
+            (list 'lambda '() expr)
+            (cons 'lambda (cons formals bodies)))
+      (list 'call-with-values
+            (list 'lambda '() expr)
+            (list 'case-lambda (cons formals bodies)))))
+
+(define-picopass rule-desugar-receive
+  (Expr
+    ((receive ,formals ,expr . ,bodies)
+     (desugar-receive formals expr bodies))))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass Definition: Desugar Dynamic (fuse-rules)
 ;;; -----------------------------------------------------------------------
 (define-pass desugar-dynamic : L_src (ir) -> L_src ()
@@ -203,4 +221,5 @@
     rule-desugar-parameter-ops
     rule-desugar-values
     rule-desugar-error-assume
+    rule-desugar-receive
     atto-no-unexpanded-let-syntax))
