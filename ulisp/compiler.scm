@@ -11728,7 +11728,15 @@
        (if (<= c 0) val (loop (* val 2) (- c 1)))))
     (else
      (let loop ((val n) (c (- count)))
-       (if (<= c 0) val (loop (quotient val 2) (- c 1)))))))
+       (if (<= c 0)
+           val
+           (let ((next (if (>= val 0)
+                           (quotient val 2)
+                           (let ((q (quotient val 2)))
+                             (if (= (* q 2) val)
+                                 q
+                                 (- q 1))))))
+             (loop next (- c 1))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Primitive Operator Evaluation
@@ -16498,7 +16506,7 @@
         (b-sym (unique-symbol "mbv_b_"))
         (bv-sym (unique-symbol "mbv_bv_"))
         (i-sym (unique-symbol "mbv_i_"))
-        (loop-sym (unique-symbol "mbv_loop_")))
+        (loop-sym (unique-symbol "%mbv_loop_")))
     (list 'let (list (list n-sym k) (list b-sym byte))
           (list 'let (list (list bv-sym (list '%make-bytevector n-sym)))
                 (list 'if (list '= b-sym 0)
@@ -16577,7 +16585,7 @@
         (f-sym (unique-symbol "mv_f_"))
         (v-sym (unique-symbol "mv_v_"))
         (i-sym (unique-symbol "mv_i_"))
-        (loop-sym (unique-symbol "mv_loop_")))
+        (loop-sym (unique-symbol "%mv_loop_")))
     (list 'let (list (list n-sym k) (list f-sym fill))
           (list 'let (list (list v-sym (list '%make-vector n-sym)))
                 (list 'letrec
@@ -16731,7 +16739,7 @@
         (c-sym (unique-symbol "ms_c_"))
         (s-sym (unique-symbol "ms_s_"))
         (i-sym (unique-symbol "ms_i_"))
-        (loop-sym (unique-symbol "ms_loop_")))
+        (loop-sym (unique-symbol "%ms_loop_")))
     (list 'let (list (list n-sym k) (list c-sym ch))
           (list 'let (list (list s-sym (list 'make-string n-sym)))
                 (list 'letrec
@@ -16795,6 +16803,18 @@
   (Expr
     ((+ ,a ,b ,c . ,rest) (desugar-math-binop-fold '+ a b c rest))
     ((* ,a ,b ,c . ,rest) (desugar-math-binop-fold '* a b c rest))
+    ((bitwise-and) -1)
+    ((bitwise-and ,a) a)
+    ((bitwise-and ,a ,b ,c . ,rest) (desugar-math-binop-fold 'bitwise-and a b c rest))
+    ((bitwise-ior) 0)
+    ((bitwise-ior ,a) a)
+    ((bitwise-ior ,a ,b ,c . ,rest) (desugar-math-binop-fold 'bitwise-ior a b c rest))
+    ((bitwise-xor) 0)
+    ((bitwise-xor ,a) a)
+    ((bitwise-xor ,a ,b ,c . ,rest) (desugar-math-binop-fold 'bitwise-xor a b c rest))
+    ((bitwise-eqv) -1)
+    ((bitwise-eqv ,a) a)
+    ((bitwise-eqv ,a ,b ,c . ,rest) (desugar-math-binop-fold 'bitwise-eqv a b c rest))
     ((gcd . ,args) (desugar-gcd args))
     ((lcm . ,args) (desugar-lcm args))
     ((max . ,args) (desugar-max args))
@@ -17078,9 +17098,15 @@
          (bindings (caddr expr))
          (bodies (cdddr expr))
          (params (map car* bindings))
-         (inits (map cadr bindings)))
+         (inits (map cadr bindings))
+         (name-str (if (symbol? name) (symbol->string name) ""))
+         (is-internal? (and (> (string-length name-str) 0)
+                            (char=? (string-ref name-str 0) #\%)))
+         (clean-bodies (if is-internal?
+                           (cons '(declare (no-safepoints)) bodies)
+                           bodies)))
     (list 'letrec
-          (list (list name (cons 'lambda (cons params bodies))))
+          (list (list name (cons 'lambda (cons params clean-bodies))))
           (cons name inits))))
 
 (define (desugar-do bindings exit-clause commands)
@@ -18321,9 +18347,16 @@
      (let* ((loop-name (cadr expr))
             (bindings (caddr expr))
             (raw-body (cdddr expr))
-            (single-body (if (null? (cdr raw-body))
-                             (car raw-body)
-                             (cons 'begin raw-body)))
+            (has-decl? (safepoint-body-has-decl? raw-body))
+            (clean-body-list (if has-decl?
+                                 (safepoint-body-strip-decl raw-body)
+                                 raw-body))
+            (skip? (or (safepoint-excluded-name? loop-name)
+                       has-decl?
+                       (safepoint-trivial-body? clean-body-list)))
+            (single-body (if (null? (cdr clean-body-list))
+                             (car clean-body-list)
+                             (cons 'begin clean-body-list)))
             (new-loop-names (if (memq loop-name loop-names)
                                 loop-names
                                 (cons loop-name loop-names)))
@@ -18335,8 +18368,12 @@
                          b))
                    bindings))
             ;; Inject safepoint at loop entry
-            (injected-body (wrap-with-safepoint-prologue single-body))
-            (trans-body (inject-safepoints-expr injected-body new-loop-names)))
+            (injected-body (if skip?
+                               single-body
+                               (wrap-with-safepoint-prologue single-body)))
+            (trans-body (if skip?
+                            single-body
+                            (inject-safepoints-expr injected-body new-loop-names))))
        (list 'let loop-name trans-bindings trans-body)))
 
     ;; Standard let
@@ -18364,6 +18401,26 @@
                    bindings))
             (trans-body (map (lambda (e) (inject-safepoints-expr e loop-names)) body)))
        (cons 'let* (cons trans-bindings trans-body))))
+
+    ;; Standard letrec / letrec*
+    ((or (and (pair? expr) (eq? (car expr) 'letrec) (pair? (cdr expr)))
+         (and (pair? expr) (eq? (car expr) 'letrec*) (pair? (cdr expr))))
+     (let* ((op (car expr))
+            (bindings (cadr expr))
+            (body (cddr expr))
+            (trans-bindings
+              (map (lambda (b)
+                     (if (and (pair? b) (pair? (cdr b)))
+                         (let* ((var (car b))
+                                (val (cadr b))
+                                (skip-binding? (safepoint-excluded-name? var)))
+                           (if (and skip-binding? (pair? val) (eq? (car val) 'lambda))
+                               b
+                               (list var (inject-safepoints-expr val loop-names))))
+                         b))
+                   bindings))
+            (trans-body (map (lambda (e) (inject-safepoints-expr e loop-names)) body)))
+       (cons op (cons trans-bindings trans-body))))
 
     ;; Begin block
     ((begin-form? expr)
@@ -18481,7 +18538,9 @@
             (injected-body (if skip?
                                clean-body
                                (prepend-safepoint-to-list clean-body)))
-            (trans-body (map (lambda (e) (inject-safepoints-expr e '())) injected-body)))
+            (trans-body (if skip?
+                            clean-body
+                            (map (lambda (e) (inject-safepoints-expr e '())) injected-body))))
        (cons 'define (cons sig trans-body))))
     ;; define variable: (define name expr)
     ((and (eq? (car form) 'define)

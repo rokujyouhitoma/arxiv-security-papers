@@ -26,9 +26,15 @@
          (bindings (caddr expr))
          (bodies (cdddr expr))
          (params (map car* bindings))
-         (inits (map cadr bindings)))
+         (inits (map cadr bindings))
+         (name-str (if (symbol? name) (symbol->string name) ""))
+         (is-internal? (and (> (string-length name-str) 0)
+                            (char=? (string-ref name-str 0) #\%)))
+         (clean-bodies (if is-internal?
+                           (cons '(declare (no-safepoints)) bodies)
+                           bodies)))
     (list 'letrec
-          (list (list name (cons 'lambda (cons params bodies))))
+          (list (list name (cons 'lambda (cons params clean-bodies))))
           (cons name inits))))
 
 (define (desugar-do bindings exit-clause commands)

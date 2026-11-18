@@ -258,9 +258,16 @@
      (let* ((loop-name (cadr expr))
             (bindings (caddr expr))
             (raw-body (cdddr expr))
-            (single-body (if (null? (cdr raw-body))
-                             (car raw-body)
-                             (cons 'begin raw-body)))
+            (has-decl? (safepoint-body-has-decl? raw-body))
+            (clean-body-list (if has-decl?
+                                 (safepoint-body-strip-decl raw-body)
+                                 raw-body))
+            (skip? (or (safepoint-excluded-name? loop-name)
+                       has-decl?
+                       (safepoint-trivial-body? clean-body-list)))
+            (single-body (if (null? (cdr clean-body-list))
+                             (car clean-body-list)
+                             (cons 'begin clean-body-list)))
             (new-loop-names (if (memq loop-name loop-names)
                                 loop-names
                                 (cons loop-name loop-names)))
@@ -272,8 +279,12 @@
                          b))
                    bindings))
             ;; Inject safepoint at loop entry
-            (injected-body (wrap-with-safepoint-prologue single-body))
-            (trans-body (inject-safepoints-expr injected-body new-loop-names)))
+            (injected-body (if skip?
+                               single-body
+                               (wrap-with-safepoint-prologue single-body)))
+            (trans-body (if skip?
+                            single-body
+                            (inject-safepoints-expr injected-body new-loop-names))))
        (list 'let loop-name trans-bindings trans-body)))
 
     ;; Standard let
@@ -301,6 +312,26 @@
                    bindings))
             (trans-body (map (lambda (e) (inject-safepoints-expr e loop-names)) body)))
        (cons 'let* (cons trans-bindings trans-body))))
+
+    ;; Standard letrec / letrec*
+    ((or (and (pair? expr) (eq? (car expr) 'letrec) (pair? (cdr expr)))
+         (and (pair? expr) (eq? (car expr) 'letrec*) (pair? (cdr expr))))
+     (let* ((op (car expr))
+            (bindings (cadr expr))
+            (body (cddr expr))
+            (trans-bindings
+              (map (lambda (b)
+                     (if (and (pair? b) (pair? (cdr b)))
+                         (let* ((var (car b))
+                                (val (cadr b))
+                                (skip-binding? (safepoint-excluded-name? var)))
+                           (if (and skip-binding? (pair? val) (eq? (car val) 'lambda))
+                               b
+                               (list var (inject-safepoints-expr val loop-names))))
+                         b))
+                   bindings))
+            (trans-body (map (lambda (e) (inject-safepoints-expr e loop-names)) body)))
+       (cons op (cons trans-bindings trans-body))))
 
     ;; Begin block
     ((begin-form? expr)
@@ -418,7 +449,9 @@
             (injected-body (if skip?
                                clean-body
                                (prepend-safepoint-to-list clean-body)))
-            (trans-body (map (lambda (e) (inject-safepoints-expr e '())) injected-body)))
+            (trans-body (if skip?
+                            clean-body
+                            (map (lambda (e) (inject-safepoints-expr e '())) injected-body))))
        (cons 'define (cons sig trans-body))))
     ;; define variable: (define name expr)
     ((and (eq? (car form) 'define)
