@@ -219,10 +219,20 @@
                (pure-int-atom? (cadr e) int-vars)))
          (else #f))))
 
+(define (expr-has-int-gt? expr limit)
+  (cond
+    ((integer? expr)
+     (or (> expr limit) (< expr (- 0 limit))))
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) 'quote) #f)
+    (else
+     (or (expr-has-int-gt? (car expr) limit)
+         (expr-has-int-gt? (cdr expr) limit)))))
+
 (define (pure-int-expr? expr fn-name-or-names int-vars bool-vars depth)
   (cond
     ((> depth 40) #f)
-    ((integer? expr) #t)
+    ((integer? expr) (and (<= expr 536870911) (>= expr -536870911)))
     ((symbol? expr) (memq expr int-vars))
     ((not (pair? expr)) #f)
     (else
@@ -383,7 +393,10 @@
                        (lbody (caddr c)))
                   (if (and (pure-int-expr? lbody (cons fn-name init-allowed) params '() 0)
                            (rtyper-all-params-occur? params lbody)
-                           (not (fn-escapes-in-expr? fn-name lbody)))
+                           (not (fn-escapes-in-expr? fn-name lbody))
+                           (or (not (occurs-in? '* lbody))
+                               (and (not (expr-has-int-gt? lbody 20))
+                                    (not (expr-has-int-gt? scope-exprs 20)))))
                       (loop (cdr cs) (cons c acc))
                       (loop (cdr cs) acc))))))
          (local-survivors (rtyper-prune-pure-cands local-cands known-pure-fns)))
@@ -468,8 +481,10 @@
 (define (rtyper-binop op e1 e2 raw-env)
   (cond
     ((memq op '(+ - *))
-     (let ((raw1? (or (integer? e1) (and (symbol? e1) (raw-var? e1 raw-env))))
-           (raw2? (or (integer? e2) (and (symbol? e2) (raw-var? e2 raw-env)))))
+     (let ((raw1? (or (and (integer? e1) (<= e1 536870911) (>= e1 -536870911))
+                      (and (symbol? e1) (raw-var? e1 raw-env))))
+           (raw2? (or (and (integer? e2) (<= e2 536870911) (>= e2 -536870911))
+                      (and (symbol? e2) (raw-var? e2 raw-env)))))
        (if (and raw1? raw2?)
            (case op
              ((+) (list '%raw-add e1 e2))
@@ -580,7 +595,10 @@
                            (eq? (car val) 'lambda)
                            (pair? (cadr val))
                            (all-fixnum-params? (cadr val))
-                           (pure-tail-loop? (car b) (caddr val)))))
+                           (pure-tail-loop? (car b) (caddr val))
+                           (or (not (occurs-in? '* (caddr val)))
+                               (and (not (expr-has-int-gt? (caddr val) 20))
+                                    (not (expr-has-int-gt? body 20)))))))
                ;; Named-let loop with 100% fixnum parameters and pure tail-recursion:
                ;; Lower all loop variables to raw %raw-i64 hardware representation.
                ;; Lexically scope fn-name to its definition body and continuation.

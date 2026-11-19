@@ -447,10 +447,12 @@
     (assert-true "main body contains instructions" (not (null? body)))
     ;; Check valid LIR opcodes
     (let ((valid-opcodes '(%mov %load %store %store-byte %load-byte-zx %add %sub
+                          %add-overflow %sub-overflow %mul-overflow
                           %raw-add %raw-sub %raw-mul %raw-cmp %box-fixnum %unbox-fixnum
                           %neg %imul %cqo %idiv %inc %shl %shr %sar %bit-and
                           %bit-or %bit-xor %cmp %set-boolean %alloc %code-ref
-                          %str-ref %c-call %call-closure %label %block %jump
+                          %str-ref %c-call %call-closure %direct-call %direct-jump
+                          %label %block %jump %jump-cond %switch
                           %jump-if %jump-if-false %jump-if-zero %return)))
       (for-each
        (lambda (inst)

@@ -51,6 +51,9 @@
           (or (expr-free-references-var? (car expr) var)
               (expr-free-references-var? (cdr expr) var))))))))
 
+(define (in-place-const-int? x)
+  (and (integer? x) (>= x -268435456) (<= x 268435455)))
+
 (define (extract-in-place-const op e)
   (let* ((raw-c (if (integer? (cadr e)) (cadr e) (caddr e)))
          (is-raw? (memq op '(%raw-add %raw-sub))))
@@ -106,14 +109,14 @@
             (cond
               ((and (pair? e0)
                     (memq (car e0) '(+ %raw-add))
-                    (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
-                        (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
+                    (or (and (eq? (cadr e0) p0) (in-place-const-int? (caddr e0)))
+                        (and (in-place-const-int? (cadr e0)) (eq? (caddr e0) p0))))
                (let ((c (extract-in-place-const (car e0) e0)))
                  (emit-lir! (list '%add r0 c))))
               ((and (pair? e0)
                     (memq (car e0) '(- %raw-sub))
                     (eq? (cadr e0) p0)
-                    (integer? (caddr e0)))
+                    (in-place-const-int? (caddr e0)))
                (let ((c (extract-in-place-const (car e0) e0)))
                  (emit-lir! (list '%sub r0 c))))
               (else
@@ -126,14 +129,14 @@
             (cond
               ((and (pair? e1)
                     (memq (car e1) '(+ %raw-add))
-                    (or (and (eq? (cadr e1) p1) (integer? (caddr e1)))
-                        (and (integer? (cadr e1)) (eq? (caddr e1) p1))))
+                    (or (and (eq? (cadr e1) p1) (in-place-const-int? (caddr e1)))
+                        (and (in-place-const-int? (cadr e1)) (eq? (caddr e1) p1))))
                (let ((c (extract-in-place-const (car e1) e1)))
                  (emit-lir! (list '%add r1 c))))
               ((and (pair? e1)
                     (memq (car e1) '(- %raw-sub))
                     (eq? (cadr e1) p1)
-                    (integer? (caddr e1)))
+                    (in-place-const-int? (caddr e1)))
                (let ((c (extract-in-place-const (car e1) e1)))
                  (emit-lir! (list '%sub r1 c))))
               (else
@@ -165,14 +168,14 @@
             (cond
               ((and (pair? e0)
                     (memq (car e0) '(+ %raw-add))
-                    (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
-                        (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
+                    (or (and (eq? (cadr e0) p0) (in-place-const-int? (caddr e0)))
+                        (and (in-place-const-int? (cadr e0)) (eq? (caddr e0) p0))))
                (let ((c (extract-in-place-const (car e0) e0)))
                  (emit-lir! (list '%add r0 c))))
               ((and (pair? e0)
                     (memq (car e0) '(- %raw-sub))
                     (eq? (cadr e0) p0)
-                    (integer? (caddr e0)))
+                    (in-place-const-int? (caddr e0)))
                (let ((c (extract-in-place-const (car e0) e0)))
                  (emit-lir! (list '%sub r0 c))))
               (else
@@ -198,14 +201,14 @@
             (cond
               ((and (pair? e1)
                     (memq (car e1) '(+ %raw-add))
-                    (or (and (eq? (cadr e1) p1) (integer? (caddr e1)))
-                        (and (integer? (cadr e1)) (eq? (caddr e1) p1))))
+                    (or (and (eq? (cadr e1) p1) (in-place-const-int? (caddr e1)))
+                        (and (in-place-const-int? (cadr e1)) (eq? (caddr e1) p1))))
                (let ((c (extract-in-place-const (car e1) e1)))
                  (emit-lir! (list '%add r1 c))))
               ((and (pair? e1)
                     (memq (car e1) '(- %raw-sub))
                     (eq? (cadr e1) p1)
-                    (integer? (caddr e1)))
+                    (in-place-const-int? (caddr e1)))
                (let ((c (extract-in-place-const (car e1) e1)))
                  (emit-lir! (list '%sub r1 c))))
               (else
@@ -233,14 +236,14 @@
          (cond
            ((and (pair? e0)
                  (memq (car e0) '(+ %raw-add))
-                 (or (and (eq? (cadr e0) p0) (integer? (caddr e0)))
-                     (and (integer? (cadr e0)) (eq? (caddr e0) p0))))
+                 (or (and (eq? (cadr e0) p0) (in-place-const-int? (caddr e0)))
+                     (and (in-place-const-int? (cadr e0)) (eq? (caddr e0) p0))))
             (let ((c (extract-in-place-const (car e0) e0)))
               (emit-lir! (list '%add r0 c))))
            ((and (pair? e0)
                  (memq (car e0) '(- %raw-sub))
                  (eq? (cadr e0) p0)
-                 (integer? (caddr e0)))
+                 (in-place-const-int? (caddr e0)))
             (let ((c (extract-in-place-const (car e0) e0)))
               (emit-lir! (list '%sub r0 c))))
            (else
@@ -372,6 +375,7 @@
                        (else #f))))
          (and limit
               (>= limit 16)
+              (<= limit 1000000000)
               (zero? (modulo limit 8))
               (let* ((call-form
                       (cond
@@ -480,7 +484,9 @@
          (num-params (length params))
          ;; Allocate callee-saved registers (%rbx, %r13, %r14) for leaf loops with <= 3 parameters
          (use-reg-alloc? (and (<= num-params 3)
-                              (not (cont-body-has-external-call? f-body f-name))))
+                              (not (cont-body-has-external-call? f-body f-name))
+                              (or (unboxed-fn? f-name)
+                                  (not (occurs-in? '* f-body)))))
          (rot-cand (and use-reg-alloc? (cont-loop-rotation-candidate? f-name f-body)))
          (callee-saved-regs '(%rbx %r13 %r14)))
     (cond

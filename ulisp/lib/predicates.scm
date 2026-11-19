@@ -22,12 +22,18 @@
        (= (vector-length x) 3)
        (eq? (vector-ref x 0) 'ulisp-complex-tag)))
 
+(define (bignum? x)
+  (and (vector? x)
+       (= (vector-length x) 3)
+       (eq? (vector-ref x 0) 'bignum)))
+
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 Numbers: Numerical Tower Predicates
 ;; ---------------------------------------------------------------------
 
 (define (%number? x)
   (or (fixnum? x)
+      (bignum? x)
       (ratnum? x)
       (flonum? x)
       (compnum? x)))
@@ -38,6 +44,7 @@
 (define (%real? x)
   (cond
     ((fixnum? x) #t)
+    ((bignum? x) #t)
     ((ratnum? x) #t)
     ((flonum? x) #t)
     ((compnum? x)
@@ -48,6 +55,7 @@
 (define (%rational? x)
   (cond
     ((fixnum? x) #t)
+    ((bignum? x) #t)
     ((ratnum? x) #t)
     ((flonum? x) (fixnum? (vector-ref x 1)))
     ((compnum? x)
@@ -58,6 +66,7 @@
 (define (%integer? x)
   (cond
     ((fixnum? x) #t)
+    ((bignum? x) #t)
     ((flonum? x)
      (let ((v (vector-ref x 1)))
        (and (fixnum? v) (= (modulo v 1000000) 0))))
@@ -69,6 +78,7 @@
 (define (%exact? x)
   (cond
     ((fixnum? x) #t)
+    ((bignum? x) #t)
     ((ratnum? x) #t)
     ((compnum? x)
      (and (%exact? (vector-ref x 1))
@@ -78,14 +88,18 @@
 (define (%inexact? x)
   (cond
     ((fixnum? x) #f)
+    ((bignum? x) #f)
     ((flonum? x) #t)
     ((compnum? x)
      (or (%inexact? (vector-ref x 1))
          (%inexact? (vector-ref x 2))))
     (else #f)))
 
+(define (%exact-integer? x)
+  (or (fixnum? x) (bignum? x)))
+
 (define (exact-integer? x)
-  (fixnum? x))
+  (%exact-integer? x))
 
 (define (number? x) (%number? x))
 (define (complex? x) (%complex? x))
@@ -123,6 +137,10 @@
   (syntax-rules ()
     ((_ x) (%inexact? x))))
 
+(define-syntax exact-integer?
+  (syntax-rules ()
+    ((_ x) (%exact-integer? x))))
+
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 IEEE 754 Special Value Predicates (finite?, infinite?, nan?)
 ;;   Conforms to R7RS §6.2.6 & Issue #712
@@ -131,6 +149,7 @@
 (define (nan? z)
   (cond
     ((fixnum? z) #f)
+    ((bignum? z) #f)
     ((ratnum? z) #f)
     ((flonum? z) (eq? (vector-ref z 1) 'nan))
     ((compnum? z)
@@ -141,6 +160,7 @@
 (define (infinite? z)
   (cond
     ((fixnum? z) #f)
+    ((bignum? z) #f)
     ((ratnum? z) #f)
     ((flonum? z)
      (let ((v (vector-ref z 1)))
@@ -153,12 +173,18 @@
 (define (finite? z)
   (cond
     ((fixnum? z) #t)
+    ((bignum? z) #t)
     ((ratnum? z) #t)
     ((flonum? z) (fixnum? (vector-ref z 1)))
     ((compnum? z)
      (and (finite? (vector-ref z 1))
           (finite? (vector-ref z 2))))
     (else (error "finite?: expected number" z))))
+
+(define (positive? x) (> x 0))
+(define (negative? x) (< x 0))
+(define (even? x) (= (modulo x 2) 0))
+(define (odd? x) (not (= (modulo x 2) 0)))
 
 ;; §6.4 Pairs and lists: list?
 (define (list? x)

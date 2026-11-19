@@ -19,7 +19,15 @@
 ;; Internal helper: absolute value
 ;; ---------------------------------------------------------------------
 (define (%math-abs x)
-  (if (< x 0) (- 0 x) x))
+  (if (bignum? x)
+      (bignum-demote (bignum-abs x))
+      (if (< x 0) (- 0 x) x)))
+
+(define (num-quotient a b)
+  (bignum-demote (bignum-quotient (%ensure-bignum a) (%ensure-bignum b))))
+
+(define (num-modulo a b)
+  (bignum-demote (bignum-modulo (%ensure-bignum a) (%ensure-bignum b))))
 
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 square
@@ -78,7 +86,7 @@
 
 (define (numerator q)
   (cond
-    ((fixnum? q) q)
+    ((%exact-integer? q) q)
     ((ratnum? q) (vector-ref q 1))
     ((flonum? q)
      (let ((v (vector-ref q 1)))
@@ -91,7 +99,7 @@
 
 (define (denominator q)
   (cond
-    ((fixnum? q) 1)
+    ((%exact-integer? q) 1)
     ((ratnum? q) (vector-ref q 2))
     ((flonum? q)
      (let ((v (vector-ref q 1)))
@@ -104,7 +112,7 @@
 
 (define (%exact-rat-num x)
   (cond
-    ((fixnum? x) x)
+    ((%exact-integer? x) x)
     ((ratnum? x) (vector-ref x 1))
     ((and (flonum? x) (fixnum? (vector-ref x 1)))
      (let ((r (make-rational (vector-ref x 1) 1000000)))
@@ -113,7 +121,7 @@
 
 (define (%exact-rat-den x)
   (cond
-    ((fixnum? x) 1)
+    ((%exact-integer? x) 1)
     ((ratnum? x) (vector-ref x 2))
     ((and (flonum? x) (fixnum? (vector-ref x 1)))
      (let ((r (make-rational (vector-ref x 1) 1000000)))
@@ -327,25 +335,37 @@
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 exact-integer-sqrt (R7RS Section 6.2.6)
 ;; ---------------------------------------------------------------------
+(define (%bignum-isqrt k)
+  (let* ((n-limbs (bignum-num-limbs k))
+         (init-shift (* n-limbs 15))
+         (x0 (bignum-shift-left (bignum-one) (if (> init-shift 0) init-shift 1))))
+    (let loop ((x (quotient (+ x0 (quotient k x0)) 2)))
+      (let ((x1 (quotient (+ x (quotient k x)) 2)))
+        (if (>= x1 x)
+            (values x (- k (* x x)))
+            (loop x1))))))
+
 (define (exact-integer-sqrt k)
   (if (< k 0)
       (error "exact-integer-sqrt: argument must be non-negative" k)
-      (if (<= k 1)
-          (values k 0)
-          (let loop ((low 1)
-                     (high (if (< k 500000000) k 500000000))
-                     (ans 1))
-            (if (<= low high)
-                (let* ((mid (quotient (+ low high) 2))
-                       (sq (* mid mid)))
-                  (cond
-                    ((= sq k)
-                     (values mid 0))
-                    ((< sq k)
-                     (loop (+ mid 1) high mid))
-                    (else
-                     (loop low (- mid 1) ans))))
-                (values ans (- k (* ans ans))))))))
+      (if (bignum? k)
+          (%bignum-isqrt k)
+          (if (<= k 1)
+              (values k 0)
+              (let loop ((low 1)
+                         (high (if (< k 500000000) k 500000000))
+                         (ans 1))
+                (if (<= low high)
+                    (let* ((mid (quotient (+ low high) 2))
+                           (sq (* mid mid)))
+                      (cond
+                        ((= sq k)
+                         (values mid 0))
+                        ((< sq k)
+                         (loop (+ mid 1) high mid))
+                        (else
+                         (loop low (- mid 1) ans))))
+                    (values ans (- k (* ans ans)))))))))
 
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 max and min (variadic support, Issue #653)
@@ -389,6 +409,7 @@
 (define (floor x)
   (cond
     ((fixnum? x) x)
+    ((bignum? x) x)
     ((ratnum? x)
      (floor-quotient (vector-ref x 1) (vector-ref x 2)))
     ((flonum? x)
@@ -401,6 +422,7 @@
 (define (ceiling x)
   (cond
     ((fixnum? x) x)
+    ((bignum? x) x)
     ((ratnum? x)
      (ceiling-quotient (vector-ref x 1) (vector-ref x 2)))
     ((flonum? x)
@@ -413,6 +435,7 @@
 (define (truncate x)
   (cond
     ((fixnum? x) x)
+    ((bignum? x) x)
     ((ratnum? x)
      (truncate-quotient (vector-ref x 1) (vector-ref x 2)))
     ((flonum? x)
@@ -425,6 +448,7 @@
 (define (round x)
   (cond
     ((fixnum? x) x)
+    ((bignum? x) x)
     ((ratnum? x)
      (round-quotient (vector-ref x 1) (vector-ref x 2)))
     ((flonum? x)
@@ -499,10 +523,20 @@
 (define (inexact z)
   (cond
     ((fixnum? z)
-     (vector 'ulisp-flonum-tag (* z 1000000)))
+     (let ((scaled (* z 1000000)))
+       (if (fixnum? scaled)
+           (vector 'ulisp-flonum-tag scaled)
+           (if (< z 0) -inf.0 +inf.0))))
+    ((bignum? z)
+     (let ((scaled (bignum-demote (bignum-mul z (fixnum->bignum 1000000)))))
+       (if (fixnum? scaled)
+           (vector 'ulisp-flonum-tag scaled)
+           (if (bignum-negative? z) -inf.0 +inf.0))))
     ((ratnum? z)
-     (vector 'ulisp-flonum-tag
-             (round-quotient (* (vector-ref z 1) 1000000) (vector-ref z 2))))
+     (let ((q (round-quotient (* (vector-ref z 1) 1000000) (vector-ref z 2))))
+       (if (fixnum? q)
+           (vector 'ulisp-flonum-tag q)
+           (if (bignum-negative? q) -inf.0 +inf.0))))
     ((flonum? z)
      z)
     ((compnum? z)
@@ -515,6 +549,7 @@
 (define (exact z)
   (cond
     ((fixnum? z) z)
+    ((bignum? z) z)
     ((ratnum? z) z)
     ((flonum? z)
      (let ((v (vector-ref z 1)))
@@ -536,8 +571,21 @@
 (define (%to-flonum-val x)
   (cond
     ((flonum? x) (vector-ref x 1))
-    ((fixnum? x) (* x 1000000))
-    ((ratnum? x) (round-quotient (* (vector-ref x 1) 1000000) (vector-ref x 2)))
+    ((fixnum? x)
+     (let ((scaled (* x 1000000)))
+       (if (fixnum? scaled)
+           scaled
+           (if (< x 0) 'neg-inf 'pos-inf))))
+    ((bignum? x)
+     (let ((scaled (bignum-demote (bignum-mul x (fixnum->bignum 1000000)))))
+       (if (fixnum? scaled)
+           scaled
+           (if (bignum-negative? x) 'neg-inf 'pos-inf))))
+    ((ratnum? x)
+     (let ((q (round-quotient (* (vector-ref x 1) 1000000) (vector-ref x 2))))
+       (if (fixnum? q)
+           q
+           (if (bignum-negative? q) 'neg-inf 'pos-inf))))
     (else (error "flonum operation: expected real number" x))))
 
 (define (flo+ a b)
@@ -636,9 +684,13 @@
   (or (flo= a b) (flo< b a)))
 
 ;; Mixed-exactness real & complex arithmetic with R7RS Inexactness Contagion
+;; Note: %real-num+, %real-num-, and %real-num* serve as the LIR overflow
+;; fallback targets (`ulisp_fn_num_plus`, `ulisp_fn_num_`, `ulisp_fn_num_star`),
+;; so they MUST NOT invoke generic +/-/* directly on two fixnums.
 (define (%real-num+ a b)
   (cond
-    ((and (fixnum? a) (fixnum? b)) (+ a b))
+    ((and (%exact-integer? a) (%exact-integer? b))
+     (bignum-demote (bignum-add (%ensure-bignum a) (%ensure-bignum b))))
     ((or (inexact? a) (inexact? b)) (flo+ a b))
     (else (rat+ a b))))
 
@@ -646,18 +698,21 @@
   (case-lambda
     ((a)
      (cond
-       ((fixnum? a) (- 0 a))
+       ((%exact-integer? a)
+        (bignum-demote (bignum-negate (%ensure-bignum a))))
        ((inexact? a) (flo- a))
        (else (rat- a))))
     ((a b)
      (cond
-       ((and (fixnum? a) (fixnum? b)) (- a b))
+       ((and (%exact-integer? a) (%exact-integer? b))
+        (bignum-demote (bignum-sub (%ensure-bignum a) (%ensure-bignum b))))
        ((or (inexact? a) (inexact? b)) (flo- a b))
        (else (rat- a b))))))
 
 (define (%real-num* a b)
   (cond
-    ((and (fixnum? a) (fixnum? b)) (* a b))
+    ((and (%exact-integer? a) (%exact-integer? b))
+     (bignum-demote (bignum-mul (%ensure-bignum a) (%ensure-bignum b))))
     ((or (inexact? a) (inexact? b)) (flo* a b))
     (else (rat* a b))))
 
@@ -673,8 +728,12 @@
 (define (%real-num= a b)
   (cond
     ((and (fixnum? a) (fixnum? b)) (= a b))
+    ((and (%exact-integer? a) (%exact-integer? b))
+     (bignum=? (%ensure-bignum a) (%ensure-bignum b)))
     ((or (inexact? a) (inexact? b)) (flo= a b))
-    (else (rat= a b))))
+    ((or (ratnum? a) (ratnum? b))
+     (and (%rational? a) (%rational? b) (rat= a b)))
+    (else #f)))
 
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 Complex Numbers ((scheme complex), Issue #714)
@@ -772,24 +831,32 @@
 (define (num< a b)
   (cond
     ((and (fixnum? a) (fixnum? b)) (< a b))
+    ((and (%exact-integer? a) (%exact-integer? b))
+     (bignum<? (%ensure-bignum a) (%ensure-bignum b)))
     ((or (inexact? a) (inexact? b)) (flo< a b))
     (else (rat< a b))))
 
 (define (num<= a b)
   (cond
     ((and (fixnum? a) (fixnum? b)) (<= a b))
+    ((and (%exact-integer? a) (%exact-integer? b))
+     (bignum<=? (%ensure-bignum a) (%ensure-bignum b)))
     ((or (inexact? a) (inexact? b)) (flo<= a b))
     (else (rat<= a b))))
 
 (define (num> a b)
   (cond
     ((and (fixnum? a) (fixnum? b)) (> a b))
+    ((and (%exact-integer? a) (%exact-integer? b))
+     (bignum>? (%ensure-bignum a) (%ensure-bignum b)))
     ((or (inexact? a) (inexact? b)) (flo> a b))
     (else (rat> a b))))
 
 (define (num>= a b)
   (cond
     ((and (fixnum? a) (fixnum? b)) (>= a b))
+    ((and (%exact-integer? a) (%exact-integer? b))
+     (bignum>=? (%ensure-bignum a) (%ensure-bignum b)))
     ((or (inexact? a) (inexact? b)) (flo>= a b))
     (else (rat>= a b))))
 
@@ -1073,6 +1140,7 @@
 (define (magnitude z)
   (cond
     ((fixnum? z) (if (< z 0) (- 0 z) z))
+    ((bignum? z) (bignum-demote (bignum-abs z)))
     ((ratnum? z)
      (let ((n (vector-ref z 1))
            (d (vector-ref z 2)))

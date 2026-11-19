@@ -186,9 +186,6 @@
 (write-string "--- Group 5: Searching & Filtering ---")
 (write-char #\newline)
 
-(define (even? n) (= (modulo n 2) 0))
-(define (odd? n) (not (even? n)))
-
 (assert-equal "5.1 filter" (filter even? '(1 2 3 4 5 6)) '(2 4 6))
 (assert-equal "5.2 remove" (remove even? '(1 2 3 4 5 6)) '(1 3 5))
 

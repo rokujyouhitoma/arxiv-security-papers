@@ -1766,7 +1766,7 @@ demo: build/demo_runner.scm
 
 
 # --- Unified JIT Binary: bin/ulisp-jit ---
-build/ulisp_jit_combined.scm: lib/posix.scm lib/list.scm lib/predicates.scm lib/math.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/exception.scm lib/values.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
+build/ulisp_jit_combined.scm: lib/posix.scm lib/list.scm lib/predicates.scm lib/math.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm lib/reader.scm lib/equality.scm lib/bytevector.scm lib/vector.scm lib/bignum.scm lib/exception.scm lib/values.scm lib/gc.scm build/compiler_passes.scm driver/jit.scm
 	@mkdir -p build
 	cat $^ > $@
 

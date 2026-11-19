@@ -6,8 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **860** | SRFI 115 S 式正規表現エンジン (SRE) および (scheme regex) の実装 | Feature | Medium | Closed | [860-implement-srfi-115-scheme-regular-expressions-sre.md](closed/860-implement-srfi-115-scheme-regular-expressions-sre.md) |
-| **861** | 多倍長整数 (Bignum) のネイティブ AOT ランタイム完全統合と Tangerine Tower 適合 | Feature | Medium | New | [861-integrate-bignum-arithmetic-into-native-aot-compiler-and-runtime.md](861-integrate-bignum-arithmetic-into-native-aot-compiler-and-runtime.md) |
 | **862** | SRFI 180 RFC 8259 準拠 JSON パーサおよびジェネレータ ((scheme json)) の実装 | Feature | Medium | New | [862-implement-srfi-180-json-parser-and-serializer.md](862-implement-srfi-180-json-parser-and-serializer.md) |
 | **863** | SRFI 214 動的可変長ベクタ ((scheme flexvector)) の実装 | Feature | Medium | New | [863-implement-srfi-214-flexvectors.md](863-implement-srfi-214-flexvectors.md) |
 | **864** | SRFI 48 中級フォーマット文字列 API ((scheme format)) の実装 | Feature | Medium | New | [864-implement-srfi-48-intermediate-format-strings.md](864-implement-srfi-48-intermediate-format-strings.md) |
@@ -17,6 +15,8 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **861** | 多倍長整数 (Bignum) のネイティブ AOT ランタイム完全統合と Tangerine Tower 適合 | Feature | 2026-11-19 | [861-integrate-bignum-arithmetic-into-native-aot-compiler-and-runtime.md](closed/861-integrate-bignum-arithmetic-into-native-aot-compiler-and-runtime.md) |
+| **860** | SRFI 115 S 式正規表現エンジン (SRE) および (scheme regex) の実装 | Feature | 2026-11-19 | [860-implement-srfi-115-scheme-regular-expressions-sre.md](closed/860-implement-srfi-115-scheme-regular-expressions-sre.md) |
 | **859** | Yellow Docket 構文拡張マクロ (SRFI 8, 26, 31, 2, 61) の脱糖実装 | Feature | 2026-11-18 | [859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md](closed/859-implement-yellow-docket-macros-srfi-8-26-31-2-and-61.md) |
 | **858** | SRFI 143 Fixnums 特化高速演算ライブラリおよび (scheme fixnum) の実装 | Feature | 2026-11-18 | [858-implement-srfi-143-fixnums-and-scheme-fixnum.md](closed/858-implement-srfi-143-fixnums-and-scheme-fixnum.md) |
 | **857** | SRFI 151 ビット演算包括ライブラリおよび (scheme bitwise) の実装 | Feature | 2026-11-18 | [857-implement-srfi-151-bitwise-operations-and-scheme-bitwise.md](closed/857-implement-srfi-151-bitwise-operations-and-scheme-bitwise.md) |
