@@ -391,7 +391,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 | **SRFI 166** | Monadic / Combinator Formatting | **×** | - | 高機能コンビネータ書式化出力エンジン（未実装） |
 | **SRFI 175** | ASCII Character Library | **◎** | [ulisp/lib/char.scm](../lib/char.scm) | ASCII コードポイント検査・分類述語群完備 ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
 | **SRFI 178** | Bitvectors (ビットベクタ) | **×** | - | 1 ビット単位の論理配列型およびビットフィールド走査演算（未実装） |
-| **SRFI 180** | JSON (JSON パース・シリアライズ) | **×** | - | RFC 8259 準拠 JSON パーサおよびジェネレータ（未実装） |
+| **SRFI 180** | JSON (JSON パース・シリアライズ) | **◎** | [ulisp/lib/json.scm](../lib/json.scm)<br>[ulisp/lib/srfi/180.sld](../lib/srfi/180.sld)<br>[ulisp/lib/scheme/json.sld](../lib/scheme/json.sld) | RFC 8259 準拠 JSON パーサ・ジェネレータ・シリアライザ完備 ([Issue #862](../../docs/issues/closed/862-implement-srfi-180-json-parser-and-serializer.md)) |
 | **SRFI 189** | Maybe and Either: optional values and error containers | **×** | - | 関数型オプショナル値 (`just`, `nothing`) および結果値 (`right`, `left`) モナド風コンテナ（未実装） |
 | **SRFI 190** | Coroutine Generators | **△** | - | ファーストクラス継続を用いたコルーチンジェネレータ（`call/cc` で自前構築可能） |
 | **SRFI 196** | Range Objects (範囲オブジェクト) | **×** | - | インデックス指定可能な計算可能遅延シーケンス（未実装） |

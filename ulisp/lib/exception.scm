@@ -8,7 +8,11 @@
 ;; §6.11 Exceptions: error-object?
 ;; ---------------------------------------------------------------------
 (define (error-object? obj)
-  (and (pair? obj) (eq? (car obj) 'error-object)))
+  (and (pair? obj)
+       (or (eq? (car obj) 'error-object)
+           (eq? (car obj) 'read-error)
+           (eq? (car obj) 'file-error)
+           (eq? (car obj) 'json-error))))
 
 ;; ---------------------------------------------------------------------
 ;; §6.11 Exceptions: error-object-message
@@ -42,7 +46,9 @@
 ;; §6.11 Exceptions: read-error?
 ;; ---------------------------------------------------------------------
 (define (read-error? obj)
-  (and (pair? obj) (eq? (car obj) 'read-error)))
+  (and (pair? obj)
+       (or (eq? (car obj) 'read-error)
+           (eq? (car obj) 'json-error))))
 
 ;; ---------------------------------------------------------------------
 ;; §6.11 Exceptions: with-exception-handler

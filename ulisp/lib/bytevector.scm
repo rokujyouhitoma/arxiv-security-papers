@@ -140,6 +140,18 @@
             (loop (+ i 1)))
           str))))
 
+(define string->utf8
+  (case-lambda
+    ((str) (string->utf8-range str 0 (string-length str)))
+    ((str start) (string->utf8-range str start (string-length str)))
+    ((str start end) (string->utf8-range str start end))))
+
+(define utf8->string
+  (case-lambda
+    ((bv) (utf8->string-range bv 0 (bytevector-length bv)))
+    ((bv start) (utf8->string-range bv start (bytevector-length bv)))
+    ((bv start end) (utf8->string-range bv start end))))
+
 ;; ---------------------------------------------------------------------
 ;; §6.9 Bytevectors: list->bytevector / bytevector->list
 ;; ---------------------------------------------------------------------
