@@ -397,7 +397,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 | **SRFI 196** | Range Objects (範囲オブジェクト) | **×** | - | インデックス指定可能な計算可能遅延シーケンス（未実装） |
 | **SRFI 207** | Bytestrings (バイト文字列) | **×** | - | ASCII 文字列互換のバイナリバイト列型（未実装） |
 | **SRFI 209** | Enums and Enum Sets (列挙型・列挙集合) | **×** | - | シンボリック列挙型および効率的ビットマスク列挙集合（未実装） |
-| **SRFI 214** | Flexvectors (可変長動的ベクタ) | **×** | - | 要素の動的追加・削除が可能な拡張ベクタ型（未実装） |
+| **SRFI 214** | Flexvectors (可変長動的ベクタ) | **◎** | [ulisp/lib/flexvector.scm](../lib/flexvector.scm)<br>[ulisp/lib/srfi/214.sld](../lib/srfi/214.sld)<br>[ulisp/lib/scheme/flexvector.sld](../lib/scheme/flexvector.sld) | 動的可変長配列・幾何学的倍加 $O(1)$ 償却挿入削除・探索・高階反復完備 ([Issue #863](../../docs/issues/closed/863-implement-srfi-214-flexvectors.md)) |
 | **SRFI 217** | Integer Sets (整数集合) | **×** | - | 非負整数の高速ビットマップ集合（未実装） |
 | **SRFI 222** | Compound Objects (複合オブジェクト) | **×** | - | 複数オブジェクトの直和的ラップ型（未実装） |
 | **SRFI 223** | Generalized Binary Search (汎用二分探索) | **×** | - | シーケンスに対する汎用二分探索アルゴリズム（未実装） |
