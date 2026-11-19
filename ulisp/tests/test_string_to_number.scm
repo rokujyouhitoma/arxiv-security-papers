@@ -130,30 +130,38 @@
 (assert-false "unsupported radix 3" (string->number "10" 3))
 (assert-false "unsupported radix 36" (string->number "10" 36))
 
-;; Fixnum boundaries: MAX = 288230376151711743 (2^58 - 1), MIN = -288230376151711744 (-2^58)
+;; Fixnum & Bignum boundaries: *ulisp-fixnum-max* = 288230376151711743 (2^58 - 1),
+;; 62-bit Fixnum holds [-(2^61 - 1), 2^61 - 1], larger integers promote to <bignum>.
 (assert-equal "fixnum max decimal"
               (string->number "288230376151711743")
               288230376151711743)
 (assert-equal "fixnum min decimal"
               (string->number "-288230376151711744")
               -288230376151711744)
-(assert-false "fixnum max + 1 overflow"
-              (string->number "288230376151711744"))
-(assert-false "fixnum min - 1 underflow"
-              (string->number "-288230376151711745"))
-(assert-false "huge number overflow"
-              (string->number "99999999999999999999999999999999"))
+(assert-equal "2^58 promotes via bignum-demote to fixnum"
+              (string->number "288230376151711744")
+              (+ 288230376151711743 1))
+(assert-equal "-2^58 - 1 promotes via bignum-demote to fixnum"
+              (string->number "-288230376151711745")
+              (- -288230376151711744 1))
+(let ((huge (string->number "99999999999999999999999999999999")))
+  (assert-true "huge number promotes to bignum" (bignum? huge))
+  (assert-equal "huge number roundtrip"
+                (number->string huge)
+                "99999999999999999999999999999999"))
 
 (assert-equal "fixnum max hex"
               (string->number "#x03ffffffffffffff")
               288230376151711743)
-(assert-false "fixnum max hex overflow"
-              (string->number "#x0400000000000000"))
+(assert-equal "2^58 hex promotes via bignum-demote to fixnum"
+              (string->number "#x0400000000000000")
+              (+ 288230376151711743 1))
 (assert-equal "fixnum min hex"
               (string->number "-#x0400000000000000")
               -288230376151711744)
-(assert-false "fixnum min hex underflow"
-              (string->number "-#x0400000000000001"))
+(assert-equal "-2^58 - 1 hex promotes via bignum-demote to fixnum"
+              (string->number "-#x0400000000000001")
+              (- -288230376151711744 1))
 
 ;;; -----------------------------------------------------------------------
 ;;; Group 6: S-Expression Reader Integration

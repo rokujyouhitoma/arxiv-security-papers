@@ -45,10 +45,7 @@
 (define (make-bignum sign limbs)
   (vector 'bignum sign limbs))
 
-(define (bignum? x)
-  (and (vector? x)
-       (= (vector-length x) 3)
-       (eq? (vector-ref x 0) 'bignum)))
+;; Note: bignum? is defined in lib/predicates.scm
 
 (define (bignum-sign bn) (vector-ref bn 1))
 (define (bignum-limbs bn) (vector-ref bn 2))
@@ -112,20 +109,38 @@
          (la (bignum-limbs bn)))
     (cond
       ((= n 0) 0)
-      ((= n 1) (* s (vector-ref la 0)))
+      ((= n 1)
+       (let ((val (vector-ref la 0)))
+         (if (< s 0) (- 0 val) val)))
       ((= n 2)
        (let ((val (+ (vector-ref la 0) (* (vector-ref la 1) *bignum-radix*))))
-         (* s val)))
+         (if (< s 0) (- 0 val) val)))
       ((= n 3)
-       ;; In 62-bit fixnum, max positive is 2^61 - 1: limb2 must be <= 1
-       (let ((l2 (vector-ref la 2)))
-         (if (<= l2 1)
-             (let ((val (+ (+ (vector-ref la 0)
-                              (* (vector-ref la 1) *bignum-radix*))
-                           (* l2 (* *bignum-radix* *bignum-radix*)))))
-               (* s val))
-             #f)))
+       ;; In 62-bit two's-complement fixnum: [fx-least, fx-greatest] = [-2^61, 2^61 - 1]
+       (let ((l0 (vector-ref la 0))
+             (l1 (vector-ref la 1))
+             (l2 (vector-ref la 2)))
+         (cond
+           ((<= l2 1)
+            (let ((val (+ (+ l0 (* l1 *bignum-radix*))
+                          (* l2 (* *bignum-radix* *bignum-radix*)))))
+              (if (< s 0) (- 0 val) val)))
+           ((and (< s 0) (= l2 2) (= l1 0) (= l0 0))
+            (let ((p60 (* *bignum-radix* *bignum-radix*)))
+              (+ (- 0 p60) (- 0 p60))))
+           (else #f))))
       (else #f))))
+
+(define (%ensure-bignum x)
+  (if (bignum? x)
+      x
+      (fixnum->bignum x)))
+
+(define (bignum-demote x)
+  (if (bignum? x)
+      (let ((fx (bignum->fixnum x)))
+        (if fx fx x))
+      x))
 
 ;;; -----------------------------------------------------------------------
 ;;; §4. Comparisons

@@ -75,7 +75,9 @@
 
 (define (direct-call-simple-arg? arg env)
   (cond
-    ((integer? arg) #t)
+    ((integer? arg)
+     (let ((q (quotient arg 1073741824)))
+       (and (< q 536870912) (> q -536870912))))
     ((and (symbol? arg) (number? (env-stack-slot? arg env))) #t)
     ((and (pair? arg) (eq? (car arg) '%unbox-fixnum))
      (let ((inner (cadr arg)))

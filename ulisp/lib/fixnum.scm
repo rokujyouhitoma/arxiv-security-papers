@@ -184,15 +184,17 @@
               (loop next))))))
 
 ;;; §4. Arithmetic with Carry
+(define (%fx-wrap-carry s)
+  (cond
+    ((> s fx-greatest)
+     (values (+ (+ s fx-least) fx-least) 1))
+    ((< s fx-least)
+     (values (- (- s fx-least) fx-least) -1))
+    (else
+     (values s 0))))
+
 (define (%fx-add2 i j)
-  (let ((s (+ i j)))
-    (cond
-      ((and (> i 0) (> j 0) (< s 0))
-       (values s 1))
-      ((and (< i 0) (< j 0) (>= s 0))
-       (values s -1))
-      (else
-       (values s 0)))))
+  (%fx-wrap-carry (+ i j)))
 
 (define (fx+/carry i j k)
   (call-with-values
@@ -204,14 +206,7 @@
           (values s (+ c1 c2)))))))
 
 (define (%fx-sub2 i j)
-  (let ((d (- i j)))
-    (cond
-      ((and (< i 0) (> j 0) (>= d 0))
-       (values d -1))
-      ((and (> i 0) (< j 0) (< d 0))
-       (values d 1))
-      (else
-       (values d 0)))))
+  (%fx-wrap-carry (- i j)))
 
 (define (fx-/carry i j k)
   (call-with-values

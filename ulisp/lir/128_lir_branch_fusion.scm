@@ -35,8 +35,21 @@
 
 (define (extract-fused-cmp-int e)
   (cond
-    ((integer? e) (* e 4))
+    ((integer? e)
+     (let ((q (quotient e 1073741824)))
+       (if (or (>= q 536870912) (<= q -536870912))
+           #f
+           (* e 4))))
     ((and (pair? e) (eq? (car e) '%unbox-fixnum) (integer? (cadr e))) (cadr e))
+    (else #f)))
+
+(define (lir-num-cmp-slow-fn op)
+  (case op
+    ((=)  'ulisp_fn_num_eq)
+    ((<)  'ulisp_fn_num_lt)
+    ((<=) 'ulisp_fn_num_lt_eq)
+    ((>)  'ulisp_fn_num_gt)
+    ((>=) 'ulisp_fn_num_gt_eq)
     (else #f)))
 
 (define (lir-compile-fused-cmp-cond op e1 e2 target-label jmp-cc-fn si env)
@@ -44,7 +57,13 @@
          (r1 (env-reg-var? e1 env))
          (r2 (env-reg-var? e2 env))
          (c1 (extract-fused-cmp-int e1))
-         (c2 (extract-fused-cmp-int e2)))
+         (c2 (extract-fused-cmp-int e2))
+         (raw-vars (get-raw-vars env))
+         (is-raw? (or (raw-expr? e1 raw-vars) (raw-expr? e2 raw-vars)))
+         (allow-imm? (or (eq? op 'eq?) is-raw?
+                         (and (integer? e1) (integer? e2))
+                         (and (pair? e2) (eq? (car e2) '%unbox-fixnum))
+                         (and (pair? e1) (eq? (car e1) '%unbox-fixnum)))))
     (cond
       ;; 1. e1 is reg, e2 is integer constant -> direct cmp reg, c2
       ((and r1 c2)
@@ -80,14 +99,14 @@
        (emit-lir! (list '%cmp '%rax r2))
        (emit-lir! (list '%jump-cond jmp-op target-label)))
 
-      ;; 6. e2 is integer constant -> evaluate e1 to rax, then cmp rax, c2
-      (c2
+      ;; 6. e2 is integer constant (raw or eq?) -> evaluate e1 to rax, then cmp rax, c2
+      ((and c2 allow-imm?)
        (lir-compile-operand-for-op op e1 si env)
        (emit-lir! (list '%cmp '%rax c2))
        (emit-lir! (list '%jump-cond jmp-op target-label)))
 
-      ;; 7. e1 is integer constant -> evaluate e2 to rax, then reverse cmp rax, c1
-      (c1
+      ;; 7. e1 is integer constant (raw or eq?) -> evaluate e2 to rax, then reverse cmp rax, c1
+      ((and c1 allow-imm?)
        (let ((rev-op (case op
                        ((= eq?) '=)
                        ((<)     '>)
@@ -99,15 +118,41 @@
          (emit-lir! (list '%cmp '%rax c1))
          (emit-lir! (list '%jump-cond (jmp-cc-fn rev-op) target-label))))
 
-      ;; 8. General fallback: evaluate e1 to stack, evaluate e2 to rax, then cmp (stack si), rax
+      ;; 8. General fallback: evaluate e1 to stack, evaluate e2 to rax
       (else
        (track-lir-si! si)
        (lir-compile-operand-for-op op e1 si env)
        (emit-lir! (list '%store '%rsp si '%rax))
        (track-lir-si! (- si 8))
        (lir-compile-operand-for-op op e2 (- si 8) env)
-       (emit-lir! (list '%cmp (list '%stack si) '%rax))
-       (emit-lir! (list '%jump-cond jmp-op target-label))))))
+       (let ((slow-fn (if (not is-raw?) (lir-num-cmp-slow-fn op) #f)))
+         (if slow-fn
+             (let ((lbl-slow (unique-label-sym "cmp_br_slow"))
+                   (lbl-cont (unique-label-sym "cmp_br_cont"))
+                   (jump-if-true? (string=? (jmp-cc-fn '=) "je")))
+               (emit-lir! '(%mov %rdx %rax))
+               (emit-lir! (list '%bit-or '%rdx (list '%stack si)))
+               (emit-lir! (list '%bit-and '%rdx 3))
+               (emit-lir! (list '%cmp '%rdx 0))
+               (emit-lir! (list '%jump-cond "jne" lbl-slow))
+               (emit-lir! (list '%cmp (list '%stack si) '%rax))
+               (emit-lir! (list '%jump-cond jmp-op target-label))
+               (emit-lir! (list '%jump lbl-cont))
+               (emit-lir! (list '%label lbl-slow))
+               (emit-lir! (list '%load '%rdi '%rsp si))
+               (emit-lir! '(%mov %rsi %rax))
+               (let* ((frame-shift (align-frame-shift (- 0 si)))
+                      (bitmap (compute-stackmap-bitmap frame-shift (- 0 frame-shift) '() env))
+                      (safepoint-lbl (new-safepoint-label!)))
+                 (record-safepoint! safepoint-lbl frame-shift bitmap)
+                 (emit-lir! (list '%mov '%rax 8))
+                 (emit-lir! (list '%direct-call slow-fn frame-shift safepoint-lbl)))
+               (emit-lir! (list '%cmp '%rax 47))
+               (emit-lir! (list '%jump-cond (if jump-if-true? "jne" "je") target-label))
+               (emit-lir! (list '%label lbl-cont)))
+             (begin
+               (emit-lir! (list '%cmp (list '%stack si) '%rax))
+               (emit-lir! (list '%jump-cond jmp-op target-label)))))))))
 
 (define (lir-compile-fused-cmp op e1 e2 else-label si env)
   (lir-compile-fused-cmp-cond op e1 e2 else-label lir-cmp-false-cc si env))

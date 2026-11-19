@@ -438,8 +438,15 @@
 
 (define-picopass rule-desugar-math-variadic
   (Expr
+    ((+) 0)
+    ((+ ,a) a)
     ((+ ,a ,b ,c . ,rest) (desugar-math-binop-fold '+ a b c rest))
+    ((- ,a ,b ,c . ,rest) (desugar-math-binop-fold '- a b c rest))
+    ((*) 1)
+    ((* ,a) a)
     ((* ,a ,b ,c . ,rest) (desugar-math-binop-fold '* a b c rest))
+    ((/ ,a) (list '/ 1 a))
+    ((/ ,a ,b ,c . ,rest) (desugar-math-binop-fold '/ a b c rest))
     ((bitwise-and) -1)
     ((bitwise-and ,a) a)
     ((bitwise-and ,a ,b ,c . ,rest) (desugar-math-binop-fold 'bitwise-and a b c rest))

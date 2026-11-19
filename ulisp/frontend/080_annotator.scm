@@ -310,11 +310,16 @@
                 (max1 (type-range-max t1))
                 (min2 (type-range-min t2))
                 (max2 (type-range-max t2)))
-            (case op
-              ((+) (type-fixnum-range (+ min1 min2) (+ max1 max2)))
-              ((-) (type-fixnum-range (- min1 max2) (- max1 min2)))
-              ((*) (type-fixnum))
-              (else (type-fixnum))))
+            (if (and (integer? min1) (<= min1 536870911) (>= min1 -536870911)
+                     (integer? max1) (<= max1 536870911) (>= max1 -536870911)
+                     (integer? min2) (<= min2 536870911) (>= min2 -536870911)
+                     (integer? max2) (<= max2 536870911) (>= max2 -536870911))
+                (case op
+                  ((+) (type-fixnum-range (+ min1 min2) (+ max1 max2)))
+                  ((-) (type-fixnum-range (- min1 max2) (- max1 min2)))
+                  ((*) (type-fixnum))
+                  (else (type-fixnum)))
+                (type-fixnum)))
           (type-fixnum))
       (type-fixnum)))
 

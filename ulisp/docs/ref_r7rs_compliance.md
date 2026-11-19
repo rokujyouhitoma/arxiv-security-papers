@@ -355,7 +355,7 @@ Scheme Working Group 2 (WG2) が主導する **R7RS-large** は、Scheme コミ�
 | **SRFI 159** | `(scheme show)` | Combinator Formatting (コンビネータ書式化出力) | **×** | - | モナディックなコンビネータ型テキスト・数値・カラムレイアウト書式化エンジン（未実装） |
 | **SRFI 160** | `(scheme vector @)` | Homogeneous numeric vectors (u8, s8, u16 等の型付きベクタ) | **△** | [ulisp/lib/bytevector.scm](../lib/bytevector.scm) | `@` は `base, u8, s8, u16, s16, u32, s32, u64, s64, f32, f64, c64, c128`。ULisp では `u8` (バイトベクタ) を完全サポート。他の固定幅数値ベクタは未実装 |
 | **R6RS / WG2** | `(scheme bytevector)` | R6RS Bytevector Operations (包括的バイトベクタ操作) | **×** | - | R6RS 互換の包括的単数形 `(scheme bytevector)` ライブラリ（エンディアン指定数値デコード等、未実装） |
-| **Tangerine Tower** | - | R6RS 準拠完全数値塔 (Full Numeric Tower) | **×** | - | Tangerine Edition で義務付けられる任意長整数 (Bignums)、任意長有理数、不正確実数、複素数（ULisp はスタンドアロン AOT 向け 62-bit Fixnum 設計のため非サポート） |
+| **Tangerine Tower** | - | R6RS 準拠完全数値塔 (Full Numeric Tower) | **◎** | [ulisp/lib/bignum.scm](../lib/bignum.scm)<br>[ulisp/lib/math.scm](../lib/math.scm)<br>[ulisp/lib/predicates.scm](../lib/predicates.scm)<br>[ulisp/lib/reader.scm](../lib/reader.scm)<br>[ulisp/lir/129_lir_primitives.scm](../lir/129_lir_primitives.scm) | Fixnum (62-bit) / Bignum (2^30 基数任意長整数) / Ratnum (任意長有理数) / Flonum / Complex の完全数値塔。演算オーバーフロー時の自動昇格・降格、S式リーダ/プリンタ、`exact-integer?` 完備 ([Issue #832](../../docs/issues/closed/832-implement-r7rs-bignum-arithmetic-in-pure-scheme.md), [Issue #861](../../docs/issues/closed/861-integrate-bignum-arithmetic-into-native-aot-compiler-and-runtime.md)) |
 | **SRFI 138** | - | Compiling Scheme Programs (コンパイル規約) | **◎** | [compiler/driver.scm](../compiler/driver.scm) | AOT 静的コンパイル・バッチ処理に完全適合 |
 | **SRFI 179** | - | Nonempty Intervals and Arrays (多次元配列) | **×** | - | 任意次元の多次元配列・間隔演算ライブラリ（未実装） |
 

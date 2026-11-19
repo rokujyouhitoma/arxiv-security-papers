@@ -165,9 +165,15 @@
               #f
               (lvn-all '(null? (cons 1 2))))
 
-;; 19. Arithmetic produces fixnum
-(assert-equal "predicate arithmetic: (fixnum? (+ a b)) -> #t"
+;; 19. Arithmetic predicate folding (fixnum-only vs generic numeric tower)
+(assert-equal "predicate arithmetic: (fixnum? (fxadd1 a)) -> #t"
               #t
+              (lvn-all '(fixnum? (fxadd1 a))))
+(assert-equal "predicate arithmetic: (number? (+ a b)) -> #t"
+              #t
+              (lvn-all '(number? (+ a b))))
+(assert-equal "predicate arithmetic: (fixnum? (+ a b)) preserved"
+              '(fixnum? (+ a b))
               (lvn-all '(fixnum? (+ a b))))
 
 ;; 20. Dominance scope type predicate folding

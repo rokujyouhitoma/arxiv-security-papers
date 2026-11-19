@@ -92,6 +92,18 @@
               i
               (loop (+ i 1)))))))
 
+(define (%parse-bignum-tail str pos end radix acc-bn)
+  (let ((b-rad (fixnum->bignum radix)))
+    (let loop ((i pos) (acc acc-bn))
+      (if (>= i end)
+          acc
+          (let ((d (ulisp-digit-value (string-ref str i) radix)))
+            (if (not d)
+                #f
+                (loop (+ i 1)
+                      (bignum-add (bignum-mul acc b-rad)
+                                  (fixnum->bignum d)))))))))
+
 (define (%parse-uint-range str start end radix limit)
   (if (>= start end)
       #f
@@ -104,7 +116,7 @@
                   (let ((q (quotient limit radix))
                         (r (modulo limit radix)))
                     (if (or (> acc q) (and (= acc q) (> d r)))
-                        #f
+                        (%parse-bignum-tail str pos end radix (fixnum->bignum acc))
                         (loop (+ pos 1)
                               (+ (* acc radix) d)
                               (+ count 1))))))))))
@@ -120,7 +132,11 @@
              (uval (%parse-uint-range str dstart end radix limit)))
         (if (not uval)
             #f
-            (if neg? (- 0 uval) uval)))))
+            (if (bignum? uval)
+                (if neg?
+                    (bignum-demote (bignum-negate uval))
+                    (bignum-demote uval))
+                (if neg? (- 0 uval) uval))))))
 
 (define (%parse-decimal-or-exp-range str start end)
   (if (>= start end)
@@ -187,7 +203,8 @@
        (if slash-idx
            (let ((n (%parse-signed-int-range str start slash-idx radix))
                  (d (%parse-uint-range str (+ slash-idx 1) end radix *ulisp-fixnum-max*)))
-             (if (and n d (> d 0))
+             (if (and n d (or (and (fixnum? d) (> d 0))
+                              (and (bignum? d) (bignum-positive? d))))
                  (let ((r (make-rational n d)))
                    (if (eq? exactness-pref 'inexact)
                        (inexact r)

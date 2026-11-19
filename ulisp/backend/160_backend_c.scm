@@ -1837,7 +1837,7 @@
        (lambda (name)
          (if (not (c-has-fn? name))
              (emit (string-append "static void " name "(void) { ulisp_unhandled_exception(0); }"))))
-       '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq")))
+       '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq" "ulisp_fn_num_lt" "ulisp_fn_num_lt_eq" "ulisp_fn_num_gt" "ulisp_fn_num_gt_eq" "ulisp_fn_num_quotient" "ulisp_fn_num_modulo")))
     (emit "")
     ;; Emit string literals
     (if (not (null? (car *strings*)))
