@@ -389,3 +389,79 @@
           (verifier-error 'residual-anf "Grammar Conformance Violation: residual AST contains meta-syntax" found)
           #f)
         #t)))
+
+;;; -----------------------------------------------------------------------
+;;; Residual Function Contification Guarantees Verifier
+;;; Conforms to DSN-33-03 §5.4 & Issue #882
+;;; -----------------------------------------------------------------------
+
+(define (residual-fn-escapes? var form)
+  (cond
+    ((eq? form var) #t)
+    ((not (pair? form)) #f)
+    ((eq? (car form) 'quote) #f)
+    ((eq? (car form) var)
+     (let loop ((args (cdr form)))
+       (and (pair? args)
+            (or (residual-fn-escapes? var (car args))
+                (loop (cdr args))))))
+    ((eq? (car form) 'call-anf)
+     (if (eq? (cadr form) var)
+         (let loop ((args (cddr form)))
+           (and (pair? args)
+                (or (residual-fn-escapes? var (car args))
+                    (loop (cdr args)))))
+         (or (residual-fn-escapes? var (cadr form))
+             (let loop ((args (cddr form)))
+               (and (pair? args)
+                    (or (residual-fn-escapes? var (car args))
+                        (loop (cdr args))))))))
+    ((eq? (car form) 'lambda)
+     (let ((params (cadr form))
+           (body (caddr form)))
+       (if (memq var params)
+           #f
+           (residual-fn-escapes? var body))))
+    ((eq? (car form) 'let)
+     (let ((bindings (cadr form))
+           (body (caddr form)))
+       (or (let loop ((bs bindings))
+             (and (pair? bs)
+                  (or (residual-fn-escapes? var (cadar bs))
+                      (loop (cdr bs)))))
+           (if (assq var bindings)
+               #f
+               (residual-fn-escapes? var body)))))
+    (else
+     (let loop ((xs form))
+       (and (pair? xs)
+            (or (residual-fn-escapes? var (car xs))
+                (loop (cdr xs))))))))
+
+(define (verify-residual-contification-guarantees fn-name fn-body in-body)
+  (let ((escapes? (or (residual-fn-escapes? fn-name fn-body)
+                      (residual-fn-escapes? fn-name in-body))))
+    (if escapes?
+        #f
+        #t)))
+
+(define (verify-letrec-contifiable-guarantees letrec-expr)
+  (if (and (pair? letrec-expr)
+           (eq? (car letrec-expr) 'letrec)
+           (pair? (cdr letrec-expr))
+           (pair? (cddr letrec-expr)))
+      (let ((bindings (cadr letrec-expr))
+            (body (caddr letrec-expr)))
+        (let loop ((bs bindings))
+          (if (null? bs)
+              #t
+              (let* ((b (car bs))
+                     (var (car b))
+                     (fn-val (cadr b)))
+                (if (and (pair? fn-val) (eq? (car fn-val) 'lambda))
+                    (let ((fn-body (caddr fn-val)))
+                      (if (verify-residual-contification-guarantees var fn-body body)
+                          (loop (cdr bs))
+                          #f))
+                    #f)))))
+      #f))
