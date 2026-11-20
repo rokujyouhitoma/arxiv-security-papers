@@ -592,11 +592,19 @@
     ((eq? op 'symbol?) (symbol? a))
     ((eq? op 'string?) (string? a))
     ((eq? op 'char?) (char? a))
+    ((eq? op 'zero?) (if (number? a) (= a 0) *ctfe-failure*))
     ((eq? op 'car) (if (pair? a) (car a) *ctfe-failure*))
     ((eq? op 'cdr) (if (pair? a) (cdr a) *ctfe-failure*))
-    ((eq? op '-) (- 0 a))
+    ((eq? op 'caar) (if (and (pair? a) (pair? (car a))) (caar a) *ctfe-failure*))
+    ((eq? op 'cadr) (if (and (pair? a) (pair? (cdr a))) (cadr a) *ctfe-failure*))
+    ((eq? op 'cdar) (if (and (pair? a) (pair? (car a))) (cdar a) *ctfe-failure*))
+    ((eq? op 'cddr) (if (and (pair? a) (pair? (cdr a))) (cddr a) *ctfe-failure*))
+    ((eq? op 'length) (if (list? a) (length a) *ctfe-failure*))
+    ((eq? op 'reverse) (if (list? a) (reverse a) *ctfe-failure*))
+    ((eq? op '-) (if (number? a) (- 0 a) *ctfe-failure*))
     ((eq? op 'string-length) (if (string? a) (string-length a) *ctfe-failure*))
     ((eq? op 'vector-length) (if (vector? a) (vector-length a) *ctfe-failure*))
+    ((eq? op 'bitwise-not) (if (number? a) (ctfe-bitwise-not a) *ctfe-failure*))
     (else *ctfe-failure*)))
 
 (define (now-dict-apply-prim-2 dict op a b)
@@ -604,9 +612,11 @@
     ((eq? op '+) (+ a b))
     ((eq? op '-) (- a b))
     ((eq? op '*) (* a b))
-    ((eq? op 'quotient) (if (= b 0) *ctfe-failure* (quotient a b)))
+    ((or (eq? op 'quotient) (eq? op '/)) (if (= b 0) *ctfe-failure* (quotient a b)))
     ((eq? op 'modulo) (if (= b 0) *ctfe-failure* (modulo a b)))
     ((eq? op 'remainder) (if (= b 0) *ctfe-failure* (remainder a b)))
+    ((eq? op 'min) (if (and (number? a) (number? b)) (min a b) *ctfe-failure*))
+    ((eq? op 'max) (if (and (number? a) (number? b)) (max a b) *ctfe-failure*))
     ((eq? op '=) (= a b))
     ((eq? op '<) (< a b))
     ((eq? op '<=) (<= a b))
@@ -614,6 +624,8 @@
     ((eq? op '>=) (>= a b))
     ((eq? op 'eq?) (eq? a b))
     ((eq? op 'equal?) (equal? a b))
+    ((eq? op 'char=?) (if (and (char? a) (char? b)) (char=? a b) *ctfe-failure*))
+    ((eq? op 'boolean=?) (if (and (boolean? a) (boolean? b)) (eq? a b) *ctfe-failure*))
     ((eq? op 'cons) (cons a b))
     ((eq? op 'bitwise-and) (ctfe-bitwise-and a b))
     ((eq? op 'bitwise-ior) (ctfe-bitwise-ior a b))
@@ -872,11 +884,11 @@
     (else 'constant)))
 
 (define (stage-known-primitive? sym)
-  (memq sym '(+ - * quotient modulo remainder abs min max
+  (memq sym '(+ - * / quotient modulo remainder abs min max
               not null? pair? boolean? number? symbol? string? char?
               zero?
               car cdr caar cadr cdar cddr length reverse cons
-              eq? eqv? equal? = < <= > >=
+              eq? eqv? equal? char=? boolean=? = < <= > >=
               bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift)))
 
 ;;; -----------------------------------------------------------------------
@@ -1169,3 +1181,25 @@
 
 (define (stage-eval-expr dict env expr)
   (eval-in-stage dict env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*))
+
+
+;;; -----------------------------------------------------------------------
+;;; 14. Single-Source Semantic Oracle Interface (DSN-33-03 §3.6)
+;;; -----------------------------------------------------------------------
+
+(define (eval-with-now-oracle-opt expr env fuel depth)
+  (let* ((now-d (make-now-dict))
+         (res (eval-in-stage now-d env expr fuel depth)))
+    (cond
+      ((stage-csp-error? res) #f)
+      ((stage-val? res)
+       (let ((p (stage-val-payload res)))
+         (val->ast-const p)))
+      (else #f))))
+
+(define (eval-with-now-oracle expr)
+  (eval-with-now-oracle-opt expr '() *ctfe-default-step-limit* *ctfe-default-depth-limit*))
+
+(register-language-evaluator! 'L_stage_poly
+  (lambda (expr env fuel depth)
+    (eval-with-now-oracle-opt expr env fuel depth)))
