@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **878** | Nanopass 中間言語 L-StagePoly および L-Residual-ANF の定義 | Feature | High | Open (New) | [878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md](878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md) |
 | **879** | ステージ多相部分評価 Nanopass (stage-poly-lower) の実装 | Feature | High | Open (New) | [879-implement-stage-poly-lower-nanopass-partial-evaluator.md](879-implement-stage-poly-lower-nanopass-partial-evaluator.md) |
 | **880** | Pass Manager への Nanopass 文法完全消去アサーションの組み込み | Feature | High | Open (New) | [880-integrate-grammar-conformance-assertion-in-pass-manager.md](880-integrate-grammar-conformance-assertion-in-pass-manager.md) |
 | **881** | 3重差分テストオラクルとメタモルフィック摂動検証スイートの実装 | Feature | High | Open (New) | [881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md](881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md) |
@@ -20,6 +19,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **878** | Nanopass 中間言語 L-StagePoly および L-Residual-ANF の定義 | Feature | 2026-11-20 | [878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md](closed/878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md) |
 | **877** | 特殊化メモ化エンジンとハードリミット・一般化（Widening）の実装 | Feature | 2026-11-20 | [877-implement-specialization-memoization-and-widening-engine.md](closed/877-implement-specialization-memoization-and-widening-engine.md) |
 | **876** | CSP 越境バリデータと Dual Span 診断レポーターの実装 | Feature | 2026-11-20 | [876-implement-csp-boundary-validator-and-dual-span-diagnostics.md](closed/876-implement-csp-boundary-validator-and-dual-span-diagnostics.md) |
 | **875** | 動的分岐配下の純粋性解析と投機的副作用・例外の自動 Later 降格 | Feature | 2026-11-20 | [875-implement-purity-analysis-and-speculative-trap-demotion.md](closed/875-implement-purity-analysis-and-speculative-trap-demotion.md) |

@@ -208,3 +208,48 @@
   (Program (p)
     (- (%program (d ...) e))
     (+ (%program (fn ...) e))))
+
+;;; -----------------------------------------------------------------------
+;;; 6. L-StagePoly: Stage-Polymorphic Meta-Language (DSN-33-03 §6.1)
+;;; -----------------------------------------------------------------------
+(define-language L-StagePoly
+  (entry Expr)
+  (terminals
+    (symbol (x var lbl call-target))
+    (constant (c))
+    (primitive (prim)))
+  (Expr (e body)
+    x
+    c
+    (if e0 e1 e2)
+    (let ((x e)) body)
+    (lambda (x ...) body)
+    (prim e ...)
+    (call e0 e1 ...)
+    ;; Meta-Stage Syntax (DSN-33-03 §6.1)
+    (stage-now e)
+    (stage-later e)
+    (stage-lift e)
+    (stage-quasiquote e)))
+
+;;; -----------------------------------------------------------------------
+;;; 7. L-Residual-ANF: Subtractive Residual ANF Language (DSN-33-03 §6.2)
+;;; -----------------------------------------------------------------------
+(define-language L-Residual-ANF
+  (extends L-StagePoly)
+  (entry Expr)
+  (Atom (e-atom)
+    x
+    c)
+  (Expr (e body)
+    ;; Complete elimination of meta-stage constructs & non-ANF forms
+    (- (stage-now e)
+       (stage-later e)
+       (stage-lift e)
+       (stage-quasiquote e)
+       (call e0 e1 ...)
+       (let ((x e)) body))
+    ;; Strict A-Normal Form productions
+    (+ (let-anf ((x (prim e-atom ...))) body)
+       (let-call ((x (call-target e-atom ...))) body)
+       (atom-value e-atom))))
