@@ -650,3 +650,54 @@
             (list (list '%bit-and dst mask)
                   (list '%cmp dst expected-tag)
                   (list '%set-boolean dst "sete")))))
+
+;;; =======================================================================
+;;; Data Plane 64-bit Single-Word Representation & Tag Stripping Engine
+;;; Conforms to DSN-33-03 §7.3 & Issue #884
+;;; =======================================================================
+
+(define *dataplane-tag-mask* 7)     ; 0b111 (3-bit tag)
+(define *dataplane-ptr-mask* -8)    ; 0xFFFFFFFFFFFFFFF8
+
+(define (data-plane-pack-word ptr tag)
+  (bitwise-ior (bitwise-and ptr *dataplane-ptr-mask*)
+               (bitwise-and tag *dataplane-tag-mask*)))
+
+(define (data-plane-strip-tag word)
+  (bitwise-and word *dataplane-ptr-mask*))
+
+(define (data-plane-extract-tag word)
+  (bitwise-and word *dataplane-tag-mask*))
+
+(define (data-plane-tag-match? word expected-tag)
+  (= (data-plane-extract-tag word) expected-tag))
+
+;; LIR-level Tag Stripping Optimizer:
+;; Eliminates redundant type-tag check sequences (%bit-and + %cmp + %set-boolean)
+;; when accessing variables that are statically proven to conform to known Data Plane types.
+(define (optimize-dataplane-tag-stripping insts known-typed-vars)
+  (let loop ((is insts) (acc '()))
+    (cond
+      ((null? is) (reverse acc))
+      ;; Detect pattern:
+      ;;   (%bit-and dst src 7)
+      ;;   (%cmp dst expected-tag)
+      ;;   (%set-boolean dst "sete")
+      ((and (pair? is)
+            (pair? (cdr is))
+            (pair? (cddr is))
+            (let ((i1 (car is))
+                  (i2 (cadr is))
+                  (i3 (caddr is)))
+              (and (pair? i1) (eq? (car i1) '%bit-and)
+                   (pair? (cdddr i1)) (equal? (cadddr i1) 7)
+                   (pair? i2) (eq? (car i2) '%cmp)
+                   (pair? i3) (eq? (car i3) '%set-boolean)
+                   (let ((src (caddr i1)))
+                     (memq src known-typed-vars)))))
+       (let* ((i1 (car is))
+              (dst (cadr i1))
+              (rest (cdddr is)))
+         (loop rest (cons (list '%mov dst 1) acc))))
+      (else
+       (loop (cdr is) (cons (car is) acc))))))
