@@ -13,7 +13,7 @@
 | **883** | freeze! 循環グラフ直列化と .rodata 肥大化ガードの実装 | Feature | High | Closed (Completed) | [883-implement-freeze-graph-serialization-and-rodata-guard.md](closed/883-implement-freeze-graph-serialization-and-rodata-guard.md) |
 | **884** | Data Plane 境界の Tag Stripping と 64-bit 単一ワード正規化の実装 | Feature | High | Closed (Completed) | [884-implement-data-plane-tag-stripping-and-single-word-repr.md](closed/884-implement-data-plane-tag-stripping-and-single-word-repr.md) |
 | **885** | マイクロ言語による第1二村射影平坦化（Tower Collapse）の E2E 実証 | Feature | High | Closed (Completed) | [885-demonstrate-e2e-first-futamura-projection-on-micro-language.md](closed/885-demonstrate-e2e-first-futamura-projection-on-micro-language.md) |
-| **886** | セルフホスティング決定論性と不動点（Stage 2 -> Stage 3 diff 0）の検証 | Feature | High | Open (New) | [886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md](886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md) |
+| **886** | セルフホスティング決定論性と不動点（Stage 2 -> Stage 3 diff 0）の検証 | Feature | High | Closed | [886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md](closed/886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
