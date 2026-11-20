@@ -344,6 +344,8 @@
            (if (>= lvl 2) (verify-lir-safepoint data) #t))
           ((ssa 132)
            (if (>= lvl 2) (verify-ssa-ast data) #t))
+          ((residual-anf stage-poly-lower 075)
+           (verify-residual-anf-conformance data))
           ((core-lir core-machine-lir)
            (verify-core-lir data))
           ((lir canonical-lir 130)
@@ -356,3 +358,34 @@
            (nanopass-verify-ast pass-name lang-name data phase)
            #t)
        (verify-pass-output pass-name data)))
+
+;;; -----------------------------------------------------------------------
+;;; L-Residual-ANF Grammar Conformance & Meta-Syntax Eradication Assertion
+;;; Conforms to DSN-33-03 §6.3
+;;; -----------------------------------------------------------------------
+(define (stage-meta-syntax-keyword? sym)
+  (and (symbol? sym)
+       (or (eq? sym 'stage-now)
+           (eq? sym 'stage-later)
+           (eq? sym 'stage-lift)
+           (eq? sym 'stage-quasiquote))))
+
+(define (find-stage-meta-syntax form)
+  (cond
+    ((pair? form)
+     (let ((head (car form)))
+       (if (and (symbol? head) (stage-meta-syntax-keyword? head))
+           form
+           (let ((res-car (find-stage-meta-syntax head)))
+             (if res-car
+                 res-car
+                 (find-stage-meta-syntax (cdr form)))))))
+    (else #f)))
+
+(define (verify-residual-anf-conformance ast)
+  (let ((found (find-stage-meta-syntax ast)))
+    (if found
+        (begin
+          (verifier-error 'residual-anf "Grammar Conformance Violation: residual AST contains meta-syntax" found)
+          #f)
+        #t)))
