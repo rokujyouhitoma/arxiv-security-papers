@@ -1596,3 +1596,91 @@
                 f1
                 (if (> m-frame max-frame) m-frame max-frame)
                 (cons m-body main-bodies-rev))))))
+
+;;; =======================================================================
+;;; Freeze Graph Serialization & .rodata Bloat Guard
+;;; Conforms to DSN-33-03 §7.3 & Issue #883
+;;; =======================================================================
+
+(define *max-rodata-size* 67108864) ; 64MB
+
+(define (sbi-node-byte-size node)
+  (cond
+    ((number? node) 8)
+    ((boolean? node) 8)
+    ((char? node) 8)
+    ((symbol? node) (+ 8 (string-length (symbol->string node))))
+    ((string? node) (+ 8 (string-length node)))
+    ((bytevector? node) (+ 8 (bytevector-length node)))
+    ((pair? node) 16)
+    ((vector? node) (+ 8 (* (vector-length node) 8)))
+    (else 8)))
+
+(define (freeze-graph-internal obj id-counter visited size-box max-size)
+  (let ((cur-size (car size-box)))
+    (if (> cur-size max-size)
+        (error "E-RODATA-OVERFLOW" cur-size)
+        (cond
+          ((or (number? obj) (boolean? obj) (char? obj) (null? obj))
+           (set-car! size-box (+ cur-size (sbi-node-byte-size obj)))
+           obj)
+          ((symbol? obj)
+           (set-car! size-box (+ cur-size (sbi-node-byte-size obj)))
+           obj)
+          ((string? obj)
+           (set-car! size-box (+ cur-size (sbi-node-byte-size obj)))
+           obj)
+          ((bytevector? obj)
+           (set-car! size-box (+ cur-size (sbi-node-byte-size obj)))
+           obj)
+          ((pair? obj)
+           (let ((entry (assq obj (car visited))))
+             (if entry
+                 ;; Cycle detected: return cycle-ref placeholder
+                 (list 'cycle-ref (cdr entry))
+                 (let* ((node-id (car id-counter))
+                        (_1 (set-car! id-counter (+ node-id 1)))
+                        (_2 (set-car! visited (cons (cons obj node-id) (car visited))))
+                        (_3 (set-car! size-box (+ (car size-box) 16)))
+                        (frozen-car (freeze-graph-internal (car obj) id-counter visited size-box max-size))
+                        (frozen-cdr (freeze-graph-internal (cdr obj) id-counter visited size-box max-size)))
+                   (cons frozen-car frozen-cdr)))))
+          ((vector? obj)
+           (let ((entry (assq obj (car visited))))
+             (if entry
+                 (list 'cycle-ref (cdr entry))
+                 (let* ((node-id (car id-counter))
+                        (len (vector-length obj))
+                        (_1 (set-car! id-counter (+ node-id 1)))
+                        (_2 (set-car! visited (cons (cons obj node-id) (car visited))))
+                        (_3 (set-car! size-box (+ (car size-box) (+ 8 (* len 8)))))
+                        (new-vec (make-vector len)))
+                   (let vloop ((i 0))
+                     (if (< i len)
+                         (begin
+                           (vector-set! new-vec i
+                             (freeze-graph-internal (vector-ref obj i) id-counter visited size-box max-size))
+                           (vloop (+ i 1)))
+                         new-vec))))))
+          (else
+           (set-car! size-box (+ cur-size 8))
+           obj)))))
+
+(define (freeze! obj)
+  (let ((id-counter (cons 1 '()))
+        (visited (cons '() '()))
+        (size-box (cons 0 '())))
+    (freeze-graph-internal obj id-counter visited size-box *max-rodata-size*)))
+
+(define (freeze-serialize-to-rodata obj max-size)
+  (let* ((id-counter (cons 1 '()))
+         (visited (cons '() '()))
+         (size-box (cons 0 '()))
+         (limit (if max-size max-size *max-rodata-size*))
+         (frozen (freeze-graph-internal obj id-counter visited size-box limit)))
+    (if (> (car size-box) limit)
+        (error "E-RODATA-OVERFLOW" (car size-box))
+        (list 'rodata-segment
+              (cons 'size (car size-box))
+              (cons 'max-limit limit)
+              (cons 'payload frozen)))))
