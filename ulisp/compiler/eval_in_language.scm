@@ -568,14 +568,197 @@
         (string->symbol (string-append prefix (number->string id)))))))
 
 ;;; -----------------------------------------------------------------------
-;;; 4. Default CSP Error Reporter
+;;; 4. Default CSP Error Reporter & Dual-Span Diagnostic Generator
+;;; Conforms to DSN-33-03 §4.2, §4.3 & DSN-33-02 §3.4
 ;;; -----------------------------------------------------------------------
 
+(define (csp-normalize-span sp)
+  (cond
+    ;; <source-span> record
+    ((source-span? sp)
+     (list (cons 'file (span-file sp))
+           (cons 'line (span-start-line sp))
+           (cons 'column (span-start-col sp))))
+    ;; Association list ((file . ...) (line . ...) (column . ...))
+    ((and (pair? sp) (pair? (car sp)) (assq 'file sp))
+     sp)
+    ;; List format (span file line col) or (file line col)
+    ((and (pair? sp) (eq? (car sp) 'span) (>= (length sp) 4))
+     (list (cons 'file (cadr sp))
+           (cons 'line (caddr sp))
+           (cons 'column (cadddr sp))))
+    ((and (pair? sp) (= (length sp) 3) (string? (car sp)))
+     (list (cons 'file (car sp))
+           (cons 'line (cadr sp))
+           (cons 'column (caddr sp))))
+    ;; String format (e.g. "path/to/file")
+    ((and (string? sp) (> (string-length sp) 0))
+     (list (cons 'file sp)
+           (cons 'line 0)
+           (cons 'column 0)))
+    ;; Fallback
+    (else
+     '((file . "unknown")
+       (line . 0)
+       (column . 0)))))
+
+(define (csp-extract-dual-spans loc)
+  (let* ((guest-raw
+          (cond
+            ((stage-val? loc) (stage-val-guest-span loc))
+            ((and (pair? loc) (assq 'guest loc)) (cdr (assq 'guest loc)))
+            (else #f)))
+         (host-raw
+          (cond
+            ((stage-val? loc) (stage-val-host-span loc))
+            ((and (pair? loc) (assq 'host loc)) (cdr (assq 'host loc)))
+            ((source-span? loc) loc)
+            (else #f))))
+    (list (cons 'guest-span (csp-normalize-span guest-raw))
+          (cons 'host-span (csp-normalize-span host-raw)))))
+
+(define (csp-resolve-rule-info dict reason loc)
+  (case reason
+    ((illegal-mutable-lift)
+     (list "CSP-001-ILLEGAL-MUTABLE-LIFT"
+           "Prohibited cross-stage lift of mutable object to residual code."
+           '((variable . #f)
+             (source-stage . 1)
+             (target-stage . 0)
+             (binding-time . dynamic)
+             (inferred-type . mutable-cell))
+           "Use immutable values or explicit runtime bump-pointer allocation."))
+
+    ((illegal-continuation-lift)
+     (list "CSP-002-ILLEGAL-CONTINUATION-LIFT"
+           "Prohibited cross-stage lift of host continuation to residual code."
+           '((variable . #f)
+             (source-stage . 1)
+             (target-stage . 0)
+             (binding-time . dynamic)
+             (inferred-type . continuation))
+           "Delimit continuations to current stage or represent as residual closures."))
+
+    ((illegal-procedure-lift)
+     (list "CSP-003-OPAQUE-PROCEDURE-LIFT"
+           "Prohibited cross-stage lift of opaque host procedure to residual code."
+           '((variable . #f)
+             (source-stage . 1)
+             (target-stage . 0)
+             (binding-time . dynamic)
+             (inferred-type . opaque-procedure))
+           "Define functions as residual lambda expressions or use defmacro."))
+
+    ((now-stage-cannot-evaluate-dynamic)
+     (list "CSP-004-NOW-STAGE-CANNOT-EVALUATE-DYNAMIC"
+           "Now stage cannot evaluate dynamic or partially-static expressions."
+           '((source-stage . 1)
+             (target-stage . 1)
+             (binding-time . dynamic))
+           "Defer evaluation to Later stage or eliminate dynamic dependencies."))
+
+    ((ctfe-fuel-exhausted)
+     (list "CSP-005-RESOURCE-BOUND-FUEL-EXHAUSTED"
+           "Compile-time evaluation exceeded maximum fuel limit (CWE-400 guard)."
+           '((resource . fuel)
+             (limit-exceeded . #t))
+           "Increase compile-time fuel or restructure recursion into tail-call loops."))
+
+    ((ctfe-depth-overflow)
+     (list "CSP-006-RESOURCE-BOUND-DEPTH-OVERFLOW"
+           "Compile-time evaluation exceeded maximum stack depth (CWE-400 guard)."
+           '((resource . depth)
+             (limit-exceeded . #t))
+           "Increase recursion depth limit or flatten nested expressions."))
+
+    ((invalid-negative-stage-level)
+     (list "CSP-007-INVALID-NEGATIVE-STAGE-LEVEL"
+           "Encountered invalid negative stage level transition."
+           '((stage-level . invalid))
+           "Ensure stage level is non-negative."))
+
+    (else
+     (list "CSP-099-GENERAL-STAGE-ERROR"
+           "Stage evaluation error."
+           (list (cons 'reason reason))
+           "Check stage constraints and bindings."))))
+
+(define (make-compiler-diagnostic-sexpr dict reason loc)
+  (let* ((rule-info (csp-resolve-rule-info dict reason loc))
+         (rule (car rule-info))
+         (msg (cadr rule-info))
+         (details (caddr rule-info))
+         (remediation (cadddr rule-info))
+         (spans (csp-extract-dual-spans loc)))
+    (list 'compiler-diagnostic
+          (list 'version "1.0")
+          (list 'severity 'error)
+          (list 'phase "bta-csp-guard")
+          (list 'rule rule)
+          (list 'message msg)
+          (list 'details details)
+          (list 'provenance spans)
+          (list 'remediation remediation))))
+
 (define (default-stage-csp-error-reporter dict reason loc)
-  (cons '%stage-csp-error (cons reason loc)))
+  (let ((diag (make-compiler-diagnostic-sexpr dict reason loc)))
+    (cons '%stage-csp-error (cons reason (cons loc (cons diag '()))))))
 
 (define (stage-csp-error? x)
-  (and (pair? x) (eq? (car x) '%stage-csp-error)))
+  (and (pair? x)
+       (or (eq? (car x) '%stage-csp-error)
+           (eq? (car x) 'compiler-diagnostic))))
+
+(define (stage-csp-error-reason err)
+  (cond
+    ((not (stage-csp-error? err)) #f)
+    ((eq? (car err) '%stage-csp-error) (cadr err))
+    ((eq? (car err) 'compiler-diagnostic)
+     (let ((rule-entry (assq 'rule (cdr err))))
+       (if rule-entry (cadr rule-entry) 'unknown-csp-error)))
+    (else #f)))
+
+(define (stage-csp-error-diagnostic err)
+  (cond
+    ((not (stage-csp-error? err)) #f)
+    ((eq? (car err) 'compiler-diagnostic) err)
+    ((and (pair? (cddr err)) (pair? (cdddr err)))
+     (cadddr err))
+    (else
+     (make-compiler-diagnostic-sexpr (make-now-dict) (cadr err) (cddr err)))))
+
+(define (stage-box? x)
+  (and (pair? x) (eq? (car x) '%box) (pair? (cdr x))))
+
+(define (stage-continuation? x)
+  (and (pair? x) (eq? (car x) '%continuation)))
+
+(define (csp-classify-lift-violation val)
+  (cond
+    ;; 1. Mutable cell (Box) -> CSP-001
+    ((stage-box? val)
+     'illegal-mutable-lift)
+
+    ;; 2. Host Continuation -> CSP-002
+    ((stage-continuation? val)
+     'illegal-continuation-lift)
+
+    ;; 3. Opaque Host Procedure / Native Closure -> CSP-003
+    ((procedure? val)
+     'illegal-procedure-lift)
+
+    ;; 4. Pair / List recursive check
+    ((pair? val)
+     (let ((car-viol (csp-classify-lift-violation (car val))))
+       (if car-viol
+           car-viol
+           (csp-classify-lift-violation (cdr val)))))
+
+    ;; 5. Valid lift targets
+    (else #f)))
+
+(define (csp-valid-lift-target? val)
+  (not (csp-classify-lift-violation val)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Now Dictionary (Immediate Evaluation & Ground Truth Oracle)
@@ -726,13 +909,16 @@
   (cons 'call-anf (cons callee-expr arg-exprs)))
 
 (define (later-dict-lift-val dict val loc)
-  ;; Lift static value into residual literal
-  (cond
-    ((or (number? val) (boolean? val) (char? val) (string? val)) val)
-    ((symbol? val) (list 'quote val))
-    ((null? val) (list 'quote '()))
-    ((pair? val) (list 'quote val))
-    (else (list 'quote val))))
+  (let ((violation (csp-classify-lift-violation val)))
+    (if violation
+        (stage-signal-csp-error dict violation (or loc val))
+        ;; Lift static value into residual literal
+        (cond
+          ((or (number? val) (boolean? val) (char? val) (string? val)) val)
+          ((symbol? val) (list 'quote val))
+          ((null? val) (list 'quote '()))
+          ((pair? val) (list 'quote val))
+          (else (list 'quote val))))))
 
 (define (make-later-dict)
   (%make-stage-dict-raw
@@ -926,12 +1112,18 @@
       (cons (stage-val-payload (car svs))
             (extract-payloads (cdr svs)))))
 
+(define (find-first-csp-error lst)
+  (cond
+    ((null? lst) #f)
+    ((stage-csp-error? (car lst)) (car lst))
+    (else (find-first-csp-error (cdr lst)))))
+
 (define (extract-lifted-payloads dict svs)
   (if (null? svs)
       '()
       (let* ((sv (car svs))
              (p (if (stage-val-pure-static? sv)
-                    (stage-lift-val dict (stage-val-payload sv) #f)
+                    (stage-lift-val dict (stage-val-payload sv) sv)
                     (stage-val-payload sv))))
         (cons p (extract-lifted-payloads dict (cdr svs))))))
 
@@ -941,8 +1133,11 @@
       ;; Impure primitive under Later stage -> directly demote to residual code (Speculative Trap / Effect Leak Prevention)
       ((and (stage-impure-primitive? op) (stage-dict-later? dict))
        (let* ((lifted (extract-lifted-payloads dict args))
-              (res-call (cons op lifted)))
-         (make-dynamic-val 'any res-call loc #f)))
+              (csp-err (find-first-csp-error lifted)))
+         (if csp-err
+             csp-err
+             (let ((res-call (cons op lifted)))
+               (make-dynamic-val 'any res-call loc #f)))))
 
       ;; All arguments are pure-static -> execute CTFE directly via Now dictionary
       ((all-pure-static? args)
@@ -958,12 +1153,15 @@
                  (stage-signal-csp-error dict 'ctfe-primitive-failure (cons op (extract-payloads args)))
                  ;; Later dict: demote speculative failure to residual call
                  (let* ((lifted (extract-lifted-payloads dict args))
-                        (res-call (cond
-                                    ((= nargs 1) (stage-apply-prim-1 dict op (car lifted)))
-                                    ((= nargs 2) (stage-apply-prim-2 dict op (car lifted) (cadr lifted)))
-                                    ((= nargs 3) (stage-apply-prim-3 dict op (car lifted) (cadr lifted) (caddr lifted)))
-                                    (else (cons op lifted)))))
-                   (make-dynamic-val 'any res-call loc #f)))
+                        (csp-err (find-first-csp-error lifted)))
+                   (if csp-err
+                       csp-err
+                       (let ((res-call (cond
+                                         ((= nargs 1) (stage-apply-prim-1 dict op (car lifted)))
+                                         ((= nargs 2) (stage-apply-prim-2 dict op (car lifted) (cadr lifted)))
+                                         ((= nargs 3) (stage-apply-prim-3 dict op (car lifted) (cadr lifted) (caddr lifted)))
+                                         (else (cons op lifted)))))
+                         (make-dynamic-val 'any res-call loc #f)))))
              (make-static-val (stage-constant-type raw-res) raw-res loc #f))))
 
       ;; Dynamic or partially-static arguments in Now dict -> CSP error!
@@ -988,14 +1186,17 @@
          ;; General dynamic primitive residualization
          (else
           (let* ((lifted (extract-lifted-payloads dict args))
-                 (res-call
-                  (cond
-                    ((= nargs 1) (stage-apply-prim-1 dict op (car lifted)))
-                    ((= nargs 2) (stage-apply-prim-2 dict op (car lifted) (cadr lifted)))
-                    ((= nargs 3) (stage-apply-prim-3 dict op (car lifted) (cadr lifted) (caddr lifted)))
-                    ((= nargs 4) (stage-apply-prim-4 dict op (car lifted) (cadr lifted) (caddr lifted) (cadddr lifted)))
-                    (else (cons op lifted)))))
-            (make-dynamic-val 'any res-call loc #f))))))))
+                 (csp-err (find-first-csp-error lifted)))
+            (if csp-err
+                csp-err
+                (let ((res-call
+                       (cond
+                         ((= nargs 1) (stage-apply-prim-1 dict op (car lifted)))
+                         ((= nargs 2) (stage-apply-prim-2 dict op (car lifted) (cadr lifted)))
+                         ((= nargs 3) (stage-apply-prim-3 dict op (car lifted) (cadr lifted) (caddr lifted)))
+                         ((= nargs 4) (stage-apply-prim-4 dict op (car lifted) (cadr lifted) (caddr lifted) (cadddr lifted)))
+                         (else (cons op lifted)))))
+                  (make-dynamic-val 'any res-call loc #f))))))))))
 
 (define (eval-in-stage-apply dict env head args-exprs fuel depth)
   (let loop ((exprs args-exprs)
@@ -1021,12 +1222,13 @@
                           (make-static-val (stage-constant-type res) res #f #f)))))
                  (else
                   ;; Later dict: emit residual call
-                  (let* ((callee-expr (if (stage-val-pure-static? callee-sv)
-                                          (stage-val-payload callee-sv)
-                                          (stage-val-payload callee-sv)))
+                  (let* ((callee-expr (stage-val-payload callee-sv))
                          (arg-exprs (extract-lifted-payloads dict evaled-args))
-                         (res (stage-emit-call dict callee-expr arg-exprs)))
-                    (make-dynamic-val 'any res #f #f))))))))
+                         (csp-err (find-first-csp-error arg-exprs)))
+                    (if csp-err
+                        csp-err
+                        (let ((res (stage-emit-call dict callee-expr arg-exprs)))
+                          (make-dynamic-val 'any res #f #f))))))))))
       ((<= curr-fuel 0)
        (stage-signal-csp-error dict 'ctfe-fuel-exhausted head))
       (else
