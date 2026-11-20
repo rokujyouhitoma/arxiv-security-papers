@@ -387,7 +387,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 
 | 仕様番号 / SRFI | 名称・対象機能 | ステータス | 内部実装ファイル | 備考・技術仕様 |
 | :--- | :--- | :---: | :--- | :--- |
-| **SRFI 48** | Intermediate Format Strings (中級フォーマット: `format`) | **×** | - | `~a`, `~s`, `~%`, `~d`, `~x`, `~f`, `~?` 等の中級書式指定子（未実装） |
+| **SRFI 48** | Intermediate Format Strings (中級フォーマット: `format`) | **◎** | [ulisp/lib/format.scm](../lib/format.scm)<br>[ulisp/lib/srfi/48.sld](../lib/srfi/48.sld)<br>[ulisp/lib/scheme/format.sld](../lib/scheme/format.sld) | `~a`, `~s`, `~%`, `~d`, `~x`, `~o`, `~b`, `~c`, `~w`, `~y`, `~?`, `~F`, `~t`, `~&`, `~_`, `~h` 中級書式指定子完備 ([Issue #864](../../docs/issues/closed/864-implement-srfi-48-intermediate-format-strings.md)) |
 | **SRFI 166** | Monadic / Combinator Formatting | **×** | - | 高機能コンビネータ書式化出力エンジン（未実装） |
 | **SRFI 175** | ASCII Character Library | **◎** | [ulisp/lib/char.scm](../lib/char.scm) | ASCII コードポイント検査・分類述語群完備 ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
 | **SRFI 178** | Bitvectors (ビットベクタ) | **×** | - | 1 ビット単位の論理配列型およびビットフィールド走査演算（未実装） |
