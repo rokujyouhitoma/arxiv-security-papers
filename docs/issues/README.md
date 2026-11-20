@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | Feature | High | Open (New) | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
+| **872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | Feature | High | Closed (Completed) | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](closed/872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
 | **873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | Feature | Medium | Open (New) | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
 | **874** | 4値束縛時間束（Lattice）モデルに基づく BTA 型推論パスの実装 | Feature | High | Open (New) | [874-implement-4-valued-bta-lattice-type-inference-pass.md](874-implement-4-valued-bta-lattice-type-inference-pass.md) |
 | **875** | 動的分岐配下の純粋性解析と投機的副作用・例外の自動 Later 降格 | Feature | High | Open (New) | [875-implement-purity-analysis-and-speculative-trap-demotion.md](875-implement-purity-analysis-and-speculative-trap-demotion.md) |

@@ -843,3 +843,329 @@
      (let ((res (stage-apply-prim-1 dict 'cdr (stage-val-payload sv))))
        (make-dynamic-val 'any res loc (stage-val-guest-span sv))))
     (else *ctfe-failure*)))
+
+
+;;; =======================================================================
+;;; Stage-Polymorphic Evaluator Core Loop (DSN-33-03 §2.6, §3.5, §3.7)
+;;; =======================================================================
+
+;;; -----------------------------------------------------------------------
+;;; 9. Environment Utilities & Primitive Predicates
+;;; -----------------------------------------------------------------------
+
+(define (stage-env-lookup env sym)
+  (let ((entry (assq sym env)))
+    (if entry
+        (cdr entry)
+        #f)))
+
+(define (stage-env-extend env sym val)
+  (cons (cons sym val) env))
+
+(define (stage-constant-type expr)
+  (cond
+    ((number? expr) 'number)
+    ((boolean? expr) 'boolean)
+    ((char? expr) 'char)
+    ((string? expr) 'string)
+    ((null? expr) 'null)
+    (else 'constant)))
+
+(define (stage-known-primitive? sym)
+  (memq sym '(+ - * quotient modulo remainder abs min max
+              not null? pair? boolean? number? symbol? string? char?
+              zero?
+              car cdr caar cadr cdar cddr length reverse cons
+              eq? eqv? equal? = < <= > >=
+              bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift)))
+
+;;; -----------------------------------------------------------------------
+;;; 10. Primitive & Function Application Dispatch
+;;; -----------------------------------------------------------------------
+
+(define (all-pure-static? svs)
+  (cond
+    ((null? svs) #t)
+    ((stage-val-pure-static? (car svs)) (all-pure-static? (cdr svs)))
+    (else #f)))
+
+(define (extract-payloads svs)
+  (if (null? svs)
+      '()
+      (cons (stage-val-payload (car svs))
+            (extract-payloads (cdr svs)))))
+
+(define (extract-lifted-payloads dict svs)
+  (if (null? svs)
+      '()
+      (let* ((sv (car svs))
+             (p (if (stage-val-pure-static? sv)
+                    (stage-lift-val dict (stage-val-payload sv) #f)
+                    (stage-val-payload sv))))
+        (cons p (extract-lifted-payloads dict (cdr svs))))))
+
+(define (eval-in-stage-apply-known-prim dict op args loc)
+  (let ((nargs (length args)))
+    (cond
+      ;; All arguments are pure-static -> execute CTFE directly via Now dictionary
+      ((all-pure-static? args)
+       (let ((raw-res
+              (cond
+                ((= nargs 1) (stage-apply-prim-1 (make-now-dict) op (stage-val-payload (car args))))
+                ((= nargs 2) (stage-apply-prim-2 (make-now-dict) op (stage-val-payload (car args)) (stage-val-payload (cadr args))))
+                ((= nargs 3) (stage-apply-prim-3 (make-now-dict) op (stage-val-payload (car args)) (stage-val-payload (cadr args)) (stage-val-payload (caddr args))))
+                ((= nargs 4) (stage-apply-prim-4 (make-now-dict) op (stage-val-payload (car args)) (stage-val-payload (cadr args)) (stage-val-payload (caddr args)) (stage-val-payload (cadddr args))))
+                (else *ctfe-failure*))))
+         (if (ctfe-failure? raw-res)
+             (if (stage-dict-now? dict)
+                 (stage-signal-csp-error dict 'ctfe-primitive-failure (cons op (extract-payloads args)))
+                 ;; Later dict: demote speculative failure to residual call
+                 (let* ((lifted (extract-lifted-payloads dict args))
+                        (res-call (cond
+                                    ((= nargs 1) (stage-apply-prim-1 dict op (car lifted)))
+                                    ((= nargs 2) (stage-apply-prim-2 dict op (car lifted) (cadr lifted)))
+                                    ((= nargs 3) (stage-apply-prim-3 dict op (car lifted) (cadr lifted) (caddr lifted)))
+                                    (else (cons op lifted)))))
+                   (make-dynamic-val 'any res-call loc #f)))
+             (make-static-val (stage-constant-type raw-res) raw-res loc #f))))
+
+      ;; Dynamic or partially-static arguments in Now dict -> CSP error!
+      ((stage-dict-now? dict)
+       (stage-signal-csp-error dict 'now-stage-cannot-evaluate-dynamic (cons op (extract-payloads args))))
+
+      ;; Dynamic or PSDS in Later dict -> residual code generation
+      (else
+       (cond
+         ;; PSDS cons
+         ((and (eq? op 'cons) (= nargs 2))
+          (stage-cons (car args) (cadr args) loc #f))
+
+         ;; PSDS car
+         ((and (eq? op 'car) (= nargs 1))
+          (stage-car dict (car args) loc))
+
+         ;; PSDS cdr
+         ((and (eq? op 'cdr) (= nargs 1))
+          (stage-cdr dict (car args) loc))
+
+         ;; General dynamic primitive residualization
+         (else
+          (let* ((lifted (extract-lifted-payloads dict args))
+                 (res-call
+                  (cond
+                    ((= nargs 1) (stage-apply-prim-1 dict op (car lifted)))
+                    ((= nargs 2) (stage-apply-prim-2 dict op (car lifted) (cadr lifted)))
+                    ((= nargs 3) (stage-apply-prim-3 dict op (car lifted) (cadr lifted) (caddr lifted)))
+                    ((= nargs 4) (stage-apply-prim-4 dict op (car lifted) (cadr lifted) (caddr lifted) (cadddr lifted)))
+                    (else (cons op lifted)))))
+            (make-dynamic-val 'any res-call loc #f))))))))
+
+(define (eval-in-stage-apply dict env head args-exprs fuel depth)
+  (let loop ((exprs args-exprs)
+             (curr-fuel fuel)
+             (acc '()))
+    (cond
+      ((null? exprs)
+       (let ((evaled-args (reverse acc)))
+         (if (stage-known-primitive? head)
+             (eval-in-stage-apply-known-prim dict head evaled-args #f)
+             ;; Variable or lambda application
+             (let ((callee-sv (if (symbol? head)
+                                  (eval-in-stage dict env head curr-fuel depth)
+                                  (eval-in-stage dict env head curr-fuel depth))))
+               (cond
+                 ((stage-csp-error? callee-sv) callee-sv)
+                 ((stage-dict-now? dict)
+                  (let ((callee (stage-val-payload callee-sv))
+                        (arg-vals (extract-payloads evaled-args)))
+                    (let ((res (stage-emit-call dict callee arg-vals)))
+                      (if (ctfe-failure? res)
+                          (stage-signal-csp-error dict 'now-call-failed (cons head arg-vals))
+                          (make-static-val (stage-constant-type res) res #f #f)))))
+                 (else
+                  ;; Later dict: emit residual call
+                  (let* ((callee-expr (if (stage-val-pure-static? callee-sv)
+                                          (stage-val-payload callee-sv)
+                                          (stage-val-payload callee-sv)))
+                         (arg-exprs (extract-lifted-payloads dict evaled-args))
+                         (res (stage-emit-call dict callee-expr arg-exprs)))
+                    (make-dynamic-val 'any res #f #f))))))))
+      ((<= curr-fuel 0)
+       (stage-signal-csp-error dict 'ctfe-fuel-exhausted head))
+      (else
+       (let ((sv (eval-in-stage dict env (car exprs) (- curr-fuel 1) depth)))
+         (if (stage-csp-error? sv)
+             sv
+             (loop (cdr exprs) (- curr-fuel 1) (cons sv acc))))))))
+
+;;; -----------------------------------------------------------------------
+;;; 11. Let Bindings Handler
+;;; -----------------------------------------------------------------------
+
+(define (eval-in-stage-let dict env bindings body fuel depth)
+  (let loop ((bs bindings)
+             (curr-env env)
+             (curr-fuel fuel)
+             (acc-dyn '()))
+    (cond
+      ((null? bs)
+       ;; All bindings processed, evaluate body
+       (let ((body-sv (eval-in-stage dict curr-env body curr-fuel depth)))
+         (cond
+           ((stage-csp-error? body-sv) body-sv)
+           ((null? acc-dyn) body-sv)
+           (else
+            ;; Wrap residual let-anf bindings from acc-dyn (in reverse order)
+            (let wrap ((rem acc-dyn) (curr-payload (stage-val-payload body-sv)))
+              (if (null? rem)
+                  (make-dynamic-val 'any curr-payload #f #f)
+                  (let* ((binding (car rem))
+                         (var (car binding))
+                         (rhs (cadr binding))
+                         (nested (stage-bind-let dict var rhs (lambda () curr-payload))))
+                    (wrap (cdr rem) nested))))))))
+      ((<= curr-fuel 0)
+       (stage-signal-csp-error dict 'ctfe-fuel-exhausted body))
+      (else
+       (let* ((b (car bs))
+              (var (car b))
+              (val-expr (cadr b))
+              (val-sv (eval-in-stage dict curr-env val-expr (- curr-fuel 1) depth)))
+         (cond
+           ((stage-csp-error? val-sv) val-sv)
+           ((stage-dict-now? dict)
+            ;; Now dict: always bind value into environment
+            (loop (cdr bs)
+                  (stage-env-extend curr-env var val-sv)
+                  (- curr-fuel 1)
+                  acc-dyn))
+           (else
+            ;; Later dict:
+            ;; Pure-static values are bound directly to env (inlined at compile time!)
+            ;; Dynamic values are bound to env as dynamic variable reference, and scheduled for residual let
+            (if (stage-val-pure-static? val-sv)
+                (loop (cdr bs)
+                      (stage-env-extend curr-env var val-sv)
+                      (- curr-fuel 1)
+                      acc-dyn)
+                (loop (cdr bs)
+                      (stage-env-extend curr-env var (make-dynamic-val (stage-val-tag val-sv) var #f #f))
+                      (- curr-fuel 1)
+                      (cons (list var (stage-val-payload val-sv)) acc-dyn))))))))))
+
+;;; -----------------------------------------------------------------------
+;;; 12. Main eval-in-stage Core Loop
+;;; -----------------------------------------------------------------------
+
+(define (eval-in-stage dict env expr fuel depth)
+  ;; 1. Resource bounds check (CWE-400 guard)
+  (cond
+    ((<= fuel 0)
+     (stage-signal-csp-error dict 'ctfe-fuel-exhausted expr))
+    ((<= depth 0)
+     (stage-signal-csp-error dict 'ctfe-depth-overflow expr))
+
+    ;; 2. Literals / Constants
+    ((or (number? expr) (boolean? expr) (char? expr) (string? expr) (null? expr))
+     (make-static-val (stage-constant-type expr) expr #f #f))
+
+    ;; 3. Quoted forms
+    ((and (pair? expr) (eq? (car expr) 'quote))
+     (if (and (pair? (cdr expr)) (null? (cddr expr)))
+         (make-static-val 'quoted (cadr expr) #f #f)
+         (stage-signal-csp-error dict 'invalid-quote-syntax expr)))
+
+    ;; 4. Symbols (Variable References)
+    ((symbol? expr)
+     (let ((found (stage-env-lookup env expr)))
+       (cond
+         ((stage-val? found) found)
+         (found (make-static-val 'any found #f #f))
+         ((stage-dict-now? dict)
+          (stage-signal-csp-error dict 'unbound-variable expr))
+         (else
+          ;; In Later stage, unbound variables are residual dynamic references
+          (make-dynamic-val 'unknown expr #f #f)))))
+
+    ;; 5. Non-pair forms (bytevectors, vectors, etc.)
+    ((not (pair? expr))
+     (make-static-val 'constant expr #f #f))
+
+    ;; 6. Compound expressions
+    (else
+     (let ((head (car expr))
+           (f1 (- fuel 1))
+           (d1 (- depth 1)))
+       (case head
+         ;; Conditional: (if test then [else])
+         ((if)
+          (let ((test-expr (cadr expr))
+                (then-expr (caddr expr))
+                (else-expr (if (null? (cdddr expr)) #f (cadddr expr))))
+            (let ((test-sv (eval-in-stage dict env test-expr f1 d1)))
+              (cond
+                ((stage-csp-error? test-sv) test-sv)
+                ((stage-val-pure-static? test-sv)
+                 ;; Static branch decision: dead branch is eliminated at compile-time!
+                 (if (stage-val-payload test-sv)
+                     (eval-in-stage dict env then-expr f1 depth)
+                     (if else-expr
+                         (eval-in-stage dict env else-expr f1 depth)
+                         (make-static-val 'boolean #f #f #f))))
+                (else
+                 ;; Dynamic / PSDS branch: emit residual if-anf
+                 (let ((res-expr
+                        (stage-emit-if
+                         dict
+                         (stage-val-payload test-sv)
+                         (lambda ()
+                           (let ((th-sv (eval-in-stage dict env then-expr f1 d1)))
+                             (if (stage-val? th-sv) (stage-val-payload th-sv) th-sv)))
+                         (lambda ()
+                           (if else-expr
+                               (let ((el-sv (eval-in-stage dict env else-expr f1 d1)))
+                                 (if (stage-val? el-sv) (stage-val-payload el-sv) el-sv))
+                               #f)))))
+                   (make-dynamic-val 'any res-expr #f #f)))))))
+
+         ;; Sequential: (begin e ...)
+         ((begin)
+          (let loop ((es (cdr expr)) (curr-fuel f1) (last-sv (make-static-val 'unspecified #f #f #f)))
+            (cond
+              ((null? es) last-sv)
+              ((<= curr-fuel 0) (stage-signal-csp-error dict 'ctfe-fuel-exhausted expr))
+              (else
+               (let ((sv (eval-in-stage dict env (car es) (- curr-fuel 1) d1)))
+                 (if (stage-csp-error? sv)
+                     sv
+                     (loop (cdr es) (- curr-fuel 1) sv)))))))
+
+         ;; Local Bindings: (let ((var val) ...) body)
+         ((let)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let ((bindings (cadr expr))
+                    (body (caddr expr)))
+                (eval-in-stage-let dict env bindings body f1 d1))
+              (stage-signal-csp-error dict 'invalid-let-syntax expr)))
+
+         ;; Function / Primitive Application
+         (else
+          (eval-in-stage-apply dict env head (cdr expr) f1 d1)))))))
+
+;;; -----------------------------------------------------------------------
+;;; 13. Relative Stage-Level Transition & High-Level Evaluator Interface
+;;; -----------------------------------------------------------------------
+
+(define (stage-eval-level dict-now dict-later env expr fuel depth stage-level)
+  (cond
+    ((< stage-level 0)
+     (stage-signal-csp-error dict-later 'invalid-negative-stage-level expr))
+    ((> stage-level 0)
+     ;; Higher stage: execute immediately via Now dictionary
+     (eval-in-stage dict-now env expr fuel depth))
+    (else
+     ;; Stage-level 0: transition to Later dictionary (residual code generation)
+     (eval-in-stage dict-later env expr fuel depth))))
+
+(define (stage-eval-expr dict env expr)
+  (eval-in-stage dict env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*))
