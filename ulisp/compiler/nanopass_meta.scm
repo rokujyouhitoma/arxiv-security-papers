@@ -529,7 +529,9 @@
 (define (nanopass-parse-nt lang-name expr nt-name)
   (if (nanopass-ast-valid-nt? lang-name expr nt-name)
       expr
-      (error "nanopass-parse: invalid expression for language" lang-name expr)))
+      (error (string-append "nanopass-parse: invalid expression for language "
+                            (symbol->raw-name lang-name))
+             expr)))
 
 (define (nanopass-parse lang-name expr)
   (nanopass-parse-nt lang-name expr
