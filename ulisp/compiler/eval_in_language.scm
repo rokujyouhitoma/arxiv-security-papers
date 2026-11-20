@@ -492,3 +492,246 @@
       (if (ctfe-failure? res)
           #f
           (val->ast-const res)))))
+
+;;; =======================================================================
+;;; Stage-Polymorphic Dictionary Framework (DSN-33-03 §3.1, §3.2, §3.3, §3.7)
+;;; Conforms to Futamura Projection, No-set! & Fixed-Arity self-hosting rules
+;;; =======================================================================
+
+;;; -----------------------------------------------------------------------
+;;; 1. <stage-dict> Record Definition
+;;; -----------------------------------------------------------------------
+
+(define-record-type <stage-dict>
+  (%make-stage-dict-raw name stage-level apply-prim-1 apply-prim-2 apply-prim-3 apply-prim-4
+                        bind-let emit-if emit-call lift-val signal-csp-error)
+  stage-dict?
+  (name             stage-dict-name)
+  (stage-level      stage-dict-stage-level)
+  (apply-prim-1     stage-dict-apply-prim-1)
+  (apply-prim-2     stage-dict-apply-prim-2)
+  (apply-prim-3     stage-dict-apply-prim-3)
+  (apply-prim-4     stage-dict-apply-prim-4)
+  (bind-let         stage-dict-bind-let)
+  (emit-if          stage-dict-emit-if)
+  (emit-call        stage-dict-emit-call)
+  (lift-val         stage-dict-lift-val)
+  (signal-csp-error stage-dict-signal-csp-error))
+
+(define (stage-dict-now? dict)
+  (eq? (stage-dict-name dict) 'now))
+
+(define (stage-dict-later? dict)
+  (eq? (stage-dict-name dict) 'later))
+
+;;; -----------------------------------------------------------------------
+;;; 2. Convenience Invocation Wrappers
+;;; -----------------------------------------------------------------------
+
+(define (stage-apply-prim-1 dict op arg1)
+  ((stage-dict-apply-prim-1 dict) dict op arg1))
+
+(define (stage-apply-prim-2 dict op arg1 arg2)
+  ((stage-dict-apply-prim-2 dict) dict op arg1 arg2))
+
+(define (stage-apply-prim-3 dict op arg1 arg2 arg3)
+  ((stage-dict-apply-prim-3 dict) dict op arg1 arg2 arg3))
+
+(define (stage-apply-prim-4 dict op arg1 arg2 arg3 arg4)
+  ((stage-dict-apply-prim-4 dict) dict op arg1 arg2 arg3 arg4))
+
+(define (stage-bind-let dict var rhs body-thunk)
+  ((stage-dict-bind-let dict) dict var rhs body-thunk))
+
+(define (stage-emit-if dict test-val then-thunk else-thunk)
+  ((stage-dict-emit-if dict) dict test-val then-thunk else-thunk))
+
+(define (stage-emit-call dict callee args)
+  ((stage-dict-emit-call dict) dict callee args))
+
+(define (stage-lift-val dict val loc)
+  ((stage-dict-lift-val dict) dict val loc))
+
+(define (stage-signal-csp-error dict reason loc)
+  ((stage-dict-signal-csp-error dict) dict reason loc))
+
+;;; -----------------------------------------------------------------------
+;;; 3. Temporary Variable Generator for Later Dictionaries
+;;; Uses cons cell counter to satisfy No-set! self-hosting rules
+;;; -----------------------------------------------------------------------
+
+(define (make-temp-var-generator prefix)
+  (let ((counter (cons 0 '())))
+    (lambda ()
+      (let ((id (car counter)))
+        (set-car! counter (+ id 1))
+        (string->symbol (string-append prefix (number->string id)))))))
+
+;;; -----------------------------------------------------------------------
+;;; 4. Default CSP Error Reporter
+;;; -----------------------------------------------------------------------
+
+(define (default-stage-csp-error-reporter dict reason loc)
+  (cons '%stage-csp-error (cons reason loc)))
+
+(define (stage-csp-error? x)
+  (and (pair? x) (eq? (car x) '%stage-csp-error)))
+
+;;; -----------------------------------------------------------------------
+;;; 5. Now Dictionary (Immediate Evaluation & Ground Truth Oracle)
+;;; -----------------------------------------------------------------------
+
+(define (now-dict-apply-prim-1 dict op a)
+  (cond
+    ((eq? op 'abs) (if (< a 0) (- 0 a) a))
+    ((eq? op 'not) (if a #f #t))
+    ((eq? op 'null?) (null? a))
+    ((eq? op 'pair?) (pair? a))
+    ((eq? op 'number?) (number? a))
+    ((eq? op 'boolean?) (boolean? a))
+    ((eq? op 'symbol?) (symbol? a))
+    ((eq? op 'string?) (string? a))
+    ((eq? op 'char?) (char? a))
+    ((eq? op 'car) (if (pair? a) (car a) *ctfe-failure*))
+    ((eq? op 'cdr) (if (pair? a) (cdr a) *ctfe-failure*))
+    ((eq? op '-) (- 0 a))
+    ((eq? op 'string-length) (if (string? a) (string-length a) *ctfe-failure*))
+    ((eq? op 'vector-length) (if (vector? a) (vector-length a) *ctfe-failure*))
+    (else *ctfe-failure*)))
+
+(define (now-dict-apply-prim-2 dict op a b)
+  (cond
+    ((eq? op '+) (+ a b))
+    ((eq? op '-) (- a b))
+    ((eq? op '*) (* a b))
+    ((eq? op 'quotient) (if (= b 0) *ctfe-failure* (quotient a b)))
+    ((eq? op 'modulo) (if (= b 0) *ctfe-failure* (modulo a b)))
+    ((eq? op 'remainder) (if (= b 0) *ctfe-failure* (remainder a b)))
+    ((eq? op '=) (= a b))
+    ((eq? op '<) (< a b))
+    ((eq? op '<=) (<= a b))
+    ((eq? op '>) (> a b))
+    ((eq? op '>=) (>= a b))
+    ((eq? op 'eq?) (eq? a b))
+    ((eq? op 'equal?) (equal? a b))
+    ((eq? op 'cons) (cons a b))
+    ((eq? op 'bitwise-and) (ctfe-bitwise-and a b))
+    ((eq? op 'bitwise-ior) (ctfe-bitwise-ior a b))
+    ((eq? op 'bitwise-xor) (ctfe-bitwise-xor a b))
+    ((eq? op 'arithmetic-shift) (ctfe-arithmetic-shift a b))
+    (else *ctfe-failure*)))
+
+(define (now-dict-apply-prim-3 dict op a b c)
+  (cond
+    ((eq? op 'vector-ref) (if (and (vector? a) (number? b) (>= b 0) (< b (vector-length a)))
+                              (vector-ref a b)
+                              *ctfe-failure*))
+    ((eq? op 'string-ref) (if (and (string? a) (number? b) (>= b 0) (< b (string-length a)))
+                              (string-ref a b)
+                              *ctfe-failure*))
+    (else *ctfe-failure*)))
+
+(define (now-dict-apply-prim-4 dict op a b c d)
+  *ctfe-failure*)
+
+(define (now-dict-bind-let dict var rhs-val body-thunk)
+  ;; For Now dict, body-thunk is invoked directly
+  (body-thunk))
+
+(define (now-dict-emit-if dict test-val then-thunk else-thunk)
+  ;; Immediate condition evaluation: dead-code branch is completely skipped!
+  (if (and (boolean? test-val) (not test-val))
+      (else-thunk)
+      (if test-val
+          (then-thunk)
+          (else-thunk))))
+
+(define (now-dict-emit-call dict callee-proc arg-vals)
+  ;; Immediate closure invocation
+  (cond
+    ((procedure? callee-proc)
+     (let ((n (length arg-vals)))
+       (cond
+         ((= n 0) (callee-proc))
+         ((= n 1) (callee-proc (car arg-vals)))
+         ((= n 2) (callee-proc (car arg-vals) (cadr arg-vals)))
+         ((= n 3) (callee-proc (car arg-vals) (cadr arg-vals) (caddr arg-vals)))
+         (else *ctfe-failure*))))
+    ((and (pair? callee-proc) (eq? (car callee-proc) '%ctfe-closure))
+     (let* ((params (cadr callee-proc))
+            (body (caddr callee-proc))
+            (cenv (cadddr callee-proc)))
+       (if (= (length params) (length arg-vals))
+           (let ((call-env (ctfe-env-extend* cenv params arg-vals)))
+             (ctfe-eval body call-env *ctfe-default-step-limit* *ctfe-default-depth-limit*))
+           *ctfe-failure*)))
+    (else *ctfe-failure*)))
+
+(define (now-dict-lift-val dict val loc)
+  ;; In Now stage, lifting is an identity operation
+  val)
+
+(define (make-now-dict)
+  (%make-stage-dict-raw
+    'now
+    1
+    now-dict-apply-prim-1
+    now-dict-apply-prim-2
+    now-dict-apply-prim-3
+    now-dict-apply-prim-4
+    now-dict-bind-let
+    now-dict-emit-if
+    now-dict-emit-call
+    now-dict-lift-val
+    default-stage-csp-error-reporter))
+
+;;; -----------------------------------------------------------------------
+;;; 6. Later Dictionary (Residualization & MIR-ANF Node Emitter)
+;;; -----------------------------------------------------------------------
+
+(define (later-dict-apply-prim-1 dict op a)
+  (list op a))
+
+(define (later-dict-apply-prim-2 dict op a b)
+  (list op a b))
+
+(define (later-dict-apply-prim-3 dict op a b c)
+  (list op a b c))
+
+(define (later-dict-apply-prim-4 dict op a b c d)
+  (list op a b c d))
+
+(define (later-dict-bind-let dict var rhs-expr body-thunk)
+  (let ((body-expr (body-thunk)))
+    (list 'let-anf (list (list var rhs-expr)) body-expr)))
+
+(define (later-dict-emit-if dict test-expr then-thunk else-thunk)
+  (let ((then-branch (then-thunk))
+        (else-branch (else-thunk)))
+    (list 'if-anf test-expr then-branch else-branch)))
+
+(define (later-dict-emit-call dict callee-expr arg-exprs)
+  (cons 'call-anf (cons callee-expr arg-exprs)))
+
+(define (later-dict-lift-val dict val loc)
+  ;; Lift static value into residual literal
+  (cond
+    ((or (number? val) (boolean? val) (char? val) (string? val)) val)
+    ((symbol? val) (list 'quote val))
+    ((null? val) (list 'quote '()))
+    ((pair? val) (list 'quote val))
+    (else (list 'quote val))))
+
+(define (make-later-dict)
+  (%make-stage-dict-raw
+    'later
+    0
+    later-dict-apply-prim-1
+    later-dict-apply-prim-2
+    later-dict-apply-prim-3
+    later-dict-apply-prim-4
+    later-dict-bind-let
+    later-dict-emit-if
+    later-dict-emit-call
+    later-dict-lift-val
+    default-stage-csp-error-reporter))

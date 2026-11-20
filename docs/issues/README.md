@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **870** | <stage-dict> レコードおよび Now/Later ステージ辞書の実装 | Feature | High | Open (New) | [870-implement-stage-dict-and-now-later-dictionaries.md](870-implement-stage-dict-and-now-later-dictionaries.md) |
 | **871** | PSDS（部分静的データ構造）と二重 Source Span 出自追跡の実装 | Feature | High | Open (New) | [871-support-psds-and-dual-source-span-provenance.md](871-support-psds-and-dual-source-span-provenance.md) |
 | **872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | Feature | High | Open (New) | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
 | **873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | Feature | Medium | Open (New) | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
@@ -28,6 +27,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **870** | <stage-dict> レコードおよび Now/Later ステージ辞書の実装 | Feature | 2026-11-20 | [870-implement-stage-dict-and-now-later-dictionaries.md](closed/870-implement-stage-dict-and-now-later-dictionaries.md) |
 | **865** | SRFI 189 Maybe and Either オプショナルコンテナ ((scheme maybe)) の実装 | Feature | 2026-11-20 | [865-implement-srfi-189-maybe-and-either-optional-containers.md](closed/865-implement-srfi-189-maybe-and-either-optional-containers.md) |
 | **864** | SRFI 48 中級フォーマット文字列 API ((scheme format)) の実装 | Feature | 2026-11-20 | [864-implement-srfi-48-intermediate-format-strings.md](closed/864-implement-srfi-48-intermediate-format-strings.md) |
 | **863** | SRFI 214 動的可変長ベクタ ((scheme flexvector)) の実装 | Feature | 2026-11-20 | [863-implement-srfi-214-flexvectors.md](closed/863-implement-srfi-214-flexvectors.md) |

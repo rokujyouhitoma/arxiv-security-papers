@@ -602,7 +602,7 @@ flowchart LR
 
 | Issue ID | タスク名 | フェーズ | 優先度 | 詳細リンク |
 | :---: | :--- | :---: | :---: | :--- |
-| **#870** | `<stage-dict>` レコードおよび Now/Later ステージ辞書の実装 | P1 | High | [870-implement-stage-dict-and-now-later-dictionaries.md](../issues/870-implement-stage-dict-and-now-later-dictionaries.md) |
+| **#870** | `<stage-dict>` レコードおよび Now/Later ステージ辞書の実装 | P1 | High | [870-implement-stage-dict-and-now-later-dictionaries.md](../issues/closed/870-implement-stage-dict-and-now-later-dictionaries.md) |
 | **#871** | PSDS（部分静的データ構造）と二重 Source Span 出自追跡の実装 | P1 | High | [871-support-psds-and-dual-source-span-provenance.md](../issues/871-support-psds-and-dual-source-span-provenance.md) |
 | **#872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | P1 | High | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](../issues/872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
 | **#873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | P1 | Medium | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](../issues/873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
