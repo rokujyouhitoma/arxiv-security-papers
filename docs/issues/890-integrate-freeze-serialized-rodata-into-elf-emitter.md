@@ -2,13 +2,13 @@
 ID: 890
 種別: Feature
 優先度: High
-ステータス: Open (New)
+ステータス: Open (In Progress)
 ---
 
 # [FEAT] freeze-serialize-to-rodata 直列化データと elf.scm (.rodata) の実リンカ配線 (ID: 890)
 
 ## 1. 概要 / Summary
-DSN-33-03 §7.3, §8.1 (Phase P5), DSN-33-02 §8.4 および DSN-33 §11.1 に基づき、`sbi.scm` の `freeze-serialize-to-rodata` で生成された循環グラフ・定数データ構造の直列化バイナリを、AOT バックエンド（`elf.scm`）の `.rodata` セクション実データとして直接注入し、機械語からゼロコスト RIP 相対アドレッシング（`[rip + symbol_rodata]`）でアクセス可能にする実リンカ配線を実装する。
+DSN-33-03 §7.3, §8.1 (Phase P5), DSN-33-02 §8.4 および DSN-33 §11.1 に基づき、`sbi.scm` の `freeze-serialize-to-rodata` で生成された循環グラフ・定数データ構造の直列化バイナリを、AOT バックエンド（`elf64_builder.scm` / `144_backend_x86_elf.scm`）の `.rodata` セクション実データとして直接注入し、機械語からゼロコスト RIP 相対アドレッシング（`[rip + symbol_rodata]`）でアクセス可能にする実リンカ配線を実装する。
 
 ---
 
@@ -22,18 +22,24 @@ DSN-33-03 §7.3, §8.1 (Phase P5), DSN-33-02 §8.4 および DSN-33 §11.1 に�
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/compiler/elf.scm](../../ulisp/compiler/elf.scm)
-- [ ] [ulisp/compiler/sbi.scm](../../ulisp/compiler/sbi.scm)
-- [ ] [ulisp/tests/test_elf_sections_and_reloc.scm](../../ulisp/tests/test_elf_sections_and_reloc.scm)
+- [x] [ulisp/backend/elf64_builder.scm](../../ulisp/backend/elf64_builder.scm)
+- [x] [ulisp/compiler/sbi.scm](../../ulisp/compiler/sbi.scm)
+- [x] [ulisp/tests/test_elf_sections_and_reloc.scm](../../ulisp/tests/test_elf_sections_and_reloc.scm)
 
 ---
 
 ## 4. 実装方針 / Implementation Plan
 Target Branch: `feat/890-integrate-freeze-serialized-rodata-into-elf-emitter`
 
-1. `elf.scm` の ELF セクション生成処理において、`freeze-serialize-to-rodata` で出力されたバイト列を `.rodata` セクションヘッダおよびペイロードバッファへ追記するインターフェース `elf-emit-rodata-payload!` を追加。
-2. 循環参照や自己言及シンボルの再配置（Relocation Entry）を生成し、実行時デシリアライズコストなしで C/ネイティブポインタとして解決。
-3. ELF バイナリ生成テストで `.rodata` セクションにデータが正しく配置され、RIP 相対アクセス可能であることを検証。
+1. **直列化リストから bytevector への変換インターフェース**:
+   - `ulisp/compiler/sbi.scm` に、`freeze-serialize-to-rodata` が出力する整数リストをネイティブな Scheme `bytevector` へ変換する `freeze-serialized->bytevector` を追加。
+2. **`elf64_builder.scm` への `.rodata` ペイロード統合**:
+   - `build-elf64-plain` および `elf64-link-executable` に渡す `rodata-bv` に、フリーズされた定数グラフバイト列をアライメント（16バイト境界）を保ってマージする。
+   - シンボル名（例: `__ulisp_frozen_graph_root`）を定義し、`.symtab` および RIP 相対参照ラベルとしてエクスポート。
+3. **サイズ上限チェックの二重防壁**:
+   - `sbi.scm` の `*max-rodata-size*` (64MB) を ELF ビルダ側でも検査し、超過時は `E-RODATA-OVERFLOW` を送出。
+4. **テストスイート拡充**:
+   - `ulisp/tests/test_elf_sections_and_reloc.scm` に、循環グラフをフリーズして埋め込んだ ELF バイナリを生成し、セクションヘッダ `.rodata` の offset / size が正しく設定されていることをアサートするテストを追加。
 
 ---
 
