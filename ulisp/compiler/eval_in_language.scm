@@ -1203,3 +1203,122 @@
 (register-language-evaluator! 'L_stage_poly
   (lambda (expr env fuel depth)
     (eval-with-now-oracle-opt expr env fuel depth)))
+
+
+;;; =======================================================================
+;;; Binding-Time Analysis (BTA) Engine (DSN-33-03 §4.1)
+;;; =======================================================================
+
+;;; -----------------------------------------------------------------------
+;;; 15. BTA Environment & Inference Rules
+;;; -----------------------------------------------------------------------
+
+(define (bta-env-empty) '())
+
+(define (bta-env-lookup env var)
+  (let ((entry (assq var env)))
+    (if entry
+        (cdr entry)
+        'dynamic)))
+
+(define (bta-env-extend env var type)
+  (cons (cons var type) env))
+
+(define (bta-infer-expr expr env)
+  (cond
+    ;; 1. Self-evaluating constants & literals
+    ((or (number? expr) (boolean? expr) (char? expr) (string? expr) (null? expr))
+     'static)
+
+    ;; 2. Quoted datums
+    ((and (pair? expr) (eq? (car expr) 'quote))
+     'static)
+
+    ;; 3. Variable references
+    ((symbol? expr)
+     (bta-env-lookup env expr))
+
+    ;; 4. Non-pair forms
+    ((not (pair? expr))
+     'static)
+
+    ;; 5. Compound forms
+    (else
+     (let ((head (car expr)))
+       (case head
+         ;; Conditional: (if test then [else])
+         ((if)
+          (let ((test-bt (bta-infer-expr (cadr expr) env))
+                (then-bt (bta-infer-expr (caddr expr) env))
+                (else-bt (if (pair? (cdddr expr))
+                             (bta-infer-expr (cadddr expr) env)
+                             'static)))
+            (if (eq? test-bt 'static)
+                (bta-join then-bt else-bt)
+                'dynamic)))
+
+         ;; Sequential: (begin e ...)
+         ((begin)
+          (let loop ((es (cdr expr)) (last-bt 'static))
+            (if (null? es)
+                last-bt
+                (loop (cdr es) (bta-infer-expr (car es) env)))))
+
+         ;; Local Bindings: (let ((x e) ...) body)
+         ((let)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let ((bindings (cadr expr))
+                    (body (caddr expr)))
+                (let loop ((bs bindings) (curr-env env))
+                  (if (null? bs)
+                      (bta-infer-expr body curr-env)
+                      (let* ((b (car bs))
+                             (var (car b))
+                             (rhs (cadr b))
+                             (rhs-bt (bta-infer-expr rhs env)))
+                        (loop (cdr bs) (bta-env-extend curr-env var rhs-bt))))))
+              'dynamic))
+
+         ;; Pairs & PSDS constructor: (cons a b)
+         ((cons)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let ((car-bt (bta-infer-expr (cadr expr) env))
+                    (cdr-bt (bta-infer-expr (caddr expr) env)))
+                (if (and (eq? car-bt 'static) (eq? cdr-bt 'static))
+                    'static
+                    'psds))
+              'dynamic))
+
+         ;; Pair accessors: (car p), (cdr p)
+         ((car cdr)
+          (if (pair? (cdr expr))
+              (let ((arg-bt (bta-infer-expr (cadr expr) env)))
+                (cond
+                  ((eq? arg-bt 'static) 'static)
+                  ((eq? arg-bt 'psds) 'dynamic)
+                  (else 'dynamic)))
+              'dynamic))
+
+         ;; Known Primitives
+         (else
+          (if (stage-known-primitive? head)
+              (let loop ((args (cdr expr)))
+                (cond
+                  ((null? args) 'static)
+                  ((eq? (bta-infer-expr (car args) env) 'static)
+                   (loop (cdr args)))
+                  (else 'dynamic)))
+              'dynamic)))))))
+
+(define (bta-annotate-ast expr env)
+  (let ((bt (bta-infer-expr expr env)))
+    (list '%bta-annotated bt expr)))
+
+(define (bta-annotated? x)
+  (and (pair? x) (eq? (car x) '%bta-annotated)))
+
+(define (bta-annotation-type x)
+  (if (bta-annotated? x) (cadr x) 'dynamic))
+
+(define (bta-annotation-expr x)
+  (if (bta-annotated? x) (caddr x) x))

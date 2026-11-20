@@ -206,6 +206,59 @@
      (cons (lattice-meet lat1 (car p1) (car p2))
            (lattice-meet lat2 (cdr p1) (cdr p2))))))
 
+;;; 2.6 4-Valued Binding-Time Analysis (BTA) Lattice (DSN-33-03 §4.1)
+;;; Elements: 'bot <= 'static <= 'psds <= 'dynamic <= 'top
+;;;   bot     : unreachable / unanalyzed
+;;;   static  : completely known at compile time (Now)
+;;;   psds    : partially static (static spine, dynamic leaves)
+;;;   dynamic : must be computed at runtime (Later)
+;;;   top     : contradiction / over-generalized
+
+(define (bta-level x)
+  (case x
+    ((bot) 0)
+    ((static) 1)
+    ((psds) 2)
+    ((dynamic) 3)
+    ((top) 4)
+    (else 4)))
+
+(define (bta-from-level lvl)
+  (case lvl
+    ((0) 'bot)
+    ((1) 'static)
+    ((2) 'psds)
+    ((3) 'dynamic)
+    ((4) 'top)
+    (else 'top)))
+
+(define (bta-elem? x)
+  (if (memq x '(bot static psds dynamic top)) #t #f))
+
+(define (bta-leq? a b)
+  (<= (bta-level a) (bta-level b)))
+
+(define (bta-join a b)
+  (if (>= (bta-level a) (bta-level b))
+      a
+      b))
+
+(define (bta-meet a b)
+  (if (<= (bta-level a) (bta-level b))
+      a
+      b))
+
+(define (make-bta-lattice name)
+  (make-lattice
+   name
+   'bot
+   'top
+   bta-leq?
+   bta-join
+   bta-meet))
+
+(define *bta-default-lattice* (make-bta-lattice 'bta-4val))
+
 ;;; -----------------------------------------------------------------------
 ;;; Part 3: Dataflow Problem Specification
 ;;; -----------------------------------------------------------------------

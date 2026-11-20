@@ -8,7 +8,7 @@
 | :---: | --- | :---: | :---: | :---: | :---: |
 | **872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | Feature | High | Closed (Completed) | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](closed/872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
 | **873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | Feature | Medium | Closed (Completed) | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](closed/873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
-| **874** | 4値束縛時間束（Lattice）モデルに基づく BTA 型推論パスの実装 | Feature | High | Open (New) | [874-implement-4-valued-bta-lattice-type-inference-pass.md](874-implement-4-valued-bta-lattice-type-inference-pass.md) |
+| **874** | 4値束縛時間束（Lattice）モデルに基づく BTA 型推論パスの実装 | Feature | High | Closed (Completed) | [874-implement-4-valued-bta-lattice-type-inference-pass.md](closed/874-implement-4-valued-bta-lattice-type-inference-pass.md) |
 | **875** | 動的分岐配下の純粋性解析と投機的副作用・例外の自動 Later 降格 | Feature | High | Open (New) | [875-implement-purity-analysis-and-speculative-trap-demotion.md](875-implement-purity-analysis-and-speculative-trap-demotion.md) |
 | **876** | CSP 越境バリデータと Dual Span 診断レポーターの実装 | Feature | High | Open (New) | [876-implement-csp-boundary-validator-and-dual-span-diagnostics.md](876-implement-csp-boundary-validator-and-dual-span-diagnostics.md) |
 | **877** | 特殊化メモ化エンジンとハードリミット・一般化（Widening）の実装 | Feature | High | Open (New) | [877-implement-specialization-memoization-and-widening-engine.md](877-implement-specialization-memoization-and-widening-engine.md) |
