@@ -1549,3 +1549,169 @@
 
 (define (bta-annotation-expr x)
   (if (bta-annotated? x) (caddr x) x))
+
+;;; =======================================================================
+;;; Specialization Engine & Hard Limits & Generalization (DSN-33-03 §5.1-§5.3)
+;;; =======================================================================
+
+(define *max-spec-instances* 8)
+(define *max-spec-depth* 4)
+
+;;; -----------------------------------------------------------------------
+;;; 16. Static Projection Operator Pi_static & Signature Key
+;;; -----------------------------------------------------------------------
+
+(define (stage-project-static-key sv)
+  (cond
+    ((not (stage-val? sv)) sv)
+    ((stage-val-pure-static? sv)
+     (let ((p (stage-val-payload sv)))
+       (if (pair? p)
+           (cons (stage-project-static-key (car p))
+                 (stage-project-static-key (cdr p)))
+           p)))
+    ((stage-val-partially-static? sv)
+     (let ((p (stage-val-payload sv)))
+       (if (pair? p)
+           (cons (stage-project-static-key (car p))
+                 (stage-project-static-key (cdr p)))
+           '*dynamic*)))
+    ((stage-val-pure-dynamic? sv)
+     '*dynamic*)
+    (else '*dynamic*)))
+
+(define (make-spec-signature-key fn-name arg-svs)
+  (let loop ((rem arg-svs) (acc '()))
+    (if (null? rem)
+        (cons fn-name (reverse acc))
+        (loop (cdr rem) (cons (stage-project-static-key (car rem)) acc)))))
+
+;;; -----------------------------------------------------------------------
+;;; 17. <spec-memo-table> Record Definition
+;;; -----------------------------------------------------------------------
+
+(define-record-type <spec-memo-table>
+  (%make-spec-memo-table-raw table-box instances-box residual-fns-box depth-box counter-box)
+  spec-memo-table?
+  (table-box        %spec-memo-table-box)
+  (instances-box    %spec-memo-instances-box)
+  (residual-fns-box %spec-memo-residual-fns-box)
+  (depth-box        %spec-memo-depth-box)
+  (counter-box      %spec-memo-counter-box))
+
+(define (make-spec-memo-table)
+  (%make-spec-memo-table-raw
+    (cons '() '())  ;; table: ((key . spec-name) ...)
+    (cons '() '())  ;; instances: ((fn . count) ...)
+    (cons '() '())  ;; residual-fns: (fn-def ...)
+    (cons 0 '())    ;; current depth
+    (cons 0 '())))  ;; unique symbol counter
+
+(define (spec-memo-table-entries memo)
+  (car (%spec-memo-table-box memo)))
+
+(define (spec-memo-lookup memo key)
+  (let loop ((entries (car (%spec-memo-table-box memo))))
+    (cond
+      ((null? entries) #f)
+      ((equal? (caar entries) key) (cdar entries))
+      (else (loop (cdr entries))))))
+
+(define (spec-memo-instance-count memo fn-name)
+  (let loop ((entries (car (%spec-memo-instances-box memo))))
+    (cond
+      ((null? entries) 0)
+      ((eq? (caar entries) fn-name) (cdar entries))
+      (else (loop (cdr entries))))))
+
+(define (spec-memo-current-depth memo)
+  (car (%spec-memo-depth-box memo)))
+
+(define (spec-memo-set-depth! memo d)
+  (set-car! (%spec-memo-depth-box memo) d))
+
+(define (spec-memo-can-specialize? memo fn-name key depth)
+  (cond
+    ((> depth *max-spec-depth*) #f)
+    ((>= (spec-memo-instance-count memo fn-name) *max-spec-instances*) #f)
+    (else #t)))
+
+(define (spec-memo-register! memo fn-name key)
+  (let* ((ctr-box (%spec-memo-counter-box memo))
+         (id (car ctr-box))
+         (spec-name (string->symbol
+                      (string-append (symbol->string fn-name) "$spec" (number->string id)))))
+    (set-car! ctr-box (+ id 1))
+    ;; Register in table
+    (let ((tbl-box (%spec-memo-table-box memo)))
+      (set-car! tbl-box (cons (cons key spec-name) (car tbl-box))))
+    ;; Increment instance count
+    (let* ((inst-box (%spec-memo-instances-box memo))
+           (insts (car inst-box)))
+      (let loop ((rem insts) (acc '()) (found #f))
+        (cond
+          ((null? rem)
+           (if found
+               (set-car! inst-box (reverse acc))
+               (set-car! inst-box (cons (cons fn-name 1) insts))))
+          ((eq? (caar rem) fn-name)
+           (loop (cdr rem) (cons (cons fn-name (+ (cdar rem) 1)) acc) #t))
+          (else
+           (loop (cdr rem) (cons (car rem) acc) found)))))
+    spec-name))
+
+(define (spec-memo-record-residual-fn! memo fn-def)
+  (let ((box (%spec-memo-residual-fns-box memo)))
+    (set-car! box (cons fn-def (car box)))))
+
+(define (spec-memo-residual-fns memo)
+  (reverse (car (%spec-memo-residual-fns-box memo))))
+
+;;; -----------------------------------------------------------------------
+;;; 18. Generalization (Widening) & Argument Demotion
+;;; -----------------------------------------------------------------------
+
+(define (spec-widen-arguments arg-svs)
+  (let loop ((rem arg-svs) (acc '()))
+    (if (null? rem)
+        (reverse acc)
+        (let* ((sv (car rem))
+               (p (if (stage-val? sv) (stage-val-payload sv) sv))
+               (w-sv (make-dynamic-val 'widened p #f #f)))
+          (loop (cdr rem) (cons w-sv acc))))))
+
+(define (spec-extract-dynamic-payloads arg-svs)
+  (let loop ((rem arg-svs) (acc '()))
+    (if (null? rem)
+        (reverse acc)
+        (let ((sv (car rem)))
+          (cond
+            ((stage-val-pure-dynamic? sv)
+             (loop (cdr rem) (cons (stage-val-payload sv) acc)))
+            ((stage-val-partially-static? sv)
+             (loop (cdr rem) (cons (stage-val-payload sv) acc)))
+            (else
+             (loop (cdr rem) acc)))))))
+
+(define (specialize-or-widen memo fn-name arg-svs depth spec-builder-proc)
+  (let ((key (make-spec-signature-key fn-name arg-svs)))
+    ;; 1. Memoization cache lookup
+    (let ((cached (spec-memo-lookup memo key)))
+      (if cached
+          (list 'cached cached (spec-extract-dynamic-payloads arg-svs))
+          ;; 2. Hard limits check (Instances & Depth)
+          (if (spec-memo-can-specialize? memo fn-name key depth)
+              ;; 3. Specialize: allocate name & emit residual function
+              (let* ((spec-fn (spec-memo-register! memo fn-name key))
+                     (prev-depth (spec-memo-current-depth memo)))
+                (spec-memo-set-depth! memo (+ depth 1))
+                (let ((fn-def (spec-builder-proc spec-fn arg-svs)))
+                  (spec-memo-record-residual-fn! memo fn-def)
+                  (spec-memo-set-depth! memo prev-depth)
+                  (list 'specialized spec-fn (spec-extract-dynamic-payloads arg-svs))))
+              ;; 4. Widening fallback: generalize arguments
+              (let ((widened-args (spec-widen-arguments arg-svs)))
+                (list 'widened fn-name (let loop ((rem widened-args) (acc '()))
+                                         (if (null? rem)
+                                             (reverse acc)
+                                             (loop (cdr rem) (cons (stage-val-payload (car rem)) acc)))))))))))
