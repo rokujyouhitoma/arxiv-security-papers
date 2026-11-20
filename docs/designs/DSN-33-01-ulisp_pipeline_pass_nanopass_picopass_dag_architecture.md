@@ -716,6 +716,15 @@ flowchart TD
 | **T6.2** | [#769](../issues/closed/769-implement-picopass-provenance-tracing-and-auto-bisect.md) | Provenance 来歴トレースと Rule-level Auto-Bisect 実装 | `compiler/nanopass_meta.scm`<br>`compiler/pass_manager.scm`<br>`tests/test_nanopass_tracer.scm` | 【完了】・発火した Picopass 名を記録・表示する細粒度 AST Diff トレーサを実装。<br>・`disable-picopass!` と二分探索により不具合原因ルールを自動特定する Auto-Bisect 機能を実装。 |
 | **T6.3** | [#770](../issues/closed/770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) | 3段階セルフホスティング不動点検証 ＆ 性能ベンチマーク測定 | `ulisp/compiler.scm`<br>`ulisp/Makefile`<br>`benchmarks/` | 【完了 (2026-11-13)】<br>・`compiler.scm` を再生成し、5モジュール全 Stage 2/Stage 3 のバイナリ・アセンブリ完全一致（0バイト差分）を実証。<br>・`--time-passes` による実測プロファイル採取により、脱糖走査 75% 削減・ヒープ消費 70% 削減・ブートストラップ 2.4x 高速化を実証。 |
 
+#### Phase 7：DSN-33-03 ステージ多相部分評価パスの常設統合と CTFE 一本化
+DSN-33-03 で完成した二村射影・ステージ多相部分評価エンジンを Pass Manager 標準パイプラインへ正式統合する。
+
+| タスク ID | Issue ID | タスク名 | 対象ファイル | 主な実装内容と完了条件 (DoD) |
+| :---: | :---: | :--- | :--- | :--- |
+| **T7.1** | [#887](../issues/887-register-stage-poly-lower-in-pass-manager-pipeline.md) | `pass-075-stage-poly-lower` の Pass Manager 常設登録と最適化レベル連動 | `compiler/pass_manager.scm`<br>`compiler/frontend_passes.scm` | ・`init-default-pass-registry!` に `pass-075-stage-poly-lower` を登録。<br>・Opt レベル連動およびメタ構文検知時条件付き実行により、標準 AOT ビルドでの Tower Collapse を有効化。 |
+| **T7.2** | [#888](../issues/888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md) | 旧 `ctfe_eval` の `eval-in-stage (Now dict)` への一本化・二重実装解消 | `compiler/eval_in_language.scm` | ・旧 `ctfe_eval` を新設の `<stage-dict>` / `Now` 辞書評価器へ一本化し、重複保守を排除。 |
+
+
 ---
 
 ### 9.3 品質ゲートとセルフホスティング不動点保証規準

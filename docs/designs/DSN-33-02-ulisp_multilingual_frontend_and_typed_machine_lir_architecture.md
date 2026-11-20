@@ -432,3 +432,13 @@ LLVM PassManager の設計を導入し、最適化パス間の暗黙のデータ
    - **裁定**: **musl libc を本線**とする。構造が明晰であり、Linux x86-64 との整合性が最も高い。組み込み向け超軽量フォールバックとして picolibc の知見を参考とする。
 4. **セルフホスト時のコンパイル速度対策**:
    - **裁定**: Issue #839（中間表現シリアライズと PCH）および DSN-33-01 で確立した Picopass 高速ディスパッチ（$O(1)$ Head-tag ディスパッチ）をフル活用し、約 3 万行の C ソースを数秒以内でコンパイル可能にする。
+
+### 8.4 DSN-33-03 ステージ多相メタコンパイラとの LIR/ELF 統合拡張（Phase P5）
+
+DSN-33-03 において具現化された `L-Residual-ANF` および `freeze!` 循環グラフ直列化を、DSN-33-02 の型付き機械語 LIR および ELF 生成器へ直接接続するための統合仕様：
+
+1. **`L-Residual-ANF` から `L_lir_raw` への降格ブリッジ (Issue #889)**:
+   - `stage-poly-lower` が出力する `let-anf` / `let-call` 構文木を、本仕様書第 4 章で規定された Typed Machine LIR の仮想レジスタ形式へとダイレクトに lowering するブリッジアダプターを配備。
+2. **`freeze-serialize-to-rodata` の `.rodata` ELF セクション配置 (Issue #890)**:
+   - Issue #830 で規定された複数 ELF セクション生成機能（`elf.scm`）に対し、直列化されたバイト列を直接 `.rodata` セクションへ注入し、RIP 相対アドレッシング（`[rip + symbol_rodata]`）でのゼロコスト参照を保証。
+

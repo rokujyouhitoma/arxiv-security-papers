@@ -581,7 +581,7 @@ Control Plane で生成された静的定数（ディスパッチテーブルや
 
 ## 8. 実装ロードマップ ＆ 品質ゲート
 
-### 8.1 フェーズ別移行スケジュール（Phase P1 〜 P4）
+### 8.1 フェーズ別移行スケジュール（Phase P1 〜 P5）
 
 ```mermaid
 flowchart LR
@@ -589,36 +589,43 @@ flowchart LR
     P2["Phase P2: BTA & CSP ガード<br/>(PSDS, 越境遮断, 診断レポーター)"]
     P3["Phase P3: Nanopass 差分消去<br/>(L-StagePoly -> L-Residual-ANF)"]
     P4["Phase P4: ミニ言語 Collapse 実証<br/>(バイトコード -> フラット ELF)"]
+    P5["Phase P5: プロダクション統合 & 一本化<br/>(PassManager 常設, LIR/ELF 結合)"]
 
-    P1 --> P2 --> P3 --> P4
+    P1 --> P2 --> P3 --> P4 --> P5
 ```
 
 * **Phase P1 (M1)**: `ulisp/compiler/eval_in_language.scm` に `<stage-dict>`、`Now` 辞書、`Later` 辞書を配備。CTFE テスト 100% PASS、および単一ソース意味論オラクルによる自己検証（Issue #870〜#873）。
 * **Phase P2 (M2)**: 4値 BTA、PSDS 抽象解釈器、および CSP 診断 S式レポーターを `dataflow.scm` に実装。メタモルフィック摂動テストによる健全性検証自動化（Issue #874〜#877）。
 * **Phase P3 (M3)**: `nanopass.scm` に `L-StagePoly` および `L-Residual-ANF` を定義し、Pass Manager に消去アサーションおよび 3重差分テストオラクル（Now vs Ref VM vs Native）を組み込み（Issue #878〜#882）。
 * **Phase P4 (M4)**: スタック型バイトコードインタプリタを記述し、第1二村射影によってディスパッチループのない直接機械語 ELF が生成されることを E2E テストで実証。セルフホスト不動点検証（Issue #883〜#886）。
+* **Phase P5 (M5)**: 実パイプライン統合と二重化解消。Pass Manager への `pass-075-stage-poly-lower` 常設登録、旧 `ctfe_eval` の `eval-in-stage (Now dict)` への一本化、`L-Residual-ANF` から LIR へのアダプターブリッジ、および `freeze-serialize-to-rodata` の ELF リンカ結合（Issue #887〜#891）。
 
-### 8.2 全 17 Issue（#870〜#886）トレーサビリティマップ
+### 8.2 全 22 Issue（#870〜#891）トレーサビリティマップ
 
 | Issue ID | タスク名 | フェーズ | 優先度 | 詳細リンク |
 | :---: | :--- | :---: | :---: | :--- |
 | **#870** | `<stage-dict>` レコードおよび Now/Later ステージ辞書の実装 | P1 | High | [870-implement-stage-dict-and-now-later-dictionaries.md](../issues/closed/870-implement-stage-dict-and-now-later-dictionaries.md) |
 | **#871** | PSDS（部分静的データ構造）と二重 Source Span 出自追跡の実装 | P1 | High | [871-support-psds-and-dual-source-span-provenance.md](../issues/closed/871-support-psds-and-dual-source-span-provenance.md) |
-| **#872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | P1 | High | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](../issues/872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
-| **#873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | P1 | Medium | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](../issues/873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
-| **#874** | 4値束縛時間束（Lattice）モデルに基づく BTA 型推論パスの実装 | P2 | High | [874-implement-4-valued-bta-lattice-type-inference-pass.md](../issues/874-implement-4-valued-bta-lattice-type-inference-pass.md) |
-| **#875** | 動的分岐配下の純粋性解析と投機的副作用・例外の自動 Later 降格 | P2 | High | [875-implement-purity-analysis-and-speculative-trap-demotion.md](../issues/875-implement-purity-analysis-and-speculative-trap-demotion.md) |
-| **#876** | CSP 越境バリデータと Dual Span 診断レポーターの実装 | P2 | High | [876-implement-csp-boundary-validator-and-dual-span-diagnostics.md](../issues/876-implement-csp-boundary-validator-and-dual-span-diagnostics.md) |
-| **#877** | 特殊化メモ化エンジンとハードリミット・一般化（Widening）の実装 | P2 | High | [877-implement-specialization-memoization-and-widening-engine.md](../issues/877-implement-specialization-memoization-and-widening-engine.md) |
-| **#878** | Nanopass 中間言語 L-StagePoly および L-Residual-ANF の定義 | P3 | High | [878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md](../issues/878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md) |
-| **#879** | ステージ多相部分評価 Nanopass (stage-poly-lower) の実装 | P3 | High | [879-implement-stage-poly-lower-nanopass-partial-evaluator.md](../issues/879-implement-stage-poly-lower-nanopass-partial-evaluator.md) |
-| **#880** | Pass Manager への Nanopass 文法完全消去アサーションの組み込み | P3 | High | [880-integrate-grammar-conformance-assertion-in-pass-manager.md](../issues/880-integrate-grammar-conformance-assertion-in-pass-manager.md) |
-| **#881** | 3重差分テストオラクルとメタモルフィック摂動検証スイートの実装 | P3 | High | [881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md](../issues/881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md) |
-| **#882** | 部分評価後の残余関数における Contification 保証の検証 | P3 | Medium | [882-verify-residual-function-contification-guarantees.md](../issues/882-verify-residual-function-contification-guarantees.md) |
-| **#883** | freeze! 循環グラフ直列化と .rodata 肥大化ガードの実装 | P4 | High | [883-implement-freeze-graph-serialization-and-rodata-guard.md](../issues/883-implement-freeze-graph-serialization-and-rodata-guard.md) |
-| **#884** | Data Plane 境界の Tag Stripping と 64-bit 単一ワード正規化の実装 | P4 | High | [884-implement-data-plane-tag-stripping-and-single-word-repr.md](../issues/884-implement-data-plane-tag-stripping-and-single-word-repr.md) |
-| **#885** | マイクロ言語による第1二村射影平坦化（Tower Collapse）の E2E 実証 | P4 | High | [885-demonstrate-e2e-first-futamura-projection-on-micro-language.md](../issues/885-demonstrate-e2e-first-futamura-projection-on-micro-language.md) |
-| **#886** | セルフホスティング決定論性と不動点（Stage 2 -> Stage 3 diff 0）の検証 | P4 | High | [886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md](../issues/886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md) |
+| **#872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | P1 | High | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](../issues/closed/872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
+| **#873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | P1 | Medium | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](../issues/closed/873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
+| **#874** | 4値束縛時間束（Lattice）モデルに基づく BTA 型推論パスの実装 | P2 | High | [874-implement-4-valued-bta-lattice-type-inference-pass.md](../issues/closed/874-implement-4-valued-bta-lattice-type-inference-pass.md) |
+| **#875** | 動的分岐配下の純粋性解析と投機的副作用・例外の自動 Later 降格 | P2 | High | [875-implement-purity-analysis-and-speculative-trap-demotion.md](../issues/closed/875-implement-purity-analysis-and-speculative-trap-demotion.md) |
+| **#876** | CSP 越境バリデータと Dual Span 診断レポーターの実装 | P2 | High | [876-implement-csp-boundary-validator-and-dual-span-diagnostics.md](../issues/closed/876-implement-csp-boundary-validator-and-dual-span-diagnostics.md) |
+| **#877** | 特殊化メモ化エンジンとハードリミット・一般化（Widening）の実装 | P2 | High | [877-implement-specialization-memoization-and-widening-engine.md](../issues/closed/877-implement-specialization-memoization-and-widening-engine.md) |
+| **#878** | Nanopass 中間言語 L-StagePoly および L-Residual-ANF の定義 | P3 | High | [878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md](../issues/closed/878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md) |
+| **#879** | ステージ多相部分評価 Nanopass (stage-poly-lower) の実装 | P3 | High | [879-implement-stage-poly-lower-nanopass-partial-evaluator.md](../issues/closed/879-implement-stage-poly-lower-nanopass-partial-evaluator.md) |
+| **#880** | Pass Manager への Nanopass 文法完全消去アサーションの組み込み | P3 | High | [880-integrate-grammar-conformance-assertion-in-pass-manager.md](../issues/closed/880-integrate-grammar-conformance-assertion-in-pass-manager.md) |
+| **#881** | 3重差分テストオラクルとメタモルフィック摂動検証スイートの実装 | P3 | High | [881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md](../issues/closed/881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md) |
+| **#882** | 部分評価後の残余関数における Contification 保証の検証 | P3 | Medium | [882-verify-residual-function-contification-guarantees.md](../issues/closed/882-verify-residual-function-contification-guarantees.md) |
+| **#883** | freeze! 循環グラフ直列化と .rodata 肥大化ガードの実装 | P4 | High | [883-implement-freeze-graph-serialization-and-rodata-guard.md](../issues/closed/883-implement-freeze-graph-serialization-and-rodata-guard.md) |
+| **#884** | Data Plane 境界の Tag Stripping と 64-bit 単一ワード正規化の実装 | P4 | High | [884-implement-data-plane-tag-stripping-and-single-word-repr.md](../issues/closed/884-implement-data-plane-tag-stripping-and-single-word-repr.md) |
+| **#885** | マイクロ言語による第1二村射影平坦化（Tower Collapse）の E2E 実証 | P4 | High | [885-demonstrate-e2e-first-futamura-projection-on-micro-language.md](../issues/closed/885-demonstrate-e2e-first-futamura-projection-on-micro-language.md) |
+| **#886** | セルフホスティング決定論性と不動点（Stage 2 -> Stage 3 diff 0）の検証 | P4 | High | [886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md](../issues/closed/886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md) |
+| **#887** | Pass Manager への `pass-075-stage-poly-lower` 常設登録と最適化レベル連動 | P5 | High | [887-register-stage-poly-lower-in-pass-manager-pipeline.md](../issues/887-register-stage-poly-lower-in-pass-manager-pipeline.md) |
+| **#888** | 旧 ctfe_eval の eval-in-stage (Now dict) への一本化と二重実装解消 | P5 | High | [888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md](../issues/888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md) |
+| **#889** | L-Residual-ANF から Middle-End LIR へのローワリング・アダプターブリッジ実装 | P5 | High | [889-implement-residual-anf-to-lir-lowering-bridge.md](../issues/889-implement-residual-anf-to-lir-lowering-bridge.md) |
+| **#890** | freeze-serialize-to-rodata 直列化データと elf.scm (.rodata) の実リンカ配線 | P5 | High | [890-integrate-freeze-serialized-rodata-into-elf-emitter.md](../issues/890-integrate-freeze-serialized-rodata-into-elf-emitter.md) |
+| **#891** | オフライン BTA 4値束注釈とオンライン部分評価のハイブリッド推論フィードバック統合 | P5 | Medium | [891-integrate-offline-bta-lattice-with-stage-poly-lower.md](../issues/891-integrate-offline-bta-lattice-with-stage-poly-lower.md) |
 
 ### 8.3 4大品質ゲート遵守規準
 

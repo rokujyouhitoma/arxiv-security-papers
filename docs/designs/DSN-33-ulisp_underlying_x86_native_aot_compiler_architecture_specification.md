@@ -802,4 +802,15 @@ ulisp/
 
 Issue #514 の完遂により、旧 `mlisp/` ディレクトリは完全に廃止・消去され、すべてのリソースと責任境界は `ulisp/` 配下に美しく一本化された。これにより、リポジトリ全体の構造的簡潔性、保守性、および 3 段階ブートストラップの決定論性が恒久的に担保される。
 
+### 11.1 DSN-33-03 ステージ多相メタコンパイラ統合（Phase P5: Issues #887〜#891）
+
+個別仕様書 [[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) で確立された第1二村射影（Tower Collapse）および Nanopass 不動点メタコンパイラ基盤を、最上位コンパイラパイプラインおよび ELF バックエンドへ実結合・一本化する最終フェーズ（Phase P5）：
+
+1. **Pass Manager 常設登録 (Issue #887)**: `pass-075-stage-poly-lower` を標準パスへ登録し、最適化レベル連動でメタ循環インタプリタを単層機械語へ平坦化。
+2. **CTFE エンジン一本化 (Issue #888)**: 既存の旧 `ctfe_eval` を新設の `<stage-dict>` / `Now` 辞書評価器へ一本化し、重複評価系を解消。
+3. **LIR ローワリング結合 (Issue #889)**: `L-Residual-ANF` から `L_lir_raw` へのダイレクト降格ブリッジの配備。
+4. **ELF .rodata 実配線 (Issue #890)**: `freeze!` 循環グラフ直列化バイナリを ELF `.rodata` セクションへ直接注入し、ゼロコスト RIP 相対アクセスを実現。
+5. **BTA ハイブリッド推論 (Issue #891)**: オフライン 4値束推論結果をオンライン部分評価へフィードバックし、静的分岐・アンローリングを最大化。
+
+
 
