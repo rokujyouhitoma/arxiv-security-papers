@@ -2,6 +2,9 @@
 
 - **文書番号**: `DSN-33-01`
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
+- **関連個別仕様書**: 
+  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）統合 ＆ 型付き機械語 LIR・ゼロコスト ABI アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
+  - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**:
   - `ulisp/compiler/` (`nanopass.scm`, `nanopass_meta.scm`, `pass_manager.scm`, `verifier.scm`, `driver.scm`, `scope.scm`, `dataflow.scm`)

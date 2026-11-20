@@ -6,6 +6,23 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
+| **870** | <stage-dict> レコードおよび Now/Later ステージ辞書の実装 | Feature | High | Open (New) | [870-implement-stage-dict-and-now-later-dictionaries.md](870-implement-stage-dict-and-now-later-dictionaries.md) |
+| **871** | PSDS（部分静的データ構造）と二重 Source Span 出自追跡の実装 | Feature | High | Open (New) | [871-support-psds-and-dual-source-span-provenance.md](871-support-psds-and-dual-source-span-provenance.md) |
+| **872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | Feature | High | Open (New) | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
+| **873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | Feature | Medium | Open (New) | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
+| **874** | 4値束縛時間束（Lattice）モデルに基づく BTA 型推論パスの実装 | Feature | High | Open (New) | [874-implement-4-valued-bta-lattice-type-inference-pass.md](874-implement-4-valued-bta-lattice-type-inference-pass.md) |
+| **875** | 動的分岐配下の純粋性解析と投機的副作用・例外の自動 Later 降格 | Feature | High | Open (New) | [875-implement-purity-analysis-and-speculative-trap-demotion.md](875-implement-purity-analysis-and-speculative-trap-demotion.md) |
+| **876** | CSP 越境バリデータと Dual Span 診断レポーターの実装 | Feature | High | Open (New) | [876-implement-csp-boundary-validator-and-dual-span-diagnostics.md](876-implement-csp-boundary-validator-and-dual-span-diagnostics.md) |
+| **877** | 特殊化メモ化エンジンとハードリミット・一般化（Widening）の実装 | Feature | High | Open (New) | [877-implement-specialization-memoization-and-widening-engine.md](877-implement-specialization-memoization-and-widening-engine.md) |
+| **878** | Nanopass 中間言語 L-StagePoly および L-Residual-ANF の定義 | Feature | High | Open (New) | [878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md](878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md) |
+| **879** | ステージ多相部分評価 Nanopass (stage-poly-lower) の実装 | Feature | High | Open (New) | [879-implement-stage-poly-lower-nanopass-partial-evaluator.md](879-implement-stage-poly-lower-nanopass-partial-evaluator.md) |
+| **880** | Pass Manager への Nanopass 文法完全消去アサーションの組み込み | Feature | High | Open (New) | [880-integrate-grammar-conformance-assertion-in-pass-manager.md](880-integrate-grammar-conformance-assertion-in-pass-manager.md) |
+| **881** | 3重差分テストオラクルとメタモルフィック摂動検証スイートの実装 | Feature | High | Open (New) | [881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md](881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md) |
+| **882** | 部分評価後の残余関数における Contification 保証の検証 | Feature | Medium | Open (New) | [882-verify-residual-function-contification-guarantees.md](882-verify-residual-function-contification-guarantees.md) |
+| **883** | freeze! 循環グラフ直列化と .rodata 肥大化ガードの実装 | Feature | High | Open (New) | [883-implement-freeze-graph-serialization-and-rodata-guard.md](883-implement-freeze-graph-serialization-and-rodata-guard.md) |
+| **884** | Data Plane 境界の Tag Stripping と 64-bit 単一ワード正規化の実装 | Feature | High | Open (New) | [884-implement-data-plane-tag-stripping-and-single-word-repr.md](884-implement-data-plane-tag-stripping-and-single-word-repr.md) |
+| **885** | マイクロ言語による第1二村射影平坦化（Tower Collapse）の E2E 実証 | Feature | High | Open (New) | [885-demonstrate-e2e-first-futamura-projection-on-micro-language.md](885-demonstrate-e2e-first-futamura-projection-on-micro-language.md) |
+| **886** | セルフホスティング決定論性と不動点（Stage 2 -> Stage 3 diff 0）の検証 | Feature | High | Open (New) | [886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md](886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
