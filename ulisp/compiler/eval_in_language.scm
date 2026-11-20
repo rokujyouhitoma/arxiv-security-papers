@@ -735,3 +735,111 @@
     later-dict-emit-call
     later-dict-lift-val
     default-stage-csp-error-reporter))
+
+;;; =======================================================================
+;;; Partially Static Data Structures (PSDS) & Provenance (DSN-33-03 §3.4)
+;;; =======================================================================
+
+;;; -----------------------------------------------------------------------
+;;; 7. <stage-val> Record Definition
+;;; -----------------------------------------------------------------------
+
+(define-record-type <stage-val>
+  (%make-stage-val-raw tag kind payload host-span guest-span)
+  stage-val?
+  (tag         stage-val-tag)
+  (kind        stage-val-kind)
+  (payload     stage-val-payload)
+  (host-span   stage-val-host-span)
+  (guest-span  stage-val-guest-span))
+
+(define (stage-val-pure-static? sv)
+  (and (stage-val? sv) (eq? (stage-val-kind sv) 'pure-static)))
+
+(define (stage-val-partially-static? sv)
+  (and (stage-val? sv) (eq? (stage-val-kind sv) 'partially-static)))
+
+(define (stage-val-pure-dynamic? sv)
+  (and (stage-val? sv) (eq? (stage-val-kind sv) 'pure-dynamic)))
+
+;; Constructor helpers
+(define (make-static-val tag payload host-sp guest-sp)
+  (%make-stage-val-raw tag 'pure-static payload host-sp guest-sp))
+
+(define (make-dynamic-val tag payload host-sp guest-sp)
+  (%make-stage-val-raw tag 'pure-dynamic payload host-sp guest-sp))
+
+(define (make-psds-val tag payload host-sp guest-sp)
+  (%make-stage-val-raw tag 'partially-static payload host-sp guest-sp))
+
+;; Provenance Stack extraction
+(define (stage-val-provenance sv)
+  (if (stage-val? sv)
+      (list (cons 'guest (stage-val-guest-span sv))
+            (cons 'host (stage-val-host-span sv)))
+      (list (cons 'guest #f) (cons 'host #f))))
+
+;;; -----------------------------------------------------------------------
+;;; 8. PSDS Pair Reduction Operations (Static Spine Elimination)
+;;; -----------------------------------------------------------------------
+
+(define (stage-cons car-sv cdr-sv host-sp guest-sp)
+  (let ((car-static? (stage-val-pure-static? car-sv))
+        (cdr-static? (stage-val-pure-static? cdr-sv)))
+    (if (and car-static? cdr-static?)
+        ;; Both operands are pure-static -> construct pure-static Scheme pair immediately
+        (make-static-val
+          'pair
+          (cons (stage-val-payload car-sv) (stage-val-payload cdr-sv))
+          host-sp
+          guest-sp)
+        ;; At least one operand is dynamic/PSDS -> construct partially-static meta-pair
+        (make-psds-val
+          'pair
+          (cons car-sv cdr-sv)
+          host-sp
+          guest-sp))))
+
+(define (stage-car dict sv loc)
+  (cond
+    ((not (stage-val? sv))
+     *ctfe-failure*)
+    ((stage-val-pure-static? sv)
+     (let ((p (stage-val-payload sv)))
+       (if (pair? p)
+           (make-static-val 'any (car p) loc (stage-val-guest-span sv))
+           *ctfe-failure*)))
+    ((stage-val-partially-static? sv)
+     ;; Static spine: retrieve component directly at compile time!
+     ;; Zero residual 'car' instruction emitted!
+     (let ((p (stage-val-payload sv)))
+       (if (pair? p)
+           (car p)
+           *ctfe-failure*)))
+    ((stage-val-pure-dynamic? sv)
+     ;; Pure dynamic: emit residual car ANF instruction
+     (let ((res (stage-apply-prim-1 dict 'car (stage-val-payload sv))))
+       (make-dynamic-val 'any res loc (stage-val-guest-span sv))))
+    (else *ctfe-failure*)))
+
+(define (stage-cdr dict sv loc)
+  (cond
+    ((not (stage-val? sv))
+     *ctfe-failure*)
+    ((stage-val-pure-static? sv)
+     (let ((p (stage-val-payload sv)))
+       (if (pair? p)
+           (make-static-val 'any (cdr p) loc (stage-val-guest-span sv))
+           *ctfe-failure*)))
+    ((stage-val-partially-static? sv)
+     ;; Static spine: retrieve component directly at compile time!
+     ;; Zero residual 'cdr' instruction emitted!
+     (let ((p (stage-val-payload sv)))
+       (if (pair? p)
+           (cdr p)
+           *ctfe-failure*)))
+    ((stage-val-pure-dynamic? sv)
+     ;; Pure dynamic: emit residual cdr ANF instruction
+     (let ((res (stage-apply-prim-1 dict 'cdr (stage-val-payload sv))))
+       (make-dynamic-val 'any res loc (stage-val-guest-span sv))))
+    (else *ctfe-failure*)))
