@@ -374,12 +374,15 @@
   (cond
     ((pair? form)
      (let ((head (car form)))
-       (if (and (symbol? head) (stage-meta-syntax-keyword? head))
-           form
-           (let ((res-car (find-stage-meta-syntax head)))
-             (if res-car
-                 res-car
-                 (find-stage-meta-syntax (cdr form)))))))
+       (cond
+         ((eq? head 'quote) #f)
+         ((and (symbol? head) (stage-meta-syntax-keyword? head))
+          form)
+         (else
+          (let ((res-car (find-stage-meta-syntax head)))
+            (if res-car
+                res-car
+                (find-stage-meta-syntax (cdr form))))))))
     (else #f)))
 
 (define (verify-residual-anf-conformance ast)

@@ -8310,12 +8310,15 @@
   (cond
     ((pair? form)
      (let ((head (car form)))
-       (if (and (symbol? head) (stage-meta-syntax-keyword? head))
-           form
-           (let ((res-car (find-stage-meta-syntax head)))
-             (if res-car
-                 res-car
-                 (find-stage-meta-syntax (cdr form)))))))
+       (cond
+         ((eq? head 'quote) #f)
+         ((and (symbol? head) (stage-meta-syntax-keyword? head))
+          form)
+         (else
+          (let ((res-car (find-stage-meta-syntax head)))
+            (if res-car
+                res-car
+                (find-stage-meta-syntax (cdr form))))))))
     (else #f)))
 
 (define (verify-residual-anf-conformance ast)
@@ -9289,6 +9292,9 @@
     ((or (not out-lang) (not in-lang)) #t)
     ((or (eq? out-lang 'any) (eq? in-lang 'any)) #t)
     ((eq? out-lang in-lang) #t)
+    ((and (or (eq? out-lang 'L_anf) (eq? out-lang 'L-StagePoly) (eq? out-lang 'L-Residual-ANF))
+          (or (eq? in-lang 'L_anf) (eq? in-lang 'L-StagePoly) (eq? in-lang 'L-Residual-ANF)))
+     #t)
     ((and (or (eq? out-lang 'L_lir_core) (eq? out-lang 'L_lir_managed) (eq? out-lang 'L_lir_raw) (eq? out-lang 'L_lir_canonical))
           (or (eq? in-lang 'L_lir_core) (eq? in-lang 'L_lir_managed) (eq? in-lang 'L_lir_raw) (eq? in-lang 'L_lir_canonical)))
      #t)
@@ -9438,6 +9444,7 @@
     (pass-050-cp0 . "pass-050-cp0")
     (pass-060-lvn . "pass-060-lvn")
     (pass-070-anf . "pass-070-anf")
+    (pass-075-stage-poly-lower . "pass-075-stage-poly-lower")
     (pass-080-annotator . "pass-080-annotator")
     (pass-090-rtyper . "pass-090-rtyper")
     (pass-100-contify . "pass-100-contify")
@@ -9834,6 +9841,7 @@
     pass-050-cp0
     pass-060-lvn
     pass-070-anf
+    pass-075-stage-poly-lower
     pass-080-annotator
     pass-090-rtyper
     pass-100-contify
@@ -9927,6 +9935,13 @@
   (register-pass!
     (make-pass-descriptor 'pass-070-anf "A-Normal Form Conversion" 'frontend 0
       (lambda (forms) (anf-all forms)) 'anf 'L_core 'L_anf '(pass-030-desugar) #t))
+  (register-pass!
+    (make-pass-descriptor 'pass-075-stage-poly-lower "Stage-Polymorphic Partial Evaluator" 'frontend 1
+      (lambda (forms)
+        (if (contains-stage-meta-syntax? forms)
+            (stage-poly-lower-all forms)
+            forms))
+      'stage-poly-lower 'L-StagePoly 'L-Residual-ANF '(pass-070-anf) #f))
   (register-pass!
     (make-pass-descriptor 'pass-080-annotator "Abstract Interpretation Annotator" 'frontend 2
       (lambda (forms) (annotate-all forms)) #f 'L_anf 'L_anf '(pass-070-anf) #f))
@@ -13747,6 +13762,78 @@
          (residual-ast (stage-poly-lower expr env))
          (v-residual (eval-residual-anf-expr residual-ast env)))
     (list (equal? v-now v-residual) v-now v-residual residual-ast)))
+
+;;; -----------------------------------------------------------------------
+;;; 9. Stage-Poly Lowering Pass Integration (DSN-33-03 §2.6, §8.1 & Issue #887)
+;;; -----------------------------------------------------------------------
+
+(define (stage-meta-syntax-tag? sym)
+  (and (symbol? sym)
+       (or (eq? sym 'stage-now)
+           (eq? sym 'stage-later)
+           (eq? sym 'stage-lift)
+           (eq? sym 'stage-quasiquote)
+           (eq? sym 'stage-splice)
+           (eq? sym 'stage-run))))
+
+(define (contains-stage-meta-syntax? form)
+  (cond
+    ((not (pair? form)) #f)
+    ((eq? (car form) 'quote) #f)
+    ((stage-meta-syntax-tag? (car form)) #t)
+    (else
+     (or (contains-stage-meta-syntax? (car form))
+         (contains-stage-meta-syntax? (cdr form))))))
+
+(define (stage-poly-lower-body body)
+  (if (null? body)
+      '()
+      (cons (if (contains-stage-meta-syntax? (car body))
+                (stage-poly-lower (car body) '())
+                (car body))
+            (stage-poly-lower-body (cdr body)))))
+
+(define (stage-poly-lower-form form)
+  (cond
+    ((not (pair? form)) form)
+    ((and (eq? (car form) 'define) (pair? (cdr form)))
+     (let ((target (cadr form)))
+       (if (symbol? target)
+           (if (pair? (cddr form))
+               (if (contains-stage-meta-syntax? (caddr form))
+                   (list 'define target (stage-poly-lower (caddr form) '()))
+                   form)
+               form)
+           (if (contains-stage-meta-syntax? (cddr form))
+               (cons 'define (cons target (stage-poly-lower-body (cddr form))))
+               form))))
+    ((contains-stage-meta-syntax? form)
+     (stage-poly-lower form '()))
+    (else form)))
+
+(define (stage-poly-lower-all form-or-forms)
+  (cond
+    ((null? form-or-forms) '())
+    ((not (pair? form-or-forms))
+     (stage-poly-lower-form form-or-forms))
+    ((eq? (car form-or-forms) '%program)
+     (let ((defs (cadr form-or-forms))
+           (main (caddr form-or-forms)))
+       (list '%program
+             (let loop ((ds defs))
+               (if (null? ds)
+                   '()
+                   (cons (stage-poly-lower-form (car ds))
+                         (loop (cdr ds)))))
+             (stage-poly-lower-form main))))
+    ((eq? (car form-or-forms) 'define)
+     (stage-poly-lower-form form-or-forms))
+    (else
+     (let loop ((fs form-or-forms))
+       (if (null? fs)
+           '()
+           (cons (stage-poly-lower-form (car fs))
+                 (loop (cdr fs))))))))
 ;;; =======================================================================
 ;;; ULisp Compiler - Calling Convention Abstraction & ABI Layout Planner
 ;;; Conforms to DSN-38 §2 (C2/E5/E6), DSN-33 §3.3, DSN-33-02 §5.1 & Issue #829
@@ -42665,7 +42752,7 @@
                         (eq? (car first) '--include-pch))
                     (pair? (cdr first)))
                (let* ((path (cadr first))
-                      (path-str (if (symbol? path) (symbol->string path) path))
+                      (path-str (if (symbol? path) (symbol->raw-name path) path))
                       (imported-forms (sbi-import-forms path-str)))
                  (loop (append imported-forms (cdr forms)) target gc-mode verify trace debug)))
               ;; Emit SBI directive

@@ -649,4 +649,32 @@
               (test-pass-pm-fused '(list (pm-op-1 a) (pm-op-2 b))))
 (reset-disabled-picopasses!)
 
+;; -----------------------------------------------------------------------
+;; 11. pass-075-stage-poly-lower Integration (Issue #887 & DSN-33-03 §2.6)
+;; -----------------------------------------------------------------------
+(display "\n--- Group 11: pass-075-stage-poly-lower Registry & Lowering ---\n")
+(init-default-pass-registry!)
+
+(assert-true "11.1 pass-075-stage-poly-lower registered" (pass-registered? 'pass-075-stage-poly-lower))
+(let ((desc (lookup-pass 'pass-075-stage-poly-lower)))
+  (assert-equal "11.2 pass-075-stage-poly-lower name" 'pass-075-stage-poly-lower (pass-id desc))
+  (assert-equal "11.3 pass-075-stage-poly-lower group" 'frontend (pass-category desc))
+  (assert-equal "11.4 pass-075-stage-poly-lower opt-level" 1 (pass-opt-level desc))
+  (assert-equal "11.5 pass-075-stage-poly-lower vphase" 'stage-poly-lower (pass-verifier-phase desc))
+  (assert-equal "11.6 pass-075-stage-poly-lower lang-in" 'L-StagePoly (pass-in-lang desc))
+  (assert-equal "11.7 pass-075-stage-poly-lower lang-out" 'L-Residual-ANF (pass-out-lang desc)))
+
+(let* ((input-prog '((define const-val (stage-now (+ 40 2)))
+                     (define dyn-val (stage-later (* x 2)))))
+       (has-meta? (contains-stage-meta-syntax? input-prog)))
+  (assert-true "11.8 contains-stage-meta-syntax? detects stage-now/stage-later" has-meta?)
+  (let ((lowered (stage-poly-lower-all input-prog)))
+    (assert-equal "11.9 stage-now reduced to (atom-value 42)"
+                  '(atom-value 42)
+                  (caddr (car lowered)))
+    (assert-true "11.10 meta-syntax eliminated in lowered AST"
+                 (not (contains-stage-meta-syntax? lowered)))
+    (assert-true "11.11 verify-residual-anf-conformance passes"
+                 (verify-residual-anf-conformance lowered))))
+
 (test-end "Unified Pass Manager")

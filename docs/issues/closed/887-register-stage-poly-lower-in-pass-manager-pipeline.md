@@ -2,7 +2,7 @@
 ID: 887
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] Pass Manager への pass-075-stage-poly-lower 常設登録と最適化レベル連動 (ID: 887)
@@ -53,7 +53,7 @@ Target Branch: `feat/887-register-stage-poly-lower-in-pass-manager-pipeline`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `pass-075-stage-poly-lower` が Pass Manager の標準パイプラインに登録され、`run-pass-pipeline` で正しく駆動されること。
-- [ ] メタ構文を含む AST に対して部分評価が自動実行され、`verify-residual-anf-conformance` をパスすること。
-- [ ] 最適化レベル 0 かつメタ構文なしの場合は余分な処理をスキップすること。
-- [ ] 既存の全フロントエンドテストおよびセルフホスト不動点検証が 100% PASS すること。
+- [x] `pass-075-stage-poly-lower` が Pass Manager の標準パイプラインに登録され、`run-pass-pipeline` で正しく駆動されること。
+- [x] メタ構文を含む AST に対して部分評価が自動実行され、`verify-residual-anf-conformance` をパスすること。
+- [x] 最適化レベル 0 かつメタ構文なしの場合は余分な処理をスキップすること。
+- [x] 既存の全フロントエンドテストおよびセルフホスト不動点検証が 100% PASS すること。

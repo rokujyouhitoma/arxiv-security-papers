@@ -1924,3 +1924,75 @@
          (residual-ast (stage-poly-lower expr env))
          (v-residual (eval-residual-anf-expr residual-ast env)))
     (list (equal? v-now v-residual) v-now v-residual residual-ast)))
+
+;;; -----------------------------------------------------------------------
+;;; 9. Stage-Poly Lowering Pass Integration (DSN-33-03 §2.6, §8.1 & Issue #887)
+;;; -----------------------------------------------------------------------
+
+(define (stage-meta-syntax-tag? sym)
+  (and (symbol? sym)
+       (or (eq? sym 'stage-now)
+           (eq? sym 'stage-later)
+           (eq? sym 'stage-lift)
+           (eq? sym 'stage-quasiquote)
+           (eq? sym 'stage-splice)
+           (eq? sym 'stage-run))))
+
+(define (contains-stage-meta-syntax? form)
+  (cond
+    ((not (pair? form)) #f)
+    ((eq? (car form) 'quote) #f)
+    ((stage-meta-syntax-tag? (car form)) #t)
+    (else
+     (or (contains-stage-meta-syntax? (car form))
+         (contains-stage-meta-syntax? (cdr form))))))
+
+(define (stage-poly-lower-body body)
+  (if (null? body)
+      '()
+      (cons (if (contains-stage-meta-syntax? (car body))
+                (stage-poly-lower (car body) '())
+                (car body))
+            (stage-poly-lower-body (cdr body)))))
+
+(define (stage-poly-lower-form form)
+  (cond
+    ((not (pair? form)) form)
+    ((and (eq? (car form) 'define) (pair? (cdr form)))
+     (let ((target (cadr form)))
+       (if (symbol? target)
+           (if (pair? (cddr form))
+               (if (contains-stage-meta-syntax? (caddr form))
+                   (list 'define target (stage-poly-lower (caddr form) '()))
+                   form)
+               form)
+           (if (contains-stage-meta-syntax? (cddr form))
+               (cons 'define (cons target (stage-poly-lower-body (cddr form))))
+               form))))
+    ((contains-stage-meta-syntax? form)
+     (stage-poly-lower form '()))
+    (else form)))
+
+(define (stage-poly-lower-all form-or-forms)
+  (cond
+    ((null? form-or-forms) '())
+    ((not (pair? form-or-forms))
+     (stage-poly-lower-form form-or-forms))
+    ((eq? (car form-or-forms) '%program)
+     (let ((defs (cadr form-or-forms))
+           (main (caddr form-or-forms)))
+       (list '%program
+             (let loop ((ds defs))
+               (if (null? ds)
+                   '()
+                   (cons (stage-poly-lower-form (car ds))
+                         (loop (cdr ds)))))
+             (stage-poly-lower-form main))))
+    ((eq? (car form-or-forms) 'define)
+     (stage-poly-lower-form form-or-forms))
+    (else
+     (let loop ((fs form-or-forms))
+       (if (null? fs)
+           '()
+           (cons (stage-poly-lower-form (car fs))
+                 (loop (cdr fs))))))))

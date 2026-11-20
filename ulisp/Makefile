@@ -1629,7 +1629,7 @@ build/meta/compiler_env.sbi: compiler/module_header.scm
 
 build/compiler_base_in.scm: $(COMPILER_BASE) build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo "(!gc none) (!module-name compiler_base) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@echo '(!gc none) (!module-name compiler_base) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat $(COMPILER_BASE) >> $@
 
 build/compiler_base.s: build/compiler_base_in.scm build/meta/compiler_env.sbi
@@ -1642,7 +1642,7 @@ build/compiler_base.o: build/compiler_base.s
 
 build/frontend_passes_in.scm: $(FRONTEND_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo "(!gc none) (!module-name frontend_passes) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@echo '(!gc none) (!module-name frontend_passes) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat $(FRONTEND_PASSES) >> $@
 
 build/frontend_passes.s: build/frontend_passes_in.scm build/meta/compiler_env.sbi
@@ -1655,7 +1655,7 @@ build/frontend_passes.o: build/frontend_passes.s
 
 build/lir_passes_in.scm: $(LIR_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo "(!gc none) (!module-name lir_passes) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@echo '(!gc none) (!module-name lir_passes) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat $(LIR_PASSES) >> $@
 
 build/lir_passes.s: build/lir_passes_in.scm build/meta/compiler_env.sbi
@@ -1668,7 +1668,7 @@ build/lir_passes.o: build/lir_passes.s
 
 build/backend_passes_in.scm: $(BACKEND_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo "(!gc none) (!module-name backend_passes) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@echo '(!gc none) (!module-name backend_passes) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat $(BACKEND_PASSES) >> $@
 
 build/backend_passes.s: build/backend_passes_in.scm build/meta/compiler_env.sbi
@@ -1681,7 +1681,7 @@ build/backend_passes.o: build/backend_passes.s
 
 build/compiler_driver_in.scm: compiler/driver.scm build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi build/meta/compiler_env.sbi)" > $@
+	@echo '(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat compiler/driver.scm >> $@
 
 build/compiler_driver.s: build/compiler_driver_in.scm build/meta/compiler_env.sbi

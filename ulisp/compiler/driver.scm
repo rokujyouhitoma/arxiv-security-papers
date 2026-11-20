@@ -154,7 +154,7 @@
                         (eq? (car first) '--include-pch))
                     (pair? (cdr first)))
                (let* ((path (cadr first))
-                      (path-str (if (symbol? path) (symbol->string path) path))
+                      (path-str (if (symbol? path) (symbol->raw-name path) path))
                       (imported-forms (sbi-import-forms path-str)))
                  (loop (append imported-forms (cdr forms)) target gc-mode verify trace debug)))
               ;; Emit SBI directive

@@ -886,6 +886,9 @@
     ((or (not out-lang) (not in-lang)) #t)
     ((or (eq? out-lang 'any) (eq? in-lang 'any)) #t)
     ((eq? out-lang in-lang) #t)
+    ((and (or (eq? out-lang 'L_anf) (eq? out-lang 'L-StagePoly) (eq? out-lang 'L-Residual-ANF))
+          (or (eq? in-lang 'L_anf) (eq? in-lang 'L-StagePoly) (eq? in-lang 'L-Residual-ANF)))
+     #t)
     ((and (or (eq? out-lang 'L_lir_core) (eq? out-lang 'L_lir_managed) (eq? out-lang 'L_lir_raw) (eq? out-lang 'L_lir_canonical))
           (or (eq? in-lang 'L_lir_core) (eq? in-lang 'L_lir_managed) (eq? in-lang 'L_lir_raw) (eq? in-lang 'L_lir_canonical)))
      #t)
@@ -1035,6 +1038,7 @@
     (pass-050-cp0 . "pass-050-cp0")
     (pass-060-lvn . "pass-060-lvn")
     (pass-070-anf . "pass-070-anf")
+    (pass-075-stage-poly-lower . "pass-075-stage-poly-lower")
     (pass-080-annotator . "pass-080-annotator")
     (pass-090-rtyper . "pass-090-rtyper")
     (pass-100-contify . "pass-100-contify")
@@ -1431,6 +1435,7 @@
     pass-050-cp0
     pass-060-lvn
     pass-070-anf
+    pass-075-stage-poly-lower
     pass-080-annotator
     pass-090-rtyper
     pass-100-contify
@@ -1524,6 +1529,13 @@
   (register-pass!
     (make-pass-descriptor 'pass-070-anf "A-Normal Form Conversion" 'frontend 0
       (lambda (forms) (anf-all forms)) 'anf 'L_core 'L_anf '(pass-030-desugar) #t))
+  (register-pass!
+    (make-pass-descriptor 'pass-075-stage-poly-lower "Stage-Polymorphic Partial Evaluator" 'frontend 1
+      (lambda (forms)
+        (if (contains-stage-meta-syntax? forms)
+            (stage-poly-lower-all forms)
+            forms))
+      'stage-poly-lower 'L-StagePoly 'L-Residual-ANF '(pass-070-anf) #f))
   (register-pass!
     (make-pass-descriptor 'pass-080-annotator "Abstract Interpretation Annotator" 'frontend 2
       (lambda (forms) (annotate-all forms)) #f 'L_anf 'L_anf '(pass-070-anf) #f))

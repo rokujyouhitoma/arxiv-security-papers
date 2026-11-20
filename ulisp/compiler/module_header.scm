@@ -318,6 +318,14 @@
   assv
   member
   string->number-core
-  run-pass-fixpoint)
+  run-pass-fixpoint
+  stage-poly-lower
+  stage-poly-lower-form
+  stage-poly-lower-all
+  contains-stage-meta-syntax?
+  eval-in-stage
+  make-later-dict
+  run-triple-differential-oracle
+  verify-residual-anf-conformance)
 
 
