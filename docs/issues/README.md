@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **865** | SRFI 189 Maybe and Either オプショナルコンテナ ((scheme maybe)) の実装 | Feature | Medium | New | [865-implement-srfi-189-maybe-and-either-optional-containers.md](865-implement-srfi-189-maybe-and-either-optional-containers.md) |
+| **865** | SRFI 189 Maybe and Either オプショナルコンテナ ((scheme maybe)) の実装 | Feature | Medium | In Progress | [865-implement-srfi-189-maybe-and-either-optional-containers.md](865-implement-srfi-189-maybe-and-either-optional-containers.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
