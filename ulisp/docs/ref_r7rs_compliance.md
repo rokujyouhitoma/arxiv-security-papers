@@ -392,7 +392,7 @@ R7RS-large の Orange Docket および Hypnos Docket で審議・策定が進め
 | **SRFI 175** | ASCII Character Library | **◎** | [ulisp/lib/char.scm](../lib/char.scm) | ASCII コードポイント検査・分類述語群完備 ([Issue #612](../../docs/issues/612-implement-r7rs-char-ascii-predicates-and-conversions.md)) |
 | **SRFI 178** | Bitvectors (ビットベクタ) | **×** | - | 1 ビット単位の論理配列型およびビットフィールド走査演算（未実装） |
 | **SRFI 180** | JSON (JSON パース・シリアライズ) | **◎** | [ulisp/lib/json.scm](../lib/json.scm)<br>[ulisp/lib/srfi/180.sld](../lib/srfi/180.sld)<br>[ulisp/lib/scheme/json.sld](../lib/scheme/json.sld) | RFC 8259 準拠 JSON パーサ・ジェネレータ・シリアライザ完備 ([Issue #862](../../docs/issues/closed/862-implement-srfi-180-json-parser-and-serializer.md)) |
-| **SRFI 189** | Maybe and Either: optional values and error containers | **×** | - | 関数型オプショナル値 (`just`, `nothing`) および結果値 (`right`, `left`) モナド風コンテナ（未実装） |
+| **SRFI 189** | Maybe and Either: optional values and error containers | **◎** | [ulisp/lib/maybe.scm](../lib/maybe.scm)<br>[ulisp/lib/srfi/189.sld](../lib/srfi/189.sld)<br>[ulisp/lib/scheme/maybe.sld](../lib/scheme/maybe.sld) | `Just`/`Nothing`, `Right`/`Left` 排他レコード直和型・多値ペイロード・全プロトコル変換・モナド合成・3値論理完備 ([Issue #865](../../docs/issues/closed/865-implement-srfi-189-maybe-and-either-optional-containers.md)) |
 | **SRFI 190** | Coroutine Generators | **△** | - | ファーストクラス継続を用いたコルーチンジェネレータ（`call/cc` で自前構築可能） |
 | **SRFI 196** | Range Objects (範囲オブジェクト) | **×** | - | インデックス指定可能な計算可能遅延シーケンス（未実装） |
 | **SRFI 207** | Bytestrings (バイト文字列) | **×** | - | ASCII 文字列互換のバイナリバイト列型（未実装） |

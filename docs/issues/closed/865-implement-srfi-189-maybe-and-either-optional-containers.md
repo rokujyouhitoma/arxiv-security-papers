@@ -2,7 +2,7 @@
 ID: 865
 種別: Feature
 優先度: Medium
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] SRFI 189 Maybe and Either オプショナルコンテナ ((scheme maybe)) の実装 (ID: 865)
@@ -42,13 +42,13 @@ SRFI 189 の核心的特徴：
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/lib/maybe.scm](../../ulisp/lib/maybe.scm) (新規作成: SRFI 189 レコード型定義、コンストラクタ、述語、アクセサ、モナド演算、シーケンス、プロトコル変換、高階反復、3値論理、構文マクロ)
-- [ ] [ulisp/lib/srfi/189.sld](../../ulisp/lib/srfi/189.sld) (新規作成: `(srfi 189)` ライブラリ定義、Traceability ヘッダー)
-- [ ] [ulisp/lib/scheme/maybe.sld](../../ulisp/lib/scheme/maybe.sld) (新規作成: `(scheme maybe)` ライブラリ定義、Traceability ヘッダー)
-- [ ] [ulisp/tests/test_srfi_189.scm](../../ulisp/tests/test_srfi_189.scm) (新規作成: Group 1〜10、モナド則、短絡評価、境界値、型安全性検証テストスイート)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`ULISP_LARGE_LIBS` への `lib/maybe.scm` 追加、`lint_sexpr` への `.sld` 追加、および `test_srfi_189` ターゲット新設)
-- [ ] [ulisp/docs/ref_r7rs_compliance.md](../../ulisp/docs/ref_r7rs_compliance.md) (SRFI 189 準拠ステータスを `◎` に更新)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳更新: ステータス管理)
+- [x] [ulisp/lib/maybe.scm](../../ulisp/lib/maybe.scm) (新規作成: SRFI 189 レコード型定義、コンストラクタ、述語、アクセサ、モナド演算、シーケンス、プロトコル変換、高階反復、3値論理、構文マクロ)
+- [x] [ulisp/lib/srfi/189.sld](../../ulisp/lib/srfi/189.sld) (新規作成: `(srfi 189)` ライブラリ定義、Traceability ヘッダー)
+- [x] [ulisp/lib/scheme/maybe.sld](../../ulisp/lib/scheme/maybe.sld) (新規作成: `(scheme maybe)` ライブラリ定義、Traceability ヘッダー)
+- [x] [ulisp/tests/test_srfi_189.scm](../../ulisp/tests/test_srfi_189.scm) (新規作成: Group 1〜10、モナド則、短絡評価、境界値、型安全性検証テストスイート)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`ULISP_LARGE_LIBS` への `lib/maybe.scm` 追加、`lint_sexpr` への `.sld` 追加、および `test_srfi_189` ターゲット新設)
+- [x] [ulisp/docs/ref_r7rs_compliance.md](../../ulisp/docs/ref_r7rs_compliance.md) (SRFI 189 準拠ステータスを `◎` に更新)
+- [x] [docs/issues/README.md](README.md) (Issue 台帳更新: ステータス管理)
 
 ---
 
@@ -249,15 +249,15 @@ Target Branch: `feat/865-implement-srfi-189-maybe-and-either-optional-containers
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
-- [ ] `(scheme maybe)` および `(srfi 189)` の両ライブラリ仕様が定義され、全必須手続き・構文マクロがエクスポートされていること。
-- [ ] `Just`, `Nothing`, `Right`, `Left` が disjoint な不変レコード型として実装され、シングルトン `nothing-obj` が保証されていること。
-- [ ] 単一値のみならず、0個および複数個のペイロードオブジェクトを正常にカプセル化・展開できること。
-- [ ] モナド則（左単位元、右単位元、結合律）および短絡評価が正しく機能すること。
-- [ ] クレーネ 3 値論理 (`tri-and`, `tri-or`, `tri-not`, `tri=?`, `tri-merge`) が仕様通りに真偽・未知を処理すること。
-- [ ] `ulisp/tests/test_srfi_189.scm` の全テストケースが 100% PASS すること。
-- [ ] `make -C ulisp test_srfi_189` および `make -C ulisp test`（ブートストラップを含む全テスト）が PASS すること。
-- [ ] `make -C ulisp lint_sexpr`、`make -C ulisp test_lint_sexpr`、`make -C ulisp test_r7rs_traceability` が全件 PASS すること。
-- [ ] 絶対パス参照がゼロ件であること（相対パスのみ使用）。
-- [ ] `ulisp/docs/ref_r7rs_compliance.md` の SRFI 189 ステータスが `◎` に更新されていること。
-- [ ] Issue ファイルが `docs/issues/closed/865-implement-srfi-189-maybe-and-either-optional-containers.md` に移動され、`docs/issues/README.md` が更新されていること。
-- [ ] フィーチャーブランチ `feat/865-implement-srfi-189-maybe-and-either-optional-containers` が `main` にマージされていること。
+- [x] `(scheme maybe)` および `(srfi 189)` の両ライブラリ仕様が定義され、全必須手続き・構文マクロがエクスポートされていること。
+- [x] `Just`, `Nothing`, `Right`, `Left` が disjoint な不変レコード型として実装され、シングルトン `nothing-obj` が保証されていること。
+- [x] 単一値のみならず、0個および複数個のペイロードオブジェクトを正常にカプセル化・展開できること。
+- [x] モナド則（左単位元、右単位元、結合律）および短絡評価が正しく機能すること。
+- [x] クレーネ 3 値論理 (`tri-and`, `tri-or`, `tri-not`, `tri=?`, `tri-merge`) が仕様通りに真偽・未知を処理すること。
+- [x] `ulisp/tests/test_srfi_189.scm` の全テストケースが 100% PASS すること。
+- [x] `make -C ulisp test_srfi_189` および `make -C ulisp test`（ブートストラップを含む全テスト）が PASS すること。
+- [x] `make -C ulisp lint_sexpr`、`make -C ulisp test_lint_sexpr`、`make -C ulisp test_r7rs_traceability` が全件 PASS すること。
+- [x] 絶対パス参照がゼロ件であること（相対パスのみ使用）。
+- [x] `ulisp/docs/ref_r7rs_compliance.md` の SRFI 189 ステータスが `◎` に更新されていること。
+- [x] Issue ファイルが `docs/issues/closed/865-implement-srfi-189-maybe-and-either-optional-containers.md` に移動され、`docs/issues/README.md` が更新されていること。
+- [x] フィーチャーブランチ `feat/865-implement-srfi-189-maybe-and-either-optional-containers` が `main` にマージされていること。

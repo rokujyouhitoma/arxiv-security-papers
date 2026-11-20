@@ -6,12 +6,12 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **865** | SRFI 189 Maybe and Either オプショナルコンテナ ((scheme maybe)) の実装 | Feature | Medium | In Progress | [865-implement-srfi-189-maybe-and-either-optional-containers.md](865-implement-srfi-189-maybe-and-either-optional-containers.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **865** | SRFI 189 Maybe and Either オプショナルコンテナ ((scheme maybe)) の実装 | Feature | 2026-11-20 | [865-implement-srfi-189-maybe-and-either-optional-containers.md](closed/865-implement-srfi-189-maybe-and-either-optional-containers.md) |
 | **864** | SRFI 48 中級フォーマット文字列 API ((scheme format)) の実装 | Feature | 2026-11-20 | [864-implement-srfi-48-intermediate-format-strings.md](closed/864-implement-srfi-48-intermediate-format-strings.md) |
 | **863** | SRFI 214 動的可変長ベクタ ((scheme flexvector)) の実装 | Feature | 2026-11-20 | [863-implement-srfi-214-flexvectors.md](closed/863-implement-srfi-214-flexvectors.md) |
 | **862** | SRFI 180 RFC 8259 準拠 JSON パーサおよびジェネレータ ((scheme json)) の実装 | Feature | 2026-11-20 | [862-implement-srfi-180-json-parser-and-serializer.md](closed/862-implement-srfi-180-json-parser-and-serializer.md) |
