@@ -1387,6 +1387,47 @@
                 (eval-in-stage-let dict env bindings body f1 d1))
               (stage-signal-csp-error dict 'invalid-let-syntax expr)))
 
+         ;; Meta-Stage Constructs (DSN-33-03 §6.1)
+         ((stage-now)
+          (if (pair? (cdr expr))
+              (let* ((now-d (make-now-dict))
+                     (sv (eval-in-stage now-d env (cadr expr) f1 d1)))
+                (cond
+                  ((stage-csp-error? sv) sv)
+                  ((stage-dict-now? dict) sv)
+                  (else
+                   ;; In Later dict: lift the evaluated static value into residual code
+                   (let ((p (stage-val-payload sv)))
+                     (make-static-val (stage-val-tag sv) p (stage-val-host-span sv) (stage-val-guest-span sv))))))
+              (stage-signal-csp-error dict 'invalid-stage-syntax expr)))
+
+         ((stage-later)
+          (if (pair? (cdr expr))
+              (let ((later-d (make-later-dict)))
+                (eval-in-stage later-d env (cadr expr) f1 d1))
+              (stage-signal-csp-error dict 'invalid-stage-syntax expr)))
+
+         ((stage-lift)
+          (if (pair? (cdr expr))
+              (let* ((now-d (make-now-dict))
+                     (sv (eval-in-stage now-d env (cadr expr) f1 d1)))
+                (cond
+                  ((stage-csp-error? sv) sv)
+                  ((stage-val-pure-static? sv)
+                   (let* ((later-d (make-later-dict))
+                          (lifted (stage-lift-val later-d (stage-val-payload sv) sv)))
+                     (if (stage-csp-error? lifted)
+                         lifted
+                         (make-static-val 'lifted lifted (stage-val-host-span sv) (stage-val-guest-span sv)))))
+                  (else
+                   (stage-signal-csp-error dict 'now-stage-cannot-evaluate-dynamic expr))))
+              (stage-signal-csp-error dict 'invalid-stage-syntax expr)))
+
+         ((stage-quasiquote)
+          (if (pair? (cdr expr))
+              (eval-in-stage dict env (cadr expr) f1 d1)
+              (stage-signal-csp-error dict 'invalid-stage-syntax expr)))
+
          ;; Function / Primitive Application
          (else
           (eval-in-stage-apply dict env head (cdr expr) f1 d1)))))))
@@ -1715,3 +1756,78 @@
                                          (if (null? rem)
                                              (reverse acc)
                                              (loop (cdr rem) (cons (stage-val-payload (car rem)) acc)))))))))))
+
+;;; -----------------------------------------------------------------------
+;;; 19. Stage-Poly Lowering Nanopass (L-StagePoly -> L-Residual-ANF)
+;;; Conforms to DSN-33-03 §2.1, §3.3, §6.2 & Issue #879
+;;; -----------------------------------------------------------------------
+
+(define *stage-poly-lower-counter* (cons 0 '()))
+
+(define (stage-poly-lower-gensym prefix)
+  (let ((id (car *stage-poly-lower-counter*)))
+    (set-car! *stage-poly-lower-counter* (+ id 1))
+    (string->symbol (string-append prefix (number->string id)))))
+
+(define (stage-atomic-value? x)
+  (or (number? x) (boolean? x) (char? x) (string? x) (symbol? x) (null? x)))
+
+(define (stage-normalize-to-residual-anf expr)
+  (cond
+    ;; Atomic value
+    ((stage-atomic-value? expr)
+     (list 'atom-value expr))
+
+    ((not (pair? expr))
+     (list 'atom-value expr))
+
+    ;; (if-anf test then else) -> (if test (norm then) (norm else))
+    ((eq? (car expr) 'if-anf)
+     (let ((test (cadr expr))
+           (then (caddr expr))
+           (else-e (cadddr expr)))
+       (list 'if test
+             (stage-normalize-to-residual-anf then)
+             (stage-normalize-to-residual-anf else-e))))
+
+    ;; (let-anf ((x rhs)) body)
+    ((eq? (car expr) 'let-anf)
+     (let* ((bindings (cadr expr))
+            (body (caddr expr))
+            (b (car bindings))
+            (var (car b))
+            (rhs (cadr b)))
+       (list 'let-anf (list (list var rhs))
+             (stage-normalize-to-residual-anf body))))
+
+    ;; (call-anf fn args ...) -> (let-call ((t (fn args ...))) (atom-value t))
+    ((eq? (car expr) 'call-anf)
+     (let ((tmp (stage-poly-lower-gensym "call$")))
+       (list 'let-call (list (list tmp (cons (cadr expr) (cddr expr))))
+             (list 'atom-value tmp))))
+
+    ;; Quoted literal: '(...) -> (atom-value '(..))
+    ((eq? (car expr) 'quote)
+     (list 'atom-value expr))
+
+    ;; Residual function or primitive application: (op arg ...)
+    (else
+     (if (stage-known-primitive? (car expr))
+         (let ((tmp (stage-poly-lower-gensym "prim$")))
+           (list 'let-anf (list (list tmp expr))
+                 (list 'atom-value tmp)))
+         (let ((tmp (stage-poly-lower-gensym "app$")))
+           (list 'let-call (list (list tmp expr))
+                 (list 'atom-value tmp)))))))
+
+(define (stage-poly-lower expr env)
+  (let* ((later-d (make-later-dict))
+         (res-sv (eval-in-stage later-d env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
+    (cond
+      ((stage-csp-error? res-sv)
+       res-sv)
+      ((stage-val? res-sv)
+       (let ((p (stage-val-payload res-sv)))
+         (stage-normalize-to-residual-anf p)))
+      (else
+       (stage-normalize-to-residual-anf res-sv)))))

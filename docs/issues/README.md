@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **879** | ステージ多相部分評価 Nanopass (stage-poly-lower) の実装 | Feature | High | Open (New) | [879-implement-stage-poly-lower-nanopass-partial-evaluator.md](879-implement-stage-poly-lower-nanopass-partial-evaluator.md) |
+| **879** | ステージ多相部分評価 Nanopass (stage-poly-lower) の実装 | Feature | High | Closed (Completed) | [879-implement-stage-poly-lower-nanopass-partial-evaluator.md](closed/879-implement-stage-poly-lower-nanopass-partial-evaluator.md) |
 | **880** | Pass Manager への Nanopass 文法完全消去アサーションの組み込み | Feature | High | Open (New) | [880-integrate-grammar-conformance-assertion-in-pass-manager.md](880-integrate-grammar-conformance-assertion-in-pass-manager.md) |
 | **881** | 3重差分テストオラクルとメタモルフィック摂動検証スイートの実装 | Feature | High | Open (New) | [881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md](881-implement-triple-differential-oracle-and-metamorphic-fuzzing.md) |
 | **882** | 部分評価後の残余関数における Contification 保証の検証 | Feature | Medium | Open (New) | [882-verify-residual-function-contification-guarantees.md](882-verify-residual-function-contification-guarantees.md) |
