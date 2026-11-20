@@ -889,7 +889,26 @@
               zero?
               car cdr caar cadr cdar cddr length reverse cons
               eq? eqv? equal? char=? boolean=? = < <= > >=
-              bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift)))
+              bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
+              display write newline)))
+
+(define (stage-pure-effect-free? sym)
+  (if (memq sym '(+ - * abs not null? pair? boolean? number? symbol? string? char?
+                  zero? length reverse cons
+                  eq? eqv? equal? char=? boolean=? = < <= > >=
+                  bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift))
+      #t
+      #f))
+
+(define (stage-potentially-trapping-prim? sym)
+  (if (memq sym '(/ quotient modulo remainder car cdr caar cadr cdar cddr vector-ref string-ref))
+      #t
+      #f))
+
+(define (stage-impure-primitive? sym)
+  (if (memq sym '(display write newline set-car! set-cdr! vector-set! string-set!))
+      #t
+      #f))
 
 ;;; -----------------------------------------------------------------------
 ;;; 10. Primitive & Function Application Dispatch
@@ -919,6 +938,12 @@
 (define (eval-in-stage-apply-known-prim dict op args loc)
   (let ((nargs (length args)))
     (cond
+      ;; Impure primitive under Later stage -> directly demote to residual code (Speculative Trap / Effect Leak Prevention)
+      ((and (stage-impure-primitive? op) (stage-dict-later? dict))
+       (let* ((lifted (extract-lifted-payloads dict args))
+              (res-call (cons op lifted)))
+         (make-dynamic-val 'any res-call loc #f)))
+
       ;; All arguments are pure-static -> execute CTFE directly via Now dictionary
       ((all-pure-static? args)
        (let ((raw-res

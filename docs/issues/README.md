@@ -6,10 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | Feature | High | Closed (Completed) | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](closed/872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
-| **873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | Feature | Medium | Closed (Completed) | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](closed/873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
-| **874** | 4値束縛時間束（Lattice）モデルに基づく BTA 型推論パスの実装 | Feature | High | Closed (Completed) | [874-implement-4-valued-bta-lattice-type-inference-pass.md](closed/874-implement-4-valued-bta-lattice-type-inference-pass.md) |
-| **875** | 動的分岐配下の純粋性解析と投機的副作用・例外の自動 Later 降格 | Feature | High | Open (New) | [875-implement-purity-analysis-and-speculative-trap-demotion.md](875-implement-purity-analysis-and-speculative-trap-demotion.md) |
 | **876** | CSP 越境バリデータと Dual Span 診断レポーターの実装 | Feature | High | Open (New) | [876-implement-csp-boundary-validator-and-dual-span-diagnostics.md](876-implement-csp-boundary-validator-and-dual-span-diagnostics.md) |
 | **877** | 特殊化メモ化エンジンとハードリミット・一般化（Widening）の実装 | Feature | High | Open (New) | [877-implement-specialization-memoization-and-widening-engine.md](877-implement-specialization-memoization-and-widening-engine.md) |
 | **878** | Nanopass 中間言語 L-StagePoly および L-Residual-ANF の定義 | Feature | High | Open (New) | [878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md](878-define-nanopass-languages-l-stagepoly-and-l-residual-anf.md) |
@@ -26,6 +22,10 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **875** | 動的分岐配下の純粋性解析と投機的副作用・例外の自動 Later 降格 | Feature | 2026-11-20 | [875-implement-purity-analysis-and-speculative-trap-demotion.md](closed/875-implement-purity-analysis-and-speculative-trap-demotion.md) |
+| **874** | 4値束縛時間束（Lattice）モデルに基づく BTA 型推論パスの実装 | Feature | 2026-11-20 | [874-implement-4-valued-bta-lattice-type-inference-pass.md](closed/874-implement-4-valued-bta-lattice-type-inference-pass.md) |
+| **873** | 単一ソース意味論オラクルによる CTFE 既存テスト回帰検証 | Feature | 2026-11-20 | [873-verify-single-source-semantic-oracle-with-ctfe-tests.md](closed/873-verify-single-source-semantic-oracle-with-ctfe-tests.md) |
+| **872** | eval-in-stage コアループと Fuel/Depth リソースバウンドガードの実装 | Feature | 2026-11-20 | [872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md](closed/872-implement-eval-in-stage-core-loop-with-fuel-depth-guards.md) |
 | **871** | PSDS（部分静的データ構造）と二重 Source Span 出自追跡の実装 | Feature | 2026-11-20 | [871-support-psds-and-dual-source-span-provenance.md](closed/871-support-psds-and-dual-source-span-provenance.md) |
 | **870** | <stage-dict> レコードおよび Now/Later ステージ辞書の実装 | Feature | 2026-11-20 | [870-implement-stage-dict-and-now-later-dictionaries.md](closed/870-implement-stage-dict-and-now-later-dictionaries.md) |
 | **865** | SRFI 189 Maybe and Either オプショナルコンテナ ((scheme maybe)) の実装 | Feature | 2026-11-20 | [865-implement-srfi-189-maybe-and-either-optional-containers.md](closed/865-implement-srfi-189-maybe-and-either-optional-containers.md) |
