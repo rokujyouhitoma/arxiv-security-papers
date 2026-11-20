@@ -368,7 +368,12 @@
        (or (eq? sym 'stage-now)
            (eq? sym 'stage-later)
            (eq? sym 'stage-lift)
-           (eq? sym 'stage-quasiquote))))
+           (eq? sym 'stage-quasiquote))
+       (let ((s (symbol->raw-name sym)))
+         (or (string=? s "stage-now")
+             (string=? s "stage-later")
+             (string=? s "stage-lift")
+             (string=? s "stage-quasiquote")))))
 
 (define (find-stage-meta-syntax form)
   (cond

@@ -1936,7 +1936,14 @@
            (eq? sym 'stage-lift)
            (eq? sym 'stage-quasiquote)
            (eq? sym 'stage-splice)
-           (eq? sym 'stage-run))))
+           (eq? sym 'stage-run))
+       (let ((s (symbol->raw-name sym)))
+         (or (string=? s "stage-now")
+             (string=? s "stage-later")
+             (string=? s "stage-lift")
+             (string=? s "stage-quasiquote")
+             (string=? s "stage-splice")
+             (string=? s "stage-run")))))
 
 (define (contains-stage-meta-syntax? form)
   (cond

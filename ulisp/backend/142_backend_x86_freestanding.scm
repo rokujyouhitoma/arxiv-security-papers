@@ -609,8 +609,8 @@
   (emit "    push r13")
   (emit "    push r14")
   (emit "    sub rsp, 8")
+  (emit "    mov rbx, rdi")             ; exception object (save to callee-saved rbx BEFORE ulisp_flush clobbers rdi)
   (emit "    call ulisp_flush")         ; flush any pending stdout bytes first (Issue #785)
-  (emit "    mov rbx, rdi")             ; exception object
   (emit "    mov rax, rbx")
   (emit "    and rax, 7")
   (emit "    cmp rax, 1")
