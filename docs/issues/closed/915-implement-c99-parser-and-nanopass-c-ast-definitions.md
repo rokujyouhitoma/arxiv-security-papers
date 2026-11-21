@@ -2,7 +2,8 @@
 ID: 915
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
+クローズ日: 2026-11-22
 ---
 
 # [FEAT/ENH] C99 構文解析器 (Parser) および Nanopass C-AST 言語定義・Lexer Hack 解消の実装 (ID: 915)
@@ -31,10 +32,10 @@ ID: 915
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `ulisp/frontend_c/c_lang.scm` (新規: `define-language L_c_ast` および `L_c_typed` 用 `<c-type>` / `verify-c99-ast` スキーマ定義)
-- [ ] [ulisp/frontend_c/parser.scm](../../ulisp/frontend_c/parser.scm) (拡張: `#931` 基盤を正式 `L_c_ast` 生成・`parse-c99-tokens`・`parse-c99-preprocessed-string`・`parse-c99-file` へ拡張)
-- [ ] `ulisp/tests/test_c99_parser.scm` (新規: `L_c_ast` Nanopass 検証・CPP 連携・`typedef`/タグ/ラベル名前空間 ＆ シャドウイングテスト)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`test_c99_parser` ターゲットおよび `test` 集約への登録)
+- [x] [ulisp/frontend_c/c_lang.scm](../../ulisp/frontend_c/c_lang.scm) (新規: `define-language L_c_ast` および `L_c_typed` 用 `<c-type>` / `verify-c99-ast` スキーマ定義)
+- [x] [ulisp/frontend_c/parser.scm](../../ulisp/frontend_c/parser.scm) (拡張: `#931` 基盤を正式 `L_c_ast` 生成・`parse-c99-tokens`・`parse-c99-preprocessed-string`・`parse-c99-file` へ拡張)
+- [x] [ulisp/tests/test_c99_parser.scm](../../ulisp/tests/test_c99_parser.scm) (新規: `L_c_ast` Nanopass 検証・CPP 連携・`typedef`/タグ/ラベル名前空間 ＆ シャドウイングテスト)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (`test_c99_parser` ターゲットおよび `test` 集約への登録)
 - 既存連携先（参照のみ）:
   - [ulisp/compiler/nanopass.scm](../../ulisp/compiler/nanopass.scm) (`define-language`, `define-pass`, `verify-language`)
   - [ulisp/compiler/binding.scm](../../ulisp/compiler/binding.scm) (`make-scope-manager`, `scope-manager-push!`, `scope-manager-define!`, `scope-manager-typedef-name?`)
@@ -76,7 +77,7 @@ Target Branch: `feat/915-implement-c99-parser-and-c-ast`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `L_c_ast` が `ulisp/frontend_c/c_lang.scm` で `define-language` 定義され、`verify-c99-ast` が全 AST ノードで `<source-span>` と `<binding-id>` の整合性を検証できること。
-- [ ] `parse-c99-preprocessed-string` / `parse-c99-tokens` により、CPP（#914）展開済みの Lua 5.x C コード断片がそのまま正規 `L_c_ast` へ変換されること。
-- [ ] `typedef` と同名ローカル変数/仮引数/タグのシャドウイングおよび複雑宣言子（`int (*(*fp)(int))[4]`, `sizeof(type)` vs `(type)x`）がエラーなく正規 AST 化されること。
-- [ ] `ulisp/tests/test_c99_parser.scm` を作成し、`make -C ulisp test_c99_parser` が全件 PASS すること。
+- [x] `L_c_ast` が `ulisp/frontend_c/c_lang.scm` で `define-language` 定義され、`verify-c99-ast` が全 AST ノードで `<source-span>` と `<binding-id>` の整合性を検証できること。
+- [x] `parse-c99-preprocessed-string` / `parse-c99-tokens` により、CPP（#914）展開済みの Lua 5.x C コード断片がそのまま正規 `L_c_ast` へ変換されること。
+- [x] `typedef` と同名ローカル変数/仮引数/タグのシャドウイングおよび複雑宣言子（`int (*(*fp)(int))[4]`, `sizeof(type)` vs `(type)x`）がエラーなく正規 AST 化されること。
+- [x] `ulisp/tests/test_c99_parser.scm` を作成し、`make -C ulisp test_c99_parser` が全件 PASS すること。
