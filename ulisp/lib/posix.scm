@@ -197,11 +197,17 @@
 
 
 ;;; -----------------------------------------------------------------------
-;;; §6.14 Pure Scheme Heap Management (Direct Kernel MMap)
+;;; §6.14 Pure Scheme Heap Management (Direct Kernel MMap & BSS Heap)
 ;;; -----------------------------------------------------------------------
 
 (define (ulisp-init-heap! size-bytes)
   (let ((heap-ptr (sys-mmap size-bytes)))
+    (%set-heap-ptr! heap-ptr)
+    heap-ptr))
+
+;; Initialize heap using the 16MB Demand-Paged BSS Initial Heap (Issue #905 / DSN-33-07)
+(define (ulisp-init-bss-heap!)
+  (let ((heap-ptr (sys-initial-heap)))
     (%set-heap-ptr! heap-ptr)
     heap-ptr))
 

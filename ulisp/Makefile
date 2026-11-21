@@ -1532,6 +1532,10 @@ test_freestanding_syscall: compiler
 	@echo "=== Running Zero-libc Bare-Metal Freestanding Raw Syscall Test ==="
 	@PYTHONPATH=$(ROOT_DIR) $(PYTHON) -m pytest $(ROOT_DIR)/tests/test_bare_metal_ulisp.py -k test_bare_metal_raw_syscall_suite -v
 
+test_freestanding_gc: compiler
+	@echo "=== Running Zero-libc Bare-Metal Freestanding Demand-Paged BSS GC Test ==="
+	@PYTHONPATH=$(ROOT_DIR) $(PYTHON) -m pytest $(ROOT_DIR)/tests/test_bare_metal_ulisp.py -k test_bare_metal_freestanding_gc_suite -v
+
 test_c_windows: build/compiler_passes.scm $(PASS_COMMON)
 	@echo "=== Running ULisp C99 Backend Windows (MinGW-w64 / Wine64) Tests ==="
 	@mkdir -p build

@@ -36,11 +36,11 @@ def require_native_compiler() -> None:
 
 
 def get_compiler_cmd():
+    gosh = shutil.which("gosh")
+    if gosh and os.path.exists(COMPILER_SCM):
+        return [gosh, COMPILER_SCM]
     if os.path.exists(ULISP_BOOT) and os.access(ULISP_BOOT, os.X_OK):
         return [ULISP_BOOT]
-    gosh = shutil.which("gosh")
-    if gosh:
-        return [gosh, COMPILER_SCM]
     return ["python3", "-m", "ilisp", COMPILER_SCM]
 
 
@@ -730,3 +730,65 @@ def test_bare_metal_raw_syscall_suite():
         assert "[3/4] Testing sys-munmap: PASS" in output
         assert "[4/4] Testing sys-clock-gettime-monotonic: PASS" in output
         assert "=== [SUCCESS] All Freestanding Syscalls Verified ===" in output
+
+
+def test_bare_metal_freestanding_gc_suite():
+    """Verify freestanding Demand-Paged BSS bump allocation and Cheney GC under -nostdlib -static (Issue #905)."""
+    test_file = os.path.join(ULISP_DIR, "tests", "test_freestanding_gc.scm")
+    assert os.path.exists(test_file), f"Test file not found: {test_file}"
+
+    with open(test_file, "r", encoding="utf-8") as f:
+        src_code = f.read()
+
+    # Prepend posix_code if not already loaded, resolving the (include "lib/posix.scm")
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+
+    full_code = src_code.replace('(include "lib/posix.scm")', posix_code)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "test_gc.scm")
+        s_path = os.path.join(tmpdir, "test_gc.s")
+        bin_path = os.path.join(tmpdir, "test_gc_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(full_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                get_compiler_cmd(),
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        # Verify BSS initial heap symbol in generated assembly
+        with open(s_path, "r", encoding="utf-8") as f_asm:
+            asm_text = f_asm.read()
+            assert "ulisp_initial_heap:" in asm_text
+            assert "16777216" in asm_text
+
+        link_asm_to_bin(s_path, bin_path)
+
+        # Verify static ELF without dynamic loader
+        ldd_res = subprocess.run(["ldd", bin_path], capture_output=True, text=True)
+        combined_ldd = (ldd_res.stdout + ldd_res.stderr).lower()
+        assert "not a dynamic executable" in combined_ldd
+
+        run_res = subprocess.run([bin_path], capture_output=True)
+        assert run_res.returncode == 0
+        output = run_res.stdout.decode("utf-8")
+        assert "=== [TEST] Zero-libc Freestanding BSS Heap & GC Suite ===" in output
+        assert (
+            "[1/3] Testing BSS initial heap pointer & bump allocation: PASS" in output
+        )
+        assert (
+            "[2/3] Testing Cheney 2-Space GC under allocation pressure: PASS" in output
+        )
+        assert "[3/3] Testing nested object integrity across GC cycles: PASS" in output
+        assert "=== [SUCCESS] Freestanding Demand-Paged BSS GC Verified ===" in output
