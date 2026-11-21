@@ -2,16 +2,20 @@
 ## 〜 「S式で書かれた小さなインタプリタ」を Lisp トランスレータが解析・部分評価し、最適化された C99 / LLVM IR / x86-64 / AArch64 ネイティブへと導く RPython / Truffle 超越型メタコンパイラ基盤 〜
 
 - **文書番号**: `DSN-33`
-- **補足・個別仕様書**: 
-  - [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
-  - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
-  - [[DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
-  - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書 (旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
-  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書 (旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
-  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書 (旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
-  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+- **補足・個別仕様書（2桁ドメイン番台体系）**: 
+  - **【10番台: コアコンパイラパイプライン（Frontend → Middle-End → Backend）】**
+    - [[DSN-33-11] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md) *(旧 DSN-33-02)*
+    - [[DSN-33-12] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) *(旧 DSN-33-01)*
+    - [[DSN-33-13] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md) *(旧 DSN-33-08)*
+  - **【20番台: メタコンパイラ・言語ワークベンチ・動的 JIT】**
+    - [[DSN-33-21] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) *(旧 DSN-33-03)*
+    - [[DSN-33-22] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) *(旧 DSN-33-04)*
+    - [[DSN-33-23] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md) *(旧 DSN-33-05 / 旧 DSN-34)*
+  - **【30番台: ランタイム・OS境界 ＆ 実システムセルフホスト】**
+    - [[DSN-33-31] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) *(旧 DSN-33-07 / 旧 DSN-36)*
+    - [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md) *(旧 DSN-33-09)*
+  - **【40番台: 継続的性能評価・ベンチマーク】**
+    - [[DSN-33-41] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md) *(旧 DSN-33-06 / 旧 DSN-35)*
 - **文書ステータス**: `APPROVED / FULLY-CONSOLIDATED`
 - **対象サブシステム**:
   - `ulisp/` (ULISP コアプロジェクト / S式メタコンパイラ統合フレームワーク)
@@ -26,9 +30,9 @@
   - `ilisp/backend/ulisp_codegen/` (ILisp 連携: DSN-31 Backend B 向け ULisp AOT トランスパイラ)
   - `docs/designs/` (設計書体系)
 - **統合設計書**:
-  - **[DSN-33-05 (内因的メタトレーシング JIT 設計書 / 旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md) は Issue #514 の決定に基づき本 DSN-33 第 7 章へ完全統合・昇格完了。**
-  - **[DSN-33-06 (継続的ベンチマークフレームワーク / 旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md) は AOT/JIT 統合ベンチマーク仕様として昇格。**
-  - **[DSN-33-07 (Zero-libc ベアメタルランタイム / 旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) は自立型実行基盤仕様として昇格。**
+  - **[DSN-33-23 (内因的メタトレーシング JIT 設計書 / 旧 DSN-34)](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md) は Issue #514 の決定に基づき本 DSN-33 第 7 章へ完全統合・昇格完了。**
+  - **[DSN-33-41 (継続的ベンチマークフレームワーク / 旧 DSN-35)](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md) は AOT/JIT 統合ベンチマーク仕様として昇格。**
+  - **[DSN-33-31 (Zero-libc ベアメタルランタイム / 旧 DSN-36)](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) は自立型実行基盤仕様として昇格。**
 - **関連設計書**:
   - [DSN-01 (High-Level Architecture)](DSN-01-high_level_design.md)
   - [DSN-29 (Python-LISP Integrated Architecture Specification - pylisp)](DSN-29-python_lisp_integrated_architecture_specification.md)
@@ -251,7 +255,7 @@ Scheme と x86-64 ハードウェアのビット表現の乖離を解消する�
 Chez Scheme (Keep & Dybvig) の Nanopass 設計思想をさらに発展させ、ULisp は「極小規則による高い保守性・単体テスト性」と「最小回数の走査による超高速セルフホスティング」を両立するため、コンパイラ変換基盤を以下の **4階層（Pipeline > Pass > Nanopass > Picopass）** として構成する。
 
 > **詳細設計仕様の委譲**:
-> 4階層アーキテクチャの厳密な責務定義、Picopass 三権分立モデル（`pico`/`femto`/`atto`）、関数合成コンビネータ、Pass Fusion（$O(1)$ Head-Tag ディスパッチ・構造共有）、および 2次元の DAG 最適化（ルール依存 DAG ＆ Term/LIR データ依存 DAG）の完全仕様については、個別仕様書 **[[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** を参照のこと。
+> 4階層アーキテクチャの厳密な責務定義、Picopass 三権分立モデル（`pico`/`femto`/`atto`）、関数合成コンビネータ、Pass Fusion（$O(1)$ Head-Tag ディスパッチ・構造共有）、および 2次元の DAG 最適化（ルール依存 DAG ＆ Term/LIR データ依存 DAG）の完全仕様については、個別仕様書 **[[DSN-33-12] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** を参照のこと。
 
 1. **最上位：Pipeline（全体配線・スケジューラ / `compiler/pass_manager.scm`）**:
    - 用途（AOT ネイティブ生成、対話型 REPL、静的検査専用、Dual-Plane 分割コンパイル）と最適化レベル（`-O0`/`-O1`/`-O2`）に応じて、Pass 群の有向非巡回グラフ（Pipeline DAG）を編成・実行する。
@@ -289,11 +293,11 @@ Chez Scheme (Keep & Dybvig) の Nanopass 設計思想をさらに発展させ、
   ・AArch64 アセンブリ出力 (150) / Portable ANSI C99 出力 (160)
 ```
 
-詳細な各パス仕様および LIR 命令セット仕様については、[[DSN-33-01]](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)、[ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md) および [ulisp/docs/spec_lir.md](../../ulisp/docs/spec_lir.md) を参照のこと。
+詳細な各パス仕様および LIR 命令セット仕様については、[[DSN-33-12]](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)、[ulisp/docs/spec_pipeline.md](../../ulisp/docs/spec_pipeline.md) および [ulisp/docs/spec_lir.md](../../ulisp/docs/spec_lir.md) を参照のこと。
 
 ### 2.6 統一 Pass Manager 基盤と動的パス注入機構 (Pass Injection API) (Issue #598, #637)
 
-ULisp コンパイラは、単一の固定パイプラインに縛られない高度な柔軟性と関心事の分離（Separation of Concerns）を実現するため、**統一 Pass Manager (`compiler/pass_manager.scm`)** を Pipeline オーケストレータの中核に据える（詳細は [[DSN-33-01] 第2章・第5章](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) を参照）。
+ULisp コンパイラは、単一の固定パイプラインに縛られない高度な柔軟性と関心事の分離（Separation of Concerns）を実現するため、**統一 Pass Manager (`compiler/pass_manager.scm`)** を Pipeline オーケストレータの中核に据える（詳細は [[DSN-33-12] 第2章・第5章](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) を参照）。
 
 #### 1. Pass Descriptor による自己記述型パス定義
 各コンパイラパスは、以下の 10 要素タプルで構成される `pass-descriptor` として定義・登録される：
@@ -810,9 +814,9 @@ ulisp/
 
 Issue #514 の完遂により、旧 `mlisp/` ディレクトリは完全に廃止・消去され、すべてのリソースと責任境界は `ulisp/` 配下に美しく一本化された。これにより、リポジトリ全体の構造的簡潔性、保守性、および 3 段階ブートストラップの決定論性が恒久的に担保される。
 
-### 11.1 DSN-33-03 ステージ多相メタコンパイラ統合（Phase P5: Issues #887〜#891）
+### 11.1 DSN-33-21 ステージ多相メタコンパイラ統合（Phase P5: Issues #887〜#891）
 
-個別仕様書 [[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) で確立された第1二村射影（Tower Collapse）および Nanopass 不動点メタコンパイラ基盤を、最上位コンパイラパイプラインおよび ELF バックエンドへ実結合・一本化する最終フェーズ（Phase P5）：
+個別仕様書 [[DSN-33-21]](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) で確立された第1二村射影（Tower Collapse）および Nanopass 不動点メタコンパイラ基盤を、最上位コンパイラパイプラインおよび ELF バックエンドへ実結合・一本化する最終フェーズ（Phase P5）：
 
 1. **Pass Manager 常設登録 (Issue #887)**: `pass-075-stage-poly-lower` を標準パスへ登録し、最適化レベル連動でメタ循環インタプリタを単層機械語へ平坦化。
 2. **CTFE エンジン一本化 (Issue #888)**: 既存の旧 `ctfe_eval` を新設の `<stage-dict>` / `Now` 辞書評価器へ一本化し、重複評価系を解消。

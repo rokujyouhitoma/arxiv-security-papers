@@ -1,17 +1,17 @@
-# [DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書
+# [DSN-33-13] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書
 ## 〜 Pure Scheme / C99 / ステージ多相メタコンパイラを統一的に支える Core Machine LIR 最適化・実行バックエンド基盤 〜
 
-- **文書番号**: `DSN-33-08`
+- **文書番号**: `DSN-33-13` *(旧 `DSN-33-08`)*
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**: 
-  - [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
-  - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
-  - [[DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
-  - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書 (旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
-  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書 (旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
-  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書 (旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-11] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
+  - [[DSN-33-12] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-21] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
+  - [[DSN-33-22] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+  - [[DSN-33-23] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md)
+  - [[DSN-33-31] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-41] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
 - **文書ステータス**: `APPROVED / ARCHITECTURE-BLUEPRINT`
 - **対象サブシステム**:
   - `ulisp/compiler/` (`pass_manager.scm`, `value_repr.scm`, `sbi.scm`)
@@ -31,7 +31,7 @@
 
 - [1. エグゼクティブサマリー ＆ 設計哲学](#1-エグゼクティブサマリー--設計哲学)
   - [1.1 目的：多言語フロントエンドを単一の型付き機械語バックエンドへ収束させる](#11-目的多言語フロントエンドを単一の型付き機械語バックエンドへ収束させる)
-  - [1.2 責務境界：DSN-33-02（フロントエンド）および DSN-33-09（Lua C コンパイル）との分離](#12-責務境界dsn-33-02フロントエンドおよび-dsn-33-09lua-c-コンパイルとの分離)
+  - [1.2 責務境界：DSN-33-11（フロントエンド）および DSN-33-32（Lua C コンパイル）との分離](#12-責務境界dsn-33-02フロントエンドおよび-dsn-33-09lua-c-コンパイルとの分離)
   - [1.3 LLVM ミドルエンド・バックエンド対比マトリクス](#13-llvm-ミドルエンドバックエンド対比マトリクス)
 - [2. 型付き機械語 LIR ＆ 2層方言（Dialect）分離仕様](#2-型付き機械語-lir--2層方言dialect分離仕様)
   - [2.1 Core Machine LIR の厳格な命令セットと型体系 (Issue #826)](#21-core-machine-lir-の厳格な命令セットと型体系-issue-826)
@@ -48,7 +48,7 @@
 - [5. ターゲットコード生成・ELF リンカ・メタコンパイラ統合](#5-ターゲットコード生成elf-リンカメタコンパイラ統合)
   - [5.1 Pass 140 (x86-64 Backend): 命令選択・XMM SSE2・レジスタ割当](#51-pass-140-x86-64-backend-命令選択xmm-sse2レジスタ割当)
   - [5.2 複数 ELF セクション (.text/.rodata/.data/.bss) と再配置抽象化 (Issue #830)](#52-複数-elf-セクション-textrodatadatabss-と再配置抽象化-issue-830)
-  - [5.3 DSN-33-03 ステージ多相メタコンパイラとの LIR/ELF 統合ブリッジ (Issue #889, #890)](#53-dsn-33-03-ステージ多相メタコンパイラとの-lirelf-統合ブリッジ-issue-889-890)
+  - [5.3 DSN-33-21 ステージ多相メタコンパイラとの LIR/ELF 統合ブリッジ (Issue #889, #890)](#53-dsn-33-03-ステージ多相メタコンパイラとの-lirelf-統合ブリッジ-issue-889-890)
 - [6. テスト・検証・リファレンス仮想マシン基盤](#6-テスト検証リファレンス仮想マシン基盤)
   - [6.1 純粋 Scheme 製 LIR 参照仮想マシン (Reference VM) (Issue #834)](#61-純粋-scheme-製-lir-参照仮想マシン-reference-vm-issue-834)
   - [6.2 Pass 160 Portable C バックエンドのセマンティクス同期 ＆ 差分ファジング (Issue #831)](#62-pass-160-portable-c-バックエンドのセマンティクス同期--差分ファジング-issue-831)
@@ -61,31 +61,31 @@
 
 ### 1.1 目的：多言語フロントエンドを単一の型付き機械語バックエンドへ収束させる
 
-本設計書（`DSN-33-08`）は、上位文書 [[DSN-33] ULISP 包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) における **ミドルエンド後半（LIR 最適化層）からバックエンド（x86-64 ネイティブ機械語生成・ELF リンカ・Portable C 生成・LIR 参照 VM）** までの全体アーキテクチャを規定する。
+本設計書（`DSN-33-13`）は、上位文書 [[DSN-33] ULISP 包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) における **ミドルエンド後半（LIR 最適化層）からバックエンド（x86-64 ネイティブ機械語生成・ELF リンカ・Portable C 生成・LIR 参照 VM）** までの全体アーキテクチャを規定する。
 
-Scheme、C99（[[DSN-33-02]](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)）、およびステージ多相部分評価器（[[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)）から出力される多様な中間表現を、**単一の型付き機械語 LIR（Core Machine LIR）** に収束させ、バックエンド側の重複実装やランタイム依存を排除する。
+Scheme、C99（[[DSN-33-11]](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)）、およびステージ多相部分評価器（[[DSN-33-21]](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)）から出力される多様な中間表現を、**単一の型付き機械語 LIR（Core Machine LIR）** に収束させ、バックエンド側の重複実装やランタイム依存を排除する。
 
-### 1.2 責務境界：DSN-33-02（フロントエンド）および DSN-33-09（Lua C コンパイル）との分離
+### 1.2 責務境界：DSN-33-11（フロントエンド）および DSN-33-32（Lua C コンパイル）との分離
 
 ```mermaid
 flowchart LR
-    subgraph Frontend ["DSN-33-02 (フロントエンド層)"]
+    subgraph Frontend ["DSN-33-11 (フロントエンド層)"]
         SchemeFE["Scheme フロントエンド<br/>(CST → HIR → Managed Dialect)"]
         C99FE["C99 フロントエンド<br/>(CPP → Parser/Sema → Core LIR)"]
     end
 
-    subgraph StagePoly ["DSN-33-03 (メタコンパイラ)"]
+    subgraph StagePoly ["DSN-33-21 (メタコンパイラ)"]
         ResANF["L-Residual-ANF ＆ freeze!"]
     end
 
-    subgraph Backend ["DSN-33-08 (本設計書: LIR ＆ 多重バックエンド層)"]
+    subgraph Backend ["DSN-33-13 (本設計書: LIR ＆ 多重バックエンド層)"]
         P131["Pass 131: Managed Dialect Lowering (#835)"]
         CoreLIR["Core Machine LIR (#826, #828, #838)<br/>＆ define-value-repr (#836)"]
         Opt["Pass 132 Braun SSA (#827)<br/>＆ PassManager Cache (#840) ＆ LTO (#839)"]
         Targets["Pass 140 x86-64 / Pass 144a・144 ELF (#829, #830)<br/>Pass 160 Portable C (#831) / Reference VM (#834)"]
     end
 
-    subgraph LuaApp ["DSN-33-09 (Lua C コンパイル実証)"]
+    subgraph LuaApp ["DSN-33-32 (Lua C コンパイル実証)"]
         LuaC["Lua 5.x C ソース群 ＆ musl libc"]
     end
 
@@ -97,9 +97,9 @@ flowchart LR
     CoreLIR --> Opt --> Targets
 ```
 
-1. **フロントエンド（`DSN-33-02`）**: ソースコードの字句・構文・意味解析（Span、Binding ID、CTFE、C99 プリプロセッサ/型検査）を担い、Scheme は `Managed Dialect` へ、C99 は `Core Machine LIR` へ降格する。
-2. **バックエンド（`DSN-33-08`: 本書）**: 降格後の `Managed Dialect` / `Core Machine LIR` を受け取り、SSA 構築・レジスタ割り当て・SysV ABI 整合・ELF バイナリ生成または Portable C / Reference VM 実行を行う。
-3. **Lua C コンパイル（`DSN-33-09`）**: `DSN-33-02` と `DSN-33-08` の両基盤を組み合わせ、Lua 5.x の C ソース群と `musl libc` をビルド・検証する統合応用プロジェクトを規定する。
+1. **フロントエンド（`DSN-33-11`）**: ソースコードの字句・構文・意味解析（Span、Binding ID、CTFE、C99 プリプロセッサ/型検査）を担い、Scheme は `Managed Dialect` へ、C99 は `Core Machine LIR` へ降格する。
+2. **バックエンド（`DSN-33-13`: 本書）**: 降格後の `Managed Dialect` / `Core Machine LIR` を受け取り、SSA 構築・レジスタ割り当て・SysV ABI 整合・ELF バイナリ生成または Portable C / Reference VM 実行を行う。
+3. **Lua C コンパイル（`DSN-33-32`）**: `DSN-33-11` と `DSN-33-13` の両基盤を組み合わせ、Lua 5.x の C ソース群と `musl libc` をビルド・検証する統合応用プロジェクトを規定する。
 
 ### 1.3 LLVM ミドルエンド・バックエンド対比マトリクス
 
@@ -230,7 +230,7 @@ Pass 140 のグラフ彩色レジスタ割り当て器（RA）は、指定され
   (:pointer    (:align 1) (:tag-bits 0)))
 ```
 
-これにより、Scheme インタプリタ・AOT コンパイラ・C FFI 境界・将来のゲスト言語（[[DSN-33-04]](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) の NaN-boxing 表現）を単一の値表現フレームワーク上で統一的に取り扱う。
+これにより、Scheme インタプリタ・AOT コンパイラ・C FFI 境界・将来のゲスト言語（[[DSN-33-22]](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) の NaN-boxing 表現）を単一の値表現フレームワーク上で統一的に取り扱う。
 
 ### 3.2 呼出規約の多重化（SysV AMD64 ABI vs Scheme 高速規約） (Issue #829)
 
@@ -260,7 +260,7 @@ C 言語のローカルスタック変数（`%alloca`）や任意ジャンプ（
 
 ### 4.2 パスマネージャの解析キャッシュ自動無効化・再計算 (Issue #840)
 
-Pass 間で共有される解析情報（生存区間 Liveness、支配木 Dominance、エイリアス集合 Alias Sets、エスケープ情報）の整合性を自動維持するため、PassManager（[[DSN-33-01]](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)）へ宣言的依存管理を導入する。
+Pass 間で共有される解析情報（生存区間 Liveness、支配木 Dominance、エイリアス集合 Alias Sets、エスケープ情報）の整合性を自動維持するため、PassManager（[[DSN-33-12]](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)）へ宣言的依存管理を導入する。
 
 ```scheme
 (define-pass lir-peephole-window
@@ -274,7 +274,7 @@ Pass 間で共有される解析情報（生存区間 Liveness、支配木 Domin
 
 ### 4.3 LIR モジュールのバイナリ・S式シリアライズ ＆ LTO (Issue #839)
 
-`ulisp/compiler/sbi.scm` のバイナリシリアライズ機構を LIR モジュールレベルへ拡張し、フロントエンドの PCH（[[DSN-33-02]](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)）と連動したリンク時最適化（LTO: Link-Time Optimization）を実現する。
+`ulisp/compiler/sbi.scm` のバイナリシリアライズ機構を LIR モジュールレベルへ拡張し、フロントエンドの PCH（[[DSN-33-11]](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)）と連動したリンク時最適化（LTO: Link-Time Optimization）を実現する。
 - 複数の `.c` および `.scm` 翻訳単位から生成された型付き LIR モジュールを中間形式で保存・結合し、翻訳単位の境界を越えた関数インライン展開、定数伝播、およびデッドコード除去（DCE）を実行可能とする。
 
 ---
@@ -301,9 +301,9 @@ Pass 144a（統合アセンブラ）および Pass 144（ELF リンカ）にお�
   - `R_X86_64_PC32`: PC（RIP）相対 32bit 参照（`.rodata`/`.data`/`.bss` へのデータアクセス）。
   - `R_X86_64_PLT32`: 外部関数シンボルおよび動的ライブラリ呼び出し解決。
 
-### 5.3 DSN-33-03 ステージ多相メタコンパイラとの LIR/ELF 統合ブリッジ (Issue #889, #890)
+### 5.3 DSN-33-21 ステージ多相メタコンパイラとの LIR/ELF 統合ブリッジ (Issue #889, #890)
 
-[[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) で定義された残余中間表現を本バックエンドへ直接接続する。
+[[DSN-33-21]](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) で定義された残余中間表現を本バックエンドへ直接接続する。
 
 1. **`L-Residual-ANF` $\to$ `L_lir_raw` 降格ブリッジ (Issue #889)**:
    - `stage-poly-lower` が出力する `let-anf` / `let-call` 構文木を、Core Machine LIR（または Managed Dialect 経由）の仮想レジスタ形式へとダイレクトに降格するブリッジアダプター。

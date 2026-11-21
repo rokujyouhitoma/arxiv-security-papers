@@ -1,17 +1,17 @@
-# [DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書
+# [DSN-33-21] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書
 ## 〜 二村射影の工学的具現化・Now/Later ステージ多相辞書・Nanopass 階層消去・Partially-Static BTA・Control/Data Plane 二層分離による自己相似コンパイラ基盤 〜
 
-- **文書番号**: `DSN-33-03`
+- **文書番号**: `DSN-33-21` *(旧 `DSN-33-03`)*
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**: 
-  - [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
-  - [[DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
-  - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書 (旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
-  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書 (旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
-  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書 (旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
-  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-11] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
+  - [[DSN-33-12] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-13] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
+  - [[DSN-33-22] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+  - [[DSN-33-23] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md)
+  - [[DSN-33-31] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-41] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
 - **文書ステータス**: `APPROVED / ARCHITECTURE-SPECIFICATION`
 - **対象サブシステム**:
   - `ulisp/compiler/` (`eval_in_language.scm`, `nanopass.scm`, `nanopass_meta.scm`, `dataflow.scm`, `verifier.scm`, `diagnostic.scm`, `pass_manager.scm`, `binding.scm`)
@@ -21,7 +21,7 @@
   - `ulisp/vm/` (`lir_interpreter.scm` 参照仮想マシン)
 - **関連設計書**:
   - [[DSN-31] ILisp R7RS Core Architecture Specification](DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)
-  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-31] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
   - [[DSN-37] Synapse Dual-Plane Concurrent Runtime Architecture](DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)
 - **【主査・報告】 IT Specialist (Programming Languages & Compilers / PLC), Systems Architect (SA), Software Development (SWD)**
 - **【共同主査】 Project Manager (PM), Information Security Specialist (SEC), Software Quality Assurance Specialist (QA), Systems Auditor (AUD)**
@@ -34,7 +34,7 @@
 - [1. エグゼクティブサマリー ＆ 設計哲学](#1-エグゼクティブサマリー--設計哲学)
   - [1.1 背景と課題：部分評価の理想と実用コンパイラの断絶](#11-背景と課題部分評価の理想と実用コンパイラの断絶)
   - [1.2 フラクタル構造（メタ循環タワー）と実行時平坦化（Tower Collapse）](#12-フラクタル構造メタ循環タワーと実行時平坦化tower-collapse)
-  - [1.3 DSN-33, DSN-33-01, DSN-33-02 との整合と責務境界マトリクス](#13-dsn-33-dsn-33-01-dsn-33-02-との整合と責務境界マトリクス)
+  - [1.3 DSN-33, DSN-33-12, DSN-33-11 との整合と責務境界マトリクス](#13-dsn-33-dsn-33-01-dsn-33-02-との整合と責務境界マトリクス)
 - [2. 二村射影の現代的定式化と Direct Cogen アーキテクチャ](#2-二村射影の現代的定式化と-direct-cogen-アーキテクチャ)
   - [2.1 第1二村射影：ステージ多相辞書による残余化 (Residualization)](#21-第1二村射影ステージ多相辞書による残余化-residualization)
   - [2.2 第2二村射影：Nanopass による決定論的 Cogen 代替](#22-第2二村射影nanopass-による決定論的-cogen-代替)
@@ -84,7 +84,7 @@
 2. **動的ディスパッチの残存**: ナイーブな部分評価では、インタプリタの環境探索や型タグ検査が残余コードに混入し、C言語手書きコンパイラに遠く及ばない実行速度に留まる。
 3. **安全性の未検証な越境**: コンパイル時（メタ層）の可変状態（`set!`）やホスト継続（`call/cc`）がターゲット実行層に不当に漏洩（Cross-Stage Persistence の破綻）し、クラッシュや情報漏洩（CWE-400 / CWE-704）を招く。
 
-本設計書（`DSN-33-03`）は、これらの課題を **「Nanopass Framework による決定論的 Direct Cogen」**、**「辞書渡しステージ多相評価器（`Value @ α` + `Now/Later`）」**、**「Partially Static Data Structures (PSDS) に対応した型ベース束縛時間解析（BTA）」**、および **「Control Plane / Data Plane 二層分離」** の融合により完全に解決・具現化する。
+本設計書（`DSN-33-21`）は、これらの課題を **「Nanopass Framework による決定論的 Direct Cogen」**、**「辞書渡しステージ多相評価器（`Value @ α` + `Now/Later`）」**、**「Partially Static Data Structures (PSDS) に対応した型ベース束縛時間解析（BTA）」**、および **「Control Plane / Data Plane 二層分離」** の融合により完全に解決・具現化する。
 
 ### 1.2 フラクタル構造（メタ循環タワー）と実行時平坦化（Tower Collapse）
 Ulisp のアーキテクチャは、言語定義とコンパイラ自身が自己相似をなすフラクタル構造を持つ。
@@ -122,17 +122,17 @@ flowchart TD
 * **記述時のフラクタル性**: ユーザーは任意の言語 $L_n$ のインタプリタを、下位言語 $L_{n-1}$ のステージ多相プリミティブを用いて簡潔に記述できる。
 * **実行時の平坦化（Tower Collapse）**: 第1二村射影を適用することで、各層の構文解析ループ・命令フェッチ・環境走査がコンパイル時（`Now`）にすべて蒸発し、残余コード（`Later`）は入れ子コストがゼロの単層ネイティブ機械語（または C99）へ凝縮される。
 
-### 1.3 DSN-33, DSN-33-01, DSN-33-02 との整合と責務境界マトリクス
+### 1.3 DSN-33, DSN-33-12, DSN-33-11 との整合と責務境界マトリクス
 
 本設計書は、既存の DSN-33 ファミリーと完全に整合し、相互補完関係を結ぶ。
 
-| 設計書番号 | 表題・対象領域 | 本書（DSN-33-03）との責務境界と連携 |
+| 設計書番号 | 表題・対象領域 | 本書（DSN-33-21）との責務境界と連携 |
 | :--- | :--- | :--- |
-| **[[DSN-33]](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)** | **ULISP 包括設計仕様書**<br>（最上位アーキテクチャ） | メモリモデル（Tagged Pointer）、ブートストラップ連鎖（Stage 1〜3）、および第 7 章の RPython/Truffle 超越思想に対する**具体的数理・実装モデルを DSN-33-03 が提供**。 |
-| **[[DSN-33-01]](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** | **4階層パス融合＆DAG設計書**<br>（コンパイラ内部変換基盤） | DSN-33-01 の Nanopass/Picopass 融合基盤上で、DSN-33-03 が**文法階層消去（`extends`）とステージ多相パスマネージャを駆動**。 |
-| **[[DSN-33-02]](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)** | **多言語フロントエンド共通基盤**<br>（構文・意味解析・CTFE） | DSN-33-02 の `eval-in-language` (Issue #825) と Pretty Diagnostic (Issue #833) を**ステージ多相辞書 `<stage-dict>` および BTA 越境ガードとして昇華・具現化**。 |
-| **[[DSN-33-08]](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)** | **型付き機械語 LIR ＆ バックエンド**<br>（LIR・ABI・ELF・参照 VM） | 残余 `L-Residual-ANF` の Core LIR 降格ブリッジ (Issue #889) および凍結データの `.rodata` 直接配置 (Issue #890) を担当。 |
-| **`DSN-33-03`**<br>(本書) | **ステージ多相メタコンパイラ＆二村射影**<br>（メタ計算・部分評価・階層平坦化） | **二村射影、BTA、Partially Static Data Structures、停止性保証、および Control/Data Plane 二層境界の形式仕様を全統括**。 |
+| **[[DSN-33]](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)** | **ULISP 包括設計仕様書**<br>（最上位アーキテクチャ） | メモリモデル（Tagged Pointer）、ブートストラップ連鎖（Stage 1〜3）、および第 7 章の RPython/Truffle 超越思想に対する**具体的数理・実装モデルを DSN-33-21 が提供**。 |
+| **[[DSN-33-12]](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** | **4階層パス融合＆DAG設計書**<br>（コンパイラ内部変換基盤） | DSN-33-12 の Nanopass/Picopass 融合基盤上で、DSN-33-21 が**文法階層消去（`extends`）とステージ多相パスマネージャを駆動**。 |
+| **[[DSN-33-11]](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)** | **多言語フロントエンド共通基盤**<br>（構文・意味解析・CTFE） | DSN-33-11 の `eval-in-language` (Issue #825) と Pretty Diagnostic (Issue #833) を**ステージ多相辞書 `<stage-dict>` および BTA 越境ガードとして昇華・具現化**。 |
+| **[[DSN-33-13]](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)** | **型付き機械語 LIR ＆ バックエンド**<br>（LIR・ABI・ELF・参照 VM） | 残余 `L-Residual-ANF` の Core LIR 降格ブリッジ (Issue #889) および凍結データの `.rodata` 直接配置 (Issue #890) を担当。 |
+| **`DSN-33-21`**<br>(本書) | **ステージ多相メタコンパイラ＆二村射影**<br>（メタ計算・部分評価・階層平坦化） | **二村射影、BTA、Partially Static Data Structures、停止性保証、および Control/Data Plane 二層境界の形式仕様を全統括**。 |
 
 ---
 
@@ -163,7 +163,7 @@ $$\Delta L_k = L_k \setminus L_{k+1}$$
 
 $$\mathrm{Cogen} = \mathrm{mix}(\mathrm{mix}, \mathrm{mix})$$
 
-Ulisp においては、`DSN-33-01` §3 で規定された **Picopass 合成コンビネータ（`fuse-tree-rules`）** がこれに該当する。極小の局所書き換えルール（Pico）、属性計算ルール（Femto）、検証ルール（Atto）を合成し、中間構文走査（Catamorphism）を自動生成する。
+Ulisp においては、`DSN-33-12` §3 で規定された **Picopass 合成コンビネータ（`fuse-tree-rules`）** がこれに該当する。極小の局所書き換えルール（Pico）、属性計算ルール（Femto）、検証ルール（Atto）を合成し、中間構文走査（Catamorphism）を自動生成する。
 
 ### 2.4 不動点方程式とセルフホスティング固定点（Stage 1 → 2 → 3）
 Ulisp 自身のセルフホスティング連鎖は、以下のフラクタルな不動点定理（Fixed-Point Theorem）に立脚する。
@@ -348,7 +348,7 @@ $$V_{\text{Oracle}} = \mathrm{eval}_{\text{stage}}(\mathrm{dict}_{\text{now}}, \
 は、人為的な仕様不一致が原理的に存在し得ない **完全な正解（Ground Truth）オラクル** として機能する。
 
 #### 3.6.2 3重差分テストオラクル（Triple-Differential Oracle）
-`DSN-33-08` §6.1（純粋 Scheme 製 LIR 参照仮想マシン）と連携し、コンパイラの健全性を多層的に自動検証する。
+`DSN-33-13` §6.1（純粋 Scheme 製 LIR 参照仮想マシン）と連携し、コンパイラの健全性を多層的に自動検証する。
 
 ```mermaid
 flowchart TD
@@ -364,7 +364,7 @@ flowchart TD
         LaterEval["eval-in-stage (Later 辞書)"]
         MIR["MIR-ANF 生成"]
         LIR["LIR 変換"]
-        RefVM["LIR Reference VM 実行 (DSN-33-08 §6.1)"]
+        RefVM["LIR Reference VM 実行 (DSN-33-13 §6.1)"]
         ValVM["結果値 V_vm"]
         LaterEval --> MIR --> LIR --> RefVM --> ValVM
     end
@@ -432,7 +432,7 @@ Control Plane から Data Plane への値の昇格（`lift`）に対し、以下
    - これにより、コンパイル時クラッシュを根絶し、実行時の遅延評価意味論と 100% 同一の副作用順序（Effect Ordering）を維持する。
 
 ### 4.3 コンパイル時診断 S式仕様（Dual Span 伝播 Reporter #833 準拠）
-越境違反や投機的トラップ検知時、`DSN-33-02` §3.5 準拠の構造化 S式を返却する。二重ソースマップ（Dual Source Span）により、ホスト（インタプリタ実装）とゲスト（DSLスクリプト）の位置を同時に報告する。
+越境違反や投機的トラップ検知時、`DSN-33-11` §3.5 準拠の構造化 S式を返却する。二重ソースマップ（Dual Source Span）により、ホスト（インタプリタ実装）とゲスト（DSLスクリプト）の位置を同時に報告する。
 
 ```scheme
 (compiler-diagnostic
@@ -637,7 +637,7 @@ flowchart LR
 ### 8.3 4大品質ゲート遵守規準
 
 1. **Python / Scheme 構文エラー 0 件**: `make py_compile` および `make static_analysis` 100% PASS。
-2. **絶対パスの完全排除**: すべての内部設計書リンク、ファイル参照は相対パス表記（`DSN-33-01.md`, `../issues/` 等）を厳格に順守。
+2. **絶対パスの完全排除**: すべての内部設計書リンク、ファイル参照は相対パス表記（`DSN-33-12.md`, `../issues/` 等）を厳格に順守。
 3. **Google OKF v0.2 / Markdown 規準適合**: 不正な HTML タグや未定義リンクのない Markdown フォーマット。
 4. **セルフホスティング決定論性**: Stage 2 と Stage 3 の生成コード差分ゼロ（$\mathrm{diff} = 0$）を維持。
 
@@ -645,5 +645,5 @@ flowchart LR
 
 ## 9. 結論 ＆ 今後の展望
 
-本設計書（`DSN-33-03`）により、Ulisp は古典的な「Scheme から C/x86 へのトランスレータ」から、**「二村射影とフラクタル構造を数理的・工学的に完全具現化した自己相似メタコンパイラ」** へと飛躍する。
+本設計書（`DSN-33-21`）により、Ulisp は古典的な「Scheme から C/x86 へのトランスレータ」から、**「二村射影とフラクタル構造を数理的・工学的に完全具現化した自己相似メタコンパイラ」** へと飛躍する。
 開発者は最小の言語インタプリタを記述するだけで、Nanopass とステージ多相評価器が多重の抽象ループを完全に蒸発させ、Clang/LLVM に比肩する単層の高速ネイティブバイナリを自動獲得できる。

@@ -1,17 +1,17 @@
-# [DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書
+# [DSN-33-22] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書
 ## 〜 二村射影タワー崩壊の先へ：単一の小さな評価器（Interpreter）定義から、完全な構文解析器・ネイティブ AOT コンパイラ CLI・DWARF デバッグマップ・JIT ガードを自動合成するメタ言語工学基盤 〜
 
-- **文書番号**: `DSN-33-04`
+- **文書番号**: `DSN-33-22` *(旧 `DSN-33-04`)*
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**: 
-  - [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
-  - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
-  - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
-  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
-  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
-  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-11] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
+  - [[DSN-33-12] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-13] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
+  - [[DSN-33-21] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
+  - [[DSN-33-23] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md)
+  - [[DSN-33-31] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-41] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
 - **文書ステータス**: `APPROVED / ARCHITECTURE-BLUEPRINT`
 - **対象サブシステム**:
   - `ulisp/workbench/` (Language Workbench コア基盤: オブジェクトモデル、パーサー合成、Direct Cogen)
@@ -54,9 +54,9 @@
   - [5.1 二重ソース位置情報（Dual Span: Interp Span vs Guest Span）の伝播規約](#51-二重ソース位置情報dual-span-interp-span-vs-guest-spanの伝播規約)
   - [5.2 ELF/DWARF `.debug_line` / `.debug_info` へのゲスト言語ファイル名・行番号バインディング](#52-elfdwarf-debug_line--debug_info-へのゲスト言語ファイル名行番号バインディング)
   - [5.3 クラッシュ・実行時例外時のゲスト言語スタックトレース自動復元（Stack Unwinding）](#53-クラッシュ実行時例外時のゲスト言語スタックトレース自動復元stack-unwinding)
-- [6. メタトレーシング JIT（DSN-33-05）およびベアメタル（DSN-33-07）との協調](#6-メタトレーシング-jitdsn-33-05およびベアメタルdsn-33-07との協調)
+- [6. メタトレーシング JIT（DSN-33-23）およびベアメタル（DSN-33-31）との協調](#6-メタトレーシング-jitdsn-33-05およびベアメタルdsn-33-07との協調)
   - [6.1 インタプリタへの `@loop-header` / `@guard` アノテーションによる JIT 自動有効化](#61-インタプリタへの-loop-header--guard-アノテーションによる-jit-自動有効化)
-  - [6.2 Zero-libc ベアメタル環境（DSN-33-07）へのスタンドアロン DSL ランタイム配備](#62-zero-libc-ベアメタル環境dsn-33-07へのスタンドアロン-dsl-ランタイム配備)
+  - [6.2 Zero-libc ベアメタル環境（DSN-33-31）へのスタンドアロン DSL ランタイム配備](#62-zero-libc-ベアメタル環境dsn-33-07へのスタンドアロン-dsl-ランタイム配備)
 - [7. リファレンス実装仕様（DSL 事例: セキュリティ CTI フィルタ言語 `cti-ql` の自動生成）](#7-リファレンス実装仕様dsl-事例-セキュリティ-cti-フィルタ言語-cti-ql-の自動生成)
   - [7.1 文法定義・オブジェクトモデル・評価器定義の完全なコード例](#71-文法定義オブジェクトモデル評価器定義の完全なコード例)
   - [7.2 第1二村射影（AOT コンパイル）、第2二村射影（`cti-qlc` コンパイラ生成）の実証フロー](#72-第1二村射影aot-コンパイル第2二村射影cti-qlc-コンパイラ生成の実証フロー)
@@ -67,20 +67,20 @@
 ## 1. エグゼクティブサマリー ＆ 設計哲学
 
 ### 1.1 背景：二村射影タワー崩壊の達成と「実用言語ワークベンチ」の未踏課題
-[[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) において、ステージ多相評価器（`eval-in-stage`）、オフライン BTA 4値束（Lattice）、Middle-End LIR ブリッジ、および ELF `.rodata` シリアライザが完成した。これにより、S式で記述されたインタプリタ（`eval-guest`）にソーススクリプト（AST）を与えることで、中間ディスパッチループを平坦化（Tower Collapse）し、ネイティブ x86-64 機械語バイナリを出力する第1二村射影が完全に動作可能となった。
+[[DSN-33-21]](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) において、ステージ多相評価器（`eval-in-stage`）、オフライン BTA 4値束（Lattice）、Middle-End LIR ブリッジ、および ELF `.rodata` シリアライザが完成した。これにより、S式で記述されたインタプリタ（`eval-guest`）にソーススクリプト（AST）を与えることで、中間ディスパッチループを平坦化（Tower Collapse）し、ネイティブ x86-64 機械語バイナリを出力する第1二村射影が完全に動作可能となった。
 
 しかし、実用的なドメイン特化言語（DSL）や新言語を開発・運用するエンジニアリング現場においては、単に「S式評価器を平坦化できる」だけでは不十分であり、以下の **5 つの構造的断絶** が存在していた：
 
 ```mermaid
 graph TD
-    subgraph "Current State (DSN-33-03)"
+    subgraph "Current State (DSN-33-21)"
         Int["Interpreter in Scheme<br/>(S-expression AST only)"]
         Fut1["1st Futamura Projection<br/>(Stage-Poly Tower Collapse)"]
         ELF["Native ELF Binary"]
         Int --> Fut1 --> ELF
     end
 
-    subgraph "Language Workbench Gaps (To be solved by DSN-33-04)"
+    subgraph "Language Workbench Gaps (To be solved by DSN-33-22)"
         G1["Gap 1: Non-S-expression Syntax<br/>(Missing PEG Parser Generator)"]
         G2["Gap 2: Inefficient Runtime Env<br/>(Alists & Dynamic Allocations)"]
         G3["Gap 3: Missing Standalone Compiler CLI<br/>(Need 2nd Futamura / Direct Cogen)"]
@@ -95,7 +95,7 @@ graph TD
     Int -.-> G5
 ```
 
-本設計書（DSN-33-04）は、これらの断絶を埋め、開発者が**「文法規則」「オブジェクトモデル」「評価器意味論」の 3 点を定義するだけで、完全な AOT コンパイラ CLI、DWARF ソースデバッガ、高速 JIT 実行系を自動的に獲得できる言語ワークベンチ（Language Workbench）**の包括的設計を規定する。
+本設計書（DSN-33-22）は、これらの断絶を埋め、開発者が**「文法規則」「オブジェクトモデル」「評価器意味論」の 3 点を定義するだけで、完全な AOT コンパイラ CLI、DWARF ソースデバッガ、高速 JIT 実行系を自動的に獲得できる言語ワークベンチ（Language Workbench）**の包括的設計を規定する。
 
 ### 1.2 コアコンセプト：「Interpreter as the Single Source of Truth」の昇華
 従来の言語開発では、以下の構成要素を個別に手動実装・二重保守する必要があった：
@@ -116,18 +116,18 @@ $$\begin{aligned}
 
 ### 1.3 DSN-33 サブ仕様書体系における責務境界マトリクス
 
-| 仕様書番号 | 文書名 | 責務・提供レイヤー | DSN-33-04 との結合点 |
+| 仕様書番号 | 文書名 | 責務・提供レイヤー | DSN-33-22 との結合点 |
 | :--- | :--- | :--- | :--- |
 | **[[DSN-33]](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)** | 包括設計仕様書 | 全体アーキテクチャ統括・セルフホスト統御 | 最上位ガバナンスと共通 ABI |
-| **[[DSN-33-01]](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** | パス融合 ＆ DAG 最適化 | Nanopass / Picopass 変換基盤 | 構文解析器・Cogen 展開時の局所ルール適用 |
-| **[[DSN-33-02]](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)** | 多言語フロントエンド基盤 | Span・Binding ID・CTFE・Diagnostic | Dual Source Span や診断基盤を共通利用 |
-| **[[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)** | ステージ多相 ＆ 二村射影 | `eval-in-stage`・4値 BTA 束 | 部分評価・残余化コアエンジンとして利用 |
-| **[[DSN-33-04]](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)** | **言語ワークベンチ (本書)** | **オブジェクトモデル・PEG合成・Cogen CLI・デバッグ透過性** | **本仕様（メタ言語開発環境）** |
-| **[[DSN-33-05]](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)** | メタトレーシング JIT | ホットパス検出・OSR・トレース実行 | インタプリタ評価ループへの動的トレース自動注入 |
-| **[[DSN-33-06]](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)** | 継続的性能ベンチマーク | 3種実行系の自動性能測定・回帰検出 | 生成された言語処理系のスループット評価 |
-| **[[DSN-33-07]](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)** | Zero-libc ベアメタル | libc 完全排除・Linux Raw Syscall | 生成バイナリの極小・自立展開基盤 |
-| **[[DSN-33-08]](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)** | 型付き機械語 LIR ＆ バックエンド | Core/Managed LIR・ABI・ELF 生成 | 生成された残余コードの LIR 注入 ＆ 値表現共有 |
-| **[[DSN-33-09]](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)** | Lua (C 言語実装) コンパイル実証 | C99 経由 Lua 5.x・musl ビルド | C 言語ターゲットでの実システムコンパイル検証 |
+| **[[DSN-33-11]](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)** | 多言語フロントエンド基盤 | Span・Binding ID・CTFE・Diagnostic | Dual Source Span や診断基盤を共通利用 |
+| **[[DSN-33-12]](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** | パス融合 ＆ DAG 最適化 | Nanopass / Picopass 変換基盤 | 構文解析器・Cogen 展開時の局所ルール適用 |
+| **[[DSN-33-13]](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)** | 型付き機械語 LIR ＆ バックエンド | Core/Managed LIR・ABI・ELF 生成 | 生成された残余コードの LIR 注入 ＆ 値表現共有 |
+| **[[DSN-33-21]](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)** | ステージ多相 ＆ 二村射影 | `eval-in-stage`・4値 BTA 束 | 部分評価・残余化コアエンジンとして利用 |
+| **[[DSN-33-22]](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)** | **言語ワークベンチ (本書)** | **オブジェクトモデル・PEG合成・Cogen CLI・デバッグ透過性** | **本仕様（メタ言語開発環境）** |
+| **[[DSN-33-23]](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md)** | メタトレーシング JIT | ホットパス検出・OSR・トレース実行 | インタプリタ評価ループへの動的トレース自動注入 |
+| **[[DSN-33-31]](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)** | Zero-libc ベアメタル | libc 完全排除・Linux Raw Syscall | 生成バイナリの極小・自立展開基盤 |
+| **[[DSN-33-32]](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)** | Lua (C 言語実装) コンパイル実証 | C99 経由 Lua 5.x・musl ビルド | C 言語ターゲットでの実システムコンパイル検証 |
+| **[[DSN-33-41]](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)** | 継続的性能ベンチマーク | 3種実行系の自動性能測定・回帰検出 | 生成された言語処理系のスループット評価 |
 
 ---
 
@@ -236,7 +236,7 @@ graph LR
 $$\mathrm{Compiler} = \mathrm{mix}(\mathrm{mix}, \mathrm{Interpreter})$$
 
 しかし、部分評価器 $\mathrm{mix}$ は巨大かつ複雑であり、自己特殊化は極めて繊細な BTA 注釈を必要とする。
-ULisp ワークベンチでは、[[DSN-33-01]](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の Picopass 合成技術と [[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) の辞書渡しプロトコルを活用し、**決定論的 Direct Cogen 展開器** を構築する。
+ULisp ワークベンチでは、[[DSN-33-12]](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) の Picopass 合成技術と [[DSN-33-21]](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) の辞書渡しプロトコルを活用し、**決定論的 Direct Cogen 展開器** を構築する。
 
 ```scheme
 ;;; Direct Cogen: 評価器 AST からコンパイラ AST を導出する高階変換
@@ -308,10 +308,10 @@ sequenceDiagram
 
 ---
 
-## 6. メタトレーシング JIT（DSN-33-05）およびベアメタル（DSN-33-07）との協調
+## 6. メタトレーシング JIT（DSN-33-23）およびベアメタル（DSN-33-31）との協調
 
 ### 6.1 インタプリタへの `@loop-header` / `@guard` アノテーションによる JIT 自動有効化
-[[DSN-33-05]](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)（内因的メタトレーシング JIT）とのシームレスな統合のため、ワークベンチはインタプリタの評価ループに対する極小アノテーション仕様を規定する。
+[[DSN-33-23]](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md)（内因的メタトレーシング JIT）とのシームレスな統合のため、ワークベンチはインタプリタの評価ループに対する極小アノテーション仕様を規定する。
 
 ```scheme
 (define (eval-loop ast env)
@@ -335,8 +335,8 @@ sequenceDiagram
 
 開発者は評価ループに `jit-merge-point!` と `jit-guard-type!` を配置するだけで、追加のコンパイラコードを一切記述することなく、**実行時プロファイル主導のメタトレーシング JIT（Trace Recorder / LIR Optimizer / JIT Buffer）**の恩恵を無償で享受できる。
 
-### 6.2 Zero-libc ベアメタル環境（DSN-33-07）へのスタンドアロン DSL ランタイム配備
-[[DSN-33-07]](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) との連携により、生成された DSL コンパイラは `-nostdlib -static` な完全自立型 ELF バイナリを出力できる。
+### 6.2 Zero-libc ベアメタル環境（DSN-33-31）へのスタンドアロン DSL ランタイム配備
+[[DSN-33-31]](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) との連携により、生成された DSL コンパイラは `-nostdlib -static` な完全自立型 ELF バイナリを出力できる。
 - C ランタイム（libc）や動的リンカが存在しないセキュアコンテナや組み込みファームウェア環境へ、生成された DSL バイナリを直接配備可能。
 - メモリフットプリント数十 KB、起動時間数ミリ秒のセキュアなエッジ推論・パケットフィルタエンジンを実現。
 
@@ -431,7 +431,7 @@ graph TD
     Phase1["Phase 1: ゲストフレーム & オブジェクトモデル<br/>(ulisp/workbench/frame.scm)"] --> Phase2["Phase 2: PEG 構文解析器マクロ合成<br/>(ulisp/workbench/peg.scm)"]
     Phase2 --> Phase3["Phase 3: Dual Source Span & DWARF<br/>(ulisp/runtime/dual_span.scm)"]
     Phase3 --> Phase4["Phase 4: Direct Cogen & CLI ビルダ<br/>(bin/ulisp-cogen)"]
-    Phase4 --> Phase5["Phase 5: JIT ガード & ベアメタル統合<br/>(DSN-33-05 / DSN-33-07 連動)"]
+    Phase4 --> Phase5["Phase 5: JIT ガード & ベアメタル統合<br/>(DSN-33-23 / DSN-33-31 連動)"]
 ```
 
 ### 8.2 品質ゲート（Quality Gates）と検証項目
