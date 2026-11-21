@@ -2,7 +2,8 @@
 ID: 908
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-11-21
 ---
 
 # [REFACTOR/ENH] Migrate tools/grammars/*.peg to CPython PEG Grammar Syntax (ID: 908)
@@ -128,10 +129,10 @@ Target Branch: `feat/908-migrate-tools-grammars-to-cpython-peg-grammar-syntax`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `tools/grammars/` 配下の全 13 文法ファイルが CPython PEG 構文（`rule:`, `|`, `name=expr`, `[expr]`, `sep.rule+`）に統一移行されていること。
-- [ ] 各文法ファイルから旧構文の `<-` および `/`（Choice 用）が完全に排除されていること（文字クラス内スラッシュを除く）。
-- [ ] `make compile_grammars` がエラーなく実行され、全生成パーサー（Python 8ファイル、JS 1ファイル）が更新されること。
-- [ ] `make verify_peg_bootstrap`（`test_bootstrap.py`）が 100% PASS し、自己ホスト AOT パーサーが全 13 文法を正しく解析できること。
-- [ ] 既存のドメイン回帰テストスイート（SQL, BibTeX, PDF CMap, Turtle, YAML Frontmatter, Search Query）がすべて 100% PASS すること。
-- [ ] `make format && make static_analysis` がエラー 0 件で PASS すること（xenon Rank A, mypy --strict 617 files）。
-- [ ] すべてのファイル参照およびリンクにおいて相対パス規則が厳格に守られていること。
+- [x] `tools/grammars/` 配下の全 13 文法ファイルが CPython PEG 構文（`rule:`, `|`, `name=expr`, `[expr]`, `sep.rule+`）に統一移行されていること。
+- [x] 各文法ファイルから旧構文の `<-` および `/`（Choice 用）が完全に排除されていること（文字クラス内スラッシュを除く）。
+- [x] `make compile_grammars` がエラーなく実行され、全生成パーサー（Python 8ファイル、JS 1ファイル）が更新されること。
+- [x] `make verify_peg_bootstrap`（`test_bootstrap.py`）が 100% PASS し、自己ホスト AOT パーサーが全 13 文法を正しく解析できること。
+- [x] 既存のドメイン回帰テストスイート（SQL, BibTeX, PDF CMap, Turtle, YAML Frontmatter, Search Query）がすべて 100% PASS すること。
+- [x] `make format && make static_analysis` がエラー 0 件で PASS すること（xenon Rank A, mypy --strict 617 files）。
+- [x] すべてのファイル参照およびリンクにおいて相対パス規則が厳格に守られていること。

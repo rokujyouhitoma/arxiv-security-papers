@@ -19,12 +19,12 @@
 | **904** | 外部 C ランタイム完全排除と Pure Scheme _start エントリポイント・Raw Syscall 直結 | Feature | 未着手 (Open) | High | [DSN-33-07](../designs/DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) | [904-eliminate-external-c-runtime-and-establish-pure-scheme-start-entry.md](904-eliminate-external-c-runtime-and-establish-pure-scheme-start-entry.md) |
 | **905** | ベアメタル自立型 Demand-Paged BSS バンプアロケータおよび Zero-libc 2-Space GC の実装 | Feature | 未着手 (Open) | High | [DSN-33-07](../designs/DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) | [905-implement-freestanding-demand-paged-bss-bump-allocator-and-gc.md](905-implement-freestanding-demand-paged-bss-bump-allocator-and-gc.md) |
 | **906** | 完全自立型静的 ELF (-nostdlib -static) の E2E 実行可能性および動的依存ゼロの検証 | Feature | 未着手 (Open) | Medium | [DSN-33-07](../designs/DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) | [906-verify-freestanding-static-nostdlib-elf-e2e-execution.md](906-verify-freestanding-static-nostdlib-elf-e2e-execution.md) |
-| **908** | tools/grammars/*.peg 全文法ファイルの CPython PEG 構文への統一マイグレーション | Feature | 進行中 (In Progress) | High | [DSN-25](../designs/DSN-25-pure_python_packrat_peg_parser_engine.md) | [908-migrate-tools-grammars-to-cpython-peg-grammar-syntax.md](908-migrate-tools-grammars-to-cpython-peg-grammar-syntax.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **908** | tools/grammars/*.peg 全文法ファイルの CPython PEG 構文への統一マイグレーション | Feature | 2026-11-21 | [908-migrate-tools-grammars-to-cpython-peg-grammar-syntax.md](closed/908-migrate-tools-grammars-to-cpython-peg-grammar-syntax.md) |
 | **907** | src/core/peg における CPython PEG 文法仕様（PEP 617 / python.gram）の完全サポート | Feature | 2026-11-21 | [907-support-cpython-peg-grammar-specification-in-core-peg.md](closed/907-support-cpython-peg-grammar-specification-in-core-peg.md) |
 | **893** | ゲスト言語動的型タグ表現（Tagged Pointer / NaN-boxing）の実装 | Feature | 2026-11-21 | [893-implement-guest-dynamic-value-tagging-and-nan-boxing.md](closed/893-implement-guest-dynamic-value-tagging-and-nan-boxing.md) |
 | **892** | ゲスト言語スタックフレーム抽象（FrameDescriptor）とローカルスロット降格の実装 | Feature | 2026-11-21 | [892-implement-guest-frame-descriptor-and-local-slot-lowering.md](closed/892-implement-guest-frame-descriptor-and-local-slot-lowering.md) |
