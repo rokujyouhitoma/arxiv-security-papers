@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 class Expression(ABC):
@@ -115,12 +115,23 @@ class ActionExpr(Expression):
 
 
 @dataclass(frozen=True)
+class GatherExpr(Expression):
+    """Separator-delimited list expression (e.g. sep.rule+ or sep.rule*)."""
+
+    separator: Expression
+    element: Expression
+    is_one_or_more: bool = True
+
+
+@dataclass(frozen=True)
 class RuleDef:
     """Definition of a single PEG grammar rule (name = expr)."""
 
     name: str
     expr: Expression
     docstring: str = ""
+    return_type: Optional[str] = None
+    modifiers: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -131,3 +142,4 @@ class GrammarDef:
     rules: List[RuleDef] = field(default_factory=list)
     header_code: str = ""
     start_rule: Optional[str] = None
+    directives: Dict[str, str] = field(default_factory=dict)

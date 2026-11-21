@@ -19,6 +19,7 @@ from core.peg.compiler.ast_nodes import (
     ChoiceExpr,
     CutExpr,
     Expression,
+    GatherExpr,
     GrammarDef,
     LitExpr,
     NamedExpr,
@@ -44,6 +45,7 @@ _PEG_SYMBOLS: Tuple[str, ...] = (
     "Class",
     "CutOp",
     "Dot",
+    "Gather",
     "Lit",
     "NotPred",
     "OneOrMore",
@@ -84,6 +86,11 @@ class CodeGenerator(BaseCodeGenerator):
         ),
         AnyCharExpr: lambda self, e, r: "Dot()",
         CutExpr: lambda self, e, r: "CutOp()",
+        GatherExpr: lambda self, e, r: (
+            f"Gather({self._emit_expr(cast(GatherExpr, e).separator, r)}, "
+            f"{self._emit_expr(cast(GatherExpr, e).element, r)}, "
+            f"is_one_or_more={cast(GatherExpr, e).is_one_or_more})"
+        ),
         RuleRefExpr: lambda self, e, r: f"self._r_{cast(RuleRefExpr, e).name}",
         OptExpr: lambda self, e, r: f"Opt({self._emit_expr(cast(OptExpr, e).expr, r)})",
         RepeatExpr: lambda self, e, r: self._emit_repeat(cast(RepeatExpr, e), r),
