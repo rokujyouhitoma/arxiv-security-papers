@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **913** | C99 字句解析器 (Lexer) および Source Span 付きトークンストリームの実装 | Feature | Open (New) | [913-implement-c99-lexer-and-token-stream-with-source-span.md](913-implement-c99-lexer-and-token-stream-with-source-span.md) |
+| **913** | C99 字句解析器 (Lexer) および Source Span 付きトークンストリームの実装 | Feature | In Progress | [913-implement-c99-lexer-and-token-stream-with-source-span.md](913-implement-c99-lexer-and-token-stream-with-source-span.md) |
 | **914** | 純粋 Scheme 製 C99 プリプロセッサ (CPP: `#include`/`#define`/`##`/`#if` CTFE) の実装 | Feature | Open (New) | [914-implement-pure-scheme-c99-preprocessor-cpp.md](914-implement-pure-scheme-c99-preprocessor-cpp.md) |
 | **915** | C99 構文解析器 (Parser) および Nanopass C-AST 言語定義・Lexer Hack 解消の実装 | Feature | Open (New) | [915-implement-c99-parser-and-nanopass-c-ast-definitions.md](915-implement-c99-parser-and-nanopass-c-ast-definitions.md) |
 | **916** | C99 基本型検査・整数昇格 (Sema Core) および整数サブセット Core LIR Lowering の実装 | Feature | Open (New) | [916-implement-c99-sema-core-and-integer-subset-lir-lowering.md](916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |
@@ -24,7 +24,7 @@
 | **928** | `musl libc` の ULisp 自前ビルドおよび Pass 144 自前 ELF リンカによる完全静的リンク移行 | Feature | Open (New) | [928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
 | **929** | DDC (Diverse Double-Compiling) による C コンパイル出力の決定論性・ビット一致検証ハーネスの実装 | Feature | Open (New) | [929-implement-ddc-diverse-double-compiling-determinism-verification.md](929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | Open (New) | [930-implement-c99-bounds-checking-sanitizer-mode.md](930-implement-c99-bounds-checking-sanitizer-mode.md) |
-| **931** | PEG による C99 文法仕様 (`tools/grammars/c99.peg`) の定義およびパーサー自動合成の実装 | Feature | Open (New) | [931-implement-c99-peg-grammar-specification-and-parser-synthesis.md](931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) |
+| **931** | PEG による C99 文法仕様 (`tools/grammars/c99.peg`) の定義およびパーサー自動合成の実装 | Feature | In Progress | [931-implement-c99-peg-grammar-specification-and-parser-synthesis.md](931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
