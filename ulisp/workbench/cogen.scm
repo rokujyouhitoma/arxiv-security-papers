@@ -124,25 +124,28 @@
 
 ;; Compiles a guest AST node into LIR using interpreter semantic rules and GFD.
 ;; Includes recursion depth limit to mitigate CWE-400.
-(define (cogen-lower-ast node rules gfd runtime-model . maybe-depth)
-  (let ((depth (if (pair? maybe-depth) (car maybe-depth) 0)))
-    (if (> depth *cogen-max-recursion-depth*)
-        (error "cogen-lower-ast: recursion depth limit exceeded (CWE-400 mitigation)" 'depth-limit-exceeded)
-        (if (ast-has-span? node)
-            (let* ((span (ast-source-span node))
-                   (inner (ast-strip-span node))
-                   (res (cogen-lower-ast inner rules gfd runtime-model depth)))
-              (if span
-                  (ast-with-span res span)
-                  res))
-            (cond
-              ((number? node)
-               (make-lir-const node))
-              ((boolean? node)
-               (make-lir-const (if node 1 0)))
-              ((string? node)
-               (make-lir-const node))
-              ((symbol? node)
+(define cogen-lower-ast
+  (case-lambda
+    ((node rules gfd runtime-model)
+     (cogen-lower-ast node rules gfd runtime-model 0))
+    ((node rules gfd runtime-model depth)
+     (if (> depth *cogen-max-recursion-depth*)
+         (error "cogen-lower-ast: recursion depth limit exceeded (CWE-400 mitigation)" 'depth-limit-exceeded)
+         (if (ast-has-span? node)
+             (let* ((span (ast-source-span node))
+                    (inner (ast-strip-span node))
+                    (res (cogen-lower-ast inner rules gfd runtime-model depth)))
+               (if span
+                   (ast-with-span res span)
+                   res))
+             (cond
+               ((number? node)
+                (make-lir-const node))
+               ((boolean? node)
+                (make-lir-const (if node 1 0)))
+               ((string? node)
+                (make-lir-const node))
+               ((symbol? node)
                ;; Variable reference: resolve slot in frame descriptor
                (let ((slot-idx (gfd-lookup-slot gfd node)))
                  (if slot-idx
@@ -209,13 +212,16 @@
                           'depth-limit-exceeded
                           (make-lir-call tag compiled-args))))))))
           (else
-           (make-lir-const node)))))))
+           (make-lir-const node))))))))
 
 ;;; Derives a compiler procedure from a declarative interpreter specification
-(define (derive-cogen-compiler interp-spec . maybe-runtime-model)
-  (let ((runtime-model (if (pair? maybe-runtime-model) (car maybe-runtime-model) 'tagging)))
-    (lambda (ast-or-source gfd)
-      (cogen-lower-ast ast-or-source interp-spec gfd runtime-model 0))))
+(define derive-cogen-compiler
+  (case-lambda
+    ((interp-spec)
+     (derive-cogen-compiler interp-spec 'tagging))
+    ((interp-spec runtime-model)
+     (lambda (ast-or-source gfd)
+       (cogen-lower-ast ast-or-source interp-spec gfd runtime-model 0)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. LIR Evaluation & Verification Engine

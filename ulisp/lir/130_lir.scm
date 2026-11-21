@@ -339,7 +339,7 @@
           ;; General procedure call
           (lir-compile-call op (cdr expr) si env tail?)))))
     (else
-     (error "Invalid syntax in LIR compiler:" expr))))
+     (error "Invalid syntax in LIR compiler:" expr))))))
 
 (define (lir-inline-asm-resolve-var var env)
   (let ((binding (assq var env)))
@@ -429,7 +429,7 @@
             ((and (symbol? dst0)
                   (let ((nr (inline-asm-normalize-reg-sym dst0)))
                     (and nr (not (eq? nr '%rax)))))
-             (emit-lir! (list '%mov '%rax dst0))))))))))
+             (emit-lir! (list '%mov '%rax dst0))))))))
 
 ;;; Compile a single lifted %function to LIR representation
 (define (lir-compile-function fn-raw)

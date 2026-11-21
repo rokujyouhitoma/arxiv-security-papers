@@ -71,12 +71,12 @@
     (else #f)))
 
 ;;; Extract variables from a let-binding list: ((var val) ...) -> (var ...)
-(define (extract-binding-vars bindings)
+(define (jit-extract-binding-vars bindings)
   (if (null? bindings)
       '()
       (let ((b (car bindings)))
         (cons (if (pair? b) (car b) b)
-              (extract-binding-vars (cdr bindings))))))
+              (jit-extract-binding-vars (cdr bindings))))))
 
 ;;; =======================================================================
 ;;; Primary Recursive AST Transformer
@@ -102,7 +102,7 @@
      (let* ((loop-name (cadr form))
             (raw-bindings (caddr form))
             (raw-body (cdddr form))
-            (vars (extract-binding-vars raw-bindings))
+            (vars (jit-extract-binding-vars raw-bindings))
             (inst-bindings
              (map (lambda (b)
                     (if (and (pair? b) (pair? (cdr b)))

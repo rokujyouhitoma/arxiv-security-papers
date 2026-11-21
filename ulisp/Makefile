@@ -2024,7 +2024,7 @@ run_jit: bin/ulisp-jit
 	@./bin/ulisp-jit build/test_jit_aot.scm > build/test_jit_aot.s
 	@$(AS) $(ASFLAGS) build/test_jit_aot.s -o build/test_jit_aot.o
 	@$(LD) $(LDFLAGS) -o build/test_jit_aot build/test_jit_aot.o
-	@test "$$(./build/test_jit_aot)" = "120"
+	@test "$$(ULISP_PRINT_RESULT=1 ./build/test_jit_aot)" = "120"
 	@echo "SUCCESS: ulisp-jit AOT compilation verified (fact 5) = 120!"
 
 # --- Performance Benchmark ---

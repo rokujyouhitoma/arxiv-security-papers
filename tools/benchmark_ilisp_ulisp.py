@@ -31,6 +31,7 @@ ULISP_JIT_BIN = BIN_DIR / "ulisp-jit"
 STAGE2_BIN = BUILD_DIR / "scheme-stage2"
 
 PYTHON_BIN = sys.executable
+DEFAULT_SUBPROCESS_TIMEOUT_SEC = 60  # CWE-400 DoS defense: terminate runaway benchmark processes
 
 # Standard Benchmarks
 WORKLOADS: Dict[str, Dict[str, Any]] = {
@@ -87,6 +88,20 @@ WORKLOADS: Dict[str, Dict[str, Any]] = {
 }
 
 
+def validate_output_path(path_str: str) -> Path:
+    """Validate and sanitize output paths to prevent path traversal (CWE-22 / CWE-73)."""
+    p = Path(path_str)
+    if not p.is_absolute():
+        p = (ROOT_DIR / p).resolve()
+    else:
+        p = p.resolve()
+    try:
+        p.relative_to(ROOT_DIR)
+    except ValueError:
+        raise ValueError(f"Security Alert: Output path {path_str} traverses outside repository root (CWE-22)")
+    return p
+
+
 def extract_result(text: str) -> str:
     """Extract return value from output, handling ULisp-JIT banner and standard prints."""
     lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
@@ -127,7 +142,14 @@ def run_with_perf(cmd: List[str], env: Dict[str, str]) -> Tuple[subprocess.Compl
         "-e", "instructions,branch-misses,cycles,page-faults",
         "--"
     ] + cmd
-    res = subprocess.run(perf_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    res = subprocess.run(
+        perf_cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
+    )
 
     perf_stats: Dict[str, Optional[int]] = {
         "instructions": None,
@@ -167,7 +189,14 @@ def run_ilisp(code: str, env_vars: Optional[Dict[str, str]] = None) -> Tuple[flo
             env.update(env_vars)
 
         t0 = time.perf_counter()
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
+        )
         t1 = time.perf_counter()
 
         if res.returncode != 0:
@@ -201,7 +230,13 @@ def compile_and_run_aot(code: str, compiler_path: Path) -> Tuple[float, float, s
         # AOT Compilation
         t_comp_0 = time.perf_counter()
         with open(s_path, "w") as out_s:
-            comp_res = subprocess.run([str(compiler_path), in_path], stdout=out_s, stderr=subprocess.PIPE, text=True)
+            comp_res = subprocess.run(
+                [str(compiler_path), in_path],
+                stdout=out_s,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
+            )
         if comp_res.returncode != 0:
             raise RuntimeError(f"AOT compilation failed: {comp_res.stderr}")
 
@@ -210,6 +245,7 @@ def compile_and_run_aot(code: str, compiler_path: Path) -> Tuple[float, float, s
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
         )
         if gcc_res.returncode != 0:
             raise RuntimeError(f"GCC linking failed: {gcc_res.stderr}")
@@ -218,8 +254,16 @@ def compile_and_run_aot(code: str, compiler_path: Path) -> Tuple[float, float, s
 
         # Binary Execution
         env = make_padded_env()
+        env["ULISP_PRINT_RESULT"] = "1"
         t_exec_0 = time.perf_counter()
-        exec_res = subprocess.run([exe_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        exec_res = subprocess.run(
+            [exe_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
+        )
         t_exec_1 = time.perf_counter()
         exec_ms = (t_exec_1 - t_exec_0) * 1000.0
 
@@ -244,7 +288,14 @@ def run_ulisp_jit(code: str, jit_bin: Path) -> Tuple[float, str]:
         cmd = [str(jit_bin), f_path]
         env = make_padded_env()
         t0 = time.perf_counter()
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
+        )
         t1 = time.perf_counter()
 
         if res.returncode != 0:
@@ -292,11 +343,21 @@ def measure_workload(
         f_in.flush()
 
     perf_data: Dict[str, Any] = {}
+    env["ULISP_PRINT_RESULT"] = "1"
     try:
         t0_comp = time.perf_counter()
         with open(s_p, "w") as out_s:
-            subprocess.run([str(compiler_path), in_p], stdout=out_s, check=True)
-        subprocess.run(["gcc", "-nostdlib", "-static", s_p, "-o", exe_p], check=True)
+            subprocess.run(
+                [str(compiler_path), in_p],
+                stdout=out_s,
+                check=True,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
+            )
+        subprocess.run(
+            ["gcc", "-nostdlib", "-static", s_p, "-o", exe_p],
+            check=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
+        )
         t1_comp = time.perf_counter()
         aot_comp_ms = (t1_comp - t0_comp) * 1000.0
 
@@ -304,7 +365,14 @@ def measure_workload(
         aot_out = ""
         for _ in range(iterations):
             t0 = time.perf_counter()
-            res = subprocess.run([exe_p], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+            res = subprocess.run(
+                [exe_p],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SEC,
+            )
             t1 = time.perf_counter()
             if res.returncode != 0:
                 raise RuntimeError(f"AOT run failed: {res.stderr}")
@@ -650,8 +718,8 @@ def main():
         },
         "config": {
             "iterations": args.iterations,
-            "compiler": str(compiler_path),
-            "jit_bin": str(jit_path),
+            "compiler": str(compiler_path.relative_to(ROOT_DIR)) if compiler_path.is_relative_to(ROOT_DIR) else str(compiler_path),
+            "jit_bin": str(jit_path.relative_to(ROOT_DIR)) if jit_path.is_relative_to(ROOT_DIR) else str(jit_path),
             "perf_enabled": args.perf,
         },
         "results": results,
@@ -659,7 +727,7 @@ def main():
 
     # Output JSON
     if args.json_out:
-        json_path = Path(args.json_out)
+        json_path = validate_output_path(args.json_out)
         json_path.parent.mkdir(parents=True, exist_ok=True)
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(benchmark_data, f, indent=2, ensure_ascii=False)
@@ -675,7 +743,7 @@ def main():
 
     # Output Markdown
     if args.markdown_out:
-        md_path = Path(args.markdown_out)
+        md_path = validate_output_path(args.markdown_out)
         md_path.parent.mkdir(parents=True, exist_ok=True)
         md_content = generate_markdown_report(benchmark_data)
         with open(md_path, "w", encoding="utf-8") as f:

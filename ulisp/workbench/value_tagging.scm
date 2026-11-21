@@ -55,7 +55,7 @@
 
 (define (%guest-bit-shift n bits)
   (if (number? n)
-      (arithmetic-shift n bits)
+      (bitwise-arithmetic-shift n bits)
       0))
 
 ;;; -----------------------------------------------------------------------

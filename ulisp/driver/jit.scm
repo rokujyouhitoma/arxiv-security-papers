@@ -13,7 +13,7 @@
 ;;; 1. Standard Pure Scheme Helpers
 ;;; -----------------------------------------------------------------------
 
-
+(define (display-string s) (display s))
 (define (cddddr x) (cdr (cdr (cdr (cdr x)))))
 (define (caadr x) (car (car (cdr x))))
 (define (cdadr x) (cdr (car (cdr x))))
@@ -397,12 +397,12 @@
                 (tail-calls? (last-element body) target-name)))))
     (else #f)))
 
-(define (extract-binding-vars bindings)
+(define (jit-extract-binding-vars bindings)
   (if (null? bindings)
       '()
       (let ((b (car bindings)))
         (cons (if (pair? b) (car b) b)
-              (extract-binding-vars (cdr bindings))))))
+              (jit-extract-binding-vars (cdr bindings))))))
 
 (define (auto-instrument-form form)
   (cond
@@ -418,7 +418,7 @@
      (let* ((loop-name (cadr form))
             (raw-bindings (caddr form))
             (raw-body (cdddr form))
-            (vars (extract-binding-vars raw-bindings))
+            (vars (jit-extract-binding-vars raw-bindings))
             (inst-bindings
              (map (lambda (b)
                     (if (and (pair? b) (pair? (cdr b)))
@@ -732,12 +732,22 @@
 ;;; 8. Standalone Binary Entry Point
 ;;; -----------------------------------------------------------------------
 
-(define (read-all-forms-stdin)
+(define (read-all-forms-from-port p)
   (let loop ((acc '()))
-    (let ((form (read)))
+    (let ((form (read p)))
       (if (eof-object? form)
           (reverse acc)
           (loop (cons form acc))))))
+
+(define (read-all-forms)
+  (let* ((args (command-line))
+         (file-arg (and (pair? args) (pair? (cdr args)) (cadr args))))
+    (if (and file-arg (not (string=? file-arg "-")))
+        (let* ((p (open-input-file file-arg))
+               (forms (read-all-forms-from-port p)))
+          (close-port p)
+          forms)
+        (read-all-forms-from-port (current-input-port)))))
 
 (define (is-compile-request? forms)
   (and (pair? forms)
@@ -797,7 +807,7 @@
     0))
 
 (define (main)
-  (let ((forms (read-all-forms-stdin)))
+  (let ((forms (read-all-forms)))
     (if (null? forms)
         (begin
           (display-string "ulisp-jit: No input expressions provided on stdin.\n")

@@ -2019,6 +2019,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "bitwise-xor": prim_bitwise_xor,
         "bitwise-not": prim_bitwise_not,
         "arithmetic-shift": prim_arithmetic_shift,
+        "bitwise-arithmetic-shift": prim_arithmetic_shift,
         "numerator": prim_numerator,
         "denominator": prim_denominator,
         "rationalize": prim_rationalize,

@@ -1243,12 +1243,10 @@
 
 (define (with-disabled-picopasses rules thunk)
   (let ((saved (car *disabled-picopasses*)))
-    (dynamic-wind
-      (lambda ()
-        (for-each disable-picopass! rules))
-      thunk
-      (lambda ()
-        (set-car! *disabled-picopasses* saved)))))
+    (for-each disable-picopass! rules)
+    (let ((res (thunk)))
+      (set-car! *disabled-picopasses* saved)
+      res)))
 
 ;;; Structured Assertion Failure Helper
 (define (picopass-fail message ir)

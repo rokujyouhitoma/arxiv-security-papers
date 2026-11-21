@@ -54,30 +54,33 @@
 
 ;;; Adds a new slot to the frame descriptor if not already present.
 ;;; Returns the assigned slot index (Fixnum).
-(define (gfd-add-slot! gfd name . maybe-type)
-  (let ((existing (gfd-lookup-slot gfd name)))
-    (if existing
-        existing
-        (let* ((curr-cnt (gfd-num-slots gfd))
-               (type-hint (if (pair? maybe-type) (car maybe-type) 'any))
-               (new-names (append (gfd-slot-names gfd) (list name)))
-               (new-types (append (gfd-slot-types gfd) (list type-hint))))
-          (gfd-num-slots-set! gfd (+ curr-cnt 1))
-          (gfd-slot-names-set! gfd new-names)
-          (gfd-slot-types-set! gfd new-types)
-          curr-cnt))))
+(define gfd-add-slot!
+  (case-lambda
+    ((gfd name)
+     (gfd-add-slot! gfd name 'any))
+    ((gfd name type-hint)
+     (let ((existing (gfd-lookup-slot gfd name)))
+       (if existing
+           existing
+           (let* ((curr-cnt (gfd-num-slots gfd))
+                  (new-names (append (gfd-slot-names gfd) (list name)))
+                  (new-types (append (gfd-slot-types gfd) (list type-hint))))
+             (gfd-num-slots-set! gfd (+ curr-cnt 1))
+             (gfd-slot-names-set! gfd new-names)
+             (gfd-slot-types-set! gfd new-types)
+             curr-cnt))))))
 
 ;;; Marks a slot as escaping (captured in a closure, dynamic eval, etc.)
 (define (gfd-mark-escape! gfd slot-idx)
   (let ((mask (gfd-escape-mask gfd)))
     ;; Set bit at slot-idx: mask | (1 << slot-idx)
-    (let ((bit (arithmetic-shift 1 slot-idx)))
+    (let ((bit (bitwise-arithmetic-shift 1 slot-idx)))
       (gfd-escape-mask-set! gfd (bitwise-ior mask bit)))))
 
 ;;; Checks if a slot escapes
 (define (gfd-escapes? gfd slot-idx)
   (let ((mask (gfd-escape-mask gfd)))
-    (let ((bit (arithmetic-shift 1 slot-idx)))
+    (let ((bit (bitwise-arithmetic-shift 1 slot-idx)))
       (not (zero? (bitwise-and mask bit))))))
 
 ;;; Returns the variable name at slot-idx

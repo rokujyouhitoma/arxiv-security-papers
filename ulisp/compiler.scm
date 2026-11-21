@@ -4265,12 +4265,10 @@
 
 (define (with-disabled-picopasses rules thunk)
   (let ((saved (car *disabled-picopasses*)))
-    (dynamic-wind
-      (lambda ()
-        (for-each disable-picopass! rules))
-      thunk
-      (lambda ()
-        (set-car! *disabled-picopasses* saved)))))
+    (for-each disable-picopass! rules)
+    (let ((res (thunk)))
+      (set-car! *disabled-picopasses* saved)
+      res)))
 
 ;;; Structured Assertion Failure Helper
 (define (picopass-fail message ir)
@@ -10154,43 +10152,41 @@
 (define (auto-bisect-picopasses candidate-rules test-fn)
   (let* ((rule-ids (map (lambda (r) (if (rule-descriptor? r) (rule-name r) r)) candidate-rules))
          (saved-disabled (disabled-picopasses)))
-    (dynamic-wind
-      (lambda () #f)
-      (lambda ()
-        (reset-disabled-picopasses!)
-        ;; Step 1: Does the bug reproduce when all candidate rules are enabled?
-        (if (test-fn)
-            #f ; Bug is not reproduced (test-fn passed)
-            ;; Step 2: Does the bug disappear when ALL candidate rules are disabled?
-            (let ((passes-when-all-disabled?
-                   (with-disabled-picopasses rule-ids test-fn)))
-              (if (not passes-when-all-disabled?)
-                  'cannot-isolate-all-disabled-still-fails
-                  ;; Step 3: Delta debugging recursive bisection
-                  (let bisect ((rules rule-ids))
-                    (cond
-                      ((null? rules) #f)
-                      ((= (length rules) 1)
-                       (car rules)) ; Isolated single culprit rule!
-                      (else
-                       (let* ((mid (quotient (length rules) 2))
-                              (split (picopass-split-list rules mid))
-                              (r1 (car split))
-                              (r2 (cdr split)))
-                         ;; Test if failure persists without r1
-                         (let ((fails-without-r1?
-                                (not (with-disabled-picopasses r1 test-fn))))
-                           (if fails-without-r1?
-                               (bisect r2)
-                               ;; Otherwise test if failure persists without r2
-                               (let ((fails-without-r2?
-                                      (not (with-disabled-picopasses r2 test-fn))))
-                                 (if fails-without-r2?
-                                     (bisect r1)
-                                     ;; Both subsets needed -> interaction bug
-                                     (list 'interaction r1 r2)))))))))))))
-      (lambda ()
-        (set-car! *disabled-picopasses* saved-disabled)))))
+    (reset-disabled-picopasses!)
+    (let ((result
+           ;; Step 1: Does the bug reproduce when all candidate rules are enabled?
+           (if (test-fn)
+               #f ; Bug is not reproduced (test-fn passed)
+               ;; Step 2: Does the bug disappear when ALL candidate rules are disabled?
+               (let ((passes-when-all-disabled?
+                      (with-disabled-picopasses rule-ids test-fn)))
+                 (if (not passes-when-all-disabled?)
+                     'cannot-isolate-all-disabled-still-fails
+                     ;; Step 3: Delta debugging recursive bisection
+                     (let bisect ((rules rule-ids))
+                       (cond
+                         ((null? rules) #f)
+                         ((= (length rules) 1)
+                          (car rules)) ; Isolated single culprit rule!
+                         (else
+                          (let* ((mid (quotient (length rules) 2))
+                                 (split (picopass-split-list rules mid))
+                                 (r1 (car split))
+                                 (r2 (cdr split)))
+                            ;; Test if failure persists without r1
+                            (let ((fails-without-r1?
+                                   (not (with-disabled-picopasses r1 test-fn))))
+                              (if fails-without-r1?
+                                  (bisect r2)
+                                  ;; Otherwise test if failure persists without r2
+                                  (let ((fails-without-r2?
+                                         (not (with-disabled-picopasses r2 test-fn))))
+                                    (if fails-without-r2?
+                                        (bisect r1)
+                                        ;; Both subsets needed -> interaction bug
+                                        (list 'interaction r1 r2))))))))))))))
+      (set-car! *disabled-picopasses* saved-disabled)
+      result)))
 ;;; =======================================================================
 ;;; ULisp Compiler: Generic Dataflow Analysis Framework & Lattice Engine
 ;;; Conforms to DSN-33 Architecture Specification & Issue #599
@@ -12052,30 +12048,33 @@
 
 ;;; Adds a new slot to the frame descriptor if not already present.
 ;;; Returns the assigned slot index (Fixnum).
-(define (gfd-add-slot! gfd name . maybe-type)
-  (let ((existing (gfd-lookup-slot gfd name)))
-    (if existing
-        existing
-        (let* ((curr-cnt (gfd-num-slots gfd))
-               (type-hint (if (pair? maybe-type) (car maybe-type) 'any))
-               (new-names (append (gfd-slot-names gfd) (list name)))
-               (new-types (append (gfd-slot-types gfd) (list type-hint))))
-          (gfd-num-slots-set! gfd (+ curr-cnt 1))
-          (gfd-slot-names-set! gfd new-names)
-          (gfd-slot-types-set! gfd new-types)
-          curr-cnt))))
+(define gfd-add-slot!
+  (case-lambda
+    ((gfd name)
+     (gfd-add-slot! gfd name 'any))
+    ((gfd name type-hint)
+     (let ((existing (gfd-lookup-slot gfd name)))
+       (if existing
+           existing
+           (let* ((curr-cnt (gfd-num-slots gfd))
+                  (new-names (append (gfd-slot-names gfd) (list name)))
+                  (new-types (append (gfd-slot-types gfd) (list type-hint))))
+             (gfd-num-slots-set! gfd (+ curr-cnt 1))
+             (gfd-slot-names-set! gfd new-names)
+             (gfd-slot-types-set! gfd new-types)
+             curr-cnt))))))
 
 ;;; Marks a slot as escaping (captured in a closure, dynamic eval, etc.)
 (define (gfd-mark-escape! gfd slot-idx)
   (let ((mask (gfd-escape-mask gfd)))
     ;; Set bit at slot-idx: mask | (1 << slot-idx)
-    (let ((bit (arithmetic-shift 1 slot-idx)))
+    (let ((bit (bitwise-arithmetic-shift 1 slot-idx)))
       (gfd-escape-mask-set! gfd (bitwise-ior mask bit)))))
 
 ;;; Checks if a slot escapes
 (define (gfd-escapes? gfd slot-idx)
   (let ((mask (gfd-escape-mask gfd)))
-    (let ((bit (arithmetic-shift 1 slot-idx)))
+    (let ((bit (bitwise-arithmetic-shift 1 slot-idx)))
       (not (zero? (bitwise-and mask bit))))))
 
 ;;; Returns the variable name at slot-idx
@@ -12266,7 +12265,7 @@
 
 (define (%guest-bit-shift n bits)
   (if (number? n)
-      (arithmetic-shift n bits)
+      (bitwise-arithmetic-shift n bits)
       0))
 
 ;;; -----------------------------------------------------------------------
@@ -12719,25 +12718,28 @@
 
 ;; Compiles a guest AST node into LIR using interpreter semantic rules and GFD.
 ;; Includes recursion depth limit to mitigate CWE-400.
-(define (cogen-lower-ast node rules gfd runtime-model . maybe-depth)
-  (let ((depth (if (pair? maybe-depth) (car maybe-depth) 0)))
-    (if (> depth *cogen-max-recursion-depth*)
-        (error "cogen-lower-ast: recursion depth limit exceeded (CWE-400 mitigation)" 'depth-limit-exceeded)
-        (if (ast-has-span? node)
-            (let* ((span (ast-source-span node))
-                   (inner (ast-strip-span node))
-                   (res (cogen-lower-ast inner rules gfd runtime-model depth)))
-              (if span
-                  (ast-with-span res span)
-                  res))
-            (cond
-              ((number? node)
-               (make-lir-const node))
-              ((boolean? node)
-               (make-lir-const (if node 1 0)))
-              ((string? node)
-               (make-lir-const node))
-              ((symbol? node)
+(define cogen-lower-ast
+  (case-lambda
+    ((node rules gfd runtime-model)
+     (cogen-lower-ast node rules gfd runtime-model 0))
+    ((node rules gfd runtime-model depth)
+     (if (> depth *cogen-max-recursion-depth*)
+         (error "cogen-lower-ast: recursion depth limit exceeded (CWE-400 mitigation)" 'depth-limit-exceeded)
+         (if (ast-has-span? node)
+             (let* ((span (ast-source-span node))
+                    (inner (ast-strip-span node))
+                    (res (cogen-lower-ast inner rules gfd runtime-model depth)))
+               (if span
+                   (ast-with-span res span)
+                   res))
+             (cond
+               ((number? node)
+                (make-lir-const node))
+               ((boolean? node)
+                (make-lir-const (if node 1 0)))
+               ((string? node)
+                (make-lir-const node))
+               ((symbol? node)
                ;; Variable reference: resolve slot in frame descriptor
                (let ((slot-idx (gfd-lookup-slot gfd node)))
                  (if slot-idx
@@ -12804,13 +12806,16 @@
                           'depth-limit-exceeded
                           (make-lir-call tag compiled-args))))))))
           (else
-           (make-lir-const node)))))))
+           (make-lir-const node))))))))
 
 ;;; Derives a compiler procedure from a declarative interpreter specification
-(define (derive-cogen-compiler interp-spec . maybe-runtime-model)
-  (let ((runtime-model (if (pair? maybe-runtime-model) (car maybe-runtime-model) 'tagging)))
-    (lambda (ast-or-source gfd)
-      (cogen-lower-ast ast-or-source interp-spec gfd runtime-model 0))))
+(define derive-cogen-compiler
+  (case-lambda
+    ((interp-spec)
+     (derive-cogen-compiler interp-spec 'tagging))
+    ((interp-spec runtime-model)
+     (lambda (ast-or-source gfd)
+       (cogen-lower-ast ast-or-source interp-spec gfd runtime-model 0)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. LIR Evaluation & Verification Engine
@@ -30362,7 +30367,7 @@
           ;; General procedure call
           (lir-compile-call op (cdr expr) si env tail?)))))
     (else
-     (error "Invalid syntax in LIR compiler:" expr))))
+     (error "Invalid syntax in LIR compiler:" expr))))))
 
 (define (lir-inline-asm-resolve-var var env)
   (let ((binding (assq var env)))
@@ -30452,7 +30457,7 @@
             ((and (symbol? dst0)
                   (let ((nr (inline-asm-normalize-reg-sym dst0)))
                     (and nr (not (eq? nr '%rax)))))
-             (emit-lir! (list '%mov '%rax dst0))))))))))
+             (emit-lir! (list '%mov '%rax dst0))))))))
 
 ;;; Compile a single lifted %function to LIR representation
 (define (lir-compile-function fn-raw)
