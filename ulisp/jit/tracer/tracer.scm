@@ -32,21 +32,36 @@
 (define (set-hot-threshold! n)
   (set! *tracer-hot-threshold* n))
 
+;;; CWE-400 Mitigation: Maximum loop profiler entries limit
+(define *jit-max-profiler-entries* 4096)
+
 ;;; Lookup loop execution count
 (define (get-loop-count pc)
   (let ((entry (assoc pc *loop-counters*)))
     (if entry (cdr entry) 0)))
 
-;;; Increment loop execution count
+;;; Increment loop execution count (with CWE-400 limit guard)
 (define (inc-loop-count! pc)
   (let ((entry (assoc pc *loop-counters*)))
     (if entry
         (begin
           (set-cdr! entry (+ (cdr entry) 1))
           (cdr entry))
-        (begin
-          (set! *loop-counters* (cons (cons pc 1) *loop-counters*))
-          1))))
+        (if (>= (length *loop-counters*) *jit-max-profiler-entries*)
+            ;; Capacity limit reached: do not allocate new entries
+            0
+            (begin
+              (set! *loop-counters* (cons (cons pc 1) *loop-counters*))
+              1)))))
+
+;;; Decay loop counters to adapt to changing execution phases
+(define (decay-loop-counters! factor)
+  (let ((f (if (and (integer? factor) (> factor 1)) factor 2)))
+    (set! *loop-counters*
+          (filter (lambda (entry) (> (cdr entry) 0))
+                  (map (lambda (entry)
+                         (cons (car entry) (quotient (cdr entry) f)))
+                       *loop-counters*)))))
 
 ;;; Check if a loop PC has reached hot threshold
 (define (hot-loop? pc)
@@ -143,3 +158,15 @@
            #f)))
 
     (else #f)))
+
+;;; =======================================================================
+;;; Delimited Continuation Linear Trace Capture API
+;;; =======================================================================
+;;; Captures one execution cycle of body-thunk within a delimited prompt.
+(define (capture-loop-trace-delimited pc state-env body-thunk)
+  (with-jit-prompt
+    (start-recording! pc)
+    (body-thunk)
+    (if (eq? *tracer-state* *TRACER-STATE-RECORDING*)
+        (finish-recording! pc)
+        #f)))

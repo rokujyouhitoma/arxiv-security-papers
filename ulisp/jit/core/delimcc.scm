@@ -10,9 +10,18 @@
 ;;; Internal meta-continuation stack for tracking delimited prompt boundaries
 (define *meta-continuation-stack* '())
 
+;;; CWE-674 Mitigation: Maximum delimited continuation prompt nesting depth
+(define *max-prompt-depth* 64)
+
+;;; Returns current prompt nesting depth
+(define (prompt-depth)
+  (length *meta-continuation-stack*))
+
 ;;; Push a prompt exit continuation
 (define (push-prompt-k! k)
-  (set! *meta-continuation-stack* (cons k *meta-continuation-stack*)))
+  (if (>= (length *meta-continuation-stack*) *max-prompt-depth*)
+      (error "Delimited control error: prompt depth limit exceeded (CWE-674 mitigation)" *max-prompt-depth*)
+      (set! *meta-continuation-stack* (cons k *meta-continuation-stack*))))
 
 ;;; Pop a prompt exit continuation
 (define (pop-prompt-k!)
@@ -76,3 +85,15 @@
 (define (abort-delimited val)
   (let ((k-exit (pop-prompt-k!)))
     (k-exit val)))
+
+;;; =======================================================================
+;;; JIT High-Level Prompt Helpers
+;;; =======================================================================
+
+(define (call-with-jit-prompt thunk)
+  (reset-thunk thunk))
+
+(define-syntax with-jit-prompt
+  (syntax-rules ()
+    ((with-jit-prompt body ...)
+     (reset-thunk (lambda () body ...)))))
