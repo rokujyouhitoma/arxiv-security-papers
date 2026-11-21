@@ -2,7 +2,7 @@
 ID: 891
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] オフライン BTA 4値束注釈とオンライン部分評価のハイブリッド推論フィードバック統合 (ID: 891)
@@ -139,8 +139,8 @@ flowchart TD
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `bta-extract-static-env` が実装され、BTA 推論環境から静的バインディングを安全に抽出できること。
-- [ ] `eval-in-stage` において `%bta-annotated` 式が適切に解釈され、純粋静的式が先回り簡約されること。
-- [ ] `bta-hybrid-stage-lower` が実装され、メタ構文なしの素のコードでも静的変数に基づく自動分岐消去と定数畳み込みが行われること。
-- [ ] `test_bta_lattice.scm` および `test_stage_oracle.scm` が 100% PASS すること。
-- [ ] `make -C ulisp bootstrap` による Stage 2 == Stage 3 の bit-for-bit IDENTICAL 不動点が 100% 保証されること。
+- [x] `bta-extract-static-env` が実装され、BTA 推論環境から静的バインディングを安全に抽出できること。
+- [x] `eval-in-stage` において `%bta-annotated` 式が適切に解釈され、純粋静的式が先回り簡約されること。
+- [x] `bta-hybrid-stage-lower` が実装され、メタ構文なしの素のコードでも静的変数に基づく自動分岐消去と定数畳み込みが行われること。
+- [x] `test_bta_lattice.scm` および `test_stage_oracle.scm` が 100% PASS すること。
+- [x] `make -C ulisp bootstrap` による Stage 2 == Stage 3 の bit-for-bit IDENTICAL 不動点が 100% 保証されること。

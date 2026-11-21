@@ -98,4 +98,32 @@
 (assert-equal "5.2 Annotation type is static" 'static (bta-annotation-type ann))
 (assert-equal "5.3 Annotation expr is (+ 1 2)" '(+ 1 2) (bta-annotation-expr ann))
 
+;;; -----------------------------------------------------------------------
+;;; Group 6: Static Environment Extraction & Recursive Annotation (Issue #891)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 6: Static Environment Extraction & Recursive Annotation ---\n")
+
+;; 6.1 bta-extract-static-env
+(let* ((b-env '((x . static) (y . dynamic) (z . psds) (w . bot)))
+       (r-env '((x . 10) (y . 20) (z . 30) (w . 40) (extra . 50)))
+       (extracted (bta-extract-static-env b-env r-env)))
+  (assert-equal "6.1 Extracted environment length is 2 (x and z)" 2 (length extracted))
+  (assert-equal "6.2 Static variable x extracted" 10 (cdr (assq 'x extracted)))
+  (assert-equal "6.3 PSDS variable z extracted" 30 (cdr (assq 'z extracted)))
+  (assert-equal "6.4 Dynamic variable y excluded" #f (assq 'y extracted))
+  (assert-equal "6.5 Unlisted variable extra excluded" #f (assq 'extra extracted)))
+
+;; 6.2 bta-annotate-ast-recursive
+(let* ((b-env (bta-env-extend (bta-env-extend (bta-env-empty) 'a 'static) 'b 'dynamic))
+       ;; Static arithmetic: (+ a 5)
+       (ann-stat (bta-annotate-ast-recursive '(+ a 5) b-env))
+       ;; Dynamic arithmetic: (+ b 5)
+       (ann-dyn (bta-annotate-ast-recursive '(+ b 5) b-env))
+       ;; Conditional: (if (< a 10) 100 b)
+       (ann-if (bta-annotate-ast-recursive '(if (< a 10) 100 b) b-env)))
+  (assert-equal "6.6 Recursive annotation is annotated node" #t (bta-annotated? ann-stat))
+  (assert-equal "6.7 Static arithmetic annotated as static" 'static (bta-annotation-type ann-stat))
+  (assert-equal "6.8 Dynamic arithmetic annotated as dynamic" 'dynamic (bta-annotation-type ann-dyn))
+  (assert-equal "6.9 Conditional with dynamic branch annotated as dynamic" 'dynamic (bta-annotation-type ann-if)))
+
 ;; End of tests

@@ -971,6 +971,22 @@
       #t
       #f))
 
+(define (stage-pure-expression? expr)
+  (cond
+    ((or (number? expr) (boolean? expr) (char? expr) (string? expr) (null? expr)) #t)
+    ((symbol? expr) #t)
+    ((not (pair? expr)) #t)
+    ((eq? (car expr) 'quote) #t)
+    ((eq? (car expr) '%bta-annotated)
+     (stage-pure-expression? (caddr expr)))
+    ((stage-pure-effect-free? (car expr))
+     (let loop ((args (cdr expr)))
+       (cond
+         ((null? args) #t)
+         ((stage-pure-expression? (car args)) (loop (cdr args)))
+         (else #f))))
+    (else #f)))
+
 ;;; -----------------------------------------------------------------------
 ;;; 10. Primitive & Function Application Dispatch
 ;;; -----------------------------------------------------------------------
@@ -1393,6 +1409,33 @@
               (eval-in-stage dict env (cadr expr) f1 d1)
               (stage-signal-csp-error dict 'invalid-stage-syntax expr)))
 
+         ;; BTA 4-Valued Lattice Annotated Form (DSN-33-03 §2.5, §4.1 & Issue #891)
+         ((%bta-annotated)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let ((bt (cadr expr))
+                    (inner (caddr expr)))
+                (cond
+                  ;; Speculatively reduce static & pure expressions at compile-time (Now)
+                  ((and (eq? bt 'static) (stage-pure-expression? inner))
+                   (let* ((now-d (make-now-dict))
+                          (res-sv (eval-in-stage now-d env inner f1 d1)))
+                     (cond
+                       ((stage-csp-error? res-sv)
+                        ;; Speculative Trap guard: fallback to ordinary evaluation if Now errors
+                        (eval-in-stage dict env inner f1 d1))
+                       ((stage-dict-now? dict)
+                        res-sv)
+                       (else
+                        ;; In Later dict: promote evaluated static constant into residual AST
+                        (make-static-val (stage-val-tag res-sv)
+                                         (stage-val-payload res-sv)
+                                         (stage-val-host-span res-sv)
+                                         (stage-val-guest-span res-sv))))))
+                  (else
+                   ;; Otherwise transparently evaluate inner expression under current dictionary
+                   (eval-in-stage dict env inner f1 d1))))
+              (stage-signal-csp-error dict 'invalid-bta-syntax expr)))
+
          ;; Function / Primitive Application
          (else
           (eval-in-stage-apply dict env head (cdr expr) f1 d1)))))))
@@ -1555,6 +1598,128 @@
 
 (define (bta-annotation-expr x)
   (if (bta-annotated? x) (caddr x) x))
+
+;;; -----------------------------------------------------------------------
+;;; Hybrid BTA Static Environment Extraction & Recursive AST Annotation
+;;; Conforms to DSN-33-03 §2.5, §4.1 & Issue #891
+;;; -----------------------------------------------------------------------
+
+(define (bta-extract-static-env bta-env runtime-env)
+  (let loop ((bs (if (list? bta-env) bta-env '())) (acc '()))
+    (if (null? bs)
+        (reverse acc)
+        (let* ((b (car bs))
+               (var (car b))
+               (bt (cdr b)))
+          (if (or (eq? bt 'static) (eq? bt 'psds))
+              (let ((entry (assq var runtime-env)))
+                (if entry
+                    (loop (cdr bs) (cons entry acc))
+                    (loop (cdr bs) acc)))
+              (loop (cdr bs) acc))))))
+
+(define (bta-annotate-ast-recursive expr env)
+  (cond
+    ((or (number? expr) (boolean? expr) (char? expr) (string? expr) (null? expr))
+     (list '%bta-annotated 'static expr))
+    ((symbol? expr)
+     (let ((bt (let ((entry (assq expr env)))
+                 (if entry (cdr entry) 'dynamic))))
+       (list '%bta-annotated bt expr)))
+    ((not (pair? expr))
+     (list '%bta-annotated 'static expr))
+    ((eq? (car expr) 'quote)
+     (list '%bta-annotated 'static expr))
+    ((eq? (car expr) '%bta-annotated)
+     expr)
+    (else
+     (let ((head (car expr)))
+       (case head
+         ((if)
+          (let* ((test-ann (bta-annotate-ast-recursive (cadr expr) env))
+                 (then-ann (bta-annotate-ast-recursive (caddr expr) env))
+                 (else-ann (if (pair? (cdddr expr))
+                               (bta-annotate-ast-recursive (cadddr expr) env)
+                               #f))
+                 (test-bt (bta-annotation-type test-ann))
+                 (then-bt (bta-annotation-type then-ann))
+                 (else-bt (if else-ann (bta-annotation-type else-ann) 'static))
+                 (overall-bt (if (eq? test-bt 'static)
+                                 (bta-join then-bt else-bt)
+                                 'dynamic)))
+            (list '%bta-annotated overall-bt
+                  (if else-ann
+                      (list 'if test-ann then-ann else-ann)
+                      (list 'if test-ann then-ann)))))
+         ((let let-anf)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let* ((bindings (cadr expr))
+                     (body (caddr expr))
+                     (new-bs-and-env
+                      (let loop ((bs bindings) (curr-env env) (ann-bs '()))
+                        (if (null? bs)
+                            (cons (reverse ann-bs) curr-env)
+                            (let* ((b (car bs))
+                                   (var (car b))
+                                   (rhs (cadr b))
+                                   (rhs-ann (bta-annotate-ast-recursive rhs env))
+                                   (rhs-bt (bta-annotation-type rhs-ann)))
+                              (loop (cdr bs)
+                                    (bta-env-extend curr-env var rhs-bt)
+                                    (cons (list var rhs-ann) ann-bs))))))
+                     (ann-bindings (car new-bs-and-env))
+                     (extended-env (cdr new-bs-and-env))
+                     (body-ann (bta-annotate-ast-recursive body extended-env))
+                     (overall-bt (bta-annotation-type body-ann)))
+                (list '%bta-annotated overall-bt
+                      (list head ann-bindings body-ann)))
+              (list '%bta-annotated 'dynamic expr)))
+         ((cons)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let* ((car-ann (bta-annotate-ast-recursive (cadr expr) env))
+                     (cdr-ann (bta-annotate-ast-recursive (caddr expr) env))
+                     (car-bt (bta-annotation-type car-ann))
+                     (cdr-bt (bta-annotation-type cdr-ann))
+                     (overall-bt (if (and (eq? car-bt 'static) (eq? cdr-bt 'static))
+                                     'static
+                                     'psds)))
+                (list '%bta-annotated overall-bt
+                      (list 'cons car-ann cdr-ann)))
+              (list '%bta-annotated 'dynamic expr)))
+         ((car cdr)
+          (if (pair? (cdr expr))
+              (let* ((arg-ann (bta-annotate-ast-recursive (cadr expr) env))
+                     (arg-bt (bta-annotation-type arg-ann))
+                     (overall-bt (if (eq? arg-bt 'static) 'static 'dynamic)))
+                (list '%bta-annotated overall-bt
+                      (list head arg-ann)))
+              (list '%bta-annotated 'dynamic expr)))
+         (else
+          (let* ((sub-anns (map (lambda (e) (bta-annotate-ast-recursive e env)) (cdr expr)))
+                 (args-static? (let loop ((as sub-anns))
+                                 (cond
+                                   ((null? as) #t)
+                                   ((eq? (bta-annotation-type (car as)) 'static)
+                                    (loop (cdr as)))
+                                   (else #f))))
+                 (overall-bt (if (and (stage-known-primitive? head) args-static?)
+                                 'static
+                                 'dynamic)))
+            (list '%bta-annotated overall-bt
+                  (cons head sub-anns)))))))))
+
+(define (bta-hybrid-stage-lower expr runtime-env bta-initial-env)
+  (let* ((static-env (bta-extract-static-env bta-initial-env runtime-env))
+         (full-bta-env (let loop ((re runtime-env) (be (if (list? bta-initial-env) bta-initial-env '())))
+                         (if (null? re)
+                             be
+                             (let* ((v (caar re))
+                                    (existing (assq v be)))
+                               (if existing
+                                   (loop (cdr re) be)
+                                   (loop (cdr re) (bta-env-extend be v 'static)))))))
+         (annotated (bta-annotate-ast-recursive expr full-bta-env)))
+    (stage-poly-lower annotated static-env)))
 
 ;;; =======================================================================
 ;;; Specialization Engine & Hard Limits & Generalization (DSN-33-03 §5.1-§5.3)
@@ -1739,6 +1904,10 @@
 
 (define (stage-normalize-to-residual-anf expr)
   (cond
+    ;; %bta-annotated transparent unwrap
+    ((and (pair? expr) (eq? (car expr) '%bta-annotated))
+     (stage-normalize-to-residual-anf (caddr expr)))
+
     ;; Atomic value
     ((stage-atomic-value? expr)
      (list 'atom-value expr))
@@ -1785,17 +1954,21 @@
            (list 'let-call (list (list tmp expr))
                  (list 'atom-value tmp)))))))
 
-(define (stage-poly-lower expr env)
-  (let* ((later-d (make-later-dict))
-         (res-sv (eval-in-stage later-d env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
-    (cond
-      ((stage-csp-error? res-sv)
-       res-sv)
-      ((stage-val? res-sv)
-       (let ((p (stage-val-payload res-sv)))
-         (stage-normalize-to-residual-anf p)))
-      (else
-       (stage-normalize-to-residual-anf res-sv)))))
+(define stage-poly-lower
+  (case-lambda
+    ((expr env)
+     (let* ((later-d (make-later-dict))
+            (res-sv (eval-in-stage later-d env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
+       (cond
+         ((stage-csp-error? res-sv)
+          res-sv)
+         ((stage-val? res-sv)
+          (let ((p (stage-val-payload res-sv)))
+            (stage-normalize-to-residual-anf p)))
+         (else
+          (stage-normalize-to-residual-anf res-sv)))))
+    ((expr env bta-env)
+     (bta-hybrid-stage-lower expr env bta-env))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Triple-Differential Oracle & Metamorphic Evaluation
@@ -1804,6 +1977,8 @@
 
 (define (eval-residual-anf-expr expr env)
   (cond
+    ((and (pair? expr) (eq? (car expr) '%bta-annotated))
+     (eval-residual-anf-expr (caddr expr) env))
     ((number? expr) expr)
     ((boolean? expr) expr)
     ((char? expr) expr)
