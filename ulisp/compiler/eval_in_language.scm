@@ -300,152 +300,17 @@
       (else *ctfe-failure*))))
 
 ;;; -----------------------------------------------------------------------
-;;; Core Tree-Walk Evaluator (ctfe-eval)
+;;; Consolidated CTFE Evaluator (Delegates directly to eval-in-stage via Now-Dict)
+;;; Conforms to DSN-33-03 §3.6 Single-Source Semantic Oracle & Issue #888
 ;;; -----------------------------------------------------------------------
 
 (define (ctfe-eval expr env fuel depth)
-  (cond
-    ;; Resource bounds check (CWE-400 guard)
-    ((or (<= fuel 0) (<= depth 0)) *ctfe-failure*)
-
-    ;; Self-evaluating literals
-    ((number? expr) expr)
-    ((boolean? expr) expr)
-    ((char? expr) expr)
-    ((string? expr) expr)
-
-    ;; Variable lookup
-    ((symbol? expr)
-     (ctfe-env-lookup env expr))
-
-    ;; Non-pair forms (bytevectors, vectors, etc.)
-    ((not (pair? expr)) expr)
-
-    ;; Compound expressions
-    (else
-     (let ((op (car expr))
-           (f1 (- fuel 1))
-           (d1 (- depth 1)))
-       (case op
-         ;; Quoted datum
-         ((quote)
-          (if (and (pair? (cdr expr)) (null? (cddr expr)))
-              (cadr expr)
-              *ctfe-failure*))
-
-         ;; Conditional: (if test then [else])
-         ((if)
-          (let ((test-expr (cadr expr))
-                (then-expr (caddr expr))
-                (else-expr (if (null? (cdddr expr)) #f (cadddr expr))))
-            (let ((test-val (ctfe-eval test-expr env f1 d1)))
-              (cond
-                ((ctfe-failure? test-val) *ctfe-failure*)
-                ((eq? test-val #f)
-                 (if else-expr
-                     (ctfe-eval else-expr env f1 d1)
-                     #f))
-                (else
-                 (ctfe-eval then-expr env f1 d1))))))
-
-         ;; Sequential: (begin e ...)
-         ((begin)
-          (let loop ((es (cdr expr)) (curr-fuel f1) (last-val #f))
-            (cond
-              ((null? es) last-val)
-              ((<= curr-fuel 0) *ctfe-failure*)
-              (else
-               (let ((v (ctfe-eval (car es) env (- curr-fuel 1) d1)))
-                 (if (ctfe-failure? v)
-                     *ctfe-failure*
-                     (loop (cdr es) (- curr-fuel 1) v)))))))
-
-         ;; Local Bindings: (let ((x e) ...) body)
-         ((let)
-          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
-              (let ((bindings (cadr expr))
-                    (body (caddr expr)))
-                (let loop ((bs bindings) (curr-env env) (curr-fuel f1) (acc-vars '()) (acc-vals '()))
-                  (cond
-                    ((null? bs)
-                     (let ((extended (ctfe-env-extend* env (reverse acc-vars) (reverse acc-vals))))
-                       (ctfe-eval body extended curr-fuel d1)))
-                    ((<= curr-fuel 0) *ctfe-failure*)
-                    (else
-                     (let* ((b (car bs))
-                            (var (car b))
-                            (val-expr (cadr b))
-                            (v (ctfe-eval val-expr env (- curr-fuel 1) d1)))
-                       (if (ctfe-failure? v)
-                           *ctfe-failure*
-                           (loop (cdr bs) curr-env (- curr-fuel 1)
-                                 (cons var acc-vars) (cons v acc-vals))))))))
-              *ctfe-failure*))
-
-         ;; Sequential Bindings: (let* ((x e) ...) body)
-         ((let*)
-          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
-              (let ((bindings (cadr expr))
-                    (body (caddr expr)))
-                (let loop ((bs bindings) (curr-env env) (curr-fuel f1))
-                  (cond
-                    ((null? bs)
-                     (ctfe-eval body curr-env curr-fuel d1))
-                    ((<= curr-fuel 0) *ctfe-failure*)
-                    (else
-                     (let* ((b (car bs))
-                            (var (car b))
-                            (val-expr (cadr b))
-                            (v (ctfe-eval val-expr curr-env (- curr-fuel 1) d1)))
-                       (if (ctfe-failure? v)
-                           *ctfe-failure*
-                           (loop (cdr bs) (ctfe-env-extend curr-env var v) (- curr-fuel 1))))))))
-              *ctfe-failure*))
-
-         ;; Pure Lambda Definition & Local Invocation:
-         ;; Supports ((lambda (x ...) body) arg ...)
-         ((lambda)
-          ;; First-class closures in CTFE represented as tagged tuple
-          (list '%ctfe-closure (cadr expr) (caddr expr) env))
-
-         ;; Function Application / Primitive Call
-         (else
-          (cond
-            ;; 1. Primitive function call: (op arg ...) where op is a pure symbol
-            ((and (symbol? op) (ctfe-pure-prim? op))
-             (let loop ((as (cdr expr)) (curr-fuel f1) (evaluated-args '()))
-               (cond
-                 ((null? as)
-                  (ctfe-apply-primitive op (reverse evaluated-args)))
-                 ((<= curr-fuel 0) *ctfe-failure*)
-                 (else
-                  (let ((v (ctfe-eval (car as) env (- curr-fuel 1) d1)))
-                    (if (ctfe-failure? v)
-                        *ctfe-failure*
-                        (loop (cdr as) (- curr-fuel 1) (cons v evaluated-args))))))))
-
-            ;; 2. First-class closure application (direct lambda, curried, or bound variable)
-            (else
-             (let ((fn-val (ctfe-eval op env f1 d1)))
-               (if (and (pair? fn-val) (eq? (car fn-val) '%ctfe-closure))
-                   (let ((params (cadr fn-val))
-                         (cbody (caddr fn-val))
-                         (cenv (cadddr fn-val))
-                         (args (cdr expr)))
-                     (if (= (length params) (length args))
-                         (let loop ((ps params) (as args) (curr-fuel f1) (evaluated-args '()))
-                           (cond
-                             ((null? ps)
-                              (let ((call-env (ctfe-env-extend* cenv params (reverse evaluated-args))))
-                                (ctfe-eval cbody call-env curr-fuel d1)))
-                             ((<= curr-fuel 0) *ctfe-failure*)
-                             (else
-                              (let ((v (ctfe-eval (car as) env (- curr-fuel 1) d1)))
-                                (if (ctfe-failure? v)
-                                    *ctfe-failure*
-                                    (loop (cdr ps) (cdr as) (- curr-fuel 1) (cons v evaluated-args)))))))
-                         *ctfe-failure*))
-                   *ctfe-failure*))))))))))
+  (let* ((now-d (make-now-dict))
+         (res (eval-in-stage now-d env expr fuel depth)))
+    (cond
+      ((stage-csp-error? res) *ctfe-failure*)
+      ((stage-val? res) (stage-val-payload res))
+      (else *ctfe-failure*))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Public API: eval-in-language & ctfe-try-reduce
@@ -1051,6 +916,9 @@
 ;;; 9. Environment Utilities & Primitive Predicates
 ;;; -----------------------------------------------------------------------
 
+(define (stage-env-lookup-entry env sym)
+  (assq sym env))
+
 (define (stage-env-lookup env sym)
   (let ((entry (assq sym env)))
     (if entry
@@ -1070,19 +938,26 @@
     (else 'constant)))
 
 (define (stage-known-primitive? sym)
-  (memq sym '(+ - * / quotient modulo remainder abs min max
-              not null? pair? boolean? number? symbol? string? char?
-              zero?
-              car cdr caar cadr cdar cddr length reverse cons
-              eq? eqv? equal? char=? boolean=? = < <= > >=
-              bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
-              display write newline)))
+  (if (memq sym '(+ - * / quotient modulo remainder abs min max
+                  not null? pair? boolean? number? symbol? string? char?
+                  zero? list?
+                  car cdr caar cadr cdar cddr length reverse cons list append
+                  eq? eqv? equal? char=? boolean=? symbol=? = < <= > >=
+                  bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
+                  char->integer integer->char string-length vector-length
+                  vector-ref string-ref
+                  fx+ fx- fx* fxadd1 fxsub1
+                  display write newline))
+      #t
+      #f))
 
 (define (stage-pure-effect-free? sym)
   (if (memq sym '(+ - * abs not null? pair? boolean? number? symbol? string? char?
-                  zero? length reverse cons
-                  eq? eqv? equal? char=? boolean=? = < <= > >=
-                  bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift))
+                  zero? list? length reverse cons list append
+                  eq? eqv? equal? char=? boolean=? symbol=? = < <= > >=
+                  bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
+                  char->integer integer->char string-length vector-length
+                  fx+ fx- fx* fxadd1 fxsub1))
       #t
       #f))
 
@@ -1139,18 +1014,40 @@
              (let ((res-call (cons op lifted)))
                (make-dynamic-val 'any res-call loc #f)))))
 
+      ;; Impure primitive under Now stage -> not allowed during CTFE / Now stage evaluation!
+      ((and (stage-impure-primitive? op) (stage-dict-now? dict))
+       (stage-signal-csp-error dict 'impure-primitive-in-now-stage (cons op (extract-payloads args))))
+
       ;; All arguments are pure-static -> execute CTFE directly via Now dictionary
       ((all-pure-static? args)
-       (let ((raw-res
-              (cond
-                ((= nargs 1) (stage-apply-prim-1 (make-now-dict) op (stage-val-payload (car args))))
-                ((= nargs 2) (stage-apply-prim-2 (make-now-dict) op (stage-val-payload (car args)) (stage-val-payload (cadr args))))
-                ((= nargs 3) (stage-apply-prim-3 (make-now-dict) op (stage-val-payload (car args)) (stage-val-payload (cadr args)) (stage-val-payload (caddr args))))
-                ((= nargs 4) (stage-apply-prim-4 (make-now-dict) op (stage-val-payload (car args)) (stage-val-payload (cadr args)) (stage-val-payload (caddr args)) (stage-val-payload (cadddr args))))
-                (else *ctfe-failure*))))
+       (let* ((raw-args (extract-payloads args))
+              (raw-res
+               (cond
+                 ((= nargs 0) (ctfe-apply-primitive op '()))
+                 ((= nargs 1)
+                  (let ((res (stage-apply-prim-1 (make-now-dict) op (car raw-args))))
+                    (if (ctfe-failure? res)
+                        (ctfe-apply-primitive op raw-args)
+                        res)))
+                 ((= nargs 2)
+                  (let ((res (stage-apply-prim-2 (make-now-dict) op (car raw-args) (cadr raw-args))))
+                    (if (ctfe-failure? res)
+                        (ctfe-apply-primitive op raw-args)
+                        res)))
+                 ((= nargs 3)
+                  (let ((res (stage-apply-prim-3 (make-now-dict) op (car raw-args) (cadr raw-args) (caddr raw-args))))
+                    (if (ctfe-failure? res)
+                        (ctfe-apply-primitive op raw-args)
+                        res)))
+                 ((= nargs 4)
+                  (let ((res (stage-apply-prim-4 (make-now-dict) op (car raw-args) (cadr raw-args) (caddr raw-args) (cadddr raw-args))))
+                    (if (ctfe-failure? res)
+                        (ctfe-apply-primitive op raw-args)
+                        res)))
+                 (else (ctfe-apply-primitive op raw-args)))))
          (if (ctfe-failure? raw-res)
              (if (stage-dict-now? dict)
-                 (stage-signal-csp-error dict 'ctfe-primitive-failure (cons op (extract-payloads args)))
+                 (stage-signal-csp-error dict 'ctfe-primitive-failure (cons op raw-args))
                  ;; Later dict: demote speculative failure to residual call
                  (let* ((lifted (extract-lifted-payloads dict args))
                         (csp-err (find-first-csp-error lifted)))
@@ -1292,6 +1189,56 @@
                       (- curr-fuel 1)
                       (cons (list var (stage-val-payload val-sv)) acc-dyn))))))))))
 
+(define (eval-in-stage-let* dict env bindings body fuel depth)
+  (let loop ((bs bindings)
+             (curr-env env)
+             (curr-fuel fuel)
+             (acc-dyn '()))
+    (cond
+      ((null? bs)
+       ;; All bindings processed, evaluate body
+       (let ((body-sv (eval-in-stage dict curr-env body curr-fuel depth)))
+         (cond
+           ((stage-csp-error? body-sv) body-sv)
+           ((null? acc-dyn) body-sv)
+           (else
+            ;; Wrap residual let-anf bindings from acc-dyn (in reverse order)
+            (let wrap ((rem acc-dyn) (curr-payload (stage-val-payload body-sv)))
+              (if (null? rem)
+                  (make-dynamic-val 'any curr-payload #f #f)
+                  (let* ((binding (car rem))
+                         (var (car binding))
+                         (rhs (cadr binding))
+                         (nested (stage-bind-let dict var rhs (lambda () curr-payload))))
+                    (wrap (cdr rem) nested))))))))
+      ((<= curr-fuel 0)
+       (stage-signal-csp-error dict 'ctfe-fuel-exhausted body))
+      (else
+       (let* ((b (car bs))
+              (var (car b))
+              (val-expr (cadr b))
+              ;; Sequential let*: each binding sees prior bindings in curr-env
+              (val-sv (eval-in-stage dict curr-env val-expr (- curr-fuel 1) depth)))
+         (cond
+           ((stage-csp-error? val-sv) val-sv)
+           ((stage-dict-now? dict)
+            ;; Now dict: always bind value into environment sequentially
+            (loop (cdr bs)
+                  (stage-env-extend curr-env var val-sv)
+                  (- curr-fuel 1)
+                  acc-dyn))
+           (else
+            ;; Later dict:
+            (if (stage-val-pure-static? val-sv)
+                (loop (cdr bs)
+                      (stage-env-extend curr-env var val-sv)
+                      (- curr-fuel 1)
+                      acc-dyn)
+                (loop (cdr bs)
+                      (stage-env-extend curr-env var (make-dynamic-val (stage-val-tag val-sv) var #f #f))
+                      (- curr-fuel 1)
+                      (cons (list var (stage-val-payload val-sv)) acc-dyn))))))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; 12. Main eval-in-stage Core Loop
 ;;; -----------------------------------------------------------------------
@@ -1316,15 +1263,15 @@
 
     ;; 4. Symbols (Variable References)
     ((symbol? expr)
-     (let ((found (stage-env-lookup env expr)))
-       (cond
-         ((stage-val? found) found)
-         (found (make-static-val 'any found #f #f))
-         ((stage-dict-now? dict)
-          (stage-signal-csp-error dict 'unbound-variable expr))
-         (else
-          ;; In Later stage, unbound variables are residual dynamic references
-          (make-dynamic-val 'unknown expr #f #f)))))
+     (let ((entry (stage-env-lookup-entry env expr)))
+       (if entry
+           (let ((found (cdr entry)))
+             (if (stage-val? found)
+                 found
+                 (make-static-val (stage-constant-type found) found #f #f)))
+           (if (stage-dict-now? dict)
+               (stage-signal-csp-error dict 'unbound-variable expr)
+               (make-dynamic-val 'unknown expr #f #f)))))
 
     ;; 5. Non-pair forms (bytevectors, vectors, etc.)
     ((not (pair? expr))
@@ -1386,6 +1333,24 @@
                     (body (caddr expr)))
                 (eval-in-stage-let dict env bindings body f1 d1))
               (stage-signal-csp-error dict 'invalid-let-syntax expr)))
+
+         ;; Sequential Bindings: (let* ((var val) ...) body)
+         ((let*)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let ((bindings (cadr expr))
+                    (body (caddr expr)))
+                (eval-in-stage-let* dict env bindings body f1 d1))
+              (stage-signal-csp-error dict 'invalid-let-syntax expr)))
+
+         ;; Pure Lambda Definition & Local Invocation
+         ((lambda)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let ((params (cadr expr))
+                    (lbody (caddr expr)))
+                (if (stage-dict-now? dict)
+                    (make-static-val 'closure (list '%ctfe-closure params lbody env) #f #f)
+                    (make-dynamic-val 'procedure expr #f #f)))
+              (stage-signal-csp-error dict 'invalid-lambda-syntax expr)))
 
          ;; Meta-Stage Constructs (DSN-33-03 §6.1)
          ((stage-now)

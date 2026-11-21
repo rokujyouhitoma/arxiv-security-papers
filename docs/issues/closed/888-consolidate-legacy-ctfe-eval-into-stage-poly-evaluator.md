@@ -2,7 +2,7 @@
 ID: 888
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] 旧 ctfe_eval の eval-in-stage (Now dict) への一本化と二重実装解消 (ID: 888)
@@ -97,8 +97,8 @@ flowchart TD
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] 旧 `ctfe-eval` の重複インタプリタループ（約150行）が全廃され、`eval-in-stage (Now dict)` への薄い委譲アダプタへ一本化されていること。
-- [ ] `L_core` および `Scheme` の評価ハンドラが `eval-with-now-oracle-opt` に統一され、二重実装が解消されていること。
-- [ ] `test_eval_in_language` (158行), `test_single_source_oracle` (111行), `test_stage_oracle` が 100% PASS すること。
-- [ ] `make -C ulisp bootstrap` による Stage 2 == Stage 3 の bit-for-bit IDENTICAL 不動点が保証されること。
-- [ ] `make -C ulisp test_srfi1` を含む主要テストスイートが正常終了すること。
+- [x] 旧 `ctfe-eval` の重複インタプリタループ（約150行）が全廃され、`eval-in-stage (Now dict)` への薄い委譲アダプタへ一本化されていること。
+- [x] `L_core` および `Scheme` の評価ハンドラが `eval-with-now-oracle-opt` に統一され、二重実装が解消されていること。
+- [x] `test_eval_in_language` (158行), `test_single_source_oracle` (111行), `test_stage_oracle` が 100% PASS すること。
+- [x] `make -C ulisp bootstrap` による Stage 2 == Stage 3 の bit-for-bit IDENTICAL 不動点が保証されること。
+- [x] `make -C ulisp test_srfi1` を含む主要テストスイートが正常終了すること。

@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **888** | 旧 ctfe_eval の eval-in-stage (Now dict) への一本化と二重実装解消 | Feature | High | In Progress | [888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md](888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md) |
 | **889** | L-Residual-ANF から Middle-End LIR へのローワリング・アダプターブリッジ実装 | Feature | High | In Progress | [889-implement-residual-anf-to-lir-lowering-bridge.md](889-implement-residual-anf-to-lir-lowering-bridge.md) |
 | **890** | freeze-serialize-to-rodata 直列化データと elf.scm (.rodata) の実リンカ配線 | Feature | High | In Progress | [890-integrate-freeze-serialized-rodata-into-elf-emitter.md](890-integrate-freeze-serialized-rodata-into-elf-emitter.md) |
 | **891** | オフライン BTA 4値束注釈とオンライン部分評価のハイブリッド推論フィードバック統合 | Feature | Medium | In Progress | [891-integrate-offline-bta-lattice-with-stage-poly-lower.md](891-integrate-offline-bta-lattice-with-stage-poly-lower.md) |
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **888** | 旧 ctfe_eval の eval-in-stage (Now dict) への一本化と二重実装解消 | Feature | 2026-11-21 | [888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md](closed/888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md) |
 | **887** | Pass Manager への pass-075-stage-poly-lower 常設登録と最適化レベル連動 | Feature | 2026-11-21 | [887-register-stage-poly-lower-in-pass-manager-pipeline.md](closed/887-register-stage-poly-lower-in-pass-manager-pipeline.md) |
 | **886** | セルフホスティング決定論性と不動点（Stage 2 -> Stage 3 diff 0）の検証 | Feature | 2026-11-21 | [886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md](closed/886-verify-self-hosting-fixed-point-and-zero-diff-bootstrap.md) |
 | **885** | マイクロ言語による第1二村射影平坦化（Tower Collapse）の E2E 実証 | Feature | 2026-11-20 | [885-demonstrate-e2e-first-futamura-projection-on-micro-language.md](closed/885-demonstrate-e2e-first-futamura-projection-on-micro-language.md) |
