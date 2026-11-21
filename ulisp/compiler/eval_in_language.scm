@@ -942,10 +942,12 @@
                   not null? pair? boolean? number? symbol? string? char?
                   zero? list?
                   car cdr caar cadr cdar cddr length reverse cons list append
+                  assq memq
                   eq? eqv? equal? char=? boolean=? symbol=? = < <= > >=
                   bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
                   char->integer integer->char string-length vector-length
-                  vector-ref string-ref
+                  vector-ref vector-set! make-vector string-ref
+                  local-slot-ref local-slot-set!
                   fx+ fx- fx* fxadd1 fxsub1
                   display write newline))
       #t
@@ -954,20 +956,22 @@
 (define (stage-pure-effect-free? sym)
   (if (memq sym '(+ - * abs not null? pair? boolean? number? symbol? string? char?
                   zero? list? length reverse cons list append
+                  assq memq
                   eq? eqv? equal? char=? boolean=? symbol=? = < <= > >=
                   bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
                   char->integer integer->char string-length vector-length
+                  vector-ref make-vector local-slot-ref
                   fx+ fx- fx* fxadd1 fxsub1))
       #t
       #f))
 
 (define (stage-potentially-trapping-prim? sym)
-  (if (memq sym '(/ quotient modulo remainder car cdr caar cadr cdar cddr vector-ref string-ref))
+  (if (memq sym '(/ quotient modulo remainder car cdr caar cadr cdar cddr vector-ref string-ref local-slot-ref))
       #t
       #f))
 
 (define (stage-impure-primitive? sym)
-  (if (memq sym '(display write newline set-car! set-cdr! vector-set! string-set!))
+  (if (memq sym '(display write newline set-car! set-cdr! vector-set! string-set! local-slot-set!))
       #t
       #f))
 
@@ -1095,6 +1099,31 @@
          ;; PSDS cdr
          ((and (eq? op 'cdr) (= nargs 1))
           (stage-cdr dict (car args) loc))
+
+         ;; Guest Frame Lowering: assq (DSN-33-04 §2.2 & Issue #892)
+         ((and (eq? op 'assq) (= nargs 2))
+          (let ((key-sv (car args))
+                (env-sv (cadr args)))
+            (cond
+              ;; If key is static and a guest frame descriptor is currently active
+              ((and (stage-val-pure-static? key-sv)
+                    (procedure? get-current-guest-frame-descriptor)
+                    (get-current-guest-frame-descriptor))
+               (let* ((gfd (get-current-guest-frame-descriptor))
+                      (var-name (stage-val-payload key-sv))
+                      (slot-idx (gfd-lookup-slot gfd var-name)))
+                 (if slot-idx
+                     (let* ((esc? (gfd-escapes? gfd slot-idx))
+                            (val-expr (if esc?
+                                          (list 'vector-ref (stage-val-payload env-sv) slot-idx)
+                                          (list 'local-slot-ref slot-idx))))
+                       ;; Return a PSDS pair so that (cdr (assq 'var env)) immediately simplifies to val-expr!
+                       (stage-cons key-sv (make-dynamic-val 'any val-expr loc #f) loc #f))
+                     (let* ((lifted (extract-lifted-payloads dict args)))
+                       (make-dynamic-val 'any (cons 'assq lifted) loc #f)))))
+              (else
+               (let* ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons 'assq lifted) loc #f))))))
 
          ;; General dynamic primitive residualization
          (else
@@ -1967,8 +1996,16 @@
             (stage-normalize-to-residual-anf p)))
          (else
           (stage-normalize-to-residual-anf res-sv)))))
-    ((expr env bta-env)
-     (bta-hybrid-stage-lower expr env bta-env))))
+    ((expr env bta-env-or-gfd)
+     (if (and (procedure? guest-frame-descriptor?) (guest-frame-descriptor? bta-env-or-gfd))
+         (with-guest-frame-descriptor bta-env-or-gfd
+           (lambda () (stage-poly-lower expr env)))
+         (bta-hybrid-stage-lower expr env bta-env-or-gfd)))
+    ((expr env bta-env gfd)
+     (if (and (procedure? guest-frame-descriptor?) (guest-frame-descriptor? gfd))
+         (with-guest-frame-descriptor gfd
+           (lambda () (bta-hybrid-stage-lower expr env bta-env)))
+         (bta-hybrid-stage-lower expr env bta-env)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Triple-Differential Oracle & Metamorphic Evaluation
@@ -2045,6 +2082,16 @@
          ((eq? head 'arithmetic-shift)
           (ctfe-arithmetic-shift (eval-residual-anf-expr (cadr expr) env)
                                  (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'vector-ref)
+          (let ((vec (eval-residual-anf-expr (cadr expr) env))
+                (idx (eval-residual-anf-expr (caddr expr) env)))
+            (if (vector? vec)
+                (vector-ref vec idx)
+                (list 'vector-ref vec idx))))
+         ((eq? head 'local-slot-ref)
+          (let ((idx (eval-residual-anf-expr (cadr expr) env)))
+            (let ((b (assq idx env)))
+              (if b (cdr b) (list 'local-slot-ref idx)))))
          (else
           (let ((b (assq head env)))
             (if b

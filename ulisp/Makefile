@@ -77,6 +77,7 @@ COMPILER_BASE = compiler/helpers.scm \
                 compiler/dataflow.scm \
                 compiler/binding.scm \
                 compiler/scope.scm \
+                workbench/frame.scm \
                 compiler/eval_in_language.scm \
                 compiler/calling_convention.scm \
                 compiler/value_repr.scm \
@@ -850,6 +851,11 @@ test_futamura_projection: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
 	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_futamura_projection.scm > build/test_futamura_projection_runner.scm
 	@$(RUN_SCHEME) build/test_futamura_projection_runner.scm
+
+test_workbench_frame: build/compiler_passes.scm $(PASS_COMMON)
+	@mkdir -p build
+	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_workbench_frame.scm > build/test_workbench_frame_runner.scm
+	@$(RUN_SCHEME) build/test_workbench_frame_runner.scm
 
 test_residual_anf_to_lir: build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build

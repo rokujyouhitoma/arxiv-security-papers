@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 優先度 | 対象仕様書 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **892** | ゲスト言語スタックフレーム抽象（FrameDescriptor）とローカルスロット降格の実装 | Feature | 進行中 (In Progress) | High | [DSN-33-04](../designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) | [892-implement-guest-frame-descriptor-and-local-slot-lowering.md](892-implement-guest-frame-descriptor-and-local-slot-lowering.md) |
 | **893** | ゲスト言語動的型タグ表現（Tagged Pointer / NaN-boxing）の実装 | Feature | 未着手 (Open) | High | [DSN-33-04](../designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) | [893-implement-guest-dynamic-value-tagging-and-nan-boxing.md](893-implement-guest-dynamic-value-tagging-and-nan-boxing.md) |
 | **894** | 宣言的文法から Stage-Now 評価器へ直結する Pure Scheme Packrat PEG 構文解析器ジェネレータの実装 | Feature | 未着手 (Open) | High | [DSN-33-04](../designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) | [894-implement-pure-scheme-compile-time-peg-parser-generator.md](894-implement-pure-scheme-compile-time-peg-parser-generator.md) |
 | **895** | 第2二村射影（Direct Cogen）によるスタンドアロン AOT コンパイラ CLI 生成ドライバの実装 | Feature | 未着手 (Open) | High | [DSN-33-04](../designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) | [895-implement-direct-cogen-driver-and-compiler-cli-generator.md](895-implement-direct-cogen-driver-and-compiler-cli-generator.md) |
@@ -26,6 +25,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **892** | ゲスト言語スタックフレーム抽象（FrameDescriptor）とローカルスロット降格の実装 | Feature | 2026-11-21 | [892-implement-guest-frame-descriptor-and-local-slot-lowering.md](closed/892-implement-guest-frame-descriptor-and-local-slot-lowering.md) |
 | **891** | オフライン BTA 4値束注釈とオンライン部分評価のハイブリッド推論フィードバック統合 | Feature | 2026-11-21 | [891-integrate-offline-bta-lattice-with-stage-poly-lower.md](closed/891-integrate-offline-bta-lattice-with-stage-poly-lower.md) |
 | **890** | freeze-serialize-to-rodata 直列化データと elf.scm (.rodata) の実リンカ配線 | Feature | 2026-11-21 | [890-integrate-freeze-serialized-rodata-into-elf-emitter.md](closed/890-integrate-freeze-serialized-rodata-into-elf-emitter.md) |
 | **889** | L-Residual-ANF から Middle-End LIR へのローワリング・アダプターブリッジ実装 | Feature | 2026-11-21 | [889-implement-residual-anf-to-lir-lowering-bridge.md](closed/889-implement-residual-anf-to-lir-lowering-bridge.md) |

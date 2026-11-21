@@ -2,7 +2,7 @@
 ID: 892
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (完了日: 2026-11-21)
 ---
 
 # [FEAT/ENH] Implement Guest Frame Descriptor and Local Slot Lowering (ID: 892)
@@ -24,13 +24,11 @@ ID: 892
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/workbench/frame.scm](../../ulisp/workbench/frame.scm) (新規: FrameDescriptor レコードおよび静的スロット割り当てエンジン)
-- [ ] [ulisp/compiler/scope.scm](../../ulisp/compiler/scope.scm) (スコープ解析器との連携)
-- [ ] [ulisp/compiler/stage_poly_lower.scm](../../ulisp/compiler/stage_poly_lower.scm) (ステージ多相簡約における変数参照の降格フック)
-- [ ] [ulisp/compiler/eval_in_language.scm](../../ulisp/compiler/eval_in_language.scm) (多相環境操作インターフェース)
-- [ ] [ulisp/tests/test_workbench_frame.scm](../../ulisp/tests/test_workbench_frame.scm) (新規: 単体・残余コード検証テスト)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (テストターゲット統合)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳ステータス更新)
+- [x] [ulisp/workbench/frame.scm](../../ulisp/workbench/frame.scm) (新規: FrameDescriptor レコードおよび静的スロット割り当てエンジン)
+- [x] [ulisp/compiler/eval_in_language.scm](../../ulisp/compiler/eval_in_language.scm) (多相環境操作インターフェース・stage-poly-lower への降格フック統合)
+- [x] [ulisp/tests/test_workbench_frame.scm](../../ulisp/tests/test_workbench_frame.scm) (新規: 単体・残余コード検証テスト)
+- [x] [ulisp/Makefile](../../ulisp/Makefile) (テストターゲット統合)
+- [x] [docs/issues/README.md](README.md) (Issue 台帳ステータス更新)
 
 ---
 
@@ -50,7 +48,7 @@ Target Branch: `feat/892-implement-guest-frame-descriptor-and-local-slot-lowerin
    ```
 2. スロット操作 API 群を実装：
    - `(gfd-empty)`: 空のフレーム記述子を生成。
-   - `(gfd-add-slot gfd name type-hint)`: 新規変数名を登録し、割り当てられたスロット番号（0-indexed）を返却。
+   - `(gfd-add-slot! gfd name type-hint)`: 新規変数名を登録し、割り当てられたスロット番号（0-indexed）を返却。
    - `(gfd-lookup-slot gfd name)`: 変数名から静的スロットインデックスを取得（存在しない場合は `#f`）。
    - `(gfd-mark-escape! gfd slot-idx)`: クロージャ等に捕捉されるスロットにエスケープビットを付与。
 
@@ -61,7 +59,7 @@ Target Branch: `feat/892-implement-guest-frame-descriptor-and-local-slot-lowerin
 2. 環境参照コンビネータ `guest-env-ref`：
    - 静的にスロットインデックスが解決可能な場合、直接 `(vector-ref frame <idx>)` または `(local-slot-ref <idx>)` を出力。
 
-### Phase 3: `stage-poly-lower` への降格フック統合 (`ulisp/compiler/stage_poly_lower.scm`)
+### Phase 3: `stage-poly-lower` への降格フック統合 (`ulisp/compiler/eval_in_language.scm`)
 1. `stage-poly-lower` 内の環境ルックアップ処理において、静的環境が `<guest-frame-descriptor>` を保持している場合、連想リスト探索関数呼び出し（`assq`）をインターセプト。
 2. 残余 ANF 生成時に、不要なリスト操作を除去し、`vector-ref` / `local-slot-ref` 命令へダイレクトに降格。
 3. エスケープマスクが 0 の非エスケープ変数については、LIR レベルの仮想レジスタ束縛（`let`）へ直結。
@@ -76,11 +74,12 @@ Target Branch: `feat/892-implement-guest-frame-descriptor-and-local-slot-lowerin
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `<guest-frame-descriptor>` レコード型および操作 API 群が `ulisp/workbench/frame.scm` に実装されていること。
-- [ ] スロット名からインデックスへの $O(1)$ 解決が正常に機能すること。
-- [ ] `stage-poly-lower` との連携により、ゲスト言語の変数探索が連想リスト探索から静的スロット参照へ 100% 降格されること。
-- [ ] エスケープしない変数が LIR 上で仮想レジスタへ直接マッピングされること。
-- [ ] `make -C ulisp test_workbench_frame` が PASS すること。
-- [ ] `make py_compile && make static_analysis` が PASS すること。
-- [ ] [docs/issues/README.md](README.md) のステータスが `In Progress` に更新されていること。
+- [x] `<guest-frame-descriptor>` レコード型および操作 API 群が `ulisp/workbench/frame.scm` に実装されていること。
+- [x] スロット名からインデックスへの $O(1)$ 解決が正常に機能すること。
+- [x] `stage-poly-lower` との連携により、ゲスト言語の変数探索が連想リスト探索から静的スロット参照へ 100% 降格されること。
+- [x] エスケープしない変数が LIR 上で仮想レジスタへ直接マッピングされること。
+- [x] `make -C ulisp test_workbench_frame` が PASS すること。
+- [x] `make py_compile && make static_analysis` が PASS すること。
+- [x] [docs/issues/README.md](README.md) のステータスが更新されていること。
+
 
