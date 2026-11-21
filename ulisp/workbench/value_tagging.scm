@@ -1,0 +1,178 @@
+;;; =======================================================================
+;;; ULisp Language Workbench: Guest Dynamic Value Tagging (3-bit Tagging)
+;;; Conforms to DSN-33-04 §2.3, DSN-33-02 §5.1, DSN-33-03 §4.4 & Issue #893
+;;; =======================================================================
+;;; Provides:
+;;; - 3-bit Tagged Pointer scheme for 64-bit architectures
+;;; - Tag definitions: Fixnum (000), Pair (001), Symbol (010), Closure (011),
+;;;   Vector (100), Instance (101), Flonum (110), Special/Immediates (111)
+;;; - Pure Scheme packing, unpacking, type predicates, and assertions
+;;; - Residual ANF / LIR code emission helpers with compile-time tag stripping
+;;; =======================================================================
+
+;;; -----------------------------------------------------------------------
+;;; 1. 3-bit Tag Constants (DSN-33-04 §2.3)
+;;; -----------------------------------------------------------------------
+
+(define GUEST_TAG_FIXNUM   0) ; 000: 61-bit signed int (n << 3 | 0)
+(define GUEST_TAG_PAIR     1) ; 001: Pair / Cons cell (ptr | 1)
+(define GUEST_TAG_SYMBOL   2) ; 010: Symbol / Interned string (ptr | 2)
+(define GUEST_TAG_CLOSURE  3) ; 011: Guest Closure (ptr | 3)
+(define GUEST_TAG_VECTOR   4) ; 100: Array / Vector (ptr | 4)
+(define GUEST_TAG_INSTANCE 5) ; 101: Guest Object Instance (ptr | 5)
+(define GUEST_TAG_FLONUM   6) ; 110: Heap Flonum (ptr | 6)
+(define GUEST_TAG_SPECIAL  7) ; 111: Immediates (#f, #t, nil, undef)
+(define GUEST_TAG_MASK     7) ; 3 bits mask: 0b111
+
+;; Special immediate codes embedded in bits [5:3] with tag 7
+(define GUEST_SPECIAL_FALSE 0) ; 0b000_111 = 7
+(define GUEST_SPECIAL_TRUE  1) ; 0b001_111 = 15
+(define GUEST_SPECIAL_NIL   2) ; 0b010_111 = 23
+(define GUEST_SPECIAL_UNDEF 3) ; 0b011_111 = 31
+
+;; Fixnum bounds for 61-bit signed integer (64 - 3 bits tag)
+;; Max:  2^60 - 1 =  1152921504606846975
+;; Min: -2^60     = -1152921504606846976
+(define GUEST_FIXNUM_MAX  1152921504606846975)
+(define GUEST_FIXNUM_MIN -1152921504606846976)
+
+;;; -----------------------------------------------------------------------
+;;; 2. Pure Scheme Helper Bitwise Wrappers & Error Handling
+;;; -----------------------------------------------------------------------
+
+(define (guest-tag-error! msg detail)
+  (raise (list 'guest-tag-error msg detail)))
+
+(define (%guest-bit-and a b)
+  (if (and (number? a) (number? b))
+      (bitwise-and a b)
+      0))
+
+(define (%guest-bit-ior a b)
+  (if (and (number? a) (number? b))
+      (bitwise-ior a b)
+      0))
+
+(define (%guest-bit-shift n bits)
+  (if (number? n)
+      (arithmetic-shift n bits)
+      0))
+
+;;; -----------------------------------------------------------------------
+;;; 3. Fixnum Packing & Unpacking (CWE-190 Defense)
+;;; -----------------------------------------------------------------------
+
+;;; Packs a signed integer into a 61-bit tagged fixnum.
+;;; Raises an error on overflow to prevent silent tag corruption.
+(define (guest-pack-fixnum n)
+  (if (not (integer? n))
+      (guest-tag-error! "guest-pack-fixnum: not an integer" n)
+      (if (or (> n GUEST_FIXNUM_MAX) (< n GUEST_FIXNUM_MIN))
+          (guest-tag-error! "guest-pack-fixnum: integer overflow for 61-bit representation" n)
+          (%guest-bit-shift n 3))))
+
+;;; Unpacks a 61-bit tagged fixnum into an integer.
+;;; Arithmetic right shift preserves the sign bit.
+(define (guest-unpack-fixnum v)
+  (if (not (guest-fixnum? v))
+      (guest-tag-error! "guest-unpack-fixnum: type assertion failure, not a tagged fixnum" v)
+      (%guest-bit-shift v -3)))
+
+;;; Tests whether value v has the Fixnum tag (000)
+(define (guest-fixnum? v)
+  (and (integer? v)
+       (= (%guest-bit-and v GUEST_TAG_MASK) GUEST_TAG_FIXNUM)))
+
+;;; -----------------------------------------------------------------------
+;;; 4. Pointer Packing & Unpacking (CWE-843 Defense)
+;;; -----------------------------------------------------------------------
+
+;;; Packs an 8-byte aligned heap pointer with a 3-bit tag.
+;;; Asserts that the lowest 3 bits of the raw pointer are zero.
+(define (guest-pack-pointer ptr tag)
+  (if (not (integer? ptr))
+      (guest-tag-error! "guest-pack-pointer: invalid pointer address" ptr)
+      (if (not (= (%guest-bit-and ptr GUEST_TAG_MASK) 0))
+          (guest-tag-error! "guest-pack-pointer: unaligned pointer (lower 3 bits non-zero)" ptr)
+          (%guest-bit-ior ptr (%guest-bit-and tag GUEST_TAG_MASK)))))
+
+;;; Unpacks a pointer with a specific expected tag.
+;;; Throws type assertion error if tag does not match (CWE-843 protection).
+(define (guest-unpack-pointer v expected-tag)
+  (if (not (guest-pointer-of-tag? v expected-tag))
+      (guest-tag-error! "guest-unpack-pointer: type assertion failed" (list v expected-tag))
+      (- v expected-tag)))
+
+;;; Extracts the 3-bit tag from a tagged value
+(define (guest-tag-of v)
+  (if (integer? v)
+      (%guest-bit-and v GUEST_TAG_MASK)
+      #f))
+
+;;; Checks if value v has the specified tag
+(define (guest-pointer-of-tag? v tag)
+  (and (integer? v)
+       (= (%guest-bit-and v GUEST_TAG_MASK) tag)))
+
+;; Type-specific predicates
+(define (guest-pair? v)     (guest-pointer-of-tag? v GUEST_TAG_PAIR))
+(define (guest-symbol? v)   (guest-pointer-of-tag? v GUEST_TAG_SYMBOL))
+(define (guest-closure? v)  (guest-pointer-of-tag? v GUEST_TAG_CLOSURE))
+(define (guest-vector? v)   (guest-pointer-of-tag? v GUEST_TAG_VECTOR))
+(define (guest-instance? v) (guest-pointer-of-tag? v GUEST_TAG_INSTANCE))
+(define (guest-flonum-ptr? v) (guest-pointer-of-tag? v GUEST_TAG_FLONUM))
+
+;;; -----------------------------------------------------------------------
+;;; 5. Special Immediates Packing & Unpacking
+;;; -----------------------------------------------------------------------
+
+;;; Packs an immediate code into a tagged special value
+(define (guest-pack-special id)
+  (%guest-bit-ior (%guest-bit-shift id 3) GUEST_TAG_SPECIAL))
+
+;;; Unpacks an immediate code from a tagged special value
+(define (guest-unpack-special v)
+  (if (not (guest-special? v))
+      (guest-tag-error! "guest-unpack-special: not a special immediate" v)
+      (%guest-bit-shift v -3)))
+
+;;; Predicate for special immediates
+(define (guest-special? v)
+  (and (integer? v)
+       (= (%guest-bit-and v GUEST_TAG_MASK) GUEST_TAG_SPECIAL)))
+
+(define (guest-false? v) (= v (guest-pack-special GUEST_SPECIAL_FALSE)))
+(define (guest-true? v)  (= v (guest-pack-special GUEST_SPECIAL_TRUE)))
+(define (guest-nil? v)   (= v (guest-pack-special GUEST_SPECIAL_NIL)))
+(define (guest-undef? v) (= v (guest-pack-special GUEST_SPECIAL_UNDEF)))
+
+;;; -----------------------------------------------------------------------
+;;; 6. Type Assertion Guard (CWE-843 Runtime Attestation)
+;;; -----------------------------------------------------------------------
+
+(define (guest-tag-assert! v expected-tag msg)
+  (if (not (= (%guest-bit-and v GUEST_TAG_MASK) expected-tag))
+      (guest-tag-error! (string-append "guest-tag-assert: " msg) (list v expected-tag))
+      #t))
+
+;;; -----------------------------------------------------------------------
+;;; 7. Residual Code / LIR Emitter Helpers (Compile-Time Lowering)
+;;; -----------------------------------------------------------------------
+
+;; Emits residual expression for tag check: (= (bitwise-and v 7) tag)
+(define (guest-emit-tag-check v-expr tag)
+  (list '= (list 'bitwise-and v-expr GUEST_TAG_MASK) tag))
+
+;; Emits residual expression for untagging: (- v tag)
+(define (guest-emit-untag v-expr tag)
+  (if (= tag 0)
+      v-expr
+      (list '- v-expr tag)))
+
+;; Emits residual expression for fixnum packing: (arithmetic-shift n 3)
+(define (guest-emit-pack-fixnum n-expr)
+  (list 'arithmetic-shift n-expr 3))
+
+;; Emits residual expression for fixnum unpacking: (arithmetic-shift v -3)
+(define (guest-emit-unpack-fixnum v-expr)
+  (list 'arithmetic-shift v-expr -3))

@@ -212,6 +212,31 @@
            ((char->integer) (if (char? v) (char->integer v) *ctfe-failure*))
            ((integer->char) (if (and (number? v) (>= v 0) (<= v #x10ffff)) (integer->char v) *ctfe-failure*))
            ((string-length) (if (string? v) (string-length v) *ctfe-failure*))
+           ((guest-pack-fixnum) (if (number? v) (guest-pack-fixnum v) *ctfe-failure*))
+           ((guest-unpack-fixnum) (if (number? v) (guest-unpack-fixnum v) *ctfe-failure*))
+           ((guest-fixnum?) (if (number? v) (guest-fixnum? v) *ctfe-failure*))
+           ((guest-tag-of) (if (number? v) (guest-tag-of v) *ctfe-failure*))
+           ((guest-pair?) (if (number? v) (guest-pair? v) *ctfe-failure*))
+           ((guest-symbol?) (if (number? v) (guest-symbol? v) *ctfe-failure*))
+           ((guest-closure?) (if (number? v) (guest-closure? v) *ctfe-failure*))
+           ((guest-vector?) (if (number? v) (guest-vector? v) *ctfe-failure*))
+           ((guest-instance?) (if (number? v) (guest-instance? v) *ctfe-failure*))
+           ((guest-flonum-ptr?) (if (number? v) (guest-flonum-ptr? v) *ctfe-failure*))
+           ((guest-pack-special) (if (number? v) (guest-pack-special v) *ctfe-failure*))
+           ((guest-unpack-special) (if (number? v) (guest-unpack-special v) *ctfe-failure*))
+           ((guest-special?) (if (number? v) (guest-special? v) *ctfe-failure*))
+           ((nan-box-int32) (if (number? v) (nan-box-int32 v) *ctfe-failure*))
+           ((nan-unbox-int32) (if (number? v) (nan-unbox-int32 v) *ctfe-failure*))
+           ((nan-is-int32?) (if (number? v) (nan-is-int32? v) *ctfe-failure*))
+           ((nan-box-pointer) (if (number? v) (nan-box-pointer v) *ctfe-failure*))
+           ((nan-unbox-pointer) (if (number? v) (nan-unbox-pointer v) *ctfe-failure*))
+           ((nan-is-pointer?) (if (number? v) (nan-is-pointer? v) *ctfe-failure*))
+           ((nan-box-special) (if (number? v) (nan-box-special v) *ctfe-failure*))
+           ((nan-unbox-special) (if (number? v) (nan-unbox-special v) *ctfe-failure*))
+           ((nan-is-special?) (if (number? v) (nan-is-special? v) *ctfe-failure*))
+           ((nan-box-flonum) (nan-box-flonum v))
+           ((nan-unbox-flonum) (nan-unbox-flonum v))
+           ((nan-is-flonum?) (nan-is-flonum? v))
            (else *ctfe-failure*))))
 
       ;; 2-argument primitives
@@ -255,6 +280,9 @@
            ((bitwise-ior) (if (and (number? v1) (number? v2)) (ctfe-bitwise-ior v1 v2) *ctfe-failure*))
            ((bitwise-xor) (if (and (number? v1) (number? v2)) (ctfe-bitwise-xor v1 v2) *ctfe-failure*))
            ((arithmetic-shift) (if (and (number? v1) (number? v2)) (ctfe-arithmetic-shift v1 v2) *ctfe-failure*))
+           ((guest-pack-pointer) (if (and (number? v1) (number? v2)) (guest-pack-pointer v1 v2) *ctfe-failure*))
+           ((guest-unpack-pointer) (if (and (number? v1) (number? v2)) (guest-unpack-pointer v1 v2) *ctfe-failure*))
+           ((guest-pointer-of-tag?) (if (and (number? v1) (number? v2)) (guest-pointer-of-tag? v1 v2) *ctfe-failure*))
            (else *ctfe-failure*))))
 
       ;; 3 or more arguments (variadic reduction)
@@ -948,6 +976,15 @@
                   char->integer integer->char string-length vector-length
                   vector-ref vector-set! make-vector string-ref
                   local-slot-ref local-slot-set!
+                  guest-pack-fixnum guest-unpack-fixnum guest-fixnum?
+                  guest-pack-pointer guest-unpack-pointer guest-tag-of
+                  guest-pointer-of-tag? guest-pair? guest-symbol? guest-closure?
+                  guest-vector? guest-instance? guest-flonum-ptr?
+                  guest-pack-special guest-unpack-special guest-special?
+                  nan-box-int32 nan-unbox-int32 nan-is-int32?
+                  nan-box-pointer nan-unbox-pointer nan-is-pointer?
+                  nan-box-special nan-unbox-special nan-is-special?
+                  nan-box-flonum nan-unbox-flonum nan-is-flonum?
                   fx+ fx- fx* fxadd1 fxsub1
                   display write newline))
       #t
@@ -961,6 +998,15 @@
                   bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
                   char->integer integer->char string-length vector-length
                   vector-ref make-vector local-slot-ref
+                  guest-pack-fixnum guest-unpack-fixnum guest-fixnum?
+                  guest-pack-pointer guest-unpack-pointer guest-tag-of
+                  guest-pointer-of-tag? guest-pair? guest-symbol? guest-closure?
+                  guest-vector? guest-instance? guest-flonum-ptr?
+                  guest-pack-special guest-unpack-special guest-special?
+                  nan-box-int32 nan-unbox-int32 nan-is-int32?
+                  nan-box-pointer nan-unbox-pointer nan-is-pointer?
+                  nan-box-special nan-unbox-special nan-is-special?
+                  nan-box-flonum nan-unbox-flonum nan-is-flonum?
                   fx+ fx- fx* fxadd1 fxsub1))
       #t
       #f))
@@ -1124,6 +1170,122 @@
               (else
                (let* ((lifted (extract-lifted-payloads dict args)))
                  (make-dynamic-val 'any (cons 'assq lifted) loc #f))))))
+
+         ;; Tag Stripping: guest-unpack-fixnum (DSN-33-04 §2.3 & Issue #893)
+         ((and (eq? op 'guest-unpack-fixnum) (= nargs 1))
+          (let* ((arg (car args))
+                 (p (stage-val-payload arg)))
+            (cond
+              ((and (pair? p) (eq? (car p) 'guest-pack-fixnum) (pair? (cdr p)))
+               (make-dynamic-val 'integer (cadr p) loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: guest-fixnum?
+         ((and (eq? op 'guest-fixnum?) (= nargs 1))
+          (let* ((arg (car args))
+                 (p (stage-val-payload arg)))
+            (cond
+              ((and (pair? p) (eq? (car p) 'guest-pack-fixnum))
+               (make-static-val 'boolean #t loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: nan-unbox-int32
+         ((and (eq? op 'nan-unbox-int32) (= nargs 1))
+          (let* ((arg (car args))
+                 (p (stage-val-payload arg)))
+            (cond
+              ((and (pair? p) (eq? (car p) 'nan-box-int32) (pair? (cdr p)))
+               (make-dynamic-val 'integer (cadr p) loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: nan-is-int32?
+         ((and (eq? op 'nan-is-int32?) (= nargs 1))
+          (let* ((arg (car args))
+                 (p (stage-val-payload arg)))
+            (cond
+              ((and (pair? p) (eq? (car p) 'nan-box-int32))
+               (make-static-val 'boolean #t loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: nan-unbox-pointer
+         ((and (eq? op 'nan-unbox-pointer) (= nargs 1))
+          (let* ((arg (car args))
+                 (p (stage-val-payload arg)))
+            (cond
+              ((and (pair? p) (eq? (car p) 'nan-box-pointer) (pair? (cdr p)))
+               (make-dynamic-val 'pointer (cadr p) loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: nan-is-pointer?
+         ((and (eq? op 'nan-is-pointer?) (= nargs 1))
+          (let* ((arg (car args))
+                 (p (stage-val-payload arg)))
+            (cond
+              ((and (pair? p) (eq? (car p) 'nan-box-pointer))
+               (make-static-val 'boolean #t loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: nan-unbox-flonum
+         ((and (eq? op 'nan-unbox-flonum) (= nargs 1))
+          (let* ((arg (car args))
+                 (p (stage-val-payload arg)))
+            (cond
+              ((and (pair? p) (eq? (car p) 'nan-box-flonum) (pair? (cdr p)))
+               (make-dynamic-val 'real (cadr p) loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: nan-is-flonum?
+         ((and (eq? op 'nan-is-flonum?) (= nargs 1))
+          (let* ((arg (car args))
+                 (p (stage-val-payload arg)))
+            (cond
+              ((and (pair? p) (eq? (car p) 'nan-box-flonum))
+               (make-static-val 'boolean #t loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: guest-unpack-pointer
+         ((and (eq? op 'guest-unpack-pointer) (= nargs 2))
+          (let* ((arg1 (car args))
+                 (arg2 (cadr args))
+                 (p1 (stage-val-payload arg1))
+                 (p2 (stage-val-payload arg2)))
+            (cond
+              ((and (pair? p1) (eq? (car p1) 'guest-pack-pointer) (pair? (cdr p1)) (pair? (cddr p1))
+                    (equal? (caddr p1) p2))
+               (make-dynamic-val 'pointer (cadr p1) loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
+
+         ;; Tag Stripping: guest-pointer-of-tag?
+         ((and (eq? op 'guest-pointer-of-tag?) (= nargs 2))
+          (let* ((arg1 (car args))
+                 (arg2 (cadr args))
+                 (p1 (stage-val-payload arg1))
+                 (p2 (stage-val-payload arg2)))
+            (cond
+              ((and (pair? p1) (eq? (car p1) 'guest-pack-pointer) (pair? (cdr p1)) (pair? (cddr p1))
+                    (equal? (caddr p1) p2))
+               (make-static-val 'boolean #t loc #f))
+              (else
+               (let ((lifted (extract-lifted-payloads dict args)))
+                 (make-dynamic-val 'any (cons op lifted) loc #f))))))
 
          ;; General dynamic primitive residualization
          (else
@@ -2092,6 +2254,39 @@
           (let ((idx (eval-residual-anf-expr (cadr expr) env)))
             (let ((b (assq idx env)))
               (if b (cdr b) (list 'local-slot-ref idx)))))
+         ((eq? head 'guest-pack-fixnum)
+          (guest-pack-fixnum (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'guest-unpack-fixnum)
+          (guest-unpack-fixnum (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'guest-fixnum?)
+          (guest-fixnum? (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'guest-pack-pointer)
+          (guest-pack-pointer (eval-residual-anf-expr (cadr expr) env)
+                              (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'guest-unpack-pointer)
+          (guest-unpack-pointer (eval-residual-anf-expr (cadr expr) env)
+                                (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'guest-pointer-of-tag?)
+          (guest-pointer-of-tag? (eval-residual-anf-expr (cadr expr) env)
+                                 (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'nan-box-int32)
+          (nan-box-int32 (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'nan-unbox-int32)
+          (nan-unbox-int32 (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'nan-is-int32?)
+          (nan-is-int32? (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'nan-box-pointer)
+          (nan-box-pointer (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'nan-unbox-pointer)
+          (nan-unbox-pointer (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'nan-is-pointer?)
+          (nan-is-pointer? (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'nan-box-flonum)
+          (nan-box-flonum (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'nan-unbox-flonum)
+          (nan-unbox-flonum (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'nan-is-flonum?)
+          (nan-is-flonum? (eval-residual-anf-expr (cadr expr) env)))
          (else
           (let ((b (assq head env)))
             (if b
