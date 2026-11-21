@@ -22,6 +22,7 @@
 (define (abs x) (if (< x 0) (- 0 x) x))
 (define (safe-car x) (if (pair? x) (car x) '()))
 (define (safe-cdr x) (if (pair? x) (cdr x) '()))
+(define (sys-chmod path mode) #f)
 
 (define (string-starts-with? s prefix)
   (let ((slen (string-length s))

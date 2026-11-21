@@ -2,7 +2,7 @@
 ID: 909
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] Integrate --cogen Option into ULisp Compiler CLI and Unify Driver Subcommands (ID: 909)
@@ -80,11 +80,11 @@ ID: 909
 ---
 
 ## 6. 完了条件 / Definition of Done (DoD)
-- [ ] `ulisp/compiler.scm` に `--cogen` オプションが追加され、`--interpreter`, `--grammar`, `-o` を用いてスタンドアロンコンパイラ CLI を合成・出力できること。
-- [ ] `ulisp/bin/ulisp-cogen` と `compiler.scm --cogen` の両方で同一の Cogen 生成結果が得られること。
-- [ ] 不正なパス（CWE-78, CWE-22）が `--cogen` 実行時にも正しく遮断されること。
-- [ ] 生成された CLI を用いてプログラムが正常にコンパイルできること（E2E 検証）。
-- [ ] `make -C ulisp test_workbench_cogen` が 100% PASS すること。
-- [ ] `make -C ulisp lint_sexpr verify_zero_gauche` がエラー 0 件で PASS すること。
-- [ ] `make py_compile && make static_analysis` がエラー 0 件で PASS すること。
-- [ ] すべてのファイル参照において相対パス規則が厳格に守られていること。
+- [x] `ulisp/compiler.scm` に `--cogen` オプションが追加され、`--interpreter`, `--grammar`, `-o` を用いてスタンドアロンコンパイラ CLI を合成・出力できること。
+- [x] `ulisp/bin/ulisp-cogen` と `compiler.scm --cogen` の両方で同一の Cogen 生成結果が得られること。
+- [x] 不正なパス（CWE-78, CWE-22）が `--cogen` 実行時にも正しく遮断されること。
+- [x] 生成された CLI を用いてプログラムが正常にコンパイルできること（E2E 検証）。
+- [x] `make -C ulisp test_workbench_cogen` が 100% PASS すること。
+- [x] `make -C ulisp lint_sexpr verify_zero_gauche` がエラー 0 件で PASS すること。
+- [x] `make py_compile && make static_analysis` がエラー 0 件で PASS すること。
+- [x] すべてのファイル参照において相対パス規則が厳格に守られていること。

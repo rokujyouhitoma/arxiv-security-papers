@@ -866,15 +866,19 @@ test_workbench_tagging: build/compiler_passes.scm $(PASS_COMMON)
 	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_workbench_tagging.scm > build/test_workbench_tagging_runner.scm
 	@$(RUN_SCHEME) build/test_workbench_tagging_runner.scm
 
-test_workbench_cogen: build/compiler_passes.scm $(PASS_COMMON)
+test_workbench_cogen: compiler.scm build/compiler_passes.scm $(PASS_COMMON)
 	@mkdir -p build
 	cat build/compiler_passes.scm $(PASS_COMMON) tests/test_workbench_cogen.scm > build/test_workbench_cogen_runner.scm
 	@$(RUN_SCHEME) build/test_workbench_cogen_runner.scm
-	@echo "--- E2E Standalone CLI Generation Verification ---"
+	@echo "--- E2E Standalone CLI Generation Verification (ulisp-cogen) ---"
 	./bin/ulisp-cogen --interpreter build/test_sample_interp.scm --grammar build/test_sample_grammar.peg --output build/test_calc_compiler_cli --runtime-model tagging
 	./build/test_calc_compiler_cli --help > /dev/null
 	./build/test_calc_compiler_cli build/sample_input.expr -o build/sample_output.bin > /dev/null
-	@echo "[PASS] All Direct Cogen tests and E2E CLI generation passed successfully."
+	@echo "--- E2E Direct Cogen Compiler Option Verification (compiler.scm --cogen) ---"
+	@$(RUN_SCHEME) compiler.scm -- --cogen --interpreter=build/test_sample_interp.scm --grammar=build/test_sample_grammar.peg -o build/test_compiler_opt_cli --runtime-model=nanbox
+	./build/test_compiler_opt_cli --help > /dev/null
+	./build/test_compiler_opt_cli build/sample_input.expr -o build/sample_output2.bin > /dev/null
+	@echo "[PASS] All Direct Cogen tests, compiler option --cogen, and E2E CLI generation passed successfully."
 
 
 # --- Pure Scheme PEG Parser Generator Tests (Issue #894) ---

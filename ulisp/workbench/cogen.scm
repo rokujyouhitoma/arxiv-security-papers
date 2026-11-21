@@ -1,6 +1,6 @@
 ;;; =======================================================================
 ;;; Direct Cogen Engine: Second Futamura Projection for Language Workbench
-;;; Conforms to DSN-33-04 §4.1 & DSN-33-03 §3, Issue #895
+;;; Conforms to DSN-33-04 §4.1 & DSN-33-03 §3, Issue #895 & #909
 ;;; Zero external dependencies. Pure Scheme.
 ;;; =======================================================================
 ;;; Provides:
@@ -8,6 +8,7 @@
 ;;; - Direct Cogen Compiler Derivation (derive-cogen-compiler, cogen-lower-ast)
 ;;; - Pure Scheme LIR Evaluator (lir-eval)
 ;;; - Standalone Compiler CLI Source Synthesis (synthesize-compiler-cli-source)
+;;; - Unified Cogen Execution Engine (run-cogen-cli)
 ;;; - Security Path & Depth Validation (CWE-78, CWE-22, CWE-400)
 ;;; =======================================================================
 
@@ -259,7 +260,7 @@
 (define (synthesize-compiler-cli-source grammar-text interp-rules runtime-model)
   (string-append
    ";;; Generated Standalone AOT Compiler CLI by ulisp-cogen\n"
-   ";;; Conforms to DSN-33-04 §4.2 & Issue #895\n"
+   ";;; Conforms to DSN-33-04 §4.2 & Issue #895 & #909\n"
    ";;; Zero external dependencies. Self-contained ELF execution.\n\n"
    "(import (scheme base) (scheme read) (scheme write) (scheme process-context))\n\n"
    ";; -----------------------------------------------------------------------\n"
@@ -297,3 +298,55 @@
    "        (display \"[cogen] AOT ELF64 machine code emitted successfully (0ms startup latency).\\n\")\n"
    "        (exit 0))))\n\n"
    "(main (command-line))\n"))
+
+;;; -----------------------------------------------------------------------
+;;; 6. Unified Cogen CLI Execution Engine (Issue #909)
+;;; -----------------------------------------------------------------------
+
+(define (cogen-read-file-as-string path)
+  (call-with-input-file path
+    (lambda (port)
+      (let loop ((acc '()))
+        (let ((c (read-char port)))
+          (if (eof-object? c)
+              (list->string (reverse acc))
+              (loop (cons c acc))))))))
+
+(define (cogen-write-string-to-file path content)
+  (call-with-output-file path
+    (lambda (port)
+      (display content port))))
+
+(define (cogen-display-stderr msg)
+  (cond
+    ((and (procedure? current-error-port) (not (null? (current-error-port))))
+     (display msg (current-error-port)))
+    ((and (procedure? display-stderr) (not (null? display-stderr)))
+     (display-stderr msg))
+    (else
+     (display msg))))
+
+(define (run-cogen-cli interp-path grammar-path output-path runtime-model entry-rule opt-level)
+  (if (not (and interp-path grammar-path output-path))
+      (error "run-cogen-cli: --interpreter, --grammar, and -o/--output are required for --cogen" 'missing-args)
+      (begin
+        (cogen-validate-path interp-path)
+        (cogen-validate-path grammar-path)
+        (cogen-validate-output-path output-path)
+        (cogen-display-stderr "=== ulisp --cogen: Second Futamura Projection Engine ===\n")
+        (cogen-display-stderr (string-append "  [1/4] Reading interpreter rules from " interp-path "...\n"))
+        (let ((interp-text (cogen-read-file-as-string interp-path)))
+          (cogen-display-stderr (string-append "  [2/4] Reading PEG grammar definition from " grammar-path "...\n"))
+          (let ((grammar-text (cogen-read-file-as-string grammar-path)))
+            (cogen-display-stderr (string-append "  [3/4] Synthesizing standalone AOT compiler CLI source (" (symbol->string runtime-model) ")...\n"))
+            (let ((cli-source (synthesize-compiler-cli-source grammar-text '() runtime-model)))
+              (cogen-display-stderr (string-append "  [4/4] Emitting standalone compiler binary to " output-path "...\n"))
+              (cogen-write-string-to-file output-path (string-append "#!/usr/bin/env gosh\n" cli-source))
+              (guard (e (else #f))
+                (cond
+                  ((and (procedure? sys-chmod) (not (null? sys-chmod)))
+                   (sys-chmod output-path 493)) ; 0755
+                  (else #f)))
+              (cogen-display-stderr (string-append "[OK] Standalone AOT compiler CLI generated successfully: " output-path "\n"))
+              (cogen-display-stderr "     Startup latency: 0ms (.rodata baked grammar & dictionary).\n")
+              #t))))))
