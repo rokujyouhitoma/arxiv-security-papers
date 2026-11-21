@@ -15,6 +15,8 @@
   (if (file-input-port? p)
       (car (caddr (cddddr p)))
       1))
+(define (port-read-line p)
+  (read-line p))
 
 (define (fixnum->char n) (integer->char n))
 (define (char->fixnum c) (char->integer c))
@@ -10152,41 +10154,42 @@
 (define (auto-bisect-picopasses candidate-rules test-fn)
   (let* ((rule-ids (map (lambda (r) (if (rule-descriptor? r) (rule-name r) r)) candidate-rules))
          (saved-disabled (disabled-picopasses)))
-    (reset-disabled-picopasses!)
-    (let ((result
-           ;; Step 1: Does the bug reproduce when all candidate rules are enabled?
-           (if (test-fn)
-               #f ; Bug is not reproduced (test-fn passed)
-               ;; Step 2: Does the bug disappear when ALL candidate rules are disabled?
-               (let ((passes-when-all-disabled?
-                      (with-disabled-picopasses rule-ids test-fn)))
-                 (if (not passes-when-all-disabled?)
-                     'cannot-isolate-all-disabled-still-fails
-                     ;; Step 3: Delta debugging recursive bisection
-                     (let bisect ((rules rule-ids))
-                       (cond
-                         ((null? rules) #f)
-                         ((= (length rules) 1)
-                          (car rules)) ; Isolated single culprit rule!
-                         (else
-                          (let* ((mid (quotient (length rules) 2))
-                                 (split (picopass-split-list rules mid))
-                                 (r1 (car split))
-                                 (r2 (cdr split)))
-                            ;; Test if failure persists without r1
-                            (let ((fails-without-r1?
-                                   (not (with-disabled-picopasses r1 test-fn))))
-                              (if fails-without-r1?
-                                  (bisect r2)
-                                  ;; Otherwise test if failure persists without r2
-                                  (let ((fails-without-r2?
-                                         (not (with-disabled-picopasses r2 test-fn))))
-                                    (if fails-without-r2?
-                                        (bisect r1)
-                                        ;; Both subsets needed -> interaction bug
-                                        (list 'interaction r1 r2))))))))))))))
-      (set-car! *disabled-picopasses* saved-disabled)
-      result)))
+    (dynamic-wind
+      (lambda () (reset-disabled-picopasses!))
+      (lambda ()
+        ;; Step 1: Does the bug reproduce when all candidate rules are enabled?
+        (if (test-fn)
+            #f ; Bug is not reproduced (test-fn passed)
+            ;; Step 2: Does the bug disappear when ALL candidate rules are disabled?
+            (let ((passes-when-all-disabled?
+                   (with-disabled-picopasses rule-ids test-fn)))
+              (if (not passes-when-all-disabled?)
+                  'cannot-isolate-all-disabled-still-fails
+                  ;; Step 3: Delta debugging recursive bisection
+                  (let bisect ((rules rule-ids))
+                    (cond
+                      ((null? rules) #f)
+                      ((= (length rules) 1)
+                       (car rules)) ; Isolated single culprit rule!
+                      (else
+                       (let* ((mid (quotient (length rules) 2))
+                              (split (picopass-split-list rules mid))
+                              (r1 (car split))
+                              (r2 (cdr split)))
+                         ;; Test if failure persists without r1
+                         (let ((fails-without-r1?
+                                (not (with-disabled-picopasses r1 test-fn))))
+                           (if fails-without-r1?
+                               (bisect r2)
+                               ;; Otherwise test if failure persists without r2
+                               (let ((fails-without-r2?
+                                      (not (with-disabled-picopasses r2 test-fn))))
+                                 (if fails-without-r2?
+                                     (bisect r1)
+                                     ;; Both subsets needed -> interaction bug
+                                     (list 'interaction r1 r2)))))))))))))
+      (lambda ()
+        (set-car! *disabled-picopasses* saved-disabled)))))
 ;;; =======================================================================
 ;;; ULisp Compiler: Generic Dataflow Analysis Framework & Lattice Engine
 ;;; Conforms to DSN-33 Architecture Specification & Issue #599

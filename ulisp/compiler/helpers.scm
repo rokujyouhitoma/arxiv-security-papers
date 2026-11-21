@@ -15,6 +15,8 @@
   (if (file-input-port? p)
       (car (caddr (cddddr p)))
       1))
+(define (port-read-line p)
+  (read-line p))
 
 (define (fixnum->char n) (integer->char n))
 (define (char->fixnum c) (char->integer c))

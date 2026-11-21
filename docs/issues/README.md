@@ -10,6 +10,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **910** | ULisp ブートストラップシードドリフトの解消および Pass Manager 大域脱出復元の修正 | Bugfix | 2026-11-21 | [910-fix-ulisp-bootstrap-seed-drift-and-pass-manager-exception-unwind.md](closed/910-fix-ulisp-bootstrap-seed-drift-and-pass-manager-exception-unwind.md) |
 | **906** | 完全自立型静的 ELF (-nostdlib -static) の E2E 実行可能性および動的依存ゼロの検証 | Feature | 2026-11-21 | [906-verify-freestanding-static-nostdlib-elf-e2e-execution.md](closed/906-verify-freestanding-static-nostdlib-elf-e2e-execution.md) |
 | **905** | ベアメタル自立型 Demand-Paged BSS バンプアロケータおよび Zero-libc 2-Space GC の実装 | Feature | 2026-11-21 | [905-implement-freestanding-demand-paged-bss-bump-allocator-and-gc.md](closed/905-implement-freestanding-demand-paged-bss-bump-allocator-and-gc.md) |
 | **904** | 外部 C ランタイム完全排除と Pure Scheme _start エントリポイント・Raw Syscall 直結 | Feature | 2026-11-21 | [904-eliminate-external-c-runtime-and-establish-pure-scheme-start-entry.md](closed/904-eliminate-external-c-runtime-and-establish-pure-scheme-start-entry.md) |
