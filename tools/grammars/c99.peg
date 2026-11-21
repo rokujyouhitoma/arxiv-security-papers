@@ -365,11 +365,11 @@ constant:
     | char_constant
 
 float_constant:
-    | ('0x' | '0X') [0-9a-fA-F]* '.' [0-9a-fA-F]+ binary_exponent float_suffix?
-    | ('0x' | '0X') [0-9a-fA-F]+ '.'? binary_exponent float_suffix?
-    | [0-9]* '.' [0-9]+ decimal_exponent? float_suffix?
-    | [0-9]+ '.' decimal_exponent? float_suffix?
-    | [0-9]+ decimal_exponent float_suffix?
+    | ('0x' | '0X') [0-9a-fA-F]* '.' [0-9a-fA-F]+ binary_exponent float_suffix? !ident_cont
+    | ('0x' | '0X') [0-9a-fA-F]+ '.'? binary_exponent float_suffix? !ident_cont
+    | [0-9]* '.' [0-9]+ decimal_exponent? float_suffix? !ident_cont
+    | [0-9]+ '.' decimal_exponent? float_suffix? !ident_cont
+    | [0-9]+ decimal_exponent float_suffix? !ident_cont
 
 decimal_exponent:
     | ('e' | 'E') ('+' | '-')? [0-9]+
@@ -381,9 +381,9 @@ float_suffix:
     | ('f' | 'F' | 'l' | 'L')
 
 integer_constant:
-    | ('0x' | '0X') [0-9a-fA-F]+ integer_suffix?
-    | '0' [0-7]* integer_suffix?
-    | [1-9] [0-9]* integer_suffix?
+    | ('0x' | '0X') [0-9a-fA-F]+ integer_suffix? !ident_cont
+    | '0' [0-7]* integer_suffix? !ident_cont
+    | [1-9] [0-9]* integer_suffix? !ident_cont
 
 integer_suffix:
     | ('u' | 'U') ('ll' | 'LL' | 'l' | 'L')?
@@ -397,6 +397,23 @@ string_literal:
 
 escape_seq:
     | '\\' .
+
+c99_punctuator:
+    | '<<=' | '>>=' | '...'
+    | '->' | '++' | '--' | '<<' | '>>' | '<=' | '>=' | '==' | '!='
+    | '&&' | '||' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '^=' | '|='
+    | '##' | '<:' | ':>' | '<%' | '%>' | '%:'
+    | '[' | ']' | '(' | ')' | '{' | '}' | '.' | '&' | '*' | '+' | '-' | '~' | '!'
+    | '/' | '%' | '<' | '>' | '^' | '|' | '?' | ':' | ';' | '=' | ',' | '#'
+
+c99_raw_token:
+    | ch=char_constant
+    | str=string_literal
+    | kw=c99_keyword
+    | id=identifier
+    | flt=float_constant
+    | int=integer_constant
+    | punct=c99_punctuator
 
 ws:
     | ([ \t\r\n] | line_comment | block_comment | pp_line)*
