@@ -261,4 +261,4 @@ Step S5 の完了基準（Definition of Done）として、ULisp でビルドさ
 | **#928** | S7 (T16) | `musl libc` 自前ビルドおよび Pass 144 自前 ELF リンカ静的リンク移行 | Medium | [928](../issues/928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
 | **#929** | S8 (T17) | DDC (Diverse Double-Compiling) 決定論性・ビット一致検証ハーネス | Medium | [929](../issues/929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
 | **#930** | S9 (T18) | C99 配列境界検査・NULL 参照トラップ自動注入 (`--sanitize-bounds`) | Medium | [930](../issues/930-implement-c99-bounds-checking-sanitizer-mode.md) |
-| **#931** | S2 (PEG) | PEG による C99 文法仕様 (`tools/grammars/c99.peg`) ＆ パーサー自動合成 | High | [931](../issues/931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) |
+| **#931** | S2 (PEG) | PEG による C99 文法仕様 (`tools/grammars/c99.peg`) ＆ パーサー自動合成 | High | [931](../issues/closed/931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) |

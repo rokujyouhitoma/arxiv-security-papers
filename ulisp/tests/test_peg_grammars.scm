@@ -24,7 +24,8 @@
     "bibtex.peg"
     "pdf_cmap.peg"
     "turtle.peg"
-    "peg_meta.peg"))
+    "peg_meta.peg"
+    "c99.peg"))
 
 (for-each
  (lambda (fname)

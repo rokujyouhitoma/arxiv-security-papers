@@ -24,12 +24,12 @@
 | **928** | `musl libc` の ULisp 自前ビルドおよび Pass 144 自前 ELF リンカによる完全静的リンク移行 | Feature | Open (New) | [928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
 | **929** | DDC (Diverse Double-Compiling) による C コンパイル出力の決定論性・ビット一致検証ハーネスの実装 | Feature | Open (New) | [929-implement-ddc-diverse-double-compiling-determinism-verification.md](929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | Open (New) | [930-implement-c99-bounds-checking-sanitizer-mode.md](930-implement-c99-bounds-checking-sanitizer-mode.md) |
-| **931** | PEG による C99 文法仕様 (`tools/grammars/c99.peg`) の定義およびパーサー自動合成の実装 | Feature | In Progress | [931-implement-c99-peg-grammar-specification-and-parser-synthesis.md](931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **931** | PEG による C99 文法仕様 (`tools/grammars/c99.peg`) の定義およびパーサー自動合成の実装 | Feature | 2026-11-21 | [931-implement-c99-peg-grammar-specification-and-parser-synthesis.md](closed/931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) |
 | **912** | DSN-33 シリーズの 2桁ドメイン番台方式（10番台〜40番台）への体系的再編 | Docs | 2026-11-21 | [912-reorganize-dsn-33-into-domain-numbered-series.md](closed/912-reorganize-dsn-33-into-domain-numbered-series.md) |
 | **911** | DSN-33-02 (フロントエンド)・DSN-33-08 (バックエンド)・DSN-33-09 (C言語経由 Lua コンパイル) の責務分離と設計書体系化 | Docs | 2026-11-21 | [911-reorganize-dsn-33-02-frontend-dsn-33-08-backend-and-dsn-33-09-lua-c-compilation.md](closed/911-reorganize-dsn-33-02-frontend-dsn-33-08-backend-and-dsn-33-09-lua-c-compilation.md) |
 | **910** | ULisp ブートストラップシードドリフトの解消および Pass Manager 大域脱出復元の修正 | Bugfix | 2026-11-21 | [910-fix-ulisp-bootstrap-seed-drift-and-pass-manager-exception-unwind.md](closed/910-fix-ulisp-bootstrap-seed-drift-and-pass-manager-exception-unwind.md) |

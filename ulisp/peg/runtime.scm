@@ -9,7 +9,7 @@
 ;;; -----------------------------------------------------------------------
 
 (define-record-type <parse-context>
-  (%make-parse-context text length max-pos expected memo lr-detected in-progress depth max-depth)
+  (%make-parse-context text length max-pos expected memo lr-detected in-progress touched-lr depth max-depth)
   parse-context?
   (text         parse-ctx-text)
   (length       parse-ctx-length)
@@ -18,20 +18,28 @@
   (memo         parse-ctx-memo         parse-ctx-raw-memo-set!)
   (lr-detected  parse-ctx-lr-detected  parse-ctx-lr-detected-set!)
   (in-progress  parse-ctx-in-progress  parse-ctx-in-progress-set!)
+  (touched-lr   parse-ctx-touched-lr   parse-ctx-touched-lr-set!)
   (depth        parse-ctx-depth        parse-ctx-depth-set!)
   (max-depth    parse-ctx-max-depth))
 
 (define (make-parse-context text . maybe-max-depth)
   (let ((len (string-length text))
         (max-d (if (pair? maybe-max-depth) (car maybe-max-depth) 10000)))
-    (%make-parse-context text len 0 '() '() '() '() 0 max-d)))
+    (%make-parse-context text len 0 '() (make-vector (+ len 1) '()) '() '() '() 0 max-d)))
 
 (define-record-type <memo-entry>
-  (make-memo-entry status val end-pos)
+  (%make-memo-entry status val end-pos growing? lr-deps)
   memo-entry?
-  (status  memo-entry-status  memo-entry-status-set!)
-  (val     memo-entry-val     memo-entry-val-set!)
-  (end-pos memo-entry-end-pos memo-entry-end-pos-set!))
+  (status   memo-entry-status   memo-entry-status-set!)
+  (val      memo-entry-val      memo-entry-val-set!)
+  (end-pos  memo-entry-end-pos  memo-entry-end-pos-set!)
+  (growing? memo-entry-growing? memo-entry-growing?-set!)
+  (lr-deps  memo-entry-lr-deps  memo-entry-lr-deps-set!))
+
+(define (make-memo-entry status val end-pos . rest)
+  (let ((g? (if (pair? rest) (car rest) #f))
+        (deps (if (and (pair? rest) (pair? (cdr rest))) (cadr rest) '())))
+    (%make-memo-entry status val end-pos g? deps)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Context Operations & Memoization Table
@@ -49,17 +57,38 @@
              (parse-ctx-expected-set! ctx (cons expected-tok exp))))))))
 
 (define (parse-ctx-memo-ref ctx key)
-  (let ((memo (parse-ctx-memo ctx)))
+  (let* ((vec (parse-ctx-memo ctx))
+         (rule (car key))
+         (pos (cdr key))
+         (bucket (vector-ref vec pos)))
     (cond
-      ((assoc key memo) => cdr)
+      ((assq rule bucket) => cdr)
       (else #f))))
 
 (define (parse-ctx-memo-set! ctx key entry)
-  (let ((memo (parse-ctx-memo ctx)))
-    (let ((slot (assoc key memo)))
-      (if slot
-          (set-cdr! slot entry)
-          (parse-ctx-raw-memo-set! ctx (cons (cons key entry) memo))))))
+  (let* ((vec (parse-ctx-memo ctx))
+         (rule (car key))
+         (pos (cdr key))
+         (bucket (vector-ref vec pos))
+         (slot (assq rule bucket)))
+    (if slot
+        (set-cdr! slot entry)
+        (vector-set! vec pos (cons (cons rule entry) bucket)))))
+
+(define (parse-ctx-touched-lr-add! ctx key)
+  (let ((cur (parse-ctx-touched-lr ctx)))
+    (if (not (member key cur))
+        (parse-ctx-touched-lr-set! ctx (cons key cur)))))
+
+(define (parse-ctx-touched-lr-merge! ctx keys)
+  (for-each (lambda (k) (parse-ctx-touched-lr-add! ctx k)) keys))
+
+(define (%filter-out-key lst target-key)
+  (let loop ((xs lst) (acc '()))
+    (cond
+      ((null? xs) acc)
+      ((equal? (car xs) target-key) (loop (cdr xs) acc))
+      (else (loop (cdr xs) (cons (car xs) acc))))))
 
 (define (parse-ctx-lr-detected? ctx key)
   (member key (parse-ctx-lr-detected ctx)))
@@ -98,38 +127,62 @@
        (loop (cdr lst) (cons (car lst) acc))))))
 
 (define (parse-ctx-clear-lr-dependent-memo! ctx pos current-key)
-  ;; Clear all memo entries starting at >= pos except current-key
-  (let ((filtered
-         (let loop ((lst (parse-ctx-memo ctx)) (acc '()))
-           (if (null? lst)
-               acc
-               (let* ((entry (car lst))
-                      (k (car entry)))
-                 ;; k is (rule-name . k-pos)
-                 (if (and (pair? k)
-                          (>= (cdr k) pos)
-                          (not (equal? k current-key)))
-                     (loop (cdr lst) acc)
-                     (loop (cdr lst) (cons entry acc))))))))
-    (parse-ctx-raw-memo-set! ctx filtered)))
+  ;; Only clear memo entries at pos that actually depended on an active left-recursive seed
+  (let* ((vec (parse-ctx-memo ctx))
+         (curr-rule (car current-key))
+         (bucket (vector-ref vec pos))
+         (filtered
+          (let loop ((lst bucket) (acc '()))
+            (if (null? lst)
+                acc
+                (let* ((pair (car lst))
+                       (rname (car pair))
+                       (entry (cdr pair)))
+                  (if (and (not (eq? rname curr-rule))
+                           (pair? (memo-entry-lr-deps entry)))
+                      (loop (cdr lst) acc)
+                      (loop (cdr lst) (cons pair acc))))))))
+    (vector-set! vec pos filtered)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. Character Class Helper
 ;;; -----------------------------------------------------------------------
 
+(define (%unescape-class-char ch)
+  (case ch
+    ((#\n) #\newline)
+    ((#\t) #\tab)
+    ((#\r) #\return)
+    ((#\\) #\\)
+    ((#\]) #\])
+    ((#\-) #\-)
+    (else ch)))
+
+(define (%tokenize-char-class-spec spec)
+  (let ((len (string-length spec)))
+    (let loop ((i 0) (acc '()))
+      (cond
+        ((>= i len) (reverse acc))
+        ((and (char=? (string-ref spec i) #\\) (< (+ i 1) len))
+         (loop (+ i 2) (cons (cons 'lit (%unescape-class-char (string-ref spec (+ i 1)))) acc)))
+        (else
+         (loop (+ i 1) (cons (cons 'raw (string-ref spec i)) acc)))))))
+
 (define (make-char-class-pred spec inverted?)
-  (let* ((len (string-length spec))
+  (let* ((tokens (%tokenize-char-class-spec spec))
          (ranges
-          (let loop ((i 0) (acc '()))
+          (let loop ((ts tokens) (acc '()))
             (cond
-              ((>= i len) acc)
-              ((and (<= (+ i 2) (- len 1))
-                    (char=? (string-ref spec (+ i 1)) #\-))
-               (let ((c-start (string-ref spec i))
-                     (c-end (string-ref spec (+ i 2))))
-                 (loop (+ i 3) (cons (cons c-start c-end) acc))))
+              ((null? ts) acc)
+              ((and (pair? (cdr ts))
+                    (pair? (cddr ts))
+                    (eq? (caadr ts) 'raw)
+                    (char=? (cdadr ts) #\-))
+               (let ((c-start (cdar ts))
+                     (c-end (cdaddr ts)))
+                 (loop (cdddr ts) (cons (cons c-start c-end) acc))))
               (else
-               (loop (+ i 1) (cons (string-ref spec i) acc)))))))
+               (loop (cdr ts) (cons (cdar ts) acc)))))))
     (lambda (ch)
       (let test ((r ranges))
         (cond
@@ -360,63 +413,76 @@
         (cond
           ((parse-ctx-in-progress? ctx key)
            (parse-ctx-lr-detected-add! ctx key)
+           (parse-ctx-touched-lr-add! ctx key)
            (fk))
           ((parse-ctx-memo-ref ctx key)
            => (lambda (entry)
+                (if (memo-entry-growing? entry)
+                    (parse-ctx-touched-lr-add! ctx key))
+                (if (pair? (memo-entry-lr-deps entry))
+                    (parse-ctx-touched-lr-merge! ctx (memo-entry-lr-deps entry)))
                 (case (memo-entry-status entry)
                   ((done)
                    (sk (memo-entry-val entry) (memo-entry-end-pos entry) fk))
                   ((fail)
                    (fk)))))
           (else
-           (parse-ctx-depth-set! ctx (+ depth 1))
-           (parse-ctx-in-progress-add! ctx key)
-           (let ((matched #f)
-                 (res-val #f)
-                 (res-pos #f))
-             (parser-proc
-              ctx pos
-              (lambda (v next-pos ifk)
-                (set! matched #t)
-                (set! res-val v)
-                (set! res-pos next-pos))
-              (lambda ()
-                (set! matched #f)))
-             (parse-ctx-depth-set! ctx depth)
-             (parse-ctx-in-progress-delete! ctx key)
-             (if (parse-ctx-lr-detected? ctx key)
-                 (begin
-                   (parse-ctx-lr-detected-delete! ctx key)
-                   (if matched
-                       ;; Seed growth loop for left-recursion
-                       (let grow ((curr-val res-val) (curr-pos res-pos))
-                         (parse-ctx-memo-set! ctx key (make-memo-entry 'done curr-val curr-pos))
-                         (parse-ctx-clear-lr-dependent-memo! ctx pos key)
-                         (let ((step-matched #f)
-                               (step-val #f)
-                               (step-pos #f))
-                           (parser-proc
-                            ctx pos
-                            (lambda (v p ifk)
-                              (set! step-matched #t)
-                              (set! step-val v)
-                              (set! step-pos p))
-                            (lambda () (set! step-matched #f)))
-                           (if (and step-matched (> step-pos curr-pos))
-                               (grow step-val step-pos)
-                               (begin
-                                 (parse-ctx-memo-set! ctx key (make-memo-entry 'done curr-val curr-pos))
-                                 (sk curr-val curr-pos fk)))))
-                       (begin
-                         (parse-ctx-memo-set! ctx key (make-memo-entry 'fail #f pos))
-                         (fk))))
-                 (if matched
-                     (begin
-                       (parse-ctx-memo-set! ctx key (make-memo-entry 'done res-val res-pos))
-                       (sk res-val res-pos fk))
-                     (begin
-                       (parse-ctx-memo-set! ctx key (make-memo-entry 'fail #f pos))
-                       (fk)))))))))))
+           (let ((outer-touched (parse-ctx-touched-lr ctx)))
+             (parse-ctx-touched-lr-set! ctx '())
+             (parse-ctx-depth-set! ctx (+ depth 1))
+             (parse-ctx-in-progress-add! ctx key)
+             (let ((matched #f)
+                   (res-val #f)
+                   (res-pos #f))
+               (parser-proc
+                ctx pos
+                (lambda (v next-pos ifk)
+                  (set! matched #t)
+                  (set! res-val v)
+                  (set! res-pos next-pos))
+                (lambda ()
+                  (set! matched #f)))
+               (parse-ctx-depth-set! ctx depth)
+               (parse-ctx-in-progress-delete! ctx key)
+               (if (parse-ctx-lr-detected? ctx key)
+                   (begin
+                     (parse-ctx-lr-detected-delete! ctx key)
+                     (if matched
+                         ;; Seed growth loop for left-recursion
+                         (let grow ((curr-val res-val) (curr-pos res-pos))
+                           (parse-ctx-memo-set! ctx key (make-memo-entry 'done curr-val curr-pos #t '()))
+                           (parse-ctx-clear-lr-dependent-memo! ctx pos key)
+                           (let ((step-matched #f)
+                                 (step-val #f)
+                                 (step-pos #f))
+                             (parser-proc
+                              ctx pos
+                              (lambda (v p ifk)
+                                (set! step-matched #t)
+                                (set! step-val v)
+                                (set! step-pos p))
+                              (lambda () (set! step-matched #f)))
+                             (if (and step-matched (> step-pos curr-pos))
+                                 (grow step-val step-pos)
+                                 (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
+                                   (parse-ctx-memo-set! ctx key (make-memo-entry 'done curr-val curr-pos #f ext-deps))
+                                   (parse-ctx-touched-lr-set! ctx outer-touched)
+                                   (parse-ctx-touched-lr-merge! ctx ext-deps)
+                                   (sk curr-val curr-pos fk)))))
+                         (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
+                           (parse-ctx-memo-set! ctx key (make-memo-entry 'fail #f pos #f ext-deps))
+                           (parse-ctx-touched-lr-set! ctx outer-touched)
+                           (parse-ctx-touched-lr-merge! ctx ext-deps)
+                           (fk))))
+                   (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
+                     (if matched
+                         (parse-ctx-memo-set! ctx key (make-memo-entry 'done res-val res-pos #f ext-deps))
+                         (parse-ctx-memo-set! ctx key (make-memo-entry 'fail #f pos #f ext-deps)))
+                     (parse-ctx-touched-lr-set! ctx outer-touched)
+                     (parse-ctx-touched-lr-merge! ctx ext-deps)
+                     (if matched
+                         (sk res-val res-pos fk)
+                         (fk))))))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 6. Top-Level Parse Execution Drivers
