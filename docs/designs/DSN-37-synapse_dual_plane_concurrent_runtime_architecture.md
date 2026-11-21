@@ -3,7 +3,7 @@
 - **文書番号**: `DSN-37`
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**: `ulisp/runtime/concurrency/`, `ulisp/passes/` (Host-Kernel Partitioning, CSP Channel, Process-Local Ephemeral Arena, LockFree Queue, Reduction-Based Safepoint Polling, FBIP, Generation-Based Speculative Cancellation)
-- **補足・個別仕様書**: [[DSN-33] uLisp x86-64 ネイティブ AOT コンパイラ包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md), [[DSN-36] Zero-libc Pure Scheme ベアメタルランタイム包括設計仕様書](DSN-36-zero_libc_pure_scheme_bare_metal_runtime.md)  
+- **補足・個別仕様書**: [[DSN-33] uLisp x86-64 ネイティブ AOT コンパイラ包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md), [[DSN-33-07] Zero-libc Pure Scheme ベアメタルランタイム包括設計仕様書](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)  
 - **【主査・報告】 IT Specialist (Programming Languages & Compilers / PLC)**  
 - **【共同主査】 Systems Architect (SA) / Software Development (SWD)**  
 - **【安全・品質保証】 Information Security Specialist (Sec) / Software QA Specialist (QA)**  

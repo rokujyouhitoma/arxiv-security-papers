@@ -1,1 +1,0 @@
-DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md
