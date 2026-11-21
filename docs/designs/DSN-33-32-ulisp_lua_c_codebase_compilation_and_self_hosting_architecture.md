@@ -246,7 +246,7 @@ Step S5 の完了基準（Definition of Done）として、ULisp でビルドさ
 | **#913** | S2 (T1) | C99 字句解析器 (Lexer) および Source Span 付きトークンストリームの実装 | High | [913](../issues/closed/913-implement-c99-lexer-and-token-stream-with-source-span.md) |
 | **#914** | S2 (T2) | 純粋 Scheme 製 C99 プリプロセッサ (CPP) の実装 | High | [914](../issues/closed/914-implement-pure-scheme-c99-preprocessor-cpp.md) |
 | **#915** | S2 (T3) | C99 構文解析器 (Parser) および Nanopass C-AST 言語定義の実装 | High | [915](../issues/closed/915-implement-c99-parser-and-nanopass-c-ast-definitions.md) |
-| **#916** | S2 (T4) | C99 基本型検査・整数昇格 (Sema Core) および整数 LIR Lowering | High | [916](../issues/916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |
+| **#916** | S2 (T4) | C99 基本型検査・整数昇格 (Sema Core) および整数 LIR Lowering | High | [916](../issues/closed/916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |
 | **#917** | S2 (T5) | C コンパイラドライバ (`c_driver.scm`) およびホストリンカ連携 | High | [917](../issues/917-implement-c-compiler-driver-and-host-ld-integration.md) |
 | **#918** | S3 (T6) | C99 構造体・共用体・列挙型・ビットフィールドの SysV レイアウト計算 | High | [918](../issues/918-implement-c99-struct-union-enum-bitfield-sysv-layout.md) |
 | **#919** | S3 (T7) | ポインタスケーリング演算・配列退化およびスタックエスケープ処理 | High | [919](../issues/919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md) |
