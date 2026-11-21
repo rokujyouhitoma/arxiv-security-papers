@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **913** | C99 字句解析器 (Lexer) および Source Span 付きトークンストリームの実装 | Feature | In Progress | [913-implement-c99-lexer-and-token-stream-with-source-span.md](913-implement-c99-lexer-and-token-stream-with-source-span.md) |
 | **914** | 純粋 Scheme 製 C99 プリプロセッサ (CPP: `#include`/`#define`/`##`/`#if` CTFE) の実装 | Feature | Open (New) | [914-implement-pure-scheme-c99-preprocessor-cpp.md](914-implement-pure-scheme-c99-preprocessor-cpp.md) |
 | **915** | C99 構文解析器 (Parser) および Nanopass C-AST 言語定義・Lexer Hack 解消の実装 | Feature | Open (New) | [915-implement-c99-parser-and-nanopass-c-ast-definitions.md](915-implement-c99-parser-and-nanopass-c-ast-definitions.md) |
 | **916** | C99 基本型検査・整数昇格 (Sema Core) および整数サブセット Core LIR Lowering の実装 | Feature | Open (New) | [916-implement-c99-sema-core-and-integer-subset-lir-lowering.md](916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |
@@ -29,6 +28,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **913** | C99 字句解析器 (Lexer) および Source Span 付きトークンストリームの実装 | Feature | 2026-11-21 | [913-implement-c99-lexer-and-token-stream-with-source-span.md](closed/913-implement-c99-lexer-and-token-stream-with-source-span.md) |
 | **931** | PEG による C99 文法仕様 (`tools/grammars/c99.peg`) の定義およびパーサー自動合成の実装 | Feature | 2026-11-21 | [931-implement-c99-peg-grammar-specification-and-parser-synthesis.md](closed/931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) |
 | **912** | DSN-33 シリーズの 2桁ドメイン番台方式（10番台〜40番台）への体系的再編 | Docs | 2026-11-21 | [912-reorganize-dsn-33-into-domain-numbered-series.md](closed/912-reorganize-dsn-33-into-domain-numbered-series.md) |
 | **911** | DSN-33-02 (フロントエンド)・DSN-33-08 (バックエンド)・DSN-33-09 (C言語経由 Lua コンパイル) の責務分離と設計書体系化 | Docs | 2026-11-21 | [911-reorganize-dsn-33-02-frontend-dsn-33-08-backend-and-dsn-33-09-lua-c-compilation.md](closed/911-reorganize-dsn-33-02-frontend-dsn-33-08-backend-and-dsn-33-09-lua-c-compilation.md) |
