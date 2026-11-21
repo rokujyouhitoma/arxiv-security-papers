@@ -128,18 +128,31 @@
              (error "Invalid binding format in LIR:" binding)))))))
 
 (define (lir-compile-expr expr si env tail?)
-  (if (pair? expr)
-      (set-current-form! expr))
   (cond
-    ((immediate? expr)
-     (lir-compile-immediate expr))
-    ((symbol? expr)
-     (lir-compile-variable expr env))
-    ((pair? expr)
-     (let ((op (car expr)))
-       (cond
-         ((zero-arg-prim? op)
-          (lir-compile-zero-arg op si env))
+    ((ast-has-span? expr)
+     (let ((span (ast-source-span expr))
+           (inner (ast-strip-span expr)))
+       (if (and (debug-symbols-enabled?) span)
+           (let* ((file (span-effective-file span))
+                  (line (span-effective-line span))
+                  (col (span-effective-col span)))
+             (if (and (string? file) (integer? line) (> line 0))
+                 (let ((fid (register-source-file! file)))
+                   (emit-lir! (list '%loc fid line col))))))
+       (lir-compile-expr inner si env tail?)))
+    (else
+     (if (pair? expr)
+         (set-current-form! expr))
+     (cond
+       ((immediate? expr)
+        (lir-compile-immediate expr))
+       ((symbol? expr)
+        (lir-compile-variable expr env))
+       ((pair? expr)
+        (let ((op (car expr)))
+          (cond
+            ((zero-arg-prim? op)
+             (lir-compile-zero-arg op si env))
          ((eq? op '-)
           (if (null? (cddr expr))
               (lir-compile-unary '- (cadr expr) si env)
@@ -416,11 +429,12 @@
             ((and (symbol? dst0)
                   (let ((nr (inline-asm-normalize-reg-sym dst0)))
                     (and nr (not (eq? nr '%rax)))))
-             (emit-lir! (list '%mov '%rax dst0))))))))
+             (emit-lir! (list '%mov '%rax dst0))))))))))
 
 ;;; Compile a single lifted %function to LIR representation
-(define (lir-compile-function fn)
-  (let* ((label (cadr fn))
+(define (lir-compile-function fn-raw)
+  (let* ((fn (if (ast-has-span? fn-raw) (ast-strip-span fn-raw) fn-raw))
+         (label (cadr fn))
          (params (caddr fn))
          (body (cadddr fn))
          (num-params (length params))
@@ -491,7 +505,7 @@
 
 ;;; Pass 6 Entrypoint: Transforms Pass 5 %program AST into %lir-program
 (define (generate-lir prog-raw)
-  (let ((prog (ast-strip-span-all prog-raw)))
+  (let* ((prog (if (ast-has-span? prog-raw) (ast-strip-span prog-raw) prog-raw)))
     (reset-safepoints!)
     (reset-symbol-table!)
     (let ((funcs (cadr prog))

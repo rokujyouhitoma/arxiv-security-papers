@@ -418,6 +418,112 @@
   (macro-origin span-macro-origin)
   (node-id      span-node-id))
 
+(define-record-type <dual-source-span>
+  (%make-dual-source-span-raw guest-file guest-line guest-col
+                              interp-file interp-line interp-col
+                              node-id)
+  dual-source-span?
+  (guest-file   span-guest-file)
+  (guest-line   span-guest-line)
+  (guest-col    span-guest-col)
+  (interp-file  span-interp-file)
+  (interp-line  span-interp-line)
+  (interp-col   span-interp-col)
+  (node-id      span-dual-node-id))
+
+(define (any-source-span? x)
+  (or (source-span? x) (dual-source-span? x)))
+
+(define (%make-dual-source-span-with-id guest-file g-line g-col interp-file i-line i-col opt-id)
+  (let* ((clean-gfile (if (string? guest-file) (sanitize-source-path guest-file) "<unknown>"))
+         (clean-ifile (if (string? interp-file) (sanitize-source-path interp-file) "<unknown>"))
+         (val-gline (if (and (integer? g-line) (>= g-line 1))
+                        (if (> g-line 10000000) 10000000 g-line)
+                        1))
+         (val-gcol (if (and (integer? g-col) (>= g-col 1))
+                       (if (> g-col 10000) 10000 g-col)
+                       1))
+         (val-iline (if (and (integer? i-line) (>= i-line 1))
+                        (if (> i-line 10000000) 10000000 i-line)
+                        1))
+         (val-icol (if (and (integer? i-col) (>= i-col 1))
+                       (if (> i-col 10000) 10000 i-col)
+                       1))
+         (val-id (if (and (integer? opt-id) (>= opt-id 0))
+                     opt-id
+                     (next-source-span-id!))))
+    (%make-dual-source-span-raw clean-gfile val-gline val-gcol
+                                clean-ifile val-iline val-icol
+                                val-id)))
+
+(define (make-dual-source-span guest-file g-line g-col interp-file i-line i-col)
+  (%make-dual-source-span-with-id guest-file g-line g-col interp-file i-line i-col #f))
+
+(define (make-dual-source-span-with-id guest-file g-line g-col interp-file i-line i-col opt-id)
+  (%make-dual-source-span-with-id guest-file g-line g-col interp-file i-line i-col opt-id))
+
+(define (span-effective-file span)
+  (cond
+    ((dual-source-span? span)
+     (let ((gf (span-guest-file span)))
+       (if (and (string? gf) (not (string=? gf "<unknown>")) (> (string-length gf) 0))
+           gf
+           (span-interp-file span))))
+    ((source-span? span)
+     (span-file span))
+    (else "<unknown>")))
+
+(define (span-effective-line span)
+  (cond
+    ((dual-source-span? span)
+     (let ((gl (span-guest-line span)))
+       (if (and (integer? gl) (>= gl 1))
+           gl
+           (span-interp-line span))))
+    ((source-span? span)
+     (span-start-line span))
+    (else 1)))
+
+(define (span-effective-col span)
+  (cond
+    ((dual-source-span? span)
+     (let ((gc (span-guest-col span)))
+       (if (and (integer? gc) (>= gc 1))
+           gc
+           (span-interp-col span))))
+    ((source-span? span)
+     (span-start-col span))
+    (else 1)))
+
+(define (span-effective-interp-file span)
+  (cond
+    ((dual-source-span? span) (span-interp-file span))
+    ((source-span? span) (span-file span))
+    (else #f)))
+
+(define (span-effective-interp-line span)
+  (cond
+    ((dual-source-span? span) (span-interp-line span))
+    ((source-span? span) (span-start-line span))
+    (else #f)))
+
+(define (span-effective-interp-col span)
+  (cond
+    ((dual-source-span? span) (span-interp-col span))
+    ((source-span? span) (span-start-col span))
+    (else #f)))
+
+(define (dual-source-span->source-span dspan)
+  (if (dual-source-span? dspan)
+      (make-source-span (span-effective-file dspan)
+                        (span-effective-line dspan)
+                        (span-effective-col dspan)
+                        (span-effective-line dspan)
+                        (span-effective-col dspan)
+                        #f
+                        (span-dual-node-id dspan))
+      dspan))
+
 (define *source-span-id-counter* (cons 0 '()))
 (define (next-source-span-id!)
   (let ((id (+ (car *source-span-id-counter*) 1)))
@@ -498,7 +604,7 @@
     (else expr)))
 
 (define (ast-with-span form span)
-  (if (and span (source-span? span))
+  (if (and span (any-source-span? span))
       (list '%source-span span (ast-strip-span form))
       form))
 
@@ -530,7 +636,7 @@
 (define *function-source-span-table* (cons '() '()))
 (define (reset-function-source-span-table!) (set-car! *function-source-span-table* '()))
 (define (register-function-source-span! fn span)
-  (if (source-span? span)
+  (if (any-source-span? span)
       (set-car! *function-source-span-table*
                 (cons (cons fn span)
                       (car *function-source-span-table*)))))
@@ -591,17 +697,22 @@
                     (car *function-source-loc-table*)))
     (register-function-source-span! fn (make-source-span clean line col line col #f (next-source-span-id!)))))
 (define (lookup-function-source-loc fn)
-  (let ((entry (assq fn (car *function-source-loc-table*))))
-    (if entry
-        (cdr entry)
-        (let loop ((es (car *function-source-loc-table*)))
-          (cond
-            ((null? es) #f)
-            ((and (symbol? (car (car es)))
-                  (not (eq? (car (car es)) '%main))
-                  (eq? (mangle-fn-label (car (car es))) fn))
-             (cdr (car es)))
-            (else (loop (cdr es))))))))
+  (let ((span (lookup-function-source-span fn)))
+    (if span
+        (list (span-effective-file span)
+              (span-effective-line span)
+              (span-effective-col span))
+        (let ((entry (assq fn (car *function-source-loc-table*))))
+          (if entry
+              (cdr entry)
+              (let loop ((es (car *function-source-loc-table*)))
+                (cond
+                  ((null? es) #f)
+                  ((and (symbol? (car (car es)))
+                        (not (eq? (car (car es)) '%main))
+                        (eq? (mangle-fn-label (car (car es))) fn))
+                   (cdr (car es)))
+                  (else (loop (cdr es))))))))))
 
 ;;; Call Stack Tracing Context (Conforms to DSN-33 & Issue #604)
 (define *call-stack* (cons '() '()))
@@ -2269,27 +2380,51 @@
                        ((symbol? code) code)
                        ((string? code) (string->symbol code))
                        (else #f)))
+         (dspan (cond
+                  ((dual-source-span? span) span)
+                  ((and (ast-has-span? span) (dual-source-span? (ast-source-span span)))
+                   (ast-source-span span))
+                  (else #f)))
          (clean-span (cond
+                       ((dual-source-span? span) (dual-source-span->source-span span))
                        ((source-span? span) span)
                        ((source-loc? span) (ast-source-span span))
-                       ((ast-has-span? span) (ast-source-span span))
+                       ((ast-has-span? span)
+                        (let ((s (ast-source-span span)))
+                          (if (dual-source-span? s)
+                              (dual-source-span->source-span s)
+                              s)))
                        (else #f)))
          (clean-msg (if (string? message)
                         message
                         (let ((p (open-output-string)))
                           (display message p)
-                          (get-output-string p)))))
-    (%make-diagnostic-raw clean-level clean-code clean-span clean-msg
-                          (cons '() '())
-                          (cons '() '())
-                          (cons '() '()))))
+                          (get-output-string p))))
+         (diag (%make-diagnostic-raw clean-level clean-code clean-span clean-msg
+                                     (cons '() '())
+                                     (cons '() '())
+                                     (cons '() '()))))
+    (if (and dspan
+             (string? (span-interp-file dspan))
+             (not (string=? (span-interp-file dspan) "<unknown>")))
+        (diagnostic-add-note! diag
+                              (string-append "evaluator context: "
+                                             (span-interp-file dspan)
+                                             ":"
+                                             (number->string (span-interp-line dspan)))))
+    diag))
 
 (define (diagnostic-add-label! diag span label-text)
   (let* ((box (%diagnostic-labels-box diag))
          (clean-span (cond
+                       ((dual-source-span? span) (dual-source-span->source-span span))
                        ((source-span? span) span)
                        ((source-loc? span) (ast-source-span span))
-                       ((ast-has-span? span) (ast-source-span span))
+                       ((ast-has-span? span)
+                        (let ((s (ast-source-span span)))
+                          (if (dual-source-span? s)
+                              (dual-source-span->source-span s)
+                              s)))
                        (else #f)))
          (entry (cons clean-span (if (string? label-text) label-text ""))))
     (set-car! box (append (car box) (list entry)))
@@ -12563,6 +12698,19 @@
        (symbol? (car node))
        (memq (car node) '(LIR-CONST LIR-SLOT-REF LIR-SLOT-SET! LIR-BINOP
                          LIR-UNOP LIR-IF LIR-SEQ LIR-CALL LIR-RETURN))))
+
+;;; -----------------------------------------------------------------------
+;;; Dual Source Span Integration (DSN-33-04 §5, Issue #896)
+;;; -----------------------------------------------------------------------
+
+(define (cogen-attach-dual-span expr guest-file g-line g-col interp-file i-line i-col)
+  (let ((span (make-dual-source-span guest-file g-line g-col interp-file i-line i-col)))
+    (ast-with-span expr span)))
+
+(define (cogen-expr-span expr)
+  (if (ast-has-span? expr)
+      (ast-source-span expr)
+      #f))
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. Direct Cogen Specializer: Deriving Compiler from Interpreter Rules
@@ -29976,18 +30124,31 @@
              (error "Invalid binding format in LIR:" binding)))))))
 
 (define (lir-compile-expr expr si env tail?)
-  (if (pair? expr)
-      (set-current-form! expr))
   (cond
-    ((immediate? expr)
-     (lir-compile-immediate expr))
-    ((symbol? expr)
-     (lir-compile-variable expr env))
-    ((pair? expr)
-     (let ((op (car expr)))
-       (cond
-         ((zero-arg-prim? op)
-          (lir-compile-zero-arg op si env))
+    ((ast-has-span? expr)
+     (let ((span (ast-source-span expr))
+           (inner (ast-strip-span expr)))
+       (if (and (debug-symbols-enabled?) span)
+           (let* ((file (span-effective-file span))
+                  (line (span-effective-line span))
+                  (col (span-effective-col span)))
+             (if (and (string? file) (integer? line) (> line 0))
+                 (let ((fid (register-source-file! file)))
+                   (emit-lir! (list '%loc fid line col))))))
+       (lir-compile-expr inner si env tail?)))
+    (else
+     (if (pair? expr)
+         (set-current-form! expr))
+     (cond
+       ((immediate? expr)
+        (lir-compile-immediate expr))
+       ((symbol? expr)
+        (lir-compile-variable expr env))
+       ((pair? expr)
+        (let ((op (car expr)))
+          (cond
+            ((zero-arg-prim? op)
+             (lir-compile-zero-arg op si env))
          ((eq? op '-)
           (if (null? (cddr expr))
               (lir-compile-unary '- (cadr expr) si env)
@@ -30264,11 +30425,12 @@
             ((and (symbol? dst0)
                   (let ((nr (inline-asm-normalize-reg-sym dst0)))
                     (and nr (not (eq? nr '%rax)))))
-             (emit-lir! (list '%mov '%rax dst0))))))))
+             (emit-lir! (list '%mov '%rax dst0))))))))))
 
 ;;; Compile a single lifted %function to LIR representation
-(define (lir-compile-function fn)
-  (let* ((label (cadr fn))
+(define (lir-compile-function fn-raw)
+  (let* ((fn (if (ast-has-span? fn-raw) (ast-strip-span fn-raw) fn-raw))
+         (label (cadr fn))
          (params (caddr fn))
          (body (cadddr fn))
          (num-params (length params))
@@ -30339,7 +30501,7 @@
 
 ;;; Pass 6 Entrypoint: Transforms Pass 5 %program AST into %lir-program
 (define (generate-lir prog-raw)
-  (let ((prog (ast-strip-span-all prog-raw)))
+  (let* ((prog (if (ast-has-span? prog-raw) (ast-strip-span prog-raw) prog-raw)))
     (reset-safepoints!)
     (reset-symbol-table!)
     (let ((funcs (cadr prog))
@@ -31599,6 +31761,14 @@
          rest
          (cons (list '%fmov d2 s1) rest)))))
 
+;; Rule 9: Redundant Source Location Elimination
+;; (%loc fid line col1) (%loc fid line col2) -> (%loc fid line col2)
+(define-picopass rule-lir-redundant-loc-elim
+  (InstWindow
+    (((%loc ,f1 ,l1 ,c1) (%loc ,f2 ,l2 ,c2) . ,rest)
+     (guard (and (equal? f1 f2) (equal? l1 l2)))
+     (cons (list '%loc f2 l2 c2) rest))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: lir-peephole-optimize (fuse-window-rules)
 ;;; -----------------------------------------------------------------------
@@ -31612,6 +31782,7 @@
     rule-lir-identity-arith-elim
     rule-lir-identity-mul-elim
     rule-lir-box-unbox-elim
+    rule-lir-redundant-loc-elim
     rule-lir-unreachable-dce))
 
 (define (optimize-peephole-fixpoint insts)
@@ -36795,8 +36966,18 @@
     (elf64-set-u32-le! bv 36 prod-str-off)            ; DW_AT_producer
     bv))
 
+(define (sort-file-table files)
+  (if (or (null? files) (null? (cdr files)))
+      files
+      (let* ((pivot (car files))
+             (p-id (if (pair? pivot) (car pivot) 1))
+             (less (filter (lambda (x) (< (if (pair? x) (car x) 1) p-id)) (cdr files)))
+             (more (filter (lambda (x) (>= (if (pair? x) (car x) 1) p-id)) (cdr files))))
+        (append (sort-file-table less) (cons pivot (sort-file-table more))))))
+
 (define (build-debug-line-section file-table line-table text-vaddr text-len)
-  (let* ((files (if (pair? file-table) file-table '((1 . "source.scm"))))
+  (let* ((raw-files (if (pair? file-table) file-table '((1 . "source.scm"))))
+         (files (sort-file-table raw-files))
          (sorted-lines (sort-line-table line-table))
          (min-insn 1)
          (default-stmt 1)

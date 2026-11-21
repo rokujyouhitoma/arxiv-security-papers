@@ -179,8 +179,18 @@
     (elf64-set-u32-le! bv 36 prod-str-off)            ; DW_AT_producer
     bv))
 
+(define (sort-file-table files)
+  (if (or (null? files) (null? (cdr files)))
+      files
+      (let* ((pivot (car files))
+             (p-id (if (pair? pivot) (car pivot) 1))
+             (less (filter (lambda (x) (< (if (pair? x) (car x) 1) p-id)) (cdr files)))
+             (more (filter (lambda (x) (>= (if (pair? x) (car x) 1) p-id)) (cdr files))))
+        (append (sort-file-table less) (cons pivot (sort-file-table more))))))
+
 (define (build-debug-line-section file-table line-table text-vaddr text-len)
-  (let* ((files (if (pair? file-table) file-table '((1 . "source.scm"))))
+  (let* ((raw-files (if (pair? file-table) file-table '((1 . "source.scm"))))
+         (files (sort-file-table raw-files))
          (sorted-lines (sort-line-table line-table))
          (min-insn 1)
          (default-stmt 1)

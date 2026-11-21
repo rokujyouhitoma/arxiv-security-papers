@@ -191,6 +191,14 @@
          rest
          (cons (list '%fmov d2 s1) rest)))))
 
+;; Rule 9: Redundant Source Location Elimination
+;; (%loc fid line col1) (%loc fid line col2) -> (%loc fid line col2)
+(define-picopass rule-lir-redundant-loc-elim
+  (InstWindow
+    (((%loc ,f1 ,l1 ,c1) (%loc ,f2 ,l2 ,c2) . ,rest)
+     (guard (and (equal? f1 f2) (equal? l1 l2)))
+     (cons (list '%loc f2 l2 c2) rest))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: lir-peephole-optimize (fuse-window-rules)
 ;;; -----------------------------------------------------------------------
@@ -204,6 +212,7 @@
     rule-lir-identity-arith-elim
     rule-lir-identity-mul-elim
     rule-lir-box-unbox-elim
+    rule-lir-redundant-loc-elim
     rule-lir-unreachable-dce))
 
 (define (optimize-peephole-fixpoint insts)

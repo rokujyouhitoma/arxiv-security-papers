@@ -250,6 +250,23 @@
   source-span?
   make-source-span
   %make-source-span-raw
+  dual-source-span?
+  make-dual-source-span
+  %make-dual-source-span-raw
+  any-source-span?
+  span-guest-file
+  span-guest-line
+  span-guest-col
+  span-interp-file
+  span-interp-line
+  span-interp-col
+  span-effective-file
+  span-effective-line
+  span-effective-col
+  span-effective-interp-file
+  span-effective-interp-line
+  span-effective-interp-col
+  dual-source-span->source-span
   span-file
   span-start-line
   span-start-col

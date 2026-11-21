@@ -125,27 +125,51 @@
                        ((symbol? code) code)
                        ((string? code) (string->symbol code))
                        (else #f)))
+         (dspan (cond
+                  ((dual-source-span? span) span)
+                  ((and (ast-has-span? span) (dual-source-span? (ast-source-span span)))
+                   (ast-source-span span))
+                  (else #f)))
          (clean-span (cond
+                       ((dual-source-span? span) (dual-source-span->source-span span))
                        ((source-span? span) span)
                        ((source-loc? span) (ast-source-span span))
-                       ((ast-has-span? span) (ast-source-span span))
+                       ((ast-has-span? span)
+                        (let ((s (ast-source-span span)))
+                          (if (dual-source-span? s)
+                              (dual-source-span->source-span s)
+                              s)))
                        (else #f)))
          (clean-msg (if (string? message)
                         message
                         (let ((p (open-output-string)))
                           (display message p)
-                          (get-output-string p)))))
-    (%make-diagnostic-raw clean-level clean-code clean-span clean-msg
-                          (cons '() '())
-                          (cons '() '())
-                          (cons '() '()))))
+                          (get-output-string p))))
+         (diag (%make-diagnostic-raw clean-level clean-code clean-span clean-msg
+                                     (cons '() '())
+                                     (cons '() '())
+                                     (cons '() '()))))
+    (if (and dspan
+             (string? (span-interp-file dspan))
+             (not (string=? (span-interp-file dspan) "<unknown>")))
+        (diagnostic-add-note! diag
+                              (string-append "evaluator context: "
+                                             (span-interp-file dspan)
+                                             ":"
+                                             (number->string (span-interp-line dspan)))))
+    diag))
 
 (define (diagnostic-add-label! diag span label-text)
   (let* ((box (%diagnostic-labels-box diag))
          (clean-span (cond
+                       ((dual-source-span? span) (dual-source-span->source-span span))
                        ((source-span? span) span)
                        ((source-loc? span) (ast-source-span span))
-                       ((ast-has-span? span) (ast-source-span span))
+                       ((ast-has-span? span)
+                        (let ((s (ast-source-span span)))
+                          (if (dual-source-span? s)
+                              (dual-source-span->source-span s)
+                              s)))
                        (else #f)))
          (entry (cons clean-span (if (string? label-text) label-text ""))))
     (set-car! box (append (car box) (list entry)))

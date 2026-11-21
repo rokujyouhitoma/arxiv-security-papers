@@ -105,6 +105,19 @@
                          LIR-UNOP LIR-IF LIR-SEQ LIR-CALL LIR-RETURN))))
 
 ;;; -----------------------------------------------------------------------
+;;; Dual Source Span Integration (DSN-33-04 §5, Issue #896)
+;;; -----------------------------------------------------------------------
+
+(define (cogen-attach-dual-span expr guest-file g-line g-col interp-file i-line i-col)
+  (let ((span (make-dual-source-span guest-file g-line g-col interp-file i-line i-col)))
+    (ast-with-span expr span)))
+
+(define (cogen-expr-span expr)
+  (if (ast-has-span? expr)
+      (ast-source-span expr)
+      #f))
+
+;;; -----------------------------------------------------------------------
 ;;; 3. Direct Cogen Specializer: Deriving Compiler from Interpreter Rules
 ;;; -----------------------------------------------------------------------
 
