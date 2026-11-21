@@ -186,7 +186,7 @@ C99 フロントエンド（`ulisp/frontend_c/`）は、C 言語で書かれた�
 
 ### 4.2 C99 Lexer / Parser / Sema と構造体・関数ポインタ型検査
 
-1. **`parser.scm`**: 再帰下降（演算子順位構文解析併用）による C89/C99 構文解析。`Binding ID` スコープ表（#837）と協調して `typedef` 曖昧性を解消し、型付き準備 AST を構築する。
+1. **`parser.scm` ＆ `tools/grammars/c99.peg` (Issue #915, #931)**: [[DSN-33-22 §3]](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) の Pure Scheme Packrat PEG パーサージェネレータ（CPython PEG / PEP 617 準拠）および左再帰メモ化・順序付き選択を用い、`tools/grammars/c99.peg` から C89/C99 構文解析器を自動合成する。`Binding ID` スコープ表（#837）と連動するセマンティック述語で `typedef` 曖昧性を解消し、型付き準備 AST（`L_c_ast`）を構築する。
 2. **`sema.scm`**:
    - **型検査・暗黙変換**: 整数昇格（Integer Promotion）、通常の算術変換、暗黙ポインタ変換、明示的キャスト検証。
    - **複合型レイアウト計算**: SysV AMD64 ABI 準拠の `struct` / `union` メンバオフセット、アライメント、パディング、ビットフィールド幅の確定。

@@ -215,7 +215,7 @@ Lua と musl libc のセルフホストを破綻なく達成するため、以�
 | :---: | :--- | :--- | :---: |
 | **S0** | **設計と未決事項の決定** | `DSN-33-11` / `13` / `32` 体系承認、4大裁定規準確定 | 本設計書体系 (**完了済**) |
 | **S1** | **基盤整備 ＆ Reference VM** | LIR 参照 VM、数値塔 (Bignum/IEEE754)、Source Span、Diagnostic | #834, #832, #824, #833 (**完了済**) |
-| **S2** | **整数 C パイプライン開通** | CPP + 整数 C Parser/Sema $\to$ Core LIR $\to$ x86/C、musl/libc とリンクして `printf("%d")` 成功 | **#913, #914, #915, #916, #917** (基盤: #826, #835, #837, #827, #830) |
+| **S2** | **整数 C パイプライン開通** | CPP + PEG ベース整数 C Parser/Sema $\to$ Core LIR $\to$ x86/C、musl/libc とリンクして `printf("%d")` 成功 | **#913, #914, #915, #916, #917, #931** (基盤: #826, #835, #837, #827, #830) |
 | **S3** | **C89/C99 仕様網羅 (Lua要件)** | 構造体・共用体レイアウト、関数ポインタ、SysV ABI、可変長引数、`setjmp`/`longjmp` | **#918, #919, #920, #921, #922** (基盤: #829, #838, #828, #836) |
 | **S4** | **浮動小数点数 (XMM/IEEE754)** | `double`/`float` 演算、XMM 引数渡し、差分テスト完全一致 | **#923, #924** (基盤: #826, #829, #831) |
 | **S5** | **Lua 5.x ビルド ＆ 公式テスト実証** | Lua 5.x 公式 C ソース全ファイルを ULisp でビルドし、Lua 公式テストスイート全件 PASS | **#925, #926** |
@@ -261,3 +261,4 @@ Step S5 の完了基準（Definition of Done）として、ULisp でビルドさ
 | **#928** | S7 (T16) | `musl libc` 自前ビルドおよび Pass 144 自前 ELF リンカ静的リンク移行 | Medium | [928](../issues/928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
 | **#929** | S8 (T17) | DDC (Diverse Double-Compiling) 決定論性・ビット一致検証ハーネス | Medium | [929](../issues/929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
 | **#930** | S9 (T18) | C99 配列境界検査・NULL 参照トラップ自動注入 (`--sanitize-bounds`) | Medium | [930](../issues/930-implement-c99-bounds-checking-sanitizer-mode.md) |
+| **#931** | S2 (PEG) | PEG による C99 文法仕様 (`tools/grammars/c99.peg`) ＆ パーサー自動合成 | High | [931](../issues/931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) |

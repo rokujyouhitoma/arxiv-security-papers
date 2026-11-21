@@ -8,7 +8,7 @@ ID: 915
 # [FEAT/ENH] C99 構文解析器 (Parser) および Nanopass C-AST 言語定義・Lexer Hack 解消の実装 (ID: 915)
 
 ## 1. 概要 / Summary
-プリプロセス済みの C99 トークンストリームを構文解析し、Nanopass 言語定義に基づく型準備 C AST（`L_c_ast`）を構築する構文解析器（`ulisp/frontend_c/parser.scm` および `ulisp/frontend_c/c_lang.scm`）を実装する（Step S2 / T3）。Issue #837（Binding ID・統一スコープ管理）と協調して C 言語特有の `typedef` 曖昧性（Lexer Hack）をクリーンに解消する。
+プリプロセス済みの C99 トークンストリームを [[Issue #931]](931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) で規定する PEG 文法仕様（`tools/grammars/c99.peg`）ベース（または連携構文解析器）によって構文解析し、Nanopass 言語定義に基づく型準備 C AST（`L_c_ast`）を構築する構文解析器（`ulisp/frontend_c/parser.scm` および `ulisp/frontend_c/c_lang.scm`）を実装する（Step S2 / T3）。Issue #837（Binding ID・統一スコープ管理）と協調して C 言語特有の `typedef` 曖昧性（Lexer Hack）をクリーンに解消する。
 
 ---
 
@@ -16,7 +16,8 @@ ID: 915
 - 関連設計書:
   - [DSN-33-32 §2, §6.1](../designs/DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
   - [DSN-33-11 §3.2, §4.2](../designs/DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
-- 前提基盤 Issue: #837 (Binding ID), #824 (Source Span), #914 (CPP)
+  - [DSN-33-22 §3 (PEG 構文解析自動合成)](../designs/DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+- 前提・連携 Issue: #837 (Binding ID), #824 (Source Span), #914 (CPP), [[#931]](931-implement-c99-peg-grammar-specification-and-parser-synthesis.md) (C99 PEG 文法)
 
 ---
 
