@@ -56,17 +56,30 @@
 ;;; Trace Recording Operations (Emits pure S-expression trace instructions)
 ;;; =======================================================================
 
+;;; Maximum trace buffer limit (CWE-400 mitigation against memory exhaustion)
+(define *tracer-max-trace-length* 1000)
+
 ;;; Record a generic operation into the active trace buffer
 (define (trace-record! op dst . args)
   (when (eq? *tracer-state* *TRACER-STATE-RECORDING*)
-    (let ((inst (cons op (cons dst args))))
-      (set! *current-trace-buffer* (cons inst *current-trace-buffer*)))))
+    (if (>= (length *current-trace-buffer*) *tracer-max-trace-length*)
+        (begin
+          ;; Abort runaway trace safely
+          (tracer-reset!)
+          #f)
+        (let ((inst (cons op (cons dst args))))
+          (set! *current-trace-buffer* (cons inst *current-trace-buffer*))))))
 
 ;;; Record a speculative type / branch guard
 (define (trace-guard! cond-type var expected fail-k)
   (when (eq? *tracer-state* *TRACER-STATE-RECORDING*)
-    (let ((inst (list '%guard cond-type var expected fail-k)))
-      (set! *current-trace-buffer* (cons inst *current-trace-buffer*)))))
+    (if (>= (length *current-trace-buffer*) *tracer-max-trace-length*)
+        (begin
+          ;; Abort runaway trace safely
+          (tracer-reset!)
+          #f)
+        (let ((inst (list '%guard cond-type var expected fail-k)))
+          (set! *current-trace-buffer* (cons inst *current-trace-buffer*))))))
 
 ;;; Start recording a trace for given PC
 (define (start-recording! pc)

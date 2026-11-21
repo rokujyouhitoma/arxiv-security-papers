@@ -25,7 +25,7 @@
 (define (already-instrumented? body)
   (and (pair? body)
        (pair? (car body))
-       (eq? (caar body) 'jit-merge-point)))
+       (memq (caar body) '(jit-merge-point jit-merge-point!))))
 
 ;;; Helper: get the last element of a non-empty list
 (define (last-element ls)
@@ -186,6 +186,16 @@
                          (map (lambda (e) (auto-instrument-form e)) (cdr cl))))
                  (cdr form))))
        (cons 'cond clauses)))
+
+    ((eq? (car form) 'case)
+     (let ((key (auto-instrument-form (cadr form)))
+           (clauses
+            (map (lambda (cl)
+                   (if (eq? (car cl) 'else)
+                       (cons 'else (map (lambda (e) (auto-instrument-form e)) (cdr cl)))
+                       (cons (car cl) (map (lambda (e) (auto-instrument-form e)) (cdr cl)))))
+                 (cddr form))))
+       (cons 'case (cons key clauses))))
 
     ;; -------------------------------------------------------------------
     ;; Case 6: sequencing and assignment (begin, set!)
