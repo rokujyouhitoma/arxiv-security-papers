@@ -20,6 +20,8 @@
        (emit-lir! (list '%code-ref '%rax "ulisp_heap_limit")))
       ((%get-stackmap-table)
        (emit-lir! (list '%code-ref '%rax "__ulisp_stackmap_table")))
+      ((%get-initial-heap-ptr %get-initial-heap sys-initial-heap)
+       (emit-lir! (list '%code-ref '%rax "ulisp_initial_heap")))
       ((eof-object)
        (emit-lir! (list '%mov '%rax (repr-encode-eof))))
       ((%num-args)

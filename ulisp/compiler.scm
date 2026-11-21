@@ -2775,7 +2775,7 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)))
+  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)))
 
 (define (unary-prim? op)
   (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
@@ -11558,7 +11558,7 @@
     power-assert-report dump-lir-unbound-variable-diagnostic
     %raw-load %raw-load-u8 %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
     %ptr-add %ptr-tag %ptr-untag %ptr-tag-add %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table
+    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap
     %memory-fence %atomic-cas!))
 
 (define (scope-primitive-symbol? sym)
@@ -23807,7 +23807,7 @@
      (type-boolean))
     ((memq op '(make-string string-ref))
      (if (eq? op 'make-string) (type-string) (type-char)))
-    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %get-environ-ptr %raw-load %raw-load-u8 %ptr-add %ptr-tag-add))
+    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %get-environ-ptr %get-initial-heap-ptr %get-initial-heap sys-initial-heap %raw-load %raw-load-u8 %ptr-add %ptr-tag-add))
      (type-fixnum))
     (else (type-top))))
 
@@ -29320,6 +29320,8 @@
        (emit-lir! (list '%code-ref '%rax "ulisp_heap_limit")))
       ((%get-stackmap-table)
        (emit-lir! (list '%code-ref '%rax "__ulisp_stackmap_table")))
+      ((%get-initial-heap-ptr %get-initial-heap sys-initial-heap)
+       (emit-lir! (list '%code-ref '%rax "ulisp_initial_heap")))
       ((eof-object)
        (emit-lir! (list '%mov '%rax (repr-encode-eof))))
       ((%num-args)
@@ -33985,13 +33987,22 @@
        (emit "    xor r9, r9")                     ; offset = 0
        (emit "    syscall")
        (emit "    test rax, rax")
-       (emit "    js .L_start_exit")
+       (emit "    jns .L_mmap_none_ok")
+       ;; Fallback to BSS Demand-Paged Initial Heap (16MB) - Issue #905 / DSN-33-07
+       (emit "    lea rax, [rip + ulisp_initial_heap]")
+       (emit "    mov rdi, rax")                   ; rdi = heap_base
+       (emit "    lea rcx, [rax + 16777216]")      ; limit = base + 16MB
+       (emit "    lea rdx, [rip + ulisp_heap_limit]")
+       (emit "    mov [rdx], rcx")
+       (emit "    jmp .L_mmap_none_done")
+       (emit ".L_mmap_none_ok:")
        (emit "    mov rdi, rax")                   ; rdi = heap_base
        (emit "    mov rcx, rax")
        (emit "    mov rdx, 34359738368")
        (emit "    add rcx, rdx")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
-       (emit "    mov [rdx], rcx"))
+       (emit "    mov [rdx], rcx")
+       (emit ".L_mmap_none_done:"))
       ((or (eq? gc-mode 'dual-space) (eq? gc-mode 'stress))
        (emit "    mov rax, 9")                     ; sys_mmap
        (emit "    xor rdi, rdi")                   ; addr = NULL
@@ -34002,7 +34013,29 @@
        (emit "    xor r9, r9")                     ; offset = 0
        (emit "    syscall")
        (emit "    test rax, rax")
-       (emit "    js .L_start_exit")
+       (emit "    jns .L_mmap_dual_ok")
+       ;; Fallback to BSS Demand-Paged Initial Heap (2 x 8MB = 16MB) - Issue #905
+       (emit "    lea rax, [rip + ulisp_initial_heap]")
+       (emit "    lea rbx, [rip + ulisp_gc_state]")
+       (emit "    mov [rbx + 0], rax")             ; from
+       (emit "    mov rdi, rax")                   ; rdi = from
+       (emit "    lea rcx, [rax + 8388608]")       ; to (8MB)
+       (emit "    mov [rbx + 8], rcx")
+       (emit "    mov qword ptr [rbx + 16], 8388608") ; size = 8MB
+       (emit "    mov [rbx + 24], rbp")            ; bottom
+       (emit "    mov qword ptr [rbx + 32], 0")    ; count = 0
+       (emit "    mov [rbx + 40], rcx")            ; free_ptr = to
+       (emit "    mov qword ptr [rbx + 88], 0")    ; gen_mode = 0
+       (emit "    mov qword ptr [rbx + 112], 4")   ; profile_id = 4 (stress)
+       (emit "    mov qword ptr [rbx + 128], 1")   ; stress_mode = 1
+       (emit "    lea rax, [rip + __start_ulisp_globals_sec]")
+       (emit "    mov [rbx + 192], rax")
+       (emit "    lea rax, [rip + __stop_ulisp_globals_sec]")
+       (emit "    mov [rbx + 200], rax")
+       (emit "    lea rdx, [rip + ulisp_heap_limit]")
+       (emit "    mov [rdx], rcx")                 ; limit = from + 8MB
+       (emit "    jmp .L_mmap_dual_done")
+       (emit ".L_mmap_dual_ok:")
        (emit "    lea rbx, [rip + ulisp_gc_state]")
        (emit "    mov [rbx + 0], rax")             ; from
        (emit "    mov rdi, rax")                   ; rdi = from
@@ -34020,7 +34053,8 @@
        (emit "    lea rax, [rip + __stop_ulisp_globals_sec]")
        (emit "    mov [rbx + 200], rax")
        (emit "    lea rdx, [rip + ulisp_heap_limit]")
-       (emit "    mov [rdx], rcx"))
+       (emit "    mov [rdx], rcx")
+       (emit ".L_mmap_dual_done:"))
       (else
        ;; Generational Collector initialization (Pass 141)
        (emit "    mov rax, 9")                     ; sys_mmap
@@ -34564,7 +34598,25 @@
     (emit "    .weak ulisp_io_buf")
     (emit "ulisp_io_buf:")
     (emit "    .space 32")
+    ;; BSS Demand-Paged Initial Heap (16MB) - Conforms to DSN-33-07 / Issue #905
+    (emit "    .align 16")
+    (emit "    .globl ulisp_initial_heap")
+    (emit "    .weak ulisp_initial_heap")
+    (emit "ulisp_initial_heap:")
+    (emit "    .space 16777216")
     (emit "    .text")
+    (emit "    .globl ulisp_fn_sys_initial_heap")
+    (emit "    .weak ulisp_fn_sys_initial_heap")
+    (emit "    .type ulisp_fn_sys_initial_heap, @function")
+    (emit "ulisp_fn_sys_initial_heap:")
+    (emit "    lea rax, [rip + ulisp_initial_heap]")
+    (emit "    ret")
+    (emit "")
+    (emit "    .globl ulisp_gvar_sys_initial_heap")
+    (emit "    .weak ulisp_gvar_sys_initial_heap")
+    (emit "ulisp_gvar_sys_initial_heap:")
+    (emit "    .quad ulisp_fn_sys_initial_heap")
+    (emit "")
     (emit "    .globl ulisp_fn_sys_bench_passes_p")
     (emit "    .weak ulisp_fn_sys_bench_passes_p")
     (emit "    .type ulisp_fn_sys_bench_passes_p, @function")
