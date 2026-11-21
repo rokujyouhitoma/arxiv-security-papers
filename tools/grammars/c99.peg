@@ -1,0 +1,411 @@
+# ISO/IEC 9899:1999 (C99) Packrat PEG Grammar Specification
+# Conforms to CPython PEG (PEP 617) syntax, DSN-25, DSN-33-11, DSN-33-22, DSN-33-32 & Issue #931
+# Portable pure PEG specification compatible with both ulisp/peg/ (Scheme) and src/core/peg/ (Python)
+
+grammar C99
+
+# ==============================================================================
+# 1. Translation Unit & External Declarations
+# ==============================================================================
+
+translation_unit:
+    | ws external_declaration+
+
+external_declaration:
+    | function_definition
+    | declaration
+
+function_definition:
+    | declaration_specifiers declarator declaration_list? compound_stmt
+
+declaration_list:
+    | declaration+
+
+# ==============================================================================
+# 2. Declarations, Type Specifiers & Struct / Union / Enum
+# ==============================================================================
+
+declaration:
+    | explicit_declaration
+    | typedef_declaration
+
+explicit_declaration:
+    | explicit_declaration_specifiers init_declarator_list? ';' ws
+
+typedef_declaration:
+    | typedef_declaration_specifiers typedef_init_declarator_list ';' ws
+
+declaration_specifiers:
+    | explicit_declaration_specifiers
+    | typedef_declaration_specifiers
+
+# Explicit (non-typedef-name) specifiers allow optional typedef_name ONLY as a declarator name
+# (e.g. "typedef int T; void f(int T);") because a typedef_name cannot combine with builtin/struct types.
+explicit_declaration_specifiers:
+    | (decl_prefix ws)* (builtin_type_specifier (ws (decl_prefix | builtin_type_specifier))* | aggregate_or_enum_specifier (ws decl_prefix)*) ws
+
+typedef_declaration_specifiers:
+    | (decl_prefix ws)* typedef_name (ws decl_prefix)* ws
+
+decl_prefix:
+    | storage_class_specifier
+    | type_qualifier
+    | function_specifier
+
+init_declarator_list:
+    | first=init_declarator rest=(',' ws init_declarator)*
+
+typedef_init_declarator_list:
+    | first=typedef_init_declarator rest=(',' ws init_declarator)*
+
+init_declarator:
+    | declarator ('=' ws initializer)?
+
+# Standalone fallback when typedef_name is not externally constrained:
+# avoid misclassifying "a * b;" multiplication expression statements as pointer declarations
+# unless an initializer ('='), array suffix ('['), or function pointer '(*' is present.
+typedef_init_declarator:
+    | direct_declarator ('=' ws initializer)?
+    | pointer direct_declarator '=' ws initializer
+    | pointer '(' ws declarator ws ')' ('=' ws initializer)?
+    | pointer identifier ws '[' ws (expr ws)? ']' ('=' ws initializer)?
+
+storage_class_specifier:
+    | ('typedef' | 'extern' | 'static' | 'auto' | 'register') !ident_cont
+
+builtin_type_specifier:
+    | ('void' | 'char' | 'short' | 'int' | 'long' | 'float' | 'double' | 'signed' | 'unsigned' | '_Bool' | '_Complex' | '_Imaginary') !ident_cont
+
+type_qualifier:
+    | ('const' | 'restrict' | 'volatile') !ident_cont
+
+function_specifier:
+    | 'inline' !ident_cont
+
+aggregate_or_enum_specifier:
+    | struct_or_union_specifier
+    | enum_specifier
+
+struct_or_union_specifier:
+    | struct_or_union ws identifier? ws '{' ws struct_declaration_list ws '}' ws
+    | struct_or_union ws identifier ws
+
+struct_or_union:
+    | ('struct' | 'union') !ident_cont
+
+struct_declaration_list:
+    | struct_declaration+
+
+struct_declaration:
+    | specifier_qualifier_list struct_declarator_list? ';' ws
+
+specifier_qualifier_list:
+    | (type_qualifier ws)* (builtin_type_specifier (ws (type_qualifier | builtin_type_specifier))* | aggregate_or_enum_specifier (ws type_qualifier)* | typedef_name (ws type_qualifier)*) ws
+    | type_qualifier (ws type_qualifier)* ws
+
+struct_declarator_list:
+    | first=struct_declarator rest=(',' ws struct_declarator)*
+
+struct_declarator:
+    | declarator? ':' ws constant_expr
+    | declarator
+
+enum_specifier:
+    | 'enum' !ident_cont ws identifier? ws '{' ws enumerator_list (',' ws)? '}' ws
+    | 'enum' !ident_cont ws identifier ws
+
+enumerator_list:
+    | first=enumerator rest=(',' ws !'}' enumerator)*
+
+enumerator:
+    | enumeration_constant ('=' ws constant_expr)?
+
+enumeration_constant:
+    | identifier ws
+
+typedef_name:
+    | identifier
+
+# ==============================================================================
+# 3. Declarators, Function Pointers & Initializers (Left-Recursive)
+# ==============================================================================
+
+declarator:
+    | pointer? direct_declarator
+
+direct_declarator:
+    | direct_declarator '[' ws 'static' !ident_cont ws type_qualifier_list? assignment_expr ']' ws
+    | direct_declarator '[' ws type_qualifier_list 'static' !ident_cont ws assignment_expr ']' ws
+    | direct_declarator '[' ws type_qualifier_list? '*' ws ']' ws
+    | direct_declarator '[' ws type_qualifier_list? assignment_expr? ']' ws
+    | direct_declarator '(' ws parameter_type_list ')' ws
+    | direct_declarator '(' ws identifier_list? ')' ws
+    | identifier ws
+    | '(' ws declarator ')' ws
+
+pointer:
+    | ('*' ws type_qualifier_list?)+
+
+type_qualifier_list:
+    | (type_qualifier ws)+
+
+parameter_type_list:
+    | parameter_list (',' ws '...' ws)?
+
+parameter_list:
+    | first=parameter_declaration rest=(',' ws !'...' parameter_declaration)*
+
+parameter_declaration:
+    | declaration_specifiers (declarator | abstract_declarator)?
+
+identifier_list:
+    | first=identifier ws rest=(',' ws identifier ws)*
+
+type_name:
+    | specifier_qualifier_list abstract_declarator?
+
+abstract_declarator:
+    | pointer direct_abstract_declarator?
+    | direct_abstract_declarator
+
+direct_abstract_declarator:
+    | direct_abstract_declarator '[' ws 'static' !ident_cont ws type_qualifier_list? assignment_expr ']' ws
+    | direct_abstract_declarator '[' ws type_qualifier_list 'static' !ident_cont ws assignment_expr ']' ws
+    | direct_abstract_declarator '[' ws type_qualifier_list? '*' ws ']' ws
+    | direct_abstract_declarator '[' ws type_qualifier_list? assignment_expr? ']' ws
+    | direct_abstract_declarator '(' ws parameter_type_list? ')' ws
+    | '(' ws abstract_declarator ')' ws
+    | '[' ws 'static' !ident_cont ws type_qualifier_list? assignment_expr ']' ws
+    | '[' ws type_qualifier_list 'static' !ident_cont ws assignment_expr ']' ws
+    | '[' ws type_qualifier_list? '*' ws ']' ws
+    | '[' ws type_qualifier_list? assignment_expr? ']' ws
+    | '(' ws parameter_type_list? ')' ws
+
+initializer:
+    | '{' ws initializer_list (',' ws)? '}' ws
+    | assignment_expr
+
+initializer_list:
+    | first=initializer_item rest=(',' ws !'}' initializer_item)*
+
+initializer_item:
+    | designation? initializer
+
+designation:
+    | designator+ '=' ws
+
+designator:
+    | '[' ws constant_expr ']' ws
+    | '.' ws identifier ws
+
+# ==============================================================================
+# 4. Statements
+# ==============================================================================
+
+stmt:
+    | labeled_stmt
+    | compound_stmt
+    | selection_stmt
+    | iteration_stmt
+    | jump_stmt
+    | expr_stmt
+
+labeled_stmt:
+    | 'case' !ident_cont ws constant_expr ':' ws stmt
+    | 'default' !ident_cont ws ':' ws stmt
+    | identifier ws ':' ws stmt
+
+compound_stmt:
+    | '{' ws block_item* '}' ws
+
+block_item:
+    | stmt_or_decl
+
+stmt_or_decl:
+    | explicit_declaration
+    | labeled_stmt
+    | compound_stmt
+    | selection_stmt
+    | iteration_stmt
+    | jump_stmt
+    | typedef_declaration
+    | expr_stmt
+
+expr_stmt:
+    | expr? ';' ws
+
+selection_stmt:
+    | 'if' !ident_cont ws '(' ws expr ')' ws stmt ('else' !ident_cont ws stmt)?
+    | 'switch' !ident_cont ws '(' ws expr ')' ws stmt
+
+iteration_stmt:
+    | 'while' !ident_cont ws '(' ws expr ')' ws stmt
+    | 'do' !ident_cont ws stmt 'while' !ident_cont ws '(' ws expr ')' ws ';' ws
+    | 'for' !ident_cont ws '(' ws (declaration | expr? ';' ws) expr? ';' ws expr? ')' ws stmt
+
+jump_stmt:
+    | 'goto' !ident_cont ws identifier ws ';' ws
+    | 'continue' !ident_cont ws ';' ws
+    | 'break' !ident_cont ws ';' ws
+    | 'return' !ident_cont ws expr? ';' ws
+
+# ==============================================================================
+# 5. Expressions (15 Precedence Levels & Left-Recursive Postfix)
+# ==============================================================================
+
+expr:
+    | first=assignment_expr rest=(',' ws assignment_expr)*
+
+assignment_expr:
+    | unary_expr assignment_operator ws assignment_expr
+    | conditional_expr
+
+assignment_operator:
+    | '=' !'='
+    | '*='
+    | '/='
+    | '%='
+    | '+='
+    | '-='
+    | '<<='
+    | '>>='
+    | '&='
+    | '^='
+    | '|='
+
+conditional_expr:
+    | logical_or_expr ('?' ws expr ':' ws conditional_expr)?
+
+constant_expr:
+    | conditional_expr
+
+logical_or_expr:
+    | first=logical_and_expr rest=('||' ws logical_and_expr)*
+
+logical_and_expr:
+    | first=inclusive_or_expr rest=('&&' ws inclusive_or_expr)*
+
+inclusive_or_expr:
+    | first=exclusive_or_expr rest=('|' !('|' | '=') ws exclusive_or_expr)*
+
+exclusive_or_expr:
+    | first=and_expr rest=('^' !'=' ws and_expr)*
+
+and_expr:
+    | first=equality_expr rest=('&' !('&' | '=') ws equality_expr)*
+
+equality_expr:
+    | first=relational_expr rest=(('==' | '!=') ws relational_expr)*
+
+relational_expr:
+    | first=shift_expr rest=(('<=' | '>=' | '<' !'<' | '>' !'>') ws shift_expr)*
+
+shift_expr:
+    | first=additive_expr rest=(('<<' !'=' | '>>' !'=') ws additive_expr)*
+
+additive_expr:
+    | first=multiplicative_expr rest=(('+' !('+' | '=') | '-' !('-' | '=' | '>')) ws multiplicative_expr)*
+
+multiplicative_expr:
+    | first=cast_expr rest=(('*' !'=' | '/' !('=' | '/' | '*') | '%' !'=') ws cast_expr)*
+
+cast_expr:
+    | '(' ws type_name ')' ws !'{' cast_expr
+    | unary_expr
+
+unary_expr:
+    | ('++' | '--') ws unary_expr
+    | unary_operator ws cast_expr
+    | 'sizeof' !ident_cont ws '(' ws type_name ')' ws !'{'
+    | 'sizeof' !ident_cont ws unary_expr
+    | postfix_expr
+
+unary_operator:
+    | '&' !'&'
+    | '*'
+    | '+' !'+'
+    | '-' !'-'
+    | '~'
+    | '!' !'='
+
+postfix_expr:
+    | postfix_expr '[' ws expr ']' ws
+    | postfix_expr '(' ws argument_expr_list? ')' ws
+    | postfix_expr '.' ws identifier ws
+    | postfix_expr '->' ws identifier ws
+    | postfix_expr ('++' | '--') ws
+    | '(' ws type_name ')' ws '{' ws initializer_list (',' ws)? '}' ws
+    | primary_expr
+
+argument_expr_list:
+    | first=assignment_expr rest=(',' ws assignment_expr)*
+
+primary_expr:
+    | identifier ws
+    | constant ws
+    | (string_literal ws)+
+    | '(' ws expr ')' ws
+
+# ==============================================================================
+# 6. Lexical Grammar (Keywords, Identifiers, Constants, Comments & Whitespace)
+# ==============================================================================
+
+identifier:
+    | !c99_keyword [a-zA-Z_] [a-zA-Z0-9_]*
+
+ident_cont:
+    | [a-zA-Z0-9_]
+
+c99_keyword:
+    | ('auto' | 'break' | 'case' | 'char' | 'const' | 'continue' | 'default' | 'do' | 'double' | 'else' | 'enum' | 'extern' | 'float' | 'for' | 'goto' | 'if' | 'inline' | 'int' | 'long' | 'register' | 'restrict' | 'return' | 'short' | 'signed' | 'sizeof' | 'static' | 'struct' | 'switch' | 'typedef' | 'union' | 'unsigned' | 'void' | 'volatile' | 'while' | '_Bool' | '_Complex' | '_Imaginary') !ident_cont
+
+constant:
+    | float_constant
+    | integer_constant
+    | char_constant
+
+float_constant:
+    | ('0x' | '0X') [0-9a-fA-F]* '.' [0-9a-fA-F]+ binary_exponent float_suffix?
+    | ('0x' | '0X') [0-9a-fA-F]+ '.'? binary_exponent float_suffix?
+    | [0-9]* '.' [0-9]+ decimal_exponent? float_suffix?
+    | [0-9]+ '.' decimal_exponent? float_suffix?
+    | [0-9]+ decimal_exponent float_suffix?
+
+decimal_exponent:
+    | ('e' | 'E') ('+' | '-')? [0-9]+
+
+binary_exponent:
+    | ('p' | 'P') ('+' | '-')? [0-9]+
+
+float_suffix:
+    | ('f' | 'F' | 'l' | 'L')
+
+integer_constant:
+    | ('0x' | '0X') [0-9a-fA-F]+ integer_suffix?
+    | '0' [0-7]* integer_suffix?
+    | [1-9] [0-9]* integer_suffix?
+
+integer_suffix:
+    | ('u' | 'U') ('ll' | 'LL' | 'l' | 'L')?
+    | ('ll' | 'LL' | 'l' | 'L') ('u' | 'U')?
+
+char_constant:
+    | 'L'? "'" (escape_seq | [^'\\\r\n])+ "'"
+
+string_literal:
+    | 'L'? '"' (escape_seq | [^"\\\r\n])* '"'
+
+escape_seq:
+    | '\\' .
+
+ws:
+    | ([ \t\r\n] | line_comment | block_comment | pp_line)*
+
+line_comment:
+    | '//' [^\r\n]*
+
+block_comment:
+    | '/*' (!'*/' .)* '*/'
+
+pp_line:
+    | '#' [^\r\n]*

@@ -285,7 +285,7 @@
              (peg:seq primary-or-gather (peg:opt (peg:alt star-tok plus-tok qmark-tok)))))
 
   ;; Prefixes: cut ~, &expr, !expr, name=expr, name:expr
-  (define prefix-parser
+  (define prefix-item
     (peg:alt
      (peg:map (lambda (_) (make-peg-cut-expr)) tilde-tok)
      (peg:map (lambda (res) (make-peg-pred-expr (cadr res) #t))
@@ -299,6 +299,20 @@
                   (make-peg-named-expr var-name inner)))
               (peg:seq (peg:meta-ident) (peg:alt eq-tok colon-tok) suffixed-parser))
      suffixed-parser))
+
+  ;; Guard against consuming the start of a subsequent rule definition
+  (define new-rule-head
+    (peg:alt
+     (peg:seq (peg:meta-ident) (tok "<-"))
+     (peg:seq (peg:line-start)
+              (peg:meta-ident)
+              (peg:opt (peg:meta-char-class))
+              (peg:opt (peg:seq lparen (peg:meta-ident) rparen))
+              (peg:alt (peg:lit ":") (peg:lit "=")))))
+
+  (define prefix-parser
+    (peg:map (lambda (res) (cadr res))
+             (peg:seq (peg:not new-rule-head) prefix-item)))
 
   ;; Sequence element: prefix + optional action
   (define seq-parser

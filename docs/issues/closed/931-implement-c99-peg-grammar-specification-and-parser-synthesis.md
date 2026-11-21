@@ -2,42 +2,43 @@
 ID: 931
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
+完了日: 2026-11-21
 ---
 
 # [FEAT/ENH] PEG による C99 文法仕様 (`tools/grammars/c99.peg`) の定義およびパーサー自動合成の実装 (ID: 931)
 
 ## 1. 概要 / Summary
-[[DSN-25]](../designs/DSN-25-pure_python_packrat_peg_parser_engine.md) および [[DSN-33-22]](../designs/DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) §3（PEG / Packrat 構文解析フロントエンドのゼロコスト自動合成 / 基盤 Issue #894, #907, #908）に基づき、ISO/IEC 9899:1999 (C99) の完全な構文規則を CPython PEG 構文（PEP 617 準拠）で記述した文法定義ファイル `tools/grammars/c99.peg` を新設し、Pure Scheme Packrat PEG パーサージェネレータ（`ulisp/peg/`）および Python 側コンパイラ（`src/core/peg/`）の双方から C99 構文解析器を自動合成可能にする。
+[[DSN-25]](../../designs/DSN-25-pure_python_packrat_peg_parser_engine.md) および [[DSN-33-22]](../../designs/DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) §3（PEG / Packrat 構文解析フロントエンドのゼロコスト自動合成 / 基盤 Issue #894, #907, #908）に基づき、ISO/IEC 9899:1999 (C99) の完全な構文規則を CPython PEG 構文（PEP 617 準拠）で記述した文法定義ファイル `tools/grammars/c99.peg` を新設し、Pure Scheme Packrat PEG パーサージェネレータ（`ulisp/peg/`）および Python 側コンパイラ（`src/core/peg/`）の双方から C99 構文解析器を自動合成可能にする。
 
-これにより、[[Issue #915]](915-implement-c99-parser-and-nanopass-c-ast-definitions.md) の C99 パーサー実装における手書きのボイラープレートを排除し、C 言語特有の左再帰演算子・`typedef` 文脈曖昧性（Lexer Hack）・宣言子構文を宣言的な PEG 規則と順序付き選択（Ordered Choice `|`）＋セマンティック述語として単一ソースで厳密に保守できるようにする。
+これにより、[[Issue #915]](../915-implement-c99-parser-and-nanopass-c-ast-definitions.md) の C99 パーサー実装における手書きのボイラープレートを排除し、C 言語特有の左再帰演算子・`typedef` 文脈曖昧性（Lexer Hack）・宣言子構文を宣言的な PEG 規則と順序付き選択（Ordered Choice `|`）＋セマンティック述語として単一ソースで厳密に保守できるようにする。
 
 ---
 
 ## 2. トレーサビリティ / Traceability
 - 関連設計書:
-  - [DSN-33-11 §3.1, §3.2, §4.2 (C99 構文解析 ＆ Binding ID)](../designs/DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
-  - [DSN-33-22 §3 (PEG 構文解析フロントエンド自動合成)](../designs/DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
-  - [DSN-33-32 §2, §6.1 (Lua C コンパイルロードマップ)](../designs/DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
-  - [DSN-25 (Pure Python Packrat PEG Parser Engine)](../designs/DSN-25-pure_python_packrat_peg_parser_engine.md)
+  - [DSN-33-11 §3.1, §3.2, §4.2 (C99 構文解析 ＆ Binding ID)](../../designs/DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
+  - [DSN-33-22 §3 (PEG 構文解析フロントエンド自動合成)](../../designs/DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+  - [DSN-33-32 §2, §6.1 (Lua C コンパイルロードマップ)](../../designs/DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [DSN-25 (Pure Python Packrat PEG Parser Engine)](../../designs/DSN-25-pure_python_packrat_peg_parser_engine.md)
 - 前提基盤（実装済）:
-  - `#894`: Pure Scheme Packrat PEG ジェネレータ（[ulisp/peg/runtime.scm](../../ulisp/peg/runtime.scm), [ulisp/peg/compiler/parser.scm](../../ulisp/peg/compiler/parser.scm), [ulisp/peg/compiler/codegen.scm](../../ulisp/peg/compiler/codegen.scm)）
+  - `#894`: Pure Scheme Packrat PEG ジェネレータ（[ulisp/peg/runtime.scm](../../../ulisp/peg/runtime.scm), [ulisp/peg/compiler/parser.scm](../../../ulisp/peg/compiler/parser.scm), [ulisp/peg/compiler/codegen.scm](../../../ulisp/peg/compiler/codegen.scm)）
   - `#907`, `#908`: CPython PEG / PEP 617 仕様統合 ＆ `tools/grammars/*.peg` 統一
-  - `#837`: 統一束縛解決 `<binding-id>`（[ulisp/compiler/binding.scm](../../ulisp/compiler/binding.scm)）
-  - `#824`: `<source-span>`（[ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm)）
+  - `#837`: 統一束縛解決 `<binding-id>`（[ulisp/compiler/binding.scm](../../../ulisp/compiler/binding.scm)）
+  - `#824`: `<source-span>`（[ulisp/compiler/helpers.scm](../../../ulisp/compiler/helpers.scm)）
 - 連携 Issue:
-  - [[#913]](913-implement-c99-lexer-and-token-stream-with-source-span.md) (C99 Lexer ＆ `<c-token>` ストリーム)
-  - [[#915]](915-implement-c99-parser-and-nanopass-c-ast-definitions.md) (C99 パーサー ＆ Nanopass `L_c_ast` 構築)
+  - [[#913]](../913-implement-c99-lexer-and-token-stream-with-source-span.md) (C99 Lexer ＆ `<c-token>` ストリーム)
+  - [[#915]](../915-implement-c99-parser-and-nanopass-c-ast-definitions.md) (C99 パーサー ＆ Nanopass `L_c_ast` 構築)
 
 ---
 
 ## 3. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] `tools/grammars/c99.peg` (新規: CPython PEG / PEP 617 準拠の C99 完全文法仕様)
-- [ ] [ulisp/peg/runtime.scm](../../ulisp/peg/runtime.scm) ＆ [ulisp/peg/compiler/codegen.scm](../../ulisp/peg/compiler/codegen.scm) (必要に応じトークンストリーム入力アダプタ／外部述語フックおよび左再帰メモ化の C99 要件検証)
-- [ ] `ulisp/frontend_c/parser.scm` (`c99.peg` コンパイル済みパーサー統合・`L_c_ast` 生成アダプタ)
-- [ ] [ulisp/tests/test_peg_grammars.scm](../../ulisp/tests/test_peg_grammars.scm) (全文法ビルド対象リストへ `c99.peg` を追加)
-- [ ] `ulisp/tests/test_c99_peg_grammar.scm` (新規: C99 左再帰式・宣言子・`typedef` 曖昧性・Lua 抜粋パーステスト)
-- [ ] `tests/core/peg/compiler/test_c99_grammar.py` (新規: `src/core/peg/` 側での `c99.peg` メタ文法構文解析・生成検証)
+- [x] [tools/grammars/c99.peg](../../../tools/grammars/c99.peg) (新規: CPython PEG / PEP 617 準拠の C99 完全文法仕様・95ルール)
+- [x] [ulisp/peg/runtime.scm](../../../ulisp/peg/runtime.scm) ＆ [ulisp/peg/compiler/parser.scm](../../../ulisp/peg/compiler/parser.scm) (文字クラスエスケープ解除強化、`new-rule-head` 負先読みガード、位置インデックスベクタ＆LR依存追跡による高速 Warth 左再帰メモ化)
+- [x] [ulisp/frontend_c/parser.scm](../../../ulisp/frontend_c/parser.scm) (`c99.peg` コンパイル済みパーサー統合・`typedef` スコープ述語連携・`<source-span>` / `<binding-id>` 付き `L_c_ast` 生成アダプタ)
+- [x] [ulisp/tests/test_peg_grammars.scm](../../../ulisp/tests/test_peg_grammars.scm) (全文法ビルド対象リストへ `c99.peg` を追加)
+- [x] [ulisp/tests/test_c99_peg_grammar.scm](../../../ulisp/tests/test_c99_peg_grammar.scm) ＆ [ulisp/Makefile](../../../ulisp/Makefile) (新規: C99 左再帰式・宣言子・`typedef` 曖昧性・Lua 抜粋パース・診断テスト全20項目)
+- [x] [tests/core/peg/compiler/test_c99_grammar.py](../../../tests/core/peg/compiler/test_c99_grammar.py) (新規: `src/core/peg/` 側での `c99.peg` メタ文法構文解析・生成検証)
 
 ---
 
@@ -83,8 +84,8 @@ Target Branch: `feat/931-implement-c99-peg-grammar`
 ---
 
 ## 5. 完了条件 / Success Criteria (DoD)
-- [ ] `tools/grammars/c99.peg` が `parse-peg-grammar` / `compile-peg-grammar`（Pure Scheme `ulisp/peg/`）および `src/core/peg/`（Python 側コンパイラ）の両方でエラーなくコンパイル・パーサー合成できること。
-- [ ] `ulisp/tests/test_peg_grammars.scm` の対象文法リストに `c99.peg` が含まれ、ビルド検証が PASS すること。
-- [ ] C99 の左再帰式、複雑な関数ポインタ宣言子（`int (*(*signal(int, void (*)(int)))(int))` 相当）、`typedef` シャドウイング、`sizeof(type)` vs `sizeof expr`、C99 指示付き初期化子、`for (int i=0; ...)` が正しく構文解析されること。
-- [ ] プリプロセス済みの Lua 5.x C ソースコード抜粋（`TValue` 構造体、`luaV_execute` 相当 `switch`/`goto`、`lua_CFunction`）を `c99.peg` 合成パーサーで構文解析できること。
-- [ ] `ulisp/tests/test_c99_peg_grammar.scm` および `tests/core/peg/compiler/test_c99_grammar.py` が全件 PASS すること。
+- [x] `tools/grammars/c99.peg` が `parse-peg-grammar` / `compile-peg-grammar`（Pure Scheme `ulisp/peg/`）および `src/core/peg/`（Python 側コンパイラ）の両方でエラーなくコンパイル・パーサー合成できること。
+- [x] `ulisp/tests/test_peg_grammars.scm` の対象文法リストに `c99.peg` が含まれ、ビルド検証が PASS すること。
+- [x] C99 の左再帰式、複雑な関数ポインタ宣言子（`int (*(*signal(int, void (*)(int)))(int))` 相当）、`typedef` シャドウイング、`sizeof(type)` vs `sizeof expr`、C99 指示付き初期化子、`for (int i=0; ...)` が正しく構文解析されること。
+- [x] プリプロセス済みの Lua 5.x C ソースコード抜粋（`TValue` 構造体、`luaV_execute` 相当 `switch`/`goto`、`lua_CFunction`）を `c99.peg` 合成パーサーで構文解析できること。
+- [x] `ulisp/tests/test_c99_peg_grammar.scm` および `tests/core/peg/compiler/test_c99_grammar.py` が全件 PASS すること。
