@@ -808,6 +808,27 @@ def _parse_class_tokens(tokens: List[str]) -> Tuple[List[Tuple[int, int]], Set[s
     return ranges, chars
 
 
+def _is_preceded_by_newline(text: str, pos: int) -> bool:
+    if pos <= 0:
+        return True
+    return text[pos - 1] in ("\n", "\r")
+
+
+class LineStart(Parser[None]):
+    """Zero-width assertion parser that succeeds if at pos 0 or preceded by a newline."""
+
+    can_be_empty: ClassVar[bool] = True
+    memoize: ClassVar[bool] = False
+
+    def __init__(self, name: Optional[str] = None) -> None:
+        super().__init__(name or "line_start")
+
+    def parse_at(self, ctx: ParseContext, pos: int) -> ParseResult[None]:
+        if _is_preceded_by_newline(ctx.text, pos):
+            return ParseResult(True, None, pos)
+        return ParseResult(False, None, pos, "Not at line start")
+
+
 class AnyChar(Parser[str]):
     """Matches any single character except EOF (Bryan Ford POPL '04 '.' token)."""
 

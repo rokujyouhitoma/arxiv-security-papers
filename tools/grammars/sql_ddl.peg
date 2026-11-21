@@ -1,5 +1,5 @@
 # SQL DDL (Data Definition Language) Grammar Specification
-# Conforms to Bryan Ford POPL '04 Packrat PEG Specification.
+# Conforms to CPython PEG (PEP 617 / python.gram) Packrat PEG Specification.
 # Generates strongly-typed DDL AST nodes.
 
 grammar SQLDDL
@@ -349,43 +349,43 @@ def _assemble_create_table_stmt(
 # -------------------------------------------------------------
 # Top-Level Root Rule
 # -------------------------------------------------------------
-root <- opt_ws ddl:ddl_stmt opt_ws {
+root : opt_ws ddl=ddl_stmt opt_ws {
     return ddl
 }
 
-ddl_stmt <-
+ddl_stmt :
     create_virtual_table_stmt
-    / create_table_stmt
-    / create_index_stmt
-    / create_view_stmt
-    / create_trigger_stmt
-    / alter_table_stmt
-    / drop_stmt
-    / reindex_stmt
+    | create_table_stmt
+    | create_index_stmt
+    | create_view_stmt
+    | create_trigger_stmt
+    | alter_table_stmt
+    | drop_stmt
+    | reindex_stmt
 
 # -------------------------------------------------------------
 # CREATE TABLE Statement
 # -------------------------------------------------------------
-create_table_stmt <-
+create_table_stmt :
     create_kw
-    (ws (temp_kw / temporary_kw))?
+    (ws (temp_kw | temporary_kw))?
     ws table_kw
-    if_not:opt_if_not_exists
-    ws tbl:ident
-    opt_ws body:paren_chunk
-    tail:(ws t:rest_of_line { return t })? {
+    if_not=opt_if_not_exists
+    ws tbl=ident
+    opt_ws body=paren_chunk
+    tail=(ws t=rest_of_line { return t })? {
         return _assemble_create_table_stmt(tbl, body, tail, if_not)
     }
 
 # -------------------------------------------------------------
 # CREATE VIRTUAL TABLE Statement
 # -------------------------------------------------------------
-create_virtual_table_stmt <-
+create_virtual_table_stmt :
     create_kw ws virtual_kw ws table_kw
-    if_not:opt_if_not_exists
-    ws tbl:ident
-    ws using_kw ws module:ident
-    args_paren:(opt_ws p:paren_chunk { return p })? {
+    if_not=opt_if_not_exists
+    ws tbl=ident
+    ws using_kw ws module=ident
+    args_paren=(opt_ws p=paren_chunk { return p })? {
         args_raw = args_paren.strip()[1:-1] if args_paren else ""
         args = [a.strip() for a in _split_comma_top_level(args_raw) if a.strip()]
 
@@ -402,15 +402,15 @@ create_virtual_table_stmt <-
 # -------------------------------------------------------------
 # CREATE INDEX Statement
 # -------------------------------------------------------------
-create_index_stmt <-
+create_index_stmt :
     create_kw
     (ws unique_kw)?
     ws index_kw
     opt_if_not_exists
-    ws idx:ident
-    ws on_kw ws tbl:ident
-    opt_ws cols_paren:paren_chunk
-    idx_type_opt:(ws using_kw ws it:ident { return it })? {
+    ws idx=ident
+    ws on_kw ws tbl=ident
+    opt_ws cols_paren=paren_chunk
+    idx_type_opt=(ws using_kw ws it=ident { return it })? {
         cols_body = cols_paren.strip()[1:-1].strip()
         idx_t = idx_type_opt.upper() if idx_type_opt else "HNSW"
 
@@ -427,13 +427,13 @@ create_index_stmt <-
 # -------------------------------------------------------------
 # CREATE VIEW Statement
 # -------------------------------------------------------------
-create_view_stmt <-
+create_view_stmt :
     create_kw
-    (ws (temp_kw / temporary_kw))?
+    (ws (temp_kw | temporary_kw))?
     ws view_kw
-    if_not:opt_if_not_exists
-    ws vw:ident
-    ws as_kw ws select_raw:rest_of_line {
+    if_not=opt_if_not_exists
+    ws vw=ident
+    ws as_kw ws select_raw=rest_of_line {
         sub_select = parse_dql(select_raw.strip())
         return CreateViewStatement(
             command_type=SQLCommandType.CREATE_VIEW,
@@ -447,17 +447,17 @@ create_view_stmt <-
 # -------------------------------------------------------------
 # CREATE TRIGGER Statement
 # -------------------------------------------------------------
-create_trigger_stmt <-
+create_trigger_stmt :
     create_kw
-    (ws (temp_kw / temporary_kw))?
+    (ws (temp_kw | temporary_kw))?
     ws trigger_kw
     opt_if_not_exists
-    ws trg:ident
-    ws timing:trigger_timing
-    ws event:trigger_event
-    ws on_kw ws tbl:ident
+    ws trg=ident
+    ws timing=trigger_timing
+    ws event=trigger_event
+    ws on_kw ws tbl=ident
     (ws for_kw ws each_kw ws row_kw)?
-    ws begin_kw ws body_raw:trigger_body opt_ws end_kw {
+    ws begin_kw ws body_raw=trigger_body opt_ws end_kw {
         body_sqls = [s.strip() for s in body_raw.split(";") if s.strip()]
         return CreateTriggerStatement(
             command_type=SQLCommandType.CREATE_TRIGGER,
@@ -470,35 +470,35 @@ create_trigger_stmt <-
         )
     }
 
-trigger_timing <-
+trigger_timing :
     before_kw { return "BEFORE" }
-    / after_kw { return "AFTER" }
-    / instead_kw ws of_kw { return "INSTEAD OF" }
+    | after_kw { return "AFTER" }
+    | instead_kw ws of_kw { return "INSTEAD OF" }
 
-trigger_event <-
+trigger_event :
     insert_kw { return "INSERT" }
-    / update_kw { return "UPDATE" }
-    / delete_kw { return "DELETE" }
+    | update_kw { return "UPDATE" }
+    | delete_kw { return "DELETE" }
 
-trigger_body <- raw:/(?is).*?(?=\bEND\b)/ {
+trigger_body : raw=/(?is).*?(?=\bEND\b)/ {
     return raw
 }
 
 # -------------------------------------------------------------
 # ALTER TABLE Statement
 # -------------------------------------------------------------
-alter_table_stmt <-
-    alter_kw ws table_kw ws tbl:ident ws action:alter_action {
+alter_table_stmt :
+    alter_kw ws table_kw ws tbl=ident ws action=alter_action {
         return action(tbl)
     }
 
-alter_action <-
+alter_action :
     rename_table_action
-    / rename_column_action
-    / add_column_action
-    / drop_column_action
+    | rename_column_action
+    | add_column_action
+    | drop_column_action
 
-rename_table_action <- rename_kw ws to_kw ws new_tbl:ident {
+rename_table_action : rename_kw ws to_kw ws new_tbl=ident {
     return lambda tbl: AlterTableStatement(
         command_type=SQLCommandType.ALTER_TABLE,
         raw_sql="",
@@ -508,7 +508,7 @@ rename_table_action <- rename_kw ws to_kw ws new_tbl:ident {
     )
 }
 
-rename_column_action <- rename_kw (ws column_kw)? ws old_c:ident ws to_kw ws new_c:ident {
+rename_column_action : rename_kw (ws column_kw)? ws old_c=ident ws to_kw ws new_c=ident {
     return lambda tbl: AlterTableStatement(
         command_type=SQLCommandType.ALTER_TABLE,
         raw_sql="",
@@ -519,7 +519,7 @@ rename_column_action <- rename_kw (ws column_kw)? ws old_c:ident ws to_kw ws new
     )
 }
 
-add_column_action <- add_kw (ws column_kw)? ws raw_col:rest_of_line {
+add_column_action : add_kw (ws column_kw)? ws raw_col=rest_of_line {
     c_def = _parse_single_column_def(raw_col.strip())
     def_val = c_def.default_value if c_def else None
     return lambda tbl: AlterTableStatement(
@@ -532,7 +532,7 @@ add_column_action <- add_kw (ws column_kw)? ws raw_col:rest_of_line {
     )
 }
 
-drop_column_action <- drop_kw (ws column_kw)? ws drop_c:ident {
+drop_column_action : drop_kw (ws column_kw)? ws drop_c=ident {
     return lambda tbl: AlterTableStatement(
         command_type=SQLCommandType.ALTER_TABLE,
         raw_sql="",
@@ -545,8 +545,8 @@ drop_column_action <- drop_kw (ws column_kw)? ws drop_c:ident {
 # -------------------------------------------------------------
 # DROP Statement
 # -------------------------------------------------------------
-drop_stmt <-
-    drop_kw ws kind:drop_kind if_ex:opt_if_exists ws target:ident {
+drop_stmt :
+    drop_kw ws kind=drop_kind if_ex=opt_if_exists ws target=ident {
         if kind == "TABLE":
             return DropTableStatement(
                 command_type=SQLCommandType.DROP_TABLE,
@@ -577,16 +577,16 @@ drop_stmt <-
             )
     }
 
-drop_kind <-
+drop_kind :
     table_kw { return "TABLE" }
-    / index_kw { return "INDEX" }
-    / view_kw { return "VIEW" }
-    / trigger_kw { return "TRIGGER" }
+    | index_kw { return "INDEX" }
+    | view_kw { return "VIEW" }
+    | trigger_kw { return "TRIGGER" }
 
 # -------------------------------------------------------------
 # REINDEX Statement
 # -------------------------------------------------------------
-reindex_stmt <- reindex_kw target:(ws t:ident { return t })? {
+reindex_stmt : reindex_kw target=(ws t=ident { return t })? {
     return ReindexStatement(
         command_type=SQLCommandType.REINDEX,
         raw_sql="",
@@ -597,81 +597,81 @@ reindex_stmt <- reindex_kw target:(ws t:ident { return t })? {
 # -------------------------------------------------------------
 # Identifiers & Helper Rules
 # -------------------------------------------------------------
-opt_if_not_exists <- flag:(ws if_kw ws not_kw ws exists_kw)? {
+opt_if_not_exists : flag=(ws if_kw ws not_kw ws exists_kw)? {
     return bool(flag)
 }
 
-opt_if_exists <- flag:(ws if_kw ws exists_kw)? {
+opt_if_exists : flag=(ws if_kw ws exists_kw)? {
     return bool(flag)
 }
 
-paren_chunk <- raw:/\((?:[^()]|\([^()]*\))*\)/ {
+paren_chunk : raw=/\((?:[^()]|\([^()]*\))*\)/ {
     return raw
 }
 
-rest_of_line <- raw:/[^\r\n;]+/ {
+rest_of_line : raw=/[^\r\n;]+/ {
     return raw
 }
 
-ident <-
-    plain:ident_pattern { return plain }
-    / backtick:backtick_pattern { return backtick }
-    / double_quote:double_quote_pattern { return double_quote }
-    / bracket:bracket_pattern { return bracket }
+ident :
+    plain=ident_pattern { return plain }
+    | backtick=backtick_pattern { return backtick }
+    | double_quote=double_quote_pattern { return double_quote }
+    | bracket=bracket_pattern { return bracket }
 
-ident_pattern <- raw:/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?/ {
+ident_pattern : raw=/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?/ {
     return raw
 }
 
-backtick_pattern <- raw:/`[^`]*`/ {
+backtick_pattern : raw=/`[^`]*`/ {
     return raw[1:-1]
 }
 
-double_quote_pattern <- raw:/"[^"]*"/ {
+double_quote_pattern : raw=/"[^"]*"/ {
     return raw[1:-1]
 }
 
-bracket_pattern <- raw:/\[[^\]]*\]/ {
+bracket_pattern : raw=/\[[^\]]*\]/ {
     return raw[1:-1]
 }
 
 # -------------------------------------------------------------
 # SQL Keywords (Case-Insensitive)
 # -------------------------------------------------------------
-create_kw <- /(?i)\bCREATE\b/
-table_kw <- /(?i)\bTABLE\b/
-temp_kw <- /(?i)\bTEMP\b/
-temporary_kw <- /(?i)\bTEMPORARY\b/
-virtual_kw <- /(?i)\bVIRTUAL\b/
-index_kw <- /(?i)\bINDEX\b/
-unique_kw <- /(?i)\bUNIQUE\b/
-view_kw <- /(?i)\bVIEW\b/
-trigger_kw <- /(?i)\bTRIGGER\b/
-alter_kw <- /(?i)\bALTER\b/
-drop_kw <- /(?i)\bDROP\b/
-reindex_kw <- /(?i)\bREINDEX\b/
-rename_kw <- /(?i)\bRENAME\b/
-to_kw <- /(?i)\bTO\b/
-add_kw <- /(?i)\bADD\b/
-column_kw <- /(?i)\bCOLUMN\b/
-using_kw <- /(?i)\bUSING\b/
-on_kw <- /(?i)\bON\b/
-as_kw <- /(?i)\bAS\b/
-before_kw <- /(?i)\bBEFORE\b/
-after_kw <- /(?i)\bAFTER\b/
-instead_kw <- /(?i)\bINSTEAD\b/
-of_kw <- /(?i)\bOF\b/
-insert_kw <- /(?i)\bINSERT\b/
-update_kw <- /(?i)\bUPDATE\b/
-delete_kw <- /(?i)\bDELETE\b/
-for_kw <- /(?i)\bFOR\b/
-each_kw <- /(?i)\bEACH\b/
-row_kw <- /(?i)\bROW\b/
-begin_kw <- /(?i)\bBEGIN\b/
-end_kw <- /(?i)\bEND\b/
-if_kw <- /(?i)\bIF\b/
-not_kw <- /(?i)\bNOT\b/
-exists_kw <- /(?i)\bEXISTS\b/
+create_kw : /(?i)\bCREATE\b/
+table_kw : /(?i)\bTABLE\b/
+temp_kw : /(?i)\bTEMP\b/
+temporary_kw : /(?i)\bTEMPORARY\b/
+virtual_kw : /(?i)\bVIRTUAL\b/
+index_kw : /(?i)\bINDEX\b/
+unique_kw : /(?i)\bUNIQUE\b/
+view_kw : /(?i)\bVIEW\b/
+trigger_kw : /(?i)\bTRIGGER\b/
+alter_kw : /(?i)\bALTER\b/
+drop_kw : /(?i)\bDROP\b/
+reindex_kw : /(?i)\bREINDEX\b/
+rename_kw : /(?i)\bRENAME\b/
+to_kw : /(?i)\bTO\b/
+add_kw : /(?i)\bADD\b/
+column_kw : /(?i)\bCOLUMN\b/
+using_kw : /(?i)\bUSING\b/
+on_kw : /(?i)\bON\b/
+as_kw : /(?i)\bAS\b/
+before_kw : /(?i)\bBEFORE\b/
+after_kw : /(?i)\bAFTER\b/
+instead_kw : /(?i)\bINSTEAD\b/
+of_kw : /(?i)\bOF\b/
+insert_kw : /(?i)\bINSERT\b/
+update_kw : /(?i)\bUPDATE\b/
+delete_kw : /(?i)\bDELETE\b/
+for_kw : /(?i)\bFOR\b/
+each_kw : /(?i)\bEACH\b/
+row_kw : /(?i)\bROW\b/
+begin_kw : /(?i)\bBEGIN\b/
+end_kw : /(?i)\bEND\b/
+if_kw : /(?i)\bIF\b/
+not_kw : /(?i)\bNOT\b/
+exists_kw : /(?i)\bEXISTS\b/
 
-ws <- /[ \t\r\n]+|#[^\r\n]*|--[^\r\n]*/
-opt_ws <- /[ \t\r\n]*|#[^\r\n]*|--[^\r\n]*/
+ws : /[ \t\r\n]+|#[^\r\n]*|--[^\r\n]*/
+opt_ws : /[ \t\r\n]*|#[^\r\n]*|--[^\r\n]*/
