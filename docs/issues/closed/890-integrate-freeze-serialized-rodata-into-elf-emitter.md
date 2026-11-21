@@ -2,7 +2,7 @@
 ID: 890
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT] freeze-serialize-to-rodata 直列化データと elf.scm (.rodata) の実リンカ配線 (ID: 890)
@@ -105,8 +105,8 @@ flowchart TD
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `freeze-serialized->bytevector` が実装され、循環グラフを安全に bytevector へ直列化できること。
-- [ ] `elf64_builder.scm` においてフリーズド・グラフのバイト列が 16 バイトアライメントを保って `.rodata` に統合されること。
-- [ ] `*max-rodata-size*` (64MB) を超過した場合に `E-RODATA-OVERFLOW` で安全にビルド中断されること。
-- [ ] `test_freeze_graph_rodata.scm` および `test_elf_sections_and_reloc.scm` が 100% PASS すること。
-- [ ] `make -C ulisp bootstrap` による Stage 2 == Stage 3 の bit-for-bit IDENTICAL 不動点が保証されること。
+- [x] `freeze-serialized->bytevector` が実装され、循環グラフを安全に bytevector へ直列化できること。
+- [x] `elf64_builder.scm` においてフリーズド・グラフのバイト列が 16 バイトアライメントを保って `.rodata` に統合されること。
+- [x] `*max-rodata-size*` (64MB) を超過した場合に `E-RODATA-OVERFLOW` で安全にビルド中断されること。
+- [x] `test_freeze_graph_rodata.scm` および `test_elf_sections_and_reloc.scm` が 100% PASS すること。
+- [x] `make -C ulisp bootstrap` による Stage 2 == Stage 3 の bit-for-bit IDENTICAL 不動点が保証されること。

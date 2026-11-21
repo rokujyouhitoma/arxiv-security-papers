@@ -6,13 +6,13 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **890** | freeze-serialize-to-rodata 直列化データと elf.scm (.rodata) の実リンカ配線 | Feature | High | In Progress | [890-integrate-freeze-serialized-rodata-into-elf-emitter.md](890-integrate-freeze-serialized-rodata-into-elf-emitter.md) |
 | **891** | オフライン BTA 4値束注釈とオンライン部分評価のハイブリッド推論フィードバック統合 | Feature | Medium | In Progress | [891-integrate-offline-bta-lattice-with-stage-poly-lower.md](891-integrate-offline-bta-lattice-with-stage-poly-lower.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **890** | freeze-serialize-to-rodata 直列化データと elf.scm (.rodata) の実リンカ配線 | Feature | 2026-11-21 | [890-integrate-freeze-serialized-rodata-into-elf-emitter.md](closed/890-integrate-freeze-serialized-rodata-into-elf-emitter.md) |
 | **889** | L-Residual-ANF から Middle-End LIR へのローワリング・アダプターブリッジ実装 | Feature | 2026-11-21 | [889-implement-residual-anf-to-lir-lowering-bridge.md](closed/889-implement-residual-anf-to-lir-lowering-bridge.md) |
 | **888** | 旧 ctfe_eval の eval-in-stage (Now dict) への一本化と二重実装解消 | Feature | 2026-11-21 | [888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md](closed/888-consolidate-legacy-ctfe-eval-into-stage-poly-evaluator.md) |
 | **887** | Pass Manager への pass-075-stage-poly-lower 常設登録と最適化レベル連動 | Feature | 2026-11-21 | [887-register-stage-poly-lower-in-pass-manager-pipeline.md](closed/887-register-stage-poly-lower-in-pass-manager-pipeline.md) |

@@ -265,29 +265,36 @@
     bv))
 
 (define (build-symtab-and-strtab sym-table text-vaddr text-len)
-  (let* ((text-syms (let loop ((st sym-table) (acc '()))
-                      (if (null? st)
-                          (reverse acc)
-                          (let* ((entry (car st))
-                                 (name (car entry))
-                                 (info (cdr entry)))
-                            (if (and (pair? info) (eq? (car info) 'text))
-                                (loop (cdr st) (cons (cons name (cadr info)) acc))
-                                (loop (cdr st) acc))))))
+  (let* ((rodata-vaddr (+ text-vaddr text-len))
+         (parsed-syms
+           (let loop ((st sym-table) (acc '()))
+             (if (null? st)
+                 (reverse acc)
+                 (let* ((entry (car st))
+                        (name (car entry))
+                        (info (cdr entry)))
+                   (cond
+                     ((and (pair? info) (eq? (car info) 'text))
+                      (loop (cdr st) (cons (list name (cadr info) 1 18 text-len) acc)))
+                     ((and (pair? info) (eq? (car info) 'rodata))
+                      (let ((off (cadr info))
+                            (sz (if (pair? (cddr info)) (caddr info) 0)))
+                        (loop (cdr st) (cons (list name off 2 17 sz) acc))))
+                     (else
+                      (loop (cdr st) acc)))))))
          (syms-with-stroff
-           (let loop ((syms text-syms) (stroff 1) (acc '()))
+           (let loop ((syms parsed-syms) (stroff 1) (acc '()))
              (if (null? syms)
                  (reverse acc)
                  (let* ((s (car syms))
                         (name (car s))
-                        (off (cdr s))
                         (slen (string-length name)))
-                   (loop (cdr syms) (+ (+ stroff slen) 1) (cons (list name off stroff) acc))))))
+                   (loop (cdr syms) (+ (+ stroff slen) 1) (cons (cons (cons name stroff) (cdr s)) acc))))))
          (strtab-bytes
            (let loop ((syms syms-with-stroff) (acc '(0)))
              (if (null? syms)
                  (elf64-list->bytevector (reverse acc))
-                 (let* ((name (caar syms))
+                 (let* ((name (caar (car syms)))
                         (chars (dwarf-string->bytes name)))
                    (loop (cdr syms) (dwarf-app3 '(0) (reverse chars) acc))))))
          (num-syms (+ (length syms-with-stroff) 1))
@@ -295,20 +302,47 @@
          (symtab-bv (make-bytevector symtab-len)))
     (let loop ((syms syms-with-stroff) (idx 1))
       (if (pair? syms)
-          (let* ((s (car syms))
-                 (name (car s))
-                 (off (cadr s))
-                 (stroff (caddr s))
+          (let* ((item (car syms))
+                 (name (caar item))
+                 (stroff (cdar item))
+                 (off (cadr item))
+                 (shndx (caddr item))
+                 (st-info (cadddr item))
+                 (sz (car (cddddr item)))
                  (sym-off (* idx 24))
-                 (val (+ text-vaddr off)))
+                 (val (if (= shndx 1)
+                          (+ text-vaddr off)
+                          (+ rodata-vaddr off))))
             (elf64-set-u32-le! symtab-bv sym-off stroff)     ;; st_name
-            (elf64-set-u8! symtab-bv (+ sym-off 4) 18)       ;; st_info = 0x12 (STB_GLOBAL | STT_FUNC)
+            (elf64-set-u8! symtab-bv (+ sym-off 4) st-info)  ;; st_info
             (elf64-set-u8! symtab-bv (+ sym-off 5) 0)        ;; st_other = 0
-            (elf64-set-u16-le! symtab-bv (+ sym-off 6) 1)    ;; st_shndx = 1 (.text)
+            (elf64-set-u16-le! symtab-bv (+ sym-off 6) shndx);; st_shndx
             (elf64-set-u64-le! symtab-bv (+ sym-off 8) val)  ;; st_value
-            (elf64-set-u64-le! symtab-bv (+ sym-off 16) text-len) ;; st_size
+            (elf64-set-u64-le! symtab-bv (+ sym-off 16) sz)  ;; st_size
             (loop (cdr syms) (+ idx 1)))))
     (list symtab-bv strtab-bytes)))
+
+;;; -----------------------------------------------------------------------
+;;; ELF64 .rodata Frozen Graph Payload Integration (Issue #890 / DSN-33 §11.1)
+;;; -----------------------------------------------------------------------
+
+(define (elf64-append-rodata-payload-with-offset rodata-bv payload-bv)
+  (let ((p-len (if (bytevector? payload-bv) (bytevector-length payload-bv) 0))
+        (r-len (if (bytevector? rodata-bv) (bytevector-length rodata-bv) 0)))
+    (if (= p-len 0)
+        (cons (if (bytevector? rodata-bv) rodata-bv (make-bytevector 0)) 0)
+        (let* ((aligned-r-len (elf64-align-up r-len 16))
+               (total-len (+ aligned-r-len p-len)))
+          (if (> total-len 67108864) ; *max-rodata-size* (64MB)
+              (error "E-RODATA-OVERFLOW" total-len)
+              (let ((new-bv (make-bytevector total-len 0)))
+                (if (> r-len 0)
+                    (elf64-copy-bytes! new-bv 0 rodata-bv 0 r-len))
+                (elf64-copy-bytes! new-bv aligned-r-len payload-bv 0 p-len)
+                (cons new-bv aligned-r-len)))))))
+
+(define (elf64-append-rodata-payload rodata-bv payload-bv)
+  (car (elf64-append-rodata-payload-with-offset rodata-bv payload-bv)))
 
 ;; -----------------------------------------------------------------------
 ;; Shared ELF Writing Helpers (kept small to stay within seed-compiler limits)
@@ -465,7 +499,8 @@
 (define (build-elf64-executable-ex text-bv rodata-bv data-bv bss-size entry-offset debug-payload)
   (if (and (pair? debug-payload)
            (or (pair? (car debug-payload))
-               (pair? (cadr debug-payload))))
+               (pair? (cadr debug-payload))
+               (pair? (caddr debug-payload))))
       (build-elf64-debug text-bv rodata-bv data-bv bss-size entry-offset debug-payload)
       (build-elf64-plain text-bv rodata-bv data-bv bss-size entry-offset)))
 
