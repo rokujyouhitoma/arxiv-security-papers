@@ -185,6 +185,18 @@
             (list (list '%mov '%rax 255) ; OSR deopt bailout sentinel
                   (list '%return)))))
 
+;;; Extract and register any embedded deopt snapshots in trace guards (Issue #900)
+(define (register-trace-deopt-snapshots! body)
+  (for-each (lambda (inst)
+              (if (and (pair? inst) (eq? (car inst) '%guard))
+                  (let* ((fail-lbl (car (cddddr inst)))
+                         (extra (cdr (cddddr inst))))
+                    (if (not (null? extra))
+                        (let ((snap (car extra)))
+                          (if (and (pair? snap) (eq? (car snap) '%deopt-snapshot))
+                              (register-deopt-snapshot! fail-lbl snap)))))))
+            body))
+
 ;;; Translate complete MLisp trace S-expression to canonical ULisp %lir-program
 (define (trace->lir-program trace)
   (if (not (and (pair? trace) (eq? (car trace) '%trace-loop)))
@@ -216,6 +228,8 @@
                       lir-insts
                       (list '(%return))
                       osr-blocks)))
+        ;; Register any deopt snapshots embedded in guards
+        (register-trace-deopt-snapshots! body)
         (list '%lir-program
               '(strings ())
               '(%lir-functions ())

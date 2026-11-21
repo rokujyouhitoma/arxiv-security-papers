@@ -60,14 +60,14 @@
             (else
              (loop (cdr rest) escaped)))))))
 
-;;; Optimize body with virtual object elimination
-(define (optimize-virtuals-body body)
+;;; Optimize body with virtual object elimination, returning (values opt-body v-map)
+(define (optimize-virtuals-body-with-map body)
   (let ((escaping (collect-escaping-vars body)))
     (let loop ((rest body)
                (v-map '())     ; Alist: (var-name . virtual-desc)
                (acc '()))
       (if (null? rest)
-          (reverse acc)
+          (values (reverse acc) v-map)
           (let* ((inst (car rest))
                  (op (car inst)))
             (case op
@@ -114,6 +114,13 @@
               (else
                (loop (cdr rest) v-map (cons inst acc)))))))))
 
+;;; Optimize body with virtual object elimination (backward compatible)
+(define (optimize-virtuals-body body)
+  (call-with-values
+    (lambda () (optimize-virtuals-body-with-map body))
+    (lambda (opt-body v-map)
+      opt-body)))
+
 ;;; Entrypoint: optimize complete (%trace-loop ...) S-expression with virtuals
 (define (optimize-trace-virtuals trace)
   (if (not (and (pair? trace) (eq? (car trace) '%trace-loop)))
@@ -121,11 +128,15 @@
       (let* ((fields (cdr trace))
              (pc (assq '%pc fields))
              (body-entry (assq '%body fields))
-             (body (if body-entry (cadr body-entry) '()))
-             (opt-body (optimize-virtuals-body body)))
-        (list '%trace-loop
-              pc
-              (list '%body opt-body)))))
+             (body (if body-entry (cadr body-entry) '())))
+        (call-with-values
+          (lambda () (optimize-virtuals-body-with-map body))
+          (lambda (opt-body v-map)
+            (let ((base-fields (filter (lambda (f) (not (memq (car f) '(%body %virtual-objects)))) fields)))
+              (cons '%trace-loop
+                    (append base-fields
+                            (list (list '%virtual-objects v-map))
+                            (list (list '%body opt-body))))))))))
 
 ;;; Combined Full Optimizer Pipeline:
 ;;; 1. Partial Evaluation & Constant Folding (pe.scm)

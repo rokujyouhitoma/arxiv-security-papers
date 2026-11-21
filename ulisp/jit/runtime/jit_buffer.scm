@@ -23,7 +23,8 @@
   (set! *jit-buffer-table* '())
   (set! *jit-bailout-handlers* '())
   (set! *jit-stats-executed* 0)
-  (set! *jit-stats-bailouts* 0))
+  (set! *jit-stats-bailouts* 0)
+  (reset-deopt-runtime!))
 
 ;;; Create a virtual JIT executable buffer descriptor for given PC
 (define (make-jit-buffer pc lir-prog)
@@ -60,8 +61,10 @@
 
 ;;; Lookup installed JIT code buffer
 (define (lookup-jit-buffer pc)
-  (let ((entry (assq pc *jit-buffer-table*)))
-    (if entry (cdr entry) #f)))
+  (if (deopt-blacklisted? pc)
+      #f
+      (let ((entry (assq pc *jit-buffer-table*)))
+        (if entry (cdr entry) #f))))
 
 ;;; Dispatch and execute JIT loop
 (define (dispatch-jit-loop pc initial-state)
