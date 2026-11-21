@@ -1,16 +1,16 @@
-# [DSN-33-07] Zero-libc / Freestanding Pure Scheme Bare-Metal Runtime Architecture (旧 DSN-36)
+# [DSN-33-31] Zero-libc / Freestanding Pure Scheme Bare-Metal Runtime Architecture (旧 DSN-36)
 
-- **文書番号**: `DSN-33-07` (旧 `DSN-36`)
+- **文書番号**: `DSN-33-31` *(旧 `DSN-33-07` / 旧 `DSN-36`)*
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**:
-  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE 設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
-  - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
-  - [[DSN-33-04] ULisp 言語ワークベンチ・インタプリタ自動生成 ＆ ゲスト言語ランタイム設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
-  - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
-  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
-  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-11] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE 設計書](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
+  - [[DSN-33-12] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-13] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
+  - [[DSN-33-21] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
+  - [[DSN-33-22] ULisp 言語ワークベンチ・インタプリタ自動生成 ＆ ゲスト言語ランタイム設計書](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+  - [[DSN-33-23] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md)
+  - [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-41] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
 - **関連設計書**:
   - [[DSN-31] ILisp R7RS Core Architecture Specification](DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)
   - [[DSN-37] Synapse Dual-Plane Concurrent Runtime Architecture](DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)

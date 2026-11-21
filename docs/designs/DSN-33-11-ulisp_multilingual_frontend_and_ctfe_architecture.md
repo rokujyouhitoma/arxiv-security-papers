@@ -1,23 +1,23 @@
-# [DSN-33-02] ULisp 多言語フロントエンド（C99 / Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書
-## 〜 第一級ソース位置情報・統一束縛解決・AST 定数式評価・純粋 Scheme 数値塔・C99 構文/意味解析を統合し、DSN-33-08 バックエンドへ繋ぐ多言語フロントエンド基盤 〜
+# [DSN-33-11] ULisp 多言語フロントエンド（C99 / Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書
+## 〜 第一級ソース位置情報・統一束縛解決・AST 定数式評価・純粋 Scheme 数値塔・C99 構文/意味解析を統合し、DSN-33-13 バックエンドへ繋ぐ多言語フロントエンド基盤 〜
 
 > [!NOTE]
 > **【設計書体系の責務分離（Issue #911）】**  
-> 本設計書（`DSN-33-02`）は **多言語フロントエンド（Scheme ＆ C99）の共通基盤・構文解析・意味解析・CTFE・AST→LIR 降格境界** を規定する。  
-> - 型付き機械語 LIR・2層 Dialect 分離・`define-value-repr`・SysV ABI・Braun SSA・ELF リンカ・C バックエンド・Reference VM については **[[DSN-33-08] ULisp 型付き機械語 LIR ＆ 多重バックエンド設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)** へ移管・整理した。  
-> - 本設計書の C99 フロントエンドと `DSN-33-08` バックエンドを用いた Lua 5.x C コードベースおよび musl libc のコンパイル・セルフホスト実証（S0〜S9 ロードマップ）については **[[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)** へ移管・整理した。
+> 本設計書（`DSN-33-11`）は **多言語フロントエンド（Scheme ＆ C99）の共通基盤・構文解析・意味解析・CTFE・AST→LIR 降格境界** を規定する。  
+> - 型付き機械語 LIR・2層 Dialect 分離・`define-value-repr`・SysV ABI・Braun SSA・ELF リンカ・C バックエンド・Reference VM については **[[DSN-33-13] ULisp 型付き機械語 LIR ＆ 多重バックエンド設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)** へ移管・整理した。  
+> - 本設計書の C99 フロントエンドと `DSN-33-13` バックエンドを用いた Lua 5.x C コードベースおよび musl libc のコンパイル・セルフホスト実証（S0〜S9 ロードマップ）については **[[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)** へ移管・整理した。
 
-- **文書番号**: `DSN-33-02`
+- **文書番号**: `DSN-33-11` *(旧 `DSN-33-02`)*
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**: 
-  - [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
-  - [[DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
-  - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書 (旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
-  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書 (旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
-  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書 (旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
-  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-12] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-13] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
+  - [[DSN-33-21] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
+  - [[DSN-33-22] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+  - [[DSN-33-23] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md)
+  - [[DSN-33-31] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-41] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
 - **文書ステータス**: `APPROVED / ARCHITECTURE-BLUEPRINT`
 - **対象サブシステム**:
   - `ulisp/frontend/` (Scheme CST to HIR, 構文位置情報 Span 伝播, 統一識別子 Binding)
@@ -41,7 +41,7 @@
   - [1.2 「C 言語サポート」を Scheme コンパイラ／メタコンパイラの飛躍台とする思想](#12-c-言語サポートを-scheme-コンパイラメタコンパイラの飛躍台とする思想)
 - [2. Clang フロントエンド対比 ＆ サブシステム責務マトリクス](#2-clang-フロントエンド対比--サブシステム責務マトリクス)
   - [2.1 フロントエンドパイプライン構成の完全マッピング](#21-フロントエンドパイプライン構成の完全マッピング)
-  - [2.2 フロントエンドとバックエンド（DSN-33-08）のシステム境界](#22-フロントエンドとバックエンドdsn-33-08のシステム境界)
+  - [2.2 フロントエンドとバックエンド（DSN-33-13）のシステム境界](#22-フロントエンドとバックエンドdsn-33-08のシステム境界)
 - [3. 多言語フロントエンド共通基盤アーキテクチャ](#3-多言語フロントエンド共通基盤アーキテクチャ)
   - [3.1 第一級ソース位置情報 (Source Span) と来歴追跡 (Issue #824)](#31-第一級ソース位置情報-source-span-と来歴追跡-issue-824)
   - [3.2 統一束縛解決 (Binding ID) とレキシカルスコープ基盤 (Issue #837)](#32-統一束縛解決-binding-id-とレキシカルスコープ基盤-issue-837)
@@ -51,7 +51,7 @@
 - [4. C99 フロントエンド詳細構成 ＆ LIR Lowering 境界仕様](#4-c99-フロントエンド詳細構成--lir-lowering-境界仕様)
   - [4.1 Compiler Driver ＆ 純粋 Scheme C99 プリプロセッサ](#41-compiler-driver--純粋-scheme-c99-プリプロセッサ)
   - [4.2 C99 Lexer / Parser / Sema と構造体・関数ポインタ型検査](#42-c99-lexer--parser--sema-と構造体関数ポインタ型検査)
-  - [4.3 `lower_to_lir.scm` と DSN-33-08 Core Machine LIR 接続契約](#43-lower_to_lirscm-と-dsn-33-08-core-machine-lir-接続契約)
+  - [4.3 `lower_to_lir.scm` と DSN-33-13 Core Machine LIR 接続契約](#43-lower_to_lirscm-と-dsn-33-08-core-machine-lir-接続契約)
 - [5. プリコンパイル済みヘッダ (PCH / `.sbi` 拡張) による高速化 (Issue #839)](#5-プリコンパイル済みヘッダ-pch--sbi-拡張-による高速化-issue-839)
 - [6. フロントエンド関連 Issue トレーサビリティ ＆ 関連仕様書への委譲マップ](#6-フロントエンド関連-issue-トレーサビリティ--関連仕様書への委譲マップ)
 
@@ -61,9 +61,9 @@
 
 ### 1.1 目的：Scheme と C99 を共通基盤で捌く多言語フロントエンド
 
-本設計書（`DSN-33-02`）は、上位文書 [[DSN-33] ULISP 包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) および [[DSN-33-01] パス融合＆DAG設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) を継承し、**ULisp のフロントエンドにおいて Scheme（S式）と C99 言語を共通のコンパイラ基盤（Span・Binding ID・CTFE・数値塔・Diagnostic）上で統一的に処理し、[[DSN-33-08]](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md) のバックエンドへ引き渡すフロントエンドアーキテクチャ**を規定する。
+本設計書（`DSN-33-11`）は、上位文書 [[DSN-33] ULISP 包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) および [[DSN-33-12] パス融合＆DAG設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md) を継承し、**ULisp のフロントエンドにおいて Scheme（S式）と C99 言語を共通のコンパイラ基盤（Span・Binding ID・CTFE・数値塔・Diagnostic）上で統一的に処理し、[[DSN-33-13]](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md) のバックエンドへ引き渡すフロントエンドアーキテクチャ**を規定する。
 
-なお、本設計書の C99 フロントエンドを用いて実際に **C 言語版 Lua 5.x および musl libc をコンパイル・セルフホスト実証する全体計画と Lua 特有要件** は、[[DSN-33-09]](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md) に独立して規定する。
+なお、本設計書の C99 フロントエンドを用いて実際に **C 言語版 Lua 5.x および musl libc をコンパイル・セルフホスト実証する全体計画と Lua 特有要件** は、[[DSN-33-32]](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md) に独立して規定する。
 
 ### 1.2 「C 言語サポート」を Scheme コンパイラ／メタコンパイラの飛躍台とする思想
 
@@ -71,7 +71,7 @@
 
 ```mermaid
 flowchart TD
-    subgraph CommonFE ["多言語フロントエンド共通基盤 (DSN-33-02)"]
+    subgraph CommonFE ["多言語フロントエンド共通基盤 (DSN-33-11)"]
         Span["(824) Source Span 第一級メタデータ"]
         Bind["(837) Binding ID ＆ 統一スコープ環境"]
         CTFE["(825) eval-in-language (CTFE 定数評価)"]
@@ -87,8 +87,8 @@ flowchart TD
 
     CommonFE --> Scheme
     CommonFE --> C99
-    Scheme -->|"Managed Dialect (DSN-33-08)"| BE["DSN-33-08 バックエンド層"]
-    C99 -->|"Core Machine LIR (DSN-33-08)"| BE
+    Scheme -->|"Managed Dialect (DSN-33-13)"| BE["DSN-33-13 バックエンド層"]
+    C99 -->|"Core Machine LIR (DSN-33-13)"| BE
 ```
 
 これにより以下の好循環を確立する：
@@ -108,16 +108,16 @@ flowchart TD
 | **C Preprocessor** | `ulisp/frontend_c/preprocessor.scm` | 新設 | `#include`, マクロ展開, `#if` 式評価（#825, #832） |
 | **Parser & Sema** | `ulisp/frontend_c/parser.scm` / `sema.scm` | 新設 | Lexer Hack 解消, 型検査, 構造体レイアウト, Binding ID（#837） |
 | **PCH** (`.pch`) | `ulisp/compiler/sbi.scm` | 拡張 | パース済みヘッダ AST の高速スナップショット保存（#839） |
-| **CodeGen Frontend** | `ulisp/frontend_c/lower_to_lir.scm` | 新設 | C AST $\to$ `DSN-33-08` Core Machine LIR 降格 |
+| **CodeGen Frontend** | `ulisp/frontend_c/lower_to_lir.scm` | 新設 | C AST $\to$ `DSN-33-13` Core Machine LIR 降格 |
 | **Diagnostics** | `ulisp/compiler/diagnostic.scm` | 統合 | Clang/Rustc 準拠エラー・警告レンダリング（#833） |
 
-### 2.2 フロントエンドとバックエンド（DSN-33-08）のシステム境界
+### 2.2 フロントエンドとバックエンド（DSN-33-13）のシステム境界
 
-1. **言語フロントエンド層（本書 `DSN-33-02` の範囲）**:
+1. **言語フロントエンド層（本書 `DSN-33-11` の範囲）**:
    - Scheme CST/AST と C99 AST は構文レベルでは独立するが、いずれも **Source Span（#824）** と **Binding ID（#837）** を保持し、**Diagnostic（#833）** を通じて診断を出力する。
-2. **LIR への出力契約（`DSN-33-08` への引き渡し境界）**:
-   - Scheme フロントエンドは GC・タグ付き値を扱う `Managed Dialect`（[[DSN-33-08 §2.2]](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md#22-managed-runtime-dialect-と-pass-131-lowering-issue-835)）を出力する。
-   - C99 フロントエンドは `Managed Dialect` を完全にバイパスし、最初から `Core Machine LIR`（[[DSN-33-08 §2.1]](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md#21-core-machine-lir-の厳格な命令セットと型体系-issue-826)）を直接出力する。
+2. **LIR への出力契約（`DSN-33-13` への引き渡し境界）**:
+   - Scheme フロントエンドは GC・タグ付き値を扱う `Managed Dialect`（[[DSN-33-13 §2.2]](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md#22-managed-runtime-dialect-と-pass-131-lowering-issue-835)）を出力する。
+   - C99 フロントエンドは `Managed Dialect` を完全にバイパスし、最初から `Core Machine LIR`（[[DSN-33-13 §2.1]](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md#21-core-machine-lir-の厳格な命令セットと型体系-issue-826)）を直接出力する。
 
 ---
 
@@ -140,7 +140,7 @@ flowchart TD
   (node-id      span-node-id))
 ```
 - **透過伝播規約**: Nanopass の `define-pass` 出力生成マクロは、入力ノードが置換される際にデフォルトで親ノードの `source-span` を自動維持する。
-- **恩恵**: C の `#define` マクロ展開エラー追跡、Scheme の構文エラー・スタックトレース、および [[DSN-33-04]](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) の DWARF デバッグシンボル生成精度が飛躍する。
+- **恩恵**: C の `#define` マクロ展開エラー追跡、Scheme の構文エラー・スタックトレース、および [[DSN-33-22]](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) の DWARF デバッグシンボル生成精度が飛躍する。
 
 ### 3.2 統一束縛解決 (Binding ID) とレキシカルスコープ基盤 (Issue #837)
 
@@ -150,7 +150,7 @@ C 言語の複雑な識別子スコープ（通常識別子、タグ名 `struct`
 
 ### 3.3 AST 定数式評価器 (`eval-in-language`) ＆ コンパイル時計算 (CTFE) (Issue #825)
 
-Nanopass 言語定義に基づき、純粋式ノードを走査してコンパイル時に値を評価する Tree-walk 評価器を標準装備する（ステージ多相メタコンパイラ [[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) の `eval-in-stage` と統合済み）。
+Nanopass 言語定義に基づき、純粋式ノードを走査してコンパイル時に値を評価する Tree-walk 評価器を標準装備する（ステージ多相メタコンパイラ [[DSN-33-21]](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md) の `eval-in-stage` と統合済み）。
 - **C 言語側での用途**: `#if` / `#elif` プリプロセッサ定数式の評価、`enum` 列挙定数の値確定、静的配列長 `int a[sizeof(struct foo)];` や `offsetof` のコンパイル時計算。
 - **Scheme 側での用途**: マクロ展開時計算、CP0 最適化パスにおける定数伝播・定数畳み込み。
 
@@ -177,7 +177,7 @@ error[C0042]: incompatible types when assigning to type 'int' from type 'double'
 
 ## 4. C99 フロントエンド詳細構成 ＆ LIR Lowering 境界仕様
 
-C99 フロントエンド（`ulisp/frontend_c/`）は、C 言語で書かれた実用アプリケーション（[[DSN-33-09]](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md) で扱う Lua 5.x および musl libc）をコンパイルするための 4 段構成パイプラインを採る。
+C99 フロントエンド（`ulisp/frontend_c/`）は、C 言語で書かれた実用アプリケーション（[[DSN-33-32]](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md) で扱う Lua 5.x および musl libc）をコンパイルするための 4 段構成パイプラインを採る。
 
 ### 4.1 Compiler Driver ＆ 純粋 Scheme C99 プリプロセッサ
 
@@ -192,12 +192,12 @@ C99 フロントエンド（`ulisp/frontend_c/`）は、C 言語で書かれた�
    - **複合型レイアウト計算**: SysV AMD64 ABI 準拠の `struct` / `union` メンバオフセット、アライメント、パディング、ビットフィールド幅の確定。
    - **関数ポインタと可変長引数**: `int (*)(lua_State *)` 等の関数ポインタ型シグネチャと `<stdarg.h>` 組み込み型の解決。
 
-### 4.3 `lower_to_lir.scm` と DSN-33-08 Core Machine LIR 接続契約
+### 4.3 `lower_to_lir.scm` と DSN-33-13 Core Machine LIR 接続契約
 
-`ulisp/frontend_c/lower_to_lir.scm` は、型検査済み C AST を `DSN-33-08` の **Core Machine LIR** へ変換するフロントエンド最終段である。
-- ローカル変数は `%alloca` として宣言し、アドレス取得（`&var`）されない純粋スカラ変数を `DSN-33-08` の Pass 132 Braun SSA へ委ねる。
+`ulisp/frontend_c/lower_to_lir.scm` は、型検査済み C AST を `DSN-33-13` の **Core Machine LIR** へ変換するフロントエンド最終段である。
+- ローカル変数は `%alloca` として宣言し、アドレス取得（`&var`）されない純粋スカラ変数を `DSN-33-13` の Pass 132 Braun SSA へ委ねる。
 - 制御構造（`if`, `while`, `for`, `do-while`, `switch-case`, `goto`）はすべて基本ブロックと `%jump` / `%branch-if` / `%switch` に展開する。
-- 外部関数および C 関数定義には `'sysv` 呼出規約（[[DSN-33-08 §3.2]](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md#32-呼出規約の多重化sysv-amd64-abi-vs-scheme-高速規約-issue-829)）を明示付与し、一切の GC ランタイム命令（Managed Dialect）を出力しない。
+- 外部関数および C 関数定義には `'sysv` 呼出規約（[[DSN-33-13 §3.2]](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md#32-呼出規約の多重化sysv-amd64-abi-vs-scheme-高速規約-issue-829)）を明示付与し、一切の GC ランタイム命令（Managed Dialect）を出力しない。
 
 ---
 
@@ -211,7 +211,7 @@ C の巨大な標準ヘッダ群（musl libc ヘッダ等 約 2 万行）や Lua
 
 ## 6. フロントエンド関連 Issue トレーサビリティ ＆ 関連仕様書への委譲マップ
 
-### 6.1 本設計書（DSN-33-02 フロントエンド基盤）担当 Issue 一覧
+### 6.1 本設計書（DSN-33-11 フロントエンド基盤）担当 Issue 一覧
 
 | Issue ID | 概要 | 対応章節 | ステータス |
 | :---: | :--- | :---: | :---: |
@@ -224,5 +224,5 @@ C の巨大な標準ヘッダ群（musl libc ヘッダ等 約 2 万行）や Lua
 
 ### 6.2 関連設計書への責務委譲マップ
 
-- **バックエンド・LIR・ABI・ELF リンカ・参照 VM**: [[DSN-33-08] ULisp 型付き機械語 LIR ＆ 多重バックエンド設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)（Issue #826, #827, #828, #829, #830, #831, #834, #835, #836, #838, #840, #889, #890）
-- **C99 フロントエンド経由の Lua 5.x コンパイル ＆ musl libc セルフホスト実証（S0〜S9 ロードマップ・4大裁定規準・DDC）**: [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+- **バックエンド・LIR・ABI・ELF リンカ・参照 VM**: [[DSN-33-13] ULisp 型付き機械語 LIR ＆ 多重バックエンド設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)（Issue #826, #827, #828, #829, #830, #831, #834, #835, #836, #838, #840, #889, #890）
+- **C99 フロントエンド経由の Lua 5.x コンパイル ＆ musl libc セルフホスト実証（S0〜S9 ロードマップ・4大裁定規準・DDC）**: [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)

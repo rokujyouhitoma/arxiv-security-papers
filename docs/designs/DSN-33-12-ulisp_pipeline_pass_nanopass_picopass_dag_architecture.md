@@ -1,16 +1,16 @@
-# [DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書
+# [DSN-33-12] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書
 
-- **文書番号**: `DSN-33-01`
+- **文書番号**: `DSN-33-12` *(旧 `DSN-33-01`)*
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**: 
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
-  - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
-  - [[DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
-  - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書 (旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
-  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書 (旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
-  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書 (旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
-  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-11] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
+  - [[DSN-33-13] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
+  - [[DSN-33-21] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
+  - [[DSN-33-22] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+  - [[DSN-33-23] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-23-ulisp_endogenous_meta_tracing_jit_architecture.md)
+  - [[DSN-33-31] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-41] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
 - **文書ステータス**: `APPROVED`
 - **対象サブシステム**:
   - `ulisp/compiler/` (`nanopass.scm`, `nanopass_meta.scm`, `pass_manager.scm`, `verifier.scm`, `driver.scm`, `scope.scm`, `dataflow.scm`)
@@ -18,9 +18,6 @@
   - `ulisp/lir/` (`lir_lang.scm`, `lir_verifier.scm`, `123_lir_closures.scm` 〜 `133_lir_peephole.scm`)
   - `ulisp/backend/` (`backend_lang.scm`, `140_backend_x86_64.scm` 〜 `160_backend_c.scm`)
 - **関連設計書**:
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
-  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
   - [[DSN-31] ILisp R7RS Core Architecture Specification](DSN-31-ilisp_r7rs_intelligence_lisp_architecture_specification.md)
   - [[DSN-32] AILisp Agent Lisp Architecture Specification](DSN-32-ailisp_agent_lisp_architecture_specification.md)
   - [[DSN-37] Synapse Dual-Plane Concurrent Runtime Architecture](DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)
@@ -308,7 +305,7 @@ AST の総ノード数を $N$、パイプライン内の走査パス数を $P$�
 
 Issue #770 において、`ulisp/build/ulisp-modular`（Stage 3 バイナリ）上で `--time-passes` を用いて実測プロファイルを採取し、Pass Fusion 導入前後の性能特性を実証した。
 
-| 評価指標 | 旧アーキテクチャ（Pass Fusion 導入前） | 新アーキテクチャ（DSN-33-01 Pass Fusion 完了後） | 実測改善効果 |
+| 評価指標 | 旧アーキテクチャ（Pass Fusion 導入前） | 新アーキテクチャ（DSN-33-12 Pass Fusion 完了後） | 実測改善効果 |
 | :--- | :--- | :--- | :--- |
 | **脱糖パス走査回数** | 4 回（`026`, `027`, `028`, `029` を個別走査） | **1 回（`pass-030-desugar` へ完全融合）** | **走査回数 75% 削減** |
 | **脱糖時ヒープ割り当て量** | 120 KB 〜 240 KB（各走査で中間 AST を全複製） | **34 KB 〜 36 KB**（$O(1)$ ディスパッチと構造共有） | **ヒープ消費量 約 70% 削減** |
@@ -617,7 +614,7 @@ Picopass 統合後は、各ノードが書き換えられる際に **「どの N
 
 ## 9. 実装タスク分解と段階的マイグレーション・ロードマップ（全6フェーズ・18タスク）
 
-本設計（`DSN-33-01`）を既存のセルフホスティングブートストラップ（Stage 1 〜 Stage 3）および全テストスイートを一度も壊すことなく完遂するため、以下の **全6フェーズ・18タスク（`T1.1` 〜 `T6.3`）** に分解して段階的に推進する。
+本設計（`DSN-33-12`）を既存のセルフホスティングブートストラップ（Stage 1 〜 Stage 3）および全テストスイートを一度も壊すことなく完遂するため、以下の **全6フェーズ・18タスク（`T1.1` 〜 `T6.3`）** に分解して段階的に推進する。
 
 ### 9.1 ロードマップ全体俯瞰とタスク依存関係図
 
@@ -724,8 +721,8 @@ flowchart TD
 | **T6.2** | [#769](../issues/closed/769-implement-picopass-provenance-tracing-and-auto-bisect.md) | Provenance 来歴トレースと Rule-level Auto-Bisect 実装 | `compiler/nanopass_meta.scm`<br>`compiler/pass_manager.scm`<br>`tests/test_nanopass_tracer.scm` | 【完了】・発火した Picopass 名を記録・表示する細粒度 AST Diff トレーサを実装。<br>・`disable-picopass!` と二分探索により不具合原因ルールを自動特定する Auto-Bisect 機能を実装。 |
 | **T6.3** | [#770](../issues/closed/770-verify-stage3-self-hosting-fixed-point-and-benchmark-pass-fusion.md) | 3段階セルフホスティング不動点検証 ＆ 性能ベンチマーク測定 | `ulisp/compiler.scm`<br>`ulisp/Makefile`<br>`benchmarks/` | 【完了 (2026-11-13)】<br>・`compiler.scm` を再生成し、5モジュール全 Stage 2/Stage 3 のバイナリ・アセンブリ完全一致（0バイト差分）を実証。<br>・`--time-passes` による実測プロファイル採取により、脱糖走査 75% 削減・ヒープ消費 70% 削減・ブートストラップ 2.4x 高速化を実証。 |
 
-#### Phase 7：DSN-33-03 ステージ多相部分評価パスの常設統合と CTFE 一本化
-DSN-33-03 で完成した二村射影・ステージ多相部分評価エンジンを Pass Manager 標準パイプラインへ正式統合する。
+#### Phase 7：DSN-33-21 ステージ多相部分評価パスの常設統合と CTFE 一本化
+DSN-33-21 で完成した二村射影・ステージ多相部分評価エンジンを Pass Manager 標準パイプラインへ正式統合する。
 
 | タスク ID | Issue ID | タスク名 | 対象ファイル | 主な実装内容と完了条件 (DoD) |
 | :---: | :---: | :--- | :--- | :--- |

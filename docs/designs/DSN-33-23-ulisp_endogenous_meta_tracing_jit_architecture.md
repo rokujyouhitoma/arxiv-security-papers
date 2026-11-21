@@ -1,22 +1,22 @@
-# [DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括的設計書 (旧 DSN-34)
+# [DSN-33-23] ULisp 内因的メタトレーシング JIT アーキテクチャ包括的設計書 (旧 DSN-34)
 ## 〜 限定継続（shift/reset）と ULisp LIR に基づく Pure Scheme 内因的動的最適化 ＆ ネイティブ実行エンジン 〜
 
 > [!IMPORTANT]
 > **【統合完了・移行案内 (Consolidated into DSN-33)】**  
-> 本設計書（旧 DSN-34）は、**Issue #514** の決定（「ulisp と mlisp を RPython スタイルの単一統合フレームワークへ一本化し、`/mlisp/` ディレクトリを完全消去する」方針）に基づき、**[[DSN-33] ULISP 包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) の第 7 章（RPython スタイル 3 層統合アーキテクチャと内因的メタトレーシング JIT）へと昇格・完全統合され、枝番号仕様書 `DSN-33-05` として再編されました。**  
+> 本設計書（旧 DSN-34）は、**Issue #514** の決定（「ulisp と mlisp を RPython スタイルの単一統合フレームワークへ一本化し、`/mlisp/` ディレクトリを完全消去する」方針）に基づき、**[[DSN-33] ULISP 包括設計仕様書](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md) の第 7 章（RPython スタイル 3 層統合アーキテクチャと内因的メタトレーシング JIT）へと昇格・完全統合され、枝番号仕様書 `DSN-33-23` として再編されました。**  
 > 旧 `mlisp/` 配下の全モジュールは `ulisp/jit/` および `ulisp/driver/` へ移設され、`/mlisp/` ディレクトリは完全消去されています。今後の最新仕様・アーキテクチャ正典（SSOT）はすべて **[DSN-33](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)** および本仕様書を参照してください。
 
-- **文書番号**: `DSN-33-05` (旧 `DSN-34`)
+- **文書番号**: `DSN-33-23` *(旧 `DSN-33-05` / 旧 `DSN-34`)*
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**:
-  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE 設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
-  - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
-  - [[DSN-33-04] ULisp 言語ワークベンチ・インタプリタ自動生成 ＆ ゲスト言語ランタイム設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
-  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
-  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
-  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
-  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-11] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE 設計書](DSN-33-11-ulisp_multilingual_frontend_and_ctfe_architecture.md)
+  - [[DSN-33-12] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](DSN-33-12-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
+  - [[DSN-33-13] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド設計書](DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
+  - [[DSN-33-21] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
+  - [[DSN-33-22] ULisp 言語ワークベンチ・インタプリタ自動生成 ＆ ゲスト言語ランタイム設計書](DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+  - [[DSN-33-31] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-31-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-32] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証設計書](DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
+  - [[DSN-33-41] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
 - **文書ステータス**: `CONSOLIDATED_INTO_DSN_33 / ACTIVE_SUBSPEC`
 - **対象サブシステム**: `ulisp/jit/` (旧 `mlisp/`: Delimited Continuations, Endogenous Meta-Tracer, Virtualization Optimizer, ULisp LIR Bridge, Pure Scheme JIT Runtime)
 - **設計基本原則**: **【Pure Scheme 原則】C 言語での実装を極限まで排除し、トレーサ・オプティマイザ・JIT アセンブラ・メモリバッファ管理に至る全パイプラインを 100% Scheme 自身で実装しきる同図像的（Homoiconic）自己完結アーキテクチャ。**
