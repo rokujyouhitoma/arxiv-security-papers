@@ -650,6 +650,51 @@ class Repetition(Parser[List[T]]):
         return ParseResult(True, results, curr_pos)
 
 
+class Gather(Parser[List[T]]):
+    """Matches a separated list of elements (e.g. sep.elem+ or sep.elem*).
+
+    Conforms to CPython PEP 617 separated list semantics:
+    Matches elements separated by separator without including separator in results.
+    """
+
+    def __init__(
+        self,
+        separator: Parser[Any],
+        element: Parser[T],
+        is_one_or_more: bool = True,
+        name: Optional[str] = None,
+    ) -> None:
+        super().__init__(name or f"Gather(min={1 if is_one_or_more else 0})")
+        self.separator = separator
+        self.element = element
+        self.is_one_or_more = is_one_or_more
+
+    def _collect_rest(self, ctx: ParseContext, start_pos: int, results: List[T]) -> int:
+        curr_pos = start_pos
+        while True:
+            sep_res = self.separator._eval_cached(ctx, curr_pos)
+            if not sep_res.success:
+                break
+            elem_res = self.element._eval_cached(ctx, sep_res.next_pos)
+            if not elem_res.success or elem_res.next_pos == curr_pos:
+                break
+            results.append(cast(T, elem_res.value))
+            curr_pos = elem_res.next_pos
+        return curr_pos
+
+    def parse_at(self, ctx: ParseContext, pos: int) -> ParseResult[List[T]]:
+        first_res = self.element._eval_cached(ctx, pos)
+        if not first_res.success:
+            if not self.is_one_or_more:
+                return ParseResult(True, [], pos)
+            msg = first_res.error_msg or "Expected element in gathered list"
+            return ParseResult(False, None, pos, msg)
+
+        results: List[T] = [cast(T, first_res.value)]
+        curr_pos = self._collect_rest(ctx, first_res.next_pos, results)
+        return ParseResult(True, results, curr_pos)
+
+
 class OptionalParser(Parser[Optional[T]]):
     """Optional match e?. Always succeeds, consuming input only if child matches."""
 
