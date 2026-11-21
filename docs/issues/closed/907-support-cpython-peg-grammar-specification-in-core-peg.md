@@ -2,7 +2,8 @@
 ID: 907
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
+完了日: 2026-11-21
 ---
 
 # [FEAT/ENH] Support CPython PEG Grammar Specification in src/core/peg (ID: 907)
@@ -170,12 +171,12 @@ Target Branch: `feat/907-support-cpython-peg-grammar-specification-in-core-peg`
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ast_nodes.py` に `GatherExpr` が定義され、`RuleDef`, `GrammarDef` が CPython メタデータに対応していること。
-- [ ] `runtime.py` に `Gather` コンビネータが実装され、単体で正しく動作すること（空マッチ無限ループ防止を含む）。
-- [ ] `parser.py` が CPython PEG 構文（`rule:`, `| alt`, `name=expr`, `[expr]`, `~`, `sep.rule+`, `rule[type]:` 等）をエラーなくパースできること。
-- [ ] `backend/python.py` および `backend/javascript.py` が `GatherExpr` を含む CPython PEG 構文から有効なコードを生成できること。
-- [ ] Bryan Ford 記法（`<-`, `/`, `name:expr`, `[a-z]`）との 100% 後方互換性が維持されていること。
-- [ ] CPython 公式 `python.gram` の主要構文ブロックがパース可能であることがテストで実証されていること。
-- [ ] 新規テスト `tests/core/peg/compiler/test_cpython_grammar.py` を含む全テスト（75+件）が 100% PASS すること（`.venv/bin/pytest tests/core/peg/`）。
-- [ ] `make py_compile && make static_analysis` がエラー 0 件で PASS すること。
-- [ ] すべてのファイル参照において相対パス規則が厳格に守られていること。
+- [x] `ast_nodes.py` に `GatherExpr` が定義され、`RuleDef`, `GrammarDef` が CPython メタデータに対応していること。
+- [x] `runtime.py` に `Gather` コンビネータが実装され、単体で正しく動作すること（空マッチ無限ループ防止を含む）。
+- [x] `parser.py` が CPython PEG 構文（`rule:`, `| alt`, `name=expr`, `[expr]`, `~`, `sep.rule+`, `rule[type]:` 等）をエラーなくパースできること。
+- [x] `backend/python.py` および `backend/javascript.py` が `GatherExpr` を含む CPython PEG 構文から有効なコードを生成できること。
+- [x] Bryan Ford 記法（`<-`, `/`, `name:expr`, `[a-z]`）との 100% 後方互換性が維持されていること。
+- [x] CPython 公式 `python.gram` の主要構文ブロックがパース可能であることがテストで実証されていること。
+- [x] 新規テスト `tests/core/peg/compiler/test_cpython_grammar.py` を含む全テスト（75+件）が 100% PASS すること（`.venv/bin/pytest tests/core/peg/`）。
+- [x] `make py_compile && make static_analysis` がエラー 0 件で PASS すること。
+- [x] すべてのファイル参照において相対パス規則が厳格に守られていること。
