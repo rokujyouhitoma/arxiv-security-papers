@@ -792,3 +792,15 @@ def test_bare_metal_freestanding_gc_suite():
         )
         assert "[3/3] Testing nested object integrity across GC cycles: PASS" in output
         assert "=== [SUCCESS] Freestanding Demand-Paged BSS GC Verified ===" in output
+
+
+def test_bare_metal_freestanding_e2e_suite():
+    """Verify freestanding static -nostdlib ELF E2E execution and zero dynamic dependencies (Issue #906)."""
+    script_path = os.path.join(ULISP_DIR, "tests", "test_freestanding_e2e.sh")
+    assert os.path.exists(script_path), f"E2E script not found: {script_path}"
+
+    ret = subprocess.run(["bash", script_path], capture_output=True, text=True)
+    assert (
+        ret.returncode == 0
+    ), f"Freestanding E2E script failed:\n{ret.stdout}\n{ret.stderr}"
+    assert "All Freestanding Static -nostdlib ELF E2E Criteria Satisfied!" in ret.stdout

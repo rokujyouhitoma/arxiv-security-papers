@@ -34599,6 +34599,7 @@
     (emit "ulisp_io_buf:")
     (emit "    .space 32")
     ;; BSS Demand-Paged Initial Heap (16MB) - Conforms to DSN-33-07 / Issue #905
+    (emit "    .bss")
     (emit "    .align 16")
     (emit "    .globl ulisp_initial_heap")
     (emit "    .weak ulisp_initial_heap")
