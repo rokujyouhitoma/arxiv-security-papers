@@ -25830,7 +25830,7 @@
   (entry Program)
   (terminals
     (symbol (x lbl var cond_op sp_lbl mty))
-    (integer (n offset shift frame_size bytes tag si cnt bitmap line col))
+    (integer (n offset shift frame_size bytes tag si cnt bitmap line col al_val))
     (string (str fn_name))
     (boolean (bool_val)))
   (Register (reg)
@@ -26023,7 +26023,7 @@
   (entry Program)
   (terminals
     (symbol (x lbl var cond_op sp_lbl mty))
-    (integer (n offset shift frame_size bytes tag si cnt bitmap line col))
+    (integer (n offset shift frame_size bytes tag si cnt bitmap line col al_val))
     (string (str fn_name))
     (boolean (bool_val)))
   (Register (reg)
