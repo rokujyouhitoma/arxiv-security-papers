@@ -6,6 +6,10 @@
   - [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
   - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）統合 ＆ 型付き機械語 LIR・ゼロコスト ABI アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
   - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
+  - [[DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
+  - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書 (旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
+  - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書 (旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
+  - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書 (旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
 - **文書ステータス**: `APPROVED / FULLY-CONSOLIDATED`
 - **対象サブシステム**:
   - `ulisp/` (ULISP コアプロジェクト / S式メタコンパイラ統合フレームワーク)
@@ -20,7 +24,9 @@
   - `ilisp/backend/ulisp_codegen/` (ILisp 連携: DSN-31 Backend B 向け ULisp AOT トランスパイラ)
   - `docs/designs/` (設計書体系)
 - **統合設計書**:
-  - **[DSN-34 (内因的メタトレーシング JIT 設計書)](DSN-34-mlisp_endogenous_meta_tracing_jit_architecture_specification.md) は Issue #514 の決定に基づき本 DSN-33 第 7 章へ完全統合・昇格完了。**
+  - **[DSN-33-05 (内因的メタトレーシング JIT 設計書 / 旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md) は Issue #514 の決定に基づき本 DSN-33 第 7 章へ完全統合・昇格完了。**
+  - **[DSN-33-06 (継続的ベンチマークフレームワーク / 旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md) は AOT/JIT 統合ベンチマーク仕様として昇格。**
+  - **[DSN-33-07 (Zero-libc ベアメタルランタイム / 旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) は自立型実行基盤仕様として昇格。**
 - **関連設計書**:
   - [DSN-01 (High-Level Architecture)](DSN-01-high_level_design.md)
   - [DSN-29 (Python-LISP Integrated Architecture Specification - pylisp)](DSN-29-python_lisp_integrated_architecture_specification.md)

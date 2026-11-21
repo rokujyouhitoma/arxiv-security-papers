@@ -94,13 +94,14 @@
   - `alisp/`, `ilisp/` — 3大境界制御プリミティブ（`with-fuel`, `with-caps`, `define/c`）・S式構造化自己修復プロトコル（`diagnostic` / `patch`）・Managed Virtual Port・Bounded Autonomy（無暴走・無破壊・超省トークン）保証。
 - ⚡ **[[DSN-33] ULISP (Underlying LISP) x86-64 ネイティブ AOT コンパイラ包括設計仕様書](designs/DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)**
   - `ulisp/`, `ilisp/backend/ulisp_codegen/` — Gauche ブートストラップから x86-64 Linux ELF 直結・Tagged Pointer・バンプアロケータ・TCO/フラットクロージャ・ILisp AOT バックエンド統合・3段階セルフホスティング。
-  - 補足仕様: **[[DSN-33-01] ULISP 4層パス階層（Pipeline / Pass / Nanopass / Picopass）＆ 二次元 DAG 最適化アーキテクチャ設計仕様書](designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** — `define-picopass`/`femtopass`/`attopass` 宣言的規則 DSL、単一走査融合（`fuse-rules`）、既存 Nanopass フレームワーク再整理・統廃合、および 6フェーズ・18タスクの実装ロードマップ。
-- 🚀 **[[DSN-34] MLISP (Meta-tracing LISP) 内因性メタトレーシング JIT 包括設計仕様書](designs/DSN-34-mlisp_endogenous_meta_tracing_jit_architecture_specification.md)**
-  - `mlisp/` — ホットループ検知・トレース記録・オプティマイザ・ネイティブ機械語 JIT 設計。
-- 📈 **[[DSN-35] ILISP/ULISP AOT/JIT 継続的性能ベンチマークフレームワーク設計書](designs/DSN-35-ilisp_ulisp_aot_jit_continuous_benchmarking_framework.md)**
-  - `benchmarks/` — AOT/JIT 性能測定・回帰検知・CI パイプライン統合ベンチマーク仕様。
-- 🛡️ **[[DSN-36] Zero-libc Pure Scheme ベアメタルランタイム包括設計仕様書](designs/DSN-36-zero_libc_pure_scheme_bare_metal_runtime.md)**
-  - `ulisp/lib/posix.scm` — libc/Cランタイム完全排除・Linux Raw Syscall・静的単一バイナリ自立型実行設計。
+  - 補足仕様:
+    - **[[DSN-33-01] ULISP 4層パス階層（Pipeline / Pass / Nanopass / Picopass）＆ 二次元 DAG 最適化アーキテクチャ設計仕様書](designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** — `define-picopass`/`femtopass`/`attopass` 宣言的規則 DSL、単一走査融合（`fuse-rules`）、既存 Nanopass フレームワーク再整理・統廃合。
+    - **[[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）統合 ＆ 型付き機械語 LIR・ゼロコスト ABI アーキテクチャ設計書](designs/DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)** — C99/Scheme 多言語フロント、統一識別子 Binding、MIR to LIR lower、型付き機械語。
+    - **[[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](designs/DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)** — ステージ多相評価器（`eval-in-stage`）、オフライン BTA 4値束推論、Direct Cogen、ELF `.rodata` 不変グラフシリアライザ。
+    - **[[DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)** — 単一評価器定義からの完全構文解析器・AOT CLI・DWARF デバッグ・JIT ガード自動合成。
+    - **[[DSN-33-05] ULisp 内因的メタトレーシング JIT 包括設計仕様書 (旧 DSN-34)](designs/DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)** — ホットループ検知・トレース記録・オプティマイザ・ネイティブ機械語 JIT 設計。
+    - **[[DSN-33-06] ILisp/ULisp AOT/JIT 継続的性能ベンチマークフレームワーク設計書 (旧 DSN-35)](designs/DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)** — AOT/JIT 性能測定・回帰検知・CI パイプライン統合ベンチマーク仕様。
+    - **[[DSN-33-07] ULisp Zero-libc Pure Scheme ベアメタルランタイム包括設計仕様書 (旧 DSN-36)](designs/DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)** — libc/Cランタイム完全排除・Linux Raw Syscall・静的単一バイナリ自立型実行設計。
 - ⚡ **[[DSN-37] ホスト・カーネル分離型 階層 CSP/アクター・ハイブリッド並行処理基盤 ＆ AOT パイプライン仕様書](designs/DSN-37-synapse_dual_plane_concurrent_runtime_architecture.md)**
   - `runtime/synapse-core.scm` — R7RS 制御層とアフィン純粋計算層の二層分離・P2P ゼロコピー Move・FBIP・Fuel 強プリエンプション・M:N ロックフリー並列基盤。
 
