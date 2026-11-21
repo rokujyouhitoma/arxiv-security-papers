@@ -99,10 +99,11 @@
 
 ;; Predicates
 (define (lir-node? node)
-  (and (pair? node)
-       (symbol? (car node))
-       (memq (car node) '(LIR-CONST LIR-SLOT-REF LIR-SLOT-SET! LIR-BINOP
-                         LIR-UNOP LIR-IF LIR-SEQ LIR-CALL LIR-RETURN))))
+  (let ((n (if (ast-has-span? node) (ast-strip-span node) node)))
+    (and (pair? n)
+         (symbol? (car n))
+         (memq (car n) '(LIR-CONST LIR-SLOT-REF LIR-SLOT-SET! LIR-BINOP
+                           LIR-UNOP LIR-IF LIR-SEQ LIR-CALL LIR-RETURN)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Dual Source Span Integration (DSN-33-04 §5, Issue #896)
@@ -127,34 +128,53 @@
   (let ((depth (if (pair? maybe-depth) (car maybe-depth) 0)))
     (if (> depth *cogen-max-recursion-depth*)
         (error "cogen-lower-ast: recursion depth limit exceeded (CWE-400 mitigation)" 'depth-limit-exceeded)
-        (cond
-          ((number? node)
-           (make-lir-const node))
-          ((boolean? node)
-           (make-lir-const node))
-          ((string? node)
-           (make-lir-const node))
-          ((symbol? node)
-           ;; Variable reference: resolve slot in frame descriptor
-           (let ((slot-idx (gfd-lookup-slot gfd node)))
-             (if slot-idx
-                 (make-lir-slot-ref slot-idx node)
-                 ;; New slot allocated dynamically if not present
-                 (let ((new-idx (gfd-add-slot! gfd node 'any)))
-                   (make-lir-slot-ref new-idx node)))))
-          ((pair? node)
-           (let* ((tag (car node))
-                  (handler (assoc tag rules)))
-             (if handler
-                 ((cdr handler) node rules gfd runtime-model (+ depth 1))
-                 (case tag
-                   ;; Standard arithmetic & comparison operations
-                   ((+ - * / % == != < <= > >=)
-                    (let ((lhs (cogen-lower-ast (cadr node) rules gfd runtime-model (+ depth 1)))
-                          (rhs (cogen-lower-ast (caddr node) rules gfd runtime-model (+ depth 1))))
-                      (if (or (eq? lhs 'depth-limit-exceeded) (eq? rhs 'depth-limit-exceeded))
-                          'depth-limit-exceeded
-                          (make-lir-binop tag lhs rhs))))
+        (if (ast-has-span? node)
+            (let* ((span (ast-source-span node))
+                   (inner (ast-strip-span node))
+                   (res (cogen-lower-ast inner rules gfd runtime-model depth)))
+              (if span
+                  (ast-with-span res span)
+                  res))
+            (cond
+              ((number? node)
+               (make-lir-const node))
+              ((boolean? node)
+               (make-lir-const (if node 1 0)))
+              ((string? node)
+               (make-lir-const node))
+              ((symbol? node)
+               ;; Variable reference: resolve slot in frame descriptor
+               (let ((slot-idx (gfd-lookup-slot gfd node)))
+                 (if slot-idx
+                     (make-lir-slot-ref slot-idx node)
+                     ;; New slot allocated dynamically if not present
+                     (let ((new-idx (gfd-add-slot! gfd node 'any)))
+                       (make-lir-slot-ref new-idx node)))))
+              ((pair? node)
+               (let* ((tag (car node))
+                      (handler (assoc tag rules)))
+                 (if handler
+                     ((cdr handler) node rules gfd runtime-model (+ depth 1))
+                     (case tag
+                       ;; Standard arithmetic & comparison operations
+                       ((+ - * / % == != < <= > >=)
+                        (let ((lhs (cogen-lower-ast (cadr node) rules gfd runtime-model (+ depth 1)))
+                              (rhs (cogen-lower-ast (caddr node) rules gfd runtime-model (+ depth 1))))
+                          (if (or (eq? lhs 'depth-limit-exceeded) (eq? rhs 'depth-limit-exceeded))
+                              'depth-limit-exceeded
+                              (make-lir-binop tag lhs rhs))))
+                       ((AND and)
+                        (let ((lhs (cogen-lower-ast (cadr node) rules gfd runtime-model (+ depth 1)))
+                              (rhs (cogen-lower-ast (caddr node) rules gfd runtime-model (+ depth 1))))
+                          (if (or (eq? lhs 'depth-limit-exceeded) (eq? rhs 'depth-limit-exceeded))
+                              'depth-limit-exceeded
+                              (make-lir-binop 'AND lhs rhs))))
+                       ((OR or)
+                        (let ((lhs (cogen-lower-ast (cadr node) rules gfd runtime-model (+ depth 1)))
+                              (rhs (cogen-lower-ast (caddr node) rules gfd runtime-model (+ depth 1))))
+                          (if (or (eq? lhs 'depth-limit-exceeded) (eq? rhs 'depth-limit-exceeded))
+                              'depth-limit-exceeded
+                              (make-lir-binop 'OR lhs rhs))))
                    ((not)
                     (let ((operand (cogen-lower-ast (cadr node) rules gfd runtime-model (+ depth 1))))
                       (if (eq? operand 'depth-limit-exceeded)
@@ -189,7 +209,7 @@
                           'depth-limit-exceeded
                           (make-lir-call tag compiled-args))))))))
           (else
-           (make-lir-const node))))))
+           (make-lir-const node)))))))
 
 ;;; Derives a compiler procedure from a declarative interpreter specification
 (define (derive-cogen-compiler interp-spec . maybe-runtime-model)
@@ -203,55 +223,62 @@
 
 ;; Pure Scheme reference interpreter for LIR trees (Ground Truth for Cogen)
 (define (lir-eval lir frame)
-  (case (car lir)
-    ((LIR-CONST)
-     (cadr lir))
-    ((LIR-SLOT-REF)
-     (let ((idx (cadr lir)))
-       (vector-ref frame idx)))
-    ((LIR-SLOT-SET!)
-     (let* ((idx (cadr lir))
-            (val (lir-eval (cadddr lir) frame)))
-       (vector-set! frame idx val)
-       val))
-    ((LIR-BINOP)
-     (let ((op (cadr lir))
-           (lhs (lir-eval (caddr lir) frame))
-           (rhs (lir-eval (cadddr lir) frame)))
-       (case op
-         ((+) (+ lhs rhs))
-         ((-) (- lhs rhs))
-         ((*) (* lhs rhs))
-         ((/) (quotient lhs rhs))
-         ((%) (modulo lhs rhs))
-         ((==) (= lhs rhs))
-         ((!=) (not (= lhs rhs)))
-         ((<) (< lhs rhs))
-         ((<=) (<= lhs rhs))
-         ((>) (> lhs rhs))
-         ((>=) (>= lhs rhs))
-         (else (error "Unsupported LIR binop" op)))))
-    ((LIR-UNOP)
-     (let ((op (cadr lir))
-           (val (lir-eval (caddr lir) frame)))
-       (case op
-         ((not) (if val #f #t))
-         ((-) (- val))
-         (else (error "Unsupported LIR unop" op)))))
-    ((LIR-IF)
-     (let ((cond-val (lir-eval (cadr lir) frame)))
-       (if (and cond-val (not (eq? cond-val 0)))
-           (lir-eval (caddr lir) frame)
-           (lir-eval (cadddr lir) frame))))
-    ((LIR-SEQ)
-     (let loop ((elts (cadr lir)) (last-val #f))
-       (if (null? elts)
-           last-val
-           (loop (cdr elts) (lir-eval (car elts) frame)))))
-    ((LIR-RETURN)
-     (lir-eval (cadr lir) frame))
-    (else
-     (error "Unknown LIR node in lir-eval" lir))))
+  (let ((n (if (ast-has-span? lir) (ast-strip-span lir) lir)))
+    (case (car n)
+      ((LIR-CONST)
+       (cadr n))
+      ((LIR-SLOT-REF)
+       (let ((idx (cadr n)))
+         (vector-ref frame idx)))
+      ((LIR-SLOT-SET!)
+       (let* ((idx (cadr n))
+              (val (lir-eval (cadddr n) frame)))
+         (vector-set! frame idx val)
+         val))
+      ((LIR-BINOP)
+       (let ((op (cadr n))
+             (lhs (lir-eval (caddr n) frame))
+             (rhs (lir-eval (cadddr n) frame)))
+         (case op
+           ((+) (+ lhs rhs))
+           ((-) (- lhs rhs))
+           ((*) (* lhs rhs))
+           ((/) (quotient lhs rhs))
+           ((%) (modulo lhs rhs))
+           ((==) (if (and (number? lhs) (number? rhs)) (= lhs rhs) (equal? lhs rhs)))
+           ((!=) (if (and (number? lhs) (number? rhs)) (not (= lhs rhs)) (not (equal? lhs rhs))))
+           ((<) (< lhs rhs))
+           ((<=) (<= lhs rhs))
+           ((>) (> lhs rhs))
+           ((>=) (>= lhs rhs))
+           ((AND and) (if (and (and lhs (not (eq? lhs 0)))
+                               (and rhs (not (eq? rhs 0))))
+                          1 0))
+           ((OR or) (if (or (and lhs (not (eq? lhs 0)))
+                            (and rhs (not (eq? rhs 0))))
+                        1 0))
+           (else (error "Unsupported LIR binop" op)))))
+      ((LIR-UNOP)
+       (let ((op (cadr n))
+             (val (lir-eval (caddr n) frame)))
+         (case op
+           ((not) (if val #f #t))
+           ((-) (- val))
+           (else (error "Unsupported LIR unop" op)))))
+      ((LIR-IF)
+       (let ((cond-val (lir-eval (cadr n) frame)))
+         (if (and cond-val (not (eq? cond-val 0)))
+             (lir-eval (caddr n) frame)
+             (lir-eval (cadddr n) frame))))
+      ((LIR-SEQ)
+       (let loop ((elts (cadr n)) (last-val #f))
+         (if (null? elts)
+             last-val
+             (loop (cdr elts) (lir-eval (car elts) frame)))))
+      ((LIR-RETURN)
+       (lir-eval (cadr n) frame))
+      (else
+       (error "Unknown LIR node in lir-eval" n)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. Standalone Compiler Driver Source Synthesis & .rodata Embedding

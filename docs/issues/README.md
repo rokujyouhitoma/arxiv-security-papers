@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 優先度 | 対象仕様書 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **897** | セキュリティ CTI フィルタ言語 cti-ql のリファレンス実装と E2E AOT コンパイル検証 | Feature | 未着手 (Open) | Medium | [DSN-33-04](../designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) | [897-implement-cti-ql-dsl-reference-implementation-and-e2e-verification.md](897-implement-cti-ql-dsl-reference-implementation-and-e2e-verification.md) |
 | **898** | 評価器ループに対する JIT マージポイントおよび型ガード注釈基盤の実装 | Feature | 未着手 (Open) | High | [DSN-33-05](../designs/DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md) | [898-implement-jit-loop-merge-point-and-guard-annotations.md](898-implement-jit-loop-merge-point-and-guard-annotations.md) |
 | **899** | ホットループ検出プロファイラおよび限定継続（shift/reset）線形トレースレコーダの実装 | Feature | 未着手 (Open) | High | [DSN-33-05](../designs/DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md) | [899-implement-hot-loop-profiler-and-linear-trace-recorder.md](899-implement-hot-loop-profiler-and-linear-trace-recorder.md) |
 | **900** | JIT トレース最適化（ガード除去・仮想化）および脱出 Deopt トランポリンの実装 | Feature | 未着手 (Open) | High | [DSN-33-05](../designs/DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md) | [900-implement-jit-trace-optimizer-and-guard-failure-deopt-trampoline.md](900-implement-jit-trace-optimizer-and-guard-failure-deopt-trampoline.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **897** | セキュリティ CTI フィルタ言語 cti-ql のリファレンス実装と E2E AOT コンパイル検証 | Feature | 2026-11-21 | [897-implement-cti-ql-dsl-reference-implementation-and-e2e-verification.md](closed/897-implement-cti-ql-dsl-reference-implementation-and-e2e-verification.md) |
 | **896** | Dual Source Span およびゲスト言語 DWARF .debug_line ソースマッピングエミッタの実装 | Feature | 2026-11-21 | [896-implement-dual-source-span-and-guest-dwarf-debug-line-emitter.md](closed/896-implement-dual-source-span-and-guest-dwarf-debug-line-emitter.md) |
 | **909** | ULisp コンパイラ（compiler.scm / ulisp-boot）への --cogen オプション統合およびサブコマンド化 | Feature | 2026-11-21 | [909-integrate-cogen-cli-option-into-ulisp-compiler.md](closed/909-integrate-cogen-cli-option-into-ulisp-compiler.md) |
 | **895** | 第2二村射影（Direct Cogen）によるスタンドアロン AOT コンパイラ CLI 生成ドライバの実装 | Feature | 2026-11-21 | [895-implement-direct-cogen-driver-and-compiler-cli-generator.md](closed/895-implement-direct-cogen-driver-and-compiler-cli-generator.md) |

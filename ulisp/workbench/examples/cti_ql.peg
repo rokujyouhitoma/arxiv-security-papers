@@ -1,0 +1,11 @@
+# CTI-QL (CTI Query Language) PEG Grammar
+# Conforms to DSN-33-04 §7 (CTI-QL Workbench Architecture), Issue #897
+
+query: expr NEWLINE* ENDMARKER
+expr: term ('OR' term)*
+term: factor ('AND' factor)*
+factor: '(' expr ')' | predicate
+predicate: field_name op_cmp literal_val
+field_name: 'threat' | 'ip-addr' | 'ip' | 'port' | 'cve-score' | 'cve'
+op_cmp: '==' | '!=' | '>=' | '<=' | '>' | '<'
+literal_val: STRING | NUMBER
