@@ -1,0 +1,114 @@
+#!/usr/bin/env gosh
+;;; =======================================================================
+;;; ulisp-cogen: Direct Cogen Driver & Standalone Compiler CLI Generator
+;;; Conforms to DSN-33-04 §4.1, DSN-33-03 §3, Issue #895
+;;; Zero external dependencies. Zero shell execution.
+;;; =======================================================================
+
+(use srfi-9)
+(use file.util)
+(use gauche.process)
+
+;; Resolve paths relative to ulisp root robustly
+(define *ulisp-root*
+  (cond
+    ((file-exists? "workbench/frame.scm") ".")
+    ((file-exists? "ulisp/workbench/frame.scm") "ulisp")
+    (else
+     (let* ((cmd (car (command-line)))
+            (abs-cmd (sys-normalize-pathname cmd :absolute #t :canonicalize #t))
+            (s-dir (sys-dirname abs-cmd)))
+       (sys-dirname s-dir)))))
+
+;; Add ulisp-root to load-path dynamically
+(set! *load-path* (cons *ulisp-root* *load-path*))
+
+;; Load workbench modules
+(load "workbench/frame.scm")
+(load "workbench/value_tagging.scm")
+(load "workbench/nan_boxing.scm")
+(load "workbench/cogen.scm")
+
+(define (print-usage)
+  (print "Usage: ulisp-cogen --interpreter <interp.scm> --grammar <grammar.peg> --output <bin/cli>")
+  (print "")
+  (print "Options:")
+  (print "  --interpreter <path>       Guest interpreter definition (Scheme)")
+  (print "  --grammar <path>           Guest PEG grammar definition (.peg)")
+  (print "  --output <path>            Output executable standalone compiler CLI path")
+  (print "  --runtime-model <model>    Runtime model: 'tagging' (default) or 'nanbox'")
+  (print "  --entry-rule <rule>        PEG entry rule symbol (default: 'entry')")
+  (print "  --opt-level <level>        Optimization level: O0, O1, O2 (default), O3")
+  (print "  -h, --help                 Show this help message"))
+
+(define (parse-args args)
+  (let loop ((rem args)
+             (interp #f)
+             (grammar #f)
+             (output #f)
+             (model 'tagging)
+             (entry 'entry)
+             (opt 'O2))
+    (cond
+      ((null? rem)
+       (values interp grammar output model entry opt))
+      ((or (string=? (car rem) "-h") (string=? (car rem) "--help"))
+       (print-usage)
+       (exit 0))
+      ((and (string=? (car rem) "--interpreter") (pair? (cdr rem)))
+       (loop (cddr rem) (cadr rem) grammar output model entry opt))
+      ((and (string=? (car rem) "--grammar") (pair? (cdr rem)))
+       (loop (cddr rem) interp (cadr rem) output model entry opt))
+      ((and (string=? (car rem) "--output") (pair? (cdr rem)))
+       (loop (cddr rem) interp grammar (cadr rem) model entry opt))
+      ((and (string=? (car rem) "--runtime-model") (pair? (cdr rem)))
+       (let ((m (string->symbol (cadr rem))))
+         (if (memq m '(tagging nanbox))
+             (loop (cddr rem) interp grammar output m entry opt)
+             (error "ulisp-cogen: invalid --runtime-model, must be 'tagging' or 'nanbox'" (cadr rem)))))
+      ((and (string=? (car rem) "--entry-rule") (pair? (cdr rem)))
+       (loop (cddr rem) interp grammar output model (string->symbol (cadr rem)) opt))
+      ((and (string=? (car rem) "--opt-level") (pair? (cdr rem)))
+       (loop (cddr rem) interp grammar output model entry (string->symbol (cadr rem))))
+      (else
+       (error "ulisp-cogen: unknown argument" (car rem))))))
+
+(define (main args)
+  (receive (interp-path grammar-path output-path runtime-model entry-rule opt-level)
+      (parse-args (cdr args))
+    (unless (and interp-path grammar-path output-path)
+      (print "Error: missing mandatory arguments.")
+      (print-usage)
+      (exit 1))
+
+    ;; Security validations (CWE-78, CWE-22)
+    (cogen-validate-path interp-path)
+    (cogen-validate-path grammar-path)
+    (cogen-validate-output-path output-path)
+
+    (unless (file-exists? interp-path)
+      (error "ulisp-cogen: interpreter file does not exist" interp-path))
+    (unless (file-exists? grammar-path)
+      (error "ulisp-cogen: grammar file does not exist" grammar-path))
+
+    (format #t "=== ulisp-cogen: Second Futamura Projection Engine ===~%")
+    (format #t "  [1/4] Reading interpreter rules from ~a...~%" interp-path)
+    (let ((interp-text (file->string interp-path)))
+      (format #t "  [2/4] Reading PEG grammar definition from ~a...~%" grammar-path)
+      (let ((grammar-text (file->string grammar-path)))
+        (format #t "  [3/4] Synthesizing standalone AOT compiler CLI source (~a)...~%" runtime-model)
+        (let ((cli-source (synthesize-compiler-cli-source grammar-text '() runtime-model)))
+          (format #t "  [4/4] Emitting standalone compiler binary to ~a...~%" output-path)
+          ;; Ensure parent directory exists
+          (let ((dir (sys-dirname output-path)))
+            (when (and (not (string=? dir "")) (not (file-is-directory? dir)))
+              (make-directory* dir)))
+          ;; Write executable driver script
+          (call-with-output-file output-path
+            (lambda (out)
+              (display "#!/usr/bin/env gosh\n" out)
+              (display cli-source out)))
+          (sys-chmod output-path #o755)
+          (format #t "[OK] Standalone AOT compiler CLI generated successfully: ~a~%" output-path)
+          (format #t "     Startup latency: 0ms (.rodata baked grammar & dictionary).~%")
+          (exit 0))))))

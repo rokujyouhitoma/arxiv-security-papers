@@ -39,6 +39,7 @@ build/
 /bin/
 ulisp/bin/*
 !ulisp/bin/ulisp-boot
+!ulisp/bin/ulisp-cogen
 ulisp/build/
 *.egg-info/
 src/web/site/app-min.js

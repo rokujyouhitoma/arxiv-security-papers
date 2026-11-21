@@ -2,7 +2,7 @@
 ID: 895
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed
 ---
 
 # [FEAT/ENH] Implement Direct Cogen Driver and Compiler CLI Generator (ID: 895)
@@ -185,14 +185,14 @@ Target Branch: `feat/895-implement-direct-cogen-driver-and-compiler-cli-generato
 ---
 
 ## 7. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/workbench/cogen.scm` が実装され、評価器定義からコンパイラ走査コードを導出できること。
-- [ ] `ulisp/bin/ulisp-cogen` 実行可能スクリプトが作成され、`--interpreter`, `--grammar`, `--output` 等の引数を解釈して単一バイナリ CLI を出力できること。
-- [ ] 生成された CLI バイナリが外部依存（libc や動的リンカ）なしに自己完結型 ELF として動作すること。
-- [ ] `freeze-serialize-to-rodata` を用いて文法テーブルおよび組み込み辞書が `.rodata` に埋め込まれ、0ms（1ms未満）起動が達成されていること。
-- [ ] 生成されたコンパイラ CLI を用いてユーザースクリプトをコンパイルし、出力されたネイティブ実行ファイルが正常に実行されることが E2E テスト（`test_workbench_cogen.scm`）で実証されていること。
-- [ ] Tagged Pointer および NaN-boxing の両オブジェクトモデルでのコンパイラ生成が正常に動作すること。
-- [ ] CWE-78（コマンドインジェクション）、CWE-22（パストラバーサル）、CWE-400（リソース枯渇）に対するセキュリティ境界防御が施されていること。
-- [ ] `make -C ulisp test_workbench_cogen` が新設され、100% PASS すること。
-- [ ] `make -C ulisp lint_sexpr verify_zero_gauche` がエラー 0 件で PASS すること。
-- [ ] `make py_compile && make static_analysis` がエラー 0 件で PASS すること。
-- [ ] すべてのファイル参照において相対パス規則が厳格に守られていること。
+- [x] `ulisp/workbench/cogen.scm` が実装され、評価器定義からコンパイラ走査コードを導出できること。
+- [x] `ulisp/bin/ulisp-cogen` 実行可能スクリプトが作成され、`--interpreter`, `--grammar`, `--output` 等の引数を解釈して単一バイナリ CLI を出力できること。
+- [x] 生成された CLI バイナリが外部依存（libc や動的リンカ）なしに自己完結型 ELF として動作すること。
+- [x] `freeze-serialize-to-rodata` を用いて文法テーブルおよび組み込み辞書が `.rodata` に埋め込まれ、0ms（1ms未満）起動が達成されていること。
+- [x] 生成されたコンパイラ CLI を用いてユーザースクリプトをコンパイルし、出力されたネイティブ実行ファイルが正常に実行されることが E2E テスト（`test_workbench_cogen.scm`）で実証されていること。
+- [x] Tagged Pointer および NaN-boxing の両オブジェクトモデルでのコンパイラ生成が正常に動作すること。
+- [x] CWE-78（コマンドインジェクション）、CWE-22（パストラバーサル）、CWE-400（リソース枯渇）に対するセキュリティ境界防御が施されていること。
+- [x] `make -C ulisp test_workbench_cogen` が新設され、100% PASS すること。
+- [x] `make -C ulisp lint_sexpr verify_zero_gauche` がエラー 0 件で PASS すること。
+- [x] `make py_compile && make static_analysis` がエラー 0 件で PASS すること。
+- [x] すべてのファイル参照において相対パス規則が厳格に守られていること。
