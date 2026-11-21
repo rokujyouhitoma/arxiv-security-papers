@@ -4,7 +4,26 @@
 
 ## 1. 進行中・未着手 Issue 一覧 (Open Issues)
 
-現在、オープンな Issue はありません（全件完了 / All Issues Completed）。
+| Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
+| :---: | --- | :--- | :---: | :---: |
+| **913** | C99 字句解析器 (Lexer) および Source Span 付きトークンストリームの実装 | Feature | Open (New) | [913-implement-c99-lexer-and-token-stream-with-source-span.md](913-implement-c99-lexer-and-token-stream-with-source-span.md) |
+| **914** | 純粋 Scheme 製 C99 プリプロセッサ (CPP: `#include`/`#define`/`##`/`#if` CTFE) の実装 | Feature | Open (New) | [914-implement-pure-scheme-c99-preprocessor-cpp.md](914-implement-pure-scheme-c99-preprocessor-cpp.md) |
+| **915** | C99 構文解析器 (Parser) および Nanopass C-AST 言語定義・Lexer Hack 解消の実装 | Feature | Open (New) | [915-implement-c99-parser-and-nanopass-c-ast-definitions.md](915-implement-c99-parser-and-nanopass-c-ast-definitions.md) |
+| **916** | C99 基本型検査・整数昇格 (Sema Core) および整数サブセット Core LIR Lowering の実装 | Feature | Open (New) | [916-implement-c99-sema-core-and-integer-subset-lir-lowering.md](916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |
+| **917** | C コンパイラドライバ (`c_driver.scm`) およびホストリンカ連携による整数 C E2E 開通 | Feature | Open (New) | [917-implement-c-compiler-driver-and-host-ld-integration.md](917-implement-c-compiler-driver-and-host-ld-integration.md) |
+| **918** | C99 構造体・共用体・列挙型・ビットフィールドの SysV AMD64 メモリレイアウト計算の実装 | Feature | Open (New) | [918-implement-c99-struct-union-enum-bitfield-sysv-layout.md](918-implement-c99-struct-union-enum-bitfield-sysv-layout.md) |
+| **919** | C99 ポインタスケーリング演算・配列退化およびアドレス取得変数のスタックエスケープ処理の実装 | Feature | Open (New) | [919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md](919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md) |
+| **920** | C99 関数ポインタ間接呼び出しおよび巨大 `switch`/`goto` 複雑 CFG の Braun SSA Lowering 実装 | Feature | Open (New) | [920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md](920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md) |
+| **921** | `<stdarg.h>` 可変長引数 (`va_list`/`va_start`/`va_arg`) の SysV AMD64 ABI Lowering 実装 | Feature | Open (New) | [921-implement-sysv-amd64-stdarg-va-list-lowering.md](921-implement-sysv-amd64-stdarg-va-list-lowering.md) |
+| **922** | 非局所脱出 (`setjmp`/`longjmp`) の `%inline-asm` 実装および呼び出し関数内の生存変数スピル保護 | Feature | Open (New) | [922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md](922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md) |
+| **923** | C99 浮動小数点型 (`double`/`float`) の意味解析および IEEE 754 / LIR 型変換 Lowering の実装 | Feature | Open (New) | [923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md](923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) |
+| **924** | Pass 140/144a/160 における SSE2 XMM 命令・SysV XMM ABI 配線と 3者差分ファジング検証 | Feature | Open (New) | [924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md](924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md) |
+| **925** | Lua 5.x 全 C ソースファイル（コア・標準ライブラリ・CLI）の ULisp 一括ビルドパイプライン構築 | Feature | Open (New) | [925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) |
+| **926** | ULisp ビルド版 Lua バイナリによる公式テストスイート完走 E2E 実証ハーネスの構築 | Feature | Open (New) | [926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) |
+| **927** | C ヘッダ用 `.sbi` プリコンパイル済みヘッダ (PCH) および mem2reg 反復最適化によるビルド高速化 | Feature | Open (New) | [927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md](927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) |
+| **928** | `musl libc` の ULisp 自前ビルドおよび Pass 144 自前 ELF リンカによる完全静的リンク移行 | Feature | Open (New) | [928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
+| **929** | DDC (Diverse Double-Compiling) による C コンパイル出力の決定論性・ビット一致検証ハーネスの実装 | Feature | Open (New) | [929-implement-ddc-diverse-double-compiling-determinism-verification.md](929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
+| **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | Open (New) | [930-implement-c99-bounds-checking-sanitizer-mode.md](930-implement-c99-bounds-checking-sanitizer-mode.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 

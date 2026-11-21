@@ -54,6 +54,7 @@
   - [6.2 実証ベンチマーク：Lua 公式テストスイート（Step S5）](#62-実証ベンチマークlua-公式テストスイートstep-s5)
   - [6.3 DDC（Diverse Double-Compiling）による決定論性・信頼性検証（Step S8）](#63-ddcdiverse-double-compilingによる決定論性信頼性検証step-s8)
   - [6.4 境界検査モードによる安全性拡張（Step S9）](#64-境界検査モードによる安全性拡張step-s9)
+- [7. 実装 Issue トレーサビリティマトリクス（#913〜#930）](#7-実装-issue-トレーサビリティマトリクス913930)
 
 ---
 
@@ -212,16 +213,16 @@ Lua と musl libc のセルフホストを破綻なく達成するため、以�
 
 | Step | 名称 | 主な達成目標 | 依存仕様 / Issue |
 | :---: | :--- | :--- | :---: |
-| **S0** | **設計と未決事項の決定** | `DSN-33-11` / `08` / `09` 体系承認、4大裁定規準確定 | 本設計書体系 |
-| **S1** | **基盤整備 ＆ Reference VM** | LIR 参照 VM、数値塔 (Bignum/IEEE754)、Source Span、Diagnostic（**完了済**） | #834, #832, #824, #833 |
-| **S2** | **整数 C パイプライン開通** | CPP + 整数 C Parser/Sema $\to$ Core LIR $\to$ x86/C、musl/libc とリンクして `printf("%d")` 成功 | #826, #835, #837, #827, #830 |
-| **S3** | **C89/C99 仕様網羅 (Lua要件)** | 構造体・共用体レイアウト、関数ポインタ、SysV ABI、可変長引数、`setjmp`/`longjmp` | #829, #838, #828, #836 |
-| **S4** | **浮動小数点数 (XMM/IEEE754)** | `double`/`float` 演算、XMM 引数渡し、差分テスト完全一致 | #826, #829, #831 |
-| **S5** | **Lua 5.x ビルド ＆ 公式テスト実証** | Lua 5.x 公式 C ソース全ファイルを ULisp でビルドし、Lua 公式テストスイート全件 PASS | S3 / S4 統合検証 |
-| **S6** | **最適化 ＆ コンパイル性能** | mem2reg 最適化、PassManager キャッシュ、PCH (`.sbi`) による Lua ビルド高速化 | #827, #840, #839, #825 |
-| **S7** | **musl libc 自前ビルド** | ULisp 自身で musl をビルドし、Pass 144 リンカで Lua を自製 libc と再リンク | J1, J2 |
-| **S8** | **DDC (多様な二重コンパイル)** | GCC / Clang / ULisp による相互ビルド決定論性・信頼検証 | 決定論性検証 |
-| **S9** | **堅牢化 (境界検査モード)** | 型付き C IR への自動境界検査注入（メモリ安全性強化オプション） | 安全性拡張 |
+| **S0** | **設計と未決事項の決定** | `DSN-33-11` / `13` / `32` 体系承認、4大裁定規準確定 | 本設計書体系 (**完了済**) |
+| **S1** | **基盤整備 ＆ Reference VM** | LIR 参照 VM、数値塔 (Bignum/IEEE754)、Source Span、Diagnostic | #834, #832, #824, #833 (**完了済**) |
+| **S2** | **整数 C パイプライン開通** | CPP + 整数 C Parser/Sema $\to$ Core LIR $\to$ x86/C、musl/libc とリンクして `printf("%d")` 成功 | **#913, #914, #915, #916, #917** (基盤: #826, #835, #837, #827, #830) |
+| **S3** | **C89/C99 仕様網羅 (Lua要件)** | 構造体・共用体レイアウト、関数ポインタ、SysV ABI、可変長引数、`setjmp`/`longjmp` | **#918, #919, #920, #921, #922** (基盤: #829, #838, #828, #836) |
+| **S4** | **浮動小数点数 (XMM/IEEE754)** | `double`/`float` 演算、XMM 引数渡し、差分テスト完全一致 | **#923, #924** (基盤: #826, #829, #831) |
+| **S5** | **Lua 5.x ビルド ＆ 公式テスト実証** | Lua 5.x 公式 C ソース全ファイルを ULisp でビルドし、Lua 公式テストスイート全件 PASS | **#925, #926** |
+| **S6** | **最適化 ＆ コンパイル性能** | mem2reg 最適化、PassManager キャッシュ、PCH (`.sbi`) による Lua ビルド高速化 | **#927** (基盤: #827, #840, #839, #825) |
+| **S7** | **musl libc 自前ビルド** | ULisp 自身で musl をビルドし、Pass 144 リンカで Lua を自製 libc と再リンク | **#928** (J1, J2) |
+| **S8** | **DDC (多様な二重コンパイル)** | GCC / Clang / ULisp による相互ビルド決定論性・信頼検証 | **#929** |
+| **S9** | **堅牢化 (境界検査モード)** | 型付き C IR への自動境界検査注入（メモリ安全性強化オプション） | **#930** |
 
 ### 6.2 実証ベンチマーク：Lua 公式テストスイート（Step S5）
 
@@ -235,3 +236,28 @@ Step S5 の完了基準（Definition of Done）として、ULisp でビルドさ
 ### 6.4 境界検査モードによる安全性拡張（Step S9）
 
 型付き C AST（`DSN-33-11`）および Core LIR 境界を活用し、コンパイル時フラグにより配列境界チェックや NULL ポインタ参照トラップを自動注入できる安全モード（Sanitizer 相当）を設け、セキュリティプラットフォームとしての信頼性を担保する。
+
+---
+
+## 7. 実装 Issue トレーサビリティマトリクス（#913〜#930）
+
+| Issue ID | フェーズ | タイトル | 優先度 | 詳細リンク |
+| :---: | :---: | :--- | :---: | :--- |
+| **#913** | S2 (T1) | C99 字句解析器 (Lexer) および Source Span 付きトークンストリームの実装 | High | [913](../issues/913-implement-c99-lexer-and-token-stream-with-source-span.md) |
+| **#914** | S2 (T2) | 純粋 Scheme 製 C99 プリプロセッサ (CPP) の実装 | High | [914](../issues/914-implement-pure-scheme-c99-preprocessor-cpp.md) |
+| **#915** | S2 (T3) | C99 構文解析器 (Parser) および Nanopass C-AST 言語定義の実装 | High | [915](../issues/915-implement-c99-parser-and-nanopass-c-ast-definitions.md) |
+| **#916** | S2 (T4) | C99 基本型検査・整数昇格 (Sema Core) および整数 LIR Lowering | High | [916](../issues/916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |
+| **#917** | S2 (T5) | C コンパイラドライバ (`c_driver.scm`) およびホストリンカ連携 | High | [917](../issues/917-implement-c-compiler-driver-and-host-ld-integration.md) |
+| **#918** | S3 (T6) | C99 構造体・共用体・列挙型・ビットフィールドの SysV レイアウト計算 | High | [918](../issues/918-implement-c99-struct-union-enum-bitfield-sysv-layout.md) |
+| **#919** | S3 (T7) | ポインタスケーリング演算・配列退化およびスタックエスケープ処理 | High | [919](../issues/919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md) |
+| **#920** | S3 (T8) | 関数ポインタ間接呼び出しおよび巨大 `switch`/`goto` の Braun SSA Lowering | High | [920](../issues/920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md) |
+| **#921** | S3 (T9) | `<stdarg.h>` 可変長引数 (`va_list`/`va_start`/`va_arg`) SysV ABI Lowering | High | [921](../issues/921-implement-sysv-amd64-stdarg-va-list-lowering.md) |
+| **#922** | S3 (T10) | 非局所脱出 (`setjmp`/`longjmp`) `%inline-asm` ＆ 生存変数スピル保護 | High | [922](../issues/922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md) |
+| **#923** | S4 (T11) | C99 浮動小数点型 (`double`/`float`) Sema ＆ IEEE 754 / LIR 変換 | High | [923](../issues/923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) |
+| **#924** | S4 (T12) | SSE2 XMM 命令・SysV XMM ABI 配線と 3者差分ファジング検証 | High | [924](../issues/924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md) |
+| **#925** | S5 (T13) | Lua 5.x 全 C ソースファイルの ULisp 一括ビルドパイプライン構築 | High | [925](../issues/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) |
+| **#926** | S5 (T14) | ULisp ビルド版 Lua バイナリによる公式テストスイート完走 E2E 実証 | High | [926](../issues/926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) |
+| **#927** | S6 (T15) | C ヘッダ `.sbi` PCH および mem2reg 反復最適化によるビルド高速化 | Medium | [927](../issues/927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) |
+| **#928** | S7 (T16) | `musl libc` 自前ビルドおよび Pass 144 自前 ELF リンカ静的リンク移行 | Medium | [928](../issues/928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
+| **#929** | S8 (T17) | DDC (Diverse Double-Compiling) 決定論性・ビット一致検証ハーネス | Medium | [929](../issues/929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
+| **#930** | S9 (T18) | C99 配列境界検査・NULL 参照トラップ自動注入 (`--sanitize-bounds`) | Medium | [930](../issues/930-implement-c99-bounds-checking-sanitizer-mode.md) |
