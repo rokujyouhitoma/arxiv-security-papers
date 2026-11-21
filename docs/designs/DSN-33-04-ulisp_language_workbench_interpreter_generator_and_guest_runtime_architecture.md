@@ -5,11 +5,13 @@
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**: 
   - [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）統合 ＆ 型付き機械語 LIR・ゼロコスト ABI アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
+  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
   - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
   - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
   - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
   - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
+  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
 - **文書ステータス**: `APPROVED / ARCHITECTURE-BLUEPRINT`
 - **対象サブシステム**:
   - `ulisp/workbench/` (Language Workbench コア基盤: オブジェクトモデル、パーサー合成、Direct Cogen)
@@ -118,12 +120,14 @@ $$\begin{aligned}
 | :--- | :--- | :--- | :--- |
 | **[[DSN-33]](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)** | 包括設計仕様書 | 全体アーキテクチャ統括・セルフホスト統御 | 最上位ガバナンスと共通 ABI |
 | **[[DSN-33-01]](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** | パス融合 ＆ DAG 最適化 | Nanopass / Picopass 変換基盤 | 構文解析器・Cogen 展開時の局所ルール適用 |
-| **[[DSN-33-02]](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)** | 多言語フロント ＆ 型付き LIR | Middle-End LIR 定義・機械語生成 | 生成された残余コードの LIR 注入 |
+| **[[DSN-33-02]](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)** | 多言語フロントエンド基盤 | Span・Binding ID・CTFE・Diagnostic | Dual Source Span や診断基盤を共通利用 |
 | **[[DSN-33-03]](DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)** | ステージ多相 ＆ 二村射影 | `eval-in-stage`・4値 BTA 束 | 部分評価・残余化コアエンジンとして利用 |
 | **[[DSN-33-04]](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)** | **言語ワークベンチ (本書)** | **オブジェクトモデル・PEG合成・Cogen CLI・デバッグ透過性** | **本仕様（メタ言語開発環境）** |
 | **[[DSN-33-05]](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)** | メタトレーシング JIT | ホットパス検出・OSR・トレース実行 | インタプリタ評価ループへの動的トレース自動注入 |
 | **[[DSN-33-06]](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)** | 継続的性能ベンチマーク | 3種実行系の自動性能測定・回帰検出 | 生成された言語処理系のスループット評価 |
 | **[[DSN-33-07]](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)** | Zero-libc ベアメタル | libc 完全排除・Linux Raw Syscall | 生成バイナリの極小・自立展開基盤 |
+| **[[DSN-33-08]](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)** | 型付き機械語 LIR ＆ バックエンド | Core/Managed LIR・ABI・ELF 生成 | 生成された残余コードの LIR 注入 ＆ 値表現共有 |
+| **[[DSN-33-09]](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)** | Lua (C 言語実装) コンパイル実証 | C99 経由 Lua 5.x・musl ビルド | C 言語ターゲットでの実システムコンパイル検証 |
 
 ---
 

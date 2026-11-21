@@ -5,11 +5,13 @@
 - **上位文書**: [[DSN-33] ULISP 包括設計仕様書: S式メタコンパイラ基盤 ＆ 多重バックエンドトランスレーションアーキテクチャ](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)
 - **関連個別仕様書**: 
   - [[DSN-33-01] ULisp 階層型パス融合（Pipeline / Pass / Nanopass / Picopass）＆ DAG 最適化基盤設計書](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）統合 ＆ 型付き機械語 LIR・ゼロコスト ABI アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
+  - [[DSN-33-02] ULisp 多言語フロントエンド（C99/Scheme）共通基盤 ＆ 構文・意味解析・CTFE アーキテクチャ設計書](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)
   - [[DSN-33-04] ULisp 言語ワークベンチ（Language Workbench）: ゲスト言語オブジェクトモデル・PEG構文解析フロントエンド・Direct Cogen コンパイラ自動生成 ＆ デバッグ透過性アーキテクチャ設計書](DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
   - [[DSN-33-05] ULisp 内因的メタトレーシング JIT アーキテクチャ包括設計書 (旧 DSN-34)](DSN-33-05-ulisp_endogenous_meta_tracing_jit_architecture.md)
   - [[DSN-33-06] ILisp・ULisp AOT・ULisp JIT 3種実行系 継続的性能評価・ベンチマーク基盤設計書 (旧 DSN-35)](DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
   - [[DSN-33-07] ULisp Zero-libc / Freestanding Pure Scheme ベアメタルランタイム包括設計書 (旧 DSN-36)](DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md)
+  - [[DSN-33-08] ULisp 型付き機械語 LIR・2層 Dialect 分離・ゼロコスト ABI ＆ 多重バックエンド（x86-64 / Portable C / ELF リンカ / 参照 VM）アーキテクチャ設計書](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
+  - [[DSN-33-09] ULisp Lua (C言語実装) コンパイル ＆ musl libc セルフホスト実証アーキテクチャ設計書](DSN-33-09-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
 - **文書ステータス**: `APPROVED / ARCHITECTURE-SPECIFICATION`
 - **対象サブシステム**:
   - `ulisp/compiler/` (`eval_in_language.scm`, `nanopass.scm`, `nanopass_meta.scm`, `dataflow.scm`, `verifier.scm`, `diagnostic.scm`, `pass_manager.scm`, `binding.scm`)
@@ -128,7 +130,8 @@ flowchart TD
 | :--- | :--- | :--- |
 | **[[DSN-33]](DSN-33-ulisp_underlying_x86_native_aot_compiler_architecture_specification.md)** | **ULISP 包括設計仕様書**<br>（最上位アーキテクチャ） | メモリモデル（Tagged Pointer）、ブートストラップ連鎖（Stage 1〜3）、および第 7 章の RPython/Truffle 超越思想に対する**具体的数理・実装モデルを DSN-33-03 が提供**。 |
 | **[[DSN-33-01]](DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)** | **4階層パス融合＆DAG設計書**<br>（コンパイラ内部変換基盤） | DSN-33-01 の Nanopass/Picopass 融合基盤上で、DSN-33-03 が**文法階層消去（`extends`）とステージ多相パスマネージャを駆動**。 |
-| **[[DSN-33-02]](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)** | **多言語フロントエンド＆型付きLIR**<br>（フロントエンド・機械語ABI） | DSN-33-02 の `eval-in-language` (Issue #825) と Pretty Diagnostic (Issue #833) を**ステージ多相辞書 `<stage-dict>` および BTA 越境ガードとして昇華・具現化**。 |
+| **[[DSN-33-02]](DSN-33-02-ulisp_multilingual_frontend_and_typed_machine_lir_architecture.md)** | **多言語フロントエンド共通基盤**<br>（構文・意味解析・CTFE） | DSN-33-02 の `eval-in-language` (Issue #825) と Pretty Diagnostic (Issue #833) を**ステージ多相辞書 `<stage-dict>` および BTA 越境ガードとして昇華・具現化**。 |
+| **[[DSN-33-08]](DSN-33-08-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)** | **型付き機械語 LIR ＆ バックエンド**<br>（LIR・ABI・ELF・参照 VM） | 残余 `L-Residual-ANF` の Core LIR 降格ブリッジ (Issue #889) および凍結データの `.rodata` 直接配置 (Issue #890) を担当。 |
 | **`DSN-33-03`**<br>(本書) | **ステージ多相メタコンパイラ＆二村射影**<br>（メタ計算・部分評価・階層平坦化） | **二村射影、BTA、Partially Static Data Structures、停止性保証、および Control/Data Plane 二層境界の形式仕様を全統括**。 |
 
 ---
@@ -345,7 +348,7 @@ $$V_{\text{Oracle}} = \mathrm{eval}_{\text{stage}}(\mathrm{dict}_{\text{now}}, \
 は、人為的な仕様不一致が原理的に存在し得ない **完全な正解（Ground Truth）オラクル** として機能する。
 
 #### 3.6.2 3重差分テストオラクル（Triple-Differential Oracle）
-`DSN-33-02` §7.1（純粋 Scheme 製 LIR 参照仮想マシン）と連携し、コンパイラの健全性を多層的に自動検証する。
+`DSN-33-08` §6.1（純粋 Scheme 製 LIR 参照仮想マシン）と連携し、コンパイラの健全性を多層的に自動検証する。
 
 ```mermaid
 flowchart TD
@@ -361,7 +364,7 @@ flowchart TD
         LaterEval["eval-in-stage (Later 辞書)"]
         MIR["MIR-ANF 生成"]
         LIR["LIR 変換"]
-        RefVM["LIR Reference VM 実行 (DSN-33-02 §7.1)"]
+        RefVM["LIR Reference VM 実行 (DSN-33-08 §6.1)"]
         ValVM["結果値 V_vm"]
         LaterEval --> MIR --> LIR --> RefVM --> ValVM
     end
@@ -429,7 +432,7 @@ Control Plane から Data Plane への値の昇格（`lift`）に対し、以下
    - これにより、コンパイル時クラッシュを根絶し、実行時の遅延評価意味論と 100% 同一の副作用順序（Effect Ordering）を維持する。
 
 ### 4.3 コンパイル時診断 S式仕様（Dual Span 伝播 Reporter #833 準拠）
-越境違反や投機的トラップ検知時、`DSN-33-02` §3.4 準拠の構造化 S式を返却する。二重ソースマップ（Dual Source Span）により、ホスト（インタプリタ実装）とゲスト（DSLスクリプト）の位置を同時に報告する。
+越境違反や投機的トラップ検知時、`DSN-33-02` §3.5 準拠の構造化 S式を返却する。二重ソースマップ（Dual Source Span）により、ホスト（インタプリタ実装）とゲスト（DSLスクリプト）の位置を同時に報告する。
 
 ```scheme
 (compiler-diagnostic
