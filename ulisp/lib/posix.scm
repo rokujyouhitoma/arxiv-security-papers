@@ -147,7 +147,7 @@
 
 ;; sys-munmap: sys_munmap(addr, length)
 (define (sys-munmap addr length)
-  (%to-fixnum (%raw-syscall (%to-raw *sys-munmap*) (%to-raw addr) (%to-raw length) 0 0 0 0)))
+  (%to-fixnum (%raw-syscall (%to-raw *sys-munmap*) addr (%to-raw length) 0 0 0 0)))
 
 ;; sys-mremap: sys_mremap(old_address, old_size, new_size, flags)
 ;; MREMAP_MAYMOVE = 1

@@ -674,3 +674,59 @@ def test_bare_metal_automatic_gc_stress():
         assert run_res.returncode == 0
         output = run_res.stdout.decode("utf-8")
         assert "AUTO_GC_STRESS_SUCCESS" in output
+
+
+def test_bare_metal_raw_syscall_suite():
+    """Verify freestanding raw syscall suite runs with zero libc under -nostdlib -static (Issue #904)."""
+    test_file = os.path.join(ULISP_DIR, "tests", "test_freestanding_syscall.scm")
+    assert os.path.exists(test_file), f"Test file not found: {test_file}"
+
+    with open(test_file, "r", encoding="utf-8") as f:
+        src_code = f.read()
+
+    # Prepend posix_code if not already loaded, resolving the (include "lib/posix.scm")
+    with open(POSIX_SCM, "r", encoding="utf-8") as f:
+        posix_code = f.read()
+
+    full_code = src_code.replace('(include "lib/posix.scm")', posix_code)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src_path = os.path.join(tmpdir, "test_syscall.scm")
+        s_path = os.path.join(tmpdir, "test_syscall.s")
+        bin_path = os.path.join(tmpdir, "test_syscall_bare")
+
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(full_code)
+
+        with open(src_path, "r", encoding="utf-8") as f_in, open(
+            s_path, "w", encoding="utf-8"
+        ) as f_out:
+            ret = subprocess.run(
+                get_compiler_cmd(),
+                stdin=f_in,
+                stdout=f_out,
+                stderr=subprocess.PIPE,
+                cwd=WORKSPACE_DIR,
+                text=True,
+            )
+        assert ret.returncode == 0, f"Compilation failed: {ret.stderr}"
+
+        link_asm_to_bin(s_path, bin_path)
+
+        # Verify static ELF without dynamic loader
+        ldd_res = subprocess.run(["ldd", bin_path], capture_output=True, text=True)
+        combined_ldd = (ldd_res.stdout + ldd_res.stderr).lower()
+        assert "not a dynamic executable" in combined_ldd
+
+        run_res = subprocess.run([bin_path], capture_output=True)
+        assert run_res.returncode == 0
+        output = run_res.stdout.decode("utf-8")
+        assert "=== [TEST] Zero-libc Freestanding Raw Syscall Suite ===" in output
+        assert "[1/4] Testing character & fixnum output: OK => 2026" in output
+        assert (
+            "[2/4] Testing sys-mmap (4096 bytes): PASS (stored and loaded: 1337)"
+            in output
+        )
+        assert "[3/4] Testing sys-munmap: PASS" in output
+        assert "[4/4] Testing sys-clock-gettime-monotonic: PASS" in output
+        assert "=== [SUCCESS] All Freestanding Syscalls Verified ===" in output
