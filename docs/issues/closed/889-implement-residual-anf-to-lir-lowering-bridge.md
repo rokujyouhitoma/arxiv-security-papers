@@ -2,7 +2,7 @@
 ID: 889
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Completed)
 ---
 
 # [FEAT] L-Residual-ANF から Middle-End LIR へのローワリング・アダプターブリッジ実装 (ID: 889)
@@ -124,8 +124,8 @@ flowchart TD
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `lir-compile-expr` が `L-Residual-ANF` の 4 大構文（`atom-value`, `let-anf`, `let-call`, `if-anf`）をネイティブにサポートしていること。
-- [ ] 独立ブリッジ関数 `lower-residual-anf-to-lir` が配備され、残余 ANF AST から `%lir-program` を直接生成可能であること。
-- [ ] `test_residual_anf_to_lir.scm` の全テストケースが 100% PASS すること。
-- [ ] 生成された LIR が `validate-lir`（LIR Verifier）を完全にパスすること。
-- [ ] `make -C ulisp bootstrap` による Stage 2 == Stage 3 の bit-for-bit IDENTICAL 不動点が維持されること。
+- [x] `lir-compile-expr` が `L-Residual-ANF` の 4 大構文（`atom-value`, `let-anf`, `let-call`, `if-anf`）をネイティブにサポートしていること。
+- [x] 独立ブリッジ関数 `lower-residual-anf-to-lir` が配備され、残余 ANF AST から `%lir-program` を直接生成可能であること。
+- [x] `test_residual_anf_to_lir.scm` の全テストケースが 100% PASS すること。
+- [x] 生成された LIR が `validate-lir`（LIR Verifier）を完全にパスすること。
+- [x] `make -C ulisp bootstrap` による Stage 2 == Stage 3 の bit-for-bit IDENTICAL 不動点が維持されること。
