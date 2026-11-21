@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | 優先度 | ステータス | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: |
-| **891** | オフライン BTA 4値束注釈とオンライン部分評価のハイブリッド推論フィードバック統合 | Feature | Medium | In Progress | [891-integrate-offline-bta-lattice-with-stage-poly-lower.md](891-integrate-offline-bta-lattice-with-stage-poly-lower.md) |
+| **891** | オフライン BTA 4値束注釈とオンライン部分評価のハイブリッド推論フィードバック統合 | Feature | High | In Progress | [891-integrate-offline-bta-lattice-with-stage-poly-lower.md](891-integrate-offline-bta-lattice-with-stage-poly-lower.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
