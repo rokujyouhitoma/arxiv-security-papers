@@ -5,15 +5,16 @@ ID: 894
 ステータス: Open (In Progress)
 ---
 
-# [FEAT/ENH] Implement Pure Scheme Compile-Time PEG Parser Generator (ID: 894)
+# [FEAT/ENH] Implement Pure Scheme Compile-Time PEG Parser Generator in ulisp/peg/ (ID: 894)
 
 ## 1. 概要 / Summary
-[[DSN-33-04]](../designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) 第 3 章（構文解析フロントエンドのゼロコスト自動合成）および [[DSN-25]](../designs/DSN-25-pure_python_packrat_peg_parser_engine.md) に基づき、Pure Scheme / ULisp マクロ体系による **Compile-Time Packrat PEG 構文解析器ジェネレータ** を実装する。
+[[DSN-33-04]](../designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md) 第 3 章（構文解析フロントエンドのゼロコスト自動合成）および Python 側リファレンス実装 [[DSN-25]](../designs/DSN-25-pure_python_packrat_peg_parser_engine.md)（`src/core/peg/`）に基づき、Pure Scheme / ULisp マクロ体系による **Compile-Time Packrat PEG 構文解析器ジェネレータ** をパッケージ `ulisp/peg/` 配下に実装する。
 
-特に、**CPython 公式の PEG 文法仕様（[Grammar/python.gram](https://github.com/python/cpython/tree/main/Grammar) / PEP 617）をコンパイルし、Python ソースコードを構文解析できる能力を獲得することを主要なマイルストーンゴール**とする。
-さらに、[[Issue #907]](907-support-cpython-peg-grammar-specification-in-core-peg.md) および [[Issue #908]](908-migrate-tools-grammars-to-cpython-peg-grammar-syntax.md) にて CPython PEG 構文に統一移行された `tools/grammars/*.peg`（`calc.peg`, `graph_query.peg`, `sql_*.peg`, `yaml_frontmatter.peg` 等）についても、本ジェネレータを通じて Pure Scheme 上で直接コンパイル・ビルド可能とし、クロスランゲージな文法共有基盤を確立する。
+本ジェネレータの最重要マイルストーンゴールとして、以下を達成する：
+1. **CPython 公式の PEG 文法仕様（[Grammar/python.gram](https://github.com/python/cpython/tree/main/Grammar) / PEP 617）をコンパイルし、Python ソースコードを構文解析できる能力を獲得すること。**
+2. **[[Issue #908]](closed/908-migrate-tools-grammars-to-cpython-peg-grammar-syntax.md) にて CPython PEG 構文に統一移行された `tools/grammars/*.peg`（`calc.peg`, `graph_query.peg`, `search_query.peg`, `yaml_frontmatter.peg`, `sql_*.peg` 等の全13ファイル）を、Pure Scheme 上で直接コンパイル・ビルド・実行可能とすること。**
 
-従来の構文解析生成器（Yacc/Bison/ANTLR 等）は外部バイナリ依存や複雑な C コード生成を必要とし、生成されたパーサーもヒープ上に大量の中間 AST 木を構築するためメモリ負荷が高い。本 Issue では二村射影とステージ多相コンパイルの数理モデルを活用し、宣言的文法定義（`define-grammar` または CPython 形式の `.gram`）から手書き再帰下降パーサー並みの $O(1)$ ディスパッチ表と Warth 左再帰メモ化ループを備えた構文解析ルーチンを Pure Scheme で完全自動生成する。さらに、セマンティックアクションを CPS で直結することで中間 AST 確保を完全に消去（Zero-Allocation Stream Parsing）する。
+アーキテクチャ設計として、`src/core/peg/` の構成（`runtime` と `compiler` の完全直交分離）を Scheme に忠実に写像し、`ulisp/peg/runtime.scm`（Packrat メモ化、Warth 左再帰、コンビネータ）と `ulisp/peg/compiler/`（AST、メタパーサー、オプティマイザ、コードジェネレータ）を明確に分離する。これにより、可読性・拡張性を極限まで高め、Python 側と Scheme 側の PEG 実装間で 1:1 の概念対称性を担保する。
 
 ---
 
@@ -22,96 +23,144 @@ ID: 894
   - [[DSN-33-04] ULisp 言語ワークベンチ・インタプリタ自動生成 ＆ ゲスト言語ランタイムアーキテクチャ設計書 (第3章 PEG/Packrat 構文解析フロントエンドのゼロコスト自動合成)](../designs/DSN-33-04-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
   - [[DSN-25] Pure Python Packrat PEG Parser Engine Specification](../designs/DSN-25-pure_python_packrat_peg_parser_engine.md)
   - [[DSN-33-03] ULisp ステージ多相メタコンパイラ ＆ 二村射影フラクタル実行基盤設計書 (第3章 eval-in-stage)](../designs/DSN-33-03-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
-  - [[DSN-33-01] ULisp 階層型パス融合 ＆ DAG 最適化基盤設計書](../designs/DSN-33-01-ulisp_pipeline_pass_nanopass_picopass_dag_architecture.md)
-- 外部標準・仕様:
-  - PEP 617: New PEG parser for CPython (Guido van Rossum, Lysandros Nikolaou, Pablo Galindo Salgado)
-  - Warth et al., "Packrat Parsers Can Support Left Recursion", PEPM 2008.
+- 依存・完了済み Issue:
+  - [[Issue #907] Support CPython PEG Grammar Specification in src/core/peg](closed/907-support-cpython-peg-grammar-specification-in-core-peg.md) (**完了済み**: Python 側 PEG コンパイラでの PEP 617 完全準拠)
+  - [[Issue #908] Migrate tools/grammars/*.peg to CPython PEG Grammar Syntax](closed/908-migrate-tools-grammars-to-cpython-peg-grammar-syntax.md) (**完了済み**: リポジトリ内全 13 文法ファイルの CPython PEG 構文統一)
+- 後続 Issue:
+  - [[Issue #895] Implement Direct Cogen Driver and Compiler CLI Generator](895-implement-direct-cogen-driver-and-compiler-cli-generator.md) (第2二村射影によるスタンドアロン構文解析器バイナリ合成)
+  - [[Issue #897] Implement cti-ql DSL Reference Implementation and E2E Verification](897-implement-cti-ql-dsl-reference-implementation-and-e2e-verification.md) (CTI フィルタ言語の PEG 構文解析器合成)
 
 ---
 
 ## 3. セキュリティ分析と脅威モデル / Security Threat Analysis
-構文解析器は外部の信頼できない入力を直接受け取る第 1 境界（Attack Surface）であるため、以下の脆弱性に対する堅牢な多層防御を組み込む。
+構文解析器は信頼できない外部テキスト入力を直接受ける攻撃面（Attack Surface）であるため、多層防御を設計レベルで組み込む。
 
-1. **CWE-400: Uncontrolled Resource Consumption (指数的バックトラック / ReDoS / メモ化メモリ爆発)**:
-   - *脅威*: 悪意を持って細工された深い入れ子構造や曖昧な選択肢（e.g. `(a*)*`）により、パーサーが指数時間のバックトラックに陥るか、Packrat メモ化キャッシュがメモリを枯渇させる。
+1. **CWE-400: Uncontrolled Resource Consumption (指数的バックトラック / ReDoS / メモリ枯渇)**:
+   - *脅威*: 悪意ある過大ネスト入力や曖昧な選択肢（e.g. `(a*)*`）による指数時間計算量の誘発、Packrat メモ化キャッシュによるヒープ枯渇。
    - *防御策*:
-     - **Packrat メモ化保証**: 各 `(Rule, Position)` ペアの結果を線形空間 $O(N)$ でメモ化し、最悪時間計算量を厳格に $O(N)$ に束縛。
-     - **カット演算子（`~` / Commit）**: 確定したプレフィックスに対するバックトラックを明示的に遮断し、メモリ消費を即座に回収。
-     - **Fuel / 再帰深度ハードリミット**: 構文解析ループに最大反復上限（燃料モデル）を導入し、無限ループを確実に遮断。
-2. **CWE-674: Uncontrolled Recursion (スタックオーバーフロー)**:
-   - *脅威*: 直接・間接の左再帰（Left Recursion: `expr: expr '+' term`）が無限再帰を引き起こしスタックを食いつぶす。
+     - **線形時間保証**: 各 `(Rule, Position)` エントリをメモ化テーブルで管理し、最悪計算量を厳格に $O(N)$ に束縛。
+     - **カット演算子（`~` / Commit）**: 確定したオルタナティブへのバックトラックを破棄し、不要となったメモ化領域の再利用を促進。
+     - **Fuel（燃料モデル）上限**: パース試行ループに最大反復回数ガード（デフォルト $10^6$ 回）を設け、無限ループ・DoS を遮断。
+2. **CWE-674: Uncontrolled Recursion (左再帰無限ループ / スタックオーバーフロー)**:
+   - *脅威*: 直接・間接の左再帰規則（`expr: expr '+' term | term` 等）がコールスタックを食いつぶす。
    - *防御策*:
-     - **Warth アルゴリズムの適用**: メモ化テーブルに一時的な「失敗」をシードとして記録し、成長ループ（Growing the Seed）により最長一致が得られるまで反復拡張する反復的左再帰解決を実装。
-3. **CWE-125 / CWE-787: Out-of-Bounds Read / Memory Safety**:
-   - *脅威*: 入力文字列の末尾を超えた先読みやインデックス参照による不正アクセス。
-   - *防御策*: Pure Scheme の文字列走査境界ガード（`0 <= pos <= len`）を強制し、`EOF` 境界を厳格に判定。
+     - **Warth アルゴリズム（PEPM '08）**: 左再帰検出時にシード失敗をメモ化し、再帰呼び出しをループへと変換して最長一致までインクリメンタルに成長（Growing the Seed）させる反復展開を実装。
+3. **CWE-125 / CWE-787: Out-of-Bounds Read / 境界外参照**:
+   - *脅威*: 先読み（Lookahead）や部分文字列スライス時の範囲外メモリアクセス。
+   - *防御策*: Pure Scheme の文字列走査境界ガード（`0 <= pos <= len`）をすべての基本コンビネータで強制。
 
 ---
 
-## 4. 影響範囲と関連ファイル / Scope and Affected Files
-- [ ] [ulisp/workbench/peg.scm](../../ulisp/workbench/peg.scm) (新規: Packrat PEG コアエンジン、Warth 左再帰メモ化、CPython .gram コンパイラ)
-- [ ] [ulisp/frontend/015_dsl_expander.scm](../../ulisp/frontend/015_dsl_expander.scm) (`define-grammar` マクロ構文拡張の登録)
-- [ ] [ulisp/tests/test_workbench_peg.scm](../../ulisp/tests/test_workbench_peg.scm) (新規: PEG 単体、左再帰、および CPython 文法サブセット検証テスト)
-- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`COMPILER_BASE` への `workbench/peg.scm` 追加および `test_workbench_peg` ターゲット新設)
-- [ ] [docs/issues/README.md](README.md) (Issue 台帳ステータス更新)
+## 4. 影響範囲とモジュール構成 / Scope and Module Architecture
+
+`src/core/peg/` の直交設計に準拠し、パッケージ `ulisp/peg/` 配下を以下の通り構造化する。
+
+```
+ulisp/
+├── peg.scm                         ; 公開ファサード (define-grammar, compile-peg-grammar, peg-parse)
+├── peg/
+│   ├── runtime.scm                 ; Packrat ランタイムエンジン (Context, Memo, Warth左再帰, Combinators)
+│   └── compiler/
+│       ├── ast.scm                 ; PEG AST レコード定義 (<grammar-def>, <rule-def>, <seq-expr> 等)
+│       ├── parser.scm              ; CPython PEG 文法仕様 (PEP 617 / .gram / .peg) メタ文法パーサー
+│       ├── optimizer.scm           ; 構文最適化 (左括り出し, 先頭文字 First-Set テーブル生成)
+│       └── codegen.scm             ; Pure Scheme クロージャ/Stage-Now 手続きコードジェネレータ
+└── tests/
+    ├── test_peg_runtime.scm        ; ランタイムコンビネータ & Warth 左再帰単体テスト
+    ├── test_peg_compiler.scm       ; CPython PEG メタパーサー & AST 構築単体テスト
+    ├── test_peg_cpython_e2e.scm    ; CPython python.gram コア構文 E2E パース検証テスト
+    └── test_peg_grammars.scm       ; tools/grammars/*.peg 全 13 ファイルのビルド & 実行検証テスト
+```
+
+### 変更・追加対象ファイル
+- [ ] [ulisp/peg/runtime.scm](../../ulisp/peg/runtime.scm) (新規: Packrat PEG ランタイム、ParseContext、Warth 左再帰メモ化、LineStart、Gather、Cut)
+- [ ] [ulisp/peg/compiler/ast.scm](../../ulisp/peg/compiler/ast.scm) (新規: PEG AST レコード定義群)
+- [ ] [ulisp/peg/compiler/parser.scm](../../ulisp/peg/compiler/parser.scm) (新規: PEP 617 / CPython PEG メタ文法パーサー)
+- [ ] [ulisp/peg/compiler/optimizer.scm](../../ulisp/peg/compiler/optimizer.scm) (新規: 共通プレフィックス括り出し、First-Set 決定木生成)
+- [ ] [ulisp/peg/compiler/codegen.scm](../../ulisp/peg/compiler/codegen.scm) (新規: Pure Scheme 高速構文解析クロージャ生成エミッタ)
+- [ ] [ulisp/peg.scm](../../ulisp/peg.scm) (新規: トップレベルモジュール公開インターフェース)
+- [ ] [ulisp/tests/test_peg_runtime.scm](../../ulisp/tests/test_peg_runtime.scm) (新規: ランタイム単体テスト)
+- [ ] [ulisp/tests/test_peg_compiler.scm](../../ulisp/tests/test_peg_compiler.scm) (新規: コンパイラ単体テスト)
+- [ ] [ulisp/tests/test_peg_cpython_e2e.scm](../../ulisp/tests/test_peg_cpython_e2e.scm) (新規: CPython python.gram E2E テスト)
+- [ ] [ulisp/tests/test_peg_grammars.scm](../../ulisp/tests/test_peg_grammars.scm) (新規: tools/grammars/*.peg 13ファイル E2E テスト)
+- [ ] [ulisp/Makefile](../../ulisp/Makefile) (`test_peg` ターゲット新設、ビルドチェイン統合)
+- [ ] [docs/issues/README.md](README.md) (Issue 台帳ステータス管理)
 
 ---
 
 ## 5. 実装方針 / Implementation Plan
 Target Branch: `feat/894-implement-pure-scheme-compile-time-peg-parser-generator`
 
-### Phase 1: Packrat PEG コアエンジンと Warth 左再帰基盤 (`ulisp/workbench/peg.scm`)
-1. **構文解析コンビネータ群の実装**:
-   - `(peg-match-char c pos str)` / `(peg-match-string s pos str)`: 終端リテラル照合
-   - `(peg-seq e1 e2 ...)`: 順序付き連結（Sequence）
-   - `(peg-alt e1 e2 ...)`: 順序付き選択（Ordered Choice）
-   - `(peg-opt e)`: オプショナル照合（`?` または `[e]`）
-   - `(peg-star e)`: 0回以上繰り返し（`*`）
-   - `(peg-plus e)`: 1回以上繰り返し（`+`）
-   - `(peg-and e)`: ポジティブ先読み（`&e`）
-   - `(peg-not e)`: ネガティブ先読み（`!e`）
-   - `(peg-cut)`: バックトラック遮断コミット（`~`）
-2. **Warth メモ化左再帰エンジン**:
-   - メモ化エントリ: `<peg-memo-entry>` （結果、進んだ位置、左再帰検出ヘッド）
-   - 左再帰検出: ルール適用開始時にメモ化テーブルへマーク。同一位置で同一ルールが再帰呼び出しされた場合、左再帰と判定しシード反復成長モードへ遷移。
+### Phase 1: Packrat PEG ランタイムと Warth 左再帰エンジン (`ulisp/peg/runtime.scm`)
+`src/core/peg/runtime.py` の全セマンティクスを Pure Scheme に移植する：
+1. **データ構造**:
+   - `<parse-context>`: `text`, `length`, `pos`, `max-pos`, `expected-tokens`, `memo-table`
+   - `<parse-result>`: `success?`, `value`, `next-pos`, `error-msg`
+   - `<memo-entry>`: `result`, `end-pos`, `head` (左再帰検出用)
+2. **基本コンビネータ**:
+   - `(peg:lit str)`: 文字列リテラル照合
+   - `(peg:char-class spec [inverted?])`: 文字クラス照合（`[0-9]`, `[a-z]`, `[^"]` 等）
+   - `(peg:any-char)`: 任意 1 文字照合（`.`）
+   - `(peg:seq p1 p2 ...)`: 順序付き連接
+   - `(peg:alt p1 p2 ...)`: 順序付き選択
+   - `(peg:star p)` / `(peg:plus p)`: 繰り返し照合
+   - `(peg:opt p)`: オプショナル照合
+   - `(peg:and p)` / `(peg:not p)`: 先読み述語
+   - `(peg:gather sep elem is-one-or-more?)`: セパレータ付きリストコンビネータ（空マッチ前進ガード付き）
+   - `(peg:cut)`: バックトラック遮断（`~`）
+   - `(peg:line-start)`: 行頭ゼロ幅アサーション（`pos == 0` または直前が改行）
+   - `(peg:map proc p)`: セマンティックアクション適用
+3. **Warth アルゴリズム（左再帰解決）**:
+   - `(peg:rule name proc)`:
+     - メモ化エントリを検査。進行中の同一ルール再帰呼び出しを検知した場合、初回は「失敗」を返し、外側の呼び出しがマッチ成功したら最長一致が得られるまでメモ化を更新して再実行（Growing the Seed）。
 
-### Phase 2: CPython PEG 文法仕様（PEP 617 / `.gram`）の構文解析 ＆ コンパイラ
-1. **CPython `.gram` メタ文法パーサーの実装**:
-   - ルール定義構文: `rule_name: alt1 | alt2 | ...`
-   - 変数束縛: `a=expr` や `(a=expr)`
-   - 先読み・カット: `&expr`, `!expr`, `~`
-   - セパレータ付きリスト: `','.expr+` や `','.expr*`
-   - セマンティックアクション: `{ action_expr }`
-2. **中間表現（Grammar AST）から Scheme 手続きへのコンパイル**:
-   - 各非終端記号を Pure Scheme の引数 `(pos str memo)` を取る高速クロージャ群へコンパイル。
-   - 先頭文字（First Set）に基づくディスパッチ分岐を生成し、不要なマッチ試行を $O(1)$ でスキップ。
+### Phase 2: CPython PEG メタ文法パーサー (`ulisp/peg/compiler/`)
+`src/core/peg/compiler/parser.py` および `ast_nodes.py` を参考に Scheme レコードとパーサーを実装：
+1. **AST レコード定義 (`compiler/ast.scm`)**:
+   - `<grammar-def>`, `<rule-def>`, `<seq-expr>`, `<choice-expr>`, `<gather-expr>`, `<cut-expr>`, `<lit-expr>`, `<char-class-expr>`, `<pred-expr>`, `<repeat-expr>`, `<opt-expr>`, `<named-expr>`, `<action-expr>`, `<rule-ref-expr>`
+2. **CPython PEG 構文パーサー (`compiler/parser.scm`)**:
+   - ルール定義: `rule_name[type] (memo): choice1 | choice2`
+   - 変数束縛: `name=expr`
+   - セパレータ付きリスト: `sep.rule+`, `sep.rule*`
+   - カット演算子: `~`
+   - 角括弧オプショナル: `[expr]`（文字クラス `[...]` との決定論的分離）
+   - ディレクティブ: `@header`, `@trailer`, `@include`
+3. **オプティマイザ (`compiler/optimizer.scm`)**:
+   - 共通プレフィックス括り出し（Choice の共通先頭因数分解）
+   - 先頭文字（First Set）分岐による不要バックトラック排除
 
-### Phase 3: Stage-Now / CPS ゼロアロケーションセマンティックアクション直結
-1. **ストリーム構文解析と意味論の融合**:
-   - 構文木（Tree）をヒープに一切割り当てず、マッチ成功と同時に CPS 継続または LIR ビルダー手続きを直接キック。
-   - `stage-poly-lower` と連携し、文法規則が静的定数の場合はディスパッチとルール照合ループを残余コードから消去。
+### Phase 3: Pure Scheme コードジェネレータ ＆ マクロファサード (`compiler/codegen.scm`, `peg.scm`)
+1. **コード生成器 (`compiler/codegen.scm`)**:
+   - AST を走査し、Pure Scheme の引数 `(ctx pos)` を取る高速クロージャ手続き定義式を合成。
+   - セマンティックアクション内の変数参照（`name`）を引数または束縛環境へ射影。
+2. **公開マクロ ＆ CLI API (`peg.scm`)**:
+   - `(define-grammar Name (rule1 ...) (rule2 ...))`: マクロ構文
+   - `(compile-peg-file path)`: `.peg` / `.gram` ファイルからパーサーをロード・コンパイル
+   - `(compile-peg-string str)`: 文字列から動的コンパイル
 
-### Phase 4: CPython 文法（`Grammar/python.gram`）の検証とテストスイート (`ulisp/tests/test_workbench_peg.scm`)
-1. **Group 1: 基本 PEG コンビネータ単体テスト**:
-   - 終端文字列、文字範囲、選択、繰り返し、先読みの照合精度検証。
-2. **Group 2: Warth 左再帰 ＆ 指数バックトラック回避テスト**:
-   - 左再帰文法（算術式 `expr: expr '+' term | term` 等）の優先順位・結合規則の正確な解決検証。
-   - カット演算子 `~` によるバックトラック刈り取り検証。
-3. **Group 3: CPython `.gram` 文法コンパイラ E2E テスト**:
-   - CPython のコア構文ルール（関数定義 `def ...`, 条件分岐 `if ...`, 式 `a + b * c`, リスト `[...]`, 辞書 `{...}`）を `.gram` 定義からコンパイル。
-   - 実際の Python ソースコード断片を入力し、構文木または AST 構造が 100% 正確に抽出されることをアサーション検証。
-4. **Group 4: セキュリティ境界テスト (CWE-400 / CWE-125 防御)**:
-   - 深い再帰入力に対するスタック枯渇防止、入力境界超過時の安全遮断検証。
+### Phase 4: CPython 文法 E2E 検証と tools/grammars/*.peg ビルド検証 (`ulisp/tests/`)
+1. **CPython `python.gram` サブセット検証 (`test_peg_cpython_e2e.scm`)**:
+   - CPython 公式の主要構文ブロック（関数定義 `def_stmt`, `if_stmt`, `while_stmt`, 算術式 `arith_expr`, リスト・辞書リテラル）をコンパイル。
+   - 実際の Python ソースコード（関数定義、ネストした計算式等）を入力し、正常に構文解析されることを検証。
+2. **`tools/grammars/*.peg` 全13ファイル ビルド検証 (`test_peg_grammars.scm`)**:
+   - `calc.peg`: 四則演算電卓パースと実行結果検証
+   - `search_query.peg`: 検索クエリパース検証
+   - `graph_query.peg`: ナレッジグラフ DSL パース検証
+   - `yaml_frontmatter.peg`: OKF フロントマターパース検証
+   - `sql_expr.peg`, `sql_dql.peg`, `sql_dml.peg`, `sql_ddl.peg`, `sql_admin.peg`: SQL 文法群のパース検証
+   - `bibtex.peg`, `pdf_cmap.peg`, `turtle.peg`, `peg_meta.peg`
+   - 全 13 ファイルが Pure Scheme 上でエラーなくコンパイルできることを検証。
 
 ---
 
 ## 6. 完了条件 / Success Criteria (DoD)
-- [ ] `ulisp/workbench/peg.scm` が新規作成され、Packrat PEG コンビネータおよび Warth 左再帰エンジンが実装されていること。
-- [ ] CPython の PEG 文法規則（`python.gram` 準拠の左再帰、先読み、カット、変数束縛、リストセパレータ）を解釈・コンパイルできること。
-- [ ] コンパイルされたパーサーにより、CPython サブセット（関数定義、制御フロー、算術式等）の Python コードが正常に構文解析できること。
-- [ ] Issue #908 で CPython 構文に移行された `tools/grammars/*.peg`（`calc.peg` や `graph_query.peg` 等）を本ジェネレータで正常にコンパイル・ビルドできること。
-- [ ] CWE-400（バックトラック爆発）および CWE-674（左再帰無限ループ）に対する安全防御がテストで実証されること。
-- [ ] `make -C ulisp test_workbench_peg` が 100% PASS すること。
-- [ ] `make -C ulisp lint_sexpr verify_zero_gauche` が PASS すること。
-- [ ] `make py_compile && make static_analysis` が PASS すること。
-- [ ] [docs/issues/README.md](README.md) のステータスが `進行中 (In Progress)` に更新されていること。
+- [ ] パッケージ `ulisp/peg/` が作成され、`runtime.scm` と `compiler/`（`ast.scm`, `parser.scm`, `optimizer.scm`, `codegen.scm`）が明確に直交分離されていること。
+- [ ] `ulisp/peg/runtime.scm` に Packrat メモ化、Warth 左再帰エンジン、LineStart、Gather、Cut を含む全コアコンビネータが実装されていること。
+- [ ] `ulisp/peg/compiler/parser.scm` が CPython PEG 文法仕様（PEP 617 / python.gram）の構文（`rule:`, `|`, `name=expr`, `[expr]`, `sep.rule+`, `~`）を完全受理すること。
+- [ ] CPython `Grammar/python.gram` のコア構文ルールがコンパイルされ、サンプルの Python ソースコードが正しく構文解析できること（`test_peg_cpython_e2e.scm` 100% PASS）。
+- [ ] Issue #908 で CPython 構文に移行された `tools/grammars/*.peg` 全 13 文法ファイルが Pure Scheme コンパイラでコンパイル・ビルド可能であることがテストで実証されていること（`test_peg_grammars.scm` 100% PASS）。
+- [ ] CWE-400（バックトラック爆発）および CWE-674（左再帰無限ループ）に対する安全防御がテストで検証されていること。
+- [ ] `make -C ulisp test_peg` が新設され、すべての PEG テストスイートが 100% PASS すること。
+- [ ] `make -C ulisp lint_sexpr verify_zero_gauche` がエラー 0 件で PASS すること。
+- [ ] `make py_compile && make static_analysis` がエラー 0 件で PASS すること。
+- [ ] すべてのファイルリンクにおいて相対パス規則が厳格に守られていること。
