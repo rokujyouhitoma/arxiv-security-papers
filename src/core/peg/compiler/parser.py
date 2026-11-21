@@ -9,6 +9,7 @@ Zero external dependencies.
 from __future__ import annotations
 
 import re
+import textwrap
 from typing import Any, Dict, List, Match, Optional, Tuple, cast
 
 from core.peg.compiler.ast_nodes import (
@@ -32,6 +33,7 @@ from core.peg.compiler.ast_nodes import (
 )
 from core.peg.runtime import (
     Choice,
+    LineStart,
     Lit,
     NotPred,
     OneOrMore,
@@ -91,25 +93,6 @@ def _scan_step(
     new_depth = depth if new_quote is not None else _step_brace(ch, depth)
     is_closed = _is_closing_brace(new_quote, new_depth, i, start)
     return (i + 1, new_quote, new_depth, is_closed)
-
-
-def _is_preceded_by_newline(text: str, pos: int) -> bool:
-    i = pos - 1
-    while i >= 0 and text[i] in (" ", "\t", "\r"):
-        i -= 1
-    return i < 0 or text[i] == "\n"
-
-
-class LineStartParser(Parser[None]):
-    """Zero-width assertion parser that succeeds if at pos 0 or preceded by a newline."""
-
-    def __init__(self) -> None:
-        super().__init__("line_start")
-
-    def parse_at(self, ctx: ParseContext, pos: int) -> ParseResult[None]:
-        if pos == 0 or _is_preceded_by_newline(ctx.text, pos):
-            return ParseResult(True, None, pos)
-        return ParseResult(False, None, pos, "Not at line start")
 
 
 class ActionBlockParser(Parser[str]):
@@ -173,6 +156,7 @@ class MetaGrammarParser:
 
     def parse(self, text: str) -> GrammarDef:
         """Parses PEG grammar specification text into GrammarDef AST."""
+        text = textwrap.dedent(text)
         if self._aot_parser is not None:
             try:
                 return cast(GrammarDef, self._aot_parser.parse(text))
@@ -329,7 +313,7 @@ class MetaGrammarParser:
         prefixed_item = Choice(cut_item, name_binder, pos_pred, neg_pred, suffixed)
 
         # Line start assertion
-        line_start = LineStartParser()
+        line_start = LineStart()
 
         # Check for start of a new rule definition:
         # Ford syntax (ident <-) is always a rule head.

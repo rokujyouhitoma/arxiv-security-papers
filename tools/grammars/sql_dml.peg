@@ -1,5 +1,5 @@
 # SQL DML (Data Manipulation Language) Grammar Specification
-# Conforms to Bryan Ford POPL '04 Packrat PEG Specification.
+# Conforms to CPython PEG (PEP 617 / python.gram) Packrat PEG Specification.
 # Generates strongly-typed InsertStatement, UpdateStatement, DeleteStatement AST nodes.
 
 grammar SQLDML
@@ -230,25 +230,25 @@ def _assemble_delete_stmt(
 # -------------------------------------------------------------
 # Top-Level Root Rule
 # -------------------------------------------------------------
-root <- opt_ws dml:dml_stmt opt_ws {
+root : opt_ws dml=dml_stmt opt_ws {
     return dml
 }
 
-dml_stmt <-
+dml_stmt :
     insert_stmt
-    / update_stmt
-    / delete_stmt
+    | update_stmt
+    | delete_stmt
 
 # -------------------------------------------------------------
 # INSERT / REPLACE Statement
 # -------------------------------------------------------------
-insert_stmt <-
-    hdr:insert_header
-    ws tbl:ident
-    cols:(opt_ws "(" opt_ws cl:ident_list opt_ws ")" { return cl })?
-    ws body:insert_body
-    upsert:(opt_ws u:upsert_clause { return u })?
-    ret:(opt_ws r:returning_clause { return r })? {
+insert_stmt :
+    hdr=insert_header
+    ws tbl=ident
+    cols=(opt_ws "(" opt_ws cl=ident_list opt_ws ")" { return cl })?
+    ws body=insert_body
+    upsert=(opt_ws u=upsert_clause { return u })?
+    ret=(opt_ws r=returning_clause { return r })? {
         return _assemble_insert_stmt(
             is_replace=hdr,
             table_name=tbl,
@@ -259,86 +259,86 @@ insert_stmt <-
         )
     }
 
-insert_header <-
+insert_header :
     replace_kw ws into_kw { return True }
-    / insert_kw ws or_kw ws replace_kw ws into_kw { return True }
-    / insert_kw ws into_kw { return False }
+    | insert_kw ws or_kw ws replace_kw ws into_kw { return True }
+    | insert_kw ws into_kw { return False }
 
-insert_body <-
+insert_body :
     values_clause
-    / select_insert_body
+    | select_insert_body
 
-values_clause <- values_kw ws rows:values_rows {
+values_clause : values_kw ws rows=values_rows {
     return rows
 }
 
-values_rows <- first:value_row rest:(opt_ws "," opt_ws r:value_row { return r })* {
+values_rows : first=value_row rest=(opt_ws "," opt_ws r=value_row { return r })* {
     return [first] + rest
 }
 
-value_row <- "(" opt_ws first:value_atom rest:(opt_ws "," opt_ws a:value_atom { return a })* opt_ws ")" {
+value_row : "(" opt_ws first=value_atom rest=(opt_ws "," opt_ws a=value_atom { return a })* opt_ws ")" {
     return [first] + rest
 }
 
-value_atom <- raw:atom_token opt_ws {
+value_atom : raw=atom_token opt_ws {
     return _resolve_raw_literal(raw)
 }
 
-atom_token <-
+atom_token :
     string_literal
-    / double_quote_literal
-    / bracket_token
-    / /[^\s,)]+/
+    | double_quote_literal
+    | bracket_token
+    | /[^\s,)]+/
 
-select_insert_body <- raw:select_raw_text {
+select_insert_body : raw=select_raw_text {
     return parse_dql(raw)
 }
 
-select_raw_text <- select_kw ws parts:select_chunk+ {
+select_raw_text : select_kw ws parts=select_chunk+ {
     return "SELECT " + " ".join(parts).strip()
 }
 
-select_chunk <- !select_insert_end raw:("," / chunk_token) opt_ws {
+select_chunk : !select_insert_end raw=("," | chunk_token) opt_ws {
     return raw
 }
 
-select_insert_end <-
+select_insert_end :
     on_conflict_kw
-    / returning_kw
-    / ";"
+    | returning_kw
+    | ";"
 
-on_conflict_kw <- on_kw ws conflict_kw
+on_conflict_kw : on_kw ws conflict_kw
 
 # -------------------------------------------------------------
 # UPSERT: ON CONFLICT [(target)] [WHERE ...] DO NOTHING / UPDATE SET ...
 # -------------------------------------------------------------
-upsert_clause <-
+upsert_clause :
     on_kw ws conflict_kw
-    tgt:(opt_ws "(" opt_ws tl:ident_list opt_ws ")" { return tl })?
+    tgt=(opt_ws "(" opt_ws tl=ident_list opt_ws ")" { return tl })?
     (ws where_kw ws /[^\bDO\b;]+/)?
-    ws do_kw ws act:upsert_action {
+    ws do_kw ws act=upsert_action {
         return (tgt, act[0], act[1])
     }
 
-upsert_action <-
+upsert_action :
     nothing_kw { return ("NOTHING", {}) }
-    / update_kw ws set_kw ws sets:set_assignment_list (ws where_kw ws /[^\bRETURNING\b;]+/)? {
+    | update_kw ws set_kw ws sets=set_assignment_list (ws where_kw ws /[^\bRETURNING\b;]+/)? {
         return ("UPDATE", sets[0])
     }
 
 # -------------------------------------------------------------
 # UPDATE Statement
 # -------------------------------------------------------------
-update_stmt <-
+update_stmt :
     update_kw
-    (ws or_kw ws (rollback_kw / abort_kw / fail_kw / ignore_kw / replace_kw))?
-    ws tbl:ident
-    hint:(ws h:idx_hint { return h })?
-    ws set_kw ws sets:set_assignment_list
-    from_p:(opt_ws f:update_from_clause { return f })?
-    where_p:(opt_ws w:where_clause { return w })?
-    ord_lim:(opt_ws ol:order_limit_clause { return ol })?
-    ret:(opt_ws r:returning_clause { return r })? {
+    (ws or_kw ws (rollback_kw | abort_kw | fail_kw | ignore_kw | replace_kw))?
+    ws tbl=ident
+    hint=(ws h=idx_hint { return h })?
+    ws set_kw ws sets=set_assignment_list
+    from_p=(opt_ws f=update_from_clause { return f })?
+    where_p=(opt_ws w=where_clause { return w })?
+    ord_lim=(opt_ws ol=order_limit_clause { return ol })?
+    ret=(opt_ws r=returning_clause { return r })? {
         return _assemble_update_stmt(
             tbl_name=tbl,
             hint=hint,
@@ -350,7 +350,7 @@ update_stmt <-
         )
     }
 
-set_assignment_list <- first:set_item rest:(opt_ws "," opt_ws next_i:set_item { return next_i })* {
+set_assignment_list : first=set_item rest=(opt_ws "," opt_ws next_i=set_item { return next_i })* {
     static_map: Dict[str, Any] = {}
     raw_map: Dict[str, str] = {}
     for col, val, raw_expr in [first] + rest:
@@ -359,33 +359,33 @@ set_assignment_list <- first:set_item rest:(opt_ws "," opt_ws next_i:set_item { 
     return (static_map, raw_map)
 }
 
-set_item <- col:ident opt_ws "=" opt_ws expr:set_expr {
+set_item : col=ident opt_ws "=" opt_ws expr=set_expr {
     return (col, _resolve_raw_literal(expr), expr)
 }
 
-set_expr <- parts:set_chunk+ {
+set_expr : parts=set_chunk+ {
     return " ".join(parts).strip()
 }
 
-set_chunk <- !set_end raw:chunk_token opt_ws {
+set_chunk : !set_end raw=chunk_token opt_ws {
     return raw
 }
 
-set_end <-
+set_end :
     from_kw
-    / where_kw
-    / order_kw
-    / limit_kw
-    / returning_kw
-    / ";"
+    | where_kw
+    | order_kw
+    | limit_kw
+    | returning_kw
+    | ";"
 
-update_from_clause <- from_kw ws tbl:ident opt_alias:(ws a:non_reserved_ident { return a })? joins:(opt_ws j:join_spec { return j })* {
+update_from_clause : from_kw ws tbl=ident opt_alias=(ws a=non_reserved_ident { return a })? joins=(opt_ws j=join_spec { return j })* {
     t_ref = TableRef(name=tbl, alias=opt_alias)
     return (t_ref, joins)
 }
 
-join_spec <-
-    join_kw ws tbl:ident opt_alias:(ws a:non_reserved_ident { return a })? (ws on_kw ws raw:/[^\bWHERE\b\bORDER\b\bLIMIT\b\bRETURNING\b;]+/)? {
+join_spec :
+    join_kw ws tbl=ident opt_alias=(ws a=non_reserved_ident { return a })? (ws on_kw ws raw=/[^\bWHERE\b\bORDER\b\bLIMIT\b\bRETURNING\b;]+/)? {
         t_ref = TableRef(name=tbl, alias=opt_alias)
         return JoinClause(
             join_type=JoinType.INNER,
@@ -397,12 +397,12 @@ join_spec <-
 # -------------------------------------------------------------
 # DELETE Statement
 # -------------------------------------------------------------
-delete_stmt <-
-    delete_kw ws from_kw ws tbl:ident
-    hint:(ws h:idx_hint { return h })?
-    where_p:(opt_ws w:where_clause { return w })?
-    ord_lim:(opt_ws ol:order_limit_clause { return ol })?
-    ret:(opt_ws r:returning_clause { return r })? {
+delete_stmt :
+    delete_kw ws from_kw ws tbl=ident
+    hint=(ws h=idx_hint { return h })?
+    where_p=(opt_ws w=where_clause { return w })?
+    ord_lim=(opt_ws ol=order_limit_clause { return ol })?
+    ret=(opt_ws r=returning_clause { return r })? {
         return _assemble_delete_stmt(
             tbl_name=tbl,
             hint=hint,
@@ -415,167 +415,167 @@ delete_stmt <-
 # -------------------------------------------------------------
 # Clauses (WHERE, ORDER BY, LIMIT, RETURNING, Index Hint)
 # -------------------------------------------------------------
-where_clause <- where_kw ws body:where_body_expr {
+where_clause : where_kw ws body=where_body_expr {
     return body
 }
 
-where_body_expr <- parts:where_chunk+ {
+where_body_expr : parts=where_chunk+ {
     return " ".join(parts).strip()
 }
 
-where_chunk <- !where_end raw:chunk_token opt_ws {
+where_chunk : !where_end raw=chunk_token opt_ws {
     return raw
 }
 
-where_end <-
+where_end :
     order_kw
-    / limit_kw
-    / returning_kw
-    / ";"
+    | limit_kw
+    | returning_kw
+    | ";"
 
-order_limit_clause <-
-    ord:order_by_clause?
-    lim:limit_clause? {
+order_limit_clause :
+    ord=order_by_clause?
+    lim=limit_clause? {
         order_col = ord[0] if ord else None
         order_desc = ord[1] if ord else False
         limit_val = lim if lim is not None else None
         return (order_col, order_desc, limit_val)
     }
 
-order_by_clause <- order_kw ws by_kw ws col:ident dir:(ws d:order_dir { return d })? {
+order_by_clause : order_kw ws by_kw ws col=ident dir=(ws d=order_dir { return d })? {
     is_desc = (dir == "DESC") if dir else False
     return (col, is_desc)
 }
 
-order_dir <-
+order_dir :
     asc_kw { return "ASC" }
-    / desc_kw { return "DESC" }
+    | desc_kw { return "DESC" }
 
-limit_clause <- opt_ws limit_kw ws num:integer_num {
+limit_clause : opt_ws limit_kw ws num=integer_num {
     return num
 }
 
-returning_clause <- returning_kw ws items:returning_item_list {
+returning_clause : returning_kw ws items=returning_item_list {
     return items
 }
 
-returning_item_list <- first:returning_item rest:(opt_ws "," opt_ws next_i:returning_item { return next_i })* {
+returning_item_list : first=returning_item rest=(opt_ws "," opt_ws next_i=returning_item { return next_i })* {
     return [first] + rest
 }
 
-returning_item <-
+returning_item :
     "*" { return "*" }
-    / raw:/[a-zA-Z0-9_\.]+(\s+AS\s+[a-zA-Z0-9_]+)?/ { return raw }
+    | raw=/[a-zA-Z0-9_\.]+(\s+AS\s+[a-zA-Z0-9_]+)?/ { return raw }
 
-idx_hint <-
-    indexed_kw ws by_kw ws name:ident { return (name, False) }
-    / not_kw ws indexed_kw { return (None, True) }
+idx_hint :
+    indexed_kw ws by_kw ws name=ident { return (name, False) }
+    | not_kw ws indexed_kw { return (None, True) }
 
 # -------------------------------------------------------------
 # Identifiers & Literals
 # -------------------------------------------------------------
-ident_list <- first:ident rest:(opt_ws "," opt_ws next_i:ident { return next_i })* {
+ident_list : first=ident rest=(opt_ws "," opt_ws next_i=ident { return next_i })* {
     return [first] + rest
 }
 
-ident <-
-    plain:ident_pattern { return plain }
-    / backtick:backtick_pattern { return backtick }
-    / double_quote:double_quote_pattern { return double_quote }
+ident :
+    plain=ident_pattern { return plain }
+    | backtick=backtick_pattern { return backtick }
+    | double_quote=double_quote_pattern { return double_quote }
 
-ident_pattern <- raw:/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?/ {
+ident_pattern : raw=/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?/ {
     return raw
 }
 
-backtick_pattern <- raw:/`[^`]*`/ {
+backtick_pattern : raw=/`[^`]*`/ {
     return raw[1:-1]
 }
 
-double_quote_pattern <- raw:/"[^"]*"/ {
+double_quote_pattern : raw=/"[^"]*"/ {
     return raw[1:-1]
 }
 
-non_reserved_ident <- !reserved_kw id:ident {
+non_reserved_ident : !reserved_kw id=ident {
     return id
 }
 
-reserved_kw <-
+reserved_kw :
     where_kw
-    / order_kw
-    / limit_kw
-    / returning_kw
-    / join_kw
-    / from_kw
-    / set_kw
-    / on_kw
+    | order_kw
+    | limit_kw
+    | returning_kw
+    | join_kw
+    | from_kw
+    | set_kw
+    | on_kw
 
-string_literal <- raw:/'([^']|'')*'/ {
+string_literal : raw=/'([^']|'')*'/ {
     return raw
 }
 
-double_quote_literal <- raw:/"([^"\\]|\\.)*"/ {
+double_quote_literal : raw=/"([^"\\]|\\.)*"/ {
     return raw
 }
 
-bracket_token <- raw:/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/ {
+bracket_token : raw=/\[(?:[^\[\]]|\[[^\[\]]*\])*\]/ {
     return raw
 }
 
-chunk_token <-
+chunk_token :
     func_call_token
-    / paren_token
-    / bracket_token
-    / string_literal
-    / double_quote_literal
-    / non_ws_token
+    | paren_token
+    | bracket_token
+    | string_literal
+    | double_quote_literal
+    | non_ws_token
 
-func_call_token <- fn:/[a-zA-Z_][a-zA-Z0-9_]*/ args:/\s*\((?:[^()]|\([^()]*\))*\)/ {
+func_call_token : fn=/[a-zA-Z_][a-zA-Z0-9_]*/ args=/\s*\((?:[^()]|\([^()]*\))*\)/ {
     return f"{fn}{args}"
 }
 
-paren_token <- raw:/\((?:[^()]|\([^()]*\))*\)/ {
+paren_token : raw=/\((?:[^()]|\([^()]*\))*\)/ {
     return raw
 }
 
-non_ws_token <- raw:/[^\s,;()]+/ {
+non_ws_token : raw=/[^\s,;()]+/ {
     return raw
 }
 
-integer_num <- raw:/[0-9]+/ {
+integer_num : raw=/[0-9]+/ {
     return int(raw)
 }
 
 # -------------------------------------------------------------
 # SQL Keywords (Case-Insensitive)
 # -------------------------------------------------------------
-insert_kw <- /(?i)\bINSERT\b/
-replace_kw <- /(?i)\bREPLACE\b/
-into_kw <- /(?i)\bINTO\b/
-update_kw <- /(?i)\bUPDATE\b/
-delete_kw <- /(?i)\bDELETE\b/
-from_kw <- /(?i)\bFROM\b/
-set_kw <- /(?i)\bSET\b/
-values_kw <- /(?i)\bVALUES\b/
-where_kw <- /(?i)\bWHERE\b/
-order_kw <- /(?i)\bORDER\b/
-by_kw <- /(?i)\bBY\b/
-limit_kw <- /(?i)\bLIMIT\b/
-returning_kw <- /(?i)\bRETURNING\b/
-on_kw <- /(?i)\bON\b/
-conflict_kw <- /(?i)\bCONFLICT\b/
-do_kw <- /(?i)\bDO\b/
-nothing_kw <- /(?i)\bNOTHING\b/
-indexed_kw <- /(?i)\bINDEXED\b/
-not_kw <- /(?i)\bNOT\b/
-or_kw <- /(?i)\bOR\b/
-rollback_kw <- /(?i)\bROLLBACK\b/
-abort_kw <- /(?i)\bABORT\b/
-fail_kw <- /(?i)\bFAIL\b/
-ignore_kw <- /(?i)\bIGNORE\b/
-join_kw <- /(?i)\bJOIN\b/
-asc_kw <- /(?i)\bASC\b/
-desc_kw <- /(?i)\bDESC\b/
-select_kw <- /(?i)\bSELECT\b/
+insert_kw : /(?i)\bINSERT\b/
+replace_kw : /(?i)\bREPLACE\b/
+into_kw : /(?i)\bINTO\b/
+update_kw : /(?i)\bUPDATE\b/
+delete_kw : /(?i)\bDELETE\b/
+from_kw : /(?i)\bFROM\b/
+set_kw : /(?i)\bSET\b/
+values_kw : /(?i)\bVALUES\b/
+where_kw : /(?i)\bWHERE\b/
+order_kw : /(?i)\bORDER\b/
+by_kw : /(?i)\bBY\b/
+limit_kw : /(?i)\bLIMIT\b/
+returning_kw : /(?i)\bRETURNING\b/
+on_kw : /(?i)\bON\b/
+conflict_kw : /(?i)\bCONFLICT\b/
+do_kw : /(?i)\bDO\b/
+nothing_kw : /(?i)\bNOTHING\b/
+indexed_kw : /(?i)\bINDEXED\b/
+not_kw : /(?i)\bNOT\b/
+or_kw : /(?i)\bOR\b/
+rollback_kw : /(?i)\bROLLBACK\b/
+abort_kw : /(?i)\bABORT\b/
+fail_kw : /(?i)\bFAIL\b/
+ignore_kw : /(?i)\bIGNORE\b/
+join_kw : /(?i)\bJOIN\b/
+asc_kw : /(?i)\bASC\b/
+desc_kw : /(?i)\bDESC\b/
+select_kw : /(?i)\bSELECT\b/
 
-ws <- /[ \t\r\n]+|#[^\r\n]*|--[^\r\n]*/
-opt_ws <- /[ \t\r\n]*|#[^\r\n]*|--[^\r\n]*/
+ws : /[ \t\r\n]+|#[^\r\n]*|--[^\r\n]*/
+opt_ws : /[ \t\r\n]*|#[^\r\n]*|--[^\r\n]*/

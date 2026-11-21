@@ -46,6 +46,7 @@ _PEG_SYMBOLS: Tuple[str, ...] = (
     "CutOp",
     "Dot",
     "Gather",
+    "LineStart",
     "Lit",
     "NotPred",
     "OneOrMore",
