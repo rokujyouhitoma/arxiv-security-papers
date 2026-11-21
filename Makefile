@@ -478,12 +478,16 @@ migrations-diff-test: activate ## Run Dual-Backend Differential Test (PyDB vs SQ
 .PHONY: benchmark_trio bench_ci bench_perf diff_test
 benchmark_trio: activate ## Run 3-way performance benchmark: ILisp vs ULisp AOT vs ULisp JIT
 	${VENV_PYTHON} tools/benchmark_ilisp_ulisp.py --iterations 10
+	${VENV_PYTHON} tools/report_benchmarks.py --latest outputs/benchmarks/latest.json --history-dir outputs/benchmarks/history --output outputs/benchmarks/benchmark_report.md
 
 bench_perf: activate ## Run 3-way benchmark with Linux perf stat hardware counters (Mytkowicz protocol)
 	${VENV_PYTHON} tools/benchmark_ilisp_ulisp.py --iterations 10 --perf
+	${VENV_PYTHON} tools/report_benchmarks.py --latest outputs/benchmarks/latest.json --history-dir outputs/benchmarks/history --output outputs/benchmarks/benchmark_report.md
 
-bench_ci: activate ## Run 3-way benchmark with regression checking against baseline
+bench_ci: activate ## Run 3-way benchmark with statistical regression checking (5% threshold, Welch's t-test)
 	${VENV_PYTHON} tools/benchmark_ilisp_ulisp.py --iterations 5 --compare outputs/benchmarks/latest.json --threshold 2.5
+	${VENV_PYTHON} tools/regression_detector.py --baseline outputs/benchmarks/latest.json --candidate outputs/benchmarks/latest.json --threshold 0.05 --json-out outputs/benchmarks/regression_report.json
+	${VENV_PYTHON} tools/report_benchmarks.py --latest outputs/benchmarks/latest.json --history-dir outputs/benchmarks/history --regression-json outputs/benchmarks/regression_report.json --output outputs/benchmarks/benchmark_report.md
 
 diff_test: activate ## Run differential testing suite: ULisp vs Chez Scheme vs Chibi Scheme (Issue #526)
 	${VENV_PYTHON} tools/differential_test_ulisp.py

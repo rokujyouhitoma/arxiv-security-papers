@@ -1,0 +1,167 @@
+{
+  "status": "PASS",
+  "threshold": 0.05,
+  "threshold_percent": 5.0,
+  "p_value_threshold": 0.05,
+  "evaluated_tiers": [
+    "ulisp_aot",
+    "ulisp_jit"
+  ],
+  "workloads": [
+    {
+      "workload_id": "fib_loop",
+      "title": "Iterative Fibonacci (fib 20)",
+      "status": "PASS",
+      "tiers": {
+        "ulisp_aot": {
+          "tier": "ulisp_aot",
+          "base_mean_ms": 0.6600058011827059,
+          "cand_mean_ms": 0.6600058011827059,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        },
+        "ulisp_jit": {
+          "tier": "ulisp_jit",
+          "base_mean_ms": 8.630910998908803,
+          "cand_mean_ms": 8.630910998908803,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        }
+      }
+    },
+    {
+      "workload_id": "fact_loop",
+      "title": "Iterative Factorial (fact 12)",
+      "status": "PASS",
+      "tiers": {
+        "ulisp_aot": {
+          "tier": "ulisp_aot",
+          "base_mean_ms": 0.43104899814352393,
+          "cand_mean_ms": 0.43104899814352393,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        },
+        "ulisp_jit": {
+          "tier": "ulisp_jit",
+          "base_mean_ms": 8.670941001037136,
+          "cand_mean_ms": 8.670941001037136,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        }
+      }
+    },
+    {
+      "workload_id": "sum_loop",
+      "title": "Hot Loop Accumulation (5,000 iters)",
+      "status": "PASS",
+      "tiers": {
+        "ulisp_aot": {
+          "tier": "ulisp_aot",
+          "base_mean_ms": 0.3532051996444352,
+          "cand_mean_ms": 0.3532051996444352,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        },
+        "ulisp_jit": {
+          "tier": "ulisp_jit",
+          "base_mean_ms": 18.813901201065164,
+          "cand_mean_ms": 18.813901201065164,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        }
+      }
+    },
+    {
+      "workload_id": "poly_loop",
+      "title": "Polynomial Loop 3x^2+5x+7 (1,000 iters)",
+      "status": "PASS",
+      "tiers": {
+        "ulisp_aot": {
+          "tier": "ulisp_aot",
+          "base_mean_ms": 0.519654800882563,
+          "cand_mean_ms": 0.519654800882563,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        },
+        "ulisp_jit": {
+          "tier": "ulisp_jit",
+          "base_mean_ms": 11.428592399170157,
+          "cand_mean_ms": 11.428592399170157,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        }
+      }
+    },
+    {
+      "workload_id": "tri_loop",
+      "title": "Triangular Sum (tri 500)",
+      "status": "PASS",
+      "tiers": {
+        "ulisp_aot": {
+          "tier": "ulisp_aot",
+          "base_mean_ms": 0.6075272001908161,
+          "cand_mean_ms": 0.6075272001908161,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        },
+        "ulisp_jit": {
+          "tier": "ulisp_jit",
+          "base_mean_ms": 9.446025200304575,
+          "cand_mean_ms": 9.446025200304575,
+          "delta_ratio": 0.0,
+          "delta_percent": 0.0,
+          "t_statistic": 0.0,
+          "degrees_of_freedom": 8.0,
+          "p_value": 0.5,
+          "status": "PASS",
+          "reason": "Speedup of 0.0% (improved)"
+        }
+      }
+    }
+  ]
+}

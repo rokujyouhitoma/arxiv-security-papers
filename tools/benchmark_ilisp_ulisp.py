@@ -437,6 +437,7 @@ def measure_workload(
             "std_ms": statistics.stdev(ilisp_times) if len(ilisp_times) > 1 else 0.0,
             "min_ms": min(ilisp_times),
             "max_ms": max(ilisp_times),
+            "raw_samples_ms": ilisp_times,
         },
         "ulisp_aot": {
             "compile_ms": aot_comp_ms,
@@ -444,12 +445,14 @@ def measure_workload(
             "std_ms": statistics.stdev(aot_exec_times) if len(aot_exec_times) > 1 else 0.0,
             "min_ms": min(aot_exec_times),
             "max_ms": max(aot_exec_times),
+            "raw_samples_ms": aot_exec_times,
         },
         "ulisp_jit": {
             "mean_ms": jit_mean,
             "std_ms": statistics.stdev(jit_times) if len(jit_times) > 1 else 0.0,
             "min_ms": min(jit_times),
             "max_ms": max(jit_times),
+            "raw_samples_ms": jit_times,
         },
         "speedups": {
             "aot_vs_ilisp": speedup_aot_vs_ilisp,

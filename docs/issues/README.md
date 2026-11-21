@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 優先度 | 対象仕様書 | 詳細リンク |
 | :---: | --- | :---: | :---: | :---: | :---: | :---: |
-| **903** | 統計的性能退行（Regression Detector）自動検知器および日本語ベンチマークレポート自動生成 | Feature | 未着手 (Open) | Medium | [DSN-33-06](../designs/DSN-33-06-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md) | [903-implement-performance-regression-detector-and-automated-markdown-reporting.md](903-implement-performance-regression-detector-and-automated-markdown-reporting.md) |
 | **904** | 外部 C ランタイム完全排除と Pure Scheme _start エントリポイント・Raw Syscall 直結 | Feature | 未着手 (Open) | High | [DSN-33-07](../designs/DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) | [904-eliminate-external-c-runtime-and-establish-pure-scheme-start-entry.md](904-eliminate-external-c-runtime-and-establish-pure-scheme-start-entry.md) |
 | **905** | ベアメタル自立型 Demand-Paged BSS バンプアロケータおよび Zero-libc 2-Space GC の実装 | Feature | 未着手 (Open) | High | [DSN-33-07](../designs/DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) | [905-implement-freestanding-demand-paged-bss-bump-allocator-and-gc.md](905-implement-freestanding-demand-paged-bss-bump-allocator-and-gc.md) |
 | **906** | 完全自立型静的 ELF (-nostdlib -static) の E2E 実行可能性および動的依存ゼロの検証 | Feature | 未着手 (Open) | Medium | [DSN-33-07](../designs/DSN-33-07-ulisp_zero_libc_pure_scheme_bare_metal_runtime.md) | [906-verify-freestanding-static-nostdlib-elf-e2e-execution.md](906-verify-freestanding-static-nostdlib-elf-e2e-execution.md) |
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **903** | 統計的性能退行（Regression Detector）自動検知器および日本語ベンチマークレポート自動生成 | Feature | 2026-11-21 | [903-implement-performance-regression-detector-and-automated-markdown-reporting.md](closed/903-implement-performance-regression-detector-and-automated-markdown-reporting.md) |
 | **902** | 3種実行系（ILisp / AOT / JIT）自動ベンチマークハーネスおよび Mytkowicz バイアス排除の実装 | Feature | 2026-11-21 | [902-implement-automated-continuous-benchmarking-harness-and-mytkowicz-bias-elimination.md](closed/902-implement-automated-continuous-benchmarking-harness-and-mytkowicz-bias-elimination.md) |
 | **901** | 最適化済み LIR トレースからインメモリ W^X 実行可能バッファへのネイティブ機械語直接アセンブル配線 | Feature | 2026-11-21 | [901-integrate-jit-trace-buffer-with-in-memory-native-x86-emitter.md](closed/901-integrate-jit-trace-buffer-with-in-memory-native-x86-emitter.md) |
 | **900** | JIT トレース最適化（ガード除去・仮想化）および脱出 Deopt トランポリンの実装 | Feature | 2026-11-21 | [900-implement-jit-trace-optimizer-and-guard-failure-deopt-trampoline.md](closed/900-implement-jit-trace-optimizer-and-guard-failure-deopt-trampoline.md) |
