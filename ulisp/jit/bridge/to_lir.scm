@@ -236,3 +236,86 @@
               (list '%lir-main
                     '(frame-size 32)
                     (list 'body full-body))))))
+
+;;; =======================================================================
+;;; MLisp In-Memory x86-64 Emitter & Assembler Wiring (Issue #901)
+;;; Conforms to DSN-33 Architecture Specification & Issue #901
+;;; =======================================================================
+
+;;; Convert LIR operand to GNU Intel-syntax string
+(define (lir-opnd->intel-asm opnd)
+  (cond
+    ((number? opnd) (number->string opnd))
+    ((boolean? opnd) (if opnd "111" "47"))
+    ((symbol? opnd)
+     (let ((s (symbol->string opnd)))
+       (if (and (> (string-length s) 1) (char=? (string-ref s 0) #\%))
+           (substring s 1 (string-length s))
+           s)))
+    ((and (pair? opnd) (eq? (car opnd) '%stack))
+     (let ((off (cadr opnd)))
+       (if (< off 0)
+           (string-append "qword ptr [rbp - " (number->string (- 0 off)) "]")
+           (string-append "qword ptr [rbp + " (number->string off) "]"))))
+    (else (write-to-string opnd))))
+
+;;; Translate single LIR instruction into list of Intel-syntax assembly lines
+(define (lir-inst->x86-asm-lines inst)
+  (let ((op (car inst)))
+    (case op
+      ((%label)
+       (list (string-append (symbol->string (cadr inst)) ":")))
+      ((%jump)
+       (list (string-append "    jmp " (symbol->string (cadr inst)))))
+      ((%jump-if-zero)
+       (list (string-append "    jz " (symbol->string (cadr inst)))))
+      ((%mov)
+       (list (string-append "    mov " (lir-opnd->intel-asm (cadr inst)) ", " (lir-opnd->intel-asm (caddr inst)))))
+      ((%add)
+       (list (string-append "    add " (lir-opnd->intel-asm (cadr inst)) ", " (lir-opnd->intel-asm (caddr inst)))))
+      ((%sub)
+       (list (string-append "    sub " (lir-opnd->intel-asm (cadr inst)) ", " (lir-opnd->intel-asm (caddr inst)))))
+      ((%imul)
+       (list (string-append "    imul " (lir-opnd->intel-asm (cadr inst)) ", " (lir-opnd->intel-asm (caddr inst)))))
+      ((%sal)
+       (list (string-append "    sal " (lir-opnd->intel-asm (cadr inst)) ", " (lir-opnd->intel-asm (caddr inst)))))
+      ((%bit-and)
+       (list (string-append "    and " (lir-opnd->intel-asm (cadr inst)) ", " (lir-opnd->intel-asm (caddr inst)))))
+      ((%cmp)
+       (list (string-append "    cmp " (lir-opnd->intel-asm (cadr inst)) ", " (lir-opnd->intel-asm (caddr inst)))))
+      ((%set-boolean)
+       (let ((set-mnem (caddr inst)))
+         (list (string-append "    " set-mnem " al")
+               "    movzx eax, al"
+               "    cmp eax, 1"
+               "    mov rax, 47"
+               "    mov rcx, 111"
+               "    cmove rax, rcx")))
+      ((%return)
+       (list "    ret"))
+      (else
+       '()))))
+
+;;; Translate %lir-program into full list of x86-64 Intel-syntax assembly lines
+(define (lir-program->x86-asm-lines lir-prog)
+  (let* ((fields (cdr lir-prog))
+         (main-clause (assq '%lir-main fields))
+         (body-clause (if main-clause (assq 'body (cdr main-clause)) #f))
+         (insts (if body-clause (cadr body-clause) '()))
+         (header '("    .intel_syntax noprefix"
+                   "    .text"
+                   "    .globl jit_entry"
+                   "jit_entry:"))
+         (lines (apply append (map lir-inst->x86-asm-lines insts))))
+    (append header lines)))
+
+;;; Translate MLisp trace directly to Intel-syntax assembly lines
+(define (trace->x86-asm-lines trace)
+  (let ((lir-prog (trace->lir-program trace)))
+    (lir-program->x86-asm-lines lir-prog)))
+
+;;; End-to-end: Compile trace directly to native x86-64 machine code bytevector via 144a assembler
+(define (trace->x86-machine-code trace)
+  (let* ((asm-lines (trace->x86-asm-lines trace))
+         (res (assemble-x86-lines asm-lines)))
+    (car res))) ; Returns text-bv
