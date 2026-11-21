@@ -306,7 +306,7 @@
 (define (vm-mem-write-u64! vm addr val)
   (let* ((u (lir-vm-u64 val))
          (low (bitwise-and u *lir-vm-mask-32*))
-         (high (bitwise-and (quotient u 4294967296) *lir-vm-mask-32*)))
+         (high (bitwise-and (arithmetic-shift u -32) *lir-vm-mask-32*)))
     (vm-mem-write-u32! vm addr low)
     (vm-mem-write-u32! vm (+ addr 4) high)))
 
@@ -945,7 +945,7 @@
                   (cnt-op (caddr inst))
                   (v-dst (vm-eval-operand vm dst))
                   (cnt (bitwise-and (lir-vm-u64 (vm-eval-operand vm cnt-op)) 63))
-                  (res (quotient (lir-vm-u64 v-dst) (arithmetic-shift 1 cnt))))
+                  (res (arithmetic-shift (lir-vm-u64 v-dst) (- cnt))))
              (vm-update-logic-flags! vm res)
              (vm-set-location! vm dst (lir-vm-s64 res))))
 
@@ -2087,14 +2087,17 @@
 
 ;;; C Foreign Call Dispatcher
 (define (vm-dispatch-c-call! vm fn-name shift)
-  ;; Check registered custom handlers first
-  (let ((custom (assq fn-name (vm-foreign-handlers vm))))
+  ;; Check registered custom handlers first (supports both string and symbol names)
+  (let* ((fn-sym (if (string? fn-name) (string->symbol fn-name) fn-name))
+         (fn-str (if (symbol? fn-name) (symbol->string fn-name) fn-name))
+         (custom (or (assq fn-sym (vm-foreign-handlers vm))
+                     (assoc fn-str (vm-foreign-handlers vm)))))
     (if custom
         ((cdr custom) vm)
-        (case fn-name
+        (case fn-sym
           ((ulisp_alloc malloc)
            (let* ((bytes (vm-get-reg vm '%rdi))
-                  (tag (if (eq? fn-name 'ulisp_alloc) (vm-get-reg vm '%rsi) 0))
+                  (tag (if (eq? fn-sym 'ulisp_alloc) (vm-get-reg vm '%rsi) 0))
                   (aligned (bitwise-and (+ bytes 7) -8))
                   (raw-ptr (vm-heap-ptr vm))
                   (new-ptr (+ raw-ptr aligned)))
@@ -2119,10 +2122,11 @@
            (vm-set-reg! vm '%rax 0))))))
 
 (define (register-c-foreign-handler! vm name proc)
-  (let ((entry (assq name (vm-foreign-handlers vm))))
+  (let* ((key (if (string? name) (string->symbol name) name))
+         (entry (assq key (vm-foreign-handlers vm))))
     (if entry
         (set-cdr! entry proc)
-        (vm-set-foreign-handlers! vm (cons (cons name proc) (vm-foreign-handlers vm))))))
+        (vm-set-foreign-handlers! vm (cons (cons key proc) (vm-foreign-handlers vm))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; §10. Public Execution & Convenience APIs

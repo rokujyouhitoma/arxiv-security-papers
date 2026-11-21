@@ -350,20 +350,30 @@ def floor_div(n1: int, n2: int) -> Values:
     return Values(q, r)
 
 
-def truncate_quotient(n1: int, n2: int) -> int:
-    """Truncate quotient: int(n1 / n2)."""
+def _exact_truncate_quotient(n1: Any, n2: Any) -> int:
+    """Exact integer truncate quotient avoiding float64 precision loss for |n| >= 2^53."""
+    if isinstance(n1, int) and isinstance(n2, int):
+        if n2 == 0:
+            raise ZeroDivisionError("division by zero")
+        q = abs(n1) // abs(n2)
+        return -q if (n1 < 0) ^ (n2 < 0) else q
     return int(n1 / n2)
+
+
+def truncate_quotient(n1: int, n2: int) -> int:
+    """Truncate quotient: exact truncate(n1 / n2)."""
+    return _exact_truncate_quotient(n1, n2)
 
 
 def truncate_remainder(n1: int, n2: int) -> int:
     """Truncate remainder: n1 - n2 * truncate(n1 / n2)."""
-    q = int(n1 / n2)
+    q = _exact_truncate_quotient(n1, n2)
     return n1 - n2 * q
 
 
 def truncate_div(n1: int, n2: int) -> Values:
     """Truncate division returning (values quotient remainder)."""
-    q = int(n1 / n2)
+    q = _exact_truncate_quotient(n1, n2)
     r = n1 - n2 * q
     return Values(q, r)
 
