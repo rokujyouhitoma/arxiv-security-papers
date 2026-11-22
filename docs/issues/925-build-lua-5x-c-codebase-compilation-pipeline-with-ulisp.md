@@ -16,7 +16,7 @@ Phase S2〜S4 で構築した ULisp C99 フロントエンド（[DSN-33-11](../d
 - 関連設計書:
   - [DSN-33-32 §1.2, §2.1, §6.1](../designs/DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
 - 前提基盤 Issue:
-  - [[#917]](closed/917-implement-c-compiler-driver-and-host-ld-integration.md), [[#918]](918-implement-c99-struct-union-enum-bitfield-sysv-layout.md), [[#919]](919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md), [[#920]](920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md), [[#921]](921-implement-sysv-amd64-stdarg-va-list-lowering.md), [[#922]](closed/922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md), [[#923]](923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md), [[#924]](924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md)
+  - [[#917]](closed/917-implement-c-compiler-driver-and-host-ld-integration.md), [[#918]](918-implement-c99-struct-union-enum-bitfield-sysv-layout.md), [[#919]](919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md), [[#920]](920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md), [[#921]](921-implement-sysv-amd64-stdarg-va-list-lowering.md), [[#922]](closed/922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md), [[#923]](closed/923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md), [[#924]](924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md)
 - 後続連携 Issue:
   - [[#926]](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) (公式テストスイート E2E 実証), [[#927]](927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) (PCH高速化), [[#928]](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) (`musl libc` 完全静的リンク)
 

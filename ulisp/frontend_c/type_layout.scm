@@ -612,7 +612,23 @@
             (loop (+ i 1) (quotient x 256) (cons (modulo x 256) acc)))))))
 
 (define (c99-f32->le-bytes val)
-  (c99-int->le-bytes (vm-f32->ieee754-u32 val) 4))
+  (cond
+    ((and (pair? val) (eq? (car val) 'c-static-fp))
+     (let ((fty (cadr val))
+           (bits (caddr val)))
+       (c99-int->le-bytes (if (eq? fty 'f64) (c99-ieee754-f64-bits->f32-bits bits) bits) 4)))
+    ((and (pair? val) (eq? (car val) 'c-float-bits))
+     (c99-int->le-bytes (cadr val) 4))
+    (else
+     (c99-int->le-bytes (vm-f32->ieee754-u32 val) 4))))
 
 (define (c99-f64->le-bytes val)
-  (c99-int->le-bytes (vm-f64->ieee754-u64 val) 8))
+  (cond
+    ((and (pair? val) (eq? (car val) 'c-static-fp))
+     (let ((fty (cadr val))
+           (bits (caddr val)))
+       (c99-int->le-bytes (if (eq? fty 'f32) (c99-ieee754-f32-bits->f64-bits bits) bits) 8)))
+    ((and (pair? val) (eq? (car val) 'c-float-bits))
+     (c99-int->le-bytes (cadr val) 8))
+    (else
+     (c99-int->le-bytes (vm-f64->ieee754-u64 val) 8))))

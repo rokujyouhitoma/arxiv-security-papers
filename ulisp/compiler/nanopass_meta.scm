@@ -3374,9 +3374,10 @@
              %box-fixnum %unbox-fixnum %neg %inc
              %alloc %alloc-stack %managed-alloc %managed-alloc-stack
              %fmov %fadd %fsub %fmul %fdiv
-             %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum)
+             %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum
+             %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
             (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg)))
-           ((%load-typed %trunc %zext %sext %managed-box %managed-unbox)
+           ((%load-typed %fneg %fpext %fptrunc %trunc %zext %sext %managed-box %managed-unbox)
             (and (pair? (cdr inst))
                  (pair? (cddr inst))
                  (lir-reg-aliases? (caddr inst) reg)))
@@ -3525,10 +3526,10 @@
            (if (eq? base '%rsp)
                (list (list 'stack off))
                (if (lir-peephole-reg? base) (list base) '()))))
-        ((%mov %fmov %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum)
+        ((%mov %fmov %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum)
          (let ((src (caddr inst)))
            (if (lir-peephole-reg? src) (list src) '())))
-        ((%trunc %zext %sext)
+        ((%fneg %fpext %fptrunc %trunc %zext %sext)
          (let ((src (cadddr inst)))
            (if (lir-peephole-reg? src) (list src) '())))
         ((%add %raw-add %sub %raw-sub %imul %raw-mul %bit-and %bit-or %bit-xor %shl %shr %sar
@@ -3541,6 +3542,13 @@
              (else '()))))
         ((%cmp %raw-cmp %fcmp)
          (let ((op1 (cadr inst)) (op2 (caddr inst)))
+           (cond
+             ((and (lir-peephole-reg? op1) (lir-peephole-reg? op2)) (list op1 op2))
+             ((lir-peephole-reg? op1) (list op1))
+             ((lir-peephole-reg? op2) (list op2))
+             (else '()))))
+        ((%fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
+         (let ((op1 (caddr inst)) (op2 (cadddr inst)))
            (cond
              ((and (lir-peephole-reg? op1) (lir-peephole-reg? op2)) (list op1 op2))
              ((lir-peephole-reg? op1) (list op1))
@@ -3577,10 +3585,11 @@
                (list (list 'stack off))
                '())))
         ((%load %load-byte-zx %pop %code-ref %str-ref %global-ref %set-boolean %alloc %alloc-stack
-          %setb %setbe %seta %setae %fmov %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64
+          %setb %setbe %seta %setae %fmov %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64
+          %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge
           %unbox-flonum %fadd %fsub %fmul %fdiv %managed-alloc %managed-alloc-stack)
          (if (lir-peephole-reg? (cadr inst)) (list (cadr inst)) '()))
-        ((%load-typed %trunc %zext %sext)
+        ((%load-typed %fneg %fpext %fptrunc %trunc %zext %sext)
          (if (lir-peephole-reg? (caddr inst)) (list (caddr inst)) '()))
         ((%add-overflow %sub-overflow %mul-overflow)
          (list (cadr inst) (caddr inst)))

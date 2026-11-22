@@ -250,9 +250,28 @@
 
 (define (%c-scale-power val base exp-val)
   (cond
+    ((= val 0.0) 0.0)
     ((= exp-val 0) val)
-    ((> exp-val 0) (* val (exact->inexact (expt base exp-val))))
-    (else (/ val (exact->inexact (expt base (- exp-val)))))))
+    ((= base 10)
+     (cond
+       ((> exp-val 308) (* 1e308 2.0))
+       ((< exp-val -350) 0.0)
+       ((> exp-val 0) (* val (exact->inexact (expt 10 exp-val))))
+       ((< exp-val -300)
+        (let ((half (exact->inexact (expt 10 150)))
+              (rem  (exact->inexact (expt 10 (- (- exp-val) 150)))))
+          (/ (/ val half) rem)))
+       (else (/ val (exact->inexact (expt 10 (- exp-val)))))))
+    (else
+     (cond
+       ((> exp-val 1024) (* 1e308 2.0))
+       ((< exp-val -1100) 0.0)
+       ((> exp-val 0) (* val (exact->inexact (expt base exp-val))))
+       ((< exp-val -1000)
+        (let ((half (exact->inexact (expt base 512)))
+              (rem  (exact->inexact (expt base (- (- exp-val) 512)))))
+          (/ (/ val half) rem)))
+       (else (/ val (exact->inexact (expt base (- exp-val)))))))))
 
 (define (%c-decode-float-literal lexeme)
   (let ((end (%c-strip-float-suffix lexeme)))

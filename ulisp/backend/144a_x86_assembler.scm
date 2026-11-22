@@ -137,9 +137,11 @@
         ((rep-movsb rep) 'rep-movsb) ((push) 'push) ((pop) 'pop) ((call) 'call) ((jmp) 'jmp)
         ((je jz) 'je) ((jne jnz) 'jne) ((jb) 'jb) ((jae jnc) 'jae) ((jbe) 'jbe) ((ja) 'ja)
         ((js) 'js) ((jns) 'jns) ((jl) 'jl) ((jge) 'jge) ((jle) 'jle) ((jg) 'jg)
+        ((jp jpe) 'jp) ((jnp jpo) 'jnp)
         ((seto) 'seto)
         ((sete setz) 'sete) ((setne setnz) 'setne) ((setb) 'setb) ((setae) 'setae)
         ((setbe) 'setbe) ((seta) 'seta) ((setl) 'setl) ((setge) 'setge) ((setle) 'setle) ((setg) 'setg)
+        ((setp setpe) 'setp) ((setnp setpo) 'setnp)
         ((cmove cmovz) 'cmove) ((cmovne cmovnz) 'cmovne) ((cmovl) 'cmovl) ((cmovge) 'cmovge)
         ((cmovle) 'cmovle) ((cmovg) 'cmovg) ((movzx) 'movzx) ((movsx) 'movsx) ((movsxd) 'movsxd) ((lea) 'lea) ((mov) 'mov)
         ((movsd) 'movsd) ((movss) 'movss) ((movq) 'movq)
@@ -178,6 +180,8 @@
           ((string=? s "jge") 'jge)
           ((string=? s "jle") 'jle)
           ((string=? s "jg") 'jg)
+          ((or (string=? s "jp") (string=? s "jpe")) 'jp)
+          ((or (string=? s "jnp") (string=? s "jpo")) 'jnp)
           ((string=? s "seto") 'seto)
           ((or (string=? s "sete") (string=? s "setz")) 'sete)
           ((or (string=? s "setne") (string=? s "setnz")) 'setne)
@@ -189,6 +193,8 @@
           ((string=? s "setge") 'setge)
           ((string=? s "setle") 'setle)
           ((string=? s "setg") 'setg)
+          ((or (string=? s "setp") (string=? s "setpe")) 'setp)
+          ((or (string=? s "setnp") (string=? s "setpo")) 'setnp)
           ((or (string=? s "cmove") (string=? s "cmovz")) 'cmove)
           ((or (string=? s "cmovne") (string=? s "cmovnz")) 'cmovne)
           ((string=? s "cmovl") 'cmovl)
@@ -864,7 +870,7 @@
                   (list 'rel32 (+ curr-off 1) sym addend)))))))
 
     ;; Conditional Jumps: jcc label -> 0F 80+cc rel32
-    ((je jz jne jnz jl jle jg jge jb jbe ja jae jnc js jns)
+    ((je jz jne jnz jl jle jg jge jb jbe ja jae jnc js jns jp jpe jnp jpo)
      (let* ((cc-code (case mnem
                        ((je jz) 132)
                        ((jne jnz) 133)
@@ -874,6 +880,8 @@
                        ((ja) 135)
                        ((js) 136)
                        ((jns) 137)
+                       ((jp jpe) 138)
+                       ((jnp jpo) 139)
                        ((jl) 140)
                        ((jge) 141)
                        ((jle) 142)
@@ -886,7 +894,7 @@
              (list 'rel32 (+ curr-off 2) sym addend))))
 
     ;; Condition Set: setcc r8 -> 0F 90+cc ModR/M
-    ((seto sete setz setne setnz setl setge setle setg setb setbe seta setae)
+    ((seto sete setz setne setnz setl setge setle setg setb setbe seta setae setp setpe setnp setpo)
      (let* ((cc-code (case mnem
                        ((seto) 144)
                        ((sete setz) 148)
@@ -895,6 +903,8 @@
                        ((setae) 147)
                        ((setbe) 150)
                        ((seta) 151)
+                       ((setp setpe) 154)
+                       ((setnp setpo) 155)
                        ((setl) 156)
                        ((setge) 157)
                        ((setle) 158)

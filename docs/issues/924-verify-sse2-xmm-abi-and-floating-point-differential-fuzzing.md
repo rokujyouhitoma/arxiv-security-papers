@@ -20,7 +20,7 @@ Core Machine LIR の `f32`/`f64` 命令および SysV AMD64 ABI の XMM 引数�
   - `#829`: SysV ABI（[ulisp/compiler/calling_convention.scm](../../ulisp/compiler/calling_convention.scm)）
   - `#831`: C バックエンド差分ファジング（[ulisp/backend/160_backend_c.scm](../../ulisp/backend/160_backend_c.scm)）
   - `#834`: Reference VM（[ulisp/vm/lir_interpreter.scm](../../ulisp/vm/lir_interpreter.scm)）
-  - `#923`: C99 浮動小数点 Sema ＆ Lowering（[[#923]](923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md)）
+  - `#923`: C99 浮動小数点 Sema ＆ Lowering（[[#923]](closed/923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md)）
 - 後続連携 Issue:
   - [[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) (`lmathlib.c` / `lvm.c`), [[#926]](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) (`math.lua`)
 

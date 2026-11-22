@@ -113,7 +113,7 @@
          (regs (make-vector 16 0))
          (xmms (make-vector 16 0.0))
          (xmm-bs (make-vector 16 0))
-         (flags (vector 0 0 0 0))) ; #(ZF SF OF CF)
+         (flags (vector 0 0 0 0 0))) ; #(ZF SF OF CF PF)
     (make-lir-vm-raw regs xmms xmm-bs '() flags mem
                      *lir-vm-heap-base* '() '() '() #f
                      '%main '%entry 0 '() 'ready
@@ -231,6 +231,16 @@
                 (* base base)
                 (if (= (modulo k 2) 1) (* acc base) acc))))))
 
+(define (%vm-round-scaled-even scaled)
+  (let* ((f (truncate scaled))
+         (fi (exact f))
+         (rem (- scaled f)))
+    (cond
+      ((> rem 0.5) (+ fi 1))
+      ((< rem 0.5) fi)
+      ((= (modulo fi 2) 1) (+ fi 1))
+      (else fi))))
+
 (define (vm-f64->ieee754-u64 val)
   (let ((flt (if (number? val) (exact->inexact val) 0.0)))
     (cond
@@ -240,7 +250,7 @@
       (else
        (let* ((neg? (< flt 0.0))
               (sign (if neg? 1 0))
-              (x (if neg? (- 0.0 flt) flt)))
+              (x (if neg? (* -1.0 flt) flt)))
          (if (= x (* x 2.0))
              (if neg? #xfff0000000000000 #x7ff0000000000000)
              (let norm ((m x) (e 0))
@@ -248,15 +258,15 @@
                  ((>= m 2.0) (norm (* m 0.5) (+ e 1)))
                  ((and (< m 1.0) (> e -1022)) (norm (* m 2.0) (- e 1)))
                  ((< e -1022)
-                  (let* ((scaled (* x (vm-pow2-f64 1074)))
-                         (frac (exact (truncate (+ scaled 0.5)))))
+                  (let* ((scaled (* (* x (vm-pow2-f64 537)) (vm-pow2-f64 537)))
+                         (frac (%vm-round-scaled-even scaled)))
                     (if (>= frac 4503599627370496)
                         (+ (arithmetic-shift sign 63) (arithmetic-shift 1 52))
                         (+ (arithmetic-shift sign 63) frac))))
                  (else
                   (let* ((bexp (+ e 1023))
                          (frac-f (* (- m 1.0) 4503599627370496.0))
-                         (frac (exact (truncate (+ frac-f 0.5)))))
+                         (frac (%vm-round-scaled-even frac-f)))
                     (if (>= frac 4503599627370496)
                         (let ((bexp2 (+ bexp 1)))
                           (if (>= bexp2 2047)
@@ -279,11 +289,15 @@
             ((= bexp 0)
              (if (= frac 0)
                  0.0
-                 (* (/ (exact->inexact frac) 4503599627370496.0) (vm-pow2-f64 -1022))))
+                 (* (* (exact->inexact frac) (vm-pow2-f64 -512))
+                    (vm-pow2-f64 -562))))
             (else
              (* (+ 1.0 (/ (exact->inexact frac) 4503599627370496.0))
-                (vm-pow2-f64 (- bexp 1023)))))))
-    (if (= sign 1) (- 0.0 abs-f) abs-f)))
+                (let ((e (- bexp 1023)))
+                  (if (< e -1000)
+                      (* (vm-pow2-f64 -512) (vm-pow2-f64 (+ e 512)))
+                      (vm-pow2-f64 e))))))))
+    (if (= sign 1) (* -1.0 abs-f) abs-f)))
 
 (define (vm-f32->ieee754-u32 val)
   (let ((flt (if (number? val) (exact->inexact val) 0.0)))
@@ -294,7 +308,7 @@
       (else
        (let* ((neg? (< flt 0.0))
               (sign (if neg? 1 0))
-              (x (if neg? (- 0.0 flt) flt)))
+              (x (if neg? (* -1.0 flt) flt)))
          (if (= x (* x 2.0))
              (if neg? #xff800000 #x7f800000)
              (let norm ((m x) (e 0))
@@ -303,14 +317,14 @@
                  ((and (< m 1.0) (> e -126)) (norm (* m 2.0) (- e 1)))
                  ((< e -126)
                   (let* ((scaled (* x (vm-pow2-f64 149)))
-                         (frac (exact (truncate (+ scaled 0.5)))))
+                         (frac (%vm-round-scaled-even scaled)))
                     (if (>= frac 8388608)
                         (+ (arithmetic-shift sign 31) (arithmetic-shift 1 23))
                         (+ (arithmetic-shift sign 31) frac))))
                  (else
                   (let* ((bexp (+ e 127))
                          (frac-f (* (- m 1.0) 8388608.0))
-                         (frac (exact (truncate (+ frac-f 0.5)))))
+                         (frac (%vm-round-scaled-even frac-f)))
                     (if (>= frac 8388608)
                         (let ((bexp2 (+ bexp 1)))
                           (if (>= bexp2 255)
@@ -337,7 +351,151 @@
             (else
              (* (+ 1.0 (/ (exact->inexact frac) 8388608.0))
                 (vm-pow2-f64 (- bexp 127)))))))
-    (if (= sign 1) (- 0.0 abs-f) abs-f)))
+    (if (= sign 1) (* -1.0 abs-f) abs-f)))
+
+(define (%vm-int-bit-length n)
+  (if (<= n 0)
+      0
+      (let chunk ((x n) (b 0))
+        (let ((hi (arithmetic-shift x -24)))
+          (if (> hi 0)
+              (chunk hi (+ b 24))
+              (let step ((y x) (k b))
+                (if (= y 0) k (step (arithmetic-shift y -1) (+ k 1)))))))))
+
+(define (vm-u32-f32->u64-f64 u32-raw)
+  (let* ((u (lir-vm-u32 u32-raw))
+         (sign (arithmetic-shift u -31))
+         (bexp (bitwise-and (arithmetic-shift u -23) #xff))
+         (frac (bitwise-and u #x7fffff))
+         (s-hi (if (= sign 1) #x8000000000000000 0)))
+    (cond
+      ((= bexp 255)
+       (if (= frac 0)
+           (bitwise-ior s-hi #x7ff0000000000000)
+           (bitwise-ior s-hi (bitwise-ior #x7ff8000000000000 (arithmetic-shift frac 29)))))
+      ((= bexp 0)
+       (if (= frac 0)
+           s-hi
+           (let* ((bl (%vm-int-bit-length frac))
+                  (lead (- bl 1))
+                  (p (- lead 149))
+                  (new-bexp (+ p 1023))
+                  (norm-frac (bitwise-and (arithmetic-shift frac (- 52 lead)) #xfffffffffffff)))
+             (bitwise-ior s-hi (bitwise-ior (arithmetic-shift new-bexp 52) norm-frac)))))
+      (else
+       (bitwise-ior s-hi (bitwise-ior (arithmetic-shift (+ (- bexp 127) 1023) 52)
+                                      (arithmetic-shift frac 29)))))))
+
+(define (vm-u64-f64->u32-f32 u64-raw)
+  (let* ((u (lir-vm-u64 u64-raw))
+         (sign (arithmetic-shift u -63))
+         (bexp (bitwise-and (arithmetic-shift u -52) #x7ff))
+         (frac (bitwise-and u #xfffffffffffff))
+         (s-hi (if (= sign 1) #x80000000 0)))
+    (cond
+      ((= bexp 2047)
+       (if (= frac 0)
+           (bitwise-ior s-hi #x7f800000)
+           (bitwise-ior s-hi (bitwise-ior #x7fc00000 (bitwise-and (arithmetic-shift frac -29) #x3fffff)))))
+      ((and (= bexp 0) (= frac 0))
+       s-hi)
+      ((= bexp 0)
+       ;; All f64 subnormals (< 2^-1022) strictly underflow to zero in f32
+       s-hi)
+      (else
+       (let ((p (- bexp 1023))
+             (sig53 (bitwise-ior (arithmetic-shift 1 52) frac)))
+         (cond
+           ((> p 127) (bitwise-ior s-hi #x7f800000))
+           ((< p -150) s-hi)
+           ((>= p -126)
+            (let* ((q (arithmetic-shift sig53 -28))
+                   (main (arithmetic-shift q -1))
+                   (r-bit (bitwise-and q 1))
+                   (sticky (not (= (bitwise-and sig53 #xfffffff) 0)))
+                   (rnd (if (and (= r-bit 1) (or sticky (= (bitwise-and main 1) 1))) (+ main 1) main))
+                   (carry? (>= rnd 16777216))
+                   (f-sig (if carry? (arithmetic-shift rnd -1) rnd))
+                   (f-bexp (+ p 127 (if carry? 1 0))))
+              (if (>= f-bexp 255)
+                  (bitwise-ior s-hi #x7f800000)
+                  (bitwise-ior s-hi (bitwise-ior (arithmetic-shift f-bexp 23) (bitwise-and f-sig #x7fffff))))))
+           (else
+            (let* ((k (- 52 (+ p 149)))
+                   (main (arithmetic-shift sig53 (- 0 k)))
+                   (r-bit (bitwise-and (arithmetic-shift sig53 (- 1 k)) 1))
+                   (s-mask (- (arithmetic-shift 1 (- k 1)) 1))
+                   (sticky (not (= (bitwise-and sig53 s-mask) 0)))
+                   (rnd (if (and (= r-bit 1) (or sticky (= (bitwise-and main 1) 1))) (+ main 1) main)))
+              (if (>= rnd 8388608)
+                  (bitwise-ior s-hi (arithmetic-shift 1 23))
+                  (bitwise-ior s-hi rnd))))))))))
+
+(define (vm-u64-int->f64-bits u-raw)
+  (let ((u (lir-vm-u64 u-raw)))
+    (if (= u 0)
+        0
+        (let* ((p (- (%vm-int-bit-length u) 1))
+               (bexp (+ p 1023)))
+          (if (<= p 52)
+              (let ((frac (bitwise-and (arithmetic-shift u (- 52 p)) #xfffffffffffff)))
+                (bitwise-ior (arithmetic-shift bexp 52) frac))
+              (let* ((sh (- p 53))
+                     (q (arithmetic-shift u (- 0 sh)))
+                     (main (arithmetic-shift q -1))
+                     (r-bit (bitwise-and q 1))
+                     (rem-mask (- (arithmetic-shift 1 sh) 1))
+                     (sticky (not (= (bitwise-and u rem-mask) 0)))
+                     (rnd (if (and (= r-bit 1) (or sticky (= (bitwise-and main 1) 1))) (+ main 1) main))
+                     (carry? (>= rnd 9007199254740992))
+                     (f-sig (if carry? (arithmetic-shift rnd -1) rnd))
+                     (f-bexp (+ bexp (if carry? 1 0))))
+                (bitwise-ior (arithmetic-shift f-bexp 52) (bitwise-and f-sig #xfffffffffffff))))))))
+
+(define (vm-s64-int->f64-bits s-raw)
+  (let ((s (lir-vm-s64 s-raw)))
+    (if (< s 0)
+        (bitwise-ior #x8000000000000000 (vm-u64-int->f64-bits (- 0 s)))
+        (vm-u64-int->f64-bits s))))
+
+(define (vm-f64-bits->s64-trunc u64-raw)
+  (let* ((u (lir-vm-u64 u64-raw))
+         (sign (arithmetic-shift u -63))
+         (bexp (bitwise-and (arithmetic-shift u -52) #x7ff))
+         (frac (bitwise-and u #xfffffffffffff)))
+    (cond
+      ((>= bexp 2047) *lir-vm-min-s64*)
+      ((< bexp 1023) 0)
+      (else
+       (let ((p (- bexp 1023))
+             (sig (bitwise-ior (arithmetic-shift 1 52) frac)))
+         (cond
+           ((and (= sign 1) (= p 63) (= frac 0)) *lir-vm-min-s64*)
+           ((>= p 63) *lir-vm-min-s64*)
+           (else
+            (let ((mag (if (>= p 52)
+                           (arithmetic-shift sig (- p 52))
+                           (arithmetic-shift sig (- p 52)))))
+              (if (= sign 1) (- 0 mag) mag)))))))))
+
+(define (vm-f64-bits->u64-trunc u64-raw)
+  (let* ((u (lir-vm-u64 u64-raw))
+         (sign (arithmetic-shift u -63))
+         (bexp (bitwise-and (arithmetic-shift u -52) #x7ff))
+         (frac (bitwise-and u #xfffffffffffff)))
+    (cond
+      ((>= bexp 2047) #x8000000000000000)
+      ((< bexp 1023) 0)
+      ((= sign 1)
+       ;; Matches x86 %fptoui path: negative <= -1.0 flows through cvttsd2si
+       (lir-vm-u64 (vm-f64-bits->s64-trunc u)))
+      (else
+       (let ((p (- bexp 1023))
+             (sig (bitwise-ior (arithmetic-shift 1 52) frac)))
+         (if (>= p 64)
+             #x8000000000000000
+             (arithmetic-shift sig (- p 52))))))))
 
 (define (vm-get-xmm vm reg)
   (let ((idx (xmm-name->index reg)))
@@ -394,13 +552,18 @@
 (define (vm-flag-sf vm) (vector-ref (vm-flags-record vm) 1))
 (define (vm-flag-of vm) (vector-ref (vm-flags-record vm) 2))
 (define (vm-flag-cf vm) (vector-ref (vm-flags-record vm) 3))
+(define (vm-flag-pf vm) (vector-ref (vm-flags-record vm) 4))
 
-(define (vm-set-flags! vm zf sf of cf)
+(define (vm-set-flags-pf! vm zf sf of cf pf)
   (let ((vec (vm-flags-record vm)))
     (vector-set! vec 0 zf)
     (vector-set! vec 1 sf)
     (vector-set! vec 2 of)
-    (vector-set! vec 3 cf)))
+    (vector-set! vec 3 cf)
+    (vector-set! vec 4 pf)))
+
+(define (vm-set-flags! vm zf sf of cf)
+  (vm-set-flags-pf! vm zf sf of cf 0))
 
 ;;; -----------------------------------------------------------------------
 ;;; §4. Memory Accessors & Little-Endian Integer Encoding (THREAT-834-1)
@@ -618,7 +781,8 @@
         (zf (= (vm-flag-zf vm) 1))
         (sf (= (vm-flag-sf vm) 1))
         (of (= (vm-flag-of vm) 1))
-        (cf (= (vm-flag-cf vm) 1)))
+        (cf (= (vm-flag-cf vm) 1))
+        (pf (= (vm-flag-pf vm) 1)))
     (case cc
       ((e z eq equal zero je jz sete setz) zf)
       ((ne nz not-equal not-zero jne jnz setne setnz) (not zf))
@@ -634,6 +798,8 @@
       ((no no-overflow jno setno) (not of))
       ((s sign js sets) sf)
       ((ns no-sign jns setns) (not sf))
+      ((p parity pe jp jpe setp setpe) pf)
+      ((np no-parity po jnp jpo setnp setpo) (not pf))
       (else
        (error "Unknown condition code in LIR VM:" raw-cc)))))
 
@@ -1035,12 +1201,7 @@
                ((ptr raw-bits scheme-val) (vm-set-location! vm dst (vm-mem-read-u64 vm addr)))
                ((f32)
                 (let ((u (vm-mem-read-u32 vm addr)))
-                  (let ((idx (xmm-name->index dst)))
-                    (if idx
-                        (begin
-                          (vector-set! (vm-xmm-bits-vector vm) idx u)
-                          (vector-set! (vm-xmm-vector vm) idx (vm-ieee754-u32->f32 u)))
-                        (vm-set-xmm! vm dst (vm-ieee754-u32->f32 u))))))
+                  (vm-set-xmm-raw-u64! vm dst (vm-u32-f32->u64-f64 u))))
                ((f64)
                 (vm-set-xmm-raw-u64! vm dst (vm-mem-read-u64 vm addr)))
                (else (error "Unsupported type in %load-typed:" type)))))
@@ -1054,13 +1215,13 @@
                   (off-val (vm-eval-offset vm offset))
                   (addr (+ base-val off-val)))
              (if (memq type '(f32 f64))
-                 (if (eq? type 'f32)
-                     (vm-mem-write-u32! vm addr (vm-f32->ieee754-u32 (vm-eval-operand vm src)))
-                     (let ((x-idx (and (symbol? src) (xmm-name->index src))))
-                       (vm-mem-write-u64! vm addr
-                                          (if x-idx
-                                              (vector-ref (vm-xmm-bits-vector vm) x-idx)
-                                              (vm-f64->ieee754-u64 (vm-eval-operand vm src))))))
+                 (let* ((x-idx (and (symbol? src) (xmm-name->index src)))
+                        (raw64 (if x-idx
+                                   (vector-ref (vm-xmm-bits-vector vm) x-idx)
+                                   (vm-f64->ieee754-u64 (vm-eval-operand vm src)))))
+                   (if (eq? type 'f32)
+                       (vm-mem-write-u32! vm addr (vm-u64-f64->u32-f32 raw64))
+                       (vm-mem-write-u64! vm addr raw64)))
                  (let ((val (vm-eval-operand vm src)))
                    (case type
                      ((i8)  (vm-mem-write-i8! vm addr val))
@@ -1358,9 +1519,8 @@
                   (dst (caddr inst))
                   (src (cadddr inst)))
              (case type
-               ((f32)     (let* ((flt (vm-get-xmm vm src))
-                                 (u (vm-f32->ieee754-u32 flt)))
-                            (vm-set-xmm! vm dst (vm-ieee754-u32->f32 u))))
+               ((f32)
+                (vm-set-xmm-raw-u64! vm dst (vm-u32-f32->u64-f64 (vm-u64-f64->u32-f32 (vm-get-xmm-raw-u64 vm src)))))
                (else
                 (let ((val (vm-eval-operand vm src)))
                   (case type
@@ -1374,7 +1534,8 @@
                   (dst (caddr inst))
                   (src (cadddr inst)))
              (case type
-               ((f64)     (vm-set-xmm! vm dst (vm-get-xmm vm src)))
+               ((f64)
+                (vm-set-xmm-raw-u64! vm dst (vm-get-xmm-raw-u64 vm src)))
                (else
                 (let ((val (vm-eval-operand vm src)))
                   (case type
@@ -1426,19 +1587,47 @@
           ((%fmov)
            (let ((dst (cadr inst))
                  (src (caddr inst)))
-             (vm-set-xmm! vm dst (vm-get-xmm vm src))))
+             (vm-set-xmm-raw-u64! vm dst (vm-get-xmm-raw-u64 vm src))))
+
+          ((%fneg)
+           (let* ((dst (caddr inst))
+                  (src (cadddr inst))
+                  (u (vm-get-xmm-raw-u64 vm src)))
+             (vm-set-xmm-raw-u64! vm dst (bitwise-xor u #x8000000000000000))))
+
+          ((%fpext)
+           (let ((dst (caddr inst))
+                 (src (cadddr inst)))
+             (vm-set-xmm-raw-u64! vm dst (vm-get-xmm-raw-u64 vm src))))
+
+          ((%fptrunc)
+           (let ((dst (caddr inst))
+                 (src (cadddr inst)))
+             (vm-set-xmm-raw-u64! vm dst (vm-u32-f32->u64-f64 (vm-u64-f64->u32-f32 (vm-get-xmm-raw-u64 vm src))))))
 
           ((%sitofp)
            (let* ((dst (cadr inst))
                   (src (caddr inst))
                   (val (vm-eval-operand vm src)))
-             (vm-set-xmm! vm dst (exact->inexact (lir-vm-s64 val)))))
+             (vm-set-xmm-raw-u64! vm dst (vm-s64-int->f64-bits val))))
+
+          ((%uitofp)
+           (let* ((dst (cadr inst))
+                  (src (caddr inst))
+                  (val (vm-eval-operand vm src)))
+             (vm-set-xmm-raw-u64! vm dst (vm-u64-int->f64-bits (lir-vm-u64 val)))))
 
           ((%fptosi)
            (let* ((dst (cadr inst))
                   (src (caddr inst))
-                  (flt (vm-get-xmm vm src)))
-             (vm-set-location! vm dst (exact (truncate flt)))))
+                  (u (vm-get-xmm-raw-u64 vm src)))
+             (vm-set-location! vm dst (vm-f64-bits->s64-trunc u))))
+
+          ((%fptoui)
+           (let* ((dst (cadr inst))
+                  (src (caddr inst))
+                  (u (vm-get-xmm-raw-u64 vm src)))
+             (vm-set-location! vm dst (lir-vm-s64 (vm-f64-bits->u64-trunc u)))))
 
           ((%fadd)
            (let* ((dst (cadr inst))
@@ -1472,10 +1661,29 @@
            (let* ((s1 (cadr inst))
                   (s2 (caddr inst))
                   (f1 (vm-get-xmm vm s1))
+                  (f2 (vm-get-xmm vm s2)))
+             (if (or (not (= f1 f1)) (not (= f2 f2)))
+                 (vm-set-flags-pf! vm 1 0 0 1 1)
+                 (let ((zf (if (= f1 f2) 1 0))
+                       (cf (if (< f1 f2) 1 0)))
+                   (vm-set-flags-pf! vm zf 0 0 cf 0)))))
+
+          ((%fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
+           (let* ((op (car inst))
+                  (dst (cadr inst))
+                  (s1 (caddr inst))
+                  (s2 (cadddr inst))
+                  (f1 (vm-get-xmm vm s1))
                   (f2 (vm-get-xmm vm s2))
-                  (zf (if (= f1 f2) 1 0))
-                  (cf (if (< f1 f2) 1 0)))
-             (vm-set-flags! vm zf 0 0 cf)))
+                  (nan? (or (not (= f1 f1)) (not (= f2 f2))))
+                  (res (case op
+                         ((%fcmp-oeq) (and (not nan?) (= f1 f2)))
+                         ((%fcmp-une) (or nan? (not (= f1 f2))))
+                         ((%fcmp-olt) (and (not nan?) (< f1 f2)))
+                         ((%fcmp-ole) (and (not nan?) (<= f1 f2)))
+                         ((%fcmp-ogt) (and (not nan?) (> f1 f2)))
+                         (else        (and (not nan?) (>= f1 f2))))))
+             (vm-set-location! vm dst (if res 1 0))))
 
           ((%bitcast-f64-to-i64)
            (let* ((dst (cadr inst))
@@ -2270,6 +2478,10 @@
        (lir-vm-ia-write-opnd! vm (car opnds) (vm-flag-cf vm)))
       ((or (string=? mnem "setae") (string=? mnem "setnc"))
        (lir-vm-ia-write-opnd! vm (car opnds) (if (= (vm-flag-cf vm) 0) 1 0)))
+      ((or (string=? mnem "setp") (string=? mnem "setpe"))
+       (lir-vm-ia-write-opnd! vm (car opnds) (vm-flag-pf vm)))
+      ((or (string=? mnem "setnp") (string=? mnem "setpo"))
+       (lir-vm-ia-write-opnd! vm (car opnds) (if (= (vm-flag-pf vm) 0) 1 0)))
       ((string=? mnem "xchg")
        (let ((o1 (car opnds))
              (o2 (cadr opnds)))

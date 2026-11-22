@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **923** | C99 浮動小数点型 (`double`/`float`) の意味解析および IEEE 754 / LIR 型変換 Lowering の実装 | Feature | In Progress | [923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md](923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) |
 | **924** | Pass 140/144a/160 における SSE2 XMM 命令・SysV XMM ABI 配線と 3者差分ファジング検証 | Feature | In Progress | [924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md](924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md) |
 | **925** | Lua 5.x 全 C ソースファイル（コア・標準ライブラリ・CLI）の ULisp 一括ビルドパイプライン構築 | Feature | In Progress | [925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) |
 | **926** | ULisp ビルド版 Lua バイナリによる公式テストスイート完走 E2E 実証ハーネスの構築 | Feature | In Progress | [926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) |
@@ -19,6 +18,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **923** | C99 浮動小数点型 (`double`/`float`) の意味解析および IEEE 754 / LIR 型変換 Lowering の実装 | Feature | 2026-11-22 | [923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md](closed/923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) |
 | **922** | 非局所脱出 (`setjmp`/`longjmp`) の `%inline-asm` 実装および呼び出し関数内の生存変数スピル保護 | Feature | 2026-11-22 | [922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md](closed/922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md) |
 | **921** | `<stdarg.h>` 可変長引数 (`va_list`/`va_start`/`va_arg`) の SysV AMD64 ABI Lowering 実装 | Feature | 2026-11-22 | [921-implement-sysv-amd64-stdarg-va-list-lowering.md](closed/921-implement-sysv-amd64-stdarg-va-list-lowering.md) |
 | **920** | C99 関数ポインタ間接呼び出しおよび巨大 `switch`/`goto` 複雑 CFG の Braun SSA Lowering 実装 | Feature | 2026-11-22 | [920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md](closed/920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md) |

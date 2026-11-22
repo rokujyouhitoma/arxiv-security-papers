@@ -388,9 +388,13 @@
                        (and hex? (or (char=? c #\p) (char=? c #\P))))
                    #t
                    (check-f (+ i 1) hex?)))))
-       (let ((last-ch (string-ref lex (- len 1))))
-         (cons (%c99-sema-parse-float lex)
-               (if (or (char=? last-ch #\f) (char=? last-ch #\F)) 'f32 'f64))))
+       (let ((parsed (c99-parse-float-literal lex)))
+         (if (eq? (car parsed) 'ok)
+             (let ((fty (cadr parsed))
+                   (bits (caddr parsed))
+                   (approx (cadddr parsed)))
+               (cons (list 'c-float-bits bits approx) fty))
+             (cons (list 'c-float-error (cadr parsed)) 'f64))))
       (else
        ;; Integer constant with optional u/l/ll suffixes
        (let strip-suf ((end len) (u? #f) (l-cnt 0))
@@ -933,7 +937,9 @@
       (if (null? xs)
           (let ((final-ty
                  (cond
-                   ((and base (not (symbol? base))) base)
+                   ((or (and base (not (symbol? base)))
+                        (memq base '(i8 u8 i16 u16 i32 u32 i64 u64 f32 f64)))
+                    base)
                    ((eq? base 'void) 'void)
                    ((eq? base 'bool) 'bool)
                    ((eq? base 'float) 'f32)
@@ -1176,8 +1182,11 @@
 
       ((c-const)
        (let* ((info (c99-parse-constant-info (cadr raw)))
+              (val (car info))
               (ty (cdr info)))
-         (make-c-typed ty (list 'c-const-val (car info) (cadr raw)))))
+         (if (and (pair? val) (eq? (car val) 'c-float-error))
+             (%c99-sema-error! "C99-FP-002" (cadr val) (or sp node)))
+         (make-c-typed ty (list 'c-const-val val (cadr raw)))))
 
       ((c-str)
        (let* ((decoded (c99-decode-string-literal (cadr raw)))
@@ -1196,6 +1205,8 @@
                    (csub (c99-apply-implicit-cast sub pt)))
               (make-c-typed pt (list 'c-unop op csub))))
            ((bit-not)
+            (if (c-float-type? sty)
+                (%c99-sema-error! "C99-FP-001" "Bitwise '~' is invalid on floating-point operand" (or sp node)))
             (if (not (c-integer-type? sty))
                 (%c99-sema-error! "C99-SEMA-003" "Bitwise '~' requires integer operand" (or sp node)))
             (let* ((pt (%c99-promote-expr-type env sub))
@@ -1252,6 +1263,8 @@
                 (%c99-sema-error! "C99-SEMA-003" "Logical operators require scalar operands" (or sp node)))
             (make-c-typed 'i32 (list 'c-binop op lhs-d rhs-d)))
            ((<< >>)
+            (if (or (c-float-type? lt) (c-float-type? rt))
+                (%c99-sema-error! "C99-FP-001" "Shift operators are invalid on floating-point operands" (or sp node)))
             (if (or (not (c-integer-type? lt)) (not (c-integer-type? rt)))
                 (%c99-sema-error! "C99-SEMA-003" "Shift operators require integer operands" (or sp node)))
             (let ((plt (%c99-promote-expr-type env lhs))
@@ -1261,6 +1274,8 @@
                                   (c99-apply-implicit-cast lhs-d plt)
                                   (c99-apply-implicit-cast rhs-d prt)))))
            ((bit-and bit-xor bit-or)
+            (if (or (c-float-type? lt) (c-float-type? rt))
+                (%c99-sema-error! "C99-FP-001" "Bitwise operators are invalid on floating-point operands" (or sp node)))
             (if (or (not (c-integer-type? lt)) (not (c-integer-type? rt)))
                 (%c99-sema-error! "C99-SEMA-003" "Bitwise operators require integer operands" (or sp node)))
             (let ((ct (c99-usual-arithmetic-type (%c99-promote-expr-type env lhs)
@@ -1311,11 +1326,15 @@
               (else
                (%c99-sema-error! "C99-SEMA-003" "Invalid operand types for '+' / '-'" (or sp node)))))
            ((* / rem)
+            (if (and (eq? op 'rem) (or (c-float-type? lt) (c-float-type? rt)))
+                (%c99-sema-error! "C99-FP-001" "Modulo '%' is invalid on floating-point operands" (or sp node)))
             (if (and (eq? op 'rem) (or (not (c-integer-type? lt)) (not (c-integer-type? rt))))
                 (%c99-sema-error! "C99-SEMA-003" "Modulo '%' requires integer operands" (or sp node)))
             (if (or (not (c-arithmetic-type? lt)) (not (c-arithmetic-type? rt)))
                 (%c99-sema-error! "C99-SEMA-003" "Multiplicative operator requires arithmetic operands" (or sp node)))
             (if (and (memq op '(/ rem))
+                     (c-integer-type? lt)
+                     (c-integer-type? rt)
                      (let ((rv (c99-eval-const-int-expr env (cadddr raw))))
                        (and rv (= rv 0))))
                 (%c99-sema-error! "C99-SEMA-005" "Compile-time division or modulo by zero" (or sp node)))
@@ -1393,22 +1412,44 @@
                                   (if (or (eq? (c-ptr-target lt) 'void) (c-function-type? (c-ptr-target lt)))
                                       (%c99-sema-error! "C99-PTR-002" "Pointer compound assignment on void* or function pointer" (or sp node)))
                                   'i64)
-                                 ((memq op '(<<= >>=))
-                                  (%c99-promote-expr-type env lhs))
+                                 ((memq base-op '(rem << >> bit-and bit-xor bit-or))
+                                  (if (or (c-float-type? lt) (c-float-type? rt))
+                                      (%c99-sema-error! "C99-FP-001"
+                                                        "Bitwise/shift/modulo compound assignment is invalid on floating-point operand"
+                                                        (or sp node)))
+                                  (if (or (not (c-integer-type? lt)) (not (c-integer-type? rt)))
+                                      (%c99-sema-error! "C99-SEMA-003"
+                                                        "Bitwise/shift/modulo compound assignment requires integer operands"
+                                                        (or sp node)))
+                                  (if (memq op '(<<= >>=))
+                                      (%c99-promote-expr-type env lhs)
+                                      (c99-usual-arithmetic-type lt rt)))
                                  (else
+                                  (if (or (not (c-arithmetic-type? lt)) (not (c-arithmetic-type? rt)))
+                                      (%c99-sema-error! "C99-SEMA-003"
+                                                        "Compound arithmetic assignment requires arithmetic operands"
+                                                        (or sp node)))
                                   (c99-usual-arithmetic-type lt rt)))))
                  (make-c-typed lt (list 'c-assign op lhs (c99-apply-implicit-cast (c99-apply-implicit-cast rhs rt) comp-ty)))))
              (begin
                (if (not (c99-assign-compatible? env lt rt (cadddr raw)))
-                   (if (or (c-pointer-type? lt) (c-pointer-type? rt))
-                       (%c99-sema-error! "C99-PTR-004"
-                                         (string-append "Incompatible pointer assignment from "
-                                                        (c-type->string rt) " to " (c-type->string lt))
-                                         (or sp node))
-                       (%c99-sema-error! "C99-SEMA-003"
-                                         (string-append "Incompatible assignment from "
-                                                        (c-type->string rt) " to " (c-type->string lt))
-                                         (or sp node))))
+                   (cond
+                     ((or (and (c-pointer-type? lt) (c-float-type? rt))
+                          (and (c-float-type? lt) (c-pointer-type? rt)))
+                      (%c99-sema-error! "C99-FP-002"
+                                        (string-append "Illegal conversion between pointer and floating-point type: "
+                                                       (c-type->string rt) " to " (c-type->string lt))
+                                        (or sp node)))
+                     ((or (c-pointer-type? lt) (c-pointer-type? rt))
+                      (%c99-sema-error! "C99-PTR-004"
+                                        (string-append "Incompatible pointer assignment from "
+                                                       (c-type->string rt) " to " (c-type->string lt))
+                                        (or sp node)))
+                     (else
+                      (%c99-sema-error! "C99-SEMA-003"
+                                        (string-append "Incompatible assignment from "
+                                                       (c-type->string rt) " to " (c-type->string lt))
+                                        (or sp node)))))
                (make-c-typed lt (list 'c-assign '= lhs (c99-apply-implicit-cast (c99-apply-implicit-cast rhs rt) lt)))))))
 
       ((c-ternary)
@@ -1451,9 +1492,16 @@
       ((c-cast)
        (let* ((target-ty (sema-resolve-type-name env (cadr raw)))
               (sub (c99-analyze-expr env (caddr raw)))
+              (dec-ty (c99-array-decay (c-typed-type sub)))
               (sub-d (if (c-pointer-type? target-ty)
-                         (c99-apply-implicit-cast sub (c99-array-decay (c-typed-type sub)))
+                         (c99-apply-implicit-cast sub dec-ty)
                          sub)))
+         (if (or (and (c-pointer-type? target-ty) (c-float-type? dec-ty))
+                 (and (c-float-type? target-ty) (c-pointer-type? dec-ty)))
+             (%c99-sema-error! "C99-FP-002"
+                               (string-append "Illegal explicit cast between pointer and floating-point type: "
+                                              (c-type->string dec-ty) " to " (c-type->string target-ty))
+                               (or sp node)))
          (make-c-typed target-ty (list 'c-cast target-ty sub-d))))
 
       ((c-sizeof-type)
@@ -1621,17 +1669,25 @@
                                       (if (and (c-aggregate-ref-type? pt) (not (c-type-complete? lenv pt)))
                                           (%c99-sema-error! "C99-LAY-001" "Function parameter has incomplete aggregate type" (car as)))
                                       (if (not (c99-assign-compatible? env pt at (car as)))
-                                          (if (or (c-pointer-type? pt) (c-pointer-type? at))
-                                              (%c99-sema-error! "C99-PTR-004"
-                                                                (string-append "Incompatible pointer argument type: expected "
-                                                                               (c-type->string pt)
-                                                                               ", got " (c-type->string at))
-                                                                (car as))
-                                              (%c99-sema-error! "C99-SEMA-004"
-                                                                (string-append "Incompatible argument type: expected "
-                                                                               (c-type->string pt)
-                                                                               ", got " (c-type->string at))
-                                                                (car as))))
+                                          (cond
+                                            ((or (and (c-pointer-type? pt) (c-float-type? at))
+                                                 (and (c-float-type? pt) (c-pointer-type? at)))
+                                             (%c99-sema-error! "C99-FP-002"
+                                                               (string-append "Illegal pointer/float argument conversion: expected "
+                                                                              (c-type->string pt) ", got " (c-type->string at))
+                                                               (car as)))
+                                            ((or (c-pointer-type? pt) (c-pointer-type? at))
+                                             (%c99-sema-error! "C99-PTR-004"
+                                                               (string-append "Incompatible pointer argument type: expected "
+                                                                              (c-type->string pt)
+                                                                              ", got " (c-type->string at))
+                                                               (car as)))
+                                            (else
+                                             (%c99-sema-error! "C99-SEMA-004"
+                                                               (string-append "Incompatible argument type: expected "
+                                                                              (c-type->string pt)
+                                                                              ", got " (c-type->string at))
+                                                               (car as)))))
                                       (aloop (cdr as) (cdr pts)
                                              (cons (c99-apply-implicit-cast (c99-apply-implicit-cast ta at) pt) acc)))
                                     ;; Default argument promotions for variadic trailing args
@@ -1754,10 +1810,16 @@
          (if (c-array-type? leaf-ty)
              (%c99-sema-error! "C99-SEMA-003" "Invalid scalar initializer for array" sp))
          (if (not (c99-assign-compatible? env leaf-ty dec-ty val-node))
-             (%c99-sema-error! "C99-SEMA-003"
-                               (string-append "Incompatible initializer type: expected "
-                                              (c-type->string leaf-ty) ", got " (c-type->string dec-ty))
-                               sp))
+             (if (or (and (c-pointer-type? leaf-ty) (c-float-type? dec-ty))
+                     (and (c-float-type? leaf-ty) (c-pointer-type? dec-ty)))
+                 (%c99-sema-error! "C99-FP-002"
+                                   (string-append "Illegal pointer/float initializer: expected "
+                                                  (c-type->string leaf-ty) ", got " (c-type->string dec-ty))
+                                   sp)
+                 (%c99-sema-error! "C99-SEMA-003"
+                                   (string-append "Incompatible initializer type: expected "
+                                                  (c-type->string leaf-ty) ", got " (c-type->string dec-ty))
+                                   sp)))
          (let ((casted (c99-apply-implicit-cast te-d leaf-ty)))
            (if (and fl-opt (c-field-layout-bit-width fl-opt))
                (cons (list 'set
@@ -2079,9 +2141,14 @@
                              (dt (c99-array-decay (c-typed-type te)))
                              (te-d (c99-apply-implicit-cast te dt)))
                         (if (not (c99-assign-compatible? env target-ty dt (caddr it)))
-                            (if (or (c-pointer-type? target-ty) (c-pointer-type? dt))
-                                (%c99-sema-error! "C99-PTR-004" "Incompatible pointer scalar initializer" node-or-span)
-                                (%c99-sema-error! "C99-SEMA-003" "Incompatible scalar initializer" node-or-span)))
+                            (cond
+                              ((or (and (c-pointer-type? target-ty) (c-float-type? dt))
+                                   (and (c-float-type? target-ty) (c-pointer-type? dt)))
+                               (%c99-sema-error! "C99-FP-002" "Illegal pointer/float scalar initializer" node-or-span))
+                              ((or (c-pointer-type? target-ty) (c-pointer-type? dt))
+                               (%c99-sema-error! "C99-PTR-004" "Incompatible pointer scalar initializer" node-or-span))
+                              (else
+                               (%c99-sema-error! "C99-SEMA-003" "Incompatible scalar initializer" node-or-span))))
                         (cons target-ty (c99-apply-implicit-cast te-d target-ty)))))
                    (else
                     (%c99-sema-error! "C99-SEMA-003" "Excess elements in scalar initializer" node-or-span))))
@@ -2089,9 +2156,14 @@
                       (dt (c99-array-decay (c-typed-type te)))
                       (te-d (c99-apply-implicit-cast te dt)))
                  (if (not (c99-assign-compatible? env target-ty dt init-node))
-                     (if (or (c-pointer-type? target-ty) (c-pointer-type? dt))
-                         (%c99-sema-error! "C99-PTR-004" "Incompatible pointer initializer type" node-or-span)
-                         (%c99-sema-error! "C99-SEMA-003" "Incompatible initializer type" node-or-span)))
+                     (cond
+                       ((or (and (c-pointer-type? target-ty) (c-float-type? dt))
+                            (and (c-float-type? target-ty) (c-pointer-type? dt)))
+                        (%c99-sema-error! "C99-FP-002" "Illegal pointer/float initializer type" node-or-span))
+                       ((or (c-pointer-type? target-ty) (c-pointer-type? dt))
+                        (%c99-sema-error! "C99-PTR-004" "Incompatible pointer initializer type" node-or-span))
+                       (else
+                        (%c99-sema-error! "C99-SEMA-003" "Incompatible initializer type" node-or-span))))
                  (cons target-ty (c99-apply-implicit-cast te-d target-ty)))))))))
 
 ;;; -----------------------------------------------------------------------
@@ -2201,9 +2273,14 @@
               (if (and (c-aggregate-ref-type? ret-ty) (not (c-type-complete? lenv ret-ty)))
                   (%c99-sema-error! "C99-LAY-001" "Return value has incomplete aggregate type" (or sp stmt-node)))
               (if (not (c99-assign-compatible? env ret-ty dt val-expr))
-                  (if (or (c-pointer-type? ret-ty) (c-pointer-type? dt))
-                      (%c99-sema-error! "C99-PTR-004" "Incompatible pointer return value type" (or sp stmt-node))
-                      (%c99-sema-error! "C99-SEMA-003" "Incompatible return value type" (or sp stmt-node))))
+                  (cond
+                    ((or (and (c-pointer-type? ret-ty) (c-float-type? dt))
+                         (and (c-float-type? ret-ty) (c-pointer-type? dt)))
+                     (%c99-sema-error! "C99-FP-002" "Illegal pointer/float return conversion" (or sp stmt-node)))
+                    ((or (c-pointer-type? ret-ty) (c-pointer-type? dt))
+                     (%c99-sema-error! "C99-PTR-004" "Incompatible pointer return value type" (or sp stmt-node)))
+                    (else
+                     (%c99-sema-error! "C99-SEMA-003" "Incompatible return value type" (or sp stmt-node)))))
               (list 'c-return (c99-apply-implicit-cast te-d ret-ty))))
            (else '(c-return #f)))))
 
