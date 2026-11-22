@@ -78,7 +78,7 @@
   (make-lir-vm-raw registers xmm-registers xmm-bits vregs flags memory heap-ptr
                    strings data-table functions main-func current-fn current-block
                    pc call-stack status fuel step-count tracer last-trap
-                   globals foreign-handlers f64-cells code-addr-table)
+                   globals foreign-handlers f64-cells code-addr-table jmp-table)
   lir-vm?
   (registers vm-registers-vector vm-set-registers-vector!)
   (xmm-registers vm-xmm-vector vm-set-xmm-vector!)
@@ -103,7 +103,8 @@
   (globals vm-globals-table vm-set-globals-table!)
   (foreign-handlers vm-foreign-handlers vm-set-foreign-handlers!)
   (f64-cells vm-f64-cells vm-set-f64-cells!)
-  (code-addr-table vm-code-addr-table vm-set-code-addr-table!))
+  (code-addr-table vm-code-addr-table vm-set-code-addr-table!)
+  (jmp-table vm-jmp-table vm-set-jmp-table!))
 
 ;;; Constructor
 (define (make-lir-vm-with-size mem-size)
@@ -117,7 +118,11 @@
                      *lir-vm-heap-base* '() '() '() #f
                      '%main '%entry 0 '() 'ready
                      *lir-vm-default-fuel* 0 #f #f '() '() '()
-                     (vector '() '() 65536))))
+                     (vector '() '() 65536)
+                     (vector '() 1))))
+
+(define (vm-reset-jmp-table! vm)
+  (vm-set-jmp-table! vm (vector '() 1)))
 
 (define (vm-reset-code-addr-table! vm)
   (vm-set-code-addr-table! vm (vector '() '() 65536)))
@@ -790,6 +795,7 @@
 
     ;; Functions loading
     (vm-reset-code-addr-table! vm)
+    (vm-reset-jmp-table! vm)
     (let ((fn-table-box (cons '() '())))
       (if (and (pair? funcs-decl) (eq? (car funcs-decl) '%lir-functions))
           (for-each
@@ -1558,19 +1564,25 @@
           ;; --- Procedure Calls & ABI ---
           ((%direct-call)
            (let* ((func-lbl (cadr inst))
-                  (shift (caddr inst))
-                  (fn-entry (assq func-lbl (vm-functions-table vm))))
-             (if (not fn-entry)
-                 (vm-trigger-trap! vm 'undefined-target "Called function not found" func-lbl)
-                 (let ((cur-rsp (vm-get-reg vm '%rsp)))
-                   ;; Push frame to call stack
-                   (vm-set-call-stack! vm (cons (list (vm-current-fn vm) (vm-pc vm) cur-rsp)
-                                                (vm-call-stack vm)))
-                   ;; Adjust %rsp
-                   (vm-set-reg! vm '%rsp (- cur-rsp (+ shift 8)))
-                   ;; Set PC to target function
-                   (vm-set-current-fn! vm func-lbl)
-                   (vm-set-pc! vm 0)))))
+                  (shift (caddr inst)))
+             (cond
+               ((eq? func-lbl '__ulisp_setjmp)
+                (vm-exec-setjmp! vm))
+               ((eq? func-lbl '__ulisp_longjmp)
+                (vm-exec-longjmp! vm))
+               (else
+                (let ((fn-entry (assq func-lbl (vm-functions-table vm))))
+                  (if (not fn-entry)
+                      (vm-trigger-trap! vm 'undefined-target "Called function not found" func-lbl)
+                      (let ((cur-rsp (vm-get-reg vm '%rsp)))
+                        ;; Push frame to call stack
+                        (vm-set-call-stack! vm (cons (list (vm-current-fn vm) (vm-pc vm) cur-rsp)
+                                                     (vm-call-stack vm)))
+                        ;; Adjust %rsp
+                        (vm-set-reg! vm '%rsp (- cur-rsp (+ shift 8)))
+                        ;; Set PC to target function
+                        (vm-set-current-fn! vm func-lbl)
+                        (vm-set-pc! vm 0))))))))
 
           ((%call-indirect)
            (let* ((addr (vm-eval-operand vm (cadr inst)))
@@ -1583,12 +1595,18 @@
                ((or (= addr 0) (not entry))
                 (vm-trigger-trap! vm 'invalid-call-target "Indirect call to NULL or invalid code address" addr))
                ((eq? (car entry) 'internal)
-                (let ((cur-rsp (vm-get-reg vm '%rsp)))
-                  (vm-set-call-stack! vm (cons (list (vm-current-fn vm) (vm-pc vm) cur-rsp)
-                                               (vm-call-stack vm)))
-                  (vm-set-reg! vm '%rsp (- cur-rsp (+ shift 8)))
-                  (vm-set-current-fn! vm (cdr entry))
-                  (vm-set-pc! vm 0)))
+                (cond
+                  ((eq? (cdr entry) '__ulisp_setjmp)
+                   (vm-exec-setjmp! vm))
+                  ((eq? (cdr entry) '__ulisp_longjmp)
+                   (vm-exec-longjmp! vm))
+                  (else
+                   (let ((cur-rsp (vm-get-reg vm '%rsp)))
+                     (vm-set-call-stack! vm (cons (list (vm-current-fn vm) (vm-pc vm) cur-rsp)
+                                                  (vm-call-stack vm)))
+                     (vm-set-reg! vm '%rsp (- cur-rsp (+ shift 8)))
+                     (vm-set-current-fn! vm (cdr entry))
+                     (vm-set-pc! vm 0)))))
                (else
                 (vm-dispatch-c-call! vm (symbol->string (cdr entry)) shift)))))
 
@@ -2426,6 +2444,69 @@
           (vm-set-current-fn! vm saved-fn)
           (vm-set-pc! vm saved-pc)))))
 
+;;; C Non-Local Jump Handlers (Issue #922: setjmp / longjmp)
+(define (vm-exec-setjmp! vm)
+  (let* ((env-addr (lir-vm-u64 (vm-get-reg vm '%rdi)))
+         (mem-len (bytevector-length (vm-memory-bytes vm))))
+    (if (or (< env-addr *lir-vm-null-page-limit*)
+            (> (+ env-addr 64) mem-len))
+        (vm-trigger-trap! vm 'invalid-jmp-buf "NULL or out-of-bounds jmp_buf in setjmp" env-addr)
+        (let* ((tbl (vm-jmp-table vm))
+               (next-id (vector-ref tbl 1))
+               (token (+ #x554C4A00000000 next-id))
+               (cur-rsp (vm-get-reg vm '%rsp)))
+          (vector-set! tbl 1 (+ next-id 1))
+          (vm-mem-write-i64! vm env-addr (vm-get-reg vm '%rbx))
+          (vm-mem-write-i64! vm (+ env-addr 8) (vm-get-reg vm '%rbp))
+          (vm-mem-write-i64! vm (+ env-addr 16) (vm-get-reg vm '%r12))
+          (vm-mem-write-i64! vm (+ env-addr 24) (vm-get-reg vm '%r13))
+          (vm-mem-write-i64! vm (+ env-addr 32) (vm-get-reg vm '%r14))
+          (vm-mem-write-i64! vm (+ env-addr 40) (vm-get-reg vm '%r15))
+          (vm-mem-write-i64! vm (+ env-addr 48) cur-rsp)
+          (vm-mem-write-i64! vm (+ env-addr 56) token)
+          (vector-set! tbl 0
+                       (cons (cons token
+                                   (list (vm-current-fn vm)
+                                         (vm-pc vm)
+                                         cur-rsp
+                                         (vm-call-stack vm)
+                                         (vm-current-block vm)))
+                             (vector-ref tbl 0)))
+          (vm-set-reg! vm '%rax 0)))))
+
+(define (vm-exec-longjmp! vm)
+  (let* ((env-addr (lir-vm-u64 (vm-get-reg vm '%rdi)))
+         (mem-len (bytevector-length (vm-memory-bytes vm))))
+    (if (or (< env-addr *lir-vm-null-page-limit*)
+            (> (+ env-addr 64) mem-len))
+        (vm-trigger-trap! vm 'invalid-jmp-buf "NULL or out-of-bounds jmp_buf in longjmp" env-addr)
+        (let* ((saved-rsp (vm-mem-read-i64 vm (+ env-addr 48)))
+               (token (vm-mem-read-i64 vm (+ env-addr 56)))
+               (entry (assv token (vector-ref (vm-jmp-table vm) 0))))
+          (if (or (not entry)
+                  (not (= saved-rsp (list-ref (cdr entry) 2))))
+              (vm-trigger-trap! vm 'invalid-jmp-buf "Invalid or uninitialized jmp_buf in longjmp" env-addr)
+              (let* ((ctx-info (cdr entry))
+                     (caller-fn (list-ref ctx-info 0))
+                     (caller-pc (list-ref ctx-info 1))
+                     (caller-rsp (list-ref ctx-info 2))
+                     (caller-stack (list-ref ctx-info 3))
+                     (caller-block (list-ref ctx-info 4))
+                     (raw-val (lir-vm-s32 (vm-get-reg vm '%rsi)))
+                     (norm-val (if (= raw-val 0) 1 raw-val)))
+                (vm-set-reg! vm '%rbx (vm-mem-read-i64 vm env-addr))
+                (vm-set-reg! vm '%rbp (vm-mem-read-i64 vm (+ env-addr 8)))
+                (vm-set-reg! vm '%r12 (vm-mem-read-i64 vm (+ env-addr 16)))
+                (vm-set-reg! vm '%r13 (vm-mem-read-i64 vm (+ env-addr 24)))
+                (vm-set-reg! vm '%r14 (vm-mem-read-i64 vm (+ env-addr 32)))
+                (vm-set-reg! vm '%r15 (vm-mem-read-i64 vm (+ env-addr 40)))
+                (vm-set-reg! vm '%rsp caller-rsp)
+                (vm-set-call-stack! vm caller-stack)
+                (vm-set-current-fn! vm caller-fn)
+                (vm-set-current-block! vm caller-block)
+                (vm-set-pc! vm caller-pc)
+                (vm-set-reg! vm '%rax norm-val)))))))
+
 ;;; C Foreign Call Dispatcher
 (define (vm-dispatch-c-call! vm fn-name shift)
   ;; Check registered custom handlers first (supports both string and symbol names)
@@ -2436,6 +2517,12 @@
     (if custom
         ((cdr custom) vm)
         (case fn-sym
+          ((__ulisp_setjmp setjmp _setjmp sigsetjmp)
+           (vm-exec-setjmp! vm))
+
+          ((__ulisp_longjmp longjmp _longjmp siglongjmp)
+           (vm-exec-longjmp! vm))
+
           ((ulisp_alloc malloc)
            (let* ((bytes (vm-get-reg vm '%rdi))
                   (tag (if (eq? fn-sym 'ulisp_alloc) (vm-get-reg vm '%rsi) 0))
