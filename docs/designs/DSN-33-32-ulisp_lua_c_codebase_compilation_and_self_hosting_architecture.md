@@ -249,8 +249,8 @@ Step S5 の完了基準（Definition of Done）として、ULisp でビルドさ
 | **#916** | S2 (T4) | C99 基本型検査・整数昇格 (Sema Core) および整数 LIR Lowering | High | [916](../issues/closed/916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |
 | **#917** | S2 (T5) | C コンパイラドライバ (`c_driver.scm`) およびホストリンカ連携 | High | [917](../issues/closed/917-implement-c-compiler-driver-and-host-ld-integration.md) |
 | **#918** | S3 (T6) | C99 構造体・共用体・列挙型・ビットフィールドの SysV レイアウト計算 | High | [918](../issues/closed/918-implement-c99-struct-union-enum-bitfield-sysv-layout.md) |
-| **#919** | S3 (T7) | ポインタスケーリング演算・配列退化およびスタックエスケープ処理 | High | [919](../issues/919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md) |
-| **#920** | S3 (T8) | 関数ポインタ間接呼び出しおよび巨大 `switch`/`goto` の Braun SSA Lowering | High | [920](../issues/920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md) |
+| **#919** | S3 (T7) | ポインタスケーリング演算・配列退化およびスタックエスケープ処理 | High | [919](../issues/closed/919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md) |
+| **#920** | S3 (T8) | 関数ポインタ間接呼び出しおよび巨大 `switch`/`goto` の Braun SSA Lowering | High | [920](../issues/closed/920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md) |
 | **#921** | S3 (T9) | `<stdarg.h>` 可変長引数 (`va_list`/`va_start`/`va_arg`) SysV ABI Lowering | High | [921](../issues/921-implement-sysv-amd64-stdarg-va-list-lowering.md) |
 | **#922** | S3 (T10) | 非局所脱出 (`setjmp`/`longjmp`) `%inline-asm` ＆ 生存変数スピル保護 | High | [922](../issues/922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md) |
 | **#923** | S4 (T11) | C99 浮動小数点型 (`double`/`float`) Sema ＆ IEEE 754 / LIR 変換 | High | [923](../issues/923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) |

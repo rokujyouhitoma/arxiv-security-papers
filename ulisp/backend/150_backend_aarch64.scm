@@ -444,11 +444,14 @@
          (emit (string-append "    b " (if (symbol? lbl) (symbol->string lbl) lbl)))))
 
       ((%switch)
-       ;; (%switch val def-lbl def-args cases)
+       ;; (%switch val def-lbl [def-args] cases)
        (let* ((val (cadr inst))
               (def-lbl (caddr inst))
-              (def-args (cadddr inst))
-              (cases (if (pair? (cddddr inst)) (car (cddddr inst)) '()))
+              (has-def-args? (= (length inst) 5))
+              (def-args (if has-def-args? (cadddr inst) '()))
+              (cases (cond (has-def-args? (car (cddddr inst)))
+                           ((pair? (cdddr inst)) (cadddr inst))
+                           (else '())))
               (val-str (arm-operand->str val)))
          (for-each
           (lambda (c)
@@ -1000,6 +1003,16 @@
          (emit "    ldr x30, [sp]")
          (arm-emit-add-sp total-shift)))
 
+      ((%call-indirect)
+       (let* ((target-reg (cadr inst))
+              (frame-shift (caddr inst))
+              (total-shift (arm-align-frame-shift frame-shift)))
+         (arm-emit-sub-sp total-shift)
+         (emit "    str x30, [sp]")
+         (emit (string-append "    blr " (arm-reg->str target-reg)))
+         (emit "    ldr x30, [sp]")
+         (arm-emit-add-sp total-shift)))
+
       ((%call-closure)
        (let* ((frame-shift (cadr inst))
               (safepoint (if (pair? (cddr inst)) (caddr inst) #f))
@@ -1295,7 +1308,7 @@
       #f
       (let ((op (car inst)))
         (case op
-          ((%direct-call %call-closure %direct-jump %c-call) #t)
+          ((%direct-call %call-closure %direct-jump %c-call %call-indirect) #t)
           ((%jump)
            ;; Only indirect jumps to registers (%jump %r11) are tail calls expecting argc in x7.
            ;; Jumps to code labels (%jump <lbl>) are local control-flow transfers (e.g. if-merge)
