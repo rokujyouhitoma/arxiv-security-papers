@@ -39,6 +39,15 @@
 (define (make-c-enum-type tag)
   (list 'enum tag))
 
+(define (make-c-struct-ref-type tag-id tag)
+  (list 'struct-ref tag-id tag))
+
+(define (make-c-union-ref-type tag-id tag)
+  (list 'union-ref tag-id tag))
+
+(define (make-c-enum-ref-type tag-id tag)
+  (list 'enum-ref tag-id tag))
+
 (define (make-c-fn-type ret params variadic?)
   (list 'fn ret params (if variadic? #t #f)))
 
@@ -46,7 +55,7 @@
   (eq? t 'void))
 
 (define (c-enum-type? t)
-  (and (pair? t) (eq? (car t) 'enum)))
+  (and (pair? t) (memq (car t) '(enum enum-ref)) #t))
 
 (define (c-integer-type? t)
   (or (memq t '(bool i8 u8 i16 u16 i32 u32 i64 u64))
@@ -77,6 +86,32 @@
 (define (c-union-type? t)
   (and (pair? t) (eq? (car t) 'union)))
 
+(define (c-struct-ref-type? t)
+  (and (pair? t) (eq? (car t) 'struct-ref)))
+
+(define (c-union-ref-type? t)
+  (and (pair? t) (eq? (car t) 'union-ref)))
+
+(define (c-enum-ref-type? t)
+  (and (pair? t) (eq? (car t) 'enum-ref)))
+
+(define (c-aggregate-ref-type? t)
+  (or (c-struct-ref-type? t) (c-union-ref-type? t)))
+
+(define (c-aggregate-type? t)
+  (or (c-struct-type? t) (c-union-type? t)
+      (c-struct-ref-type? t) (c-union-ref-type? t)))
+
+(define (c-tag-ref-id t)
+  (if (or (c-struct-ref-type? t) (c-union-ref-type? t) (c-enum-ref-type? t))
+      (cadr t)
+      #f))
+
+(define (c-tag-ref-name t)
+  (if (or (c-struct-ref-type? t) (c-union-ref-type? t) (c-enum-ref-type? t))
+      (caddr t)
+      #f))
+
 (define (c-function-type? t)
   (and (pair? t) (eq? (car t) 'fn)))
 
@@ -87,7 +122,7 @@
   (or (eq? t 'void)
       (c-arithmetic-type? t)
       (and (pair? t)
-           (memq (car t) '(ptr array struct union enum fn)))))
+           (memq (car t) '(ptr array struct union enum struct-ref union-ref enum-ref fn)))))
 
 (define (c-ptr-target t)
   (if (c-pointer-type? t) (cadr t) #f))
@@ -99,9 +134,12 @@
   (if (c-array-type? t) (caddr t) #f))
 
 (define (c-aggregate-tag t)
-  (if (or (c-struct-type? t) (c-union-type? t) (c-enum-type? t))
-      (cadr t)
-      #f))
+  (cond
+    ((or (c-struct-ref-type? t) (c-union-ref-type? t) (c-enum-ref-type? t))
+     (caddr t))
+    ((or (c-struct-type? t) (c-union-type? t) (c-enum-type? t))
+     (cadr t))
+    (else #f)))
 
 (define (c-aggregate-fields t)
   (if (or (c-struct-type? t) (c-union-type? t))
@@ -221,6 +259,17 @@
          (eq? (c-ptr-target t2) 'void)
          (c-types-compatible? (c-ptr-target t1) (c-ptr-target t2))))
     ((and (c-arithmetic-type? t1) (c-arithmetic-type? t2)) #t)
+    ((and (c-array-type? t1) (c-array-type? t2))
+     (and (c-types-compatible? (c-array-elem t1) (c-array-elem t2))
+          (or (not (c-array-length t1))
+              (not (c-array-length t2))
+              (= (c-array-length t1) (c-array-length t2)))))
+    ((and (c-struct-ref-type? t1) (c-struct-ref-type? t2))
+     (equal? (c-tag-ref-id t1) (c-tag-ref-id t2)))
+    ((and (c-union-ref-type? t1) (c-union-ref-type? t2))
+     (equal? (c-tag-ref-id t1) (c-tag-ref-id t2)))
+    ((and (c-enum-ref-type? t1) (c-enum-ref-type? t2))
+     (equal? (c-tag-ref-id t1) (c-tag-ref-id t2)))
     (else #f)))
 
 (define (c-type->string t)
@@ -228,6 +277,15 @@
     ((symbol? t) (symbol->string t))
     ((c-pointer-type? t) (string-append (c-type->string (c-ptr-target t)) "*"))
     ((c-array-type? t) (string-append (c-type->string (c-array-elem t)) "[]"))
+    ((c-enum-ref-type? t)
+     (let ((tag (c-tag-ref-name t)))
+       (if tag (string-append "enum " (symbol->string tag)) "enum")))
+    ((c-struct-ref-type? t)
+     (let ((tag (c-tag-ref-name t)))
+       (if tag (string-append "struct " (symbol->string tag)) "struct")))
+    ((c-union-ref-type? t)
+     (let ((tag (c-tag-ref-name t)))
+       (if tag (string-append "union " (symbol->string tag)) "union")))
     ((c-enum-type? t) "enum")
     ((c-struct-type? t) "struct")
     ((c-union-type? t) "union")
@@ -378,6 +436,9 @@
     (c-cast any_node expr)
     (c-sizeof-type any_node)
     (c-sizeof-expr expr)
+    (c-alignof-type any_node)
+    (c-alignof-expr expr)
+    (c-offsetof any_node any_node)
     (c-compound-lit any_node inits)))
 
 (define-language L_c_typed
@@ -387,7 +448,8 @@
     (+ (any (ctype))))
   (Expr (expr)
     (+ (c-typed ctype expr)
-       (c-implicit-cast ctype expr))))
+       (c-implicit-cast ctype expr)
+       (c-init-list any_node))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. L_c_ast Verification Helper (Source Span & Structure Check)
@@ -459,11 +521,11 @@
                 (boolean? (cadddr inner))))
           ((c-cast)
            (%c99-verify-expr-node (caddr inner)))
-          ((c-sizeof-type)
+          ((c-sizeof-type c-alignof-type c-offsetof)
            #t)
-          ((c-sizeof-expr)
+          ((c-sizeof-expr c-alignof-expr)
            (%c99-verify-expr-node (cadr inner)))
-          ((c-compound-lit)
+          ((c-compound-lit c-init-list)
            #t)
           (else
            (%c99-report-parse-violation "Unknown C99 expression tag" node))))))

@@ -23,7 +23,7 @@
   (entry Program)
   (terminals
     (symbol (x lbl var cond_op sp_lbl mty))
-    (integer (n offset shift frame_size bytes tag si cnt bitmap line col al_val))
+    (integer (n offset shift frame_size tag si cnt bitmap line col al_val))
     (string (str fn_name))
     (boolean (bool_val)))
   (Register (reg)
@@ -107,6 +107,7 @@
     (%code-ref reg lbl)
     (%str-ref reg lbl)
     (%global-ref reg var)
+    (%global-addr reg var)
     (%global-set! var reg)
 
     ;; Arithmetic / Logic / Primitives
@@ -168,6 +169,13 @@
   (StringEntry (se)
     (lbl str)
     (str1 str2))
+  (DataChunk (dc)
+    n
+    (zero n)
+    (reloc lbl offset))
+  (DataEntry (de)
+    (bss lbl al_val n)
+    (bytes lbl al_val dc ...))
   (SafepointEntry (sm)
     (lbl frame_size bitmap)
     (str frame_size bitmap))
@@ -179,7 +187,8 @@
   (MainDecl (m)
     (%lir-main (frame-size frame_size) (body inst ...)))
   (Program (p)
-    (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)))
+    (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)
+    (%lir-program (strings (se ...)) (data (de ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. L_lir_managed: Managed Runtime Dialect LIR (Issue #835)
@@ -188,11 +197,11 @@
   (extends L_lir_core)
   (entry Program)
   (Inst (inst)
-    (+ (%alloc opnd bytes tag)
-       (%alloc opnd bytes tag si)
+    (+ (%alloc opnd n tag)
+       (%alloc opnd n tag si)
        (%alloc-stack opnd offset tag)
-       (%managed-alloc opnd bytes tag)
-       (%managed-alloc opnd bytes tag si)
+       (%managed-alloc opnd n tag)
+       (%managed-alloc opnd n tag si)
        (%managed-alloc-stack opnd offset tag)
        (%managed-safepoint-poll)
        (%managed-write-barrier opnd1 offset opnd2)
@@ -216,7 +225,7 @@
   (entry Program)
   (terminals
     (symbol (x lbl var cond_op sp_lbl mty))
-    (integer (n offset shift frame_size bytes tag si cnt bitmap line col al_val))
+    (integer (n offset shift frame_size tag si cnt bitmap line col al_val))
     (string (str fn_name))
     (boolean (bool_val)))
   (Register (reg)
@@ -303,6 +312,7 @@
     (%code-ref reg lbl)
     (%str-ref reg lbl)
     (%global-ref reg var)
+    (%global-addr reg var)
     (%global-set! var reg)
 
     ;; Arithmetic / Logic / Primitives
@@ -367,8 +377,8 @@
     (%inline-asm str asm_clause ...)
 
     ;; Runtime / GC / CC / Values
-    (%alloc opnd bytes tag)
-    (%alloc opnd bytes tag si)
+    (%alloc opnd n tag)
+    (%alloc opnd n tag si)
     (%alloc-stack opnd offset tag)
     (%capture-cc lbl si)
     (%push-handler lbl si1 si2)
@@ -379,6 +389,13 @@
   (StringEntry (se)
     (lbl str)
     (str1 str2))
+  (DataChunk (dc)
+    n
+    (zero n)
+    (reloc lbl offset))
+  (DataEntry (de)
+    (bss lbl al_val n)
+    (bytes lbl al_val dc ...))
   (SafepointEntry (sm)
     (lbl frame_size bitmap)
     (str frame_size bitmap))
@@ -390,7 +407,8 @@
   (MainDecl (m)
     (%lir-main (frame-size frame_size) (body inst ...)))
   (Program (p)
-    (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)))
+    (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)
+    (%lir-program (strings (se ...)) (data (de ...)) (stackmaps (sm ...)) (%lir-functions f ...) m)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. L_lir_canonical: Canonical LIR (Post-Branch Fusion & Peephole)

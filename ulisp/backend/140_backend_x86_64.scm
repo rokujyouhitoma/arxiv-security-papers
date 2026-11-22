@@ -280,7 +280,8 @@
         (let ((inst (car xs)))
           (loop (cdr xs)
                 (+ idx 1)
-                (if (and (pair? inst) (eq? (car inst) '%global-set!))
+                (if (and (pair? inst)
+                         (memq (car inst) '(%global-set! %store %store-typed)))
                     idx
                     last-set))))))
 
@@ -550,7 +551,8 @@
                       (list '%raw-asm "    movzx eax, al")
                       (list '%raw-asm "    shl rax, 6")
                       (list '%raw-asm "    add rax, 0x2F"))))
-           (if (not (eq? (car *backend-gc-mode*) 'none))
+           (if (and (not (eq? (car *backend-gc-mode*) 'none))
+                    (not (eq? (car *backend-gc-mode*) 'c-tu)))
                (append cas-insts
                        (list (list '%raw-asm "    mov r10, rax")
                              (list '%raw-asm (string-append "    lea rdx, [" (reg->str box) " + 11]"))
@@ -582,6 +584,7 @@
                     (list (list 'mov (list '%disp offset (lower-lir-reg base)) (lower-lir-opnd src))))))
            (if (and (not (integer? src))
                     (not (eq? (car *backend-gc-mode*) 'none))
+                    (not (eq? (car *backend-gc-mode*) 'c-tu))
                     (eq? base '%rdx)
                     (or (equal? offset -1) (equal? offset 7) (eq? offset '%rcx)
                         (and (pair? offset) (eq? (car offset) '%sib))))
@@ -743,6 +746,7 @@
       ((%trunc)
        (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
          (case mty
+           ((f32)     (list (list '%raw-asm (string-append "    cvtsd2ss " (reg->str dst) ", " (operand->str src)))))
            ((i8 u8)   (list (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg8->str src)))))
            ((i16 u16) (list (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg16->str src)))))
            ((i32 u32) (list (list '%raw-asm (string-append "    mov " (reg32->str dst) ", " (reg32->str src)))))
@@ -751,6 +755,7 @@
       ((%zext)
        (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
          (case mty
+           ((f64)     (list (list '%raw-asm (string-append "    cvtss2sd " (reg->str dst) ", " (operand->str src)))))
            ((i8 u8)   (list (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg8->str src)))))
            ((i16 u16) (list (list '%raw-asm (string-append "    movzx " (reg->str dst) ", " (reg16->str src)))))
            ((i32 u32) (list (list '%raw-asm (string-append "    mov " (reg32->str dst) ", " (reg32->str src)))))
@@ -1094,6 +1099,14 @@
          (let ((g-lbl (mangle-gvar-label var)))
            (list (list '%raw-asm (string-append "    lea r11, [rip + " g-lbl "]"))
                  (list '%raw-asm (string-append "    mov " (reg->str reg) ", [r11]"))))))
+
+      ((%global-addr)
+       (let ((reg (cadr inst))
+             (var (caddr inst)))
+         (let ((g-lbl (if (eq? (car *backend-gc-mode*) 'c-tu)
+                          (asm-label->str var)
+                          (mangle-gvar-label var))))
+           (list (list '%raw-asm (string-append "    lea " (reg->str reg) ", [rip + " g-lbl "]"))))))
 
       ((%global-set!)
        (let ((var (cadr inst))
@@ -1734,6 +1747,7 @@
 
 (define (select-instructions-x86 prog)
   (let* ((strings (assq 'strings (cdr prog)))
+         (data-clause (assq 'data (cdr prog)))
          (stackmaps (assq 'stackmaps (cdr prog)))
          (funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
@@ -1741,11 +1755,18 @@
     (if (eq? (car *backend-gc-mode*) 'c-tu)
         (set-car! *c-tu-globals* (c99-collect-lir-globals prog))
         (set-car! *c-tu-globals* '()))
-    (list '%asm-program
-          (if strings strings '(strings ()))
-          (if stackmaps stackmaps '(stackmaps ()))
-          (cons '%asm-functions (map select-instructions-function funcs))
-          (select-instructions-main main-clause))))
+    (if data-clause
+        (list '%asm-program
+              (if strings strings '(strings ()))
+              data-clause
+              (if stackmaps stackmaps '(stackmaps ()))
+              (cons '%asm-functions (map select-instructions-function funcs))
+              (select-instructions-main main-clause))
+        (list '%asm-program
+              (if strings strings '(strings ()))
+              (if stackmaps stackmaps '(stackmaps ()))
+              (cons '%asm-functions (map select-instructions-function funcs))
+              (select-instructions-main main-clause)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Stage 2: Code Emission (L_asm_x86 AST -> GNU x86-64 Intel Syntax)
@@ -1779,7 +1800,8 @@
       ((mov)
        (let ((dst-str (asm-opnd->str (cadr inst)))
              (src-str (asm-opnd->str (caddr inst))))
-         (if (and (string=? dst-str "rax")
+         (if (and (not (eq? (car *backend-gc-mode*) 'c-tu))
+                  (string=? dst-str "rax")
                   (or (string=? src-str "[rax - 1]")
                       (string=? src-str "[rax + 7]")))
              (begin
@@ -1927,6 +1949,44 @@
          (body (if body-entry (cdr body-entry) '())))
     (for-each emit-x86-asm-inst body)))
 
+(define (%c99-exported-asm-label? lbl-str)
+  (not (string-starts-with? lbl-str ".L_")))
+
+(define (%c99-emit-x86-byte-group bs)
+  (if (pair? bs)
+      (let loop ((xs (cdr bs)) (s (string-append "    .byte " (number->string (car bs)))))
+        (if (null? xs)
+            (emit s)
+            (loop (cdr xs) (string-append s ", " (number->string (car xs))))))))
+
+(define (%c99-emit-x86-data-chunks chunks)
+  (let loop ((cs chunks) (pending '()))
+    (cond
+      ((null? cs)
+       (if (pair? pending) (%c99-emit-x86-byte-group (reverse pending))))
+      ((integer? (car cs))
+       (let ((next (cons (car cs) pending)))
+         (if (>= (length next) 16)
+             (begin
+               (%c99-emit-x86-byte-group (reverse next))
+               (loop (cdr cs) '()))
+             (loop (cdr cs) next))))
+      (else
+       (if (pair? pending) (%c99-emit-x86-byte-group (reverse pending)))
+       (let ((c (car cs)))
+         (cond
+           ((and (pair? c) (eq? (car c) 'zero))
+            (if (> (cadr c) 0)
+                (emit (string-append "    .zero " (number->string (cadr c))))))
+           ((and (pair? c) (eq? (car c) 'reloc))
+            (let ((t-str (asm-label->str (cadr c)))
+                  (off (caddr c)))
+              (emit (cond
+                      ((= off 0) (string-append "    .quad " t-str))
+                      ((> off 0) (string-append "    .quad " t-str " + " (number->string off)))
+                      (else (string-append "    .quad " t-str " - " (number->string (- 0 off))))))))))
+       (loop (cdr cs) '())))))
+
 (define (emit-c-tu-x86-asm-program asm-prog funcs main-body)
   (emit "    .intel_syntax noprefix")
   (if (debug-symbols-enabled?)
@@ -1961,10 +2021,52 @@
                         (emit (string-append lbl-str ":"))
                         (emit (string-append "    .asciz \"" escaped "\""))))
                     str-entries))))
-  (let ((gvs (car *c-tu-globals*)))
-    (if (pair? gvs)
+  (let* ((data-clause (assq 'data (cdr asm-prog)))
+         (data-entries (if (and data-clause (pair? (cdr data-clause)))
+                           (cadr data-clause)
+                           '()))
+         (bytes-entries (let loop ((es data-entries) (acc '()))
+                          (cond ((null? es) (reverse acc))
+                                ((eq? (caar es) 'bytes) (loop (cdr es) (cons (car es) acc)))
+                                (else (loop (cdr es) acc)))))
+         (bss-entries (let loop ((es data-entries) (acc '()))
+                        (cond ((null? es) (reverse acc))
+                              ((eq? (caar es) 'bss) (loop (cdr es) (cons (car es) acc)))
+                              (else (loop (cdr es) acc)))))
+         (gvs (car *c-tu-globals*)))
+    (if (pair? bytes-entries)
+        (begin
+          (emit "    .section .data")
+          (for-each (lambda (de)
+                      (let* ((lbl-str (asm-label->str (cadr de)))
+                             (al (caddr de))
+                             (chunks (cdddr de)))
+                        (if (> al 1)
+                            (emit (string-append "    .align " (number->string al))))
+                        (if (%c99-exported-asm-label? lbl-str)
+                            (begin
+                              (emit (string-append "    .globl " lbl-str))
+                              (emit (string-append "    .type " lbl-str ", @object"))))
+                        (emit (string-append lbl-str ":"))
+                        (%c99-emit-x86-data-chunks chunks)))
+                    bytes-entries)))
+    (if (or (pair? bss-entries) (pair? gvs))
         (begin
           (emit "    .section .bss")
+          (for-each (lambda (de)
+                      (let* ((lbl-str (asm-label->str (cadr de)))
+                             (al (caddr de))
+                             (sz (cadddr de)))
+                        (if (> al 1)
+                            (emit (string-append "    .align " (number->string al))))
+                        (if (%c99-exported-asm-label? lbl-str)
+                            (begin
+                              (emit (string-append "    .globl " lbl-str))
+                              (emit (string-append "    .type " lbl-str ", @object"))))
+                        (emit (string-append lbl-str ":"))
+                        (if (> sz 0)
+                            (emit (string-append "    .zero " (number->string sz))))))
+                    bss-entries)
           (for-each (lambda (v)
                       (let ((g-lbl (mangle-gvar-label v)))
                         (emit "    .align 8")

@@ -1,13 +1,14 @@
 ;;; =======================================================================
 ;;; ULisp C99 Frontend: Semantic Analyzer & Type Checker (L_c_ast -> L_c_typed)
-;;; Conforms to DSN-33-11 §4.2/§4.3, DSN-33-32 & Issue #916
+;;; Conforms to DSN-33-11 §4.2/§4.3, DSN-33-32 & Issues #916 / #918
 ;;; Implements:
-;;;   - Scope/Namespace resolution (variables, functions, typedefs, enums)
-;;;   - Integer Promotions (ISO C99 §6.3.1.1)
-;;;   - Usual Arithmetic Conversions (ISO C99 §6.3.1.8)
-;;;   - Implicit Cast insertion (c-implicit-cast)
-;;;   - Lvalue & Function Prototype validation
-;;;   - Span-annotated diagnostics C99-SEMA-001 .. C99-SEMA-005 (#833)
+;;;   - Block-scoped 4-namespace resolution (variables, functions, typedefs, tags, enums)
+;;;   - Complete SysV struct/union/enum/bitfield/FAM/anonymous semantic checks
+;;;   - Integer Promotions (C99 §6.3.1.1, incl. bitfield widths) & Usual Arith Conv
+;;;   - CTFE sizeof / _Alignof / __builtin_offsetof / <stddef.h> offsetof idiom
+;;;   - Designated Initializers, compound literals, string literal char[] init
+;;;   - Span-annotated diagnostics C99-SEMA-001..005 & C99-LAY-001..004
+;;;   Zero local `set!` (ULisp AOT safe).
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
@@ -33,7 +34,7 @@
         (make-c-typed target-type (list 'c-implicit-cast target-type typed-expr)))))
 
 ;;; -----------------------------------------------------------------------
-;;; 2. Diagnostic Helper (C99-SEMA-001 .. C99-SEMA-005)
+;;; 2. Diagnostic Helpers (C99-SEMA-001..005 & C99-LAY-001..004)
 ;;; -----------------------------------------------------------------------
 
 (define (%c99-sema-error! code msg node-or-span)
@@ -44,6 +45,10 @@
          (diag (make-diagnostic 'error code sp msg)))
     (report-diagnostic diag)
     (raise (list 'c99-sema-error code msg sp))))
+
+(define (%c99-sema-err-cb node-or-span)
+  (lambda (code msg)
+    (%c99-sema-error! code msg node-or-span)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. Semantic Environment (<c99-sema-env>)
@@ -60,24 +65,39 @@
     (string->symbol
      (string-append (symbol->string sym) "_" (number->string id)))))
 
-;; Sema scope entry types:
-;; - ('var unique-sym c-type global? param-idx-or-#f)
+(define (c99-next-static-var-id! sym)
+  (let ((id (car *c99-sema-var-id-counter*)))
+    (set-car! *c99-sema-var-id-counter* (+ id 1))
+    (string->symbol
+     (string-append ".L_c99_static_" (symbol->string sym) "_" (number->string id)))))
+
+;; Ordinary scope entries:
+;; - ('var unique-sym c-type linkage-kind param-idx-or-#f)
+;;     linkage-kind: #f (local auto), 'global, 'static, 'extern
 ;; - ('enum-const val)
 ;; - ('typedef c-type)
 ;; - ('fn sym fn-type defined?)
+;;
+;; Tag scope entries:
+;; - (sym kind tag-id defined?) where kind is 'struct | 'union | 'enum
 (define-record-type <c99-sema-env>
-  (%make-sema-env scopes fn-table enum-tags struct-tags curr-ret loop-depth switch-depth)
+  (%make-sema-env scopes tag-scopes fn-table layout-env visiting-tags nest-depth
+                  static-globals curr-ret loop-depth switch-depth)
   c99-sema-env?
-  (scopes       sema-env-scopes       sema-env-scopes-set!)
-  (fn-table     sema-env-fn-table     sema-env-fn-table-set!)
-  (enum-tags    sema-env-enum-tags    sema-env-enum-tags-set!)
-  (struct-tags  sema-env-struct-tags  sema-env-struct-tags-set!)
-  (curr-ret     sema-env-curr-ret     sema-env-curr-ret-set!)
-  (loop-depth   sema-env-loop-depth   sema-env-loop-depth-set!)
-  (switch-depth sema-env-switch-depth sema-env-switch-depth-set!))
+  (scopes         sema-env-scopes         sema-env-scopes-set!)
+  (tag-scopes     sema-env-tag-scopes     sema-env-tag-scopes-set!)
+  (fn-table       sema-env-fn-table       sema-env-fn-table-set!)
+  (layout-env     sema-env-layout-env     sema-env-layout-env-set!)
+  (visiting-tags  sema-env-visiting-tags  sema-env-visiting-tags-set!)
+  (nest-depth     sema-env-nest-depth     sema-env-nest-depth-set!)
+  (static-globals sema-env-static-globals sema-env-static-globals-set!)
+  (curr-ret       sema-env-curr-ret       sema-env-curr-ret-set!)
+  (loop-depth     sema-env-loop-depth     sema-env-loop-depth-set!)
+  (switch-depth   sema-env-switch-depth   sema-env-switch-depth-set!))
 
 (define (make-c99-sema-env)
-  (let ((env (%make-sema-env (list '()) '() '() '() 'i32 0 0)))
+  (let ((env (%make-sema-env (list '()) (list '()) '() (make-c99-layout-env)
+                             '() 0 '() 'i32 0 0)))
     ;; Pre-populate common libc external prototypes for SysV ABI calls
     (sema-register-fn! env 'printf (make-c-fn-type 'i32 (list (make-c-ptr-type 'i8)) #t) #f)
     (sema-register-fn! env 'puts (make-c-fn-type 'i32 (list (make-c-ptr-type 'i8)) #f) #f)
@@ -87,7 +107,9 @@
     (sema-register-fn! env 'realloc (make-c-fn-type (make-c-ptr-type 'void) (list (make-c-ptr-type 'void) 'u64) #f) #f)
     (sema-register-fn! env 'free (make-c-fn-type 'void (list (make-c-ptr-type 'void)) #f) #f)
     (sema-register-fn! env 'memcpy (make-c-fn-type (make-c-ptr-type 'void) (list (make-c-ptr-type 'void) (make-c-ptr-type 'void) 'u64) #f) #f)
+    (sema-register-fn! env 'memmove (make-c-fn-type (make-c-ptr-type 'void) (list (make-c-ptr-type 'void) (make-c-ptr-type 'void) 'u64) #f) #f)
     (sema-register-fn! env 'memset (make-c-fn-type (make-c-ptr-type 'void) (list (make-c-ptr-type 'void) 'i32 'u64) #f) #f)
+    (sema-register-fn! env 'memcmp (make-c-fn-type 'i32 (list (make-c-ptr-type 'void) (make-c-ptr-type 'void) 'u64) #f) #f)
     (sema-register-fn! env 'strlen (make-c-fn-type 'u64 (list (make-c-ptr-type 'i8)) #f) #f)
     (sema-register-fn! env 'strcmp (make-c-fn-type 'i32 (list (make-c-ptr-type 'i8) (make-c-ptr-type 'i8)) #f) #f)
     (sema-register-fn! env 'strncmp (make-c-fn-type 'i32 (list (make-c-ptr-type 'i8) (make-c-ptr-type 'i8) 'u64) #f) #f)
@@ -96,12 +118,16 @@
     env))
 
 (define (sema-push-scope! env)
-  (sema-env-scopes-set! env (cons '() (sema-env-scopes env))))
+  (sema-env-scopes-set! env (cons '() (sema-env-scopes env)))
+  (sema-env-tag-scopes-set! env (cons '() (sema-env-tag-scopes env))))
 
 (define (sema-pop-scope! env)
-  (let ((sc (sema-env-scopes env)))
+  (let ((sc (sema-env-scopes env))
+        (tsc (sema-env-tag-scopes env)))
     (if (pair? (cdr sc))
-        (sema-env-scopes-set! env (cdr sc)))))
+        (sema-env-scopes-set! env (cdr sc)))
+    (if (pair? (cdr tsc))
+        (sema-env-tag-scopes-set! env (cdr tsc)))))
 
 (define (sema-in-global-scope? env)
   (null? (cdr (sema-env-scopes env))))
@@ -127,6 +153,29 @@
         (cadr ent)
         #f)))
 
+(define (sema-lookup-tag-local env sym)
+  (assq sym (car (sema-env-tag-scopes env))))
+
+(define (sema-lookup-tag env sym)
+  (let loop ((tscs (sema-env-tag-scopes env)))
+    (if (null? tscs)
+        #f
+        (let ((slot (assq sym (car tscs))))
+          (if slot slot (loop (cdr tscs)))))))
+
+(define (sema-alloc-tag! env sym kind defined?)
+  (let* ((lenv (sema-env-layout-env env))
+         (tag-id (c99-layout-env-alloc-tag-id! lenv)))
+    (if (eq? kind 'enum)
+        (c99-layout-env-set! lenv tag-id (c99-make-incomplete-enum-layout tag-id sym))
+        (c99-layout-env-set! lenv tag-id (c99-make-incomplete-struct-layout tag-id kind sym)))
+    (if sym
+        (let* ((tsc (sema-env-tag-scopes env))
+               (entry (list sym kind tag-id defined?)))
+          (set-car! tsc (cons entry (car tsc)))
+          entry)
+        (list #f kind tag-id defined?))))
+
 (define (sema-register-fn! env sym fn-type defined?)
   (let ((slot (assq sym (sema-env-fn-table env))))
     (if slot
@@ -141,7 +190,7 @@
     (if slot (cdr slot) #f)))
 
 ;;; -----------------------------------------------------------------------
-;;; 4. C99 Integer Constant & Literal Parser + Constant Evaluator
+;;; 4. C99 Constants, Floats & Literal Parsers
 ;;; -----------------------------------------------------------------------
 
 (define (%c99-sema-hex-val ch)
@@ -228,6 +277,56 @@
                                  (loop j (cons (integer->char (bitwise-and acc 255)) chars))))
                            (loop (+ i 2) (cons esc chars)))))))))))))
 
+(define (%c99-pow-inexact base exp)
+  (let ((neg? (< exp 0))
+        (e (if (< exp 0) (- 0 exp) exp)))
+    (let loop ((k e) (b (exact->inexact base)) (acc 1.0))
+      (if (<= k 0)
+          (if neg? (/ 1.0 acc) acc)
+          (loop (quotient k 2)
+                (* b b)
+                (if (= (modulo k 2) 1) (* acc b) acc))))))
+
+(define (%c99-sema-parse-float lex)
+  (let* ((len (string-length lex))
+         (last-ch (if (> len 0) (string-ref lex (- len 1)) #\0))
+         (end (if (or (char=? last-ch #\f) (char=? last-ch #\F)
+                      (char=? last-ch #\l) (char=? last-ch #\L))
+                  (- len 1)
+                  len))
+         (hex? (and (>= end 2) (char=? (string-ref lex 0) #\0)
+                    (or (char=? (string-ref lex 1) #\x)
+                        (char=? (string-ref lex 1) #\X))))
+         (radix (if hex? 16 10))
+         (exp-ch1 (if hex? #\p #\e))
+         (exp-ch2 (if hex? #\P #\E)))
+    (let loop ((i (if hex? 2 0)) (seen-dot? #f) (mant 0) (frac-digits 0))
+      (if (>= i end)
+          (let ((base-scale (if hex? 16 10)))
+            (* (exact->inexact mant) (%c99-pow-inexact base-scale (- 0 frac-digits))))
+          (let ((c (string-ref lex i)))
+            (cond
+              ((char=? c #\.)
+               (loop (+ i 1) #t mant frac-digits))
+              ((or (char=? c exp-ch1) (char=? c exp-ch2))
+               (let* ((e-start (+ i 1))
+                      (e-neg? (and (< e-start end) (char=? (string-ref lex e-start) #\-)))
+                      (e-pos? (and (< e-start end) (char=? (string-ref lex e-start) #\+)))
+                      (d-start (if (or e-neg? e-pos?) (+ e-start 1) e-start))
+                      (ev (%c99-sema-parse-radix lex d-start end 10))
+                      (s-ev (if e-neg? (- 0 ev) ev)))
+                 (if hex?
+                     (* (exact->inexact mant)
+                        (%c99-pow-inexact 2 (- s-ev (* 4 frac-digits))))
+                     (* (exact->inexact mant)
+                        (%c99-pow-inexact 10 (- s-ev frac-digits))))))
+              (else
+               (let ((d (%c99-sema-hex-val c)))
+                 (if (>= d 0)
+                     (loop (+ i 1) seen-dot? (+ (* mant radix) d)
+                           (if seen-dot? (+ frac-digits 1) frac-digits))
+                     (loop (+ i 1) seen-dot? mant frac-digits))))))))))
+
 (define (c99-parse-constant-info lex)
   (let ((len (string-length lex)))
     (cond
@@ -248,7 +347,8 @@
                    #t
                    (check-f (+ i 1) hex?)))))
        (let ((last-ch (string-ref lex (- len 1))))
-         (cons 0.0 (if (or (char=? last-ch #\f) (char=? last-ch #\F)) 'f32 'f64))))
+         (cons (%c99-sema-parse-float lex)
+               (if (or (char=? last-ch #\f) (char=? last-ch #\F)) 'f32 'f64))))
       (else
        ;; Integer constant with optional u/l/ll suffixes
        (let strip-suf ((end len) (u? #f) (l-cnt 0))
@@ -273,33 +373,158 @@
                                ((and u? (>= l-cnt 1)) 'u64)
                                ((>= l-cnt 1) 'i64)
                                (u? (if (> val #xffffffff) 'u64 'u32))
-                               ((and (<= val #x7fffffff)) 'i32)
+                               ((<= val #x7fffffff) 'i32)
                                ((and (or hex? oct?) (<= val #xffffffff)) 'u32)
                                ((<= val #x7fffffffffffffff) 'i64)
                                (else 'u64))))
                     (cons val ty)))))))))))
 
+;;; -----------------------------------------------------------------------
+;;; 5. Compile-Time Constant Expression Evaluator (CTFE) + offsetof
+;;; -----------------------------------------------------------------------
+
+(define (%c99-cast-const-int val target-ty)
+  (case target-ty
+    ((bool) (if (= val 0) 0 1))
+    ((u8)   (modulo val 256))
+    ((i8)   (let ((u (modulo val 256))) (if (>= u 128) (- u 256) u)))
+    ((u16)  (modulo val 65536))
+    ((i16)  (let ((u (modulo val 65536))) (if (>= u 32768) (- u 65536) u)))
+    ((u32)  (modulo val 4294967296))
+    ((i32)  (let ((u (modulo val 4294967296))) (if (>= u 2147483648) (- u 4294967296) u)))
+    ((u64)  (modulo val 18446744073709551616))
+    ((i64)  (let ((u (modulo val 18446744073709551616)))
+              (if (>= u 9223372036854775808) (- u 18446744073709551616) u)))
+    (else val)))
+
+(define (%c99-eval-offsetof-designators env start-ty desigs node)
+  (let ((lenv (sema-env-layout-env env)))
+    (if (not (or (c-struct-ref-type? start-ty) (c-union-ref-type? start-ty)))
+        (%c99-sema-error! "C99-LAY-001" "offsetof requires struct or union type" node))
+    (if (not (c-type-complete? lenv start-ty))
+        (%c99-sema-error! "C99-LAY-001" "offsetof applied to incomplete struct or union type" node))
+    (let loop ((ds desigs) (cur-ty start-ty) (acc-off 0) (last-bitw #f))
+      (if (null? ds)
+          (if last-bitw
+              (%c99-sema-error! "C99-LAY-003" "Cannot take offsetof a bit-field" node)
+              acc-off)
+          (let ((d (car ds)))
+            (cond
+              ((and (pair? d) (eq? (car d) 'c-desig-field))
+               (if last-bitw
+                   (%c99-sema-error! "C99-LAY-003" "Cannot take member of bit-field" node))
+               (if (not (or (c-struct-ref-type? cur-ty) (c-union-ref-type? cur-ty)))
+                   (%c99-sema-error! "C99-LAY-002" "offsetof field designator requires struct/union" node))
+               (let* ((fsym (cadr d))
+                      (fl (c-struct-layout-find-field lenv cur-ty fsym)))
+                 (if (not fl)
+                     (%c99-sema-error! "C99-LAY-002"
+                                       (string-append "offsetof: no member named '" (symbol->string fsym) "'")
+                                       node))
+                 (loop (cdr ds)
+                       (c-field-layout-ctype fl)
+                       (+ acc-off (c-field-layout-offset fl))
+                       (c-field-layout-bit-width fl))))
+              ((and (pair? d) (eq? (car d) 'c-desig-index))
+               (if (not (c-array-type? cur-ty))
+                   (%c99-sema-error! "C99-LAY-002" "offsetof subscript designator requires array member" node))
+               (let ((idx (c99-eval-const-int-expr env (cadr d))))
+                 (if (or (not idx) (< idx 0))
+                     (%c99-sema-error! "C99-LAY-002" "Invalid array index in offsetof" node))
+                 (let ((elem (c-array-elem cur-ty)))
+                   (loop (cdr ds) elem (+ acc-off (* idx (c-type-size-in lenv elem))) #f))))
+              (else
+               (%c99-sema-error! "C99-LAY-002" "Invalid designator in offsetof" node))))))))
+
+;; Recognize classic <stddef.h> idiom: &(((T *)0)->m[idx].sub)
+(define (%c99-extract-stddef-offsetof-chain env node)
+  (let ((raw (ast-strip-span node)))
+    (if (not (and (pair? raw) (eq? (car raw) 'c-unop) (eq? (cadr raw) 'addr)))
+        #f
+        (let loop ((cur (ast-strip-span (caddr raw))) (steps '()))
+          (cond
+            ((not (pair? cur)) #f)
+            ((eq? (car cur) 'c-member)
+             (let* ((base (cadr cur))
+                    (fsym (caddr cur))
+                    (deref? (cadddr cur))
+                    (new-steps (cons (list 'c-desig-field fsym) steps)))
+               (if deref?
+                   ;; Base must evaluate to NULL / 0 cast to pointer type (T *)0
+                   (let unwrap ((b (ast-strip-span base)))
+                     (cond
+                       ((and (pair? b) (eq? (car b) 'c-cast))
+                        (let ((pty (sema-resolve-type-name env (cadr b)))
+                              (zval (c99-eval-const-int-expr env (caddr b))))
+                          (if (and (c-pointer-type? pty) zval (= zval 0))
+                              (cons (c-ptr-target pty) new-steps)
+                              #f)))
+                       (else #f)))
+                   (loop (ast-strip-span base) new-steps))))
+            ((eq? (car cur) 'c-index)
+             (loop (ast-strip-span (cadr cur))
+                   (cons (list 'c-desig-index (caddr cur)) steps)))
+            (else #f))))))
+
+(define (%c99-check-sizeof-alignof-target env target-ty raw-or-node align? sp)
+  (let ((lenv (sema-env-layout-env env)))
+    (cond
+      ((eq? target-ty 'void)
+       (%c99-sema-error! "C99-LAY-001"
+                         (if align? "Invalid _Alignof(void)" "Invalid sizeof(void)")
+                         sp))
+      ((c-function-type? target-ty)
+       (%c99-sema-error! "C99-LAY-001" "Invalid sizeof/_Alignof on function type" sp))
+      ((not (c-type-complete? lenv target-ty))
+       (%c99-sema-error! "C99-LAY-001" "sizeof/_Alignof applied to incomplete type" sp))
+      (else
+       (if align?
+           (c-type-align-in lenv target-ty)
+           (c-type-size-in lenv target-ty (%c99-sema-err-cb sp)))))))
+
+(define (%c99-bitfield-member-info env node-or-inner)
+  (let* ((lenv (sema-env-layout-env env))
+         (raw (ast-strip-span (if (c-typed? node-or-inner) (c-typed-inner node-or-inner) node-or-inner))))
+    (if (and (pair? raw) (eq? (car raw) 'c-member))
+        (let* ((base-raw (cadr raw))
+               (fsym (caddr raw))
+               (deref? (cadddr raw))
+               (base-typed (if (c-typed? base-raw) base-raw (c99-analyze-expr env base-raw)))
+               (bty (c-typed-type base-typed))
+               (agg-ty (if deref? (c-ptr-target (c99-array-decay bty)) bty))
+               (fl (and (c-aggregate-ref-type? agg-ty)
+                        (c-type-complete? lenv agg-ty)
+                        (c-struct-layout-find-field lenv agg-ty fsym))))
+          (if (and fl (c-field-layout-bit-width fl)) fl #f))
+        #f)))
+
 (define (c99-eval-const-int-expr env node)
   (let ((raw (ast-strip-span node)))
     (cond
-      ((and (pair? raw) (eq? (car raw) 'c-const))
-       (car (c99-parse-constant-info (cadr raw))))
-      ((and (pair? raw) (eq? (car raw) 'c-var-ref))
+      ((not (pair? raw)) #f)
+      ((eq? (car raw) 'c-const)
+       (let ((v (car (c99-parse-constant-info (cadr raw)))))
+         (if (integer? v) v #f)))
+      ((eq? (car raw) 'c-var-ref)
        (let ((ent (sema-lookup-ordinary env (cadr raw))))
          (if (and ent (eq? (car ent) 'enum-const))
              (cadr ent)
              #f)))
-      ((and (pair? raw) (eq? (car raw) 'c-unop))
-       (let ((v (c99-eval-const-int-expr env (caddr raw))))
-         (if (not v)
-             #f
-             (case (cadr raw)
-               ((neg) (- 0 v))
-               ((uplus) v)
-               ((lnot) (if (= v 0) 1 0))
-               ((bit-not) (bitwise-not v))
-               (else #f)))))
-      ((and (pair? raw) (eq? (car raw) 'c-binop))
+      ((eq? (car raw) 'c-unop)
+       (or (let ((chain (%c99-extract-stddef-offsetof-chain env raw)))
+             (if chain
+                 (%c99-eval-offsetof-designators env (car chain) (cdr chain) node)
+                 #f))
+           (let ((v (c99-eval-const-int-expr env (caddr raw))))
+             (if (not v)
+                 #f
+                 (case (cadr raw)
+                   ((neg) (- 0 v))
+                   ((uplus) v)
+                   ((lnot) (if (= v 0) 1 0))
+                   ((bit-not) (bitwise-not v))
+                   (else #f))))))
+      ((eq? (car raw) 'c-binop)
        (let ((l (c99-eval-const-int-expr env (caddr raw)))
              (r (c99-eval-const-int-expr env (cadddr raw))))
          (if (or (not l) (not r))
@@ -323,19 +548,67 @@
                ((bit-xor) (bitwise-xor l r))
                ((land) (if (and (not (= l 0)) (not (= r 0))) 1 0))
                ((lor) (if (or (not (= l 0)) (not (= r 0))) 1 0))
+               ((comma) r)
                (else #f)))))
-      ((and (pair? raw) (eq? (car raw) 'c-sizeof-type))
-       (c-type-size (sema-resolve-type-name env (cadr raw))))
+      ((eq? (car raw) 'c-ternary)
+       (let ((c (c99-eval-const-int-expr env (cadr raw))))
+         (if (not c)
+             #f
+             (c99-eval-const-int-expr env (if (= c 0) (cadddr raw) (caddr raw))))))
+      ((eq? (car raw) 'c-cast)
+       (let ((chain (%c99-extract-stddef-offsetof-chain env (caddr raw))))
+         (if chain
+             (let ((off (%c99-eval-offsetof-designators env (car chain) (cdr chain) node))
+                   (ty (sema-resolve-type-name env (cadr raw))))
+               (%c99-cast-const-int off ty))
+             (let ((v (c99-eval-const-int-expr env (caddr raw))))
+               (if v
+                   (%c99-cast-const-int v (sema-resolve-type-name env (cadr raw)))
+                   #f)))))
+      ((eq? (car raw) 'c-sizeof-type)
+       (%c99-check-sizeof-alignof-target env (sema-resolve-type-name env (cadr raw)) raw #f node))
+      ((eq? (car raw) 'c-sizeof-expr)
+       (let ((sub-raw (ast-strip-span (cadr raw))))
+         (if (and (pair? sub-raw) (eq? (car sub-raw) 'c-str))
+             (+ (string-length (c99-decode-string-literal (cadr sub-raw))) 1)
+             (let ((typed-sub (c99-analyze-expr env (cadr raw))))
+               (if (%c99-bitfield-member-info env typed-sub)
+                   (%c99-sema-error! "C99-LAY-003" "Invalid application of sizeof to a bit-field" node))
+               (%c99-check-sizeof-alignof-target env (c-typed-type typed-sub) raw #f node)))))
+      ((eq? (car raw) 'c-alignof-type)
+       (%c99-check-sizeof-alignof-target env (sema-resolve-type-name env (cadr raw)) raw #t node))
+      ((eq? (car raw) 'c-alignof-expr)
+       (let ((sub-raw (ast-strip-span (cadr raw))))
+         (if (and (pair? sub-raw) (eq? (car sub-raw) 'c-str))
+             1
+             (let ((typed-sub (c99-analyze-expr env (cadr raw))))
+               (if (%c99-bitfield-member-info env typed-sub)
+                   (%c99-sema-error! "C99-LAY-003" "Invalid application of _Alignof to a bit-field" node))
+               (%c99-check-sizeof-alignof-target env (c-typed-type typed-sub) raw #t node)))))
+      ((eq? (car raw) 'c-offsetof)
+       (%c99-eval-offsetof-designators env (sema-resolve-type-name env (cadr raw)) (caddr raw) node))
       (else #f))))
 
 ;;; -----------------------------------------------------------------------
-;;; 5. Integer Promotions, Usual Arithmetic Conversions & Type Resolution
+;;; 6. Integer Promotions, Conversions & Scoped Tag/Struct Resolution
 ;;; -----------------------------------------------------------------------
 
 (define (c99-integer-promote t)
   (if (or (memq t '(bool i8 u8 i16 u16)) (c-enum-type? t))
       'i32
       t))
+
+(define (%c99-promote-expr-type env typed-expr)
+  (let ((t (c-typed-type typed-expr))
+        (bf (%c99-bitfield-member-info env typed-expr)))
+    (if bf
+        (let ((bw (c-field-layout-bit-width bf)))
+          (cond
+            ((>= bw 64) t)
+            ((> bw 32) (if (c-unsigned-type? t) 'u64 'i64))
+            ((= bw 32) (if (c-unsigned-type? t) 'u32 'i32))
+            (else 'i32)))
+        (c99-integer-promote t))))
 
 (define (c99-usual-arithmetic-type t1 t2)
   (let ((p1 (c99-integer-promote t1))
@@ -358,27 +631,294 @@
          (else (c-type->unsigned-counterpart p1)))))))
 
 (define (c99-array-decay t)
-  (if (c-array-type? t)
-      (make-c-ptr-type (c-array-elem t))
-      t))
+  (cond
+    ((c-array-type? t) (make-c-ptr-type (c-array-elem t)))
+    ((c-function-type? t) (make-c-ptr-type t))
+    (else t)))
 
-(define (sema-process-enum-specifiers! env specs)
-  (for-each
-   (lambda (item)
-     (let ((raw (ast-strip-span item)))
-       (if (and (pair? raw) (eq? (car raw) 'c-enum))
-           (let loop ((enums (caddr raw)) (next-val 0))
-             (if (pair? enums)
-                 (let* ((en (ast-strip-span (car enums)))
-                        (esym (cadr en))
-                        (expr (caddr en))
-                        (val (if expr
-                                 (or (c99-eval-const-int-expr env expr) next-val)
-                                 next-val)))
-                   (if esym
-                       (sema-bind-ordinary! env esym (list 'enum-const val)))
-                   (loop (cdr enums) (+ val 1))))))))
-   specs))
+(define (c99-type-uses-visiting-tag? env ty)
+  (let ((vtags (sema-env-visiting-tags env)))
+    (if (null? vtags)
+        #f
+        (let walk ((t ty))
+          (cond
+            ((or (c-struct-ref-type? t) (c-union-ref-type? t))
+             (and (memv (c-tag-ref-id t) vtags) #t))
+            ((c-array-type? t) (walk (c-array-elem t)))
+            (else #f))))))
+
+(define (%c99-flatten-struct-field-decls field-decls)
+  (let loop ((fds field-decls) (acc '()))
+    (if (null? fds)
+        (reverse acc)
+        (let* ((fd-node (car fds))
+               (fd (ast-strip-span fd-node))
+               (fspecs (cadr fd))
+               (decls (caddr fd)))
+          (if (null? decls)
+              (loop (cdr fds) (cons (list fspecs #f #f fd-node) acc))
+              (let dloop ((ds decls) (dacc acc))
+                (if (null? ds)
+                    (loop (cdr fds) dacc)
+                    (let* ((sd-node (car ds))
+                           (sd (ast-strip-span sd-node)))
+                      (dloop (cdr ds)
+                             (cons (list fspecs (cadr sd) (caddr sd) sd-node) dacc))))))))))
+
+(define (%sema-resolve-enum! env enum-node in-decl-head?)
+  (let* ((lenv (sema-env-layout-env env))
+         (tag-sym (cadr enum-node))
+         (enums (caddr enum-node)))
+    (if (not enums)
+        ;; Reference or forward enum declaration
+        (let ((existing (if (and tag-sym in-decl-head?)
+                            (sema-lookup-tag-local env tag-sym)
+                            (and tag-sym (sema-lookup-tag env tag-sym)))))
+          (if existing
+              (begin
+                (if (not (eq? (list-ref existing 1) 'enum))
+                    (%c99-sema-error! "C99-LAY-002"
+                                      (string-append "Tag '" (symbol->string tag-sym) "' is not an enum")
+                                      enum-node))
+                (make-c-enum-ref-type (list-ref existing 2) tag-sym))
+              (let ((ent (sema-alloc-tag! env tag-sym 'enum #f)))
+                (make-c-enum-ref-type (list-ref ent 2) tag-sym))))
+        ;; Enum definition { ... }
+        (let* ((local-ent (and tag-sym (sema-lookup-tag-local env tag-sym)))
+               (tag-ent
+                (if local-ent
+                    (begin
+                      (if (not (eq? (list-ref local-ent 1) 'enum))
+                          (%c99-sema-error! "C99-LAY-002"
+                                            (string-append "Tag '" (symbol->string tag-sym) "' defined with wrong kind")
+                                            enum-node))
+                      (if (list-ref local-ent 3)
+                          (%c99-sema-error! "C99-LAY-002"
+                                            (string-append "Redefinition of enum '" (symbol->string tag-sym) "'")
+                                            enum-node))
+                      (%c99-list-set! local-ent 3 #t)
+                      local-ent)
+                    (sema-alloc-tag! env tag-sym 'enum #t)))
+               (tag-id (list-ref tag-ent 2)))
+          (let loop ((es enums) (next-val 0) (pairs '()))
+            (if (null? es)
+                (begin
+                  (c99-layout-env-set! lenv tag-id
+                                       (%make-c-enum-layout tag-id tag-sym #t (reverse pairs)))
+                  (make-c-enum-ref-type tag-id tag-sym))
+                (let* ((en (ast-strip-span (car es)))
+                       (esym (cadr en))
+                       (expr (caddr en))
+                       (val (if expr
+                                (let ((v (c99-eval-const-int-expr env expr)))
+                                  (if (not v)
+                                      (%c99-sema-error! "C99-SEMA-005" "Enumerator value is not an integer constant expression" (car es)))
+                                  v)
+                                next-val)))
+                  (if esym
+                      (begin
+                        (let ((prev (sema-lookup-ordinary-local env esym)))
+                          (if prev
+                              (%c99-sema-error! "C99-LAY-002"
+                                                (string-append "Redeclaration of enumerator '" (symbol->string esym) "'")
+                                                (car es))))
+                        (sema-bind-ordinary! env esym (list 'enum-const val))))
+                  (loop (cdr es) (+ val 1) (cons (cons esym val) pairs)))))))))
+
+(define (%c99-list-set! ls idx val)
+  (if (= idx 0)
+      (set-car! ls val)
+      (%c99-list-set! (cdr ls) (- idx 1) val)))
+
+(define (%sema-resolve-struct-or-union! env raw-spec in-decl-head?)
+  (let* ((lenv (sema-env-layout-env env))
+         (kind (if (eq? (car raw-spec) 'c-union) 'union 'struct))
+         (tag-sym (cadr raw-spec))
+         (fields (caddr raw-spec))
+         (mk-ref (lambda (id)
+                   (if (eq? kind 'union)
+                       (make-c-union-ref-type id tag-sym)
+                       (make-c-struct-ref-type id tag-sym)))))
+    (if (not fields)
+        ;; Forward declaration or tag reference (struct Foo;)
+        (let ((existing (if (and tag-sym in-decl-head?)
+                            (sema-lookup-tag-local env tag-sym)
+                            (and tag-sym (sema-lookup-tag env tag-sym)))))
+          (if existing
+              (begin
+                (if (not (eq? (list-ref existing 1) kind))
+                    (%c99-sema-error! "C99-LAY-002"
+                                      (string-append "Tag '" (symbol->string tag-sym) "' used with wrong aggregate kind")
+                                      raw-spec))
+                (mk-ref (list-ref existing 2)))
+              (let ((ent (sema-alloc-tag! env tag-sym kind #f)))
+                (mk-ref (list-ref ent 2)))))
+        ;; Struct or Union Definition { ... }
+        (begin
+          (if (>= (sema-env-nest-depth env) 256)
+              (%c99-sema-error! "C99-LAY-004" "Composite type nesting depth exceeds limit (256)" raw-spec))
+          (let* ((local-ent (and tag-sym (sema-lookup-tag-local env tag-sym)))
+                 (tag-ent
+                  (if local-ent
+                      (begin
+                        (if (not (eq? (list-ref local-ent 1) kind))
+                            (%c99-sema-error! "C99-LAY-002"
+                                              (string-append "Tag '" (symbol->string tag-sym) "' redefined with wrong kind")
+                                              raw-spec))
+                        (if (list-ref local-ent 3)
+                            (%c99-sema-error! "C99-LAY-002"
+                                              (string-append "Redefinition of " (symbol->string kind) " '" (symbol->string tag-sym) "'")
+                                              raw-spec))
+                        (%c99-list-set! local-ent 3 #t)
+                        local-ent)
+                      (sema-alloc-tag! env tag-sym kind #t)))
+                 (tag-id (list-ref tag-ent 2))
+                 (prev-vis (sema-env-visiting-tags env))
+                 (prev-depth (sema-env-nest-depth env)))
+            (sema-env-visiting-tags-set! env (cons tag-id prev-vis))
+            (sema-env-nest-depth-set! env (+ prev-depth 1))
+            (let* ((flat-items (%c99-flatten-struct-field-decls fields))
+                   (member-specs
+                    (let loop ((items flat-items) (has-prior-named? #f) (acc '()))
+                      (if (null? items)
+                          (reverse acc)
+                          (let* ((it (car items))
+                                 (fspecs (list-ref it 0))
+                                 (decl (list-ref it 1))
+                                 (bw-expr (list-ref it 2))
+                                 (span-node (list-ref it 3))
+                                 (is-last? (null? (cdr items)))
+                                 (fbase (cdr (sema-resolve-decl-specs env fspecs #f))))
+                            (cond
+                              ((and (not decl) (not bw-expr))
+                               ;; Possible anonymous struct/union member or tag decl
+                               (if (and (c-aggregate-ref-type? fbase)
+                                        (not (c-tag-ref-name fbase)))
+                                   (begin
+                                     (if (c99-type-uses-visiting-tag? env fbase)
+                                         (%c99-sema-error! "C99-LAY-004" "Cyclic anonymous struct/union member" span-node))
+                                     (if (not (c-type-complete? lenv fbase))
+                                         (%c99-sema-error! "C99-LAY-001" "Anonymous member has incomplete type" span-node))
+                                     (let ((inner-sl (c-type-layout-in lenv fbase)))
+                                       (loop (cdr items)
+                                             (or has-prior-named?
+                                                 (and inner-sl (pair? (c-struct-layout-fields inner-sl))))
+                                             (cons (list #f fbase #f) acc))))
+                                   (loop (cdr items) has-prior-named? acc)))
+                              (else
+                               (let* ((res (c99-resolve-declarator-type env fbase decl))
+                                      (fsym (car res))
+                                      (fty (cdr res)))
+                                 (cond
+                                   (bw-expr
+                                    ;; Bit-field validation
+                                    (if (not (c-integer-type? fty))
+                                        (%c99-sema-error! "C99-LAY-003" "Bit-field has non-integer type" span-node))
+                                    (let ((bw (c99-eval-const-int-expr env bw-expr)))
+                                      (if (or (not bw) (< bw 0))
+                                          (%c99-sema-error! "C99-LAY-003" "Bit-field width is negative or not an integer constant" span-node))
+                                      (if (and fsym (= bw 0))
+                                          (%c99-sema-error! "C99-LAY-003" "Zero width for named bit-field" span-node))
+                                      (let ((max-bits (* 8 (c-type-size-in lenv fty))))
+                                        (if (> bw max-bits)
+                                            (%c99-sema-error! "C99-LAY-003" "Width of bit-field exceeds its type width" span-node)))
+                                      (loop (cdr items) (or has-prior-named? (symbol? fsym))
+                                            (cons (list fsym fty bw) acc))))
+                                   ((c-function-type? fty)
+                                    (%c99-sema-error! "C99-LAY-002" "Function type cannot be a struct/union member" span-node))
+                                   ((and (c-array-type? fty) (not (c-array-length fty)))
+                                    ;; Flexible Array Member validation
+                                    (if (eq? kind 'union)
+                                        (%c99-sema-error! "C99-LAY-002" "Flexible array member not allowed in union" span-node))
+                                    (if (not is-last?)
+                                        (%c99-sema-error! "C99-LAY-002" "Flexible array member must be the last field in struct" span-node))
+                                    (if (not has-prior-named?)
+                                        (%c99-sema-error! "C99-LAY-002" "Flexible array member requires at least one preceding named member" span-node))
+                                    (let ((elem (c-array-elem fty)))
+                                      (if (c99-type-uses-visiting-tag? env elem)
+                                          (%c99-sema-error! "C99-LAY-004" "Cyclic flexible array member element type" span-node))
+                                      (if (not (c-type-complete? lenv elem))
+                                          (%c99-sema-error! "C99-LAY-001" "Flexible array member has incomplete element type" span-node)))
+                                    (loop (cdr items) #t (cons (list fsym fty #f) acc)))
+                                   (else
+                                    (if (c99-type-uses-visiting-tag? env fty)
+                                        (%c99-sema-error! "C99-LAY-004"
+                                                          (string-append "Field '" (symbol->string (or fsym 'anon)) "' forms a cyclic aggregate type")
+                                                          span-node))
+                                    (if (not (c-type-complete? lenv fty))
+                                        (%c99-sema-error! "C99-LAY-001"
+                                                          (string-append "Field '" (symbol->string (or fsym 'anon)) "' has incomplete type")
+                                                          span-node))
+                                    (loop (cdr items) (or has-prior-named? (symbol? fsym))
+                                          (cons (list fsym fty #f) acc))))))))))))
+              (c99-compute-struct-layout! lenv tag-id kind tag-sym member-specs (%c99-sema-err-cb raw-spec))
+              (sema-env-visiting-tags-set! env prev-vis)
+              (sema-env-nest-depth-set! env prev-depth)
+              (mk-ref tag-id)))))))
+
+(define (sema-resolve-decl-specs env specs-node . maybe-in-head)
+  (let ((in-decl-head? (if (pair? maybe-in-head) (car maybe-in-head) #f))
+        (items (%c-flatten-raw-specs specs-node)))
+    (let loop ((xs items)
+               (storage #f)
+               (signedness #f)
+               (long-count 0)
+               (short? #f)
+               (base #f))
+      (if (null? xs)
+          (let ((final-ty
+                 (cond
+                   ((and base (not (symbol? base))) base)
+                   ((eq? base 'void) 'void)
+                   ((eq? base 'bool) 'bool)
+                   ((eq? base 'float) 'f32)
+                   ((eq? base 'double) 'f64)
+                   ((eq? base 'char)
+                    (if (eq? signedness 'unsigned) 'u8 'i8))
+                   (short?
+                    (if (eq? signedness 'unsigned) 'u16 'i16))
+                   ((>= long-count 1)
+                    (if (eq? signedness 'unsigned) 'u64 'i64))
+                   ((eq? signedness 'unsigned) 'u32)
+                   (else 'i32))))
+            (cons storage final-ty))
+          (let ((it (car xs)))
+            (cond
+              ((memq it '(typedef extern static auto register))
+               (loop (cdr xs) it signedness long-count short? base))
+              ((memq it '(const restrict volatile inline))
+               (loop (cdr xs) storage signedness long-count short? base))
+              ((eq? it 'signed)
+               (loop (cdr xs) storage 'signed long-count short? base))
+              ((eq? it 'unsigned)
+               (loop (cdr xs) storage 'unsigned long-count short? base))
+              ((eq? it 'long)
+               (loop (cdr xs) storage signedness (+ long-count 1) short? base))
+              ((eq? it 'short)
+               (loop (cdr xs) storage signedness long-count #t base))
+              ((eq? it 'void)
+               (loop (cdr xs) storage signedness long-count short? 'void))
+              ((eq? it '_Bool)
+               (loop (cdr xs) storage signedness long-count short? 'bool))
+              ((eq? it 'char)
+               (loop (cdr xs) storage signedness long-count short? 'char))
+              ((eq? it 'int)
+               (loop (cdr xs) storage signedness long-count short? (or base 'int)))
+              ((eq? it 'float)
+               (loop (cdr xs) storage signedness long-count short? 'float))
+              ((eq? it 'double)
+               (loop (cdr xs) storage signedness long-count short? 'double))
+              ((and (pair? it) (eq? (car it) 'c-typedef-name))
+               (let ((resolved (sema-lookup-typedef env (cadr it))))
+                 (loop (cdr xs) storage signedness long-count short? (or resolved 'i64))))
+              ((and (pair? it) (eq? (car it) 'c-enum))
+               (loop (cdr xs) storage signedness long-count short?
+                     (%sema-resolve-enum! env it in-decl-head?)))
+              ((and (pair? it) (memq (car it) '(c-struct c-union)))
+               (loop (cdr xs) storage signedness long-count short?
+                     (%sema-resolve-struct-or-union! env it in-decl-head?)))
+              (else
+               (loop (cdr xs) storage signedness long-count short? base))))))))
 
 (define (sema-resolve-param-list env param-list-node)
   (let* ((raw (ast-strip-span param-list-node))
@@ -389,16 +929,15 @@
              (let* ((p0 (ast-strip-span (car params)))
                     (specs (cadr p0))
                     (decl (caddr p0)))
-               (and (not decl) (equal? (cdr (c-parse-decl-specs specs (lambda (s) (sema-lookup-typedef env s)))) 'void))))
+               (and (not decl) (equal? (cdr (sema-resolve-decl-specs env specs #f)) 'void))))
         (cons '() #f)
         (let ((resolved
                (map (lambda (pnode)
                       (let* ((p (ast-strip-span pnode))
                              (specs (cadr p))
                              (decl (caddr p))
-                             (base-ty (cdr (c-parse-decl-specs specs (lambda (s) (sema-lookup-typedef env s)))))
+                             (base-ty (cdr (sema-resolve-decl-specs env specs #f)))
                              (res (c99-resolve-declarator-type env base-ty decl))
-                             ;; Array parameters decay to pointers in C99
                              (final-ty (c99-array-decay (cdr res))))
                         (cons (car res) final-ty)))
                     params)))
@@ -427,6 +966,8 @@
                                     (%c99-sema-error! "C99-SEMA-005" "Invalid array size in declaration" decl-node)
                                     v))
                               #f)))
+             (if (c99-type-uses-visiting-tag? env cur-ty)
+                 (%c99-sema-error! "C99-LAY-004" "Array element forms a cyclic composite type" decl-node))
              (c99-resolve-declarator-type env (make-c-array-type cur-ty sz-val) (cadr raw))))
           ((eq? (car raw) 'c-fn-declarator)
            (let* ((pinfo (sema-resolve-param-list env (caddr raw)))
@@ -439,11 +980,11 @@
   (let* ((raw (ast-strip-span type-name-node))
          (specs (cadr raw))
          (abs-decl (caddr raw))
-         (base-ty (cdr (c-parse-decl-specs specs (lambda (s) (sema-lookup-typedef env s))))))
+         (base-ty (cdr (sema-resolve-decl-specs env specs #f))))
     (cdr (c99-resolve-declarator-type env base-ty abs-decl))))
 
 ;;; -----------------------------------------------------------------------
-;;; 6. Lvalue Predicate & Expression Type Checking
+;;; 7. Lvalue Predicate & Expression Type Checking
 ;;; -----------------------------------------------------------------------
 
 (define (c99-lvalue-expr? env node)
@@ -454,14 +995,25 @@
        (let ((ty (c-typed-type node)))
          (and (not (c-function-type? ty))
               (not (c-array-type? ty)))))
-      ((c-index c-member) #t)
+      ((c-index c-compound-lit)
+       (not (c-array-type? (c-typed-type node))))
+      ((c-member)
+       (and (not (c-array-type? (c-typed-type node)))
+            (or (cadddr raw)
+                (c99-lvalue-expr? env (cadr raw)))))
       ((c-unop) (eq? (cadr raw) 'deref))
       (else #f))))
+
+(define (%c99-addressable-expr? raw-inner)
+  (let ((itag (car raw-inner)))
+    (or (memq itag '(c-var-ref c-index c-member c-compound-lit c-fn-ref))
+        (and (eq? itag 'c-unop) (eq? (cadr raw-inner) 'deref)))))
 
 (define (c99-analyze-expr env node)
   (if (not (pair? node))
       (%c99-sema-error! "C99-SEMA-003" "Expected expression node" node))
-  (let* ((sp (ast-source-span node))
+  (let* ((lenv (sema-env-layout-env env))
+         (sp (ast-source-span node))
          (raw (ast-strip-span node))
          (tag (car raw)))
     (case tag
@@ -490,7 +1042,8 @@
          (make-c-typed ty (list 'c-const-val (car info) (cadr raw)))))
 
       ((c-str)
-       (let ((decoded (c99-decode-string-literal (cadr raw))))
+       (let* ((decoded (c99-decode-string-literal (cadr raw)))
+              (n (+ (string-length decoded) 1)))
          (make-c-typed (make-c-ptr-type 'i8) (list 'c-str-val decoded))))
 
       ((c-unop)
@@ -501,37 +1054,42 @@
            ((uplus neg)
             (if (not (c-arithmetic-type? sty))
                 (%c99-sema-error! "C99-SEMA-003" "Unary arithmetic requires arithmetic operand" (or sp node)))
-            (let* ((pt (c99-integer-promote sty))
+            (let* ((pt (%c99-promote-expr-type env sub))
                    (csub (c99-apply-implicit-cast sub pt)))
               (make-c-typed pt (list 'c-unop op csub))))
            ((bit-not)
             (if (not (c-integer-type? sty))
                 (%c99-sema-error! "C99-SEMA-003" "Bitwise '~' requires integer operand" (or sp node)))
-            (let* ((pt (c99-integer-promote sty))
+            (let* ((pt (%c99-promote-expr-type env sub))
                    (csub (c99-apply-implicit-cast sub pt)))
               (make-c-typed pt (list 'c-unop op csub))))
            ((lnot)
             (if (not (c-scalar-type? (c99-array-decay sty)))
                 (%c99-sema-error! "C99-SEMA-003" "Logical '!' requires scalar operand" (or sp node)))
-            (make-c-typed 'i32 (list 'c-unop 'lnot sub)))
+            (make-c-typed 'i32 (list 'c-unop 'lnot (c99-apply-implicit-cast sub (c99-array-decay sty)))))
            ((pre++ pre-- post++ post--)
             (if (not (c99-lvalue-expr? env sub))
                 (%c99-sema-error! "C99-SEMA-002" "Expression is not an assignable lvalue for '++'/'--'" (or sp node)))
             (if (not (or (c-arithmetic-type? sty) (c-pointer-type? sty)))
                 (%c99-sema-error! "C99-SEMA-003" "Invalid operand type for increment/decrement" (or sp node)))
+            (if (and (c-pointer-type? sty)
+                     (c-aggregate-ref-type? (c-ptr-target sty))
+                     (not (c-type-complete? lenv (c-ptr-target sty))))
+                (%c99-sema-error! "C99-LAY-001" "Pointer arithmetic on incomplete pointee type" (or sp node)))
             (make-c-typed sty (list 'c-unop op sub)))
            ((addr)
-            (let* ((inner (ast-strip-span (c-typed-inner sub)))
-                   (itag (car inner)))
-              (if (or (memq itag '(c-var-ref c-index c-member))
-                      (and (eq? itag 'c-unop) (eq? (cadr inner) 'deref)))
+            (let* ((inner (ast-strip-span (c-typed-inner sub))))
+              (if (%c99-bitfield-member-info env sub)
+                  (%c99-sema-error! "C99-LAY-003" "Cannot take address '&' of a bit-field" (or sp node)))
+              (if (%c99-addressable-expr? inner)
                   (make-c-typed (make-c-ptr-type sty) (list 'c-unop 'addr sub))
                   (%c99-sema-error! "C99-SEMA-002" "Cannot take address '&' of rvalue expression" (or sp node)))))
            ((deref)
             (let ((dt (c99-array-decay sty)))
               (if (not (c-pointer-type? dt))
                   (%c99-sema-error! "C99-SEMA-003" "Dereference '*' requires pointer operand" (or sp node)))
-              (make-c-typed (c-ptr-target dt) (list 'c-unop 'deref sub))))
+              (make-c-typed (c-ptr-target dt)
+                            (list 'c-unop 'deref (c99-apply-implicit-cast sub dt)))))
            (else
             (%c99-sema-error! "C99-SEMA-003" "Unsupported unary operator" (or sp node))))))
 
@@ -540,45 +1098,58 @@
               (lhs (c99-analyze-expr env (caddr raw)))
               (rhs (c99-analyze-expr env (cadddr raw)))
               (lt (c99-array-decay (c-typed-type lhs)))
-              (rt (c99-array-decay (c-typed-type rhs))))
+              (rt (c99-array-decay (c-typed-type rhs)))
+              (lhs-d (c99-apply-implicit-cast lhs lt))
+              (rhs-d (c99-apply-implicit-cast rhs rt)))
          (case op
            ((comma)
-            (make-c-typed rt (list 'c-binop 'comma lhs rhs)))
+            (make-c-typed rt (list 'c-binop 'comma lhs-d rhs-d)))
            ((land lor)
             (if (or (not (c-scalar-type? lt)) (not (c-scalar-type? rt)))
                 (%c99-sema-error! "C99-SEMA-003" "Logical operators require scalar operands" (or sp node)))
-            (make-c-typed 'i32 (list 'c-binop op lhs rhs)))
+            (make-c-typed 'i32 (list 'c-binop op lhs-d rhs-d)))
            ((<< >>)
             (if (or (not (c-integer-type? lt)) (not (c-integer-type? rt)))
                 (%c99-sema-error! "C99-SEMA-003" "Shift operators require integer operands" (or sp node)))
-            (let ((plt (c99-integer-promote lt))
-                  (prt (c99-integer-promote rt)))
+            (let ((plt (%c99-promote-expr-type env lhs))
+                  (prt (%c99-promote-expr-type env rhs)))
               (make-c-typed plt
                             (list 'c-binop op
-                                  (c99-apply-implicit-cast lhs plt)
-                                  (c99-apply-implicit-cast rhs prt)))))
+                                  (c99-apply-implicit-cast lhs-d plt)
+                                  (c99-apply-implicit-cast rhs-d prt)))))
            ((bit-and bit-xor bit-or)
             (if (or (not (c-integer-type? lt)) (not (c-integer-type? rt)))
                 (%c99-sema-error! "C99-SEMA-003" "Bitwise operators require integer operands" (or sp node)))
-            (let ((ct (c99-usual-arithmetic-type lt rt)))
+            (let ((ct (c99-usual-arithmetic-type (%c99-promote-expr-type env lhs)
+                                                 (%c99-promote-expr-type env rhs))))
               (make-c-typed ct
                             (list 'c-binop op
-                                  (c99-apply-implicit-cast lhs ct)
-                                  (c99-apply-implicit-cast rhs ct)))))
+                                  (c99-apply-implicit-cast lhs-d ct)
+                                  (c99-apply-implicit-cast rhs-d ct)))))
            ((+ -)
             (cond
               ((and (c-pointer-type? lt) (c-integer-type? rt))
-               (make-c-typed lt (list 'c-binop op lhs (c99-apply-implicit-cast rhs 'i64))))
+               (if (and (c-aggregate-ref-type? (c-ptr-target lt))
+                        (not (c-type-complete? lenv (c-ptr-target lt))))
+                   (%c99-sema-error! "C99-LAY-001" "Pointer arithmetic on incomplete pointee type" (or sp node)))
+               (make-c-typed lt (list 'c-binop op lhs-d (c99-apply-implicit-cast rhs-d 'i64))))
               ((and (eq? op '+) (c-integer-type? lt) (c-pointer-type? rt))
-               (make-c-typed rt (list 'c-binop '+ (c99-apply-implicit-cast lhs 'i64) rhs)))
+               (if (and (c-aggregate-ref-type? (c-ptr-target rt))
+                        (not (c-type-complete? lenv (c-ptr-target rt))))
+                   (%c99-sema-error! "C99-LAY-001" "Pointer arithmetic on incomplete pointee type" (or sp node)))
+               (make-c-typed rt (list 'c-binop '+ (c99-apply-implicit-cast lhs-d 'i64) rhs-d)))
               ((and (eq? op '-) (c-pointer-type? lt) (c-pointer-type? rt))
-               (make-c-typed 'i64 (list 'c-binop '- lhs rhs)))
+               (if (and (c-aggregate-ref-type? (c-ptr-target lt))
+                        (not (c-type-complete? lenv (c-ptr-target lt))))
+                   (%c99-sema-error! "C99-LAY-001" "Pointer subtraction on incomplete pointee type" (or sp node)))
+               (make-c-typed 'i64 (list 'c-binop '- lhs-d rhs-d)))
               ((and (c-arithmetic-type? lt) (c-arithmetic-type? rt))
-               (let ((ct (c99-usual-arithmetic-type lt rt)))
+               (let ((ct (c99-usual-arithmetic-type (%c99-promote-expr-type env lhs)
+                                                    (%c99-promote-expr-type env rhs))))
                  (make-c-typed ct
                                (list 'c-binop op
-                                     (c99-apply-implicit-cast lhs ct)
-                                     (c99-apply-implicit-cast rhs ct)))))
+                                     (c99-apply-implicit-cast lhs-d ct)
+                                     (c99-apply-implicit-cast rhs-d ct)))))
               (else
                (%c99-sema-error! "C99-SEMA-003" "Invalid operand types for '+' / '-'" (or sp node)))))
            ((* / rem)
@@ -590,25 +1161,27 @@
                      (let ((rv (c99-eval-const-int-expr env (cadddr raw))))
                        (and rv (= rv 0))))
                 (%c99-sema-error! "C99-SEMA-005" "Compile-time division or modulo by zero" (or sp node)))
-            (let ((ct (c99-usual-arithmetic-type lt rt)))
+            (let ((ct (c99-usual-arithmetic-type (%c99-promote-expr-type env lhs)
+                                                 (%c99-promote-expr-type env rhs))))
               (make-c-typed ct
                             (list 'c-binop op
-                                  (c99-apply-implicit-cast lhs ct)
-                                  (c99-apply-implicit-cast rhs ct)))))
+                                  (c99-apply-implicit-cast lhs-d ct)
+                                  (c99-apply-implicit-cast rhs-d ct)))))
            ((< <= > >= == !=)
             (cond
               ((and (c-pointer-type? lt) (c-pointer-type? rt))
-               (make-c-typed 'i32 (list 'c-binop op lhs rhs)))
+               (make-c-typed 'i32 (list 'c-binop op lhs-d rhs-d)))
               ((and (c-pointer-type? lt) (c-integer-type? rt))
-               (make-c-typed 'i32 (list 'c-binop op lhs (c99-apply-implicit-cast rhs 'u64))))
+               (make-c-typed 'i32 (list 'c-binop op lhs-d (c99-apply-implicit-cast rhs-d 'u64))))
               ((and (c-integer-type? lt) (c-pointer-type? rt))
-               (make-c-typed 'i32 (list 'c-binop op (c99-apply-implicit-cast lhs 'u64) rhs)))
+               (make-c-typed 'i32 (list 'c-binop op (c99-apply-implicit-cast lhs-d 'u64) rhs-d)))
               ((and (c-arithmetic-type? lt) (c-arithmetic-type? rt))
-               (let ((ct (c99-usual-arithmetic-type lt rt)))
+               (let ((ct (c99-usual-arithmetic-type (%c99-promote-expr-type env lhs)
+                                                    (%c99-promote-expr-type env rhs))))
                  (make-c-typed 'i32
                                (list 'c-binop op
-                                     (c99-apply-implicit-cast lhs ct)
-                                     (c99-apply-implicit-cast rhs ct)))))
+                                     (c99-apply-implicit-cast lhs-d ct)
+                                     (c99-apply-implicit-cast rhs-d ct)))))
               (else
                (%c99-sema-error! "C99-SEMA-003" "Incompatible operand types for comparison" (or sp node)))))
            (else
@@ -624,19 +1197,25 @@
              (%c99-sema-error! "C99-SEMA-002" "Assignment target is not a modifiable lvalue" (or sp node)))
          (if (eq? lt 'void)
              (%c99-sema-error! "C99-SEMA-003" "Cannot assign to void" (or sp node)))
-         (if (and (eq? op '=) (not (c-types-compatible? lt rt)))
-             (%c99-sema-error! "C99-SEMA-003"
-                               (string-append "Incompatible assignment from "
-                                              (c-type->string rt) " to " (c-type->string lt))
-                               (or sp node)))
-         (if (eq? op '=)
-             (make-c-typed lt (list 'c-assign '= lhs (c99-apply-implicit-cast rhs lt)))
-             (let ((comp-ty (if (and (memq op '(+= -=)) (c-pointer-type? lt))
-                                'i64
-                                (if (memq op '(<<= >>=))
-                                    (c99-integer-promote lt)
-                                    (c99-usual-arithmetic-type lt rt)))))
-               (make-c-typed lt (list 'c-assign op lhs (c99-apply-implicit-cast rhs comp-ty)))))))
+         (if (and (c-aggregate-ref-type? lt) (not (c-type-complete? lenv lt)))
+             (%c99-sema-error! "C99-LAY-001" "Cannot assign to incomplete struct or union type" (or sp node)))
+         (if (not (eq? op '=))
+             (begin
+               (if (not (or (c-arithmetic-type? lt) (c-pointer-type? lt)))
+                   (%c99-sema-error! "C99-SEMA-003" "Compound assignment requires scalar operand" (or sp node)))
+               (let ((comp-ty (if (and (memq op '(+= -=)) (c-pointer-type? lt))
+                                  'i64
+                                  (if (memq op '(<<= >>=))
+                                      (%c99-promote-expr-type env lhs)
+                                      (c99-usual-arithmetic-type lt rt)))))
+                 (make-c-typed lt (list 'c-assign op lhs (c99-apply-implicit-cast (c99-apply-implicit-cast rhs rt) comp-ty)))))
+             (begin
+               (if (not (c99-assign-compatible? env lt rt (cadddr raw)))
+                   (%c99-sema-error! "C99-SEMA-003"
+                                     (string-append "Incompatible assignment from "
+                                                    (c-type->string rt) " to " (c-type->string lt))
+                                     (or sp node)))
+               (make-c-typed lt (list 'c-assign '= lhs (c99-apply-implicit-cast (c99-apply-implicit-cast rhs rt) lt)))))))
 
       ((c-ternary)
        (let* ((cnd (c99-analyze-expr env (cadr raw)))
@@ -657,11 +1236,14 @@
 
       ((c-cast)
        (let* ((target-ty (sema-resolve-type-name env (cadr raw)))
-              (sub (c99-analyze-expr env (caddr raw))))
-         (make-c-typed target-ty (list 'c-cast target-ty sub))))
+              (sub (c99-analyze-expr env (caddr raw)))
+              (sub-d (if (c-pointer-type? target-ty)
+                         (c99-apply-implicit-cast sub (c99-array-decay (c-typed-type sub)))
+                         sub)))
+         (make-c-typed target-ty (list 'c-cast target-ty sub-d))))
 
       ((c-sizeof-type)
-       (let ((sz (c-type-size (sema-resolve-type-name env (cadr raw)))))
+       (let ((sz (%c99-check-sizeof-alignof-target env (sema-resolve-type-name env (cadr raw)) raw #f (or sp node))))
          (make-c-typed 'u64 (list 'c-const-val sz (number->string sz)))))
 
       ((c-sizeof-expr)
@@ -669,9 +1251,64 @@
          (if (and (pair? raw-sub) (eq? (car raw-sub) 'c-str))
              (let ((sz (+ (string-length (c99-decode-string-literal (cadr raw-sub))) 1)))
                (make-c-typed 'u64 (list 'c-const-val sz (number->string sz))))
-             (let* ((typed-sub (c99-analyze-expr env (cadr raw)))
-                    (sz (c-type-size (c-typed-type typed-sub))))
-               (make-c-typed 'u64 (list 'c-const-val sz (number->string sz)))))))
+             (let* ((typed-sub (c99-analyze-expr env (cadr raw))))
+               (if (%c99-bitfield-member-info env typed-sub)
+                   (%c99-sema-error! "C99-LAY-003" "Invalid application of sizeof to a bit-field" (or sp node)))
+               (let ((sz (%c99-check-sizeof-alignof-target env (c-typed-type typed-sub) raw #f (or sp node))))
+                 (make-c-typed 'u64 (list 'c-const-val sz (number->string sz))))))))
+
+      ((c-alignof-type)
+       (let ((al (%c99-check-sizeof-alignof-target env (sema-resolve-type-name env (cadr raw)) raw #t (or sp node))))
+         (make-c-typed 'u64 (list 'c-const-val al (number->string al)))))
+
+      ((c-alignof-expr)
+       (let ((raw-sub (ast-strip-span (cadr raw))))
+         (if (and (pair? raw-sub) (eq? (car raw-sub) 'c-str))
+             (make-c-typed 'u64 '(c-const-val 1 "1"))
+             (let* ((typed-sub (c99-analyze-expr env (cadr raw))))
+               (if (%c99-bitfield-member-info env typed-sub)
+                   (%c99-sema-error! "C99-LAY-003" "Invalid application of _Alignof to a bit-field" (or sp node)))
+               (let ((al (%c99-check-sizeof-alignof-target env (c-typed-type typed-sub) raw #t (or sp node))))
+                 (make-c-typed 'u64 (list 'c-const-val al (number->string al))))))))
+
+      ((c-offsetof)
+       (let ((off (%c99-eval-offsetof-designators env (sema-resolve-type-name env (cadr raw)) (caddr raw) (or sp node))))
+         (make-c-typed 'u64 (list 'c-const-val off (number->string off)))))
+
+      ((c-member)
+       (let* ((base (c99-analyze-expr env (cadr raw)))
+              (fsym (caddr raw))
+              (deref? (cadddr raw))
+              (bty (c-typed-type base))
+              (agg-ty (if deref?
+                          (let ((dt (c99-array-decay bty)))
+                            (if (not (c-pointer-type? dt))
+                                (%c99-sema-error! "C99-SEMA-003" "Member access '->' requires pointer operand" (or sp node)))
+                            (c-ptr-target dt))
+                          bty)))
+         (if (not (c-aggregate-ref-type? agg-ty))
+             (%c99-sema-error! "C99-SEMA-003" "Member access requires struct or union" (or sp node)))
+         (if (not (c-type-complete? lenv agg-ty))
+             (%c99-sema-error! "C99-LAY-001" "Member access on incomplete struct or union type" (or sp node)))
+         (let ((fl (c-struct-layout-find-field lenv agg-ty fsym)))
+           (if (not fl)
+               (%c99-sema-error! "C99-LAY-002"
+                                 (string-append "No member named '" (symbol->string fsym) "' in " (c-type->string agg-ty))
+                                 (or sp node)))
+           (make-c-typed (c-field-layout-ctype fl)
+                         (list 'c-member
+                               (if deref? (c99-apply-implicit-cast base (c99-array-decay bty)) base)
+                               fsym deref?)))))
+
+      ((c-compound-lit)
+       (let* ((target-ty (sema-resolve-type-name env (cadr raw)))
+              (items (caddr raw))
+              (norm (sema-normalize-initializer env target-ty (list 'c-init-list items) (or sp node)))
+              (final-ty (car norm))
+              (init-plan (cdr norm)))
+         (if (not (c-type-complete? lenv final-ty))
+             (%c99-sema-error! "C99-LAY-001" "Compound literal has incomplete type" (or sp node)))
+         (make-c-typed final-ty (list 'c-compound-lit final-ty init-plan))))
 
       ((c-call)
        (let* ((fn-expr (c99-analyze-expr env (cadr raw)))
@@ -687,6 +1324,8 @@
                 (arg-nodes (cddr raw))
                 (nparams (length param-tys))
                 (nargs (length arg-nodes)))
+           (if (and (c-aggregate-ref-type? ret-ty) (not (c-type-complete? lenv ret-ty)))
+               (%c99-sema-error! "C99-LAY-001" "Function call returns incomplete struct/union type" (or sp node)))
            (if (if var? (< nargs nparams) (not (= nargs nparams)))
                (%c99-sema-error! "C99-SEMA-004"
                                  (string-append "Function argument count mismatch: expected "
@@ -702,20 +1341,24 @@
                           (if (pair? pts)
                               (let ((pt (car pts))
                                     (at (c99-array-decay (c-typed-type ta))))
-                                (if (not (c-types-compatible? pt at))
+                                (if (and (c-aggregate-ref-type? pt) (not (c-type-complete? lenv pt)))
+                                    (%c99-sema-error! "C99-LAY-001" "Function parameter has incomplete aggregate type" (car as)))
+                                (if (not (c99-assign-compatible? env pt at (car as)))
                                     (%c99-sema-error! "C99-SEMA-004"
                                                       (string-append "Incompatible argument type: expected "
                                                                      (c-type->string pt)
                                                                      ", got " (c-type->string at))
                                                       (car as)))
-                                (aloop (cdr as) (cdr pts) (cons (c99-apply-implicit-cast ta pt) acc)))
+                                (aloop (cdr as) (cdr pts)
+                                       (cons (c99-apply-implicit-cast (c99-apply-implicit-cast ta at) pt) acc)))
                               ;; Default argument promotions for variadic trailing args
                               (let* ((at (c99-array-decay (c-typed-type ta)))
                                      (prom (cond
                                              ((eq? at 'f32) 'f64)
-                                             ((c-integer-type? at) (c99-integer-promote at))
+                                             ((c-integer-type? at) (%c99-promote-expr-type env ta))
                                              (else at))))
-                                (aloop (cdr as) '() (cons (c99-apply-implicit-cast ta prom) acc)))))))))
+                                (aloop (cdr as) '()
+                                       (cons (c99-apply-implicit-cast (c99-apply-implicit-cast ta at) prom) acc)))))))))
              (make-c-typed ret-ty (cons 'c-call (cons fn-expr typed-args)))))))
 
       ((c-index)
@@ -726,6 +1369,9 @@
              (%c99-sema-error! "C99-SEMA-003" "Subscripted value is neither array nor pointer" (or sp node)))
          (if (not (c-integer-type? (c-typed-type idx)))
              (%c99-sema-error! "C99-SEMA-003" "Array subscript is not an integer" (or sp node)))
+         (if (and (c-aggregate-ref-type? (c-ptr-target at))
+                  (not (c-type-complete? lenv (c-ptr-target at))))
+             (%c99-sema-error! "C99-LAY-001" "Array subscript on pointer to incomplete aggregate type" (or sp node)))
          (make-c-typed (c-ptr-target at)
                        (list 'c-index arr (c99-apply-implicit-cast idx 'i64)))))
 
@@ -733,68 +1379,499 @@
        (%c99-sema-error! "C99-SEMA-003" "Unsupported expression node in sema" (or sp node))))))
 
 ;;; -----------------------------------------------------------------------
-;;; 7. Declaration & Statement Analysis
+;;; 8. Designated Initializer Normalization & Array Length Inference
+;;; -----------------------------------------------------------------------
+
+(define (%c99-init-direct-initable? sl dfl)
+  (let ((bw (c-field-layout-bit-width dfl))
+        (name (c-field-layout-name dfl))
+        (ty (c-field-layout-ctype dfl)))
+    (cond
+      ((and bw (not name)) #f) ; unnamed bit-field / : 0 skipped in initializer lists
+      ((and (not bw) (c-array-type? ty) (not (c-array-length ty))) #f) ; FAM skipped
+      (else #t))))
+
+(define (%c99-init-next-direct-idx sl from-idx)
+  (let* ((dfs (c-struct-layout-direct-fields sl))
+         (n (length dfs)))
+    (let loop ((i from-idx))
+      (cond
+        ((>= i n) #f)
+        ((%c99-init-direct-initable? sl (list-ref dfs i)) i)
+        (else (loop (+ i 1)))))))
+
+(define (%c99-init-make-byte-entries lenv elem-ty base-off decoded len rev-entries)
+  (let* ((slen (string-length decoded))
+         (copy-n (min (+ slen 1) len)))
+    (let loop ((i 0) (acc rev-entries))
+      (if (>= i copy-n)
+          acc
+          (let* ((bval (if (< i slen) (char->integer (string-ref decoded i)) 0))
+                 (te (make-c-typed elem-ty (list 'c-const-val bval (number->string bval)))))
+            (loop (+ i 1)
+                  (cons (list 'set (+ base-off i) #f #f #f #f elem-ty te) acc)))))))
+
+(define (%c99-init-char-array-str? ty val-node)
+  (and (c-array-type? ty)
+       (memq (c-array-elem ty) '(i8 u8))
+       (let ((r (ast-strip-span val-node)))
+         (cond
+           ((and (pair? r) (eq? (car r) 'c-str)) (cadr r))
+           ((and (pair? r) (eq? (car r) 'c-init-list)
+                 (pair? (cadr r)) (null? (cdadr r)))
+            (let ((it (ast-strip-span (caadr r))))
+              (if (and (pair? it) (eq? (car it) 'c-init-item)
+                       (not (cadr it))
+                       (let ((iv (ast-strip-span (caddr it))))
+                         (and (pair? iv) (eq? (car iv) 'c-str))))
+                  (cadr (ast-strip-span (caddr (ast-strip-span (caadr r)))))
+                  #f)))
+           (else #f)))))
+
+(define (c99-assign-compatible? env dst-ty src-ty rhs-node)
+  (or (c-types-compatible? dst-ty src-ty)
+      (and (c-pointer-type? dst-ty)
+           (c-integer-type? src-ty)
+           (let ((v (c99-eval-const-int-expr env rhs-node)))
+             (and v (= v 0))))
+      (and (eq? dst-ty 'bool) (c-pointer-type? src-ty))))
+
+(define (%c99-init-emit-leaf! env leaf-ty leaf-off fl-opt val-node acc-rev sp)
+  (let* ((lenv (sema-env-layout-env env))
+         (rval (ast-strip-span val-node))
+         (str-lex (%c99-init-char-array-str? leaf-ty val-node)))
+    (cond
+      (str-lex
+       (let* ((decoded (c99-decode-string-literal str-lex))
+              (slen (string-length decoded))
+              (arr-len (c-array-length leaf-ty)))
+         (if (not arr-len)
+             (%c99-sema-error! "C99-LAY-001" "Unsized nested char array in initializer" sp))
+         (if (> slen arr-len)
+             (%c99-sema-error! "C99-LAY-002" "String initializer exceeds fixed char array size" sp))
+         (%c99-init-make-byte-entries lenv (c-array-elem leaf-ty) leaf-off decoded arr-len acc-rev)))
+      ((and (pair? rval) (eq? (car rval) 'c-init-list))
+       (%c99-init-compound-list! env leaf-ty leaf-off (cadr rval) acc-rev sp))
+      (else
+       (let* ((te (c99-analyze-expr env val-node))
+              (dec-ty (c99-array-decay (c-typed-type te)))
+              (te-d (c99-apply-implicit-cast te dec-ty)))
+         (if (c-array-type? leaf-ty)
+             (%c99-sema-error! "C99-SEMA-003" "Invalid scalar initializer for array" sp))
+         (if (not (c99-assign-compatible? env leaf-ty dec-ty val-node))
+             (%c99-sema-error! "C99-SEMA-003"
+                               (string-append "Incompatible initializer type: expected "
+                                              (c-type->string leaf-ty) ", got " (c-type->string dec-ty))
+                               sp))
+         (let ((casted (c99-apply-implicit-cast te-d leaf-ty)))
+           (if (and fl-opt (c-field-layout-bit-width fl-opt))
+               (cons (list 'set
+                           leaf-off
+                           (c-field-layout-bit-offset fl-opt)
+                           (c-field-layout-bit-width fl-opt)
+                           (c-field-layout-storage-unit-offset fl-opt)
+                           (c-field-layout-storage-unit-type fl-opt)
+                           leaf-ty casted)
+                     acc-rev)
+               (cons (list 'set leaf-off #f #f #f #f leaf-ty casted)
+                     acc-rev))))))))
+
+(define (%c99-init-follow-desigs! env root-ty root-off desigs val-node active-union-box acc-rev sp)
+  (let ((lenv (sema-env-layout-env env)))
+    (let step ((cur-ty root-ty)
+               (cur-off root-off)
+               (ds desigs)
+               (next-root-cursor #f)
+               (acc acc-rev))
+      (if (null? ds)
+          (let ((new-acc (%c99-init-emit-leaf! env cur-ty cur-off #f val-node acc sp)))
+            (cons next-root-cursor new-acc))
+          (let ((d (car ds))
+                (at-root? (eq? ds desigs)))
+            (cond
+              ((and (pair? d) (eq? (car d) 'c-desig-index))
+               (if (not (c-array-type? cur-ty))
+                   (%c99-sema-error! "C99-LAY-002" "Array index designator on non-array type" sp))
+               (let* ((elem (c-array-elem cur-ty))
+                      (len (c-array-length cur-ty))
+                      (idx (c99-eval-const-int-expr env (cadr d))))
+                 (if (or (not idx) (< idx 0))
+                     (%c99-sema-error! "C99-LAY-002" "Array designator index is negative or non-constant" sp))
+                 (if (and len (>= idx len))
+                     (%c99-sema-error! "C99-LAY-002" "Array designator index out of bounds (CWE-787)" sp))
+                 (let ((el-off (+ cur-off (* idx (c-type-size-in lenv elem (%c99-sema-err-cb sp)))))
+                       (nc (if at-root? (list 'array-idx idx (+ idx 1)) next-root-cursor)))
+                   (step elem el-off (cdr ds) nc acc))))
+              ((and (pair? d) (eq? (car d) 'c-desig-field))
+               (if (not (c-aggregate-ref-type? cur-ty))
+                   (%c99-sema-error! "C99-LAY-002" "Field designator on non-struct/union type" sp))
+               (let* ((sl (c-type-layout-in lenv cur-ty))
+                      (fsym (cadr d))
+                      (fl (and sl (c-struct-layout-find-field lenv cur-ty fsym))))
+                 (if (not fl)
+                     (%c99-sema-error! "C99-LAY-002"
+                                       (string-append "Unknown field designator '." (symbol->string fsym) "'")
+                                       sp))
+                 (if (and (not (c-field-layout-bit-width fl))
+                          (c-array-type? (c-field-layout-ctype fl))
+                          (not (c-array-length (c-field-layout-ctype fl))))
+                     (%c99-sema-error! "C99-LAY-002" "Cannot initialize flexible array member via designator" sp))
+                 ;; Find top-level direct field index for positional resume & union clearing
+                 (let* ((chain (c-field-layout-anon-chain fl))
+                        (top-df-idx
+                         (if (pair? chain)
+                             (car chain)
+                             (let find-df ((i 0) (dfs (c-struct-layout-direct-fields sl)))
+                               (cond
+                                 ((null? dfs) 0)
+                                 ((eq? (c-field-layout-name (car dfs)) fsym) i)
+                                 (else (find-df (+ i 1) (cdr dfs)))))))
+                        (acc1 (if (and (c-struct-layout-kind sl)
+                                       (eq? (c-struct-layout-kind sl) 'union)
+                                       active-union-box)
+                                  (let ((prev-df (car active-union-box)))
+                                    (set-car! active-union-box top-df-idx)
+                                    (if (and prev-df (not (= prev-df top-df-idx)))
+                                        (cons (list 'zero-range cur-off (c-struct-layout-size sl)) acc)
+                                        acc))
+                                  acc))
+                        (nc (if at-root? (list 'struct-df top-df-idx) next-root-cursor)))
+                   ;; Check union switch along anon chain if anonymous union lies inside
+                   (let* ((new-off (+ cur-off (c-field-layout-offset fl))))
+                     (if (null? (cdr ds))
+                         ;; Reached leaf field (possibly bit-field!)
+                         (let* ((bw (c-field-layout-bit-width fl))
+                                (su-off (and bw (+ cur-off (c-field-layout-storage-unit-offset fl))))
+                                (fl-adj (if bw
+                                            (%make-c-field-layout
+                                             (c-field-layout-name fl)
+                                             (c-field-layout-ctype fl)
+                                             new-off
+                                             (c-field-layout-bit-offset fl)
+                                             bw
+                                             su-off
+                                             (c-field-layout-storage-unit-type fl)
+                                             #f)
+                                            #f))
+                                (new-acc (%c99-init-emit-leaf! env (c-field-layout-ctype fl) new-off fl-adj val-node acc1 sp)))
+                           (cons nc new-acc))
+                         (begin
+                           (if (c-field-layout-bit-width fl)
+                               (%c99-sema-error! "C99-LAY-002" "Sub-designator cannot follow a bit-field" sp))
+                           (step (c-field-layout-ctype fl) new-off (cdr ds) nc acc1)))))))
+              (else
+               (%c99-sema-error! "C99-LAY-002" "Unsupported designator form" sp))))))))
+
+;; Brace elision helper: returns (remaining-items . updated-rev-acc)
+(define (%c99-init-positional-subobject! env sub-ty sub-off fl-opt val-node rest-items acc-rev sp)
+  (let* ((lenv (sema-env-layout-env env))
+         (rval (ast-strip-span val-node)))
+    (cond
+      ((and (pair? rval) (eq? (car rval) 'c-init-list))
+       (cons rest-items (%c99-init-compound-list! env sub-ty sub-off (cadr rval) acc-rev sp)))
+      ((%c99-init-char-array-str? sub-ty val-node)
+       (cons rest-items (%c99-init-emit-leaf! env sub-ty sub-off #f val-node acc-rev sp)))
+      ((or (c-scalar-type? sub-ty) (c-function-type? sub-ty))
+       (cons rest-items (%c99-init-emit-leaf! env sub-ty sub-off fl-opt val-node acc-rev sp)))
+      ((c-array-type? sub-ty)
+       ;; Brace elision into fixed array elements until filled or next item has designation
+       (let ((elem (c-array-elem sub-ty))
+             (len (c-array-length sub-ty)))
+         (if (not len)
+             (%c99-sema-error! "C99-LAY-001" "Unsized array subobject cannot be initialized" sp))
+         (let loop ((i 0) (v val-node) (rem rest-items) (acc acc-rev))
+           (let* ((sub-r (%c99-init-positional-subobject!
+                          env elem (+ sub-off (* i (c-type-size-in lenv elem))) #f v rem acc sp))
+                  (rem2 (car sub-r))
+                  (acc2 (cdr sub-r)))
+             (if (and (< (+ i 1) len) (pair? rem2)
+                      (let ((ni (ast-strip-span (car rem2))))
+                        (not (cadr ni)))) ; stop before next designator
+                 (let ((ni (ast-strip-span (car rem2))))
+                   (loop (+ i 1) (caddr ni) (cdr rem2) acc2))
+                 (cons rem2 acc2))))))
+      ((c-aggregate-ref-type? sub-ty)
+       ;; Check if single compatible struct/union expr first (no brace elision)
+       (let* ((try-expr? (and (not (and (pair? rval) (eq? (car rval) 'c-init-list)))
+                              (let ((te (c99-analyze-expr env val-node)))
+                                (c-types-compatible? sub-ty (c-typed-type te))))))
+         (if try-expr?
+             (cons rest-items (%c99-init-emit-leaf! env sub-ty sub-off #f val-node acc-rev sp))
+             ;; Brace elision into struct fields or first union field
+             (let* ((sl (c-type-layout-in lenv sub-ty))
+                    (dfs (if sl (c-struct-layout-direct-fields sl) '()))
+                    (is-union? (and sl (eq? (c-struct-layout-kind sl) 'union))))
+               (let loop ((df-i (%c99-init-next-direct-idx sl 0))
+                          (v val-node)
+                          (rem rest-items)
+                          (acc acc-rev))
+                 (if (not df-i)
+                     (cons (cons (list 'c-init-item #f v) rem) acc)
+                     (let* ((df (list-ref dfs df-i))
+                            (df-bw (c-field-layout-bit-width df))
+                            (df-off (+ sub-off (c-field-layout-offset df)))
+                            (df-fl (if df-bw
+                                       (%make-c-field-layout
+                                        (c-field-layout-name df)
+                                        (c-field-layout-ctype df)
+                                        df-off
+                                        (c-field-layout-bit-offset df)
+                                        df-bw
+                                        (+ sub-off (c-field-layout-storage-unit-offset df))
+                                        (c-field-layout-storage-unit-type df)
+                                        #f)
+                                       #f))
+                            (sub-r (%c99-init-positional-subobject!
+                                    env (c-field-layout-ctype df) df-off df-fl v rem acc sp))
+                            (rem2 (car sub-r))
+                            (acc2 (cdr sub-r))
+                            (next-df (and (not is-union?) (%c99-init-next-direct-idx sl (+ df-i 1)))))
+                       (if (and next-df (pair? rem2)
+                                (let ((ni (ast-strip-span (car rem2))))
+                                  (not (cadr ni))))
+                           (let ((ni (ast-strip-span (car rem2))))
+                             (loop next-df (caddr ni) (cdr rem2) acc2))
+                           (cons rem2 acc2)))))))))
+      (else
+       (%c99-sema-error! "C99-SEMA-003" "Unsupported type in initializer" sp)))))
+
+(define (%c99-init-compound-list! env target-ty base-off items acc-rev sp)
+  (car (%c99-init-compound-list-with-max! env target-ty base-off items acc-rev sp)))
+
+(define (%c99-init-compound-list-with-max! env target-ty base-off items acc-rev sp)
+  (let* ((lenv (sema-env-layout-env env))
+         (max-idx-box (cons -1 '()))
+         (active-union-box (cons #f '())))
+    (cond
+      ((c-array-type? target-ty)
+       (let ((elem (c-array-elem target-ty))
+             (len (c-array-length target-ty))
+             (esz (c-type-size-in lenv (c-array-elem target-ty) (%c99-sema-err-cb sp))))
+         (let loop ((its items) (pos-i 0) (acc acc-rev))
+           (if (null? its)
+               (cons acc (car max-idx-box))
+               (let* ((it (ast-strip-span (car its)))
+                      (desig (cadr it))
+                      (val (caddr it)))
+                 (if desig
+                     (let* ((res (%c99-init-follow-desigs! env target-ty base-off desig val active-union-box acc sp))
+                            (cursor (car res))
+                            (acc1 (cdr res))
+                            (written-idx (if (and (pair? cursor) (eq? (car cursor) 'array-idx))
+                                             (cadr cursor)
+                                             pos-i))
+                            (next-i (if (and (pair? cursor) (eq? (car cursor) 'array-idx))
+                                        (caddr cursor)
+                                        (+ pos-i 1))))
+                       (if (> written-idx (car max-idx-box))
+                           (set-car! max-idx-box written-idx))
+                       (loop (cdr its) next-i acc1))
+                     (begin
+                       (if (and len (>= pos-i len))
+                           (%c99-sema-error! "C99-LAY-002" "Initializer elements exceed array bounds (CWE-787)" sp))
+                       (if (> pos-i (car max-idx-box))
+                           (set-car! max-idx-box pos-i))
+                       (let ((sub-r (%c99-init-positional-subobject!
+                                     env elem (+ base-off (* pos-i esz)) #f val (cdr its) acc sp)))
+                         (loop (car sub-r) (+ pos-i 1) (cdr sub-r))))))))))
+      ((c-aggregate-ref-type? target-ty)
+       (let* ((sl (c-type-layout-in lenv target-ty))
+              (dfs (if sl (c-struct-layout-direct-fields sl) '()))
+              (is-union? (and sl (eq? (c-struct-layout-kind sl) 'union))))
+         (if (not (c-type-complete? lenv target-ty))
+             (%c99-sema-error! "C99-LAY-001" "Cannot initialize incomplete struct or union" sp))
+         (let loop ((its items) (df-i (%c99-init-next-direct-idx sl 0)) (acc acc-rev))
+           (if (null? its)
+               (cons acc -1)
+               (let* ((it (ast-strip-span (car its)))
+                      (desig (cadr it))
+                      (val (caddr it)))
+                 (if desig
+                     (let* ((res (%c99-init-follow-desigs! env target-ty base-off desig val active-union-box acc sp))
+                            (cursor (car res))
+                            (acc1 (cdr res))
+                            (written-df (and (pair? cursor) (eq? (car cursor) 'struct-df) (cadr cursor)))
+                            (next-df (if (and written-df (not is-union?))
+                                         (%c99-init-next-direct-idx sl (+ written-df 1))
+                                         #f)))
+                       (loop (cdr its) next-df acc1))
+                     (if (not df-i)
+                         (loop (cdr its) #f acc) ; ignore excess positional scalar
+                         (let* ((df (list-ref dfs df-i))
+                                (acc0 (if is-union?
+                                          (let ((prev-df (car active-union-box)))
+                                            (set-car! active-union-box df-i)
+                                            (if (and prev-df (not (= prev-df df-i)))
+                                                (cons (list 'zero-range base-off (c-struct-layout-size sl)) acc)
+                                                acc))
+                                          acc))
+                                (df-bw (c-field-layout-bit-width df))
+                                (df-off (+ base-off (c-field-layout-offset df)))
+                                (df-fl (if df-bw
+                                           (%make-c-field-layout
+                                            (c-field-layout-name df)
+                                            (c-field-layout-ctype df)
+                                            df-off
+                                            (c-field-layout-bit-offset df)
+                                            df-bw
+                                            (+ base-off (c-field-layout-storage-unit-offset df))
+                                            (c-field-layout-storage-unit-type df)
+                                            #f)
+                                           #f))
+                                (sub-r (%c99-init-positional-subobject!
+                                        env (c-field-layout-ctype df) df-off df-fl val (cdr its) acc0 sp))
+                                (next-df (if is-union? #f (%c99-init-next-direct-idx sl (+ df-i 1)))))
+                           (loop (car sub-r) next-df (cdr sub-r))))))))))
+      (else
+       (%c99-sema-error! "C99-SEMA-003" "Brace initializer applied to invalid type" sp)))))
+
+(define (sema-normalize-initializer env target-ty init-node node-or-span)
+  (if (not init-node)
+      #f
+      (let* ((lenv (sema-env-layout-env env))
+             (raw (ast-strip-span init-node))
+             (str-lex (%c99-init-char-array-str? target-ty init-node)))
+        (cond
+          (str-lex
+           (let* ((decoded (c99-decode-string-literal str-lex))
+                  (slen (string-length decoded))
+                  (arr-len (c-array-length target-ty))
+                  (final-len (or arr-len (+ slen 1))))
+             (if (and arr-len (> slen arr-len))
+                 (%c99-sema-error! "C99-LAY-002" "String literal initializer exceeds array bounds (CWE-787)" node-or-span))
+             (let* ((final-ty (make-c-array-type (c-array-elem target-ty) final-len))
+                    (entries (reverse (%c99-init-make-byte-entries
+                                       lenv (c-array-elem target-ty) 0 decoded final-len '()))))
+               (cons final-ty (make-c-typed final-ty (list 'c-init-plan final-ty entries))))))
+
+          ((c-array-type? target-ty)
+           (if (not (and (pair? raw) (eq? (car raw) 'c-init-list)))
+               (%c99-sema-error! "C99-SEMA-003" "Array initializer must be a brace-enclosed list" node-or-span))
+           (let* ((res (%c99-init-compound-list-with-max! env target-ty 0 (cadr raw) '() node-or-span))
+                  (rev-entries (car res))
+                  (max-idx (cdr res))
+                  (arr-len (c-array-length target-ty))
+                  (final-len (or arr-len (+ max-idx 1))))
+             (if (and (not arr-len) (< max-idx 0))
+                 (%c99-sema-error! "C99-LAY-001" "Empty initializer cannot determine unsized array length" node-or-span))
+             (let ((final-ty (make-c-array-type (c-array-elem target-ty) final-len)))
+               (cons final-ty (make-c-typed final-ty (list 'c-init-plan final-ty (reverse rev-entries)))))))
+
+          ((c-aggregate-ref-type? target-ty)
+           (if (not (c-type-complete? lenv target-ty))
+               (%c99-sema-error! "C99-LAY-001" "Cannot initialize incomplete struct or union type" node-or-span))
+           (if (and (pair? raw) (eq? (car raw) 'c-init-list))
+               (let* ((res (%c99-init-compound-list-with-max! env target-ty 0 (cadr raw) '() node-or-span))
+                      (entries (reverse (car res))))
+                 (cons target-ty (make-c-typed target-ty (list 'c-init-plan target-ty entries))))
+               (let ((te (c99-analyze-expr env init-node)))
+                 (if (not (c-types-compatible? target-ty (c-typed-type te)))
+                     (%c99-sema-error! "C99-SEMA-003" "Incompatible aggregate initializer expression" node-or-span))
+                 (cons target-ty (make-c-typed target-ty (list 'c-init-plan target-ty (list (list 'set 0 #f #f #f #f target-ty te))))))))
+
+          (else
+           ;; Scalar variable initialization
+           (if (and (pair? raw) (eq? (car raw) 'c-init-list))
+               (let ((items (cadr raw)))
+                 (cond
+                   ((null? items)
+                    (cons target-ty (make-c-typed target-ty (list 'c-const-val 0 "0"))))
+                   ((null? (cdr items))
+                    (let ((it (ast-strip-span (car items))))
+                      (if (cadr it)
+                          (%c99-sema-error! "C99-LAY-002" "Designator in scalar initializer" node-or-span))
+                      (let* ((te (c99-analyze-expr env (caddr it)))
+                             (dt (c99-array-decay (c-typed-type te)))
+                             (te-d (c99-apply-implicit-cast te dt)))
+                        (if (not (c99-assign-compatible? env target-ty dt (caddr it)))
+                            (%c99-sema-error! "C99-SEMA-003" "Incompatible scalar initializer" node-or-span))
+                        (cons target-ty (c99-apply-implicit-cast te-d target-ty)))))
+                   (else
+                    (%c99-sema-error! "C99-SEMA-003" "Excess elements in scalar initializer" node-or-span))))
+               (let* ((te (c99-analyze-expr env init-node))
+                      (dt (c99-array-decay (c-typed-type te)))
+                      (te-d (c99-apply-implicit-cast te dt)))
+                 (if (not (c99-assign-compatible? env target-ty dt init-node))
+                     (%c99-sema-error! "C99-SEMA-003" "Incompatible initializer type" node-or-span))
+                 (cons target-ty (c99-apply-implicit-cast te-d target-ty)))))))))
+
+;;; -----------------------------------------------------------------------
+;;; 9. Declaration & Statement Analysis
 ;;; -----------------------------------------------------------------------
 
 (define (sema-analyze-decl env decl-node)
-  (let* ((raw (ast-strip-span decl-node))
+  (let* ((lenv (sema-env-layout-env env))
+         (raw (ast-strip-span decl-node))
          (tag (car raw))
          (specs (cadr raw))
-         (inits (caddr raw)))
-    (sema-process-enum-specifiers! env specs)
-    (let* ((parsed-specs (c-parse-decl-specs specs (lambda (s) (sema-lookup-typedef env s))))
-           (storage (car parsed-specs))
-           (base-ty (cdr parsed-specs)))
-      (if (eq? tag 'c-typedef)
-          (begin
-            (for-each
-             (lambda (init-node)
-               (let* ((r (c99-resolve-declarator-type env base-ty init-node))
-                      (sym (car r))
-                      (ty (cdr r)))
-                 (if sym
-                     (sema-bind-ordinary! env sym (list 'typedef ty)))))
-             inits)
-            '())
-          (let loop ((xs inits) (acc '()))
-            (if (null? xs)
-                (reverse acc)
-                (let* ((id-node (ast-strip-span (car xs)))
-                       (decl (cadr id-node))
-                       (init-expr (caddr id-node))
-                       (resolved (c99-resolve-declarator-type env base-ty decl))
-                       (sym (car resolved))
-                       (ty (cdr resolved)))
-                  (if (not sym)
-                      (loop (cdr xs) acc)
-                      (if (c-function-type? ty)
-                          (begin
-                            (sema-register-fn! env sym ty #f)
-                            (loop (cdr xs) acc))
-                          (let ((existing (sema-lookup-ordinary-local env sym)))
-                            (if (and existing (not (eq? storage 'extern)) (not (sema-in-global-scope? env)))
-                                (%c99-sema-error! "C99-SEMA-001"
-                                                  (string-append "Redefinition of local variable '"
-                                                                 (symbol->string sym) "'")
-                                                  decl-node))
-                            (let* ((u-sym (c99-next-sema-var-id! sym))
-                                   (global? (or (sema-in-global-scope? env) (eq? storage 'static) (eq? storage 'extern)))
-                                   (typed-init (if init-expr
-                                                   (let ((te (c99-analyze-expr env init-expr)))
-                                                     (if (not (c-types-compatible? ty (c99-array-decay (c-typed-type te))))
-                                                         (%c99-sema-error! "C99-SEMA-003"
-                                                                           (string-append "Incompatible initializer type for '"
-                                                                                          (symbol->string sym) "'")
-                                                                           decl-node))
-                                                     (c99-apply-implicit-cast te ty))
-                                                   #f)))
-                              (sema-bind-ordinary! env sym (list 'var u-sym ty global? #f))
-                              (loop (cdr xs)
-                                    (cons (list 'c-typed-decl u-sym sym ty global? typed-init)
-                                          acc)))))))))))))
+         (inits (caddr raw))
+         (in-decl-head? (null? inits))
+         (parsed-specs (sema-resolve-decl-specs env specs in-decl-head?))
+         (storage (car parsed-specs))
+         (base-ty (cdr parsed-specs)))
+    (if (eq? tag 'c-typedef)
+        (begin
+          (for-each
+           (lambda (init-node)
+             (let* ((r (c99-resolve-declarator-type env base-ty init-node))
+                    (sym (car r))
+                    (ty (cdr r)))
+               (if sym
+                   (sema-bind-ordinary! env sym (list 'typedef ty)))))
+           inits)
+          '())
+        (let loop ((xs inits) (acc '()))
+          (if (null? xs)
+              (reverse acc)
+              (let* ((id-node (ast-strip-span (car xs)))
+                     (decl (cadr id-node))
+                     (init-expr (caddr id-node))
+                     (resolved (c99-resolve-declarator-type env base-ty decl))
+                     (sym (car resolved))
+                     (ty (cdr resolved)))
+                (cond
+                  ((not sym)
+                   (loop (cdr xs) acc))
+                  ((c-function-type? ty)
+                   (sema-register-fn! env sym ty #f)
+                   (loop (cdr xs) acc))
+                  (else
+                   (let* ((in-glob? (sema-in-global-scope? env))
+                          (existing (sema-lookup-ordinary-local env sym)))
+                     (if (and existing (not in-glob?) (not (eq? storage 'extern)))
+                         (%c99-sema-error! "C99-SEMA-001"
+                                           (string-append "Redefinition of local variable '"
+                                                          (symbol->string sym) "'")
+                                           decl-node))
+                     (let* ((norm (sema-normalize-initializer env ty init-expr decl-node))
+                            (final-ty (if norm (car norm) ty))
+                            (typed-init (if norm (cdr norm) #f))
+                            (linkage (cond
+                                       ((eq? storage 'extern) 'extern)
+                                       ((eq? storage 'static) 'static)
+                                       (in-glob? 'global)
+                                       (else #f)))
+                            (u-sym (cond
+                                     ((or (eq? linkage 'extern) (eq? linkage 'global)) sym)
+                                     ((eq? linkage 'static) (c99-next-static-var-id! sym))
+                                     (else (c99-next-sema-var-id! sym)))))
+                       (if (not (eq? linkage 'extern))
+                           (if (not (c-type-complete? lenv final-ty))
+                               (%c99-sema-error! "C99-LAY-001"
+                                                 (string-append "Variable '" (symbol->string sym) "' has incomplete type")
+                                                 decl-node)))
+                       (sema-bind-ordinary! env sym (list 'var u-sym final-ty linkage #f))
+                       (let ((decl-rec (list 'c-typed-decl u-sym sym final-ty linkage typed-init)))
+                         (if (and (eq? linkage 'static) (not in-glob?))
+                             (begin
+                               ;; Hoist function-local static to TU globals; omit runtime re-init inside fn
+                               (sema-env-static-globals-set! env (cons decl-rec (sema-env-static-globals env)))
+                               (loop (cdr xs) acc))
+                             (loop (cdr xs) (cons decl-rec acc))))))))))))))
 
 (define (sema-analyze-stmt env stmt-node)
-  (let* ((sp (ast-source-span stmt-node))
+  (let* ((lenv (sema-env-layout-env env))
+         (sp (ast-source-span stmt-node))
          (raw (ast-strip-span stmt-node))
          (tag (car raw)))
     (case tag
@@ -819,10 +1896,14 @@
            ((and (not (eq? ret-ty 'void)) (not val-expr))
             (%c99-sema-error! "C99-SEMA-003" "Missing return expression in non-void function" (or sp stmt-node)))
            (val-expr
-            (let ((te (c99-analyze-expr env val-expr)))
-              (if (not (c-types-compatible? ret-ty (c99-array-decay (c-typed-type te))))
+            (let* ((te (c99-analyze-expr env val-expr))
+                   (dt (c99-array-decay (c-typed-type te)))
+                   (te-d (c99-apply-implicit-cast te dt)))
+              (if (and (c-aggregate-ref-type? ret-ty) (not (c-type-complete? lenv ret-ty)))
+                  (%c99-sema-error! "C99-LAY-001" "Return value has incomplete aggregate type" (or sp stmt-node)))
+              (if (not (c99-assign-compatible? env ret-ty dt val-expr))
                   (%c99-sema-error! "C99-SEMA-003" "Incompatible return value type" (or sp stmt-node)))
-              (list 'c-return (c99-apply-implicit-cast te ret-ty))))
+              (list 'c-return (c99-apply-implicit-cast te-d ret-ty))))
            (else '(c-return #f)))))
 
       ((c-if)
@@ -905,52 +1986,84 @@
        (%c99-sema-error! "C99-SEMA-003" "Unsupported statement in sema" (or sp stmt-node))))))
 
 (define (sema-analyze-fn-def env fn-node)
-  (let* ((raw (ast-strip-span fn-node))
+  (let* ((lenv (sema-env-layout-env env))
+         (raw (ast-strip-span fn-node))
          (fn-sym (cadr raw))
          (specs (caddr raw))
          (decl (cadddr raw))
-         (body (if (>= (length raw) 7) (list-ref raw 6) (list-ref raw 5))))
-    (sema-process-enum-specifiers! env specs)
-    (let* ((base-ret (cdr (c-parse-decl-specs specs (lambda (s) (sema-lookup-typedef env s)))))
-           (resolved (c99-resolve-declarator-type env base-ret decl))
-           (fn-type (cdr resolved))
-           (ret-ty (c-fn-ret fn-type))
-           ;; Extract parameter (name . type) pairs directly from the fn-declarator
-           (param-pairs
-            (let find-fn ((d (ast-strip-span decl)))
-              (cond
-                ((not (pair? d)) '())
-                ((eq? (car d) 'c-fn-declarator)
-                 (let ((inner (ast-strip-span (cadr d))))
-                   (if (and (pair? inner) (eq? (car inner) 'c-decl-id))
-                       (car (sema-resolve-param-list env (caddr d)))
-                       (let ((sub (find-fn inner)))
-                         (if (pair? sub) sub (car (sema-resolve-param-list env (caddr d))))))))
-                ((eq? (car d) 'c-ptr-declarator)
-                 (find-fn (ast-strip-span (caddr d))))
-                (else '())))))
-      (sema-register-fn! env fn-sym fn-type #t)
-      (sema-push-scope! env)
-      (let ((prev-ret (sema-env-curr-ret env)))
-        (sema-env-curr-ret-set! env ret-ty)
-        (let* ((typed-params
-                (let loop ((ps param-pairs) (idx 0) (acc '()))
-                  (if (null? ps)
-                      (reverse acc)
-                      (let* ((psym (caar ps))
-                             (pty (cdar ps))
-                             (u-sym (c99-next-sema-var-id! (or psym 'param))))
-                        (if psym
-                            (sema-bind-ordinary! env psym (list 'var u-sym pty #f idx)))
-                        (loop (cdr ps) (+ idx 1) (cons (list u-sym psym pty idx) acc))))))
-               (typed-body (sema-analyze-stmt env body)))
-          (sema-env-curr-ret-set! env prev-ret)
-          (sema-pop-scope! env)
-          (list 'c-typed-fn fn-sym ret-ty (c-fn-variadic? fn-type) typed-params typed-body))))))
+         (body (if (>= (length raw) 7) (list-ref raw 6) (list-ref raw 5)))
+         (base-ret (cdr (sema-resolve-decl-specs env specs #f)))
+         (resolved (c99-resolve-declarator-type env base-ret decl))
+         (fn-type (cdr resolved))
+         (ret-ty (c-fn-ret fn-type))
+         (param-pairs
+          (let find-fn ((d (ast-strip-span decl)))
+            (cond
+              ((not (pair? d)) '())
+              ((eq? (car d) 'c-fn-declarator)
+               (let ((inner (ast-strip-span (cadr d))))
+                 (if (and (pair? inner) (eq? (car inner) 'c-decl-id))
+                     (car (sema-resolve-param-list env (caddr d)))
+                     (let ((sub (find-fn inner)))
+                       (if (pair? sub) sub (car (sema-resolve-param-list env (caddr d))))))))
+              ((eq? (car d) 'c-ptr-declarator)
+               (find-fn (ast-strip-span (caddr d))))
+              (else '())))))
+    (if (and (c-aggregate-ref-type? ret-ty) (not (c-type-complete? lenv ret-ty)))
+        (%c99-sema-error! "C99-LAY-001" "Function return type is incomplete" fn-node))
+    (for-each (lambda (pr)
+                (if (and (c-aggregate-ref-type? (cdr pr))
+                         (not (c-type-complete? lenv (cdr pr))))
+                    (%c99-sema-error! "C99-LAY-001" "Function parameter has incomplete aggregate type" fn-node)))
+              param-pairs)
+    (sema-register-fn! env fn-sym fn-type #t)
+    (sema-push-scope! env)
+    (let ((prev-ret (sema-env-curr-ret env)))
+      (sema-env-curr-ret-set! env ret-ty)
+      (let* ((typed-params
+              (let loop ((ps param-pairs) (idx 0) (acc '()))
+                (if (null? ps)
+                    (reverse acc)
+                    (let* ((psym (caar ps))
+                           (pty (cdar ps))
+                           (u-sym (c99-next-sema-var-id! (or psym 'param))))
+                      (if psym
+                          (sema-bind-ordinary! env psym (list 'var u-sym pty #f idx)))
+                      (loop (cdr ps) (+ idx 1) (cons (list u-sym psym pty idx) acc))))))
+             (typed-body (sema-analyze-stmt env body)))
+        (sema-env-curr-ret-set! env prev-ret)
+        (sema-pop-scope! env)
+        (list 'c-typed-fn fn-sym ret-ty (c-fn-variadic? fn-type) typed-params typed-body)))))
 
 ;;; -----------------------------------------------------------------------
-;;; 8. Top-Level Entrypoint: (c99-analyze-program ast)
+;;; 10. Tentative-Definition Deduplication & Program Entrypoint
 ;;; -----------------------------------------------------------------------
+
+(define (%c99-dedupe-globals glist)
+  (let ((table-box (cons '() '())))
+    (for-each
+     (lambda (g)
+       (let* ((u-sym (list-ref g 1))
+              (linkage (list-ref g 4))
+              (init (list-ref g 5))
+              (slot (assq u-sym (car table-box))))
+         (cond
+           ((not slot)
+            (set-car! table-box (cons (cons u-sym g) (car table-box))))
+           (else
+            (let* ((prev (cdr slot))
+                   (prev-link (list-ref prev 4))
+                   (prev-init (list-ref prev 5)))
+              ;; Prefer initialized over tentative uninitialized over extern
+              (cond
+                (init
+                 (set-cdr! slot g))
+                ((and (eq? prev-link 'extern) (not (eq? linkage 'extern)))
+                 (set-cdr! slot g))
+                ((and (not prev-init) (not (eq? linkage 'extern)))
+                 (set-cdr! slot g))))))))
+     glist)
+    (reverse (map cdr (car table-box)))))
 
 (define (c99-analyze-program ast)
   (c99-reset-sema-var-id!)
@@ -961,7 +2074,10 @@
                         (%c99-sema-error! "C99-SEMA-003" "Expected c-translation-unit" ast))))
     (let loop ((ds ext-decls) (globals '()) (funcs '()))
       (if (null? ds)
-          (list 'c-typed-unit (reverse globals) (reverse funcs))
+          (let ((all-globals (%c99-dedupe-globals
+                              (append (reverse globals)
+                                      (reverse (sema-env-static-globals env))))))
+            (list 'c-typed-unit all-globals (reverse funcs) (sema-env-layout-env env)))
           (let* ((d (car ds))
                  (di (ast-strip-span d))
                  (tag (if (pair? di) (car di) #f)))

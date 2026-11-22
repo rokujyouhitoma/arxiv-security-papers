@@ -193,6 +193,7 @@
     ((not (pair? prog)) prog)
     ((eq? (car prog) '%lir-program)
      (let* ((strings-clause (assq 'strings (cdr prog)))
+            (data-clause (assq 'data (cdr prog)))
             (stackmaps-clause (assq 'stackmaps (cdr prog)))
             (funcs-clause (assq '%lir-functions (cdr prog)))
             (main-clause (assq '%lir-main (cdr prog)))
@@ -200,11 +201,18 @@
                            (cons '%lir-functions (map lower-managed-function (cdr funcs-clause)))
                            '(%lir-functions)))
             (new-main (if main-clause (lower-managed-main main-clause) '(%lir-main (frame-size 0) (body)))))
-       (list '%lir-program
-             (if strings-clause strings-clause '(strings ()))
-             (if stackmaps-clause stackmaps-clause '(stackmaps ()))
-             new-funcs
-             new-main)))
+       (if data-clause
+           (list '%lir-program
+                 (if strings-clause strings-clause '(strings ()))
+                 data-clause
+                 (if stackmaps-clause stackmaps-clause '(stackmaps ()))
+                 new-funcs
+                 new-main)
+           (list '%lir-program
+                 (if strings-clause strings-clause '(strings ()))
+                 (if stackmaps-clause stackmaps-clause '(stackmaps ()))
+                 new-funcs
+                 new-main))))
     ((eq? (car prog) '%lir-function)
      (lower-managed-function prog))
     ((eq? (car prog) '%lir-main)

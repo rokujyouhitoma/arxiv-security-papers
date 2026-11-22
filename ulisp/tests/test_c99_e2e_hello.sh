@@ -24,7 +24,19 @@ else
 fi
 
 run_ucc() {
-    PYTHONPATH="$ROOT_DIR" "$PYTHON" -m ilisp "$DRIVER_RUNNER" -- "$@"
+    if [ "${USE_GOSH:-0}" = "1" ] && command -v gosh >/dev/null 2>&1; then
+        gosh -ugauche.uvector -ugauche.process -uscheme.file -uscheme.bitwise -uscheme.process-context -I "$ULISP_DIR" -I "$ROOT_DIR" "$DRIVER_RUNNER" "$@"
+    else
+        PYTHONPATH="$ROOT_DIR" "$PYTHON" -m ilisp "$DRIVER_RUNNER" -- "$@"
+    fi
+}
+
+run_scheme_script() {
+    if [ "${USE_GOSH:-0}" = "1" ] && command -v gosh >/dev/null 2>&1; then
+        gosh -ugauche.uvector -ugauche.process -uscheme.file -uscheme.bitwise -uscheme.process-context -I "$ULISP_DIR" -I "$ROOT_DIR" "$1"
+    else
+        PYTHONPATH="$ROOT_DIR" "$PYTHON" -m ilisp "$1"
+    fi
 }
 
 rm -rf "$BUILD_DIR"
@@ -140,7 +152,7 @@ cat >> "$BUILD_DIR/batch_e2e.scm" << EOF
   (c-driver-main '("-S" "--target=c" "$BUILD_DIR/mod_math.c" "-o" "$BUILD_DIR/mod_math_out.c"))
   (exit 0))
 EOF
-PYTHONPATH="$ROOT_DIR" "$PYTHON" -m ilisp "$BUILD_DIR/batch_e2e.scm"
+run_scheme_script "$BUILD_DIR/batch_e2e.scm"
 
 out_nat=""
 rc_nat=0

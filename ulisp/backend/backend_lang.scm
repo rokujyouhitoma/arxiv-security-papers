@@ -11,7 +11,7 @@
   (entry Program)
   (terminals
     (symbol (lbl var op cc align))
-    (integer (n disp imm scale bitmap frame_size bytes))
+    (integer (n disp imm scale bitmap frame_size offset al_val))
     (string (str)))
   (Register (reg)
     rax rbx rcx rdx rsi rdi rbp rsp
@@ -64,6 +64,13 @@
     (rep-movsb))
   (StringEntry (se)
     (lbl str))
+  (DataChunk (dc)
+    n
+    (zero n)
+    (reloc lbl offset))
+  (DataEntry (de)
+    (bss lbl al_val n)
+    (bytes lbl al_val dc ...))
   (SafepointEntry (sm)
     (lbl frame_size bitmap))
   (FunctionDecl (f)
@@ -71,7 +78,8 @@
   (MainDecl (m)
     (%asm-main (frame-size n) (body inst ...)))
   (Program (p)
-    (%asm-program (strings (se ...)) (stackmaps (sm ...)) (%asm-functions f ...) m)))
+    (%asm-program (strings (se ...)) (stackmaps (sm ...)) (%asm-functions f ...) m)
+    (%asm-program (strings (se ...)) (data (de ...)) (stackmaps (sm ...)) (%asm-functions f ...) m)))
 
 ;;; -----------------------------------------------------------------------
 ;;; L_asm_aarch64: Target Machine Assembly for AArch64 (ARM64)

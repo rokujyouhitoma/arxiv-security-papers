@@ -2155,18 +2155,22 @@
   (cond
     ((and (pair? ir) (eq? (car ir) '%lir-program))
      (let* ((rest (cdr ir))
-            (strings-entry (if (pair? rest) (car rest) '(strings ())))
-            (stackmaps-entry (if (and (pair? rest) (pair? (cdr rest))) (cadr rest) '(stackmaps ())))
-            (functions-clause (if (and (pair? rest) (pair? (cdr rest)) (pair? (cddr rest))) (caddr rest) '(%lir-functions)))
-            (main-clause (if (and (pair? rest) (pair? (cdr rest)) (pair? (cddr rest)) (pair? (cdddr rest))) (cadddr rest) '(%lir-main (frame-size 0) (body))))
+            (strings-entry (or (assq 'strings rest) '(strings ())))
+            (data-entry (assq 'data rest))
+            (stackmaps-entry (or (assq 'stackmaps rest) '(stackmaps ())))
+            (functions-clause (or (assq '%lir-functions rest) '(%lir-functions)))
+            (main-clause (or (assq '%lir-main rest) '(%lir-main (frame-size 0) (body))))
             (raw-funcs (if (and (pair? functions-clause) (eq? (car functions-clause) '%lir-functions))
                            (cdr functions-clause)
                            '()))
             (opt-funcs (map (lambda (f) (nanopass-optimize-function-body opt-proc f)) raw-funcs))
             (opt-main (nanopass-optimize-main-body opt-proc main-clause)))
-       (list '%lir-program strings-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main)))
+       (if data-entry
+           (list '%lir-program strings-entry data-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main)
+           (list '%lir-program strings-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main))))
     ((and (pair? ir) (eq? (car ir) '%asm-program))
      (let* ((strings (assq 'strings (cdr ir)))
+            (data-entry (assq 'data (cdr ir)))
             (stackmaps (assq 'stackmaps (cdr ir)))
             (funcs-entry (assq '%asm-functions (cdr ir)))
             (funcs (if funcs-entry (cdr funcs-entry) '()))
@@ -2175,11 +2179,18 @@
             (opt-main (if main-entry
                           (nanopass-optimize-asm-main-body opt-proc main-entry)
                           '(%asm-main (frame-size 0) (body ())))))
-       (list '%asm-program
-             (if strings strings '(strings ()))
-             (if stackmaps stackmaps '(stackmaps ()))
-             (cons '%asm-functions opt-funcs)
-             opt-main)))
+       (if data-entry
+           (list '%asm-program
+                 (if strings strings '(strings ()))
+                 data-entry
+                 (if stackmaps stackmaps '(stackmaps ()))
+                 (cons '%asm-functions opt-funcs)
+                 opt-main)
+           (list '%asm-program
+                 (if strings strings '(strings ()))
+                 (if stackmaps stackmaps '(stackmaps ()))
+                 (cons '%asm-functions opt-funcs)
+                 opt-main))))
     ((and (pair? ir) (eq? (car ir) '%lir-function))
      (nanopass-optimize-function-body opt-proc ir))
     ((and (pair? ir) (eq? (car ir) '%asm-function))

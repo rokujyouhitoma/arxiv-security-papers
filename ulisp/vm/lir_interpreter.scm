@@ -75,18 +75,20 @@
   (details vm-trap-details))
 
 (define-record-type <lir-vm>
-  (make-lir-vm-raw registers xmm-registers vregs flags memory heap-ptr
-                   strings functions main-func current-fn current-block
+  (make-lir-vm-raw registers xmm-registers xmm-bits vregs flags memory heap-ptr
+                   strings data-table functions main-func current-fn current-block
                    pc call-stack status fuel step-count tracer last-trap
                    globals foreign-handlers f64-cells)
   lir-vm?
   (registers vm-registers-vector vm-set-registers-vector!)
   (xmm-registers vm-xmm-vector vm-set-xmm-vector!)
+  (xmm-bits vm-xmm-bits-vector vm-set-xmm-bits-vector!)
   (vregs vm-vregs-table vm-set-vregs-table!)
   (flags vm-flags-record vm-set-flags-record!)
   (memory vm-memory-bytes vm-set-memory-bytes!)
   (heap-ptr vm-heap-ptr vm-set-heap-ptr!)
   (strings vm-strings-table vm-set-strings-table!)
+  (data-table vm-data-table vm-set-data-table!)
   (functions vm-functions-table vm-set-functions-table!)
   (main-func vm-main-func vm-set-main-func!)
   (current-fn vm-current-fn vm-set-current-fn!)
@@ -108,9 +110,10 @@
          (mem (make-bytevector actual-size 0))
          (regs (make-vector 16 0))
          (xmms (make-vector 16 0.0))
+         (xmm-bs (make-vector 16 0))
          (flags (vector 0 0 0 0))) ; #(ZF SF OF CF)
-    (make-lir-vm-raw regs xmms '() flags mem
-                     *lir-vm-heap-base* '() '() #f
+    (make-lir-vm-raw regs xmms xmm-bs '() flags mem
+                     *lir-vm-heap-base* '() '() '() #f
                      '%main '%entry 0 '() 'ready
                      *lir-vm-default-fuel* 0 #f #f '() '() '())))
 
@@ -187,6 +190,124 @@
               (vector-set! (vm-registers-vector vm) 0 (lir-vm-s64 new-rax)))
             (vm-set-vreg! vm reg val)))))
 
+(define (vm-pow2-f64 exp)
+  (let ((neg? (< exp 0))
+        (e (if (< exp 0) (- 0 exp) exp)))
+    (let loop ((k e) (base (if (< exp 0) 0.5 2.0)) (acc 1.0))
+      (if (<= k 0)
+          acc
+          (loop (quotient k 2)
+                (* base base)
+                (if (= (modulo k 2) 1) (* acc base) acc))))))
+
+(define (vm-f64->ieee754-u64 val)
+  (let ((flt (if (number? val) (exact->inexact val) 0.0)))
+    (cond
+      ((not (= flt flt)) #x7ff8000000000000)
+      ((= flt 0.0)
+       (if (string=? (number->string flt) "-0.0") #x8000000000000000 0))
+      (else
+       (let* ((neg? (< flt 0.0))
+              (sign (if neg? 1 0))
+              (x (if neg? (- 0.0 flt) flt)))
+         (if (= x (* x 2.0))
+             (if neg? #xfff0000000000000 #x7ff0000000000000)
+             (let norm ((m x) (e 0))
+               (cond
+                 ((>= m 2.0) (norm (* m 0.5) (+ e 1)))
+                 ((and (< m 1.0) (> e -1022)) (norm (* m 2.0) (- e 1)))
+                 ((< e -1022)
+                  (let* ((scaled (* x (vm-pow2-f64 1074)))
+                         (frac (exact (truncate (+ scaled 0.5)))))
+                    (if (>= frac 4503599627370496)
+                        (+ (arithmetic-shift sign 63) (arithmetic-shift 1 52))
+                        (+ (arithmetic-shift sign 63) frac))))
+                 (else
+                  (let* ((bexp (+ e 1023))
+                         (frac-f (* (- m 1.0) 4503599627370496.0))
+                         (frac (exact (truncate (+ frac-f 0.5)))))
+                    (if (>= frac 4503599627370496)
+                        (let ((bexp2 (+ bexp 1)))
+                          (if (>= bexp2 2047)
+                              (+ (arithmetic-shift sign 63) #x7ff0000000000000)
+                              (+ (arithmetic-shift sign 63) (arithmetic-shift bexp2 52))))
+                        (if (>= bexp 2047)
+                            (+ (arithmetic-shift sign 63) #x7ff0000000000000)
+                            (+ (arithmetic-shift sign 63) (arithmetic-shift bexp 52) frac)))))))))))))
+
+(define (vm-ieee754-u64->f64 u-raw)
+  (let* ((u (lir-vm-u64 u-raw))
+         (sign (arithmetic-shift u -63))
+         (bexp (bitwise-and (arithmetic-shift u -52) #x7ff))
+         (frac (bitwise-and u #xfffffffffffff))
+         (abs-f
+          (cond
+            ((= bexp 2047)
+             (let ((pinf (* 1e308 2.0)))
+               (if (= frac 0) pinf (- pinf pinf))))
+            ((= bexp 0)
+             (if (= frac 0)
+                 0.0
+                 (* (/ (exact->inexact frac) 4503599627370496.0) (vm-pow2-f64 -1022))))
+            (else
+             (* (+ 1.0 (/ (exact->inexact frac) 4503599627370496.0))
+                (vm-pow2-f64 (- bexp 1023)))))))
+    (if (= sign 1) (- 0.0 abs-f) abs-f)))
+
+(define (vm-f32->ieee754-u32 val)
+  (let ((flt (if (number? val) (exact->inexact val) 0.0)))
+    (cond
+      ((not (= flt flt)) #x7fc00000)
+      ((= flt 0.0)
+       (if (string=? (number->string flt) "-0.0") #x80000000 0))
+      (else
+       (let* ((neg? (< flt 0.0))
+              (sign (if neg? 1 0))
+              (x (if neg? (- 0.0 flt) flt)))
+         (if (= x (* x 2.0))
+             (if neg? #xff800000 #x7f800000)
+             (let norm ((m x) (e 0))
+               (cond
+                 ((>= m 2.0) (norm (* m 0.5) (+ e 1)))
+                 ((and (< m 1.0) (> e -126)) (norm (* m 2.0) (- e 1)))
+                 ((< e -126)
+                  (let* ((scaled (* x (vm-pow2-f64 149)))
+                         (frac (exact (truncate (+ scaled 0.5)))))
+                    (if (>= frac 8388608)
+                        (+ (arithmetic-shift sign 31) (arithmetic-shift 1 23))
+                        (+ (arithmetic-shift sign 31) frac))))
+                 (else
+                  (let* ((bexp (+ e 127))
+                         (frac-f (* (- m 1.0) 8388608.0))
+                         (frac (exact (truncate (+ frac-f 0.5)))))
+                    (if (>= frac 8388608)
+                        (let ((bexp2 (+ bexp 1)))
+                          (if (>= bexp2 255)
+                              (+ (arithmetic-shift sign 31) #x7f800000)
+                              (+ (arithmetic-shift sign 31) (arithmetic-shift bexp2 23))))
+                        (if (>= bexp 255)
+                            (+ (arithmetic-shift sign 31) #x7f800000)
+                            (+ (arithmetic-shift sign 31) (arithmetic-shift bexp 23) frac)))))))))))))
+
+(define (vm-ieee754-u32->f32 u-raw)
+  (let* ((u (lir-vm-u32 u-raw))
+         (sign (arithmetic-shift u -31))
+         (bexp (bitwise-and (arithmetic-shift u -23) #xff))
+         (frac (bitwise-and u #x7fffff))
+         (abs-f
+          (cond
+            ((= bexp 255)
+             (let ((pinf (* 1e308 2.0)))
+               (if (= frac 0) pinf (- pinf pinf))))
+            ((= bexp 0)
+             (if (= frac 0)
+                 0.0
+                 (* (/ (exact->inexact frac) 8388608.0) (vm-pow2-f64 -126))))
+            (else
+             (* (+ 1.0 (/ (exact->inexact frac) 8388608.0))
+                (vm-pow2-f64 (- bexp 127)))))))
+    (if (= sign 1) (- 0.0 abs-f) abs-f)))
+
 (define (vm-get-xmm vm reg)
   (let ((idx (xmm-name->index reg)))
     (if idx
@@ -196,8 +317,25 @@
 (define (vm-set-xmm! vm reg val)
   (let ((idx (xmm-name->index reg)))
     (if idx
-        (vector-set! (vm-xmm-vector vm) idx (if (number? val) (exact->inexact val) 0.0))
-        (vm-set-vreg vm reg val))))
+        (let ((flt (if (number? val) (exact->inexact val) 0.0)))
+          (vector-set! (vm-xmm-vector vm) idx flt)
+          (vector-set! (vm-xmm-bits-vector vm) idx (vm-f64->ieee754-u64 flt)))
+        (vm-set-vreg! vm reg val))))
+
+(define (vm-set-xmm-raw-u64! vm reg u64-val)
+  (let ((idx (xmm-name->index reg))
+        (u (lir-vm-u64 u64-val)))
+    (if idx
+        (begin
+          (vector-set! (vm-xmm-bits-vector vm) idx u)
+          (vector-set! (vm-xmm-vector vm) idx (vm-ieee754-u64->f64 u)))
+        (vm-set-vreg! vm reg (vm-ieee754-u64->f64 u)))))
+
+(define (vm-get-xmm-raw-u64 vm reg)
+  (let ((idx (xmm-name->index reg)))
+    (if idx
+        (vector-ref (vm-xmm-bits-vector vm) idx)
+        (vm-f64->ieee754-u64 (vm-get-vreg vm reg)))))
 
 (define (vm-get-vreg vm key)
   (let ((entry (assq key (vm-vregs-table vm))))
@@ -337,6 +475,10 @@
   (let ((entry (assq key (vm-strings-table vm))))
     (if entry (cdr entry) #f)))
 
+(define (vm-lookup-data vm key)
+  (let ((entry (assq key (vm-data-table vm))))
+    (if entry (cdr entry) #f)))
+
 (define (vm-eval-sib vm sib)
   (let* ((idx-reg (cadr sib))
          (scale (caddr sib))
@@ -409,8 +551,7 @@
                  (vector-set! (vm-registers-vector vm) 0 (lir-vm-s64 new-rax)))
                (let ((x-idx (xmm-name->index loc)))
                  (if x-idx
-                     (vector-set! (vm-xmm-vector vm) x-idx
-                                  (if (number? val) (exact->inexact val) 0.0))
+                     (vm-set-xmm! vm loc val)
                      (vm-set-vreg! vm loc val)))))))
     ((pair? loc)
      (let ((tag (car loc)))
@@ -572,23 +713,42 @@
   (let ((entry (assq lbl (func-block-params desc))))
     (if entry (cdr entry) '())))
 
+(define (vm-align-up n align)
+  (if (<= align 1)
+      n
+      (let ((rem (modulo n align)))
+        (if (= rem 0) n (+ n (- align rem))))))
+
+(define (vm-data-chunks-size chunks)
+  (let loop ((cs chunks) (sz 0))
+    (if (null? cs)
+        sz
+        (let ((c (car cs)))
+          (cond
+            ((integer? c) (loop (cdr cs) (+ sz 1)))
+            ((and (pair? c) (eq? (car c) 'zero)) (loop (cdr cs) (+ sz (cadr c))))
+            ((and (pair? c) (eq? (car c) 'reloc)) (loop (cdr cs) (+ sz 8)))
+            (else (loop (cdr cs) sz)))))))
+
 ;;; Load LIR Program into VM
 (define (lir-vm-load! vm prog)
   (if (or (not (pair? prog)) (not (eq? (car prog) '%lir-program)))
       (error "Invalid %lir-program:" prog))
-  (let* ((strings-decl (cadr prog))
-         (stackmaps-decl (caddr prog))
-         (funcs-decl (cadddr prog))
-         (main-decl (list-ref prog 4))
+  (let* ((strings-decl (assq 'strings (cdr prog)))
+         (data-decl (assq 'data (cdr prog)))
+         (stackmaps-decl (assq 'stackmaps (cdr prog)))
+         (funcs-decl (assq '%lir-functions (cdr prog)))
+         (main-decl (assq '%lir-main (cdr prog)))
          ;; Strings loading
-         (str-table '())
-         (cur-str-addr *lir-vm-null-page-limit*))
+         (str-table-box (cons '() '()))
+         (cur-addr-box (cons *lir-vm-null-page-limit* '())))
     (if (and (pair? strings-decl) (eq? (car strings-decl) 'strings))
         (for-each
          (lambda (entry)
            (let* ((lbl (car entry))
                   (str (cadr entry))
-                  (len (string-length str)))
+                  (len (string-length str))
+                  (cur-str-addr (car cur-addr-box)))
              ;; Write 8-byte length header followed by string bytes and null terminator
              (vm-mem-write-i64! vm cur-str-addr len)
              (let loop ((i 0))
@@ -597,13 +757,13 @@
                      (vm-mem-write-u8! vm (+ cur-str-addr 8 i) (char->integer (string-ref str i)))
                      (loop (+ i 1)))))
              (vm-mem-write-u8! vm (+ cur-str-addr 8 len) 0) ; Null terminator
-             (set! str-table (cons (cons lbl (+ cur-str-addr 8)) str-table))
-             (set! cur-str-addr (+ cur-str-addr (bitwise-and (+ len 16) -8)))))
+             (set-car! str-table-box (cons (cons lbl (+ cur-str-addr 8)) (car str-table-box)))
+             (set-car! cur-addr-box (+ cur-str-addr (bitwise-and (+ len 16) -8)))))
          (cadr strings-decl)))
-    (vm-set-strings-table! vm str-table)
+    (vm-set-strings-table! vm (car str-table-box))
 
     ;; Functions loading
-    (let ((fn-table '()))
+    (let ((fn-table-box (cons '() '())))
       (if (and (pair? funcs-decl) (eq? (car funcs-decl) '%lir-functions))
           (for-each
            (lambda (fn-form)
@@ -622,36 +782,101 @@
                                         (cdr body-clause)
                                         '()))
                         (desc (make-func-descriptor lbl params frame-sz body-insts)))
-                   (set! fn-table (cons (cons lbl desc) fn-table)))))
+                   (set-car! fn-table-box (cons (cons lbl desc) (car fn-table-box))))))
            (cdr funcs-decl)))
-      (vm-set-functions-table! vm fn-table))
+      (vm-set-functions-table! vm (car fn-table-box))
 
-    ;; Main loading
-    (if (and (pair? main-decl) (eq? (car main-decl) '%lir-main))
-        (let* ((frame-clause (cadr main-decl))
-               (body-clause (caddr main-decl))
-               (frame-sz (if (and (pair? frame-clause) (eq? (car frame-clause) 'frame-size))
-                             (cadr frame-clause)
-                             0))
-               (body-insts (if (and (pair? body-clause) (eq? (car body-clause) 'body))
-                               (cdr body-clause)
+      ;; 2-pass Static Data Loading (.data / .bss)
+      (let* ((data-entries (if (and (pair? data-decl) (pair? (cdr data-decl)))
+                               (cadr data-decl)
                                '()))
-               (main-desc (make-func-descriptor '%main '() frame-sz body-insts)))
-          (vm-set-main-func! vm main-desc)))
+             (data-table-box (cons '() '()))
+             (str-table (car str-table-box))
+             (fn-table (car fn-table-box)))
+        ;; Pass 1: Assign aligned addresses
+        (for-each
+         (lambda (de)
+           (let* ((kind (car de))
+                  (lbl (cadr de))
+                  (align (max 1 (caddr de)))
+                  (sz (if (eq? kind 'bss)
+                          (cadddr de)
+                          (vm-data-chunks-size (cdddr de))))
+                  (base-addr (vm-align-up (car cur-addr-box) align)))
+             (set-car! data-table-box (cons (cons lbl base-addr) (car data-table-box)))
+             (set-car! cur-addr-box (+ base-addr (max 1 sz)))))
+         data-entries)
+        (vm-set-data-table! vm (car data-table-box))
+        ;; Pass 2: Materialize bytes and relocations
+        (for-each
+         (lambda (de)
+           (let* ((kind (car de))
+                  (lbl (cadr de))
+                  (base-addr (cdr (assq lbl (car data-table-box)))))
+             (if (eq? kind 'bss)
+                 (let ((sz (cadddr de)))
+                   (let zloop ((i 0))
+                     (if (< i sz)
+                         (begin
+                           (vm-mem-write-u8! vm (+ base-addr i) 0)
+                           (zloop (+ i 1))))))
+                 (let cloop ((cs (cdddr de)) (p base-addr))
+                   (if (pair? cs)
+                       (let ((c (car cs)))
+                         (cond
+                           ((integer? c)
+                            (vm-mem-write-u8! vm p c)
+                            (cloop (cdr cs) (+ p 1)))
+                           ((and (pair? c) (eq? (car c) 'zero))
+                            (let ((cnt (cadr c)))
+                              (let zloop ((k 0))
+                                (if (< k cnt)
+                                    (begin
+                                      (vm-mem-write-u8! vm (+ p k) 0)
+                                      (zloop (+ k 1)))))
+                              (cloop (cdr cs) (+ p cnt))))
+                           ((and (pair? c) (eq? (car c) 'reloc))
+                            (let* ((tgt (cadr c))
+                                   (off (caddr c))
+                                   (t-addr (cond
+                                             ((assq tgt (car data-table-box)) => cdr)
+                                             ((assq tgt str-table) => cdr)
+                                             ((assq tgt fn-table) 4096)
+                                             (else 0))))
+                              (vm-mem-write-u64! vm p (+ t-addr off))
+                              (cloop (cdr cs) (+ p 8))))
+                           (else
+                            (cloop (cdr cs) p)))))))))
+         data-entries))
 
-    ;; Initial Register & PC Setup
-    (let ((top (- (bytevector-length (vm-memory-bytes vm)) 16)))
-      (vm-set-reg! vm '%rsp top)
-      (vm-set-reg! vm '%rbp top)
-      (vm-set-reg! vm '%r12 *lir-vm-heap-base*) ; Heap pointer
-      (vm-set-current-fn! vm '%main)
-      (vm-set-current-block! vm '%entry)
-      (vm-set-pc! vm 0)
-      (vm-set-call-stack! vm '())
-      (vm-set-status! vm 'ready)
-      (vm-set-step-count! vm 0)
-      (vm-set-last-trap! vm #f)
-      vm)))
+      ;; Main loading
+      (if (and (pair? main-decl) (eq? (car main-decl) '%lir-main))
+          (let* ((frame-clause (cadr main-decl))
+                 (body-clause (caddr main-decl))
+                 (frame-sz (if (and (pair? frame-clause) (eq? (car frame-clause) 'frame-size))
+                               (cadr frame-clause)
+                               0))
+                 (body-insts (if (and (pair? body-clause) (eq? (car body-clause) 'body))
+                                 (cdr body-clause)
+                                 '()))
+                 (main-desc (make-func-descriptor '%main '() frame-sz body-insts)))
+            (vm-set-main-func! vm main-desc)))
+
+      ;; Initial Register & PC Setup
+      (let ((top (- (bytevector-length (vm-memory-bytes vm)) 16))
+            (heap-start (max *lir-vm-heap-base* (vm-align-up (car cur-addr-box) 4096))))
+        (vm-set-heap-ptr! vm heap-start)
+        (vm-set-reg! vm '%rsp top)
+        (vm-set-reg! vm '%rbp top)
+        (vm-set-reg! vm '%r12 heap-start) ; Heap pointer
+        (vm-set-current-fn! vm '%main)
+        (vm-set-current-block! vm '%entry)
+        (vm-set-pc! vm 0)
+        (vm-set-call-stack! vm '())
+        (vm-set-status! vm 'ready)
+        (vm-set-step-count! vm 0)
+        (vm-set-last-trap! vm #f)
+        vm))))
 
 ;;; -----------------------------------------------------------------------
 ;;; §9. Instruction Dispatcher & Execution Engine
@@ -774,7 +999,16 @@
                ((i64) (vm-set-location! vm dst (vm-mem-read-i64 vm addr)))
                ((u64) (vm-set-location! vm dst (vm-mem-read-u64 vm addr)))
                ((ptr raw-bits scheme-val) (vm-set-location! vm dst (vm-mem-read-u64 vm addr)))
-               ((f64) (vm-set-xmm! vm dst (vm-mem-read-f64 vm addr)))
+               ((f32)
+                (let ((u (vm-mem-read-u32 vm addr)))
+                  (let ((idx (xmm-name->index dst)))
+                    (if idx
+                        (begin
+                          (vector-set! (vm-xmm-bits-vector vm) idx u)
+                          (vector-set! (vm-xmm-vector vm) idx (vm-ieee754-u32->f32 u)))
+                        (vm-set-xmm! vm dst (vm-ieee754-u32->f32 u))))))
+               ((f64)
+                (vm-set-xmm-raw-u64! vm dst (vm-mem-read-u64 vm addr)))
                (else (error "Unsupported type in %load-typed:" type)))))
 
           ((%store-typed)
@@ -784,22 +1018,27 @@
                   (src (list-ref inst 4))
                   (base-val (vm-eval-operand vm base))
                   (off-val (vm-eval-offset vm offset))
-                  (addr (+ base-val off-val))
-                  (val (if (eq? type 'f64)
-                           (vm-eval-operand vm src)
-                           (vm-eval-operand vm src))))
-             (case type
-               ((i8)  (vm-mem-write-i8! vm addr val))
-               ((u8)  (vm-mem-write-u8! vm addr val))
-               ((i16) (vm-mem-write-i16! vm addr val))
-               ((u16) (vm-mem-write-u16! vm addr val))
-               ((i32) (vm-mem-write-i32! vm addr val))
-               ((u32) (vm-mem-write-u32! vm addr val))
-               ((i64) (vm-mem-write-i64! vm addr val))
-               ((u64) (vm-mem-write-u64! vm addr val))
-               ((ptr raw-bits scheme-val) (vm-mem-write-u64! vm addr val))
-               ((f64) (vm-mem-write-f64! vm addr val))
-               (else (error "Unsupported type in %store-typed:" type)))))
+                  (addr (+ base-val off-val)))
+             (if (memq type '(f32 f64))
+                 (if (eq? type 'f32)
+                     (vm-mem-write-u32! vm addr (vm-f32->ieee754-u32 (vm-eval-operand vm src)))
+                     (let ((x-idx (and (symbol? src) (xmm-name->index src))))
+                       (vm-mem-write-u64! vm addr
+                                          (if x-idx
+                                              (vector-ref (vm-xmm-bits-vector vm) x-idx)
+                                              (vm-f64->ieee754-u64 (vm-eval-operand vm src))))))
+                 (let ((val (vm-eval-operand vm src)))
+                   (case type
+                     ((i8)  (vm-mem-write-i8! vm addr val))
+                     ((u8)  (vm-mem-write-u8! vm addr val))
+                     ((i16) (vm-mem-write-i16! vm addr val))
+                     ((u16) (vm-mem-write-u16! vm addr val))
+                     ((i32) (vm-mem-write-i32! vm addr val))
+                     ((u32) (vm-mem-write-u32! vm addr val))
+                     ((i64) (vm-mem-write-i64! vm addr val))
+                     ((u64) (vm-mem-write-u64! vm addr val))
+                     ((ptr raw-bits scheme-val) (vm-mem-write-u64! vm addr val))
+                     (else (error "Unsupported type in %store-typed:" type)))))))
 
           ((%push)
            (let* ((src (cadr inst))
@@ -835,6 +1074,14 @@
                   (var (caddr inst))
                   (val (vm-lookup-global vm var)))
              (vm-set-location! vm dst (if val val 0))))
+
+          ((%global-addr)
+           (let* ((dst (cadr inst))
+                  (var (caddr inst))
+                  (addr (vm-lookup-data vm var)))
+             (if addr
+                 (vm-set-location! vm dst addr)
+                 (vm-trigger-trap! vm 'undefined-target "Data label not found" var))))
 
           ((%global-set!)
            (let* ((var (cadr inst))
@@ -1074,24 +1321,32 @@
           ((%trunc)
            (let* ((type (cadr inst))
                   (dst (caddr inst))
-                  (src (cadddr inst))
-                  (val (vm-eval-operand vm src)))
+                  (src (cadddr inst)))
              (case type
-               ((i8 u8)   (vm-set-location! vm dst (bitwise-and val #xff)))
-               ((i16 u16) (vm-set-location! vm dst (bitwise-and val #xffff)))
-               ((i32 u32) (vm-set-location! vm dst (bitwise-and val #xffffffff)))
-               (else (vm-set-location! vm dst val)))))
+               ((f32)     (let* ((flt (vm-get-xmm vm src))
+                                 (u (vm-f32->ieee754-u32 flt)))
+                            (vm-set-xmm! vm dst (vm-ieee754-u32->f32 u))))
+               (else
+                (let ((val (vm-eval-operand vm src)))
+                  (case type
+                    ((i8 u8)   (vm-set-location! vm dst (bitwise-and val #xff)))
+                    ((i16 u16) (vm-set-location! vm dst (bitwise-and val #xffff)))
+                    ((i32 u32) (vm-set-location! vm dst (bitwise-and val #xffffffff)))
+                    (else (vm-set-location! vm dst val))))))))
 
           ((%zext)
            (let* ((type (cadr inst))
                   (dst (caddr inst))
-                  (src (cadddr inst))
-                  (val (vm-eval-operand vm src)))
+                  (src (cadddr inst)))
              (case type
-               ((i8 u8)   (vm-set-location! vm dst (bitwise-and val #xff)))
-               ((i16 u16) (vm-set-location! vm dst (bitwise-and val #xffff)))
-               ((i32 u32) (vm-set-location! vm dst (bitwise-and val #xffffffff)))
-               (else (vm-set-location! vm dst (lir-vm-u64 val))))))
+               ((f64)     (vm-set-xmm! vm dst (vm-get-xmm vm src)))
+               (else
+                (let ((val (vm-eval-operand vm src)))
+                  (case type
+                    ((i8 u8)   (vm-set-location! vm dst (bitwise-and val #xff)))
+                    ((i16 u16) (vm-set-location! vm dst (bitwise-and val #xffff)))
+                    ((i32 u32) (vm-set-location! vm dst (bitwise-and val #xffffffff)))
+                    (else (vm-set-location! vm dst (lir-vm-u64 val)))))))))
 
           ((%sext)
            (let* ((type (cadr inst))
@@ -1181,6 +1436,18 @@
                   (zf (if (= f1 f2) 1 0))
                   (cf (if (< f1 f2) 1 0)))
              (vm-set-flags! vm zf 0 0 cf)))
+
+          ((%bitcast-f64-to-i64)
+           (let* ((dst (cadr inst))
+                  (src (caddr inst))
+                  (u (vm-get-xmm-raw-u64 vm src)))
+             (vm-set-location! vm dst (lir-vm-s64 u))))
+
+          ((%bitcast-i64-to-f64)
+           (let* ((dst (cadr inst))
+                  (src (caddr inst))
+                  (u (lir-vm-u64 (vm-eval-operand vm src))))
+             (vm-set-xmm-raw-u64! vm dst u)))
 
           ;; --- Control Flow & SSA Branches ---
           ((%jump)

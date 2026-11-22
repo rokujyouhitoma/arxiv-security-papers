@@ -547,6 +547,13 @@
                #t
                (lir-report-error "%global-ref format must be (%global-ref <reg> <var-sym>)" inst)))
 
+          ((%global-addr)
+           (if (and (= (length inst) 3)
+                    (lir-valid-register? (cadr inst))
+                    (symbol? (caddr inst)))
+               #t
+               (lir-report-error "%global-addr format must be (%global-addr <reg> <var-sym>)" inst)))
+
           ((%global-set!)
            (if (and (= (length inst) 3)
                     (symbol? (cadr inst))
@@ -1281,18 +1288,69 @@
          (validate-core-lir prog)
          (validate-lir-general prog)))))
 
+(define (lir-valid-data-chunk? dc)
+  (cond
+    ((integer? dc)
+     (and (>= dc 0) (<= dc 255)))
+    ((and (pair? dc) (eq? (car dc) 'zero))
+     (and (= (length dc) 2)
+          (integer? (cadr dc))
+          (>= (cadr dc) 0)))
+    ((and (pair? dc) (eq? (car dc) 'reloc))
+     (and (= (length dc) 3)
+          (symbol? (cadr dc))
+          (integer? (caddr dc))))
+    (else #f)))
+
+(define (lir-valid-data-entry? de)
+  (and (pair? de)
+       (case (car de)
+         ((bss)
+          (and (= (length de) 4)
+               (symbol? (cadr de))
+               (integer? (caddr de))
+               (>= (caddr de) 1)
+               (integer? (cadddr de))
+               (>= (cadddr de) 0)))
+         ((bytes)
+          (and (>= (length de) 3)
+               (symbol? (cadr de))
+               (integer? (caddr de))
+               (>= (caddr de) 1)
+               (let loop ((cs (cdddr de)))
+                 (if (null? cs)
+                     #t
+                     (and (lir-valid-data-chunk? (car cs))
+                          (loop (cdr cs)))))))
+         (else #f))))
+
+(define (lir-valid-data-clause? data-clause)
+  (and (pair? data-clause)
+       (eq? (car data-clause) 'data)
+       (pair? (cdr data-clause))
+       (null? (cddr data-clause))
+       (list? (cadr data-clause))
+       (let loop ((des (cadr data-clause)))
+         (if (null? des)
+             #t
+             (and (lir-valid-data-entry? (car des))
+                  (loop (cdr des)))))))
+
 (define (validate-lir-general prog)
   (cond
     ((not (and (pair? prog) (eq? (car prog) '%lir-program)))
      (lir-report-error "Root of LIR AST must be %lir-program" prog))
     (else
      (let* ((strings-clause (assq 'strings (cdr prog)))
+            (data-clause (assq 'data (cdr prog)))
             (stackmaps-clause (assq 'stackmaps (cdr prog)))
             (funcs-clause (assq '%lir-functions (cdr prog)))
             (main-clause (assq '%lir-main (cdr prog))))
        (cond
          ((not strings-clause)
           (lir-report-error "%lir-program missing (strings ...) clause" prog))
+         ((and data-clause (not (lir-valid-data-clause? data-clause)))
+          (lir-report-error "Invalid (data ...) clause in %lir-program" data-clause))
          ((not stackmaps-clause)
           (lir-report-error "%lir-program missing (stackmaps ...) clause" prog))
          ((not funcs-clause)

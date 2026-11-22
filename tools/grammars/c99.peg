@@ -87,7 +87,7 @@ aggregate_or_enum_specifier:
     | enum_specifier
 
 struct_or_union_specifier:
-    | struct_or_union ws identifier? ws '{' ws struct_declaration_list ws '}' ws
+    | struct_or_union ws identifier? ws '{' ws struct_declaration_list? ws '}' ws
     | struct_or_union ws identifier ws
 
 struct_or_union:
@@ -182,7 +182,7 @@ direct_abstract_declarator:
     | '(' ws parameter_type_list? ')' ws
 
 initializer:
-    | '{' ws initializer_list (',' ws)? '}' ws
+    | '{' ws (initializer_list (',' ws)?)? '}' ws
     | assignment_expr
 
 initializer_list:
@@ -318,7 +318,17 @@ unary_expr:
     | unary_operator ws cast_expr
     | 'sizeof' !ident_cont ws '(' ws type_name ')' ws !'{'
     | 'sizeof' !ident_cont ws unary_expr
+    | ('_Alignof' | '__alignof__' | '__alignof') !ident_cont ws '(' ws type_name ')' ws !'{'
+    | ('_Alignof' | '__alignof__' | '__alignof') !ident_cont ws unary_expr
+    | '__builtin_offsetof' !ident_cont ws '(' ws type_name ',' ws offsetof_member_designator ')' ws
     | postfix_expr
+
+offsetof_member_designator:
+    | identifier ws offsetof_designator_suffix*
+
+offsetof_designator_suffix:
+    | '.' ws identifier ws
+    | '[' ws constant_expr ']' ws
 
 unary_operator:
     | '&' !'&'
@@ -334,7 +344,7 @@ postfix_expr:
     | postfix_expr '.' ws identifier ws
     | postfix_expr '->' ws identifier ws
     | postfix_expr ('++' | '--') ws
-    | '(' ws type_name ')' ws '{' ws initializer_list (',' ws)? '}' ws
+    | '(' ws type_name ')' ws '{' ws (initializer_list (',' ws)?)? '}' ws
     | primary_expr
 
 argument_expr_list:
@@ -357,7 +367,7 @@ ident_cont:
     | [a-zA-Z0-9_]
 
 c99_keyword:
-    | ('auto' | 'break' | 'case' | 'char' | 'const' | 'continue' | 'default' | 'do' | 'double' | 'else' | 'enum' | 'extern' | 'float' | 'for' | 'goto' | 'if' | 'inline' | 'int' | 'long' | 'register' | 'restrict' | 'return' | 'short' | 'signed' | 'sizeof' | 'static' | 'struct' | 'switch' | 'typedef' | 'union' | 'unsigned' | 'void' | 'volatile' | 'while' | '_Bool' | '_Complex' | '_Imaginary') !ident_cont
+    | ('auto' | 'break' | 'case' | 'char' | 'const' | 'continue' | 'default' | 'do' | 'double' | 'else' | 'enum' | 'extern' | 'float' | 'for' | 'goto' | 'if' | 'inline' | 'int' | 'long' | 'register' | 'restrict' | 'return' | 'short' | 'signed' | 'sizeof' | 'static' | 'struct' | 'switch' | 'typedef' | 'union' | 'unsigned' | 'void' | 'volatile' | 'while' | '_Bool' | '_Complex' | '_Imaginary' | '_Alignof' | '__alignof__' | '__alignof' | '__builtin_offsetof') !ident_cont
 
 constant:
     | float_constant
