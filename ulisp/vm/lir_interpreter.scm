@@ -1575,7 +1575,10 @@
           ((%call-indirect)
            (let* ((addr (vm-eval-operand vm (cadr inst)))
                   (shift (caddr inst))
+                  (al-val (if (pair? (cdddr inst)) (cadddr inst) #f))
                   (entry (vm-lookup-code-target vm addr)))
+             (if (number? al-val)
+                 (vm-set-reg! vm '%rax al-val))
              (cond
                ((or (= addr 0) (not entry))
                 (vm-trigger-trap! vm 'invalid-call-target "Indirect call to NULL or invalid code address" addr))

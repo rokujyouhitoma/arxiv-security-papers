@@ -49,6 +49,13 @@
 (define *sysv-return-gpr* '%rax)
 (define *sysv-return-xmm* '%xmm0)
 
+;; System V AMD64 psABI §3.5.7 Variable Argument List & Register Save Area Constants
+(define *sysv-va-reg-save-area-size* 176) ; 6 GPRs * 8B (0..47) + 8 XMMs * 16B (48..175)
+(define *sysv-va-gp-limit* 48)            ; Max gp_offset before overflowing to stack
+(define *sysv-va-fp-base* 48)             ; Byte offset where XMM save slots begin
+(define *sysv-va-fp-limit* 176)           ; Max fp_offset before overflowing to stack
+(define *sysv-va-list-size* 24)           ; sizeof(struct __va_list_tag[1]) == 24 bytes
+
 ;; Scheme Internal Fast Convention (x86-64)
 ;; All arguments passed in GPRs as tagged pointers or unboxed values
 (define *scheme-fast-arg-registers* '(%rdi %rsi %rdx %rcx %r8 %r9))

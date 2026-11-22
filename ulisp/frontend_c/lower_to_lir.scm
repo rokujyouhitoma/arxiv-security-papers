@@ -13,7 +13,7 @@
 
 (define-record-type <c99-lower-ctx>
   (%make-lower-ctx vars strings data-entries str-cnt lbl-cnt insts next-si min-si
-                   internal-fns layout-env ret-lbl ret-plan sret-si
+                   internal-fns layout-env ret-lbl ret-plan sret-si va-meta
                    break-lbl continue-lbl user-labels)
   c99-lower-ctx?
   (vars         lower-ctx-vars         lower-ctx-vars-set!)
@@ -29,6 +29,7 @@
   (ret-lbl      lower-ctx-ret-lbl      lower-ctx-ret-lbl-set!)
   (ret-plan     lower-ctx-ret-plan     lower-ctx-ret-plan-set!)
   (sret-si      lower-ctx-sret-si      lower-ctx-sret-si-set!)
+  (va-meta      lower-ctx-va-meta      lower-ctx-va-meta-set!)
   (break-lbl    lower-ctx-break-lbl    lower-ctx-break-lbl-set!)
   (continue-lbl lower-ctx-continue-lbl lower-ctx-continue-lbl-set!)
   (user-labels  lower-ctx-user-labels  lower-ctx-user-labels-set!))
@@ -36,7 +37,7 @@
 (define (make-c99-lower-ctx internal-fns layout-env)
   (%make-lower-ctx '() '() '() 0 0 '() -16 -16 internal-fns
                    (or layout-env (make-c99-layout-env))
-                   #f '(void) #f #f #f '()))
+                   #f '(void) #f #f #f #f '()))
 
 (define (%c99-lower-emit! ctx inst)
   (lower-ctx-insts-set! ctx (cons inst (lower-ctx-insts ctx))))
@@ -662,6 +663,8 @@
        (%c99-lower-expr-to-ptr-slot! ctx (caddr inner) dst-ptr-si))
       ((eq? tag 'c-call)
        (%c99-lower-call! ctx inner ty dst-ptr-si))
+      ((eq? tag 'c-va-arg)
+       (%c99-lower-va-arg! ctx inner ty dst-ptr-si))
       ((eq? tag 'c-assign)
        (let ((lhs (caddr inner))
              (rhs (cadddr inner)))
@@ -950,7 +953,10 @@
     (if direct-fn-sym
         (let ((internal? (memq direct-fn-sym (lower-ctx-internal-fns ctx))))
           (if internal?
-              (%c99-lower-emit! ctx (list '%direct-call direct-fn-sym shift))
+              (begin
+                (if (and (c-function-type? fty) (c-fn-variadic? fty))
+                    (%c99-lower-emit! ctx (list '%mov '%rax (min 8 xmm-used))))
+                (%c99-lower-emit! ctx (list '%direct-call direct-fn-sym shift)))
               (%c99-lower-emit! ctx (list '%c-call (symbol->string direct-fn-sym) shift (min 8 xmm-used)))))
         (begin
           (%c99-lower-emit! ctx (list '%load '%r11 '%rsp fn-ptr-si))
@@ -968,6 +974,207 @@
       ((not (%c99-lower-aggregate-like? call-ret-ty))
        (if (and (not (eq? call-ret-ty 'void)) (not (c-float-type? call-ret-ty)))
            (%c99-lower-emit-cast! ctx call-ret-ty))))
+    (lower-ctx-next-si-set! ctx saved-si)))
+
+;;; -----------------------------------------------------------------------
+;;; 6b. System V AMD64 psABI §3.5.7 <stdarg.h> Lowering
+;;; -----------------------------------------------------------------------
+
+(define (%c99-lower-va-emit-ovf! ctx ovf-step al)
+  ;; Expects ap struct pointer in %rdx. Returns aligned arg pointer in %rcx
+  ;; and advances ap->overflow_arg_area by ovf-step. Clobbers %rcx, %r8.
+  (%c99-lower-emit! ctx '(%load %rcx %rdx 8))
+  (if (> al 8)
+      (begin
+        (%c99-lower-emit! ctx (list '%add '%rcx (- al 1)))
+        (%c99-lower-emit! ctx (list '%mov '%r8 (- 0 al)))
+        (%c99-lower-emit! ctx '(%bit-and %rcx %r8))))
+  (%c99-lower-emit! ctx '(%mov %r8 %rcx))
+  (%c99-lower-emit! ctx (list '%add '%r8 ovf-step))
+  (%c99-lower-emit! ctx '(%store %rdx 8 %r8)))
+
+(define (%c99-lower-va-start! ctx inner)
+  (let ((meta (lower-ctx-va-meta ctx)))
+    (if (not meta)
+        (error "va_start lowered inside non-variadic function" inner))
+    (let ((rsa-si   (list-ref meta 0))
+          (init-gp  (list-ref meta 1))
+          (init-fp  (list-ref meta 2))
+          (init-ovf (list-ref meta 3)))
+      (%c99-lower-expr! ctx (cadr inner))
+      (%c99-lower-emit! ctx '(%mov %rdx %rax))
+      (%c99-lower-emit! ctx (list '%mov '%rax init-gp))
+      (%c99-lower-emit! ctx '(%store-typed u32 %rdx 0 %rax))
+      (%c99-lower-emit! ctx (list '%mov '%rax init-fp))
+      (%c99-lower-emit! ctx '(%store-typed u32 %rdx 4 %rax))
+      (%c99-lower-emit! ctx '(%mov %rax %rsp))
+      (%c99-lower-emit! ctx (list '%add '%rax init-ovf))
+      (%c99-lower-emit! ctx '(%store %rdx 8 %rax))
+      (%c99-lower-emit! ctx '(%mov %rax %rsp))
+      (%c99-lower-emit! ctx (list '%add '%rax rsa-si))
+      (%c99-lower-emit! ctx '(%store %rdx 16 %rax)))))
+
+(define (%c99-lower-va-copy! ctx inner)
+  (let* ((saved-si (lower-ctx-next-si ctx))
+         (dst-si (%c99-lower-alloc-slot! ctx))
+         (src-si (%c99-lower-alloc-slot! ctx)))
+    (%c99-lower-expr! ctx (cadr inner))
+    (%c99-lower-emit! ctx (list '%store '%rsp dst-si '%rax))
+    (%c99-lower-expr! ctx (caddr inner))
+    (%c99-lower-emit! ctx (list '%store '%rsp src-si '%rax))
+    (%c99-lower-emit! ctx (list '%load '%rdx '%rsp dst-si))
+    (%c99-lower-emit! ctx (list '%load '%rcx '%rsp src-si))
+    (%c99-lower-memcpy-regs! ctx '%rdx 0 '%rcx 0 *sysv-va-list-size*)
+    (lower-ctx-next-si-set! ctx saved-si)))
+
+(define (%c99-lower-va-end! ctx inner)
+  (%c99-lower-expr! ctx (cadr inner)))
+
+(define (%c99-lower-va-arg! ctx inner target-ty maybe-dst-ptr-si)
+  (let* ((saved-si (lower-ctx-next-si ctx))
+         (lenv (lower-ctx-layout-env ctx))
+         (sz (max 1 (%c99-lower-type-size ctx target-ty)))
+         (al (max 1 (%c99-lower-type-align ctx target-ty)))
+         (cls (c99-sysv-type-abi-class lenv target-ty))
+         (ovf-step (c-type-align-up (max 8 sz) 8))
+         (ap-si (%c99-lower-alloc-slot! ctx)))
+    (%c99-lower-expr! ctx (cadr inner))
+    (%c99-lower-emit! ctx (list '%store '%rsp ap-si '%rax))
+    (%c99-lower-emit! ctx (list '%load '%rdx '%rsp ap-si))
+    (cond
+      ;; Empty struct/union
+      ((or (eq? cls 'empty) (eq? cls 'VOID) (not (pair? cls)))
+       (if (not (eq? cls 'MEMORY))
+           #f
+           (begin
+             (%c99-lower-va-emit-ovf! ctx ovf-step al)
+             (if maybe-dst-ptr-si
+                 (begin
+                   (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+                   (%c99-lower-memcpy-regs! ctx '%rdx 0 '%rcx 0 sz))
+                 (%c99-lower-load-from-mem! ctx (if (c-float-type? target-ty) '%xmm0 '%rax) '%rcx 0 target-ty)))))
+
+      ;; 1-eightbyte INTEGER or SSE
+      ((null? (cdr cls))
+       (let* ((c0 (car cls))
+              (is-sse? (eq? c0 'SSE))
+              (off-disp (if is-sse? 4 0))
+              (max-off (if is-sse? 160 40))
+              (reg-step (if is-sse? 16 8))
+              (ovf-lbl (%c99-lower-new-label ctx "va_ovf"))
+              (done-lbl (%c99-lower-new-label ctx "va_done")))
+         (%c99-lower-emit! ctx (list '%load-typed 'u32 '%rax '%rdx off-disp))
+         (%c99-lower-emit! ctx (list '%cmp '%rax max-off))
+         (%c99-lower-emit! ctx (list '%jump-cond 'ja ovf-lbl))
+         (%c99-lower-emit! ctx '(%mov %r8 %rax))
+         (%c99-lower-emit! ctx (list '%add '%rax reg-step))
+         (%c99-lower-emit! ctx (list '%store-typed 'u32 '%rdx off-disp '%rax))
+         (%c99-lower-emit! ctx '(%load %rcx %rdx 16))
+         (%c99-lower-emit! ctx '(%add %rcx %r8))
+         (%c99-lower-emit! ctx (list '%direct-jump done-lbl))
+         (%c99-lower-emit! ctx (list '%label ovf-lbl))
+         (%c99-lower-va-emit-ovf! ctx ovf-step al)
+         (%c99-lower-emit! ctx (list '%label done-lbl))
+         (if maybe-dst-ptr-si
+             (begin
+               (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+               (%c99-lower-memcpy-regs! ctx '%rdx 0 '%rcx 0 sz))
+             (%c99-lower-load-from-mem! ctx (if is-sse? '%xmm0 '%rax) '%rcx 0 target-ty))))
+
+      ;; 2-eightbyte (INTEGER INTEGER)
+      ((and (eq? (car cls) 'INTEGER) (eq? (cadr cls) 'INTEGER))
+       (let ((ovf-lbl (%c99-lower-new-label ctx "va_ovf"))
+             (done-lbl (%c99-lower-new-label ctx "va_done")))
+         (%c99-lower-emit! ctx '(%load-typed u32 %rax %rdx 0))
+         (%c99-lower-emit! ctx '(%cmp %rax 32))
+         (%c99-lower-emit! ctx (list '%jump-cond 'ja ovf-lbl))
+         (%c99-lower-emit! ctx '(%mov %r8 %rax))
+         (%c99-lower-emit! ctx '(%add %rax 16))
+         (%c99-lower-emit! ctx '(%store-typed u32 %rdx 0 %rax))
+         (%c99-lower-emit! ctx '(%load %rcx %rdx 16))
+         (%c99-lower-emit! ctx '(%add %rcx %r8))
+         (%c99-lower-emit! ctx (list '%direct-jump done-lbl))
+         (%c99-lower-emit! ctx (list '%label ovf-lbl))
+         (%c99-lower-va-emit-ovf! ctx ovf-step al)
+         (%c99-lower-emit! ctx (list '%label done-lbl))
+         (if maybe-dst-ptr-si
+             (begin
+               (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+               (%c99-lower-memcpy-regs! ctx '%rdx 0 '%rcx 0 sz)))))
+
+      ;; 2-eightbyte (SSE SSE): XMM slots are stride-16 in RSA, stride-8 on overflow stack
+      ((and (eq? (car cls) 'SSE) (eq? (cadr cls) 'SSE))
+       (let ((ovf-lbl (%c99-lower-new-label ctx "va_ovf"))
+             (done-lbl (%c99-lower-new-label ctx "va_done"))
+             (src-si (%c99-lower-alloc-slot! ctx)))
+         (%c99-lower-emit! ctx '(%load-typed u32 %rax %rdx 4))
+         (%c99-lower-emit! ctx '(%cmp %rax 144))
+         (%c99-lower-emit! ctx (list '%jump-cond 'ja ovf-lbl))
+         (%c99-lower-emit! ctx '(%mov %r8 %rax))
+         (%c99-lower-emit! ctx '(%add %rax 32))
+         (%c99-lower-emit! ctx '(%store-typed u32 %rdx 4 %rax))
+         (%c99-lower-emit! ctx '(%load %rcx %rdx 16))
+         (%c99-lower-emit! ctx '(%add %rcx %r8))
+         (%c99-lower-emit! ctx (list '%store '%rsp src-si '%rcx))
+         (if maybe-dst-ptr-si
+             (begin
+               (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+               (%c99-lower-memcpy-regs! ctx '%rdx 0 '%rcx 0 8)
+               (%c99-lower-emit! ctx (list '%load '%rcx '%rsp src-si))
+               (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+               (%c99-lower-memcpy-regs! ctx '%rdx 8 '%rcx 16 (- sz 8))))
+         (%c99-lower-emit! ctx (list '%direct-jump done-lbl))
+         (%c99-lower-emit! ctx (list '%label ovf-lbl))
+         (%c99-lower-va-emit-ovf! ctx ovf-step al)
+         (if maybe-dst-ptr-si
+             (begin
+               (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+               (%c99-lower-memcpy-regs! ctx '%rdx 0 '%rcx 0 sz)))
+         (%c99-lower-emit! ctx (list '%label done-lbl))))
+
+      ;; Mixed 2-eightbyte (INTEGER SSE) or (SSE INTEGER): All-or-Nothing pre-check
+      (else
+       (let ((ovf-lbl (%c99-lower-new-label ctx "va_ovf"))
+             (done-lbl (%c99-lower-new-label ctx "va_done"))
+             (gp-si (%c99-lower-alloc-slot! ctx))
+             (fp-si (%c99-lower-alloc-slot! ctx)))
+         (%c99-lower-emit! ctx '(%load-typed u32 %rax %rdx 0))
+         (%c99-lower-emit! ctx '(%cmp %rax 40))
+         (%c99-lower-emit! ctx (list '%jump-cond 'ja ovf-lbl))
+         (%c99-lower-emit! ctx '(%mov %r8 %rax))
+         (%c99-lower-emit! ctx '(%load-typed u32 %rax %rdx 4))
+         (%c99-lower-emit! ctx '(%cmp %rax 160))
+         (%c99-lower-emit! ctx (list '%jump-cond 'ja ovf-lbl))
+         (%c99-lower-emit! ctx '(%mov %r9 %rax))
+         (%c99-lower-emit! ctx '(%load %rcx %rdx 16))
+         (%c99-lower-emit! ctx '(%mov %r10 %rcx))
+         (%c99-lower-emit! ctx '(%add %r10 %r8))
+         (%c99-lower-emit! ctx (list '%store '%rsp gp-si '%r10))
+         (%c99-lower-emit! ctx '(%mov %r10 %rcx))
+         (%c99-lower-emit! ctx '(%add %r10 %r9))
+         (%c99-lower-emit! ctx (list '%store '%rsp fp-si '%r10))
+         (%c99-lower-emit! ctx '(%mov %rax %r8))
+         (%c99-lower-emit! ctx '(%add %rax 8))
+         (%c99-lower-emit! ctx '(%store-typed u32 %rdx 0 %rax))
+         (%c99-lower-emit! ctx '(%mov %rax %r9))
+         (%c99-lower-emit! ctx '(%add %rax 16))
+         (%c99-lower-emit! ctx '(%store-typed u32 %rdx 4 %rax))
+         (if maybe-dst-ptr-si
+             (begin
+               (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+               (%c99-lower-emit! ctx (list '%load '%rcx '%rsp (if (eq? (car cls) 'INTEGER) gp-si fp-si)))
+               (%c99-lower-memcpy-regs! ctx '%rdx 0 '%rcx 0 8)
+               (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+               (%c99-lower-emit! ctx (list '%load '%rcx '%rsp (if (eq? (cadr cls) 'INTEGER) gp-si fp-si)))
+               (%c99-lower-memcpy-regs! ctx '%rdx 8 '%rcx 0 (- sz 8))))
+         (%c99-lower-emit! ctx (list '%direct-jump done-lbl))
+         (%c99-lower-emit! ctx (list '%label ovf-lbl))
+         (%c99-lower-va-emit-ovf! ctx ovf-step al)
+         (if maybe-dst-ptr-si
+             (begin
+               (%c99-lower-emit! ctx (list '%load '%rdx '%rsp maybe-dst-ptr-si))
+               (%c99-lower-memcpy-regs! ctx '%rdx 0 '%rcx 0 sz)))
+         (%c99-lower-emit! ctx (list '%label done-lbl)))))
     (lower-ctx-next-si-set! ctx saved-si)))
 
 ;;; -----------------------------------------------------------------------
@@ -1389,6 +1596,25 @@
 
       ((c-call)
        (%c99-lower-call! ctx inner ty))
+
+      ((c-va-start)
+       (%c99-lower-va-start! ctx inner))
+
+      ((c-va-copy)
+       (%c99-lower-va-copy! ctx inner))
+
+      ((c-va-end)
+       (%c99-lower-va-end! ctx inner))
+
+      ((c-va-arg)
+       (if (%c99-lower-aggregate-like? ty)
+           (let* ((sz (%c99-lower-type-size ctx ty))
+                  (al (%c99-lower-type-align ctx ty))
+                  (slot-si (%c99-lower-alloc-bytes! ctx sz al)))
+             (%c99-lower-expr-to-stack-slot! ctx node slot-si)
+             (%c99-lower-emit! ctx '(%mov %rax %rsp))
+             (%c99-lower-emit! ctx (list '%add '%rax slot-si)))
+           (%c99-lower-va-arg! ctx inner ty #f)))
 
       (else
        (error "Unsupported expression tag in lower_to_lir" tag)))))
@@ -1846,15 +2072,30 @@
           frame-clause
           (cons 'body ssa-blocks))))
 
+(define (%c99-count-abi-reg-pieces ret-plan param-plans kind)
+  (+ (if (and (eq? kind 'gpr) (eq? (car ret-plan) 'sret)) 1 0)
+     (let loop ((ps param-plans) (k 0))
+       (if (null? ps)
+           k
+           (let ((p (car ps)))
+             (if (eq? (car p) 'regs)
+                 (let ploop ((pcs (cadr p)) (kk k))
+                   (if (null? pcs)
+                       (loop (cdr ps) kk)
+                       (ploop (cdr pcs) (if (eq? (caar pcs) kind) (+ kk 1) kk))))
+                 (loop (cdr ps) k)))))))
+
 (define (%c99-lower-function ctx fn-node globals)
   (let* ((fn-sym (list-ref fn-node 1))
          (ret-ty  (list-ref fn-node 2))
+         (variadic? (list-ref fn-node 3))
          (params  (list-ref fn-node 4))
          (body    (list-ref fn-node 5))
          (param-tys (map caddr params))
          (abi (c99-plan-sysv-abi (lower-ctx-layout-env ctx) ret-ty param-tys))
          (ret-plan (car abi))
          (param-plans (cadr abi))
+         (named-stack-bytes (caddr abi))
          (ret-lbl (%c99-lower-new-label ctx "ret")))
     (lower-ctx-vars-set! ctx '())
     (lower-ctx-insts-set! ctx '())
@@ -1863,10 +2104,37 @@
     (lower-ctx-user-labels-set! ctx '())
     (lower-ctx-ret-lbl-set! ctx ret-lbl)
     (lower-ctx-ret-plan-set! ctx ret-plan)
+    (lower-ctx-va-meta-set! ctx #f)
     (for-each
      (lambda (g)
        (%c99-lower-bind-data-global! ctx (list-ref g 1) (list-ref g 3)))
      globals)
+    ;; Variadic System V AMD64 Register Save Area prologue (176B at entry before sret/param spills)
+    (if variadic?
+        (let ((rsa-si (%c99-lower-alloc-bytes! ctx *sysv-va-reg-save-area-size* 16))
+              (skip-xmm-lbl (%c99-lower-new-label ctx "va_skip_xmm"))
+              (used-gpr (%c99-count-abi-reg-pieces ret-plan param-plans 'gpr))
+              (used-xmm (%c99-count-abi-reg-pieces ret-plan param-plans 'sse)))
+          (let sloop-g ((regs *sysv-gpr-arg-registers*) (off 0))
+            (if (pair? regs)
+                (begin
+                  (%c99-lower-emit! ctx (list '%store '%rsp (+ rsa-si off) (car regs)))
+                  (sloop-g (cdr regs) (+ off 8)))))
+          (%c99-lower-emit! ctx '(%bit-and %rax 255))
+          (%c99-lower-emit! ctx '(%cmp %rax 0))
+          (%c99-lower-emit! ctx (list '%jump-cond 'je skip-xmm-lbl))
+          (let sloop-x ((xregs *sysv-xmm-arg-registers*) (off *sysv-va-fp-base*))
+            (if (pair? xregs)
+                (begin
+                  (%c99-lower-emit! ctx (list '%store-typed 'f64 '%rsp (+ rsa-si off) (car xregs)))
+                  (sloop-x (cdr xregs) (+ off 16)))))
+          (%c99-lower-emit! ctx (list '%label skip-xmm-lbl))
+          (lower-ctx-va-meta-set!
+           ctx
+           (list rsa-si
+                 (* 8 (min 6 used-gpr))
+                 (+ *sysv-va-fp-base* (* 16 (min 8 used-xmm)))
+                 (+ 8 named-stack-bytes)))))
     ;; Save hidden sret pointer if returning >16B struct
     (if (eq? (car ret-plan) 'sret)
         (let ((s-si (%c99-lower-alloc-slot! ctx)))

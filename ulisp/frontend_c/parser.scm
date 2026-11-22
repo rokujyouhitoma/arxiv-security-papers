@@ -53,9 +53,14 @@
   (file      c99-parse-env-file      c99-parse-env-file-set!)
   (text      c99-parse-env-text      c99-parse-env-text-set!))
 
+(define (c99-make-init-scope-manager)
+  (let ((mgr (make-scope-manager)))
+    (scope-manager-define! mgr '__builtin_va_list 'typedef)
+    mgr))
+
 (define (make-c99-parse-env . maybe-file)
   (let ((fname (if (pair? maybe-file) (car maybe-file) "<c99-input>")))
-    (%make-c99-parse-env (make-scope-manager) fname "")))
+    (%make-c99-parse-env (c99-make-init-scope-manager) fname "")))
 
 (define (c99-push-scope! env kind)
   (scope-manager-push! (c99-parse-env-scope-mgr env) kind))
@@ -906,6 +911,12 @@
                     (lambda (res next-pos inner-fk)
                       (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
                         (cond
+                          ((and (pair? res) (string? (car res))
+                                (string=? (car res) "__builtin_va_arg"))
+                           (sk (ast-with-span
+                                (list 'c-va-arg (list-ref res 5) (list-ref res 8))
+                                sp)
+                               next-pos inner-fk))
                           ((and (pair? res) (symbol? (car res)))
                            (let* ((sym (car res))
                                   (bid (c99-lookup-binding-id env sym)))
@@ -1011,7 +1022,7 @@
   (let ((cached (car *c99-cached-env-parser*)))
     (if cached
         (let ((env (car cached)))
-          (c99-parse-env-scope-mgr-set! env (make-scope-manager))
+          (c99-parse-env-scope-mgr-set! env (c99-make-init-scope-manager))
           (c99-parse-env-file-set! env filename)
           (c99-parse-env-text-set! env src-text)
           cached)
