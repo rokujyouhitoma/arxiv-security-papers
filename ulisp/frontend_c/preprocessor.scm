@@ -147,12 +147,24 @@
             (%cpp-normalize-path rel)
             (%cpp-normalize-path (string-append dir "/" rel))))))
 
+(define *cpp-builtin-system-include-paths*
+  '("frontend_c/include" "ulisp/frontend_c/include" "/__ulisp_builtin__"))
+
+(define (%cpp-insert-before-builtins paths new-path)
+  (let loop ((xs paths) (acc '()))
+    (cond
+      ((null? xs) (reverse (cons new-path acc)))
+      ((member (car xs) *cpp-builtin-system-include-paths*)
+       (append (reverse acc) (cons new-path xs)))
+      (else
+       (loop (cdr xs) (cons (car xs) acc))))))
+
 (define (cpp-add-include-path! ctx dir-path . maybe-system?)
   (let ((sys? (and (pair? maybe-system?) (car maybe-system?)))
         (norm (%cpp-normalize-path dir-path)))
     (if sys?
         (cpp-ctx-system-include-paths-set!
-         ctx (append (cpp-ctx-system-include-paths ctx) (list norm)))
+         ctx (%cpp-insert-before-builtins (cpp-ctx-system-include-paths ctx) norm))
         (cpp-ctx-include-paths-set!
          ctx (append (cpp-ctx-include-paths ctx) (list norm))))))
 
@@ -250,14 +262,30 @@
                         (else (string ch)))))
             (loop (+ i 1) (cons seg parts)))))))
 
+(define *c99-builtin-stdarg-h*
+  (string-append
+   "/* ULisp C99 Built-in <stdarg.h> (ISO C99 §7.15 & System V AMD64 psABI §3.5.7) */\n"
+   "#ifndef _ULISP_STDARG_H\n"
+   "#define _ULISP_STDARG_H\n\n"
+   "typedef __builtin_va_list va_list;\n"
+   "typedef __builtin_va_list __gnuc_va_list;\n\n"
+   "#define va_start(ap, last) __builtin_va_start(ap, last)\n"
+   "#define va_arg(ap, type)   __builtin_va_arg(ap, type)\n"
+   "#define va_end(ap)         __builtin_va_end(ap)\n"
+   "#define va_copy(dst, src)  __builtin_va_copy(dst, src)\n\n"
+   "#endif /* _ULISP_STDARG_H */\n"))
+
 (define (make-default-cpp-context . maybe-include-paths)
   (let* ((inc-paths (if (pair? maybe-include-paths)
                         (map %cpp-normalize-path (car maybe-include-paths))
                         '()))
-         (ctx (make-cpp-context inc-paths '() '() '() '()
+         (ctx (make-cpp-context inc-paths
+                                (append *cpp-builtin-system-include-paths* '())
+                                '() '() '()
                                 0 *cpp-max-include-depth*
                                 0 *cpp-max-expansion-steps*
                                 '())))
+    (cpp-register-virtual-file! ctx "/__ulisp_builtin__/stdarg.h" *c99-builtin-stdarg-h*)
     (%cpp-register-builtin!
      ctx '__FILE__
      (lambda (call-tok)

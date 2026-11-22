@@ -42,6 +42,7 @@
 
 (define (c99-backend-known-libc-fn? name)
   (let loop ((xs '("puts" "putchar" "printf" "fprintf" "sprintf" "snprintf"
+                   "vprintf" "vfprintf" "vsprintf" "vsnprintf"
                    "exit" "abort" "malloc" "calloc" "realloc" "free"
                    "strlen" "strcmp" "strncmp" "memcpy" "memmove" "memset"
                    "memcmp" "strchr" "strstr" "atoi" "atol" "abs"
@@ -136,6 +137,14 @@
      (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, const char *, ...))sprintf)((char *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
     ((string=? fname "snprintf")
      (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, size_t, const char *, ...))snprintf)((char *)(uintptr_t)reg_rdi, (size_t)reg_rsi, (const char *)(uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+    ((string=? fname "vprintf")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(const char *, va_list))vprintf)((const char *)(uintptr_t)reg_rdi, (void *)(uintptr_t)reg_rsi);"))
+    ((string=? fname "vfprintf")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(FILE *, const char *, va_list))vfprintf)((FILE *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (void *)(uintptr_t)reg_rdx);"))
+    ((string=? fname "vsprintf")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, const char *, va_list))vsprintf)((char *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (void *)(uintptr_t)reg_rdx);"))
+    ((string=? fname "vsnprintf")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, size_t, const char *, va_list))vsnprintf)((char *)(uintptr_t)reg_rdi, (size_t)reg_rsi, (const char *)(uintptr_t)reg_rdx, (void *)(uintptr_t)reg_rcx);"))
     ((string=? fname "exit")
      (emit "    exit((int)reg_rdi);"))
     ((string=? fname "malloc")
@@ -1146,7 +1155,10 @@
 
       ((%call-indirect)
        (let ((target-reg (cadr inst))
-             (frame-shift (caddr inst)))
+             (frame-shift (caddr inst))
+             (al-val (if (pair? (cdddr inst)) (cadddr inst) #f)))
+         (if (number? al-val)
+             (emit (string-append "    reg_rax = " (number->string al-val) ";")))
          (emit (string-append "    reg_rsp -= " (number->string (+ frame-shift 8)) ";"))
          (emit (string-append "    ((void (*)(void))(uintptr_t)" (c-reg->str target-reg) ")();"))
          (emit (string-append "    reg_rsp += " (number->string (+ frame-shift 8)) ";"))))
@@ -1391,6 +1403,7 @@
     (emit "#define _GNU_SOURCE")
     (emit "#endif")
     (emit "#include <stdint.h>")
+    (emit "#include <stdarg.h>")
     (emit "#include <stdio.h>")
     (emit "#include <stdlib.h>")
     (emit "#include <string.h>")

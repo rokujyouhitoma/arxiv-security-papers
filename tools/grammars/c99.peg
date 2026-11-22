@@ -351,6 +351,7 @@ argument_expr_list:
     | first=assignment_expr rest=(',' ws assignment_expr)*
 
 primary_expr:
+    | '__builtin_va_arg' !ident_cont ws '(' ws assignment_expr ',' ws type_name ')' ws
     | identifier ws
     | constant ws
     | (string_literal ws)+
@@ -367,7 +368,7 @@ ident_cont:
     | [a-zA-Z0-9_]
 
 c99_keyword:
-    | ('auto' | 'break' | 'case' | 'char' | 'const' | 'continue' | 'default' | 'do' | 'double' | 'else' | 'enum' | 'extern' | 'float' | 'for' | 'goto' | 'if' | 'inline' | 'int' | 'long' | 'register' | 'restrict' | 'return' | 'short' | 'signed' | 'sizeof' | 'static' | 'struct' | 'switch' | 'typedef' | 'union' | 'unsigned' | 'void' | 'volatile' | 'while' | '_Bool' | '_Complex' | '_Imaginary' | '_Alignof' | '__alignof__' | '__alignof' | '__builtin_offsetof') !ident_cont
+    | ('auto' | 'break' | 'case' | 'char' | 'const' | 'continue' | 'default' | 'do' | 'double' | 'else' | 'enum' | 'extern' | 'float' | 'for' | 'goto' | 'if' | 'inline' | 'int' | 'long' | 'register' | 'restrict' | 'return' | 'short' | 'signed' | 'sizeof' | 'static' | 'struct' | 'switch' | 'typedef' | 'union' | 'unsigned' | 'void' | 'volatile' | 'while' | '_Bool' | '_Complex' | '_Imaginary' | '_Alignof' | '__alignof__' | '__alignof' | '__builtin_offsetof' | '__builtin_va_arg') !ident_cont
 
 constant:
     | float_constant

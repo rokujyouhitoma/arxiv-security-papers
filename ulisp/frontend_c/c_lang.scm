@@ -496,6 +496,7 @@
     (c-alignof-type any_node)
     (c-alignof-expr expr)
     (c-offsetof any_node any_node)
+    (c-va-arg expr any_node)
     (c-compound-lit any_node inits)))
 
 (define-language L_c_typed
@@ -506,7 +507,11 @@
   (Expr (expr)
     (+ (c-typed ctype expr)
        (c-implicit-cast ctype expr)
-       (c-init-list any_node))))
+       (c-init-list any_node)
+       (c-va-start expr)
+       (c-va-arg expr ctype)
+       (c-va-end expr)
+       (c-va-copy expr1 expr2))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 5. L_c_ast Verification Helper (Source Span & Structure Check)
@@ -582,6 +587,9 @@
            #t)
           ((c-sizeof-expr c-alignof-expr)
            (%c99-verify-expr-node (cadr inner)))
+          ((c-va-arg)
+           (and (%c99-verify-expr-node (cadr inner))
+                (pair? (cddr inner))))
           ((c-compound-lit c-init-list)
            #t)
           (else
