@@ -78,7 +78,7 @@
   (make-lir-vm-raw registers xmm-registers xmm-bits vregs flags memory heap-ptr
                    strings data-table functions main-func current-fn current-block
                    pc call-stack status fuel step-count tracer last-trap
-                   globals foreign-handlers f64-cells)
+                   globals foreign-handlers f64-cells code-addr-table)
   lir-vm?
   (registers vm-registers-vector vm-set-registers-vector!)
   (xmm-registers vm-xmm-vector vm-set-xmm-vector!)
@@ -102,7 +102,8 @@
   (last-trap vm-last-trap vm-set-last-trap!)
   (globals vm-globals-table vm-set-globals-table!)
   (foreign-handlers vm-foreign-handlers vm-set-foreign-handlers!)
-  (f64-cells vm-f64-cells vm-set-f64-cells!))
+  (f64-cells vm-f64-cells vm-set-f64-cells!)
+  (code-addr-table vm-code-addr-table vm-set-code-addr-table!))
 
 ;;; Constructor
 (define (make-lir-vm-with-size mem-size)
@@ -115,7 +116,32 @@
     (make-lir-vm-raw regs xmms xmm-bs '() flags mem
                      *lir-vm-heap-base* '() '() '() #f
                      '%main '%entry 0 '() 'ready
-                     *lir-vm-default-fuel* 0 #f #f '() '() '())))
+                     *lir-vm-default-fuel* 0 #f #f '() '() '()
+                     (vector '() '() 65536))))
+
+(define (vm-reset-code-addr-table! vm)
+  (vm-set-code-addr-table! vm (vector '() '() 65536)))
+
+(define (vm-lookup-code-addr vm sym)
+  (let* ((tbl (vm-code-addr-table vm))
+         (hit (assq sym (vector-ref tbl 0))))
+    (if hit (cdr hit) #f)))
+
+(define (vm-lookup-code-target vm addr)
+  (let* ((tbl (vm-code-addr-table vm))
+         (hit (assv addr (vector-ref tbl 1))))
+    (if hit (cdr hit) #f)))
+
+(define (vm-register-code-addr! vm sym kind)
+  (let* ((tbl (vm-code-addr-table vm))
+         (existing (assq sym (vector-ref tbl 0))))
+    (if existing
+        (cdr existing)
+        (let ((addr (vector-ref tbl 2)))
+          (vector-set! tbl 2 (+ addr 16))
+          (vector-set! tbl 0 (cons (cons sym addr) (vector-ref tbl 0)))
+          (vector-set! tbl 1 (cons (cons addr (cons kind sym)) (vector-ref tbl 1)))
+          addr))))
 
 (define (make-lir-vm)
   (make-lir-vm-with-size *lir-vm-default-mem-size*))
@@ -763,6 +789,7 @@
     (vm-set-strings-table! vm (car str-table-box))
 
     ;; Functions loading
+    (vm-reset-code-addr-table! vm)
     (let ((fn-table-box (cons '() '())))
       (if (and (pair? funcs-decl) (eq? (car funcs-decl) '%lir-functions))
           (for-each
@@ -782,6 +809,7 @@
                                         (cdr body-clause)
                                         '()))
                         (desc (make-func-descriptor lbl params frame-sz body-insts)))
+                   (vm-register-code-addr! vm lbl 'internal)
                    (set-car! fn-table-box (cons (cons lbl desc) (car fn-table-box))))))
            (cdr funcs-decl)))
       (vm-set-functions-table! vm (car fn-table-box))
@@ -841,8 +869,8 @@
                                    (t-addr (cond
                                              ((assq tgt (car data-table-box)) => cdr)
                                              ((assq tgt str-table) => cdr)
-                                             ((assq tgt fn-table) 4096)
-                                             (else 0))))
+                                             ((assq tgt fn-table) (vm-lookup-code-addr vm tgt))
+                                             (else (vm-register-code-addr! vm tgt 'external)))))
                               (vm-mem-write-u64! vm p (+ t-addr off))
                               (cloop (cdr cs) (+ p 8))))
                            (else
@@ -1065,9 +1093,10 @@
 
           ((%code-ref)
            (let* ((dst (cadr inst))
-                  (lbl (caddr inst)))
-             ;; Code address represented as a virtual reference / address
-             (vm-set-location! vm dst 4096)))
+                  (lbl (caddr inst))
+                  (addr (or (vm-lookup-code-addr vm lbl)
+                            (vm-register-code-addr! vm lbl 'external))))
+             (vm-set-location! vm dst addr)))
 
           ((%global-ref)
            (let* ((dst (cadr inst))
@@ -1388,6 +1417,11 @@
              (vm-set-location! vm dst res)))
 
           ;; --- Floating Point Operations (XMM) ---
+          ((%fmov)
+           (let ((dst (cadr inst))
+                 (src (caddr inst)))
+             (vm-set-xmm! vm dst (vm-get-xmm vm src))))
+
           ((%sitofp)
            (let* ((dst (cadr inst))
                   (src (caddr inst))
@@ -1497,6 +1531,26 @@
                            (vm-set-pc! vm 0))
                          (vm-trigger-trap! vm 'undefined-target "Jump target not found" lbl)))))))
 
+          ((%switch)
+           ;; (%switch val def-lbl [def-args] cases)
+           (let* ((val (lir-vm-s64 (vm-eval-operand vm (cadr inst))))
+                  (def-lbl (caddr inst))
+                  (has-def-args? (= (length inst) 5))
+                  (def-args (if (and has-def-args? (list? (cadddr inst))) (cadddr inst) '()))
+                  (cases (cond (has-def-args? (car (cddddr inst)))
+                               ((pair? (cdddr inst)) (cadddr inst))
+                               (else '()))))
+             (let sloop ((cs cases))
+               (if (null? cs)
+                   (vm-dispatch-jump! vm desc def-lbl def-args)
+                   (let* ((c (car cs))
+                          (c-val (lir-vm-s64 (vm-eval-operand vm (car c))))
+                          (c-lbl (cadr c))
+                          (c-args (if (and (pair? (cddr c)) (list? (caddr c))) (caddr c) '())))
+                     (if (= val c-val)
+                         (vm-dispatch-jump! vm desc c-lbl c-args)
+                         (sloop (cdr cs))))))))
+
           ((%return)
            (let ((val (if (pair? (cdr inst)) (cadr inst) #f)))
              (vm-dispatch-return! vm val)))
@@ -1517,6 +1571,23 @@
                    ;; Set PC to target function
                    (vm-set-current-fn! vm func-lbl)
                    (vm-set-pc! vm 0)))))
+
+          ((%call-indirect)
+           (let* ((addr (vm-eval-operand vm (cadr inst)))
+                  (shift (caddr inst))
+                  (entry (vm-lookup-code-target vm addr)))
+             (cond
+               ((or (= addr 0) (not entry))
+                (vm-trigger-trap! vm 'invalid-call-target "Indirect call to NULL or invalid code address" addr))
+               ((eq? (car entry) 'internal)
+                (let ((cur-rsp (vm-get-reg vm '%rsp)))
+                  (vm-set-call-stack! vm (cons (list (vm-current-fn vm) (vm-pc vm) cur-rsp)
+                                               (vm-call-stack vm)))
+                  (vm-set-reg! vm '%rsp (- cur-rsp (+ shift 8)))
+                  (vm-set-current-fn! vm (cdr entry))
+                  (vm-set-pc! vm 0)))
+               (else
+                (vm-dispatch-c-call! vm (symbol->string (cdr entry)) shift)))))
 
           ((%c-call %call-foreign)
            (let* ((fn (cadr inst))

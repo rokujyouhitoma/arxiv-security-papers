@@ -18,7 +18,7 @@
 
 (define (lir-unconditional-terminator? inst)
   (and (pair? inst)
-       (memq (car inst) '(%jump %direct-jump %return))))
+       (memq (car inst) '(%jump %direct-jump %switch %return))))
 
 (define (lir-label-inst? inst)
   (and (pair? inst)

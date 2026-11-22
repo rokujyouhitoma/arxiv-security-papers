@@ -3395,7 +3395,7 @@
            ((%atomic-cas!)
             (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
                 (lir-reg-aliases? reg '%rax)))
-           ((%c-call %call-foreign %call-closure %direct-call %dispatch-consumer)
+           ((%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer)
             (or (memq reg '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al
                             %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
                             %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
@@ -3414,7 +3414,7 @@
 
 (define (lir-inst-memory-barrier? inst)
   (and (pair? inst)
-       (or (memq (car inst) '(%c-call %call-foreign %call-closure %direct-call %dispatch-consumer
+       (or (memq (car inst) '(%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer
                               %syscall %memory-fence %managed-safepoint-poll %push %pop %raise
                               %capture-cc %push-handler %pop-handler
                               %store-values-buf))
@@ -3449,7 +3449,7 @@
 (define (lir-inst-terminates-block? inst)
   (and (pair? inst)
        (memq (car inst) '(%jump %direct-jump %jump-cond %jump-if %jump-if-false %jump-if-zero
-                          %return %raise %label %block))))
+                          %switch %return %raise %label %block))))
 
 (define (lir-skip-to-next-label insts)
   (cond

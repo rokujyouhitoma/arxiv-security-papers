@@ -836,12 +836,20 @@
                (%c99-lower-emit! ctx (list '%store-typed (if (<= csz 4) 'f32 'f64) '%rdx off '%xmm0))))))
      saved-pieces)))
 
+(define (%c99-extract-direct-fn-sym node)
+  (let loop ((n node))
+    (let ((in (c-typed-inner n)))
+      (cond
+        ((eq? (car in) 'c-fn-ref) (cadr in))
+        ((eq? (car in) 'c-implicit-cast) (loop (caddr in)))
+        ((and (eq? (car in) 'c-unop) (memq (cadr in) '(addr deref)))
+         (loop (caddr in)))
+        (else #f)))))
+
 (define (%c99-lower-call! ctx inner call-ret-ty . maybe-dst-ptr-si)
   (let* ((fn-node (cadr inner))
          (arg-nodes (cddr inner))
-         (fn-inner (let unwrap ((n fn-node))
-                     (let ((in (c-typed-inner n)))
-                       (if (eq? (car in) 'c-implicit-cast) (unwrap (caddr in)) in))))
+         (direct-fn-sym (%c99-extract-direct-fn-sym fn-node))
          (raw-fty (c-typed-type fn-node))
          (fty (if (and (c-pointer-type? raw-fty) (c-function-type? (c-ptr-target raw-fty)))
                   (c-ptr-target raw-fty)
@@ -859,6 +867,13 @@
          (param-plans (cadr abi))
          (stack-arg-bytes (caddr abi))
          (saved-si (lower-ctx-next-si ctx))
+         ;; Evaluate indirect function pointer expression BEFORE arguments
+         (fn-ptr-si (if direct-fn-sym
+                        #f
+                        (let ((psi (%c99-lower-alloc-slot! ctx)))
+                          (%c99-lower-expr! ctx fn-node)
+                          (%c99-lower-emit! ctx (list '%store '%rsp psi '%rax))
+                          psi)))
          ;; If returning via sret without destination buffer supplied, allocate caller scratch slot
          (sret-ptr-si (if (eq? (car ret-plan) 'sret)
                           (if (and (pair? maybe-dst-ptr-si) (car maybe-dst-ptr-si))
@@ -870,7 +885,6 @@
                                 (%c99-lower-emit! ctx (list '%store '%rsp p-si '%rax))
                                 p-si))
                           (and (pair? maybe-dst-ptr-si) (car maybe-dst-ptr-si))))
-         (fn-sym (if (eq? (car fn-inner) 'c-fn-ref) (cadr fn-inner) 'unknown))
          ;; Evaluate each argument right-to-left or left-to-right into temp stack buffers
          (arg-slots
           (%c99-map2
@@ -894,7 +908,6 @@
          (needed (+ (- 0 min-after-args) stack-arg-bytes))
          (shift (align-frame-shift needed))
          (min-touch (- 0 shift))
-         (internal? (memq fn-sym (lower-ctx-internal-fns ctx)))
          (xmm-used (let count-x ((ps param-plans) (k 0))
                      (if (null? ps)
                          k
@@ -934,9 +947,14 @@
     ;; Hidden sret argument passed in %rdi
     (if (eq? (car ret-plan) 'sret)
         (%c99-lower-emit! ctx (list '%load '%rdi '%rsp sret-ptr-si)))
-    (if internal?
-        (%c99-lower-emit! ctx (list '%direct-call fn-sym shift))
-        (%c99-lower-emit! ctx (list '%c-call (symbol->string fn-sym) shift (min 8 xmm-used))))
+    (if direct-fn-sym
+        (let ((internal? (memq direct-fn-sym (lower-ctx-internal-fns ctx))))
+          (if internal?
+              (%c99-lower-emit! ctx (list '%direct-call direct-fn-sym shift))
+              (%c99-lower-emit! ctx (list '%c-call (symbol->string direct-fn-sym) shift (min 8 xmm-used)))))
+        (begin
+          (%c99-lower-emit! ctx (list '%load '%r11 '%rsp fn-ptr-si))
+          (%c99-lower-emit! ctx (list '%call-indirect '%r11 shift (min 8 xmm-used)))))
     ;; Handle aggregate or scalar return value
     (cond
       ((and (%c99-lower-aggregate-like? call-ret-ty)
@@ -1150,7 +1168,8 @@
             (%c99-lower-lvalue-addr! ctx sub))
            ((deref)
             (%c99-lower-expr! ctx sub)
-            (if (not (%c99-lower-aggregate-like? ty))
+            (if (not (or (%c99-lower-aggregate-like? ty)
+                         (c-function-type? ty)))
                 (begin
                   (%c99-lower-emit! ctx '(%mov %rdx %rax))
                   (%c99-lower-load-from-mem! ctx (if (c-float-type? ty) '%xmm0 '%rax) '%rdx 0 ty))))
@@ -1587,22 +1606,13 @@
               (ann-body (%c99-annotate-switch-body ctx (caddr stmt) cases-box def-box))
               (end-lbl (%c99-lower-new-label ctx "sw_end"))
               (prev-brk (lower-ctx-break-lbl ctx))
-              (sw-si (%c99-lower-alloc-slot! ctx)))
+              (cases (reverse (car cases-box)))
+              (def-lbl (or (car def-box) end-lbl))
+              (case-entries (map (lambda (cv) (list (car cv) (cdr cv) '())) cases)))
          (%c99-lower-expr! ctx cnd)
-         (%c99-lower-emit! ctx (list '%store '%rsp sw-si '%rax))
-         (for-each
-          (lambda (cv)
-            (let ((val (car cv))
-                  (lbl (cdr cv)))
-              (%c99-lower-emit! ctx (list '%load '%rax '%rsp sw-si))
-              (if (and (>= val -2147483648) (<= val 2147483647))
-                  (%c99-lower-emit! ctx (list '%cmp '%rax val))
-                  (begin
-                    (%c99-lower-emit-u64-const! ctx '%rcx val)
-                    (%c99-lower-emit! ctx '(%cmp %rax %rcx))))
-              (%c99-lower-emit! ctx (list '%jump-cond 'je lbl))))
-          (reverse (car cases-box)))
-         (%c99-lower-emit! ctx (list '%direct-jump (or (car def-box) end-lbl)))
+         (if (null? case-entries)
+             (%c99-lower-emit! ctx (list '%direct-jump def-lbl))
+             (%c99-lower-emit! ctx (list '%switch '%rax def-lbl '() case-entries)))
          (lower-ctx-break-lbl-set! ctx end-lbl)
          (%c99-lower-stmt! ctx ann-body)
          (lower-ctx-break-lbl-set! ctx prev-brk)
@@ -1709,6 +1719,132 @@
                      (not (memq u-sym escaped)))
                 (loop (cdr vs) (cons si acc))
                 (loop (cdr vs) acc)))))))
+
+;;; -----------------------------------------------------------------------
+;;; 8.2 Flat C99 LIR -> Pass 132 Braun SSA CFG Bridge (Issue #920)
+;;; -----------------------------------------------------------------------
+
+(define (%c99-ssa-cond-branch-target inst)
+  (case (car inst)
+    ((%jump-cond %jump-if-false) (caddr inst))
+    ((%jump-if-zero) (cadr inst))
+    (else #f)))
+
+(define (%c99-ssa-rewrite-cond-branch inst new-tgt)
+  (case (car inst)
+    ((%jump-cond) (list '%jump-cond (cadr inst) new-tgt))
+    ((%jump-if-false) (list '%jump-if-false (cadr inst) new-tgt))
+    ((%jump-if-zero) (list '%jump-if-zero new-tgt))
+    (else inst)))
+
+(define (c99-lir-fn->braun-cfg fn-lir candidate-offsets)
+  (let* ((fn-sym (list-ref fn-lir 1))
+         (body-clause (assq 'body (cddr fn-lir)))
+         (body-insts (if body-clause (cdr body-clause) '()))
+         (entry-lbl (string->symbol (string-append (symbol->string fn-sym) "__entry")))
+         (lbl-cnt-box (cons 0 '()))
+         (next-cfg-lbl!
+          (lambda (prefix)
+            (let ((n (car lbl-cnt-box)))
+              (set-car! lbl-cnt-box (+ n 1))
+              (string->symbol
+               (string-append ".L_ssa_" (symbol->string fn-sym) "_" prefix "_" (number->string n))))))
+         (blocks-box (cons '() '()))
+         (tramps-box (cons '() '()))
+         (emit-blk! (lambda (lbl rev-insts term extra-edges)
+                      (set-car! blocks-box
+                                (cons (list lbl (reverse rev-insts) term (reverse extra-edges))
+                                      (car blocks-box))))))
+    ;; Pass 0: Split flat LIR into basic blocks with taken-edge trampolines for conditional jumps
+    (let scan ((rest body-insts) (cur-lbl entry-lbl) (cur-insts '()) (cur-extra '()))
+      (if (null? rest)
+          (if cur-lbl
+              (emit-blk! cur-lbl cur-insts '(%return) cur-extra))
+          (let ((inst (car rest)))
+            (cond
+              ((not cur-lbl)
+               ;; Inside unreachable code after an unconditional terminator: wait for next %label
+               (if (and (pair? inst) (eq? (car inst) '%label))
+                   (scan (cdr rest) (cadr inst) '() '())
+                   (scan (cdr rest) #f '() '())))
+              ((not (pair? inst))
+               (scan (cdr rest) cur-lbl cur-insts cur-extra))
+              ((eq? (car inst) '%label)
+               (let ((next-lbl (cadr inst)))
+                 (emit-blk! cur-lbl cur-insts (list '%jump next-lbl) cur-extra)
+                 (scan (cdr rest) next-lbl '() '())))
+              ((memq (car inst) '(%jump %direct-jump))
+               (emit-blk! cur-lbl cur-insts (list '%jump (cadr inst)) cur-extra)
+               (scan (cdr rest) #f '() '()))
+              ((memq (car inst) '(%switch %return))
+               (emit-blk! cur-lbl cur-insts inst cur-extra)
+               (scan (cdr rest) #f '() '()))
+              ((memq (car inst) '(%jump-cond %jump-if-zero %jump-if-false))
+               (let* ((orig-tgt (%c99-ssa-cond-branch-target inst))
+                      (tramp-lbl (next-cfg-lbl! "tramp"))
+                      (rewritten (%c99-ssa-rewrite-cond-branch inst tramp-lbl))
+                      (has-next-label? (and (pair? (cdr rest))
+                                            (pair? (cadr rest))
+                                            (eq? (caadr rest) '%label)))
+                      (next-lbl (if has-next-label?
+                                    (cadr (cadr rest))
+                                    (next-cfg-lbl! "fall"))))
+                 (emit-blk! cur-lbl
+                            (cons rewritten cur-insts)
+                            (list '%jump next-lbl)
+                            (cons tramp-lbl cur-extra))
+                 (set-car! tramps-box
+                           (cons (list tramp-lbl '() (list '%jump orig-tgt) '())
+                                 (car tramps-box)))
+                 (if has-next-label?
+                     (scan (cdr rest) #f '() '())
+                     (scan (cdr rest) next-lbl '() '()))))
+              (else
+               (scan (cdr rest) cur-lbl (cons inst cur-insts) cur-extra))))))
+    (let* ((main-blocks (reverse (car blocks-box)))
+           (tramp-blocks (reverse (car tramps-box)))
+           (all-blocks (append main-blocks tramp-blocks))
+           (cfg (make-braun-cfg)))
+      ;; Pass 1: Pre-create ALL basic blocks before emitting any instructions or edges
+      (for-each (lambda (b) (braun-new-block! cfg (list-ref b 0))) all-blocks)
+      ;; Pass 2: Emit non-terminator instructions, set terminators, and register extra edges
+      (for-each
+       (lambda (b)
+         (let ((lbl (list-ref b 0))
+               (insts (list-ref b 1))
+               (term (list-ref b 2))
+               (extras (list-ref b 3)))
+           (for-each (lambda (ins) (braun-emit-inst! cfg lbl ins)) insts)
+           (if term
+               (begin
+                 (braun-set-terminator! cfg lbl term)
+                 (braun-auto-add-terminator-edges! cfg lbl term)))
+           (for-each (lambda (ex) (braun-add-edge! cfg lbl ex)) extras)))
+       all-blocks)
+      ;; Selective mem2reg on non-escaped scalar stack offsets + delayed seal-block
+      (if (and (pair? candidate-offsets) (pair? main-blocks))
+          (let ((first-lbl (list-ref (car main-blocks) 0)))
+            (for-each
+             (lambda (off)
+               (let ((var (string->symbol (string-append "stk_" (number->string off)))))
+                 (braun-write-variable! cfg var first-lbl 0)))
+             candidate-offsets)
+            (braun-promote-alloca-to-ssa cfg candidate-offsets)))
+      (braun-seal-all-blocks! cfg)
+      (braun-verify-cfg cfg)
+      cfg)))
+
+(define (c99-braun-ssa-transform-fn fn-lir candidate-offsets)
+  (let* ((fn-sym (list-ref fn-lir 1))
+         (params-clause (list-ref fn-lir 2))
+         (frame-clause (list-ref fn-lir 3))
+         (cfg (c99-lir-fn->braun-cfg fn-lir candidate-offsets))
+         (ssa-blocks (braun-cfg->lir cfg)))
+    (list '%lir-function
+          fn-sym
+          params-clause
+          frame-clause
+          (cons 'body ssa-blocks))))
 
 (define (%c99-lower-function ctx fn-node globals)
   (let* ((fn-sym (list-ref fn-node 1))

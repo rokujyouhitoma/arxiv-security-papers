@@ -454,6 +454,17 @@
                #t
                (lir-report-error "%c-call / %call-foreign format must be (%c-call <fn-name> <shift> [<al-val>])" inst)))
 
+          ((%call-indirect)
+           (if (or (and (= (length inst) 3)
+                        (lir-valid-register? (cadr inst))
+                        (integer? (caddr inst)))
+                   (and (= (length inst) 4)
+                        (lir-valid-register? (cadr inst))
+                        (integer? (caddr inst))
+                        (or (integer? (cadddr inst)) (not (cadddr inst)))))
+               #t
+               (lir-report-error "%call-indirect format must be (%call-indirect <reg> <shift> [<al-val>])" inst)))
+
           ((%call-closure)
            (if (or (and (= (length inst) 2) (integer? (cadr inst)))
                    (and (= (length inst) 3) (integer? (cadr inst))
