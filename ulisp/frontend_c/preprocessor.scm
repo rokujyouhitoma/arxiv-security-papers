@@ -275,6 +275,21 @@
    "#define va_copy(dst, src)  __builtin_va_copy(dst, src)\n\n"
    "#endif /* _ULISP_STDARG_H */\n"))
 
+(define *c99-builtin-setjmp-h*
+  (string-append
+   "/* ULisp C99 Built-in <setjmp.h> (ISO C99 §7.13 & SysV AMD64 ULisp 64B ABI) */\n"
+   "#ifndef _ULISP_SETJMP_H\n"
+   "#define _ULISP_SETJMP_H\n\n"
+   "typedef long jmp_buf[8];\n"
+   "typedef long sigjmp_buf[8];\n\n"
+   "int setjmp(jmp_buf env);\n"
+   "int _setjmp(jmp_buf env);\n"
+   "int sigsetjmp(sigjmp_buf env, int savemask);\n"
+   "void longjmp(jmp_buf env, int val);\n"
+   "void _longjmp(jmp_buf env, int val);\n"
+   "void siglongjmp(sigjmp_buf env, int val);\n\n"
+   "#endif /* _ULISP_SETJMP_H */\n"))
+
 (define (make-default-cpp-context . maybe-include-paths)
   (let* ((inc-paths (if (pair? maybe-include-paths)
                         (map %cpp-normalize-path (car maybe-include-paths))
@@ -286,6 +301,7 @@
                                 0 *cpp-max-expansion-steps*
                                 '())))
     (cpp-register-virtual-file! ctx "/__ulisp_builtin__/stdarg.h" *c99-builtin-stdarg-h*)
+    (cpp-register-virtual-file! ctx "/__ulisp_builtin__/setjmp.h" *c99-builtin-setjmp-h*)
     (%cpp-register-builtin!
      ctx '__FILE__
      (lambda (call-tok)

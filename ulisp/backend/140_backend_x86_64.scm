@@ -1905,9 +1905,14 @@
                                        (list '%p2align 4)))))
            (base-acc (if is-exported?
                          (if c-tu?
-                             (append init-acc
-                                     (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
-                                           (list '%raw-asm (string-append "    .globl " label-str))))
+                             (if (memq label '(__ulisp_setjmp __ulisp_longjmp))
+                                 (append init-acc
+                                         (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
+                                               (list '%raw-asm (string-append "    .weak " label-str))
+                                               (list '%raw-asm (string-append "    .globl " label-str))))
+                                 (append init-acc
+                                         (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
+                                               (list '%raw-asm (string-append "    .globl " label-str)))))
                              (append init-acc
                                      (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
                                            (list '%raw-asm (string-append "    .weak " label-str))

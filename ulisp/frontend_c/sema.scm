@@ -147,6 +147,16 @@
     (sema-register-fn! env 'strncmp (make-c-fn-type 'i32 (list (make-c-ptr-type 'i8) (make-c-ptr-type 'i8) 'u64) #f) #f)
     (sema-register-fn! env 'exit (make-c-fn-type 'void '(i32) #f) #f)
     (sema-register-fn! env 'abort (make-c-fn-type 'void '() #f) #f)
+    ;; <setjmp.h> prototypes (64B jmp_buf = long[8] -> long*)
+    (let ((jmp-ptr-ty (make-c-ptr-type 'i64)))
+      (sema-register-fn! env 'setjmp (make-c-fn-type 'i32 (list jmp-ptr-ty) #f) #f)
+      (sema-register-fn! env '_setjmp (make-c-fn-type 'i32 (list jmp-ptr-ty) #f) #f)
+      (sema-register-fn! env '__ulisp_setjmp (make-c-fn-type 'i32 (list jmp-ptr-ty) #f) #f)
+      (sema-register-fn! env 'sigsetjmp (make-c-fn-type 'i32 (list jmp-ptr-ty 'i32) #f) #f)
+      (sema-register-fn! env 'longjmp (make-c-fn-type 'void (list jmp-ptr-ty 'i32) #f) #f)
+      (sema-register-fn! env '_longjmp (make-c-fn-type 'void (list jmp-ptr-ty 'i32) #f) #f)
+      (sema-register-fn! env 'siglongjmp (make-c-fn-type 'void (list jmp-ptr-ty 'i32) #f) #f)
+      (sema-register-fn! env '__ulisp_longjmp (make-c-fn-type 'void (list jmp-ptr-ty 'i32) #f) #f))
     env))
 
 (define (sema-push-scope! env)
@@ -1077,6 +1087,66 @@
                           err-node))
     (c99-apply-implicit-cast ap-typed decayed)))
 
+(define (%sema-analyze-setjmp-longjmp-call env fn-sym arg-nodes err-node)
+  (let* ((lenv (sema-env-layout-env env))
+         (fn-name (symbol->string fn-sym))
+         (is-one-arg? (memq fn-sym '(setjmp _setjmp __ulisp_setjmp)))
+         (expected-argc (if is-one-arg? 1 2))
+         (argc (length arg-nodes)))
+    (if (not (= argc expected-argc))
+        (%c99-sema-error! "C99-JMP-001"
+                          (string-append "Function '" fn-name "' expects "
+                                         (number->string expected-argc)
+                                         " argument(s), got "
+                                         (number->string argc))
+                          err-node))
+    (let* ((env-typed (c99-analyze-expr env (car arg-nodes)))
+           (raw-env-ty (c-typed-type env-typed))
+           (decayed-env-ty (c99-array-decay raw-env-ty)))
+      (if (and (c-array-type? raw-env-ty)
+               (integer? (c-array-length raw-env-ty))
+               (< (c-type-size-in lenv raw-env-ty) *c99-jmp-buf-size*))
+          (%c99-sema-error! "C99-JMP-001"
+                            (string-append "First argument to '" fn-name
+                                           "' must be jmp_buf (at least 64 bytes / long[8], got "
+                                           (number->string (c-type-size-in lenv raw-env-ty))
+                                           " bytes)")
+                            err-node))
+      (if (not (and (c-pointer-type? decayed-env-ty)
+                    (c-types-exact-compatible? (c-ptr-target decayed-env-ty) 'i64)))
+          (%c99-sema-error! "C99-JMP-001"
+                            (string-append "First argument to '" fn-name
+                                           "' must be jmp_buf (long *), got "
+                                           (c-type->string raw-env-ty))
+                            err-node))
+      (let* ((env-casted (c99-apply-implicit-cast env-typed decayed-env-ty))
+             (typed-args
+              (if is-one-arg?
+                  (list env-casted)
+                  (let* ((val-typed (c99-analyze-expr env (cadr arg-nodes)))
+                         (val-ty (c99-array-decay (c-typed-type val-typed))))
+                    (if (not (c-integer-type? val-ty))
+                        (%c99-sema-error! "C99-JMP-001"
+                                          (string-append "Second argument to '" fn-name
+                                                         "' must be an integer type, got "
+                                                         (c-type->string (c-typed-type val-typed)))
+                                          (cadr arg-nodes)))
+                    (list env-casted
+                          (c99-apply-implicit-cast
+                           (c99-apply-implicit-cast val-typed val-ty)
+                           'i32)))))
+             (fn-ent (sema-lookup-fn env fn-sym))
+             (fn-ty (if fn-ent
+                        (caddr fn-ent)
+                        (if (c99-setjmp-fn-sym? fn-sym)
+                            (make-c-fn-type 'i32 (if is-one-arg? (list (make-c-ptr-type 'i64)) (list (make-c-ptr-type 'i64) 'i32)) #f)
+                            (make-c-fn-type 'void (list (make-c-ptr-type 'i64) 'i32) #f))))
+             (ret-ty (c-fn-ret fn-ty)))
+        (make-c-typed ret-ty
+                      (cons 'c-call
+                            (cons (make-c-typed fn-ty (list 'c-fn-ref fn-sym))
+                                  typed-args)))))))
+
 (define (c99-analyze-expr env node)
   (if (not (pair? node))
       (%c99-sema-error! "C99-SEMA-003" "Expected expression node" node))
@@ -1509,7 +1579,13 @@
                       (%c99-sema-error! "C99-VA-001" "va_end expects 1 argument (ap)" (or sp node)))
                   (let ((ap-d (%sema-require-va-list-ptr env (car arg-nodes) "va_end" (or sp node))))
                     (make-c-typed 'void (list 'c-va-end ap-d))))))
-             (let* ((fn-expr (c99-analyze-expr env (cadr raw)))
+             (if (and (pair? raw-callee)
+                      (eq? (car raw-callee) 'c-var-ref)
+                      (c99-setjmp-or-longjmp-sym? (cadr raw-callee))
+                      (let ((ent (sema-lookup-ordinary env (cadr raw-callee))))
+                        (and ent (eq? (car ent) 'fn))))
+                 (%sema-analyze-setjmp-longjmp-call env (cadr raw-callee) (cddr raw) (or sp node))
+                 (let* ((fn-expr (c99-analyze-expr env (cadr raw)))
                     (raw-fty (c-typed-type fn-expr))
                     (fty (if (and (c-pointer-type? raw-fty) (c-function-type? (c-ptr-target raw-fty)))
                              (c-ptr-target raw-fty)
@@ -1566,7 +1642,7 @@
                                                    (else at))))
                                       (aloop (cdr as) '()
                                              (cons (c99-apply-implicit-cast (c99-apply-implicit-cast ta at) prom) acc)))))))))
-                   (make-c-typed ret-ty (cons 'c-call (cons fn-expr typed-args)))))))))
+                   (make-c-typed ret-ty (cons 'c-call (cons fn-expr typed-args))))))))))
 
       ((c-index)
        (let* ((arr-t (c99-analyze-expr env (cadr raw)))

@@ -431,7 +431,17 @@
              (inits '())
              (has-main? #f))
     (if (null? xs)
-        (let* ((all-fns-raw (reverse fns))
+        (let* ((all-fns-raw
+                (let dloop ((xs (reverse fns)) (seen-builtins '()) (acc '()))
+                  (if (null? xs)
+                      (reverse acc)
+                      (let* ((fn (car xs))
+                             (sym (cadr fn)))
+                        (if (memq sym '(__ulisp_setjmp __ulisp_longjmp))
+                            (if (memq sym seen-builtins)
+                                (dloop (cdr xs) seen-builtins acc)
+                                (dloop (cdr xs) (cons sym seen-builtins) (cons fn acc)))
+                            (dloop (cdr xs) seen-builtins (cons fn acc)))))))
                (defined-fn-syms (map cadr all-fns-raw))
                (all-fns (map (lambda (fn)
                                (c99-rewrite-fn-body
