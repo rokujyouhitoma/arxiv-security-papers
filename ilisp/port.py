@@ -1424,22 +1424,27 @@ class BinaryFileOutputPort(BinaryOutputPort):
 # --- Binary Port Operations ---
 
 
-def open_binary_input_file(filepath: str) -> BinaryFileInputPort:
+def _coerce_filepath(filepath: object, proc_name: str) -> str:
+    """Coerce a Scheme string (str or MutableString) filepath to Python str."""
+    from ilisp.types import MutableString
+
+    if isinstance(filepath, MutableString):
+        return str(filepath)
+    if isinstance(filepath, str):
+        return filepath
+    raise TypeError(
+        f"{proc_name}: expected str or MutableString filepath, got {type(filepath).__name__}"
+    )
+
+
+def open_binary_input_file(filepath: object) -> BinaryFileInputPort:
     """Open a file as a binary input port."""
-    if not isinstance(filepath, str):
-        raise TypeError(
-            f"open-binary-input-file: expected str, got {type(filepath).__name__}"
-        )
-    return BinaryFileInputPort(filepath)
+    return BinaryFileInputPort(_coerce_filepath(filepath, "open-binary-input-file"))
 
 
-def open_binary_output_file(filepath: str) -> BinaryFileOutputPort:
+def open_binary_output_file(filepath: object) -> BinaryFileOutputPort:
     """Open a file as a binary output port."""
-    if not isinstance(filepath, str):
-        raise TypeError(
-            f"open-binary-output-file: expected str, got {type(filepath).__name__}"
-        )
-    return BinaryFileOutputPort(filepath)
+    return BinaryFileOutputPort(_coerce_filepath(filepath, "open-binary-output-file"))
 
 
 def open_input_bytevector(bv: Bytevector) -> BytesInputPort:

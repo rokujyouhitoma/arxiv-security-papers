@@ -49,9 +49,9 @@
 (define-record-type <c99-parse-env>
   (%make-c99-parse-env scope-mgr file text)
   c99-parse-env?
-  (scope-mgr c99-parse-env-scope-mgr)
-  (file      c99-parse-env-file)
-  (text      c99-parse-env-text c99-parse-env-text-set!))
+  (scope-mgr c99-parse-env-scope-mgr c99-parse-env-scope-mgr-set!)
+  (file      c99-parse-env-file      c99-parse-env-file-set!)
+  (text      c99-parse-env-text      c99-parse-env-text-set!))
 
 (define (make-c99-parse-env . maybe-file)
   (let ((fname (if (pair? maybe-file) (car maybe-file) "<c99-input>")))
@@ -101,19 +101,58 @@
 
 (define *c99-peg-grammar-ast* (cons #f '()))
 (define *c99-standalone-parser* (cons #f '()))
+(define *c99-cached-env-parser* (cons #f '()))
+
+(define (%c99-try-load-grammar-cache txt)
+  (let loop ((paths '("build/c99_grammar_ast.sexp" "ulisp/build/c99_grammar_ast.sexp")))
+    (if (null? paths)
+        #f
+        (let* ((p (car paths))
+               (loaded
+                (guard (ex (else #f))
+                  (if (file-exists? p)
+                      (call-with-input-file p
+                        (lambda (port) (read port)))
+                      #f))))
+          (if (and (pair? loaded)
+                   (eq? (car loaded) 'c99-grammar-cache)
+                   (pair? (cdr loaded))
+                   (string? (cadr loaded))
+                   (string=? (cadr loaded) txt)
+                   (pair? (cddr loaded)))
+              (guard (ex (else #f))
+                (sexpr->ast (caddr loaded)))
+              (loop (cdr paths)))))))
+
+(define (%c99-try-save-grammar-cache txt ast)
+  (let ((target (cond
+                  ((file-exists? "frontend_c/parser.scm") "build/c99_grammar_ast.sexp")
+                  ((file-exists? "ulisp/frontend_c/parser.scm") "ulisp/build/c99_grammar_ast.sexp")
+                  (else #f))))
+    (if target
+        (guard (ex (else #f))
+          (let ((port (open-output-file target)))
+            (write (list 'c99-grammar-cache txt (ast->sexpr ast)) port)
+            (newline port)
+            (close-output-port port))))))
 
 (define (c99-peg-grammar-ast)
   (or (car *c99-peg-grammar-ast*)
       (let* ((txt (%c99-read-grammar-text))
-             (ast (optimize-grammar (parse-peg-grammar txt))))
+             (cached (%c99-try-load-grammar-cache txt))
+             (ast (if cached
+                      cached
+                      (let ((parsed (optimize-grammar (parse-peg-grammar txt))))
+                        (%c99-try-save-grammar-cache txt parsed)
+                        parsed))))
         (set-car! *c99-peg-grammar-ast* ast)
         ast)))
 
 (define (c99-peg-parser . maybe-entry)
   (if (pair? maybe-entry)
-      (compile-peg-grammar (c99-peg-grammar-ast) (car maybe-entry))
+      (compile-grammar-entry-parser (c99-peg-grammar-ast) (car maybe-entry))
       (or (car *c99-standalone-parser*)
-          (let ((p (compile-peg-grammar (c99-peg-grammar-ast) 'translation_unit)))
+          (let ((p (compile-grammar-entry-parser (c99-peg-grammar-ast) 'translation_unit)))
             (set-car! *c99-standalone-parser* p)
             p))))
 
@@ -300,19 +339,21 @@
 ;;; 5. Environment-Aware C99 PEG Compiler (Produces L_c_ast with Span & Binding ID)
 ;;; -----------------------------------------------------------------------
 
-(define (compile-c99-parser-with-env env . maybe-entry)
+(define (compile-c99-rule-getter env)
   (let* ((grammar (c99-peg-grammar-ast))
          (rules (peg-grammar-def-rules grammar))
-         (entry-name (if (pair? maybe-entry) (car maybe-entry) 'translation_unit))
-         (rule-table '()))
-    (define (lookup name)
-      (let ((slot (assoc name rule-table)))
+         (rule-cells '()))
+    (define (lookup-cell name)
+      (let ((slot (assq name rule-cells)))
         (if slot (cdr slot) #f)))
+    (define (lookup name)
+      (let ((cell (lookup-cell name)))
+        (if cell (car cell) #f)))
 
-    ;; Initialize forward rule slots
+    ;; Initialize forward mutable cell slots (proc . '())
     (for-each
      (lambda (r)
-       (set! rule-table (cons (cons (peg-rule-def-name r) #f) rule-table)))
+       (set! rule-cells (cons (cons (peg-rule-def-name r) (cons #f '())) rule-cells)))
      rules)
 
     ;; Compile each rule with C99 semantic hooks
@@ -324,11 +365,11 @@
                  ;; Because typedef_name is strictly enforced by scope predicate,
                  ;; typedef_init_declarator can match full init_declarator (including "T *p;")
                  ((eq? name 'typedef_init_declarator)
-                  (let ((init-decl (lookup 'init_declarator)))
+                  (let ((init-cell (lookup-cell 'init_declarator)))
                     (lambda (ctx pos sk fk)
-                      ((lookup 'init_declarator) ctx pos sk fk))))
+                      ((car init-cell) ctx pos sk fk))))
                  (else
-                  (compile-expr->parser (peg-rule-def-expr r) lookup))))
+                  (compile-expr->parser-with-cells (peg-rule-def-expr r) lookup-cell))))
               (decorated (decorate-c99-rule name raw-body env lookup))
               (wrapped (if (peg-rule-def-memoize? r)
                            ;; Do not memoize context-sensitive typedef_name predicate globally across scope mutations
@@ -336,11 +377,16 @@
                                decorated
                                (peg:rule name decorated))
                            decorated)))
-         (let ((slot (assoc name rule-table)))
-           (set-cdr! slot wrapped))))
+         (let ((cell (lookup-cell name)))
+           (set-car! cell wrapped))))
      rules)
 
-    (or (lookup entry-name)
+    lookup))
+
+(define (compile-c99-parser-with-env env . maybe-entry)
+  (let ((entry-name (if (pair? maybe-entry) (car maybe-entry) 'translation_unit))
+        (getter (compile-c99-rule-getter env)))
+    (or (getter entry-name)
         (error "Unknown C99 grammar entry rule" entry-name))))
 
 (define (decorate-c99-rule name base-parser env lookup)
@@ -614,10 +660,14 @@
                     fk)))
 
     ((compound_stmt)
-     (lambda (ctx pos sk fk)
-       (let ((p-lbrace (peg:seq (peg:lit "{") (lookup 'ws)))
-             (p-items  (peg:star (lookup 'block_item)))
-             (p-rbrace (peg:seq (peg:lit "}") (lookup 'ws))))
+     (let ((ready #f) (p-lbrace #f) (p-items #f) (p-rbrace #f))
+       (lambda (ctx pos sk fk)
+         (if (not ready)
+             (begin
+               (set! p-lbrace (peg:seq (peg:lit "{") (lookup 'ws)))
+               (set! p-items  (peg:star (lookup 'block_item)))
+               (set! p-rbrace (peg:seq (peg:lit "}") (lookup 'ws)))
+               (set! ready #t)))
          (p-lbrace ctx pos
                    (lambda (_lb pos1 fk1)
                      (c99-push-scope! env 'block)
@@ -638,11 +688,15 @@
                    fk))))
 
     ((function_definition)
-     (lambda (ctx pos sk fk)
-       (let ((p-specs (lookup 'declaration_specifiers))
-             (p-decl  (lookup 'declarator))
-             (p-dlist (peg:opt (lookup 'declaration_list)))
-             (p-body  (lookup 'compound_stmt)))
+     (let ((ready #f) (p-specs #f) (p-decl #f) (p-dlist #f) (p-body #f))
+       (lambda (ctx pos sk fk)
+         (if (not ready)
+             (begin
+               (set! p-specs (lookup 'declaration_specifiers))
+               (set! p-decl  (lookup 'declarator))
+               (set! p-dlist (peg:opt (lookup 'declaration_list)))
+               (set! p-body  (lookup 'compound_stmt))
+               (set! ready #t)))
          (p-specs ctx pos
                   (lambda (specs pos1 fk1)
                     (p-decl ctx pos1
@@ -917,17 +971,33 @@
 ;;; 6. Top-Level Parse API & Pretty Diagnostic Integration
 ;;; -----------------------------------------------------------------------
 
+(define (%c99-get-cached-env-and-getter filename src-text)
+  (let ((cached (car *c99-cached-env-parser*)))
+    (if cached
+        (let ((env (car cached)))
+          (c99-parse-env-scope-mgr-set! env (make-scope-manager))
+          (c99-parse-env-file-set! env filename)
+          (c99-parse-env-text-set! env src-text)
+          cached)
+        (let* ((env (make-c99-parse-env filename))
+               (getter (compile-c99-rule-getter env))
+               (pair (cons env getter)))
+          (c99-parse-env-text-set! env src-text)
+          (set-car! *c99-cached-env-parser* pair)
+          pair))))
+
 (define (%c99-run-entry-parser src-text filename entry-rule)
   (reset-alpha-symbol-counter!)
   (diagnostic-register-source-string! filename src-text)
-  (let* ((env (make-c99-parse-env filename))
-         (parser (compile-c99-parser-with-env env entry-rule))
+  (let* ((cached (%c99-get-cached-env-and-getter filename src-text))
+         (getter (cdr cached))
+         (parser (or (getter entry-rule)
+                     (error "Unknown C99 grammar entry rule" entry-rule)))
          (ctx (make-parse-context src-text))
          (txt-len (string-length src-text))
          (matched #f)
          (result-val #f)
          (result-pos 0))
-    (c99-parse-env-text-set! env src-text)
     (parser
      ctx 0
      (lambda (val next-pos fk)

@@ -345,8 +345,6 @@
                       seq-parser
                       (peg:star (peg:seq (peg:alt pipe-tok (tok "/")) seq-parser)))))
 
-  (set! choice-parser choice-parser-internal)
-
   ;; Rule definition: name [type] (memo): choice_expr
   (define rule-parser
     (peg:map (lambda (res)
@@ -356,7 +354,7 @@
                  (make-peg-rule-def name body #t #f)))
              (peg:seq (peg:meta-ident)
                       arrow-tok
-                      choice-parser)))
+                      choice-ref)))
 
   ;; Directive: grammar Name or @header { ... } etc.
   (define directive-parser
@@ -400,6 +398,7 @@
              (peg:seq (peg:meta-ws)
                       (peg:star (peg:alt directive-parser rule-parser)))))
 
+  (set! choice-parser choice-parser-internal)
   grammar-file-parser)
 
 (define *meta-grammar-parser* (build-meta-grammar-parser))

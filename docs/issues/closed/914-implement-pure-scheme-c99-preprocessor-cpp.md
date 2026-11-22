@@ -28,7 +28,7 @@ ID: 914
   - `#931`: C99 PEG 文法 ＆ パーサー合成基盤（[tools/grammars/c99.peg](../../../tools/grammars/c99.peg), [ulisp/frontend_c/parser.scm](../../../ulisp/frontend_c/parser.scm), [[#931]](931-implement-c99-peg-grammar-specification-and-parser-synthesis.md)）
 - 後続連携 Issue:
   - [[#915]](../915-implement-c99-parser-and-nanopass-c-ast-definitions.md) (C99 パーサー ＆ Nanopass `L_c_ast` 統合)
-  - [[#917]](../917-implement-c-compiler-driver-and-host-ld-integration.md) (`c_driver.scm` `-I`/`-D`/`-U` フラグ連携)
+  - [[#917]](917-implement-c-compiler-driver-and-host-ld-integration.md) (`c_driver.scm` `-I`/`-D`/`-U` フラグ連携)
 
 ---
 

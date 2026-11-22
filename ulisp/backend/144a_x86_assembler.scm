@@ -40,6 +40,11 @@
     ("r8d" 8 4 #t #t) ("r9d" 9 4 #t #t) ("r10d" 10 4 #t #t) ("r11d" 11 4 #t #t)
     ("r12d" 12 4 #t #t) ("r13d" 13 4 #t #t) ("r14d" 14 4 #t #t) ("r15d" 15 4 #t #t)
 
+    ("ax" 0 2 #f #f) ("cx" 1 2 #f #f) ("dx" 2 2 #f #f) ("bx" 3 2 #f #f)
+    ("sp" 4 2 #f #f) ("bp" 5 2 #f #f) ("si" 6 2 #f #f) ("di" 7 2 #f #f)
+    ("r8w" 8 2 #t #t) ("r9w" 9 2 #t #t) ("r10w" 10 2 #t #t) ("r11w" 11 2 #t #t)
+    ("r12w" 12 2 #t #t) ("r13w" 13 2 #t #t) ("r14w" 14 2 #t #t) ("r15w" 15 2 #t #t)
+
     ("al" 0 1 #f #f) ("cl" 1 1 #f #f) ("dl" 2 1 #f #f) ("bl" 3 1 #f #f)
     ("spl" 4 1 #f #t) ("bpl" 5 1 #f #t) ("sil" 6 1 #f #t) ("dil" 7 1 #f #t)
     ("r8b" 8 1 #t #t) ("r9b" 9 1 #t #t) ("r10b" 10 1 #t #t) ("r11b" 11 1 #t #t)
@@ -58,6 +63,10 @@
     (esp 4 4 #f #f) (ebp 5 4 #f #f) (esi 6 4 #f #f) (edi 7 4 #f #f)
     (r8d 8 4 #t #t) (r9d 9 4 #t #t) (r10d 10 4 #t #t) (r11d 11 4 #t #t)
     (r12d 12 4 #t #t) (r13d 13 4 #t #t) (r14d 14 4 #t #t) (r15d 15 4 #t #t)
+    (ax 0 2 #f #f) (cx 1 2 #f #f) (dx 2 2 #f #f) (bx 3 2 #f #f)
+    (sp 4 2 #f #f) (bp 5 2 #f #f) (si 6 2 #f #f) (di 7 2 #f #f)
+    (r8w 8 2 #t #t) (r9w 9 2 #t #t) (r10w 10 2 #t #t) (r11w 11 2 #t #t)
+    (r12w 12 2 #t #t) (r13w 13 2 #t #t) (r14w 14 2 #t #t) (r15w 15 2 #t #t)
     (al 0 1 #f #f) (cl 1 1 #f #f) (dl 2 1 #f #f) (bl 3 1 #f #f)
     (spl 4 1 #f #t) (bpl 5 1 #f #t) (sil 6 1 #f #t) (dil 7 1 #f #t)
     (r8b 8 1 #t #t) (r9b 9 1 #t #t) (r10b 10 1 #t #t) (r11b 11 1 #t #t)
@@ -77,6 +86,10 @@
        ((esp) "esp") ((ebp) "ebp") ((esi) "esi") ((edi) "edi")
        ((r8d) "r8d") ((r9d) "r9d") ((r10d) "r10d") ((r11d) "r11d")
        ((r12d) "r12d") ((r13d) "r13d") ((r14d) "r14d") ((r15d) "r15d")
+       ((ax) "ax") ((cx) "cx") ((dx) "dx") ((bx) "bx")
+       ((sp) "sp") ((bp) "bp") ((si) "si") ((di) "di")
+       ((r8w) "r8w") ((r9w) "r9w") ((r10w) "r10w") ((r11w) "r11w")
+       ((r12w) "r12w") ((r13w) "r13w") ((r14w) "r14w") ((r15w) "r15w")
        ((al %al) "al") ((cl %cl) "cl") ((dl) "dl") ((bl) "bl")
        ((spl) "spl") ((bpl) "bpl") ((sil) "sil") ((dil) "dil")
        ((r8b) "r8b") ((r9b) "r9b") ((r10b) "r10b") ((r11b) "r11b")
@@ -107,7 +120,7 @@
         ((sete setz) 'sete) ((setne setnz) 'setne) ((setb) 'setb) ((setae) 'setae)
         ((setbe) 'setbe) ((seta) 'seta) ((setl) 'setl) ((setge) 'setge) ((setle) 'setle) ((setg) 'setg)
         ((cmove cmovz) 'cmove) ((cmovne cmovnz) 'cmovne) ((cmovl) 'cmovl) ((cmovge) 'cmovge)
-        ((cmovle) 'cmovle) ((cmovg) 'cmovg) ((movzx) 'movzx) ((lea) 'lea) ((mov) 'mov)
+        ((cmovle) 'cmovle) ((cmovg) 'cmovg) ((movzx) 'movzx) ((movsx) 'movsx) ((movsxd) 'movsxd) ((lea) 'lea) ((mov) 'mov)
         ((add) 'add) ((sub) 'sub) ((and) 'and) ((or) 'or) ((xor) 'xor) ((cmp) 'cmp)
         ((bt) 'bt) ((test) 'test) ((imul) 'imul) ((idiv) 'idiv) ((div) 'div)
         ((shl) 'shl) ((shr) 'shr) ((sar) 'sar) ((neg) 'neg) ((not) 'not)
@@ -158,6 +171,8 @@
           ((string=? s "cmovle") 'cmovle)
           ((string=? s "cmovg") 'cmovg)
           ((string=? s "movzx") 'movzx)
+          ((string=? s "movsx") 'movsx)
+          ((string=? s "movsxd") 'movsxd)
           ((string=? s "lea") 'lea)
           ((string=? s "mov") 'mov)
           ((string=? s "add") 'add)
@@ -396,7 +411,7 @@
                          (let ((sc (string-ref clean j)))
                            (cond
                              (escaped
-                              (str-loop (+ j 1) #f (cons (case sc ((#\n) #\newline) ((#\t) #\tab) ((#\\) #\\) ((#\") #\") (else sc)) chars)))
+                              (str-loop (+ j 1) #f (cons (case sc ((#\n) #\newline) ((#\t) #\tab) ((#\r) (integer->char 13)) ((#\\) #\\) ((#\") #\") (else sc)) chars)))
                              ((char=? sc #\\)
                               (str-loop (+ j 1) #t chars))
                              ((char=? sc #\")
@@ -606,9 +621,10 @@
   (let* ((clean (asm-trim-string str))
          ;; detect width prefix
          (is-byte? (or (string-starts-with? clean "byte ptr") (string-starts-with? clean "BYTE PTR")))
+         (is-word? (or (string-starts-with? clean "word ptr") (string-starts-with? clean "WORD PTR")))
          (is-dword? (or (string-starts-with? clean "dword ptr") (string-starts-with? clean "DWORD PTR")))
          (is-qword? (or (string-starts-with? clean "qword ptr") (string-starts-with? clean "QWORD PTR")))
-         (size (cond (is-byte? 1) (is-dword? 4) (else 8)))
+         (size (cond (is-byte? 1) (is-word? 2) (is-dword? 4) (else 8)))
          ;; extract bracket contents
          (lb (let loop ((i 0)) (if (or (>= i (string-length clean)) (char=? (string-ref clean i) #\[)) i (loop (+ i 1)))))
          (rb (let loop ((i (- (string-length clean) 1))) (if (or (< i 0) (char=? (string-ref clean i) #\])) i (loop (- i 1)))))
@@ -689,6 +705,8 @@
       ((or (string-starts-with? clean "[")
            (string-starts-with? clean "byte ptr")
            (string-starts-with? clean "BYTE PTR")
+           (string-starts-with? clean "word ptr")
+           (string-starts-with? clean "WORD PTR")
            (string-starts-with? clean "dword ptr")
            (string-starts-with? clean "DWORD PTR")
            (string-starts-with? clean "qword ptr")
@@ -870,24 +888,66 @@
           (let ((enc (encode-modrm-sib-disp #t (lookup-x86-reg (cadr dst)) src)))
             (list (asm-flatten (list (enc-rex enc) (list 15 cc-code) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))))
 
-    ;; MOVZX: movzx r32/r64, byte/word ptr [mem]
+    ;; MOVZX: movzx r32/r64, byte/word ptr [mem] / reg8 / reg16
     ((movzx)
      (let* ((dst (car opnds))
             (src (cadr opnds))
             (d-info (lookup-x86-reg (cadr dst))))
        (case (car src)
          ((mem)
-          (let* ((enc (encode-modrm-sib-disp #f d-info src))
+          (let* ((opc2 (if (= (mem-size src) 2) 183 182))
+                 (enc (encode-modrm-sib-disp #f d-info src))
                  (rip-sym (mem-rip-sym src)))
             (if (and rip-sym (not (string=? rip-sym "rip_disp")))
-                (list (asm-flatten (list (enc-rex enc) (list 15 182) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
-                      (list 'rip_disp32 (+ curr-off (length (asm-flatten (list (enc-rex enc) (list 15 182) (enc-modrm enc) (enc-sib enc))))) rip-sym (mem-disp src) 0))
-                (list (asm-flatten (list (enc-rex enc) (list 15 182) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
+                (list (asm-flatten (list (enc-rex enc) (list 15 opc2) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
+                      (list 'rip_disp32 (+ curr-off (length (asm-flatten (list (enc-rex enc) (list 15 opc2) (enc-modrm enc) (enc-sib enc))))) rip-sym (mem-disp src) 0))
+                (list (asm-flatten (list (enc-rex enc) (list 15 opc2) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
          (else
           (let* ((s-info (lookup-x86-reg (cadr src)))
+                 (opc2 (if (= (reg-size s-info) 2) 183 182))
                  (rex (make-rex #f (reg-ext? d-info) #f (reg-ext? s-info))))
             (list (append (if (or (reg-ext? d-info) (reg-ext? s-info) (reg-rex? s-info)) (list rex) '())
-                          (list 15 182 (make-modrm 3 (reg-id d-info) (caddr src)))) #f))))))
+                          (list 15 opc2 (make-modrm 3 (reg-id d-info) (reg-id s-info)))) #f))))))
+
+    ;; MOVSX: movsx r64, byte/word ptr [mem] / reg8 / reg16
+    ((movsx)
+     (let* ((dst (car opnds))
+            (src (cadr opnds))
+            (d-info (lookup-x86-reg (cadr dst)))
+            (w (= (reg-size d-info) 8)))
+       (case (car src)
+         ((mem)
+          (let* ((opc2 (if (= (mem-size src) 2) 191 190))
+                 (enc (encode-modrm-sib-disp w d-info src))
+                 (rip-sym (mem-rip-sym src)))
+            (if (and rip-sym (not (string=? rip-sym "rip_disp")))
+                (list (asm-flatten (list (enc-rex enc) (list 15 opc2) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
+                      (list 'rip_disp32 (+ curr-off (length (asm-flatten (list (enc-rex enc) (list 15 opc2) (enc-modrm enc) (enc-sib enc))))) rip-sym (mem-disp src) 0))
+                (list (asm-flatten (list (enc-rex enc) (list 15 opc2) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
+         (else
+          (let* ((s-info (lookup-x86-reg (cadr src)))
+                 (opc2 (if (= (reg-size s-info) 2) 191 190))
+                 (rex (make-rex w (reg-ext? d-info) #f (reg-ext? s-info))))
+            (list (append (if (or w (reg-ext? d-info) (reg-ext? s-info) (reg-rex? s-info)) (list rex) '())
+                          (list 15 opc2 (make-modrm 3 (reg-id d-info) (reg-id s-info)))) #f))))))
+
+    ;; MOVSXD: movsxd r64, dword ptr [mem] / reg32
+    ((movsxd)
+     (let* ((dst (car opnds))
+            (src (cadr opnds))
+            (d-info (lookup-x86-reg (cadr dst))))
+       (case (car src)
+         ((mem)
+          (let* ((enc (encode-modrm-sib-disp #t d-info src))
+                 (rip-sym (mem-rip-sym src)))
+            (if (and rip-sym (not (string=? rip-sym "rip_disp")))
+                (list (asm-flatten (list (enc-rex enc) (list 99) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
+                      (list 'rip_disp32 (+ curr-off (length (asm-flatten (list (enc-rex enc) (list 99) (enc-modrm enc) (enc-sib enc))))) rip-sym (mem-disp src) 0))
+                (list (asm-flatten (list (enc-rex enc) (list 99) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
+         (else
+          (let* ((s-info (lookup-x86-reg (cadr src)))
+                 (rex (make-rex #t (reg-ext? d-info) #f (reg-ext? s-info))))
+            (list (list rex 99 (make-modrm 3 (reg-id d-info) (reg-id s-info))) #f))))))
 
     ;; LEA: lea r64, [mem]
     ((lea)
@@ -913,12 +973,16 @@
          ((and (eq? (car dst) 'reg) (eq? (car src) 'reg))
           (let* ((d-info (lookup-x86-reg (cadr dst)))
                  (s-info (lookup-x86-reg (cadr src)))
-                 (w (= (reg-size d-info) 8))
+                 (sz (reg-size d-info))
+                 (w (= sz 8))
+                 (pfx16 (if (= sz 2) '(102) '()))
                  (rex (make-rex w (reg-ext? s-info) #f (reg-ext? d-info)))
                  (modrm (make-modrm 3 (reg-id s-info) (reg-id d-info)))
-                 (opc (if (= (reg-size d-info) 1) 136 137)))
-            (list (append (if (or w (reg-ext? s-info) (reg-ext? d-info) (reg-rex? s-info) (reg-rex? d-info)) (list rex) '())
-                          (list opc modrm)) #f)))
+                 (opc (if (= sz 1) 136 137)))
+            (list (append pfx16
+                          (append (if (or w (reg-ext? s-info) (reg-ext? d-info) (reg-rex? s-info) (reg-rex? d-info)) (list rex) '())
+                                  (list opc modrm)))
+                  #f)))
 
          ;; mov reg, imm
          ((and (eq? (car dst) 'reg) (eq? (car src) 'imm))
@@ -932,6 +996,15 @@
                       (opc (+ 176 (modulo (reg-id d-info) 8))))
                  (list (append (if (or (reg-ext? d-info) (reg-rex? d-info)) (list rex) '())
                                (list opc (modulo (if (< val 0) (+ val 256) val) 256))) #f)))
+
+              ;; 16-bit reg: 66 B8+rw imm16
+              ((= sz 2)
+               (let* ((rex (make-rex #f #f #f (reg-ext? d-info)))
+                      (opc (+ 184 (modulo (reg-id d-info) 8))))
+                 (list (cons 102
+                             (append (if (reg-ext? d-info) (list rex) '())
+                                     (cons opc (split-u16-le val))))
+                       #f)))
 
               ;; 32-bit reg: B8+rd imm32
               ((= sz 4)
@@ -956,41 +1029,53 @@
          ;; mov reg, [mem]
          ((and (eq? (car dst) 'reg) (eq? (car src) 'mem))
           (let* ((d-info (lookup-x86-reg (cadr dst)))
+                 (dsz (reg-size d-info))
                  (sz (mem-size src))
-                 (w (= (reg-size d-info) 8))
+                 (pfx16 (if (or (= dsz 2) (= sz 2)) '(102) '()))
+                 (w (= dsz 8))
                  (enc (encode-modrm-sib-disp w d-info src))
-                 (opc (if (= (reg-size d-info) 1) 138 139))
+                 (opc (if (= dsz 1) 138 139))
                  (rip-sym (mem-rip-sym src)))
             (if (and rip-sym (not (string=? rip-sym "rip_disp")))
-                (list (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
-                      (list 'rip_disp32 (+ curr-off (length (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc))))) rip-sym (mem-disp src) 0))
-                (list (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
+                (let ((head-len (+ (length pfx16) (length (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc)))))))
+                  (list (asm-flatten (list pfx16 (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
+                        (list 'rip_disp32 (+ curr-off head-len) rip-sym (mem-disp src) 0)))
+                (list (asm-flatten (list pfx16 (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
 
          ;; mov [mem], reg
          ((and (eq? (car dst) 'mem) (eq? (car src) 'reg))
           (let* ((s-info (lookup-x86-reg (cadr src)))
+                 (ssz (reg-size s-info))
                  (sz (mem-size dst))
-                 (w (= (reg-size s-info) 8))
+                 (pfx16 (if (or (= ssz 2) (= sz 2)) '(102) '()))
+                 (w (= ssz 8))
                  (enc (encode-modrm-sib-disp w s-info dst))
-                 (opc (if (= (reg-size s-info) 1) 136 137))
+                 (opc (if (= ssz 1) 136 137))
                  (rip-sym (mem-rip-sym dst)))
             (if (and rip-sym (not (string=? rip-sym "rip_disp")))
-                (list (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
-                      (list 'rip_disp32 (+ curr-off (length (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc))))) rip-sym (mem-disp dst) 0))
-                (list (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
+                (let ((head-len (+ (length pfx16) (length (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc)))))))
+                  (list (asm-flatten (list pfx16 (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
+                        (list 'rip_disp32 (+ curr-off head-len) rip-sym (mem-disp dst) 0)))
+                (list (asm-flatten (list pfx16 (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
 
          ;; mov [mem], imm
          ((and (eq? (car dst) 'mem) (eq? (car src) 'imm))
           (let* ((val (cadr src))
                  (sz (mem-size dst))
                  (w (= sz 8)))
-            (if (= sz 1)
-                ;; byte ptr: C6 /0 imm8
-                (let ((enc (encode-modrm-sib-disp #f (list 0 1 #f) dst)))
-                  (list (asm-flatten (list (enc-rex enc) (list 198) (enc-modrm enc) (enc-sib enc) (enc-disp enc) (list (modulo (if (< val 0) (+ val 256) val) 256)))) #f))
-                ;; qword/dword ptr: REX.W C7 /0 imm32
-                (let ((enc (encode-modrm-sib-disp w (list 0 8 #f) dst)))
-                  (list (asm-flatten (list (enc-rex enc) (list 199) (enc-modrm enc) (enc-sib enc) (enc-disp enc) (split-u32-le val))) #f)))))
+            (cond
+              ((= sz 1)
+               ;; byte ptr: C6 /0 imm8
+               (let ((enc (encode-modrm-sib-disp #f (list 0 1 #f) dst)))
+                 (list (asm-flatten (list (enc-rex enc) (list 198) (enc-modrm enc) (enc-sib enc) (enc-disp enc) (list (modulo (if (< val 0) (+ val 256) val) 256)))) #f)))
+              ((= sz 2)
+               ;; word ptr: 66 C7 /0 imm16
+               (let ((enc (encode-modrm-sib-disp #f (list 0 2 #f) dst)))
+                 (list (asm-flatten (list (list 102) (enc-rex enc) (list 199) (enc-modrm enc) (enc-sib enc) (enc-disp enc) (split-u16-le val))) #f)))
+              (else
+               ;; qword/dword ptr: [REX.W] C7 /0 imm32
+               (let ((enc (encode-modrm-sib-disp w (list 0 8 #f) dst)))
+                 (list (asm-flatten (list (enc-rex enc) (list 199) (enc-modrm enc) (enc-sib enc) (enc-disp enc) (split-u32-le val))) #f))))))
          (else
           (list '(144) #f)))))
 
@@ -1001,13 +1086,16 @@
             (ext-op (case mnem ((add) 0) ((or) 1) ((and) 4) ((sub) 5) ((xor) 6) ((cmp) 7)))
             (base-op (case mnem ((add) 1) ((or) 9) ((and) 33) ((sub) 41) ((xor) 49) ((cmp) 57))))
        (cond
-         ;; op r64, r64
+         ;; op r64/r32, r64/r32
          ((and (eq? (car dst) 'reg) (eq? (car src) 'reg))
           (let* ((d-info (lookup-x86-reg (cadr dst)))
                  (s-info (lookup-x86-reg (cadr src)))
-                 (rex (make-rex #t (reg-ext? s-info) #f (reg-ext? d-info)))
+                 (w (= (reg-size d-info) 8))
+                 (rex (make-rex w (reg-ext? s-info) #f (reg-ext? d-info)))
                  (modrm (make-modrm 3 (reg-id s-info) (reg-id d-info))))
-            (list (list rex base-op modrm) #f)))
+            (list (append (if (or w (reg-ext? s-info) (reg-ext? d-info)) (list rex) '())
+                          (list base-op modrm))
+                  #f)))
 
          ;; op r64, imm
          ((and (eq? (car dst) 'reg) (eq? (car src) 'imm))
@@ -1034,6 +1122,22 @@
                 (list (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
                       (list 'rip_disp32 (+ curr-off (length (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc))))) rip-sym (mem-disp src) 0))
                 (list (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
+
+         ;; op [mem], reg
+         ((and (eq? (car dst) 'mem) (eq? (car src) 'reg))
+          (let* ((s-info (lookup-x86-reg (cadr src)))
+                 (ssz (reg-size s-info))
+                 (sz (mem-size dst))
+                 (pfx16 (if (or (= ssz 2) (= sz 2)) '(102) '()))
+                 (w (= ssz 8))
+                 (enc (encode-modrm-sib-disp w s-info dst))
+                 (opc (if (= ssz 1) (- base-op 1) base-op))
+                 (rip-sym (mem-rip-sym dst)))
+            (if (and rip-sym (not (string=? rip-sym "rip_disp")))
+                (let ((head-len (+ (length pfx16) (length (asm-flatten (list (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc)))))))
+                  (list (asm-flatten (list pfx16 (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) '(0 0 0 0)))
+                        (list 'rip_disp32 (+ curr-off head-len) rip-sym (mem-disp dst) 0)))
+                (list (asm-flatten (list pfx16 (enc-rex enc) (list opc) (enc-modrm enc) (enc-sib enc) (enc-disp enc))) #f))))
 
          ;; cmp [mem], imm
          ((and (eq? mnem 'cmp) (eq? (car dst) 'mem) (eq? (car src) 'imm))

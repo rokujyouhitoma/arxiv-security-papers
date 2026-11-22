@@ -27,7 +27,7 @@ C99 AST（`L_c_ast`）に対して基本型検査・暗黙の整数昇格（Inte
   - `#835`: Core Machine LIR と Managed Runtime Dialect の完全分離（[ulisp/lir/lir_verifier.scm](../../../ulisp/lir/lir_verifier.scm)）
   - `#915`: C99 Parser ＆ `L_c_ast`（[[#915]](915-implement-c99-parser-and-nanopass-c-ast-definitions.md)）
 - 後続連携 Issue:
-  - [[#917]](../917-implement-c-compiler-driver-and-host-ld-integration.md) (`c_driver.scm`), [[#918]](../918-implement-c99-struct-union-enum-bitfield-sysv-layout.md), [[#919]](../919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md)
+  - [[#917]](917-implement-c-compiler-driver-and-host-ld-integration.md) (`c_driver.scm`), [[#918]](../918-implement-c99-struct-union-enum-bitfield-sysv-layout.md), [[#919]](../919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md)
 
 ---
 

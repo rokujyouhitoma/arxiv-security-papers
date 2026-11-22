@@ -4,6 +4,52 @@
 ;;; Consumes Pass 6 %lir-program and emits ANSI C99 source code.
 ;;; =======================================================================
 
+(define *c-backend-c-tu* (cons #f '()))
+
+(define (c-backend-fn-label lbl)
+  (let ((s (c-sanitize-label lbl)))
+    (if (car *c-backend-c-tu*)
+        (string-append "ulisp_c99_fn_" s)
+        s)))
+
+(define (c99-backend-known-libc-fn? name)
+  (let loop ((xs '("puts" "putchar" "printf" "fprintf" "sprintf" "snprintf"
+                   "exit" "abort" "malloc" "calloc" "realloc" "free"
+                   "strlen" "strcmp" "strncmp" "memcpy" "memmove" "memset"
+                   "memcmp" "strchr" "strstr" "atoi" "atol" "abs"
+                   "ulisp_read_char" "ulisp_peek_char" "ulisp_write_char" "ulisp_write_string")))
+    (cond
+      ((null? xs) #f)
+      ((string=? (car xs) name) #t)
+      (else (loop (cdr xs))))))
+
+(define (c99-collect-c-calls prog)
+  (let ((seen-box (cons '() '())))
+    (let ((add-fn! (lambda (fn)
+                     (let ((fname (if (symbol? fn) (symbol->raw-name fn) fn)))
+                       (if (and (string? fname)
+                                (> (string-length fname) 0)
+                                (not (c99-backend-known-libc-fn? fname))
+                                (not (member fname (car seen-box))))
+                           (set-car! seen-box (cons fname (car seen-box))))))))
+      (let ((scan-insts (lambda (insts)
+                          (for-each (lambda (inst)
+                                      (if (and (pair? inst)
+                                               (memq (car inst) '(%c-call %call-foreign)))
+                                          (add-fn! (cadr inst))))
+                                    insts)))
+            (funcs-clause (assq '%lir-functions (cdr prog)))
+            (main-clause (assq '%lir-main (cdr prog))))
+        (if funcs-clause
+            (for-each (lambda (fn)
+                        (let ((b (assq 'body (cddr fn))))
+                          (if b (scan-insts (cdr b)))))
+                      (cdr funcs-clause)))
+        (if main-clause
+            (let ((b (assq 'body (cdr main-clause))))
+              (if b (scan-insts (cdr b)))))
+        (reverse (car seen-box))))))
+
 (define (c-target-directive? form)
   (and (pair? form)
        (eq? (car form) '!target)
@@ -499,7 +545,7 @@
              (emit (string-append "    goto " (c-sanitize-label lbl) ";"))
              (begin
                (emit "    reg_r10 = 0;")
-               (emit (string-append "    " (c-sanitize-label lbl) "(); return;"))))))
+               (emit (string-append "    " (c-backend-fn-label lbl) "(); return;"))))))
 
       ((%switch)
        ;; (%switch val def-lbl def-args cases)
@@ -961,7 +1007,29 @@
             (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";"))))
            (else
             (if (> frame-shift 0) (emit (string-append "    reg_rsp -= " (number->string frame-shift) ";")))
-            (emit (string-append "    reg_rax = " fname "();"))
+            (if (car *c-backend-c-tu*)
+                (cond
+                  ((string=? fname "puts")
+                   (emit "    reg_rax = (uint64_t)(int64_t)puts((const char *)(uintptr_t)reg_rdi);"))
+                  ((string=? fname "putchar")
+                   (emit "    reg_rax = (uint64_t)(int64_t)putchar((int)reg_rdi);"))
+                  ((string=? fname "printf")
+                   (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(const char *, ...))printf)((const char *)(uintptr_t)reg_rdi, (uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+                  ((string=? fname "fprintf")
+                   (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(FILE *, const char *, ...))fprintf)((FILE *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+                  ((string=? fname "sprintf")
+                   (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, const char *, ...))sprintf)((char *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+                  ((string=? fname "snprintf")
+                   (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, size_t, const char *, ...))snprintf)((char *)(uintptr_t)reg_rdi, (size_t)reg_rsi, (const char *)(uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+                  ((string=? fname "exit")
+                   (emit "    exit((int)reg_rdi);"))
+                  ((string=? fname "malloc")
+                   (emit "    reg_rax = (uint64_t)(uintptr_t)malloc((size_t)reg_rdi);"))
+                  ((string=? fname "free")
+                   (emit "    free((void *)(uintptr_t)reg_rdi); reg_rax = 0;"))
+                  (else
+                   (emit (string-append "    reg_rax = ((uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))" fname ")(reg_rdi, reg_rsi, reg_rdx, reg_rcx, reg_r8, reg_r9);"))))
+                (emit (string-append "    reg_rax = " fname "();")))
             (if (> frame-shift 0) (emit (string-append "    reg_rsp += " (number->string frame-shift) ";")))))))
 
       ((%call-closure)
@@ -974,17 +1042,11 @@
       ((%direct-call)
        (let ((label (cadr inst))
              (frame-shift (caddr inst)))
-         (let ((fn-name (c-sanitize-label label)))
+         (let ((fn-name (c-backend-fn-label label)))
            (emit "    reg_r10 = 0;")
            (emit (string-append "    reg_rsp -= " (number->string (+ frame-shift 8)) ";"))
            (emit (string-append "    " fn-name "();"))
            (emit (string-append "    reg_rsp += " (number->string (+ frame-shift 8)) ";")))))
-
-      ((%direct-jump)
-       (let ((label (cadr inst)))
-         (let ((fn-name (c-sanitize-label label)))
-           (emit "    reg_r10 = 0;")
-           (emit (string-append "    " fn-name "(); return;")))))
 
       ((%global-ref)
        (let ((reg (cadr inst))
@@ -1123,18 +1185,20 @@
 ;;; Emits C code for a single %lir-function
 (define (emit-c-function fn)
   (let* ((label (cadr fn))
-         (label-str (c-sanitize-label label))
+         (label-str (c-backend-fn-label label))
          (body (cdr (assq 'body (cddr fn)))))
     (scan-c-blocks! body)
     (emit (string-append "static void " label-str "(void) ULISP_UNUSED;"))
     (emit (string-append "static void " label-str "(void) {"))
-    (emit "    *(uint64_t *)(reg_rsp - 8) = reg_r10;")
+    (if (not (car *c-backend-c-tu*))
+        (emit "    *(uint64_t *)(reg_rsp - 8) = reg_r10;"))
     (for-each emit-c-instruction body)
     (emit "}")
     (emit "")))
 
 ;;; Pass 7b Entrypoint: Takes %lir-program and emits complete ANSI C99 source
 (define (emit-c prog gc-mode)
+  (set-car! *c-backend-c-tu* (eq? gc-mode 'c-tu))
   (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog)))
@@ -1656,6 +1720,16 @@
                  (g-lbl (mangle-gvar-label v)))
             (emit (string-append "static uint64_t " g-lbl " ULISP_UNUSED = 63;"))
             (loop (cdr gvs)))))
+    (if (car *c-backend-c-tu*)
+        (begin
+          (for-each (lambda (v)
+                      (if (not (memq v (car *top-level-vars*)))
+                          (let ((g-lbl (mangle-gvar-label v)))
+                            (emit (string-append "static uint64_t " g-lbl " ULISP_UNUSED = 0;")))))
+                    (c99-collect-lir-globals prog))
+          (for-each (lambda (fn-str)
+                      (emit (string-append "extern uint64_t " fn-str "();")))
+                    (c99-collect-c-calls prog))))
     (emit "")
     (emit "static uint64_t copy_if_heap(uint64_t val) {")
     (emit "    uint64_t tag = val & 7ULL;")
@@ -1822,7 +1896,7 @@
     ;; Forward declarations of lifted functions
     (for-each (lambda (fn)
                 (let* ((lbl (cadr fn))
-                       (lbl-str (c-sanitize-label lbl)))
+                       (lbl-str (c-backend-fn-label lbl)))
                   (emit (string-append "static void " lbl-str "(void);"))))
               funcs)
     (emit "")
@@ -1831,7 +1905,7 @@
                        (let loop ((fs funcs))
                          (cond
                            ((null? fs) #f)
-                           ((string=? (c-sanitize-label (cadar fs)) name) #t)
+                           ((string=? (c-backend-fn-label (cadar fs)) name) #t)
                            (else (loop (cdr fs))))))))
       (for-each
        (lambda (name)
@@ -1848,16 +1922,29 @@
                      (escaped (escape-gas-string (cdr entry))))
                 (emit (string-append "static const char " lbl-str "[] ULISP_UNUSED __attribute__((aligned(8))) = \"" escaped "\";"))
                 (loop (cdr ss))))))
+    (if (car *c-backend-c-tu*)
+        (let* ((prog-str-clause (assq 'strings (cdr prog)))
+               (prog-strs (if (and prog-str-clause (pair? (cdr prog-str-clause)))
+                              (cadr prog-str-clause)
+                              '())))
+          (for-each (lambda (entry)
+                      (let* ((lbl-str (c-sanitize-label (car entry)))
+                             (raw-str (if (pair? (cdr entry)) (cadr entry) (cdr entry)))
+                             (escaped (escape-gas-string raw-str)))
+                        (emit (string-append "static const char " lbl-str "[] ULISP_UNUSED __attribute__((aligned(8))) = \"" escaped "\";"))))
+                    prog-strs)))
     (emit "")
     ;; Emit lifted function bodies
     (for-each emit-c-function funcs)
     ;; Emit scheme_entry
     (emit "uint64_t scheme_entry(char *heap_base) {")
-    (emit "    semi_space_size = (1024ULL * 1024 * 1024);")
-    (emit "    from_space = heap_base;")
-    (emit "    to_space = heap_base + semi_space_size;")
-    (emit "    to_space_free = (uint64_t)(uintptr_t)to_space;")
-    (emit "    reg_r12 = from_space;")
+    (if (not (car *c-backend-c-tu*))
+        (begin
+          (emit "    semi_space_size = (1024ULL * 1024 * 1024);")
+          (emit "    from_space = heap_base;")
+          (emit "    to_space = heap_base + semi_space_size;")
+          (emit "    to_space_free = (uint64_t)(uintptr_t)to_space;")
+          (emit "    reg_r12 = from_space;")))
     (emit "    reg_rsp = stack_mem + sizeof(stack_mem) - 1024;")
     (scan-c-blocks! main-body)
     (for-each (lambda (inst)
@@ -1870,6 +1957,15 @@
     ;; Standalone main() entrypoint
     (emit "#ifndef ULISP_NO_MAIN")
     (emit "int main(int argc, char **argv, char **envp) {")
+    (if (car *c-backend-c-tu*)
+        (begin
+          (emit "    (void)argc; (void)argv; (void)envp;")
+          (emit "    uint64_t result = scheme_entry(NULL);")
+          (emit "    return (int)(int64_t)result;")
+          (emit "}")
+          (emit "#endif")
+          (emit ""))
+        (begin
     (emit "#ifdef _WIN32")
     (emit "    extern char **_environ;")
     (emit "    ulisp_argc[0] = (uint64_t)argc;")
@@ -1985,4 +2081,4 @@
     (emit "    return 0;")
     (emit "}")
     (emit "#endif")
-    (emit "")))
+    (emit "")))))

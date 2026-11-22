@@ -54,6 +54,91 @@
       (else
        (peg:lit pat)))))
 
+;;; Compiles a single AST expression node with O(1) rule-cell dispatch
+(define (compile-expr->parser-with-cells expr lookup-cell)
+  (cond
+    ((peg-lit-expr? expr)
+     (peg:lit (peg-lit-expr-val expr)))
+
+    ((peg-regex-expr? expr)
+     (compile-regex-pattern (peg-regex-expr-pattern expr)))
+
+    ((peg-char-class-expr? expr)
+     (peg:char-class (peg-char-class-expr-spec expr)
+                     (peg-char-class-expr-inverted? expr)))
+
+    ((peg-any-char-expr? expr)
+     (peg:any-char))
+
+    ((peg-cut-expr? expr)
+     (peg:cut))
+
+    ((peg-line-start-expr? expr)
+     (peg:line-start))
+
+    ((peg-seq-expr? expr)
+     (let ((sub-parsers
+            (map (lambda (e) (compile-expr->parser-with-cells e lookup-cell))
+                 (peg-seq-expr-elements expr))))
+       (apply peg:seq sub-parsers)))
+
+    ((peg-choice-expr? expr)
+     (let ((sub-parsers
+            (map (lambda (e) (compile-expr->parser-with-cells e lookup-cell))
+                 (peg-choice-expr-alternatives expr))))
+       (apply peg:alt sub-parsers)))
+
+    ((peg-repeat-expr? expr)
+     (let ((inner (compile-expr->parser-with-cells (peg-repeat-expr-expr expr) lookup-cell))
+           (min-c (peg-repeat-expr-min-count expr)))
+       (if (= min-c 1)
+           (peg:plus inner)
+           (peg:star inner))))
+
+    ((peg-opt-expr? expr)
+     (peg:opt (compile-expr->parser-with-cells (peg-opt-expr-expr expr) lookup-cell)))
+
+    ((peg-pred-expr? expr)
+     (let ((inner (compile-expr->parser-with-cells (peg-pred-expr-expr expr) lookup-cell)))
+       (if (peg-pred-expr-positive? expr)
+           (peg:and inner)
+           (peg:not inner))))
+
+    ((peg-gather-expr? expr)
+     (let ((sep (compile-expr->parser-with-cells (peg-gather-expr-sep expr) lookup-cell))
+           (elem (compile-expr->parser-with-cells (peg-gather-expr-elem expr) lookup-cell)))
+       (peg:gather sep elem (peg-gather-expr-one-or-more? expr))))
+
+    ((peg-named-expr? expr)
+     (let ((name (peg-named-expr-name expr))
+           (inner (compile-expr->parser-with-cells (peg-named-expr-expr expr) lookup-cell)))
+       (peg:bind name inner)))
+
+    ((peg-rule-ref-expr? expr)
+     (let* ((name (peg-rule-ref-expr-name expr))
+            (cell (lookup-cell name)))
+       (if cell
+           (lambda (ctx pos sk fk)
+             (let ((r (car cell)))
+               (if r
+                   (r ctx pos sk fk)
+                   (error "Undefined grammar rule referenced" name))))
+           (error "Undefined grammar rule referenced" name))))
+
+    ((peg-action-expr? expr)
+     (let ((inner (compile-expr->parser-with-cells (peg-action-expr-expr expr) lookup-cell))
+           (code (peg-action-expr-action-code expr)))
+       ;; Semantic action: returns parsed value decorated or mapped
+       (peg:map (lambda (val)
+                  ;; Clean action wrapper returning value
+                  (if (procedure? code)
+                      (code val)
+                      val))
+                inner)))
+
+    (else
+     (error "Unknown AST expression node in codegen" expr))))
+
 ;;; Compiles a single AST expression node into a (lambda (ctx pos sk fk) ...) parser closure
 (define (compile-expr->parser expr lookup-rule)
   (cond
@@ -140,16 +225,16 @@
 ;;; Returns a procedure: (lambda (entry-rule-name-or-default) -> parser-closure)
 (define (compile-grammar-rules grammar)
   (let* ((rules (peg-grammar-def-rules grammar))
-         (rule-table '()))
-    (define (lookup name)
-      (let ((slot (assoc name rule-table)))
+         (rule-cells '()))
+    (define (lookup-cell name)
+      (let ((slot (assq name rule-cells)))
         (if slot
             (cdr slot)
             #f)))
-    ;; Populate rule-table with forward dummy cells
+    ;; Populate rule-cells with forward mutable box pairs (proc . '())
     (for-each
      (lambda (r)
-       (set! rule-table (cons (cons (peg-rule-def-name r) #f) rule-table)))
+       (set! rule-cells (cons (cons (peg-rule-def-name r) (cons #f '())) rule-cells)))
      rules)
     ;; Compile and assign each rule wrapped in Warth Packrat memoization
     (for-each
@@ -163,18 +248,19 @@
                  ((eq? name 'choice_expr)
                   (peg:map (lambda (pair) (cadr pair))
                            (peg:seq (peg:opt (peg:lex (peg:alt (peg:lit "|") (peg:lit "/"))))
-                                    (compile-expr->parser (peg-rule-def-expr r) lookup))))
+                                    (compile-expr->parser-with-cells (peg-rule-def-expr r) lookup-cell))))
                  (else
-                  (compile-expr->parser (peg-rule-def-expr r) lookup))))
+                  (compile-expr->parser-with-cells (peg-rule-def-expr r) lookup-cell))))
               (wrapped-rule (if memo?
                                 (peg:rule name base-body)
                                 base-body)))
-         (let ((slot (assoc name rule-table)))
-           (set-cdr! slot wrapped-rule))))
+         (let ((cell (lookup-cell name)))
+           (set-car! cell wrapped-rule))))
      rules)
     ;; Return getter for rules
     (lambda (rule-name)
-      (lookup rule-name))))
+      (let ((cell (lookup-cell rule-name)))
+        (if cell (car cell) #f)))))
 
 (define (compile-grammar-entry-parser grammar . maybe-entry)
   (let* ((rules (peg-grammar-def-rules grammar))

@@ -208,21 +208,27 @@
 
 ;;; Literal string match
 (define (peg:lit str)
-  (let ((lit-len (string-length str)))
+  (let ((lit-len (string-length str))
+        (err-label (string-append "'" str "'"))
+        (first-ch (if (> (string-length str) 0) (string-ref str 0) #f)))
     (lambda (ctx pos sk fk)
       (let ((txt (parse-ctx-text ctx))
             (total-len (parse-ctx-length ctx)))
         (if (and (<= (+ pos lit-len) total-len)
-                 (string=? (substring txt pos (+ pos lit-len)) str))
+                 (or (= lit-len 0)
+                     (and (char=? (string-ref txt pos) first-ch)
+                          (or (= lit-len 1)
+                              (string=? (substring txt pos (+ pos lit-len)) str)))))
             (sk str (+ pos lit-len) fk)
             (begin
-              (parse-ctx-update-max-pos! ctx pos (string-append "'" str "'"))
+              (parse-ctx-update-max-pos! ctx pos err-label)
               (fk)))))))
 
 ;;; Character class match
 (define (peg:char-class spec . maybe-inverted)
   (let* ((inverted? (if (pair? maybe-inverted) (car maybe-inverted) #f))
-         (pred (make-char-class-pred spec inverted?)))
+         (pred (make-char-class-pred spec inverted?))
+         (err-label (string-append "[" spec "]")))
     (lambda (ctx pos sk fk)
       (let ((txt (parse-ctx-text ctx))
             (total-len (parse-ctx-length ctx)))
@@ -230,7 +236,7 @@
                  (pred (string-ref txt pos)))
             (sk (string (string-ref txt pos)) (+ pos 1) fk)
             (begin
-              (parse-ctx-update-max-pos! ctx pos (string-append "[" spec "]"))
+              (parse-ctx-update-max-pos! ctx pos err-label)
               (fk)))))))
 
 ;;; Any character match (.)

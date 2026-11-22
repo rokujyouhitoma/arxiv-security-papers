@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **917** | C コンパイラドライバ (`c_driver.scm`) およびホストリンカ連携による整数 C E2E 開通 | Feature | In Progress | [917-implement-c-compiler-driver-and-host-ld-integration.md](917-implement-c-compiler-driver-and-host-ld-integration.md) |
 | **918** | C99 構造体・共用体・列挙型・ビットフィールドの SysV AMD64 メモリレイアウト計算の実装 | Feature | In Progress | [918-implement-c99-struct-union-enum-bitfield-sysv-layout.md](918-implement-c99-struct-union-enum-bitfield-sysv-layout.md) |
 | **919** | C99 ポインタスケーリング演算・配列退化およびアドレス取得変数のスタックエスケープ処理の実装 | Feature | In Progress | [919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md](919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md) |
 | **920** | C99 関数ポインタ間接呼び出しおよび巨大 `switch`/`goto` 複雑 CFG の Braun SSA Lowering 実装 | Feature | In Progress | [920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md](920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md) |
@@ -25,6 +24,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **917** | C コンパイラドライバ (`c_driver.scm`) およびホストリンカ連携による整数 C E2E 開通 | Feature | 2026-11-22 | [917-implement-c-compiler-driver-and-host-ld-integration.md](closed/917-implement-c-compiler-driver-and-host-ld-integration.md) |
 | **916** | C99 基本型検査・整数昇格 (Sema Core) および整数サブセット Core LIR Lowering の実装 | Feature | 2026-11-22 | [916-implement-c99-sema-core-and-integer-subset-lir-lowering.md](closed/916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |
 | **915** | C99 構文解析器 (Parser) および Nanopass C-AST 言語定義・Lexer Hack 解消の実装 | Feature | 2026-11-22 | [915-implement-c99-parser-and-nanopass-c-ast-definitions.md](closed/915-implement-c99-parser-and-nanopass-c-ast-definitions.md) |
 | **914** | 純粋 Scheme 製 C99 プリプロセッサ (CPP: `#include`/`#define`/`##`/`#if` CTFE) の実装 | Feature | 2026-11-21 | [914-implement-pure-scheme-c99-preprocessor-cpp.md](closed/914-implement-pure-scheme-c99-preprocessor-cpp.md) |

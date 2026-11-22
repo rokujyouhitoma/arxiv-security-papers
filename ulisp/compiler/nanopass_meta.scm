@@ -3361,8 +3361,14 @@
              %add %raw-add %sub %raw-sub %imul %raw-mul
              %bit-and %bit-or %bit-xor %shl %shr %sar
              %box-fixnum %unbox-fixnum %neg %inc
-             %alloc %alloc-stack)
+             %alloc %alloc-stack %managed-alloc %managed-alloc-stack
+             %fmov %fadd %fsub %fmul %fdiv
+             %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum)
             (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg)))
+           ((%load-typed %trunc %zext %sext %managed-box %managed-unbox)
+            (and (pair? (cdr inst))
+                 (pair? (cddr inst))
+                 (lir-reg-aliases? (caddr inst) reg)))
            ((%add-overflow %sub-overflow %mul-overflow)
             (and (pair? (cdr inst))
                  (or (lir-reg-aliases? (cadr inst) reg)
@@ -3378,8 +3384,10 @@
            ((%atomic-cas!)
             (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
                 (lir-reg-aliases? reg '%rax)))
-           ((%c-call %call-closure %direct-call %dispatch-consumer)
-            (or (memq reg '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al))
+           ((%c-call %call-foreign %call-closure %direct-call %dispatch-consumer)
+            (or (memq reg '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al
+                            %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                            %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
                 (and (eq? (current-target-arch) 'aarch64)
                      (or (lir-reg-aliases? reg '%rax) (lir-reg-aliases? reg '%rbx)))))
            ((%syscall)
@@ -3395,12 +3403,37 @@
 
 (define (lir-inst-memory-barrier? inst)
   (and (pair? inst)
-       (or (memq (car inst) '(%c-call %call-closure %direct-call %dispatch-consumer
-                              %syscall %memory-fence %push %pop %raise
+       (or (memq (car inst) '(%c-call %call-foreign %call-closure %direct-call %dispatch-consumer
+                              %syscall %memory-fence %managed-safepoint-poll %push %pop %raise
                               %capture-cc %push-handler %pop-handler
                               %store-values-buf))
            (and (eq? (car inst) '%inline-asm)
                 (lir-inline-asm-memory-barrier? inst)))))
+
+(define (lir-inst-may-alias-stack-slot? inst off)
+  (and (pair? inst)
+       (case (car inst)
+         ((%store %store-byte)
+          (if (and (pair? (cdr inst)) (pair? (cddr inst)))
+              (let ((base (cadr inst))
+                    (soff (caddr inst)))
+                (or (not (eq? base '%rsp))
+                    (not (integer? soff))
+                    (not (integer? off))
+                    (< (abs (- soff off)) 8)))
+              #t))
+         ((%store-typed)
+          (if (and (pair? (cdr inst)) (pair? (cddr inst)) (pair? (cdddr inst)))
+              (let ((base (caddr inst))
+                    (soff (cadddr inst)))
+                (or (not (eq? base '%rsp))
+                    (not (integer? soff))
+                    (not (integer? off))
+                    (< (abs (- soff off)) 8)))
+              #t))
+         ((%box-flonum %managed-write-barrier %atomic-cas!)
+          #t)
+         (else #f))))
 
 (define (lir-inst-terminates-block? inst)
   (and (pair? inst)
@@ -3431,18 +3464,9 @@
            ((lir-inst-memory-barrier? inst)
             #f)
 
-           ;; 3. Store instruction:
-           ((and (pair? inst) (eq? (car inst) '%store))
-            (let ((base (cadr inst))
-                  (store-off (caddr inst)))
-              (cond
-                ;; Indirect store not via %rsp: potential memory alias, stop
-                ((not (eq? base '%rsp)) #f)
-                ;; Overwriting the same stack slot: stop scanning
-                ((equal? store-off off) #f)
-                ;; Store to different stack slot: continue scanning
-                (else
-                 (loop tail (cons inst prefix))))))
+           ;; 3. Memory store / alias check (includes %store, %store-byte, %store-typed):
+           ((lir-inst-may-alias-stack-slot? inst off)
+            #f)
 
            ;; 4. Load from matching stack slot (%load dst %rsp off)
            ;; Safely replace %load with (%mov dst src).
@@ -3459,7 +3483,7 @@
            ((lir-inst-defines-reg? inst src)
             #f)
 
-           ;; 6. General instruction not defining src: continue scanning
+           ;; 6. General instruction not defining src or aliasing off: continue scanning
            (else
             (loop tail (cons inst prefix)))))))))
 
@@ -3468,24 +3492,43 @@
   (if (not (pair? inst))
       '()
       (case (car inst)
-        ((%store)
+        ((%store %store-byte)
          (let ((base (cadr inst)) (val (cadddr inst)))
            (cond
              ((and (eq? base '%rsp) (lir-peephole-reg? val)) (list val))
              ((lir-peephole-reg? base) (if (lir-peephole-reg? val) (list base val) (list base)))
              (else (if (lir-peephole-reg? val) (list val) '())))))
-        ((%load)
+        ((%store-typed)
+         (let ((base (caddr inst)) (val (car (cddddr inst))))
+           (cond
+             ((and (eq? base '%rsp) (lir-peephole-reg? val)) (list val))
+             ((lir-peephole-reg? base) (if (lir-peephole-reg? val) (list base val) (list base)))
+             (else (if (lir-peephole-reg? val) (list val) '())))))
+        ((%load %load-byte-zx)
          (let ((base (caddr inst)) (off (cadddr inst)))
            (if (eq? base '%rsp)
                (list (list 'stack off))
                (if (lir-peephole-reg? base) (list base) '()))))
-        ((%mov)
+        ((%load-typed)
+         (let ((base (cadddr inst)) (off (car (cddddr inst))))
+           (if (eq? base '%rsp)
+               (list (list 'stack off))
+               (if (lir-peephole-reg? base) (list base) '()))))
+        ((%mov %fmov %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum)
          (let ((src (caddr inst)))
            (if (lir-peephole-reg? src) (list src) '())))
-        ((%add %raw-add %sub %raw-sub %imul %raw-mul %bit-and %bit-or %bit-xor %shl %shr %sar)
+        ((%trunc %zext %sext)
+         (let ((src (cadddr inst)))
+           (if (lir-peephole-reg? src) (list src) '())))
+        ((%add %raw-add %sub %raw-sub %imul %raw-mul %bit-and %bit-or %bit-xor %shl %shr %sar
+          %fadd %fsub %fmul %fdiv)
          (let ((dst (cadr inst)) (src (caddr inst)))
-           (if (lir-peephole-reg? src) (list dst src) (list dst))))
-        ((%cmp %raw-cmp)
+           (cond
+             ((and (lir-peephole-reg? dst) (lir-peephole-reg? src)) (list dst src))
+             ((lir-peephole-reg? dst) (list dst))
+             ((lir-peephole-reg? src) (list src))
+             (else '()))))
+        ((%cmp %raw-cmp %fcmp)
          (let ((op1 (cadr inst)) (op2 (caddr inst)))
            (cond
              ((and (lir-peephole-reg? op1) (lir-peephole-reg? op2)) (list op1 op2))
@@ -3512,14 +3555,22 @@
   (if (not (pair? inst))
       '()
       (case (car inst)
-        ((%store)
+        ((%store %store-byte)
          (let ((base (cadr inst)) (off (caddr inst)))
            (if (eq? base '%rsp)
                (list (list 'stack off))
                '())))
+        ((%store-typed)
+         (let ((base (caddr inst)) (off (cadddr inst)))
+           (if (eq? base '%rsp)
+               (list (list 'stack off))
+               '())))
         ((%load %load-byte-zx %pop %code-ref %str-ref %global-ref %set-boolean %alloc %alloc-stack
-          %setb %setbe %seta %setae)
-         (list (cadr inst)))
+          %setb %setbe %seta %setae %fmov %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64
+          %unbox-flonum %fadd %fsub %fmul %fdiv %managed-alloc %managed-alloc-stack)
+         (if (lir-peephole-reg? (cadr inst)) (list (cadr inst)) '()))
+        ((%load-typed %trunc %zext %sext)
+         (if (lir-peephole-reg? (caddr inst)) (list (caddr inst)) '()))
         ((%add-overflow %sub-overflow %mul-overflow)
          (list (cadr inst) (caddr inst)))
         ((%udiv %urem)

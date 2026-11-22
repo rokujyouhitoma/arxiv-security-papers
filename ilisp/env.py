@@ -1674,6 +1674,40 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             )
             raise SchemeException(err)
 
+    def prim_process_exec(argv: Any) -> int:
+        import subprocess
+
+        py_argv: List[str] = []
+        cur = argv
+        while isinstance(cur, Cons):
+            elem = cur.car
+            if not isinstance(elem, (str, MutableString)):
+                raise TypeError(f"process-exec: expected list of strings, got {elem!r}")
+            s = string_val(elem)
+            if not s or any(ch in s for ch in ("\x00", "\n", "\r")):
+                raise ValueError(
+                    f"process-exec: unsafe control character or empty arg in {s!r}"
+                )
+            py_argv.append(s)
+            cur = cur.cdr
+        if cur is not NIL or not py_argv:
+            raise ValueError("process-exec: expected non-empty proper list of strings")
+        try:
+            proc = subprocess.run(py_argv, check=False)
+            return int(proc.returncode)
+        except FileNotFoundError as e:
+            err = ErrorObject(
+                f"process-exec executable not found: {e}",
+                to_lisp_list([py_argv[0]]),
+                kind="file",
+            )
+            raise SchemeException(err)
+        except OSError as e:
+            err = ErrorObject(
+                f"process-exec failed: {e}", to_lisp_list(py_argv), kind="generic"
+            )
+            raise SchemeException(err)
+
     # Register all primitives
     primitives: Dict[str, Callable[..., Any]] = {
         # Pairs and Lists (R7RS 6.4)
@@ -2026,6 +2060,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "features": prim_features,
         "file-exists?": prim_file_exists_p,
         "delete-file": prim_delete_file,
+        "process-exec": prim_process_exec,
     }
 
     for name, fn in primitives.items():
