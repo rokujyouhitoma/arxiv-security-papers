@@ -1628,6 +1628,88 @@
       (else
        (error "Unsupported statement tag in lower_to_lir" tag)))))
 
+;;; -----------------------------------------------------------------------
+;;; 8.1 Escape Analysis & mem2reg Candidate Promotion (Issue #919)
+;;; -----------------------------------------------------------------------
+
+(define (c99-find-root-lvalue-var node)
+  (let* ((unwrapped (if (c-typed? node) (c-typed-inner node) node))
+         (tag (and (pair? unwrapped) (car unwrapped))))
+    (case tag
+      ((c-var-ref) (cadr unwrapped))
+      ((c-member)
+       (let ((base (cadr unwrapped))
+             (deref? (cadddr unwrapped)))
+         (if (not deref?) (c99-find-root-lvalue-var base) #f)))
+      ((c-index)
+       (c99-find-root-lvalue-var (cadr unwrapped)))
+      ((c-cast c-implicit-cast)
+       (c99-find-root-lvalue-var (caddr unwrapped)))
+      (else #f))))
+
+(define (c99-collect-escaped-bindings fn-node)
+  (letrec
+      ((walk
+        (lambda (node acc)
+          (cond
+            ((not (pair? node)) acc)
+            (else
+             (let* ((inner (if (c-typed? node) (c-typed-inner node) node))
+                    (tag (and (pair? inner) (car inner))))
+               (case tag
+                 ((c-unop)
+                  (let* ((op (cadr inner))
+                         (sub (caddr inner))
+                         (root (and (eq? op 'addr) (c99-find-root-lvalue-var sub)))
+                         (acc2 (if (and root (not (memq root acc)))
+                                   (cons root acc)
+                                   acc)))
+                    (walk sub acc2)))
+                 ((c-decl)
+                  (let dloop ((ds (cdr inner)) (dacc acc))
+                    (if (null? ds) dacc
+                        (let* ((d (car ds))
+                               (u-sym (list-ref d 1))
+                               (ty (list-ref d 3))
+                               (init (list-ref d 5))
+                               (agg? (or (c-array-type? ty) (c-aggregate-ref-type? ty)))
+                               (dacc2 (if (and agg? (not (memq u-sym dacc)))
+                                          (cons u-sym dacc)
+                                          dacc))
+                               (dacc3 (if init (walk init dacc2) dacc2)))
+                          (dloop (cdr ds) dacc3)))))
+                 (else
+                  (let loop ((items inner) (cur-acc acc))
+                    (if (null? items) cur-acc
+                        (loop (cdr items) (walk (car items) cur-acc))))))))))))
+    (let* ((params (if (>= (length fn-node) 5) (list-ref fn-node 4) '()))
+           (body   (if (>= (length fn-node) 6) (list-ref fn-node 5) '()))
+           (init-acc
+            (let ploop ((ps params) (pacc '()))
+              (if (null? ps) pacc
+                  (let* ((p (car ps))
+                         (u-sym (car p))
+                         (pty (caddr p)))
+                    (if (or (c-array-type? pty) (c-aggregate-ref-type? pty))
+                        (ploop (cdr ps) (if (memq u-sym pacc) pacc (cons u-sym pacc)))
+                        (ploop (cdr ps) pacc)))))))
+      (walk body init-acc))))
+
+(define (c99-function-candidate-mem2reg-offsets fn-node vars)
+  (let ((escaped (c99-collect-escaped-bindings fn-node)))
+    (let loop ((vs vars) (acc '()))
+      (if (null? vs) (reverse acc)
+          (let* ((entry (car vs))
+                 (u-sym (car entry))
+                 (kind (cadr entry))
+                 (si (caddr entry))
+                 (ty (cadddr entry)))
+            (if (and (eq? kind 'local)
+                     (c-scalar-type? ty)
+                     (not (memq u-sym escaped)))
+                (loop (cdr vs) (cons si acc))
+                (loop (cdr vs) acc)))))))
+
 (define (%c99-lower-function ctx fn-node globals)
   (let* ((fn-sym (list-ref fn-node 1))
          (ret-ty  (list-ref fn-node 2))
