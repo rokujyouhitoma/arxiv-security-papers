@@ -378,7 +378,9 @@
       (if (null? xs)
           (let ((final-ty
                  (cond
-                   ((and base (not (symbol? base))) base)
+                   ((or (and base (not (symbol? base)))
+                        (memq base '(i8 u8 i16 u16 i32 u32 i64 u64 f32 f64)))
+                    base)
                    ((eq? base 'void) 'void)
                    ((eq? base 'bool) 'bool)
                    ((eq? base 'float) 'f32)

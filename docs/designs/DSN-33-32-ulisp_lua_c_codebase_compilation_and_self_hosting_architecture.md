@@ -253,7 +253,7 @@ Step S5 の完了基準（Definition of Done）として、ULisp でビルドさ
 | **#920** | S3 (T8) | 関数ポインタ間接呼び出しおよび巨大 `switch`/`goto` の Braun SSA Lowering | High | [920](../issues/closed/920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md) |
 | **#921** | S3 (T9) | `<stdarg.h>` 可変長引数 (`va_list`/`va_start`/`va_arg`) SysV ABI Lowering | High | [921](../issues/closed/921-implement-sysv-amd64-stdarg-va-list-lowering.md) |
 | **#922** | S3 (T10) | 非局所脱出 (`setjmp`/`longjmp`) `%inline-asm` ＆ 生存変数スピル保護 | High | [922](../issues/closed/922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md) |
-| **#923** | S4 (T11) | C99 浮動小数点型 (`double`/`float`) Sema ＆ IEEE 754 / LIR 変換 | High | [923](../issues/923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) |
+| **#923** | S4 (T11) | C99 浮動小数点型 (`double`/`float`) Sema ＆ IEEE 754 / LIR 変換 | High | [923](../issues/closed/923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) |
 | **#924** | S4 (T12) | SSE2 XMM 命令・SysV XMM ABI 配線と 3者差分ファジング検証 | High | [924](../issues/924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md) |
 | **#925** | S5 (T13) | Lua 5.x 全 C ソースファイルの ULisp 一括ビルドパイプライン構築 | High | [925](../issues/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) |
 | **#926** | S5 (T14) | ULisp ビルド版 Lua バイナリによる公式テストスイート完走 E2E 実証 | High | [926](../issues/926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) |

@@ -764,12 +764,44 @@
                #t
                (lir-report-error (string-append (symbol->string op) " format must be (op <dst> <src>)") inst)))
 
+          ((%fneg)
+           (if (and (= (length inst) 4)
+                    (memq (cadr inst) '(f32 f64))
+                    (lir-float-register? (caddr inst))
+                    (lir-float-operand? (cadddr inst)))
+               #t
+               (lir-report-error "%fneg format must be (%fneg <f32|f64> <dst-freg> <src-fopnd>)" inst)))
+
+          ((%fpext)
+           (if (and (= (length inst) 4)
+                    (eq? (cadr inst) 'f64)
+                    (lir-float-register? (caddr inst))
+                    (lir-float-operand? (cadddr inst)))
+               #t
+               (lir-report-error "%fpext format must be (%fpext f64 <dst-freg> <src-fopnd>)" inst)))
+
+          ((%fptrunc)
+           (if (and (= (length inst) 4)
+                    (eq? (cadr inst) 'f32)
+                    (lir-float-register? (caddr inst))
+                    (lir-float-operand? (cadddr inst)))
+               #t
+               (lir-report-error "%fptrunc format must be (%fptrunc f32 <dst-freg> <src-fopnd>)" inst)))
+
           ((%sitofp)
            (if (and (= (length inst) 3)
                     (lir-float-register? (cadr inst))
                     (lir-valid-operand? (caddr inst)))
                #t
                (lir-report-error "%sitofp format must be (%sitofp <dst-freg> <src-gpr>)" inst)))
+
+          ((%uitofp)
+           (if (and (= (length inst) 3)
+                    (lir-float-register? (cadr inst))
+                    (lir-valid-operand? (caddr inst))
+                    (not (lir-float-register? (caddr inst))))
+               #t
+               (lir-report-error "%uitofp format must be (%uitofp <dst-freg> <src-gpr>)" inst)))
 
           ((%fptosi)
            (if (and (= (length inst) 3)
@@ -778,6 +810,23 @@
                     (lir-float-operand? (caddr inst)))
                #t
                (lir-report-error "%fptosi format must be (%fptosi <dst-gpr> <src-freg>)" inst)))
+
+          ((%fptoui)
+           (if (and (= (length inst) 3)
+                    (lir-valid-register? (cadr inst))
+                    (not (lir-float-register? (cadr inst)))
+                    (lir-float-operand? (caddr inst)))
+               #t
+               (lir-report-error "%fptoui format must be (%fptoui <dst-gpr> <src-freg>)" inst)))
+
+          ((%fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
+           (if (and (= (length inst) 4)
+                    (lir-valid-register? (cadr inst))
+                    (not (lir-float-register? (cadr inst)))
+                    (lir-float-register? (caddr inst))
+                    (lir-float-operand? (cadddr inst)))
+               #t
+               (lir-report-error (string-append (symbol->string op) " format must be (op <dst-gpr> <lhs-freg> <rhs-fopnd>)") inst)))
 
           ((%trunc %zext %sext)
            (if (and (= (length inst) 4)

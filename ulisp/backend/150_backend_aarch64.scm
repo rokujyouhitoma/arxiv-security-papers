@@ -667,13 +667,55 @@
        (let ((dst (cadr inst)) (src (caddr inst)))
          (emit (string-append "    fcmp " (arm-reg->str dst) ", " (arm-operand->str src)))))
 
+      ((%fneg)
+       (let ((mty (cadr inst)) (dst (caddr inst)) (src (cadddr inst)))
+         (let ((d-str (arm-reg->str dst))
+               (s-str (arm-operand->str src)))
+           (if (eq? mty 'f32)
+               (let ((ds (string-append "s" (substring d-str 1 (string-length d-str))))
+                     (ss (string-append "s" (substring s-str 1 (string-length s-str)))))
+                 (emit (string-append "    fneg " ds ", " ss)))
+               (emit (string-append "    fneg " d-str ", " s-str))))))
+
+      ((%fpext)
+       (let ((dst (caddr inst)) (src (cadddr inst)))
+         (let ((s-str (arm-operand->str src)))
+           (emit (string-append "    fcvt " (arm-reg->str dst) ", s" (substring s-str 1 (string-length s-str)))))))
+
+      ((%fptrunc)
+       (let ((dst (caddr inst)) (src (cadddr inst)))
+         (let ((d-str (arm-reg->str dst)))
+           (emit (string-append "    fcvt s" (substring d-str 1 (string-length d-str)) ", " (arm-operand->str src))))))
+
       ((%sitofp)
        (let ((dst (cadr inst)) (src (caddr inst)))
-         (emit (string-append "    scvtf " (arm-reg->str dst) ", " (arm-reg->str src)))))
+         (emit (string-append "    scvtf " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%uitofp)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    ucvtf " (arm-reg->str dst) ", " (arm-operand->str src)))))
 
       ((%fptosi)
        (let ((dst (cadr inst)) (src (caddr inst)))
-         (emit (string-append "    fcvtzs " (arm-reg->str dst) ", " (arm-reg->str src)))))
+         (emit (string-append "    fcvtzs " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%fptoui)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (emit (string-append "    fcvtzu " (arm-reg->str dst) ", " (arm-operand->str src)))))
+
+      ((%fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
+       (let* ((dst (cadr inst))
+              (lhs (caddr inst))
+              (rhs (cadddr inst))
+              (cc (case op
+                    ((%fcmp-oeq) "eq")
+                    ((%fcmp-une) "ne")
+                    ((%fcmp-olt) "mi")
+                    ((%fcmp-ole) "ls")
+                    ((%fcmp-ogt) "gt")
+                    ((%fcmp-oge) "ge"))))
+         (emit (string-append "    fcmp " (arm-reg->str lhs) ", " (arm-operand->str rhs)))
+         (emit (string-append "    cset " (arm-reg->str dst) ", " cc))))
 
       ((%box-flonum)
        (let ((dst (cadr inst)) (src (caddr inst)))
