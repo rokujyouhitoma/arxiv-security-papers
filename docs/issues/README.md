@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **919** | C99 ポインタスケーリング演算・配列退化およびアドレス取得変数のスタックエスケープ処理の実装 | Feature | In Progress | [919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md](919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md) |
 | **920** | C99 関数ポインタ間接呼び出しおよび巨大 `switch`/`goto` 複雑 CFG の Braun SSA Lowering 実装 | Feature | In Progress | [920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md](920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md) |
 | **921** | `<stdarg.h>` 可変長引数 (`va_list`/`va_start`/`va_arg`) の SysV AMD64 ABI Lowering 実装 | Feature | In Progress | [921-implement-sysv-amd64-stdarg-va-list-lowering.md](921-implement-sysv-amd64-stdarg-va-list-lowering.md) |
 | **922** | 非局所脱出 (`setjmp`/`longjmp`) の `%inline-asm` 実装および呼び出し関数内の生存変数スピル保護 | Feature | In Progress | [922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md](922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md) |
@@ -23,6 +22,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **919** | C99 ポインタスケーリング演算・配列退化およびアドレス取得変数のスタックエスケープ処理の実装 | Feature | 2026-11-22 | [919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md](closed/919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md) |
 | **918** | C99 構造体・共用体・列挙型・ビットフィールドの SysV AMD64 メモリレイアウト計算の実装 | Feature | 2026-11-22 | [918-implement-c99-struct-union-enum-bitfield-sysv-layout.md](closed/918-implement-c99-struct-union-enum-bitfield-sysv-layout.md) |
 | **917** | C コンパイラドライバ (`c_driver.scm`) およびホストリンカ連携による整数 C E2E 開通 | Feature | 2026-11-22 | [917-implement-c-compiler-driver-and-host-ld-integration.md](closed/917-implement-c-compiler-driver-and-host-ld-integration.md) |
 | **916** | C99 基本型検査・整数昇格 (Sema Core) および整数サブセット Core LIR Lowering の実装 | Feature | 2026-11-22 | [916-implement-c99-sema-core-and-integer-subset-lir-lowering.md](closed/916-implement-c99-sema-core-and-integer-subset-lir-lowering.md) |

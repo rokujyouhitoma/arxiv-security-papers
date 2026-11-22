@@ -36,6 +36,7 @@ PYTHON = $(shell if [ -x $(ROOT_DIR)/.venv/bin/python ]; then echo $(ROOT_DIR)/.
 ILISP = $(PYTHON) -m ilisp
 ULISP_BOOT = bin/ulisp-boot
 GOSH_BIN = $(shell command -v gosh 2>/dev/null)
+USE_GOSH ?= $(if $(GOSH_BIN),1,0)
 ifeq ($(USE_GOSH),1)
 RUN_SCHEME = $(GOSH_BIN) -usrfi.9 -ugauche.uvector -ugauche.process -uscheme.file -uscheme.bitwise -uscheme.process-context -I $(CURDIR) -I $(ROOT_DIR)
 else
@@ -962,6 +963,13 @@ test_c99_struct_union_layout: build/compiler_passes.scm vm/lir_interpreter.scm $
 	cat build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm tests/test_c99_struct_union_layout.scm > build/test_c99_struct_union_layout_runner.scm
 	@$(RUN_SCHEME) build/test_c99_struct_union_layout_runner.scm
 	@USE_GOSH="$(USE_GOSH)" bash tests/test_c99_struct_union_layout.sh
+
+test_c99_pointers_and_escape: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm build/c_driver_runner.scm tests/test_c99_pointers_and_escape.scm tests/test_c99_pointers_and_escape.sh
+	@mkdir -p build
+	@$(PYTHON) scripts/lint_sexpr.py frontend_c/sema.scm frontend_c/lower_to_lir.scm tests/test_c99_pointers_and_escape.scm
+	cat build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm tests/test_c99_pointers_and_escape.scm > build/test_c99_pointers_and_escape_runner.scm
+	@$(RUN_SCHEME) build/test_c99_pointers_and_escape_runner.scm
+	@USE_GOSH="$(USE_GOSH)" bash tests/test_c99_pointers_and_escape.sh
 
 build/c_driver_runner.scm: build/compiler_passes.scm vm/lir_interpreter.scm $(C99_FRONTEND_SOURCES) driver/c_driver.scm
 	@mkdir -p build
@@ -2138,7 +2146,7 @@ verify_zero_gauche:
 	fi
 	@echo "[PASS] Zero Gauche dependency check passed."
 
-test: verify_zero_gauche test_lint_sexpr test_r7rs_traceability test_cli_diagnostics test_reader_eof test_peg test_c99_lexer test_c99_preprocessor test_c99_parser test_c99_int_lowering test_c99_struct_union_layout test_c99_e2e test_passes test_pass_manager test_pass_manager_cache_invalidation test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_nanopass_source_span test_diagnostic_reporter test_profiler test_dataflow test_scope test_scope_and_binding test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_concurrency_osal test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_sysv_abi_calls test_elf_sections_and_reloc test_fuzz_lir test_lir_interpreter test_lir_dialect_separation test_value_representation test_inline_asm test_ir_serialization test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_srfi_133 test_srfi_151 test_srfi_143 test_yellow_docket_macros test_srfi_115 test_srfi_180 test_srfi_214 test_srfi_101 test_srfi_135 test_gc_ephemeron test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_bignum test_ieee754 test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
+test: verify_zero_gauche test_lint_sexpr test_r7rs_traceability test_cli_diagnostics test_reader_eof test_peg test_c99_lexer test_c99_preprocessor test_c99_parser test_c99_int_lowering test_c99_struct_union_layout test_c99_pointers_and_escape test_c99_e2e test_passes test_pass_manager test_pass_manager_cache_invalidation test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_nanopass_source_span test_diagnostic_reporter test_profiler test_dataflow test_scope test_scope_and_binding test_include_source_loc test_runtime test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_concurrency_osal test_preemption test_eval_adapter test_concurrency_harness test_annotator test_rtyper test_lir test_sysv_abi_calls test_elf_sections_and_reloc test_fuzz_lir test_lir_interpreter test_lir_dialect_separation test_value_representation test_inline_asm test_ir_serialization test_aarch64 test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_srfi_133 test_srfi_151 test_srfi_143 test_yellow_docket_macros test_srfi_115 test_srfi_180 test_srfi_214 test_srfi_101 test_srfi_135 test_gc_ephemeron test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_bignum test_ieee754 test_process_context test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats test_jit test_c test_aot
 
 clean:
 	rm -f tmp tmp_bin *.s *.o *.log
