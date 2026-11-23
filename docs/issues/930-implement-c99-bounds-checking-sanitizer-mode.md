@@ -19,7 +19,7 @@ ID: 930
   - `#824`: `<source-span>`（[ulisp/compiler/helpers.scm](../../ulisp/compiler/helpers.scm)）
   - `#833`: 統合診断レポート（[ulisp/compiler/diagnostic.scm](../../ulisp/compiler/diagnostic.scm)）
   - `#919`: ポインタ演算 ＆ 配列退化（[[#919]](919-implement-c99-pointer-scaling-array-decay-and-escape-analysis.md)）
-  - `#925`: Lua 一括ビルド（[[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)）
+  - `#925`: Lua 一括ビルド（[[#925]](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)）
 
 ---
 

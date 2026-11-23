@@ -2013,7 +2013,8 @@
   (let* ((c-tu? (eq? (car *backend-gc-mode*) 'c-tu))
          (label (cadr fn))
          (label-str (asm-label->str label))
-         (is-exported? (or c-tu? (string-starts-with? label-str "ulisp_fn_")))
+         (is-exported? (or (and c-tu? (%c99-exported-asm-label? label-str))
+                           (string-starts-with? label-str "ulisp_fn_")))
          (frame-size-entry (assq 'frame-size (cddr fn)))
          (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
          (params-entry (assq 'params (cddr fn)))
@@ -2050,7 +2051,10 @@
                                      (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
                                            (list '%raw-asm (string-append "    .weak " label-str))
                                            (list '%raw-asm (string-append "    .globl " label-str)))))
-                         init-acc)))
+                         (if c-tu?
+                             (append init-acc
+                                     (list (list '%raw-asm (string-append "    .type " label-str ", @function"))))
+                             init-acc))))
       (let loop ((rest body) (acc base-acc))
         (if (null? rest)
             (list '%asm-function label (list 'frame-size frame-size) (cons 'body (reverse acc)))
@@ -2297,6 +2301,22 @@
 (define (%c99-exported-asm-label? lbl-str)
   (not (string-starts-with? lbl-str ".L_")))
 
+(define (%c99-string-needs-raw-bytes? s)
+  (let ((n (string-length s)))
+    (let loop ((i 0))
+      (if (>= i n)
+          #f
+          (let ((c (char->integer (string-ref s i))))
+            (if (or (< c 32) (>= c 127))
+                #t
+                (loop (+ i 1))))))))
+
+(define (%c99-string->cstr-bytes s)
+  (let loop ((i (- (string-length s) 1)) (bs '(0)))
+    (if (< i 0)
+        bs
+        (loop (- i 1) (cons (modulo (char->integer (string-ref s i)) 256) bs)))))
+
 (define (%c99-emit-x86-byte-group bs)
   (if (pair? bs)
       (let loop ((xs (cdr bs)) (s (string-append "    .byte " (number->string (car bs)))))
@@ -2360,11 +2380,12 @@
           (emit "    .section .rodata")
           (for-each (lambda (entry)
                       (let* ((lbl-str (asm-label->str (car entry)))
-                             (raw-str (cadr entry))
-                             (escaped (escape-gas-string raw-str)))
+                             (raw-str (cadr entry)))
                         (emit "    .p2align 3")
                         (emit (string-append lbl-str ":"))
-                        (emit (string-append "    .asciz \"" escaped "\""))))
+                        (if (%c99-string-needs-raw-bytes? raw-str)
+                            (%c99-emit-x86-data-chunks (%c99-string->cstr-bytes raw-str))
+                            (emit (string-append "    .asciz \"" (escape-gas-string raw-str) "\"")))))
                     str-entries))))
   (emit-x86-switch-jump-tables!)
   (let* ((data-clause (assq 'data (cdr asm-prog)))

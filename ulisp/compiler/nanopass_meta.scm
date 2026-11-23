@@ -3455,16 +3455,39 @@
   (and (pair? inst)
        (let ((op (car inst)))
          (case op
-           ((%mov %load %load-byte-zx %pop %code-ref %str-ref %global-ref
+           ((%mov %load %load-byte-zx %pop %code-ref %str-ref %global-addr %not
              %add %raw-add %sub %raw-sub %imul %raw-mul
              %bit-and %bit-or %bit-xor %shl %shr %sar
              %box-fixnum %unbox-fixnum %neg %inc
              %alloc %alloc-stack %managed-alloc %managed-alloc-stack
              %fmov %fadd %fsub %fmul %fdiv
-             %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum
-             %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
+             %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum
+             %fcmp-ogt %fcmp-oge)
             (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg)))
-           ((%load-typed %fneg %fpext %fptrunc %trunc %zext %sext %managed-box %managed-unbox)
+           ((%global-ref %setb %setbe %seta %setae)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (lir-reg-aliases? reg '%r11)))
+           ((%fcmp-oeq %fcmp-une)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (lir-reg-aliases? reg '%r10)
+                (lir-reg-aliases? reg '%r11)))
+           ((%fcmp-olt %fcmp-ole)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (lir-reg-aliases? reg '%xmm14)
+                (lir-reg-aliases? reg '%xmm15)))
+           ((%uitofp)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (memq reg '(%rcx %r9 %r10 %r11))))
+           ((%fptoui)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (memq reg '(%r10 %r11 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))))
+           ((%fneg)
+            (or (and (pair? (cdr inst))
+                     (pair? (cddr inst))
+                     (lir-reg-aliases? (caddr inst) reg))
+                (lir-reg-aliases? reg '%r10)
+                (lir-reg-aliases? reg '%r11)))
+           ((%load-typed %fpext %fptrunc %trunc %zext %sext %managed-box %managed-unbox)
             (and (pair? (cdr inst))
                  (pair? (cddr inst))
                  (lir-reg-aliases? (caddr inst) reg)))
@@ -3472,14 +3495,16 @@
             (and (pair? (cdr inst))
                  (or (lir-reg-aliases? (cadr inst) reg)
                      (and (pair? (cddr inst)) (lir-reg-aliases? (caddr inst) reg)))))
-           ((%setb %setbe %seta %setae)
-            (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg)))
            ((%set-boolean)
             (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
                 (lir-reg-aliases? reg '%rax)))
            ((%cqo %idiv %udiv %urem)
-            (or (lir-reg-aliases? reg '%rax) (lir-reg-aliases? reg '%rdx)
+            (or (lir-reg-aliases? reg '%rax)
+                (lir-reg-aliases? reg '%rdx)
+                (lir-reg-aliases? reg '%r11)
                 (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))))
+           ((%cmp %raw-cmp)
+            (lir-reg-aliases? reg '%r11))
            ((%atomic-cas!)
             (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
                 (lir-reg-aliases? reg '%rax)))
@@ -3671,7 +3696,7 @@
            (if (eq? base '%rsp)
                (list (list 'stack off))
                '())))
-        ((%load %load-byte-zx %pop %code-ref %str-ref %global-ref %set-boolean %alloc %alloc-stack
+        ((%load %load-byte-zx %pop %code-ref %str-ref %global-ref %global-addr %not %set-boolean %alloc %alloc-stack
           %setb %setbe %seta %setae %fmov %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64
           %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge
           %unbox-flonum %fadd %fsub %fmul %fdiv %managed-alloc %managed-alloc-stack)

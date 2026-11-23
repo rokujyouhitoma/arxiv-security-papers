@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **925** | Lua 5.x 全 C ソースファイル（コア・標準ライブラリ・CLI）の ULisp 一括ビルドパイプライン構築 | Feature | In Progress | [925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) |
 | **926** | ULisp ビルド版 Lua バイナリによる公式テストスイート完走 E2E 実証ハーネスの構築 | Feature | In Progress | [926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) |
 | **927** | C ヘッダ用 `.sbi` プリコンパイル済みヘッダ (PCH) および mem2reg 反復最適化によるビルド高速化 | Feature | In Progress | [927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md](927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) |
 | **928** | `musl libc` の ULisp 自前ビルドおよび Pass 144 自前 ELF リンカによる完全静的リンク移行 | Feature | In Progress | [928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
@@ -18,6 +17,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **925** | Lua 5.x 全 C ソースファイル（コア・標準ライブラリ・CLI）の ULisp 一括ビルドパイプライン構築 | Feature | 2026-11-23 | [925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) |
 | **924** | SSE2 XMM エンコーディング・SysV XMM ABI・`libm` 連携検証 ＆ 浮動小数点差分ファジングスイート構築 | Feature | 2026-11-23 | [924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md](closed/924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md) |
 | **923** | C99 浮動小数点型 (`double`/`float`) の意味解析および IEEE 754 / LIR 型変換 Lowering の実装 | Feature | 2026-11-22 | [923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md](closed/923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) |
 | **922** | 非局所脱出 (`setjmp`/`longjmp`) の `%inline-asm` 実装および呼び出し関数内の生存変数スピル保護 | Feature | 2026-11-22 | [922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md](closed/922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md) |

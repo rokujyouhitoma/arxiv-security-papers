@@ -218,14 +218,34 @@
           entry)
         (list #f kind tag-id defined?))))
 
-(define (sema-register-fn! env sym fn-type defined?)
-  (let ((slot (assq sym (sema-env-fn-table env))))
+(define (%c99-static-fn-label sym)
+  (string->symbol
+   (string-append ".L_c99_static_fn_" (symbol->string sym))))
+
+(define (sema-fn-entry-runtime-sym ent)
+  (if (and (pair? ent) (>= (length ent) 6))
+      (list-ref ent 5)
+      (cadr ent)))
+
+(define (sema-register-fn! env sym fn-type defined? . maybe-static?)
+  (let* ((req-static? (and (pair? maybe-static?) (car maybe-static?) #t))
+         (slot (assq sym (sema-env-fn-table env))))
     (if slot
-        (let ((prev (cdr slot)))
-          (set-cdr! slot (list 'fn sym fn-type (or defined? (list-ref prev 3)))))
-        (let ((ent (list 'fn sym fn-type defined?)))
+        (let* ((prev (cdr slot))
+               (prev-def? (list-ref prev 3))
+               (prev-stat? (and (>= (length prev) 5) (list-ref prev 4) #t))
+               (new-stat? (or prev-stat? req-static?))
+               (new-rsym (if prev-stat?
+                             (sema-fn-entry-runtime-sym prev)
+                             (if req-static? (%c99-static-fn-label sym) sym)))
+               (new-def? (or prev-def? (if defined? #t #f))))
+          (set-cdr! prev (list sym fn-type new-def? new-stat? new-rsym))
+          prev)
+        (let* ((rsym (if req-static? (%c99-static-fn-label sym) sym))
+               (ent (list 'fn sym fn-type (if defined? #t #f) req-static? rsym)))
           (sema-env-fn-table-set! env (cons (cons sym ent) (sema-env-fn-table env)))
-          (sema-bind-ordinary! env sym ent)))))
+          (sema-bind-ordinary! env sym ent)
+          ent))))
 
 (define (sema-lookup-fn env sym)
   (let ((slot (assq sym (sema-env-fn-table env))))
@@ -1174,7 +1194,7 @@
                ((enum-const)
                 (make-c-typed 'i32 (list 'c-enum-const (cadr ent))))
                ((fn)
-                (make-c-typed (caddr ent) (list 'c-fn-ref sym)))
+                (make-c-typed (caddr ent) (list 'c-fn-ref (sema-fn-entry-runtime-sym ent))))
                (else
                 (%c99-sema-error! "C99-SEMA-001"
                                   (string-append "'" (symbol->string sym) "' does not name a value")
@@ -1353,7 +1373,9 @@
                             (not (c99-pointer-targets-compatible? (c-ptr-target lt) (c-ptr-target rt) #f))))
                    (%c99-sema-error! "C99-PTR-004" "Incompatible pointer comparison" (or sp node)))
                (if (and (memq op '(== !=))
-                        (not (c99-pointer-targets-compatible? (c-ptr-target lt) (c-ptr-target rt) #t)))
+                        (not (or (c99-pointer-targets-compatible? (c-ptr-target lt) (c-ptr-target rt) #t)
+                                 (c99-null-ptr-const? env (caddr raw))
+                                 (c99-null-ptr-const? env (cadddr raw)))))
                    (%c99-sema-error! "C99-PTR-004" "Incompatible pointer comparison" (or sp node)))
                (make-c-typed 'i32 (list 'c-binop op lhs-d rhs-d)))
               ((and (c-pointer-type? lt) (c-integer-type? rt))
@@ -1466,21 +1488,22 @@
                         ((and (c-arithmetic-type? tt) (c-arithmetic-type? et))
                          (c99-usual-arithmetic-type tt et))
                         ((and (c-pointer-type? tt) (c-pointer-type? et))
-                         (if (not (c99-pointer-targets-compatible? (c-ptr-target tt) (c-ptr-target et) #t))
-                             (%c99-sema-error! "C99-PTR-004"
-                                               (string-append "Pointer type mismatch in conditional operator: "
-                                                              (c-type->string tt) " vs " (c-type->string et))
-                                               (or sp node)))
-                         (if (or (eq? (c-ptr-target tt) 'void) (eq? (c-ptr-target et) 'void))
-                             (make-c-ptr-type 'void)
-                             tt))
+                         (cond
+                           ((c99-null-ptr-const? env els-raw) tt)
+                           ((c99-null-ptr-const? env thn-raw) et)
+                           ((not (c99-pointer-targets-compatible? (c-ptr-target tt) (c-ptr-target et) #t))
+                            (%c99-sema-error! "C99-PTR-004"
+                                              (string-append "Pointer type mismatch in conditional operator: "
+                                                             (c-type->string tt) " vs " (c-type->string et))
+                                              (or sp node)))
+                           ((or (eq? (c-ptr-target tt) 'void) (eq? (c-ptr-target et) 'void))
+                            (make-c-ptr-type 'void))
+                           (else tt)))
                         ((and (c-pointer-type? tt) (c-integer-type? et)
-                              (let ((v (c99-eval-const-int-expr env els-raw)))
-                                (and v (= v 0))))
+                              (c99-null-ptr-const? env els-raw))
                          tt)
                         ((and (c-pointer-type? et) (c-integer-type? tt)
-                              (let ((v (c99-eval-const-int-expr env thn-raw)))
-                                (and v (= v 0))))
+                              (c99-null-ptr-const? env thn-raw))
                          et)
                         ((equal? tt et) tt)
                         (else tt))))
@@ -1775,13 +1798,33 @@
                   #f)))
            (else #f)))))
 
+(define (c99-null-ptr-const? env node)
+  (let ((raw (ast-strip-span node)))
+    (cond
+      ((and (pair? raw) (eq? (car raw) 'c-cast))
+       (let ((ty (sema-resolve-type-name env (cadr raw))))
+         (cond
+           ((and (c-pointer-type? ty) (eq? (c-ptr-target ty) 'void))
+            (let ((v (c99-eval-const-int-expr env (caddr raw))))
+              (and v (= v 0)
+                   (let ((inner (ast-strip-span (caddr raw))))
+                     (or (not (and (pair? inner) (eq? (car inner) 'c-cast)))
+                         (c-integer-type? (sema-resolve-type-name env (cadr inner))))))))
+           ((c-integer-type? ty)
+            (let ((v (c99-eval-const-int-expr env (caddr raw))))
+              (and v (= v 0))))
+           (else #f))))
+      (else
+       (let ((v (c99-eval-const-int-expr env node)))
+         (and v (= v 0)))))))
+
 (define (c99-assign-compatible? env dst-ty src-ty rhs-node)
   (cond
     ((and (c-pointer-type? dst-ty) (c-pointer-type? src-ty))
-     (c99-pointer-targets-compatible? (c-ptr-target dst-ty) (c-ptr-target src-ty) #t))
+     (or (c99-pointer-targets-compatible? (c-ptr-target dst-ty) (c-ptr-target src-ty) #t)
+         (c99-null-ptr-const? env rhs-node)))
     ((and (c-pointer-type? dst-ty) (c-integer-type? src-ty))
-     (let ((v (c99-eval-const-int-expr env rhs-node)))
-       (and v (= v 0))))
+     (c99-null-ptr-const? env rhs-node))
     ((and (eq? dst-ty 'bool) (c-pointer-type? src-ty)) #t)
     ((and (c-pointer-type? dst-ty) (not (c-pointer-type? src-ty))) #f)
     ((and (not (c-pointer-type? dst-ty)) (c-pointer-type? src-ty)) #f)
@@ -2204,12 +2247,21 @@
                   ((not sym)
                    (loop (cdr xs) acc))
                   ((c-function-type? ty)
-                   (sema-register-fn! env sym ty #f)
+                   (sema-register-fn! env sym ty #f (eq? storage 'static))
                    (loop (cdr xs) acc))
                   (else
                    (let* ((in-glob? (sema-in-global-scope? env))
-                          (existing (sema-lookup-ordinary-local env sym)))
-                     (if (and existing (not in-glob?) (not (eq? storage 'extern)))
+                          (existing-local (sema-lookup-ordinary-local env sym))
+                          (existing-outer (and (eq? storage 'extern)
+                                               (not in-glob?)
+                                               (sema-lookup-ordinary env sym)))
+                          (existing (cond
+                                      ((and in-glob? existing-local (eq? (car existing-local) 'var))
+                                       existing-local)
+                                      ((and existing-outer (eq? (car existing-outer) 'var))
+                                       existing-outer)
+                                      (else #f))))
+                     (if (and existing-local (not in-glob?) (not (eq? storage 'extern)))
                          (%c99-sema-error! "C99-SEMA-001"
                                            (string-append "Redefinition of local variable '"
                                                           (symbol->string sym) "'")
@@ -2217,20 +2269,31 @@
                      (let* ((norm (sema-normalize-initializer env ty init-expr decl-node))
                             (final-ty (if norm (car norm) ty))
                             (typed-init (if norm (cdr norm) #f))
+                            (prev-link (and existing (list-ref existing 3)))
                             (linkage (cond
-                                       ((eq? storage 'extern) 'extern)
+                                       ((eq? storage 'extern)
+                                        (if in-glob? (or prev-link 'extern) 'extern))
                                        ((eq? storage 'static) 'static)
-                                       (in-glob? 'global)
+                                       (in-glob?
+                                        (if (eq? prev-link 'static) 'static 'global))
                                        (else #f)))
                             (u-sym (cond
+                                     (existing (cadr existing))
                                      ((or (eq? linkage 'extern) (eq? linkage 'global)) sym)
                                      ((eq? linkage 'static) (c99-next-static-var-id! sym))
-                                     (else (c99-next-sema-var-id! sym)))))
-                       (if (not (eq? linkage 'extern))
-                           (if (not (c-type-complete? lenv final-ty))
-                               (%c99-sema-error! "C99-LAY-001"
-                                                 (string-append "Variable '" (symbol->string sym) "' has incomplete type")
-                                                 decl-node)))
+                                     (else (c99-next-sema-var-id! sym))))
+                            (tentative-incomplete-arr?
+                             (and in-glob?
+                                  (not init-expr)
+                                  (c-array-type? final-ty)
+                                  (not (c-array-length final-ty))
+                                  (c-type-complete? lenv (c-array-elem final-ty)))))
+                       (if (and (not (eq? linkage 'extern))
+                                (not tentative-incomplete-arr?)
+                                (not (c-type-complete? lenv final-ty)))
+                           (%c99-sema-error! "C99-LAY-001"
+                                             (string-append "Variable '" (symbol->string sym) "' has incomplete type")
+                                             decl-node))
                        (sema-bind-ordinary! env sym (list 'var u-sym final-ty linkage #f))
                        (let ((decl-rec (list 'c-typed-decl u-sym sym final-ty linkage typed-init)))
                          (if (and (eq? linkage 'static) (not in-glob?))
@@ -2406,7 +2469,9 @@
          (specs (caddr raw))
          (decl (cadddr raw))
          (body (if (>= (length raw) 7) (list-ref raw 6) (list-ref raw 5)))
-         (base-ret (cdr (sema-resolve-decl-specs env specs #f)))
+         (parsed-specs (sema-resolve-decl-specs env specs #f))
+         (storage (car parsed-specs))
+         (base-ret (cdr parsed-specs))
          (resolved (c99-resolve-declarator-type env base-ret decl))
          (fn-type (cdr resolved))
          (ret-ty (c-fn-ret fn-type))
@@ -2432,7 +2497,9 @@
                          (not (c-type-complete? lenv (cdr pr))))
                     (%c99-sema-error! "C99-LAY-001" "Function parameter has incomplete aggregate type" fn-node)))
               param-pairs)
-    (sema-register-fn! env fn-sym fn-type #t)
+    (let ((rt-fn-sym
+           (sema-fn-entry-runtime-sym
+            (sema-register-fn! env fn-sym fn-type #t (eq? storage 'static)))))
     (sema-push-scope! env)
     (let ((prev-ret (sema-env-curr-ret env))
           (prev-variadic? (sema-env-curr-fn-variadic? env))
@@ -2484,7 +2551,7 @@
           (sema-env-switch-depth-set! env prev-sw-depth)
           (sema-env-loop-depth-set! env prev-loop-depth)
           (sema-pop-scope! env)
-          (list 'c-typed-fn fn-sym ret-ty (c-fn-variadic? fn-type) typed-params typed-body))))))
+          (list 'c-typed-fn rt-fn-sym ret-ty (c-fn-variadic? fn-type) typed-params typed-body)))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 10. Tentative-Definition Deduplication & Program Entrypoint
@@ -2525,9 +2592,21 @@
                         (%c99-sema-error! "C99-SEMA-003" "Expected c-translation-unit" ast))))
     (let loop ((ds ext-decls) (globals '()) (funcs '()))
       (if (null? ds)
-          (let ((all-globals (%c99-dedupe-globals
-                              (append (reverse globals)
-                                      (reverse (sema-env-static-globals env))))))
+          (let* ((deduped (%c99-dedupe-globals
+                           (append (reverse globals)
+                                   (reverse (sema-env-static-globals env)))))
+                 (all-globals
+                  (map (lambda (g)
+                         (let ((ty (list-ref g 3))
+                               (link (list-ref g 4)))
+                           (if (and (not (eq? link 'extern))
+                                    (c-array-type? ty)
+                                    (not (c-array-length ty)))
+                               (list (list-ref g 0) (list-ref g 1) (list-ref g 2)
+                                     (make-c-array-type (c-array-elem ty) 1)
+                                     link (list-ref g 5))
+                               g)))
+                       deduped)))
             (list 'c-typed-unit all-globals (reverse funcs) (sema-env-layout-env env)))
           (let* ((d (car ds))
                  (di (ast-strip-span d))

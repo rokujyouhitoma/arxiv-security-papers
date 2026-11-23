@@ -21,6 +21,11 @@
 #define INFINITY   (1.0f / 0.0f)
 #define NAN        (0.0f / 0.0f)
 
+#define isnan(x)    ((x) != (x))
+#define isfinite(x) (((x) - (x)) == 0.0)
+#define isinf(x)    (((x) == (x)) && (((x) - (x)) != 0.0))
+#define signbit(x)  (((x) < 0.0) || (((x) == 0.0) && ((1.0 / (x)) < 0.0)))
+
 typedef float float_t;
 typedef double double_t;
 
@@ -51,6 +56,8 @@ double trunc(double x);
 double round(double x);
 double hypot(double x, double y);
 double copysign(double x, double y);
+double fmin(double x, double y);
+double fmax(double x, double y);
 
 float acosf(float x);
 float asinf(float x);
@@ -79,5 +86,7 @@ float truncf(float x);
 float roundf(float x);
 float hypotf(float x, float y);
 float copysignf(float x, float y);
+float fminf(float x, float y);
+float fmaxf(float x, float y);
 
 #endif /* _ULISP_MATH_H */

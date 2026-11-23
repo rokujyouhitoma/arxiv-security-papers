@@ -463,6 +463,16 @@
 (define (c-tokenize-file filepath)
   (c-tokenize-string (read-all-file-text filepath) filepath))
 
+(define (%c-byte->octal3-escape code)
+  (let* ((d2 (quotient code 64))
+         (r2 (modulo code 64))
+         (d1 (quotient r2 8))
+         (d0 (modulo r2 8)))
+    (string #\\
+            (integer->char (+ 48 d2))
+            (integer->char (+ 48 d1))
+            (integer->char (+ 48 d0)))))
+
 (define (%c-escape-string-for-c str)
   (let ((n (string-length str)))
     (let loop ((i 0) (parts '()))
@@ -476,7 +486,8 @@
                         ((= code 13) "\\r")
                         ((= code 92) "\\\\")
                         ((= code 34) "\\\"")
-                        ((= code 0)  "\\0")
+                        ((or (< code 32) (>= code 127))
+                         (%c-byte->octal3-escape code))
                         (else (string ch)))))
             (loop (+ i 1) (cons seg parts)))))))
 

@@ -6483,16 +6483,39 @@
   (and (pair? inst)
        (let ((op (car inst)))
          (case op
-           ((%mov %load %load-byte-zx %pop %code-ref %str-ref %global-ref
+           ((%mov %load %load-byte-zx %pop %code-ref %str-ref %global-addr %not
              %add %raw-add %sub %raw-sub %imul %raw-mul
              %bit-and %bit-or %bit-xor %shl %shr %sar
              %box-fixnum %unbox-fixnum %neg %inc
              %alloc %alloc-stack %managed-alloc %managed-alloc-stack
              %fmov %fadd %fsub %fmul %fdiv
-             %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum
-             %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
+             %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum
+             %fcmp-ogt %fcmp-oge)
             (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg)))
-           ((%load-typed %fneg %fpext %fptrunc %trunc %zext %sext %managed-box %managed-unbox)
+           ((%global-ref %setb %setbe %seta %setae)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (lir-reg-aliases? reg '%r11)))
+           ((%fcmp-oeq %fcmp-une)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (lir-reg-aliases? reg '%r10)
+                (lir-reg-aliases? reg '%r11)))
+           ((%fcmp-olt %fcmp-ole)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (lir-reg-aliases? reg '%xmm14)
+                (lir-reg-aliases? reg '%xmm15)))
+           ((%uitofp)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (memq reg '(%rcx %r9 %r10 %r11))))
+           ((%fptoui)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (memq reg '(%r10 %r11 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))))
+           ((%fneg)
+            (or (and (pair? (cdr inst))
+                     (pair? (cddr inst))
+                     (lir-reg-aliases? (caddr inst) reg))
+                (lir-reg-aliases? reg '%r10)
+                (lir-reg-aliases? reg '%r11)))
+           ((%load-typed %fpext %fptrunc %trunc %zext %sext %managed-box %managed-unbox)
             (and (pair? (cdr inst))
                  (pair? (cddr inst))
                  (lir-reg-aliases? (caddr inst) reg)))
@@ -6500,14 +6523,16 @@
             (and (pair? (cdr inst))
                  (or (lir-reg-aliases? (cadr inst) reg)
                      (and (pair? (cddr inst)) (lir-reg-aliases? (caddr inst) reg)))))
-           ((%setb %setbe %seta %setae)
-            (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg)))
            ((%set-boolean)
             (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
                 (lir-reg-aliases? reg '%rax)))
            ((%cqo %idiv %udiv %urem)
-            (or (lir-reg-aliases? reg '%rax) (lir-reg-aliases? reg '%rdx)
+            (or (lir-reg-aliases? reg '%rax)
+                (lir-reg-aliases? reg '%rdx)
+                (lir-reg-aliases? reg '%r11)
                 (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))))
+           ((%cmp %raw-cmp)
+            (lir-reg-aliases? reg '%r11))
            ((%atomic-cas!)
             (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
                 (lir-reg-aliases? reg '%rax)))
@@ -6699,7 +6724,7 @@
            (if (eq? base '%rsp)
                (list (list 'stack off))
                '())))
-        ((%load %load-byte-zx %pop %code-ref %str-ref %global-ref %set-boolean %alloc %alloc-stack
+        ((%load %load-byte-zx %pop %code-ref %str-ref %global-ref %global-addr %not %set-boolean %alloc %alloc-stack
           %setb %setbe %seta %setae %fmov %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64
           %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge
           %unbox-flonum %fadd %fsub %fmul %fdiv %managed-alloc %managed-alloc-stack)
@@ -34375,7 +34400,8 @@
   (let* ((c-tu? (eq? (car *backend-gc-mode*) 'c-tu))
          (label (cadr fn))
          (label-str (asm-label->str label))
-         (is-exported? (or c-tu? (string-starts-with? label-str "ulisp_fn_")))
+         (is-exported? (or (and c-tu? (%c99-exported-asm-label? label-str))
+                           (string-starts-with? label-str "ulisp_fn_")))
          (frame-size-entry (assq 'frame-size (cddr fn)))
          (frame-size (if frame-size-entry (cadr frame-size-entry) 0))
          (params-entry (assq 'params (cddr fn)))
@@ -34412,7 +34438,10 @@
                                      (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
                                            (list '%raw-asm (string-append "    .weak " label-str))
                                            (list '%raw-asm (string-append "    .globl " label-str)))))
-                         init-acc)))
+                         (if c-tu?
+                             (append init-acc
+                                     (list (list '%raw-asm (string-append "    .type " label-str ", @function"))))
+                             init-acc))))
       (let loop ((rest body) (acc base-acc))
         (if (null? rest)
             (list '%asm-function label (list 'frame-size frame-size) (cons 'body (reverse acc)))
@@ -34659,6 +34688,22 @@
 (define (%c99-exported-asm-label? lbl-str)
   (not (string-starts-with? lbl-str ".L_")))
 
+(define (%c99-string-needs-raw-bytes? s)
+  (let ((n (string-length s)))
+    (let loop ((i 0))
+      (if (>= i n)
+          #f
+          (let ((c (char->integer (string-ref s i))))
+            (if (or (< c 32) (>= c 127))
+                #t
+                (loop (+ i 1))))))))
+
+(define (%c99-string->cstr-bytes s)
+  (let loop ((i (- (string-length s) 1)) (bs '(0)))
+    (if (< i 0)
+        bs
+        (loop (- i 1) (cons (modulo (char->integer (string-ref s i)) 256) bs)))))
+
 (define (%c99-emit-x86-byte-group bs)
   (if (pair? bs)
       (let loop ((xs (cdr bs)) (s (string-append "    .byte " (number->string (car bs)))))
@@ -34722,11 +34767,12 @@
           (emit "    .section .rodata")
           (for-each (lambda (entry)
                       (let* ((lbl-str (asm-label->str (car entry)))
-                             (raw-str (cadr entry))
-                             (escaped (escape-gas-string raw-str)))
+                             (raw-str (cadr entry)))
                         (emit "    .p2align 3")
                         (emit (string-append lbl-str ":"))
-                        (emit (string-append "    .asciz \"" escaped "\""))))
+                        (if (%c99-string-needs-raw-bytes? raw-str)
+                            (%c99-emit-x86-data-chunks (%c99-string->cstr-bytes raw-str))
+                            (emit (string-append "    .asciz \"" (escape-gas-string raw-str) "\"")))))
                     str-entries))))
   (emit-x86-switch-jump-tables!)
   (let* ((data-clause (assq 'data (cdr asm-prog)))
@@ -43908,6 +43954,31 @@
               (if b (scan-insts (cdr b)))))
         (reverse (car seen-box))))))
 
+(define (%c99-escape-c-string-bytes s)
+  (let ((n (string-length s)))
+    (let loop ((i 0) (parts '()))
+      (if (>= i n)
+          (apply string-append (reverse parts))
+          (let* ((ch (string-ref s i))
+                 (code (modulo (char->integer ch) 256))
+                 (seg (cond
+                        ((= code 10) "\\n")
+                        ((= code 9)  "\\t")
+                        ((= code 13) "\\r")
+                        ((= code 92) "\\\\")
+                        ((= code 34) "\\\"")
+                        ((or (< code 32) (>= code 127))
+                         (let* ((d2 (quotient code 64))
+                                (r2 (modulo code 64))
+                                (d1 (quotient r2 8))
+                                (d0 (modulo r2 8)))
+                           (string #\\
+                                   (integer->char (+ 48 d2))
+                                   (integer->char (+ 48 d1))
+                                   (integer->char (+ 48 d0)))))
+                        (else (string ch)))))
+            (loop (+ i 1) (cons seg parts)))))))
+
 (define (c-backend-fn-label lbl)
   (let ((s (c-sanitize-label lbl)))
     (if (car *c-backend-c-tu*)
@@ -46212,7 +46283,7 @@
           (for-each (lambda (entry)
                       (let* ((lbl-str (c-sanitize-label (car entry)))
                              (raw-str (if (pair? (cdr entry)) (cadr entry) (cdr entry)))
-                             (escaped (escape-gas-string raw-str)))
+                             (escaped (%c99-escape-c-string-bytes raw-str)))
                         (emit (string-append "static const char " lbl-str "[] ULISP_UNUSED __attribute__((aligned(8))) = \"" escaped "\";"))))
                     prog-strs))
       (for-each (lambda (de)

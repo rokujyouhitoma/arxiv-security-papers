@@ -26,7 +26,7 @@ ID: 917
   - `#915`: C99 Parser ＆ `L_c_ast`（[[#915]](915-implement-c99-parser-and-nanopass-c-ast-definitions.md)）
   - `#916`: C99 Sema Core ＆ 整数 Lowering（[[#916]](916-implement-c99-sema-core-and-integer-subset-lir-lowering.md)）
 - 後続連携 Issue:
-  - [[#925]](../925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) (Lua 一括ビルド), [[#928]](../928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) (Pass 144 静的リンク移行), [[#930]](../930-implement-c99-bounds-checking-sanitizer-mode.md) (`--sanitize-bounds`)
+  - [[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) (Lua 一括ビルド), [[#928]](../928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) (Pass 144 静的リンク移行), [[#930]](../930-implement-c99-bounds-checking-sanitizer-mode.md) (`--sanitize-bounds`)
 
 ---
 

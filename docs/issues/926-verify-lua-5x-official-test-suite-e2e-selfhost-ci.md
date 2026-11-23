@@ -16,7 +16,7 @@ Issue #925 で ULisp がビルドしたネイティブ `lua` 実行バイナリ�
 - 関連設計書:
   - [DSN-33-32 §6.1, §6.2](../designs/DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
 - 前提基盤 Issue:
-  - [[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) (Lua 5.x フルビルド)
+  - [[#925]](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) (Lua 5.x フルビルド)
 - 後続連携 Issue:
   - [[#927]](927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) (`-O2` 最適化), [[#928]](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) (静的リンク), [[#929]](929-implement-ddc-diverse-double-compiling-determinism-verification.md) (DDC 検証), [[#930]](930-implement-c99-bounds-checking-sanitizer-mode.md) (`--sanitize-bounds`)
 
