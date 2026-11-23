@@ -1464,6 +1464,11 @@
             out
             (loop (cdr xs) (and acc-and (car xs)) (cons acc-and out))))))
 
+(define (%c99-call-needs-al? fty arg-nodes)
+  (or (not (c-function-type? fty))
+      (c-fn-variadic? fty)
+      (and (null? (c-fn-params fty)) (pair? arg-nodes))))
+
 (define (%c99-lower-call! ctx inner call-ret-ty . maybe-dst-ptr-si)
   (let* ((fn-node (cadr inner))
          (arg-nodes (cddr inner))
@@ -1640,13 +1645,16 @@
           (if direct-fn-sym
               (let* ((resolved-fn-sym (%c99-lower-resolve-runtime-fn! ctx direct-fn-sym))
                      (internal? (or (memq resolved-fn-sym (lower-ctx-internal-fns ctx))
-                                    (c99-builtin-weak-fn-sym? resolved-fn-sym))))
+                                    (c99-builtin-weak-fn-sym? resolved-fn-sym)))
+                     (needs-al? (%c99-call-needs-al? fty arg-nodes)))
                 (if internal?
                     (begin
-                      (if (and (c-function-type? fty) (c-fn-variadic? fty))
+                      (if needs-al?
                           (%c99-lower-emit! ctx (list '%mov '%rax (min 8 xmm-used))))
                       (%c99-lower-emit! ctx (list '%direct-call resolved-fn-sym shift)))
-                    (%c99-lower-emit! ctx (list '%c-call (symbol->string resolved-fn-sym) shift (min 8 xmm-used)))))
+                    (if needs-al?
+                        (%c99-lower-emit! ctx (list '%c-call (symbol->string resolved-fn-sym) shift (min 8 xmm-used)))
+                        (%c99-lower-emit! ctx (list '%c-call (symbol->string resolved-fn-sym) shift)))))
               (begin
                 (if (eq? (car fn-ptr-loc) 'slot)
                     (%c99-lower-emit! ctx (list '%load '%r11 '%rsp (cdr fn-ptr-loc))))
@@ -1729,13 +1737,16 @@
           (if direct-fn-sym
               (let* ((resolved-fn-sym (%c99-lower-resolve-runtime-fn! ctx direct-fn-sym))
                      (internal? (or (memq resolved-fn-sym (lower-ctx-internal-fns ctx))
-                                    (c99-builtin-weak-fn-sym? resolved-fn-sym))))
+                                    (c99-builtin-weak-fn-sym? resolved-fn-sym)))
+                     (needs-al? (%c99-call-needs-al? fty arg-nodes)))
                 (if internal?
                     (begin
-                      (if (and (c-function-type? fty) (c-fn-variadic? fty))
+                      (if needs-al?
                           (%c99-lower-emit! ctx (list '%mov '%rax (min 8 xmm-used))))
                       (%c99-lower-emit! ctx (list '%direct-call resolved-fn-sym shift)))
-                    (%c99-lower-emit! ctx (list '%c-call (symbol->string resolved-fn-sym) shift (min 8 xmm-used)))))
+                    (if needs-al?
+                        (%c99-lower-emit! ctx (list '%c-call (symbol->string resolved-fn-sym) shift (min 8 xmm-used)))
+                        (%c99-lower-emit! ctx (list '%c-call (symbol->string resolved-fn-sym) shift)))))
               (begin
                 (%c99-lower-emit! ctx (list '%load '%r11 '%rsp fn-ptr-si))
                 (%c99-lower-emit! ctx (list '%call-indirect '%r11 shift (min 8 xmm-used)))))

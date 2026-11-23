@@ -123,4 +123,123 @@
                   '("    shl rax, cl" "    shr rax, cl" "    sar rax, cl")
                   (reverse captured))))
 
+;; 9. Issue #936 WP1: c-tu omits Managed GC xor r10,r10 on %direct-call while managed keeps it
+(let ((saved-mode (car *backend-gc-mode*)))
+  (set-car! *backend-gc-mode* 'managed)
+  (let ((mg-insts (lower-lir-instruction '(%direct-call helper_fn 8))))
+    (assert-true "managed mode %direct-call keeps xor r10, r10"
+                 (and (member '(%raw-asm "    xor r10, r10") mg-insts) #t)))
+  (set-car! *backend-gc-mode* 'c-tu)
+  (let ((ctu-insts (lower-lir-instruction '(%direct-call helper_fn 8))))
+    (assert-false "c-tu mode %direct-call omits xor r10, r10"
+                  (member '(%raw-asm "    xor r10, r10") ctu-insts))
+    (assert-true "c-tu unhoisted %direct-call still calls target"
+                 (and (member '(%raw-asm "    call helper_fn") ctu-insts) #t)))
+  (set-car! *backend-gc-mode* saved-mode))
+
+;; 10. Issue #936 WP2: c-tu stack frame hoisting, +F shift, lea [rsp+F], opt-outs & stack-arg deltas
+(let ((saved-mode (car *backend-gc-mode*)))
+  (set-car! *backend-gc-mode* 'c-tu)
+  (let* ((hoist-fn
+          '(%lir-function hoisted_fn
+            (params (a))
+            (frame-size 32)
+            (body (%store %rsp -16 %rdi)
+                  (%direct-call ext1 24)
+                  (%load %rdx %rsp -16)
+                  (%load-typed i32 %rcx %rsp 8)
+                  (%mov %rsi %rsp)
+                  (%add %rsi -16)
+                  (%c-call "ext2" 40)
+                  (%return))))
+         (leaf-fn
+          '(%lir-function leaf_fn
+            (params ())
+            (frame-size 16)
+            (body (%mov %rax 7)
+                  (%return))))
+         (asm-fn
+          '(%lir-function inline_asm_fn
+            (params ())
+            (frame-size 16)
+            (body (%inline-asm "nop" "" () () ())
+                  (%direct-call ext1 24)
+                  (%return))))
+         (tail-fn
+          '(%lir-function tail_jump_fn
+            (params ())
+            (frame-size 16)
+            (body (%direct-call ext1 24)
+                  (%direct-jump other_fn))))
+         (multi-fn
+          '(%lir-function multi_stack_fn
+            (params ())
+            (frame-size 48)
+            (body (%mov %rax 99)
+                  (%store %rsp -40 %rax)
+                  (%c-call "many_args" 40)
+                  (%c-call "normal_call" 72)
+                  (%return))))
+         (lir-prog (list '%lir-program
+                         '(strings ())
+                         '(stackmaps ())
+                         (list '%lir-functions hoist-fn leaf-fn asm-fn tail-fn multi-fn)
+                         '(%lir-main (frame-size 16) (body (%return %rax)))))
+         (asm-prog (select-instructions-x86 lir-prog))
+         (opt-prog (optimize-x86-peephole asm-prog))
+         (get-fn-body
+          (lambda (prog name)
+            (let loop ((fs (cdr (assq '%asm-functions (cdr prog)))))
+              (cond
+                ((null? fs) '())
+                ((eq? (cadar fs) name) (cdr (assq 'body (cddr (car fs)))))
+                (else (loop (cdr fs)))))))
+         (hb (get-fn-body asm-prog 'hoisted_fn))
+         (hb-opt (get-fn-body opt-prog 'hoisted_fn))
+         (lb (get-fn-body asm-prog 'leaf_fn))
+         (ab (get-fn-body asm-prog 'inline_asm_fn))
+         (tb (get-fn-body asm-prog 'tail_jump_fn))
+         (mb (get-fn-body asm-prog 'multi_stack_fn)))
+    (assert-true "hoisted c-tu program satisfies L_asm_x86?" (L_asm_x86? asm-prog))
+    (assert-true "peepholed hoisted c-tu program satisfies L_asm_x86?" (L_asm_x86? opt-prog))
+    (assert-true "hoisted_fn emits prologue (sub rsp (%imm 40))"
+                 (and (member '(sub rsp (%imm 40)) hb) #t))
+    (assert-true "hoisted_fn emits epilogue (add rsp (%imm 40)) before ret"
+                 (let loop ((xs hb))
+                   (cond
+                     ((null? xs) #f)
+                     ((and (equal? (car xs) '(add rsp (%imm 40)))
+                           (pair? (cdr xs))
+                           (equal? (cadr xs) '(ret)))
+                      #t)
+                     (else (loop (cdr xs))))))
+    (assert-false "hoisted_fn omits per-call sub rsp, 24"
+                  (member '(%raw-asm "    sub rsp, 24") hb))
+    (assert-false "hoisted_fn omits per-call add rsp, 40"
+                  (member '(%raw-asm "    add rsp, 40") hb))
+    (assert-true "hoisted_fn shifts %store -16 by +40 to disp 24"
+                 (and (member '(mov (%disp 24 rsp) rdi) hb) #t))
+    (assert-true "hoisted_fn shifts %load -16 by +40 to disp 24"
+                 (and (member '(mov rdx (%disp 24 rsp)) hb) #t))
+    (assert-true "hoisted_fn shifts %load-typed +8 by +40 to [rsp + 48]"
+                 (and (member '(%raw-asm "    movsxd rcx, dword ptr [rsp + 48]") hb) #t))
+    (assert-true "hoisted_fn lowers %mov %rsi %rsp to (lea rsi (%disp 40 rsp))"
+                 (and (member '(lea rsi (%disp 40 rsp)) hb) #t))
+    (assert-true "peephole folds (lea rsi (%disp 40 rsp)) + (add rsi (%imm -16)) to disp 24"
+                 (and (member '(lea rsi (%disp 24 rsp)) hb-opt) #t))
+    (assert-false "leaf_fn with 0 calls does not hoist sub rsp"
+                  (member '(sub rsp (%imm 8)) lb))
+    (assert-true "inline_asm_fn opts out and retains per-call sub rsp, 24"
+                 (and (member '(%raw-asm "    sub rsp, 24") ab) #t))
+    (assert-true "tail_jump_fn opts out and retains per-call sub rsp, 24"
+                 (and (member '(%raw-asm "    sub rsp, 24") tb) #t))
+    (assert-true "multi_stack_fn hoists F=72 and emits +32/-32 delta ONLY around shift=40 stack-arg call"
+                 (and (member '(sub rsp (%imm 72)) mb)
+                      (member '(mov (%disp 32 rsp) rax) mb)
+                      (member '(add rsp (%imm 32)) mb)
+                      (member '(sub rsp (%imm 32)) mb)
+                      (not (member '(%raw-asm "    sub rsp, 72") mb))
+                      (not (member '(%raw-asm "    add rsp, 72") mb)))))
+  (set-car! *backend-gc-mode* saved-mode))
+
 (test-end "Pass 140 (x86-64 Backend)")

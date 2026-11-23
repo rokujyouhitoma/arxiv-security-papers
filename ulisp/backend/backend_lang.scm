@@ -10,8 +10,8 @@
 (define-language L_asm_x86
   (entry Program)
   (terminals
-    (symbol (lbl var op cc align))
-    (integer (n disp imm scale bitmap frame_size offset al_val))
+    (symbol (lbl var op cc))
+    (integer (n disp imm scale bitmap frame_size offset al_val align))
     (string (str)))
   (Register (reg)
     rax rbx rcx rdx rsi rdi rbp rsp

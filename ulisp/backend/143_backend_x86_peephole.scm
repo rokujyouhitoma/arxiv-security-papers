@@ -117,6 +117,54 @@
      (let ((c (if (integer? imm) imm (cadr imm))))
        (cons (list 'lea r1 (list '%disp c r2)) rest)))))
 
+(define (x86-asm-reads-flags? inst)
+  (and (pair? inst)
+       (or (memq (car inst) '(jcc set))
+           (and (eq? (car inst) '%raw-asm)
+                (string? (cadr inst))
+                (or (string-starts-with? (cadr inst) "    set")
+                    (string-starts-with? (cadr inst) "    cmov")
+                    (string-starts-with? (cadr inst) "    j"))))))
+
+(define (x86-imm-int opnd)
+  (cond
+    ((integer? opnd) opnd)
+    ((and (pair? opnd) (eq? (car opnd) '%imm) (integer? (cadr opnd))) (cadr opnd))
+    (else #f)))
+
+(define (x86-disp32-int? n)
+  (and (integer? n) (>= n -2147483648) (<= n 2147483647)))
+
+;; Rule 4e: LEA + Add/Sub Constant Folding (Issue #936)
+;; (lea r1 (%disp d1 base)) (add r1 imm) -> (lea r1 (%disp (+ d1 imm) base))
+;; (lea r1 (%disp d1 base)) (sub r1 imm) -> (lea r1 (%disp (- d1 imm) base))
+(define-picopass rule-x86-lea-add-fold
+  (InstWindow
+    (((lea ,r1 (%disp ,d1 ,base)) (add ,r2 ,imm) . ,rest)
+     (guard (and (x86-asm-reg? r1)
+                 (x86-asm-reg? base)
+                 (integer? d1)
+                 (equal? r2 r1)
+                 (x86-imm-int imm)
+                 (or (null? rest) (not (x86-asm-reads-flags? (car rest))))
+                 (x86-disp32-int? (+ d1 (x86-imm-int imm)))))
+     (let ((s (+ d1 (x86-imm-int imm))))
+       (if (= s 0)
+           (if (equal? r1 base) rest (cons (list 'mov r1 base) rest))
+           (cons (list 'lea r1 (list '%disp s base)) rest))))
+    (((lea ,r1 (%disp ,d1 ,base)) (sub ,r2 ,imm) . ,rest)
+     (guard (and (x86-asm-reg? r1)
+                 (x86-asm-reg? base)
+                 (integer? d1)
+                 (equal? r2 r1)
+                 (x86-imm-int imm)
+                 (or (null? rest) (not (x86-asm-reads-flags? (car rest))))
+                 (x86-disp32-int? (- d1 (x86-imm-int imm)))))
+     (let ((s (- d1 (x86-imm-int imm))))
+       (if (= s 0)
+           (if (equal? r1 base) rest (cons (list 'mov r1 base) rest))
+           (cons (list 'lea r1 (list '%disp s base)) rest))))))
+
 ;; Rule 5: Unreachable Code Elimination (Dead Code Elimination)
 ;; (jmp L) or (ret) followed by non-boundary instructions up to next label/align
 (define-picopass rule-x86-unreachable-dce
@@ -148,6 +196,7 @@
     rule-x86-jump-next-label
     rule-x86-jump-p2align-next-label
     rule-x86-lea-optimize
+    rule-x86-lea-add-fold
     rule-x86-unreachable-dce
     rule-x86-jump-to-ret))
 
