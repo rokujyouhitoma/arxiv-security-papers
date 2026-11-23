@@ -89,19 +89,23 @@
     ((eq? (caar ls) item) (car ls))
     (else (assq item (cdr ls)))))
 
-(define (string-equal? s1 s2)
-  (and (string? s1) (string? s2)
-       (not (boolean? s1)) (not (boolean? s2))
-       (= (string-length s1) (string-length s2))
-       (let loop ((i 0) (len (string-length s1)))
-         (if (= i len)
-             #t
-             (if (char=? (string-ref s1 i) (string-ref s2 i))
-                 (loop (+ i 1) len)
-                 #f)))))
-
-(define (string=? s1 s2)
-  (string-equal? s1 s2))
+(cond-expand
+  (ulisp
+   (define (string-equal? s1 s2)
+     (and (string? s1) (string? s2)
+          (not (boolean? s1)) (not (boolean? s2))
+          (= (string-length s1) (string-length s2))
+          (let loop ((i 0) (len (string-length s1)))
+            (if (= i len)
+                #t
+                (if (char=? (string-ref s1 i) (string-ref s2 i))
+                    (loop (+ i 1) len)
+                    #f)))))
+   (define (string=? s1 s2)
+     (string-equal? s1 s2)))
+  (else
+   (define (string-equal? s1 s2)
+     (and (string? s1) (string? s2) (string=? s1 s2)))))
 
 (define (escape-gas-string s)
   (let* ((len (string-length s))

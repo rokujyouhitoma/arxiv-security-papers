@@ -40,17 +40,32 @@
         (string-append "ulisp_c99_fn_" s)
         s)))
 
-(define (c99-backend-known-libc-fn? name)
-  (let loop ((xs '("puts" "putchar" "printf" "fprintf" "sprintf" "snprintf"
-                   "vprintf" "vfprintf" "vsprintf" "vsnprintf"
-                   "exit" "abort" "malloc" "calloc" "realloc" "free"
-                   "strlen" "strcmp" "strncmp" "memcpy" "memmove" "memset"
-                   "memcmp" "strchr" "strstr" "atoi" "atol" "abs"
-                   "ulisp_read_char" "ulisp_peek_char" "ulisp_write_char" "ulisp_write_string")))
+(define (c99-backend-known-libm-fn? name)
+  (let loop ((xs '("acos" "asin" "atan" "atan2" "cos" "sin" "tan"
+                   "cosh" "sinh" "tanh" "exp" "frexp" "ldexp"
+                   "log" "log10" "log2" "modf" "pow" "sqrt"
+                   "ceil" "fabs" "floor" "fmod" "trunc" "round" "hypot" "copysign"
+                   "acosf" "asinf" "atanf" "atan2f" "cosf" "sinf" "tanf"
+                   "coshf" "sinhf" "tanhf" "expf" "frexpf" "ldexpf"
+                   "logf" "log10f" "log2f" "modff" "powf" "sqrtf"
+                   "ceilf" "fabsf" "floorf" "fmodf" "truncf" "roundf" "hypotf" "copysignf")))
     (cond
       ((null? xs) #f)
       ((string=? (car xs) name) #t)
       (else (loop (cdr xs))))))
+
+(define (c99-backend-known-libc-fn? name)
+  (or (c99-backend-known-libm-fn? name)
+      (let loop ((xs '("puts" "putchar" "printf" "fprintf" "sprintf" "snprintf"
+                       "vprintf" "vfprintf" "vsprintf" "vsnprintf"
+                       "exit" "abort" "malloc" "calloc" "realloc" "free"
+                       "strlen" "strcmp" "strncmp" "memcpy" "memmove" "memset"
+                       "memcmp" "strchr" "strstr" "atoi" "atol" "abs"
+                       "ulisp_read_char" "ulisp_peek_char" "ulisp_write_char" "ulisp_write_string")))
+        (cond
+          ((null? xs) #f)
+          ((string=? (car xs) name) #t)
+          (else (loop (cdr xs)))))))
 
 (define (c99-collect-c-calls prog)
   (let ((seen-box (cons '() '())))
@@ -130,13 +145,29 @@
     ((string=? fname "putchar")
      (emit "    reg_rax = (uint64_t)(int64_t)putchar((int)reg_rdi);"))
     ((string=? fname "printf")
-     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(const char *, ...))printf)((const char *)(uintptr_t)reg_rdi, (uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+     (emit "#if defined(__x86_64__) || defined(_M_X64)")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(const char *, ...))printf)((const char *)(uintptr_t)reg_rdi, (uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9, reg_xmm0, reg_xmm1, reg_xmm2, reg_xmm3, reg_xmm4, reg_xmm5, reg_xmm6, reg_xmm7);")
+     (emit "#else")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(const char *, ...))printf)((const char *)(uintptr_t)reg_rdi, (uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);")
+     (emit "#endif"))
     ((string=? fname "fprintf")
-     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(FILE *, const char *, ...))fprintf)((FILE *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+     (emit "#if defined(__x86_64__) || defined(_M_X64)")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(FILE *, const char *, ...))fprintf)((FILE *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9, reg_xmm0, reg_xmm1, reg_xmm2, reg_xmm3, reg_xmm4, reg_xmm5, reg_xmm6, reg_xmm7);")
+     (emit "#else")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(FILE *, const char *, ...))fprintf)((FILE *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);")
+     (emit "#endif"))
     ((string=? fname "sprintf")
-     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, const char *, ...))sprintf)((char *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+     (emit "#if defined(__x86_64__) || defined(_M_X64)")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, const char *, ...))sprintf)((char *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9, reg_xmm0, reg_xmm1, reg_xmm2, reg_xmm3, reg_xmm4, reg_xmm5, reg_xmm6, reg_xmm7);")
+     (emit "#else")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, const char *, ...))sprintf)((char *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);")
+     (emit "#endif"))
     ((string=? fname "snprintf")
-     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, size_t, const char *, ...))snprintf)((char *)(uintptr_t)reg_rdi, (size_t)reg_rsi, (const char *)(uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);"))
+     (emit "#if defined(__x86_64__) || defined(_M_X64)")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, size_t, const char *, ...))snprintf)((char *)(uintptr_t)reg_rdi, (size_t)reg_rsi, (const char *)(uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9, reg_xmm0, reg_xmm1, reg_xmm2, reg_xmm3, reg_xmm4, reg_xmm5, reg_xmm6, reg_xmm7);")
+     (emit "#else")
+     (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(char *, size_t, const char *, ...))snprintf)((char *)(uintptr_t)reg_rdi, (size_t)reg_rsi, (const char *)(uintptr_t)reg_rdx, (uintptr_t)reg_rcx, (uintptr_t)reg_r8, (uintptr_t)reg_r9);")
+     (emit "#endif"))
     ((string=? fname "vprintf")
      (emit "    reg_rax = (uint64_t)(int64_t)((int (*)(const char *, va_list))vprintf)((const char *)(uintptr_t)reg_rdi, (void *)(uintptr_t)reg_rsi);"))
     ((string=? fname "vfprintf")
@@ -171,6 +202,32 @@
      (emit "    reg_rax = (uint64_t)(int64_t)strncmp((const char *)(uintptr_t)reg_rdi, (const char *)(uintptr_t)reg_rsi, (size_t)reg_rdx);"))
     ((string=? fname "abort")
      (emit "    abort();"))
+    ((member fname '("acos" "asin" "atan" "cos" "sin" "tan"
+                     "cosh" "sinh" "tanh" "exp"
+                     "log" "log10" "log2" "sqrt"
+                     "ceil" "fabs" "floor" "trunc" "round"))
+     (emit (string-append "    reg_xmm0 = " fname "(reg_xmm0);")))
+    ((member fname '("atan2" "pow" "fmod" "hypot" "copysign"))
+     (emit (string-append "    reg_xmm0 = " fname "(reg_xmm0, reg_xmm1);")))
+    ((string=? fname "ldexp")
+     (emit "    reg_xmm0 = ldexp(reg_xmm0, (int)reg_rdi);"))
+    ((string=? fname "frexp")
+     (emit "    { int _exp = 0; reg_xmm0 = frexp(reg_xmm0, &_exp); memcpy((void *)(uintptr_t)reg_rdi, &_exp, 4); }"))
+    ((string=? fname "modf")
+     (emit "    { double _ip = 0.0; reg_xmm0 = modf(reg_xmm0, &_ip); memcpy((void *)(uintptr_t)reg_rdi, &_ip, 8); }"))
+    ((member fname '("acosf" "asinf" "atanf" "cosf" "sinf" "tanf"
+                     "coshf" "sinhf" "tanhf" "expf"
+                     "logf" "log10f" "log2f" "sqrtf"
+                     "ceilf" "fabsf" "floorf" "truncf" "roundf"))
+     (emit (string-append "    reg_xmm0 = (double)" fname "((float)reg_xmm0);")))
+    ((member fname '("atan2f" "powf" "fmodf" "hypotf" "copysignf"))
+     (emit (string-append "    reg_xmm0 = (double)" fname "((float)reg_xmm0, (float)reg_xmm1);")))
+    ((string=? fname "ldexpf")
+     (emit "    reg_xmm0 = (double)ldexpf((float)reg_xmm0, (int)reg_rdi);"))
+    ((string=? fname "frexpf")
+     (emit "    { int _exp = 0; reg_xmm0 = (double)frexpf((float)reg_xmm0, &_exp); memcpy((void *)(uintptr_t)reg_rdi, &_exp, 4); }"))
+    ((string=? fname "modff")
+     (emit "    { float _ip = 0.0f; reg_xmm0 = (double)modff((float)reg_xmm0, &_ip); memcpy((void *)(uintptr_t)reg_rdi, &_ip, 4); }"))
     (else
      (emit (string-append "    reg_rax = ((uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))" fname ")(reg_rdi, reg_rsi, reg_rdx, reg_rcx, reg_r8, reg_r9);")))))
 
@@ -870,7 +927,7 @@
 
       ((%fmov)
        (let ((dst (cadr inst)) (src (caddr inst)))
-         (emit (string-append "    " (c-operand->str dst) " = (double)" (c-operand->str src) ";"))))
+         (emit (string-append "    memcpy(&" (c-operand->str dst) ", &" (c-operand->str src) ", 8);"))))
 
       ((%fadd)
        (let ((dst (cadr inst)) (src (caddr inst)))
@@ -1510,6 +1567,7 @@
     (emit "#include <string.h>")
     (emit "#include <setjmp.h>")
     (emit "#include <signal.h>")
+    (emit "#include <math.h>")
     (emit "#include <time.h>")
     (emit "")
     (emit "#ifdef _WIN32")
