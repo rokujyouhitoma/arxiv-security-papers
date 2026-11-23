@@ -85,4 +85,42 @@
                 (lower-lir-instruction '(%block .L_blk_ctu () (%mov %rax 7))))
   (set-car! *backend-gc-mode* saved-mode))
 
+;; 8. Issue #935: Variable %rcx register shift lowering & cl emission
+(let ((captured '()))
+  (assert-equal "%shl %rax %rcx lowers to (shl rax cl)"
+                '((shl rax cl))
+                (lower-lir-instruction '(%shl %rax %rcx)))
+  (assert-equal "%shr %rax %rcx lowers to (shr rax cl)"
+                '((shr rax cl))
+                (lower-lir-instruction '(%shr %rax %rcx)))
+  (assert-equal "%shr %rbx %rax %rcx lowers to mov+shr cl"
+                '((mov rbx rax) (shr rbx cl))
+                (lower-lir-instruction '(%shr %rbx %rax %rcx)))
+  (assert-equal "%sar %rax %rcx lowers to (sar rax cl)"
+                '((sar rax cl))
+                (lower-lir-instruction '(%sar %rax %rcx)))
+  (let* ((prog (list '%lir-program
+                     '(strings ())
+                     '(stackmaps ())
+                     '(%lir-functions)
+                     (list '%lir-main
+                           '(frame-size 16)
+                           '(body (%mov %rax 1)
+                                  (%mov %rcx 3)
+                                  (%shl %rax %rcx)
+                                  (%shr %rax %rcx)
+                                  (%sar %rax %rcx)
+                                  (%return %rax)))))
+         (asm-prog (select-instructions-x86 prog)))
+    (assert-true "program with %rcx shifts satisfies L_asm_x86?"
+                 (L_asm_x86? asm-prog))
+    (set-emit-line-sink! (lambda (line) (set! captured (cons line captured))))
+    (emit-x86-asm-inst '(shl rax cl))
+    (emit-x86-asm-inst '(shr rax cl))
+    (emit-x86-asm-inst '(sar rax cl))
+    (set-emit-line-sink! #f)
+    (assert-equal "emit-x86-asm-inst emits Intel 'cl' operand"
+                  '("    shl rax, cl" "    shr rax, cl" "    sar rax, cl")
+                  (reverse captured))))
+
 (test-end "Pass 140 (x86-64 Backend)")

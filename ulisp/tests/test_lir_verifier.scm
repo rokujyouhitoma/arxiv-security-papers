@@ -369,6 +369,18 @@
                                       (cons '(%label .L_blk_50)
                                             *large-chain-insts*))))
 
+;; 8.5 Issue #935: Variable %rcx register shift count validation
+(assert-true "accept %shl with %rcx shift count"
+             (validate-lir (make-test-lir-program '() '((%mov %rax 1) (%mov %rcx 3) (%shl %rax %rcx) (%return)))))
+(assert-true "accept 2-arg and 3-arg %shr with %rcx shift count"
+             (validate-lir (make-test-lir-program '() '((%mov %rax 8) (%mov %rcx 2) (%shr %rax %rcx) (%shr %rdx %rax %rcx) (%return)))))
+(assert-true "accept %sar with %rcx shift count"
+             (validate-lir (make-test-lir-program '() '((%mov %rax -8) (%mov %rcx 1) (%sar %rax %rcx) (%return)))))
+(assert-false "reject %shr with invalid register count %rdx"
+              (validate-lir (make-test-lir-program '() '((%shr %rax %rdx)))))
+(assert-false "reject %sar with invalid register count %rdx"
+              (validate-lir (make-test-lir-program '() '((%sar %rax %rdx)))))
+
 ;; Reset to standard verifier mode for subsequent suites
 (enable-verifier!)
 (set-verifier-strict! #f)

@@ -861,16 +861,13 @@
       (else #f))))
 
 (define (%c99-lower-emit-var-shift! ctx shift-op mask-64?)
-  (let loop ((bit-val 1) (limit (if mask-64? 32 16)))
-    (if (<= bit-val limit)
-        (let ((skip-lbl (%c99-lower-new-label ctx "sh_skip")))
-          (%c99-lower-emit! ctx '(%mov %rdx %rcx))
-          (%c99-lower-emit! ctx (list '%bit-and '%rdx bit-val))
-          (%c99-lower-emit! ctx '(%cmp %rdx 0))
-          (%c99-lower-emit! ctx (list '%jump-cond 'je skip-lbl))
-          (%c99-lower-emit! ctx (list shift-op '%rax bit-val))
-          (%c99-lower-emit! ctx (list '%label skip-lbl))
-          (loop (* bit-val 2) limit)))))
+  (if (not mask-64?)
+      (begin
+        (%c99-lower-emit! ctx '(%bit-and %rcx 31))
+        (cond
+          ((eq? shift-op '%shr) (%c99-lower-emit! ctx '(%zext u32 %rax %rax)))
+          ((eq? shift-op '%sar) (%c99-lower-emit! ctx '(%sext i32 %rax %rax))))))
+  (%c99-lower-emit! ctx (list shift-op '%rax '%rcx)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 3. Field Resolution & Bit-Field Read/Write Helpers
