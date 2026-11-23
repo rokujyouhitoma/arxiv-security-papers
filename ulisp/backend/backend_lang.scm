@@ -12,7 +12,8 @@
   (terminals
     (symbol (lbl var op cc))
     (integer (n disp imm scale bitmap frame_size offset al_val align))
-    (string (str)))
+    (string (str))
+    (boolean (bool_val)))
   (Register (reg)
     rax rbx rcx rdx rsi rdi rbp rsp
     r8  r9  r10 r11 r12 r13 r14 r15 al cl
@@ -73,13 +74,20 @@
     (bytes lbl al_val dc ...))
   (SafepointEntry (sm)
     (lbl frame_size bitmap))
+  (AliasEntry (ae)
+    (lbl1 lbl2 bool_val))
+  (MetaClause (mc)
+    (weak-fns (lbl ...))
+    (weak-data (lbl ...))
+    (aliases (ae ...))
+    (top-asm (str ...)))
   (FunctionDecl (f)
     (%asm-function lbl (frame-size n) (body inst ...)))
   (MainDecl (m)
     (%asm-main (frame-size n) (body inst ...)))
   (Program (p)
-    (%asm-program (strings (se ...)) (stackmaps (sm ...)) (%asm-functions f ...) m)
-    (%asm-program (strings (se ...)) (data (de ...)) (stackmaps (sm ...)) (%asm-functions f ...) m)))
+    (%asm-program (strings (se ...)) (stackmaps (sm ...)) (%asm-functions f ...) m mc ...)
+    (%asm-program (strings (se ...)) (data (de ...)) (stackmaps (sm ...)) (%asm-functions f ...) m mc ...)))
 
 ;;; -----------------------------------------------------------------------
 ;;; L_asm_aarch64: Target Machine Assembly for AArch64 (ARM64)

@@ -12,11 +12,15 @@ translation_unit:
     | ws external_declaration+
 
 external_declaration:
+    | top_asm_decl
     | function_definition
     | declaration
 
+top_asm_decl:
+    | ('__asm__' | '__asm' | 'asm') !ident_cont ws '(' ws asm_template ')' ws ';' ws
+
 function_definition:
-    | declaration_specifiers declarator declaration_list? compound_stmt
+    | declaration_specifiers declarator gnu_attribute* declaration_list? compound_stmt
 
 declaration_list:
     | declaration+
@@ -42,7 +46,7 @@ declaration_specifiers:
 # Explicit (non-typedef-name) specifiers allow optional typedef_name ONLY as a declarator name
 # (e.g. "typedef int T; void f(int T);") because a typedef_name cannot combine with builtin/struct types.
 explicit_declaration_specifiers:
-    | (decl_prefix ws)* (builtin_type_specifier (ws (decl_prefix | builtin_type_specifier))* | aggregate_or_enum_specifier (ws decl_prefix)*) ws
+    | (decl_prefix ws)* (builtin_type_specifier (ws (decl_prefix | builtin_type_specifier))* | (aggregate_or_enum_specifier | typeof_specifier) (ws decl_prefix)*) ws
 
 typedef_declaration_specifiers:
     | (decl_prefix ws)* typedef_name (ws decl_prefix)* ws
@@ -51,6 +55,42 @@ decl_prefix:
     | storage_class_specifier
     | type_qualifier
     | function_specifier
+    | '__extension__' !ident_cont
+    | gnu_attribute
+
+typeof_specifier:
+    | ('__typeof__' | '__typeof' | 'typeof') !ident_cont ws '(' ws (type_name | expr) ')' ws
+
+gnu_attribute:
+    | ('__attribute__' | '__attribute') !ident_cont ws '(' ws '(' ws attr_arg_list? ')' ws ')' ws
+
+attr_arg_list:
+    | first=attr_arg rest=(',' ws attr_arg)*
+
+attr_arg:
+    | attr_token+
+
+attr_token:
+    | '(' ws attr_balanced* ')' ws
+    | '[' ws attr_balanced* ']' ws
+    | string_literal ws
+    | constant ws
+    | c99_keyword ws
+    | identifier ws
+    | !('(' | ')' | '[' | ']' | '{' | '}' | ',') c99_punctuator ws
+
+attr_balanced:
+    | '(' ws attr_balanced* ')' ws
+    | '[' ws attr_balanced* ']' ws
+    | string_literal ws
+    | constant ws
+    | c99_keyword ws
+    | identifier ws
+    | ',' ws
+    | !('(' | ')' | '[' | ']' | '{' | '}' | ',') c99_punctuator ws
+
+decl_asm_label:
+    | ('__asm__' | '__asm' | 'asm') !ident_cont ws '(' ws asm_template ')' ws
 
 init_declarator_list:
     | first=init_declarator rest=(',' ws init_declarator)*
@@ -59,7 +99,7 @@ typedef_init_declarator_list:
     | first=typedef_init_declarator rest=(',' ws init_declarator)*
 
 init_declarator:
-    | declarator ('=' ws initializer)?
+    | declarator decl_asm_label? gnu_attribute* ('=' ws initializer)?
 
 # Standalone fallback when typedef_name is not externally constrained:
 # avoid misclassifying "a * b;" multiplication expression statements as pointer declarations
@@ -74,13 +114,13 @@ storage_class_specifier:
     | ('typedef' | 'extern' | 'static' | 'auto' | 'register') !ident_cont
 
 builtin_type_specifier:
-    | ('void' | 'char' | 'short' | 'int' | 'long' | 'float' | 'double' | 'signed' | 'unsigned' | '_Bool' | '_Complex' | '_Imaginary') !ident_cont
+    | ('void' | 'char' | 'short' | 'int' | 'long' | 'float' | 'double' | '__signed__' | '__signed' | 'signed' | 'unsigned' | '_Bool' | '_Complex' | '_Imaginary') !ident_cont
 
 type_qualifier:
-    | ('const' | 'restrict' | 'volatile') !ident_cont
+    | ('__const__' | '__const' | 'const' | '__restrict__' | '__restrict' | 'restrict' | '__volatile__' | '__volatile' | 'volatile') !ident_cont
 
 function_specifier:
-    | 'inline' !ident_cont
+    | ('__inline__' | '__inline' | 'inline') !ident_cont
 
 aggregate_or_enum_specifier:
     | struct_or_union_specifier
@@ -100,15 +140,15 @@ struct_declaration:
     | specifier_qualifier_list struct_declarator_list? ';' ws
 
 specifier_qualifier_list:
-    | (type_qualifier ws)* (builtin_type_specifier (ws (type_qualifier | builtin_type_specifier))* | aggregate_or_enum_specifier (ws type_qualifier)* | typedef_name (ws type_qualifier)*) ws
-    | type_qualifier (ws type_qualifier)* ws
+    | (type_qualifier ws | gnu_attribute)* (builtin_type_specifier (ws (type_qualifier | builtin_type_specifier | gnu_attribute))* | (aggregate_or_enum_specifier | typeof_specifier) (ws (type_qualifier | gnu_attribute))* | typedef_name (ws (type_qualifier | gnu_attribute))*) ws
+    | (type_qualifier | gnu_attribute) (ws (type_qualifier | gnu_attribute))* ws
 
 struct_declarator_list:
     | first=struct_declarator rest=(',' ws struct_declarator)*
 
 struct_declarator:
-    | declarator? ':' ws constant_expr
-    | declarator
+    | declarator? ':' ws constant_expr gnu_attribute*
+    | declarator gnu_attribute*
 
 enum_specifier:
     | 'enum' !ident_cont ws identifier? ws '{' ws enumerator_list (',' ws)? '}' ws
@@ -156,7 +196,7 @@ parameter_list:
     | first=parameter_declaration rest=(',' ws !'...' parameter_declaration)*
 
 parameter_declaration:
-    | declaration_specifiers (declarator | abstract_declarator)?
+    | declaration_specifiers (declarator gnu_attribute* | abstract_declarator gnu_attribute*)?
 
 identifier_list:
     | first=identifier ws rest=(',' ws identifier ws)*
@@ -208,7 +248,38 @@ stmt:
     | selection_stmt
     | iteration_stmt
     | jump_stmt
+    | asm_stmt
     | expr_stmt
+
+asm_qual:
+    | ('__volatile__' | '__volatile' | 'volatile' | '__inline__' | '__inline' | 'inline' | 'goto') !ident_cont ws
+
+asm_goto_labels:
+    | ':' ws (identifier ws (',' ws identifier ws)*)?
+
+asm_stmt:
+    | ('__asm__' | '__asm' | 'asm') !ident_cont ws asm_qual* '(' ws asm_template asm_outputs? asm_inputs? asm_clobbers? asm_goto_labels? ')' ws ';' ws
+
+asm_template:
+    | (string_literal ws)+
+
+asm_outputs:
+    | ':' ws asm_operand_list?
+
+asm_inputs:
+    | ':' ws asm_operand_list?
+
+asm_clobbers:
+    | ':' ws asm_clobber_list?
+
+asm_operand_list:
+    | first=asm_operand rest=(',' ws asm_operand)*
+
+asm_operand:
+    | ('[' ws identifier ws ']' ws)? asm_template '(' ws expr ')' ws
+
+asm_clobber_list:
+    | first=asm_template rest=(',' ws asm_template)*
 
 labeled_stmt:
     | 'case' !ident_cont ws constant_expr ':' ws stmt
@@ -228,6 +299,7 @@ stmt_or_decl:
     | selection_stmt
     | iteration_stmt
     | jump_stmt
+    | asm_stmt
     | typedef_declaration
     | expr_stmt
 
@@ -321,6 +393,7 @@ unary_expr:
     | ('_Alignof' | '__alignof__' | '__alignof') !ident_cont ws '(' ws type_name ')' ws !'{'
     | ('_Alignof' | '__alignof__' | '__alignof') !ident_cont ws unary_expr
     | '__builtin_offsetof' !ident_cont ws '(' ws type_name ',' ws offsetof_member_designator ')' ws
+    | '__extension__' !ident_cont ws cast_expr
     | postfix_expr
 
 offsetof_member_designator:
@@ -368,7 +441,7 @@ ident_cont:
     | [a-zA-Z0-9_]
 
 c99_keyword:
-    | ('auto' | 'break' | 'case' | 'char' | 'const' | 'continue' | 'default' | 'do' | 'double' | 'else' | 'enum' | 'extern' | 'float' | 'for' | 'goto' | 'if' | 'inline' | 'int' | 'long' | 'register' | 'restrict' | 'return' | 'short' | 'signed' | 'sizeof' | 'static' | 'struct' | 'switch' | 'typedef' | 'union' | 'unsigned' | 'void' | 'volatile' | 'while' | '_Bool' | '_Complex' | '_Imaginary' | '_Alignof' | '__alignof__' | '__alignof' | '__builtin_offsetof' | '__builtin_va_arg') !ident_cont
+    | ('auto' | 'break' | 'case' | 'char' | '__const__' | '__const' | 'const' | 'continue' | 'default' | 'do' | 'double' | 'else' | 'enum' | 'extern' | 'float' | 'for' | 'goto' | 'if' | '__inline__' | '__inline' | 'inline' | 'int' | 'long' | 'register' | '__restrict__' | '__restrict' | 'restrict' | 'return' | 'short' | '__signed__' | '__signed' | 'signed' | 'sizeof' | 'static' | 'struct' | 'switch' | 'typedef' | 'union' | 'unsigned' | 'void' | '__volatile__' | '__volatile' | 'volatile' | 'while' | '_Bool' | '_Complex' | '_Imaginary' | '_Alignof' | '__alignof__' | '__alignof' | '__builtin_offsetof' | '__builtin_va_arg' | '__asm__' | '__asm' | 'asm' | '__attribute__' | '__attribute' | '__extension__' | '__typeof__' | '__typeof' | 'typeof') !ident_cont
 
 constant:
     | float_constant

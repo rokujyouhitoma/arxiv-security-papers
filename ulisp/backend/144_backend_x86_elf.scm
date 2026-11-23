@@ -167,7 +167,12 @@
 ;;; -----------------------------------------------------------------------
 (define (link-elf64-objects-to-file obj-paths out-path entry-sym)
   (let ((bin-bv (link-elf64-relocatable-objects obj-paths entry-sym)))
-    (write-elf64-bytevector bin-bv)
+    (if (and (string? out-path) (> (string-length out-path) 0) (not (string=? out-path "-")))
+        (begin
+          (elf64-write-binary-file! out-path bin-bv)
+          (if (procedure? sys-chmod)
+              (sys-chmod out-path 493)))
+        (write-elf64-bytevector bin-bv))
     bin-bv))
 
 

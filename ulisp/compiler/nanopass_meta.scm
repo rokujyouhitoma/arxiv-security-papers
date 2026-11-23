@@ -2237,6 +2237,16 @@
             (list '%asm-main (list 'frame-size frame-size) (cons 'body opt-insts))))
       m))
 
+;;; Filter helper to preserve extra program metadata clauses (weak-fns, weak-data, aliases, top-asm)
+(define (%nanopass-extra-program-clauses rest core-tags)
+  (let loop ((xs rest) (acc '()))
+    (if (null? xs)
+        (reverse acc)
+        (let ((c (car xs)))
+          (if (and (pair? c) (not (memq (car c) core-tags)))
+              (loop (cdr xs) (cons c acc))
+              (loop (cdr xs) acc))))))
+
 ;;; Dual-mode wrapper: handles %lir-program / %asm-program, functions, main, or flat instruction lists
 (define (nanopass-wrap-window-rules-input opt-proc ir)
   (cond
@@ -2247,14 +2257,17 @@
             (stackmaps-entry (or (assq 'stackmaps rest) '(stackmaps ())))
             (functions-clause (or (assq '%lir-functions rest) '(%lir-functions)))
             (main-clause (or (assq '%lir-main rest) '(%lir-main (frame-size 0) (body))))
+            (extra-clauses (%nanopass-extra-program-clauses rest '(strings data stackmaps %lir-functions %lir-main)))
             (raw-funcs (if (and (pair? functions-clause) (eq? (car functions-clause) '%lir-functions))
                            (cdr functions-clause)
                            '()))
             (opt-funcs (map (lambda (f) (nanopass-optimize-function-body opt-proc f)) raw-funcs))
             (opt-main (nanopass-optimize-main-body opt-proc main-clause)))
-       (if data-entry
-           (list '%lir-program strings-entry data-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main)
-           (list '%lir-program strings-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main))))
+       (append
+        (if data-entry
+            (list '%lir-program strings-entry data-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main)
+            (list '%lir-program strings-entry stackmaps-entry (cons '%lir-functions opt-funcs) opt-main))
+        extra-clauses)))
     ((and (pair? ir) (eq? (car ir) '%asm-program))
      (let* ((strings (assq 'strings (cdr ir)))
             (data-entry (assq 'data (cdr ir)))
@@ -2262,22 +2275,25 @@
             (funcs-entry (assq '%asm-functions (cdr ir)))
             (funcs (if funcs-entry (cdr funcs-entry) '()))
             (main-entry (assq '%asm-main (cdr ir)))
+            (extra-clauses (%nanopass-extra-program-clauses (cdr ir) '(strings data stackmaps %asm-functions %asm-main)))
             (opt-funcs (map (lambda (f) (nanopass-optimize-asm-function-body opt-proc f)) funcs))
             (opt-main (if main-entry
                           (nanopass-optimize-asm-main-body opt-proc main-entry)
                           '(%asm-main (frame-size 0) (body ())))))
-       (if data-entry
-           (list '%asm-program
-                 (if strings strings '(strings ()))
-                 data-entry
-                 (if stackmaps stackmaps '(stackmaps ()))
-                 (cons '%asm-functions opt-funcs)
-                 opt-main)
-           (list '%asm-program
-                 (if strings strings '(strings ()))
-                 (if stackmaps stackmaps '(stackmaps ()))
-                 (cons '%asm-functions opt-funcs)
-                 opt-main))))
+       (append
+        (if data-entry
+            (list '%asm-program
+                  (if strings strings '(strings ()))
+                  data-entry
+                  (if stackmaps stackmaps '(stackmaps ()))
+                  (cons '%asm-functions opt-funcs)
+                  opt-main)
+            (list '%asm-program
+                  (if strings strings '(strings ()))
+                  (if stackmaps stackmaps '(stackmaps ()))
+                  (cons '%asm-functions opt-funcs)
+                  opt-main))
+        extra-clauses)))
     ((and (pair? ir) (eq? (car ir) '%lir-function))
      (nanopass-optimize-function-body opt-proc ir))
     ((and (pair? ir) (eq? (car ir) '%asm-function))
@@ -2930,7 +2946,8 @@
                    (short-r (inline-asm-parse-short-reg body))
                    (braced-r (inline-asm-parse-braced-reg body)))
               (cond
-                ((or (string=? body "r") (string=? body "q")) (list '=any-reg rw?))
+                ((or (string=? body "r") (string=? body "q") (string=? body "rm") (string=? body "g")) (list '=any-reg rw?))
+                ((string=? body "x") (list '=xmm rw?))
                 ((string=? body "m") (list '=mem rw?))
                 (short-r (list '=reg short-r rw?))
                 (braced-r (list '=reg braced-r rw?))
@@ -2944,8 +2961,10 @@
             (tied-idx (inline-asm-parse-uint cstr)))
         (cond
           ((or (string=? cstr "r") (string=? cstr "q")
-               (string=? cstr "ri") (string=? cstr "ir") (string=? cstr "r,i"))
+               (string=? cstr "ri") (string=? cstr "ir") (string=? cstr "r,i")
+               (string=? cstr "rm") (string=? cstr "g"))
            '(any-reg))
+          ((string=? cstr "x") '(xmm))
           ((string=? cstr "m") '(mem))
           ((or (string=? cstr "i") (string=? cstr "n")
                (string=? cstr "I") (string=? cstr "J") (string=? cstr "K"))
@@ -3089,6 +3108,16 @@
             acc))
       acc))
 
+(define (inline-asm-xmm-pool)
+  '(%xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15 %xmm6 %xmm7))
+
+(define (inline-asm-first-free-xmm used)
+  (let loop ((pool (inline-asm-xmm-pool)))
+    (cond
+      ((null? pool) #f)
+      ((memq (car pool) used) (loop (cdr pool)))
+      (else (car pool)))))
+
 (define (inline-asm-gpr-pool)
   '(%r10 %r11 %rax %rcx %rdx %rsi %rdi %r8 %r9 %rbx %r13 %r14 %rbp %r15 %r12))
 
@@ -3176,6 +3205,13 @@
                     ((eq? (car oc) '=mem)
                      (oloop (cdr os) (+ idx 1) used
                             (cons (list idx name dst (cadr oc) 'mem dst cstr) acc)))
+                    ((eq? (car oc) '=xmm)
+                     (let* ((rw? (cadr oc))
+                            (x (inline-asm-first-free-xmm used)))
+                       (if (not x)
+                           (error "Exhausted XMM regs allocating %inline-asm output:" inst)
+                           (oloop (cdr os) (+ idx 1) (cons x used)
+                                  (cons (list idx name dst rw? 'reg x cstr) acc)))))
                     (else
                      (let* ((rw? (cadr oc))
                             (r (inline-asm-first-free-gpr used)))
@@ -3208,6 +3244,12 @@
                     ((eq? (car ic) 'imm)
                      (iloop (cdr is) (+ idx 1) used
                             (cons (list idx name src 'imm src #f cstr) acc)))
+                    ((eq? (car ic) 'xmm)
+                     (let ((x (inline-asm-first-free-xmm used)))
+                       (if (not x)
+                           (error "Exhausted XMM regs allocating %inline-asm input:" inst)
+                           (iloop (cdr is) (+ idx 1) (cons x used)
+                                  (cons (list idx name src 'reg x #f cstr) acc)))))
                     ((eq? (car ic) 'tied)
                      (let* ((t-idx (cadr ic))
                             (target-out (list-ref out-plans t-idx))
@@ -3561,6 +3603,21 @@
                     (not (integer? off))
                     (< (abs (- soff off)) 8)))
               #t))
+         ((%inline-asm)
+          (let* ((parsed (inline-asm-extract-clauses inst))
+                 (outs (cadr parsed)))
+            (let oloop ((os outs))
+              (if (null? os)
+                  #f
+                  (let* ((no (inline-asm-normalize-out-entry (car os)))
+                         (dst (and no (cadr no))))
+                    (if (or (and (pair? dst) (eq? (car dst) '%mem))
+                            (and (pair? dst) (eq? (car dst) '%stack)
+                                 (or (not (integer? (cadr dst)))
+                                     (not (integer? off))
+                                     (< (abs (- (cadr dst) off)) 8))))
+                        #t
+                        (oloop (cdr os))))))))
          ((%box-flonum %managed-write-barrier %atomic-cas!)
           #t)
          (else #f))))
