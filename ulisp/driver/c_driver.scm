@@ -15,7 +15,7 @@
   (%make-c-driver-options mode target opt-level output inputs
                           include-dirs system-include-dirs
                           defines undefs lib-dirs libs
-                          ld-flags sanitize-bounds? verbose?)
+                          ld-flags sanitize-bounds? verbose? pch-file)
   c-driver-options?
   (mode                c-drv-mode                c-drv-mode-set!)
   (target              c-drv-target              c-drv-target-set!)
@@ -30,10 +30,11 @@
   (libs                c-drv-libs                c-drv-libs-set!)
   (ld-flags            c-drv-ld-flags            c-drv-ld-flags-set!)
   (sanitize-bounds?    c-drv-sanitize-bounds?    c-drv-sanitize-bounds-set!)
-  (verbose?            c-drv-verbose?            c-drv-verbose-set!))
+  (verbose?            c-drv-verbose?            c-drv-verbose-set!)
+  (pch-file            c-drv-pch-file            c-drv-pch-file-set!))
 
 (define (make-default-c-driver-options)
-  (%make-c-driver-options 'link 'x86_64 0 #f '() '() '() '() '() '() '() '() #f #f))
+  (%make-c-driver-options 'link 'x86_64 0 #f '() '() '() '() '() '() '() '() #f #f #f))
 
 (define (%c-drv-error! code msg fname)
   (let* ((sp (make-source-span fname 1 1 1 1 #f (next-source-span-id!)))
@@ -142,6 +143,17 @@
               ((string=? arg "-c")
                (c-drv-mode-set! opts 'compile)
                (loop rest inputs inc-dirs sys-dirs defs undefs lib-dirs libs ld-flags))
+              ((string=? arg "-emit-pch")
+               (c-drv-mode-set! opts 'emit-pch)
+               (loop rest inputs inc-dirs sys-dirs defs undefs lib-dirs libs ld-flags))
+              ((string=? arg "-include-pch")
+               (let ((val (req-val "-include-pch" rest)))
+                 (c-drv-pch-file-set! opts val)
+                 (loop (cdr rest) inputs inc-dirs sys-dirs defs undefs lib-dirs libs ld-flags)))
+              ((%c-drv-starts-with? arg "-include-pch=")
+               (let ((val (c99-assert-safe-arg! (substring arg 13 (string-length arg)) "-include-pch")))
+                 (c-drv-pch-file-set! opts val)
+                 (loop rest inputs inc-dirs sys-dirs defs undefs lib-dirs libs ld-flags)))
               ((string=? arg "-v")
                (c-drv-verbose-set! opts #t)
                (loop rest inputs inc-dirs sys-dirs defs undefs lib-dirs libs ld-flags))
@@ -273,19 +285,170 @@
     ctx))
 
 (define (%c-drv-optimize-lir lir opts)
-  (if (<= (c-drv-opt-level opts) 0)
-      lir
-      (optimize-peephole-fixpoint lir)))
+  (let ((lvl (c-drv-opt-level opts)))
+    (cond
+      ((<= lvl 0) lir)
+      ((= lvl 1) (optimize-peephole-fixpoint lir))
+      (else (run-c99-o2-fixpoint-pipeline lir)))))
+
+(define *c99-pch-memory-cache* (cons '() '()))
+(define *c99-pch-batch-mode* (cons #f '()))
+
+(define (c99-clear-pch-memory-cache!)
+  (set-car! *c99-pch-memory-cache* '()))
+
+(define (c99-with-pch-batch-cache thunk)
+  (let ((prev (car *c99-pch-batch-mode*)))
+    (c99-clear-pch-memory-cache!)
+    (set-car! *c99-pch-batch-mode* #t)
+    (guard (ex (else
+                (set-car! *c99-pch-batch-mode* prev)
+                (c99-clear-pch-memory-cache!)
+                (raise ex)))
+      (let ((res (thunk)))
+        (set-car! *c99-pch-batch-mode* prev)
+        (c99-clear-pch-memory-cache!)
+        res))))
+
+(define (%c-drv-pch-warn! code msg fname)
+  (let ((sp (make-source-span fname 0 0 0 0 #f (next-source-span-id!))))
+    (emit-diagnostic-warning
+     code sp msg
+     "Regenerate the .sbi precompiled header with -emit-pch; falling back to full compilation")))
+
+(define (%c-drv-pch-error! code msg fname)
+  (let ((sp (make-source-span fname 0 0 0 0 #f (next-source-span-id!))))
+    (emit-diagnostic-error
+     code sp msg
+     "Ensure the .sbi file exists and was generated cleanly via -emit-pch")
+    (raise (list 'c99-driver-error code msg fname))))
+
+(define (%c-drv-pch-options-signature opts)
+  (let ((p (open-output-string)))
+    (write (list 'c99-pch-opts-v1 (c-drv-defines opts) (c-drv-undefs opts)) p)
+    (sbi-sha256-hex (get-output-string p))))
+
+(define (%c-drv-valid-pch-snapshot? snap)
+  (and (pair? snap)
+       (eq? (car snap) 'c99-pch-snapshot-v1)
+       (list? (cdr snap))
+       (assq 'schema-version (cdr snap))
+       (assq 'defines-sig (cdr snap))
+       (assq 'cpp-state (cdr snap))
+       (assq 'parse-state (cdr snap))
+       (assq 'sema-state (cdr snap))
+       #t))
+
+(define (%c-drv-filter-pch-dep-paths paths header-file)
+  (let ((all-cands (let ((nh (%cpp-normalize-path header-file)))
+                     (if (member nh paths) paths (cons nh paths)))))
+    (let loop ((xs all-cands) (acc '()))
+      (if (null? xs)
+          (reverse acc)
+          (let ((p (car xs)))
+            (if (and (string? p)
+                     (sbi-safe-dep-path? p)
+                     (file-exists? p)
+                     (not (member p acc)))
+                (loop (cdr xs) (cons p acc))
+                (loop (cdr xs) acc)))))))
+
+(define (c99-emit-pch-file header-file out-sbi opts)
+  (if (not (file-exists? header-file))
+      (%c-drv-error! "C99-DRV-001"
+                     (string-append "Input header file does not exist: " header-file)
+                     header-file))
+  (c99-assert-safe-arg! out-sbi "-o")
+  (if (not (sbi-safe-dep-path? out-sbi))
+      (%c-drv-error! "C99-DRV-002"
+                     (string-append "Unsafe PCH output path: " out-sbi)
+                     out-sbi))
+  (let* ((ctx (c-driver-build-cpp-context opts))
+         (pp-toks (cpp-preprocess-file header-file ctx))
+         (parse-pair (parse-c99-tokens-capturing-pch pp-toks header-file))
+         (ast (car parse-pair))
+         (parse-pch-sx (cdr parse-pair))
+         (sema-pch-sx (c99-analyze-header-for-pch ast))
+         (cpp-pch-sx (cpp-context->pch-sexpr ctx header-file))
+         (dep-paths (%c-drv-filter-pch-dep-paths (cpp-ctx-included-files ctx) header-file))
+         (snapshot (list 'c99-pch-snapshot-v1
+                         (cons 'schema-version 1)
+                         (cons 'header-file (%cpp-normalize-path header-file))
+                         (cons 'defines-sig (%c-drv-pch-options-signature opts))
+                         (cons 'cpp-state cpp-pch-sx)
+                         (cons 'parse-state parse-pch-sx)
+                         (cons 'sema-state sema-pch-sx))))
+    (sbi-write-file out-sbi snapshot 'pch dep-paths)
+    out-sbi))
+
+(define (%c-drv-load-pch-for-opts opts)
+  (let ((pch-path (c-drv-pch-file opts)))
+    (if (not pch-path)
+        #f
+        (let* ((opts-sig (%c-drv-pch-options-signature opts))
+               (batch? (car *c99-pch-batch-mode*))
+               (cache-entry (and batch? (assoc pch-path (car *c99-pch-memory-cache*)))))
+          (if cache-entry
+              (let ((snap (cdr cache-entry)))
+                (if (and (%c-drv-valid-pch-snapshot? snap)
+                         (equal? (cdr (assq 'schema-version (cdr snap))) 1)
+                         (string=? (cdr (assq 'defines-sig (cdr snap))) opts-sig))
+                    snap
+                    (begin
+                      (%c-drv-pch-warn!
+                       "C99-PCH-001"
+                       (string-append "PCH macro definitions or version differ from invocation options: " pch-path)
+                       pch-path)
+                      #f)))
+              (let ((res (sbi-read-pch-validated pch-path)))
+                (cond
+                  ((eq? (car res) 'error)
+                   (%c-drv-pch-error! "C99-PCH-002" (caddr res) pch-path))
+                  ((eq? (car res) 'stale)
+                   (%c-drv-pch-warn!
+                    "C99-PCH-001"
+                    (string-append "PCH header dependencies are out of date or missing: " pch-path)
+                    pch-path)
+                   #f)
+                  (else
+                   (let ((snap (cadr res)))
+                     (if (not (%c-drv-valid-pch-snapshot? snap))
+                         (%c-drv-pch-error!
+                          "C99-PCH-002"
+                          (string-append "Invalid C99 PCH snapshot payload structure in " pch-path)
+                          pch-path)
+                         (let ((ver (cdr (assq 'schema-version (cdr snap))))
+                               (sig (cdr (assq 'defines-sig (cdr snap)))))
+                           (if (not (and (equal? ver 1) (string? sig) (string=? sig opts-sig)))
+                               (begin
+                                 (%c-drv-pch-warn!
+                                  "C99-PCH-001"
+                                  (string-append "PCH compiler -D/-U flags or schema mismatch: " pch-path)
+                                  pch-path)
+                                 #f)
+                               (begin
+                                 (if batch?
+                                     (set-car! *c99-pch-memory-cache*
+                                               (cons (cons pch-path snap) (car *c99-pch-memory-cache*))))
+                                 snap)))))))))))))
 
 (define (c99-compile-file-to-lir src-file opts)
   (if (not (file-exists? src-file))
       (%c-drv-error! "C99-DRV-001"
                      (string-append "Input source file does not exist: " src-file)
                      src-file))
-  (let* ((ctx (c-driver-build-cpp-context opts))
-         (pp-toks (cpp-preprocess-file src-file ctx))
-         (ast (parse-c99-tokens pp-toks))
-         (typed (c99-analyze-program ast))
+  (let* ((pch-snap (%c-drv-load-pch-for-opts opts))
+         (ctx (c-driver-build-cpp-context opts))
+         (typed
+          (if pch-snap
+              (let ((alist (cdr pch-snap)))
+                (cpp-restore-context-from-pch! ctx (cdr (assq 'cpp-state alist)))
+                (let* ((pp-toks (cpp-preprocess-file src-file ctx))
+                       (tu-ast (parse-c99-tokens-with-pch pp-toks (cdr (assq 'parse-state alist)) src-file)))
+                  (c99-analyze-program-with-pch tu-ast (cdr (assq 'sema-state alist)))))
+              (let* ((pp-toks (cpp-preprocess-file src-file ctx))
+                     (ast (parse-c99-tokens pp-toks src-file)))
+                (c99-analyze-program ast))))
          (lir (c99-lower-to-lir typed))
          (opt-lir (%c-drv-optimize-lir lir opts)))
     (if (not (and (L_lir_core? opt-lir) (validate-core-lir opt-lir)))
@@ -688,8 +851,24 @@
                                    (string-append "Input file not found: " f)
                                    f)))
               inputs)
-    (cond
-      ((or (eq? mode 'preprocess) (eq? mode 'asm))
+    (c99-with-pch-batch-cache
+     (lambda ()
+       (cond
+         ((eq? mode 'emit-pch)
+          (if (not (= (length inputs) 1))
+              (%c-drv-error! "C99-DRV-002" "-emit-pch requires exactly one header input file" "<c-driver>"))
+          (let* ((hdr (car inputs))
+                 (out-dir? (and out
+                                (> (string-length out) 0)
+                                (char=? (string-ref out (- (string-length out) 1)) #\/)))
+                 (tgt-out (cond
+                            (out-dir? (string-append out (%c-drv-basename hdr) ".sbi"))
+                            (out out)
+                            (else (string-append hdr ".sbi")))))
+            (c99-emit-pch-file hdr tgt-out opts))
+          0)
+
+         ((or (eq? mode 'preprocess) (eq? mode 'asm))
        (if (and out (> (length inputs) 1))
            (%c-drv-error! "C99-DRV-002" "Cannot specify -o with multiple inputs in -E/-S mode" "<c-driver>"))
        (for-each
@@ -790,7 +969,7 @@
                      (raise ex)))
            (c-link-objects objs out-bin opts))
          (for-each (lambda (t) (if (file-exists? t) (delete-file t))) (car temps-box))
-         0)))))
+         0)))))))
 
 (define (c-driver-cli-main argv)
   (guard (ex

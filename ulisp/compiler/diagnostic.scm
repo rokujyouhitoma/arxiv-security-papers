@@ -270,21 +270,24 @@
                 (let ((p (open-input-file clean)))
                   (if (not p)
                       #f
-                      (let loop ((lines '()) (count 0))
-                        (if (>= count *diagnostic-max-source-lines*)
-                            (begin
-                              (close-input-port p)
-                              (let ((vec (list->vector (reverse lines))))
-                                (diagnostic-register-source-lines! clean vec)
-                                vec))
-                            (let ((line (port-read-line p)))
-                              (if (eof-object? line)
-                                  (begin
-                                    (close-input-port p)
-                                    (let ((vec (list->vector (reverse lines))))
-                                      (diagnostic-register-source-lines! clean vec)
-                                      vec))
-                                  (loop (cons line lines) (+ count 1)))))))))))))
+                      (guard (ex (else
+                                  (close-input-port p)
+                                  #f))
+                        (let loop ((lines '()) (count 0))
+                          (if (>= count *diagnostic-max-source-lines*)
+                              (begin
+                                (close-input-port p)
+                                (let ((vec (list->vector (reverse lines))))
+                                  (diagnostic-register-source-lines! clean vec)
+                                  vec))
+                              (let ((line (port-read-line p)))
+                                (if (eof-object? line)
+                                    (begin
+                                      (close-input-port p)
+                                      (let ((vec (list->vector (reverse lines))))
+                                        (diagnostic-register-source-lines! clean vec)
+                                        vec))
+                                    (loop (cons line lines) (+ count 1))))))))))))))
 
 (define (diagnostic-get-source-line file-path line-no)
   (if (or (not (integer? line-no)) (< line-no 1))

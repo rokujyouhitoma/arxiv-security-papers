@@ -499,6 +499,13 @@
   (cond
     ((and (pair? ast) (eq? (car ast) '%cfg) (pair? (cdr ast)))
      (cdr ast))
+    ((and (pair? ast) (eq? (car ast) '%lir-program))
+     (let* ((fns-clause (assq '%lir-functions (cdr ast)))
+            (fns (if fns-clause (cdr fns-clause) '())))
+       (let loop ((fs fns) (acc '((entry () ()))))
+         (if (null? fs)
+             (reverse acc)
+             (loop (cdr fs) (cons (list (cadar fs) '() '()) acc))))))
     (else
      (list (list 'entry (pm-ast-collect-free-vars ast '()) '())))))
 
@@ -513,38 +520,48 @@
             (loop (cdr bs) (cons (cons lbl bdoms) doms) bdoms))))))
 
 (define (pm-compute-variable-liveness ast)
-  (if (and (pair? ast) (eq? (car ast) '%cfg))
-      (let loop ((bs (cdr ast)) (res '()))
-        (if (null? bs)
-            (reverse res)
-            (let* ((b (car bs))
-                   (lbl (car b))
-                   (live (pm-ast-collect-free-vars (cdr b) '())))
-              (loop (cdr bs) (cons (cons lbl live) res)))))
-      (list (cons 'live-in (pm-ast-collect-free-vars ast '()))
-            (cons 'use-counts (pm-ast-use-counts ast)))))
+  (cond
+    ((and (pair? ast) (eq? (car ast) '%cfg))
+     (let loop ((bs (cdr ast)) (res '()))
+       (if (null? bs)
+           (reverse res)
+           (let* ((b (car bs))
+                  (lbl (car b))
+                  (live (pm-ast-collect-free-vars (cdr b) '())))
+             (loop (cdr bs) (cons (cons lbl live) res))))))
+    ((and (pair? ast) (eq? (car ast) '%lir-program))
+     (let* ((fns-clause (assq '%lir-functions (cdr ast)))
+            (fns (if fns-clause (cdr fns-clause) '())))
+       (list (cons 'lir-functions (length fns)))))
+    (else
+     (list (cons 'live-in (pm-ast-collect-free-vars ast '()))
+           (cons 'use-counts (pm-ast-use-counts ast))))))
 
 (define (pm-compute-reaching-defs ast)
-  (let ((defs-cell (cons '() '())))
-    (letrec ((walk
-              (lambda (x)
-                (cond
-                  ((not (pair? x)) #f)
-                  ((eq? (car x) 'quote) #f)
-                  ((and (memq (car x) '(let let* letrec)) (pair? (cdr x)) (list? (cadr x)))
-                   (for-each (lambda (b)
-                               (set-car! defs-cell (cons (cons (car b) (cadr b)) (car defs-cell)))
-                               (walk (cadr b)))
-                             (cadr x))
-                   (for-each walk (cddr x)))
-                  ((and (eq? (car x) 'define) (pair? (cdr x)))
-                   (let ((nm (if (pair? (cadr x)) (car (cadr x)) (cadr x))))
-                     (set-car! defs-cell (cons (cons nm (cddr x)) (car defs-cell))))
-                   (for-each walk (cddr x)))
-                  (else
-                   (if (pair? (cdr x)) (for-each walk (cdr x))))))))
-      (walk ast)
-      (reverse (car defs-cell)))))
+  (if (and (pair? ast) (eq? (car ast) '%lir-program))
+      (let* ((fns-clause (assq '%lir-functions (cdr ast)))
+             (fns (if fns-clause (cdr fns-clause) '())))
+        (map (lambda (fn) (cons (cadr fn) 'lir-fn)) fns))
+      (let ((defs-cell (cons '() '())))
+        (letrec ((walk
+                  (lambda (x)
+                    (cond
+                      ((not (pair? x)) #f)
+                      ((eq? (car x) 'quote) #f)
+                      ((and (memq (car x) '(let let* letrec)) (pair? (cdr x)) (list? (cadr x)))
+                       (for-each (lambda (b)
+                                   (set-car! defs-cell (cons (cons (car b) (cadr b)) (car defs-cell)))
+                                   (walk (cadr b)))
+                                 (cadr x))
+                       (for-each walk (cddr x)))
+                      ((and (eq? (car x) 'define) (pair? (cdr x)))
+                       (let ((nm (if (pair? (cadr x)) (car (cadr x)) (cadr x))))
+                         (set-car! defs-cell (cons (cons nm (cddr x)) (car defs-cell))))
+                       (for-each walk (cddr x)))
+                      (else
+                       (if (pair? (cdr x)) (for-each walk (cdr x))))))))
+          (walk ast)
+          (reverse (car defs-cell))))))
 
 (define (pm-compute-alias-sets ast)
   (let ((rdefs (get-cached-analysis 'reaching-defs)))
@@ -824,7 +841,8 @@
       (if (null? ps)
           (reverse res)
           (let ((p (car ps)))
-            (if (pass-enabled? p opt-level disabled-list)
+            (if (and (not (eq? (pass-category p) 'c99-opt))
+                     (pass-enabled? p opt-level disabled-list))
                 (loop (cdr ps) (cons p res))
                 (loop (cdr ps) res)))))))
 
@@ -1559,13 +1577,21 @@
     (make-pass-descriptor 'pass-131-lower-managed-dialect "Lower Managed Runtime Dialect" 'middle 0
       (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
   (register-pass!
+    (make-pass-descriptor-with-opts 'pass-132-c99-mem2reg "C99 LIR mem2reg Scalar Promotion" 'c99-opt 2
+      (lambda (lir) (c99-lir-mem2reg-optimize lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f
+      (list ':requires '(cfg-dominators alias-sets)
+            ':preserves '(cfg-dominators)
+            ':invalidates '(variable-liveness alias-sets))))
+  (register-pass!
     (make-pass-descriptor-with-opts 'pass-128-lir-branch-fusion "LIR Branch Fusion" 'middle 2
       (lambda (lir) (lir-fuse-branches lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f
-      (list ':invalidates '(cfg-dominators variable-liveness))))
+      (list ':requires '(variable-liveness)
+            ':invalidates '(cfg-dominators variable-liveness))))
   (register-pass!
     (make-pass-descriptor-with-opts 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
       (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_canonical '(pass-130-lir) #f
-      (list ':preserves '(cfg-dominators) ':invalidates '(variable-liveness alias-sets))))
+      (list ':preserves '(cfg-dominators)
+            ':invalidates '(variable-liveness alias-sets))))
   ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)
   (let loop ((hooks (car *pass-registry-init-hooks*)))
     (if (not (null? hooks))
@@ -1574,6 +1600,18 @@
           (loop (cdr hooks)))))
   (init-default-pipeline-registry!)
   #t)
+
+(define (run-c99-o2-fixpoint-pipeline lir)
+  (if (null? (car *pass-registry*))
+      (init-default-pass-registry!))
+  (if (null? (car *analysis-property-registry*))
+      (init-default-analysis-properties!))
+  (reset-analysis-cache!)
+  (run-pass-fixpoint
+    (list 'pass-132-c99-mem2reg 'pass-128-lir-branch-fusion 'pass-133-lir-peephole)
+    lir
+    ':max-iterations 4
+    ':equiv? equal?))
 
 ;;; -----------------------------------------------------------------------
 ;;; 10. Rule-level Auto-Bisect (Delta Debugging) Engine (DSN-33-01 T6.2)

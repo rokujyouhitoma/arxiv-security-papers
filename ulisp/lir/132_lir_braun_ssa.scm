@@ -756,3 +756,686 @@
                  (if entry (set-cdr! entry new-insts))))))
          order)
         #t)))
+
+;;; -----------------------------------------------------------------------
+;;; Register-Safe & ABI-Safe C99 LIR mem2reg & Intra-Block Promotion (Issue #927)
+;;; -----------------------------------------------------------------------
+
+(define (%c99-m2r-reg? x)
+  (memq x '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+            %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15 %al %cl)))
+
+(define (%c99-m2r-caller-saved? x)
+  (memq x '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al %cl
+            %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+            %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15)))
+
+(define (%c99-m2r-tree-has? tree sym)
+  (cond
+    ((eq? tree sym) #t)
+    ((pair? tree)
+     (or (%c99-m2r-tree-has? (car tree) sym)
+         (%c99-m2r-tree-has? (cdr tree) sym)))
+    (else #f)))
+
+(define (%c99-m2r-type-width ty)
+  (case ty
+    ((bool i8 u8) 1)
+    ((i16 u16) 2)
+    ((i32 u32 f32) 4)
+    ((i64 u64 f64 ptr raw-bits) 8)
+    (else #f)))
+
+(define (%c99-m2r-canon-int-kind ty)
+  (case ty
+    ((bool u8) 'u8)
+    ((i8)      'i8)
+    ((u16)     'u16)
+    ((i16)     'i16)
+    ((u32)     'u32)
+    ((i32)     'i32)
+    ((i64 u64 ptr raw-bits) 'i64)
+    (else #f)))
+
+(define (%c99-m2r-norm-int kind v)
+  (case kind
+    ((u8)  (modulo v 256))
+    ((u16) (modulo v 65536))
+    ((u32) (modulo v 4294967296))
+    ((i8)  (let ((m (modulo v 256))) (if (>= m 128) (- m 256) m)))
+    ((i16) (let ((m (modulo v 65536))) (if (>= m 32768) (- m 65536) m)))
+    ((i32) (let ((m (modulo v 4294967296))) (if (>= m 2147483648) (- m 4294967296) m)))
+    (else v)))
+
+(define (%c99-m2r-managed-or-unsafe-body? insts)
+  (let loop ((xs insts))
+    (if (null? xs)
+        #f
+        (let ((inst (car xs)))
+          (if (or (not (pair? inst))
+                  (memq (car inst)
+                        '(%block %alloc %alloc-stack %managed-alloc %managed-alloc-stack
+                          %managed-safepoint-poll %safepoint-poll %managed-write-barrier
+                          %managed-box %managed-unbox %capture-cc %push-handler %pop-handler
+                          %raise %set-values-count %store-values-buf %call-closure
+                          %dispatch-consumer %inline-asm %atomic-cas! %push %pop))
+                  (%c99-m2r-tree-has? inst '%stack)
+                  (%c99-m2r-tree-has? inst '%disp)
+                  (%c99-m2r-tree-has? inst '%mem))
+              #t
+              (loop (cdr xs)))))))
+
+(define (%c99-m2r-call-inst? inst)
+  (and (pair? inst)
+       (memq (car inst) '(%c-call %direct-call %call-indirect %call-foreign %syscall))))
+
+(define (%c99-m2r-rsp-escape-inst? inst)
+  (if (not (pair? inst))
+      #t
+      (let ((op (car inst)))
+        (cond
+          ((and (eq? op '%mov) (>= (length inst) 3))
+           (or (eq? (cadr inst) '%rsp) (eq? (caddr inst) '%rsp)))
+          ((and (memq op '(%store %store-byte)) (>= (length inst) 4))
+           (or (not (eq? (cadr inst) '%rsp))
+               (not (integer? (caddr inst)))
+               (eq? (cadddr inst) '%rsp)))
+          ((and (eq? op '%store-typed) (>= (length inst) 5))
+           (or (not (eq? (caddr inst) '%rsp))
+               (not (integer? (cadddr inst)))
+               (eq? (car (cddddr inst)) '%rsp)))
+          ((and (memq op '(%load %load-byte-zx)) (>= (length inst) 4))
+           (or (eq? (cadr inst) '%rsp)
+               (and (eq? (caddr inst) '%rsp) (not (integer? (cadddr inst))))))
+          ((and (eq? op '%load-typed) (>= (length inst) 5))
+           (or (eq? (caddr inst) '%rsp)
+               (and (eq? (cadddr inst) '%rsp) (not (integer? (car (cddddr inst)))))))
+          (else
+           (%c99-m2r-tree-has? inst '%rsp))))))
+
+(define (%c99-m2r-match-rsp-load inst)
+  ;; Returns (dst off width kind) or #f
+  (if (not (pair? inst))
+      #f
+      (let ((op (car inst)))
+        (cond
+          ((and (eq? op '%load) (= (length inst) 4)
+                (eq? (caddr inst) '%rsp) (integer? (cadddr inst)))
+           (list (cadr inst) (cadddr inst) 8 'i64))
+          ((and (eq? op '%load-byte-zx) (= (length inst) 4)
+                (eq? (caddr inst) '%rsp) (integer? (cadddr inst)))
+           (list (cadr inst) (cadddr inst) 1 'u8))
+          ((and (eq? op '%load-typed) (= (length inst) 5)
+                (eq? (cadddr inst) '%rsp) (integer? (car (cddddr inst))))
+           (let* ((mty (cadr inst))
+                  (w (%c99-m2r-type-width mty)))
+             (if w
+                 (list (caddr inst) (car (cddddr inst)) w mty)
+                 #f)))
+          (else #f)))))
+
+(define (%c99-m2r-match-rsp-store inst)
+  ;; Returns (off width kind src) or #f
+  (if (not (pair? inst))
+      #f
+      (let ((op (car inst)))
+        (cond
+          ((and (eq? op '%store) (= (length inst) 4)
+                (eq? (cadr inst) '%rsp) (integer? (caddr inst)))
+           (list (caddr inst) 8 'i64 (cadddr inst)))
+          ((and (eq? op '%store-byte) (= (length inst) 4)
+                (eq? (cadr inst) '%rsp) (integer? (caddr inst)))
+           (list (caddr inst) 1 'u8 (cadddr inst)))
+          ((and (eq? op '%store-typed) (= (length inst) 5)
+                (eq? (caddr inst) '%rsp) (integer? (cadddr inst)))
+           (let* ((mty (cadr inst))
+                  (w (%c99-m2r-type-width mty)))
+             (if w
+                 (list (cadddr inst) w mty (car (cddddr inst)))
+                 #f)))
+          (else #f)))))
+
+(define (%c99-m2r-all-gprs)
+  '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+    %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15 %al %cl))
+
+(define (%c99-m2r-all-kill-regs)
+  '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+    %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15 %al %cl
+    %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+    %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
+
+(define (%c99-m2r-collect-used-gprs insts)
+  (let ((regs-box (cons '() '())))
+    (for-each
+     (lambda (inst)
+       (for-each
+        (lambda (r)
+          (if (and (not (memq r (car regs-box)))
+                   (or (%c99-m2r-tree-has? inst r)
+                       (lir-inst-defines-reg? inst r)))
+              (set-car! regs-box (cons r (car regs-box)))))
+        (%c99-m2r-all-gprs)))
+     insts)
+    (car regs-box)))
+
+(define (%c99-m2r-free-scratch-pool insts)
+  (let* ((used (%c99-m2r-collect-used-gprs insts))
+         (has-switch?
+          (let loop ((xs insts))
+            (and (pair? xs)
+                 (or (and (pair? (car xs)) (eq? (caar xs) '%switch))
+                     (loop (cdr xs))))))
+         (p0 '())
+         (p1 (if (memq '%r8 used) p0 (cons '%r8 p0)))
+         (p2 (if (memq '%r9 used) p1 (cons '%r9 p1)))
+         (p3 (if (or has-switch? (memq '%r10 used)) p2 (cons '%r10 p2)))
+         (p4 (if (or has-switch? (memq '%r11 used)) p3 (cons '%r11 p3))))
+    (reverse p4)))
+
+(define (%c99-m2r-intervals-overlap? lo1 hi1 lo2 hi2)
+  (and (< lo1 hi2) (< lo2 hi1)))
+
+(define (%c99-m2r-insert-sort-candidates xs)
+  (let loop ((rem xs) (sorted '()))
+    (if (null? rem)
+        sorted
+        (let ((cur (car rem)))
+          (let ins ((ss sorted) (acc '()))
+            (if (null? ss)
+                (loop (cdr rem) (reverse (cons cur acc)))
+                (if (>= (cdr cur) (cdr (car ss)))
+                    (loop (cdr rem) (append (reverse acc) (cons cur ss)))
+                    (ins (cdr ss) (cons (car ss) acc)))))))))
+
+(define (%c99-m2r-find-leaf-slot-map insts pool)
+  ;; Scans all negative %rsp accesses; returns alist of (off . (preg . canon-kind))
+  (let ((stats-box (cons '() '()))
+        (bad-box (cons #f '())))
+    (define (record-acc! off width kind is-load?)
+      (let ((cur (assv off (car stats-box))))
+        (if cur
+            (let ((rec (cdr cur)))
+              ;; rec = (width loads stores kinds-list has-float?)
+              (if (or (not (= (list-ref rec 0) width))
+                      (memq kind '(f32 f64)))
+                  (set-car! rec -1))
+              (if is-load?
+                  (let ((ld-box (list-ref rec 1)))
+                    (set-car! ld-box (+ (car ld-box) 1))
+                    (let ((ks (list-ref rec 3)))
+                      (if (not (memq kind (car ks)))
+                          (set-car! ks (cons kind (car ks))))))
+                  (let ((st-box (list-ref rec 2)))
+                    (set-car! st-box (+ (car st-box) 1))
+                    (let ((ks (list-ref rec 4)))
+                      (if (not (memq kind (car ks)))
+                          (set-car! ks (cons kind (car ks))))))))
+            (let ((init-w (if (memq kind '(f32 f64)) -1 width)))
+              (set-car! stats-box
+                        (cons (cons off
+                                    (list init-w
+                                          (cons (if is-load? 1 0) '())
+                                          (cons (if is-load? 0 1) '())
+                                          (cons (if is-load? (list kind) '()) '())
+                                          (cons (if is-load? '() (list kind)) '())))
+                              (car stats-box)))))))
+    (for-each
+     (lambda (inst)
+       (if (%c99-m2r-tree-has? inst '%stack)
+           (set-car! bad-box #t))
+       (let ((ld (%c99-m2r-match-rsp-load inst))
+             (st (%c99-m2r-match-rsp-store inst)))
+         (cond
+           (ld
+            (if (< (cadr ld) 0)
+                (record-acc! (cadr ld) (caddr ld) (cadddr ld) #t)
+                (set-car! bad-box #t)))
+           (st
+            (if (< (car st) 0)
+                (record-acc! (car st) (cadr st) (caddr st) #f)
+                (set-car! bad-box #t)))
+           ((%c99-m2r-tree-has? inst '%rsp)
+            (set-car! bad-box #t)))))
+     insts)
+    (if (car bad-box)
+        '()
+        (let* ((stats (car stats-box))
+               (eligible
+                (let loop ((xs stats) (acc '()))
+                  (if (null? xs)
+                      acc
+                      (let* ((off (caar xs))
+                             (rec (cdar xs))
+                             (w (list-ref rec 0))
+                             (lds (car (list-ref rec 1)))
+                             (sts (car (list-ref rec 2)))
+                             (l-kinds (car (list-ref rec 3)))
+                             (s-kinds (car (list-ref rec 4)))
+                             (hi (+ off w))
+                             (overlaps?
+                              (let chk ((ys stats))
+                                (if (null? ys)
+                                    #f
+                                    (let* ((o2 (caar ys))
+                                           (r2 (cdar ys))
+                                           (w2 (let ((raw-w (list-ref r2 0)))
+                                                 (if (> raw-w 0) raw-w 8))))
+                                      (if (and (not (= o2 off))
+                                               (%c99-m2r-intervals-overlap? off hi o2 (+ o2 w2)))
+                                          #t
+                                          (chk (cdr ys))))))))
+                        (if (and (> w 0)
+                                 (not overlaps?)
+                                 (> lds 0)
+                                 (> sts 0)
+                                 (= (length l-kinds) 1)
+                                 (>= w 1))
+                            (let ((lk (%c99-m2r-canon-int-kind (car l-kinds)))
+                                  (all-compat-stores?
+                                   (let cl ((sks s-kinds))
+                                     (or (null? sks)
+                                         (and (%c99-m2r-canon-int-kind (car sks))
+                                              (= (%c99-m2r-type-width (car sks)) w)
+                                              (cl (cdr sks)))))))
+                              (if (and lk all-compat-stores?)
+                                  (loop (cdr xs) (cons (cons (list off lk) (+ lds sts)) acc))
+                                  (loop (cdr xs) acc)))
+                            (loop (cdr xs) acc))))))
+               (ranked (%c99-m2r-insert-sort-candidates eligible)))
+          (let assign ((cs ranked) (ps pool) (res '()))
+            (if (or (null? cs) (null? ps))
+                (reverse res)
+                (let ((off (caaar cs))
+                      (kind (cadar (car cs)))
+                      (preg (car ps)))
+                  (assign (cdr cs) (cdr ps)
+                          (cons (list off preg kind) res)))))))))
+
+(define (%c99-m2r-promote-leaf-slots insts)
+  (let* ((has-call?
+          (let loop ((xs insts))
+            (and (pair? xs) (or (%c99-m2r-call-inst? (car xs)) (loop (cdr xs))))))
+         (has-escape?
+          (let loop ((xs insts))
+            (and (pair? xs) (or (%c99-m2r-rsp-escape-inst? (car xs)) (loop (cdr xs)))))))
+    (if (or has-call? has-escape?)
+        insts
+        (let ((pool (%c99-m2r-free-scratch-pool insts)))
+          (if (null? pool)
+              insts
+              (let ((slot-map (%c99-m2r-find-leaf-slot-map insts pool)))
+                (if (null? slot-map)
+                    insts
+                    (let loop ((xs insts) (acc '()))
+                      (if (null? xs)
+                          (reverse acc)
+                          (let* ((inst (car xs))
+                                 (ld (%c99-m2r-match-rsp-load inst))
+                                 (st (%c99-m2r-match-rsp-store inst)))
+                            (cond
+                              ((and ld (assv (cadr ld) slot-map))
+                               => (lambda (slot)
+                                    (let ((dst (car ld))
+                                          (preg (cadr slot)))
+                                      (loop (cdr xs)
+                                            (if (eq? dst preg)
+                                                acc
+                                                (cons (list '%mov dst preg) acc))))))
+                              ((and st (assv (car st) slot-map))
+                               => (lambda (slot)
+                                    (let* ((preg (cadr slot))
+                                           (kind (caddr slot))
+                                           (src (cadddr st))
+                                           (new-inst
+                                            (cond
+                                              ((integer? src)
+                                               (list '%mov preg (%c99-m2r-norm-int kind src)))
+                                              ((eq? kind 'i64)
+                                               (if (eq? preg src) #f (list '%mov preg src)))
+                                              ((memq kind '(i8 i16 i32))
+                                               (list '%sext kind preg src))
+                                              (else
+                                               (list '%zext kind preg src)))))
+                                      (loop (cdr xs)
+                                            (if new-inst (cons new-inst acc) acc)))))
+                              (else
+                               (loop (cdr xs) (cons inst acc))))))))))))))
+
+(define (%c99-m2r-inst-reads-any-reg? inst regs)
+  ;; Over-approximation: check if any symbol in regs appears in rhs operands or implicit uses
+  (if (not (pair? inst))
+      #f
+      (let ((op (car inst)))
+        (or (and (memq op '(%cqo %idiv %udiv %urem))
+                 (or (memq '%rax regs) (memq '%rdx regs)))
+            (and (memq op '(%shl %shr %sar))
+                 (= (length inst) 3)
+                 (not (integer? (caddr inst)))
+                 (memq '%rcx regs))
+            (and (memq op '(%return))
+                 (memq '%rax regs))
+            (let loop ((rs regs))
+              (if (null? rs)
+                  #f
+                  (if (%c99-m2r-tree-has? inst (car rs))
+                      #t
+                      (loop (cdr rs)))))))))
+
+(define (%c99-m2r-slot-env-kill-overlap env off w)
+  (let ((hi (+ off w)))
+    (let loop ((xs env) (acc '()))
+      (if (null? xs)
+          (reverse acc)
+          (let* ((e (car xs))
+                 (eo (list-ref e 0))
+                 (ew (list-ref e 1)))
+            (if (%c99-m2r-intervals-overlap? off hi eo (+ eo ew))
+                (loop (cdr xs) acc)
+                (loop (cdr xs) (cons e acc))))))))
+
+(define (%c99-m2r-slot-env-kill-reg env reg)
+  (let loop ((xs env) (acc '()))
+    (if (null? xs)
+        (reverse acc)
+        (let* ((e (car xs))
+               (val (list-ref e 3)))
+          (if (and (memq (car val) '(reg loaded-reg freg))
+                   (lir-reg-aliases? (cdr val) reg))
+              (loop (cdr xs) acc)
+              (loop (cdr xs) (cons e acc)))))))
+
+(define (%c99-m2r-slot-env-kill-caller-regs env keep-consts?)
+  (let loop ((xs env) (acc '()))
+    (if (null? xs)
+        (reverse acc)
+        (let* ((e (car xs))
+               (val (list-ref e 3)))
+          (cond
+            ((eq? (car val) 'const)
+             (if keep-consts?
+                 (loop (cdr xs) (cons e acc))
+                 (loop (cdr xs) acc)))
+            ((and (memq (car val) '(reg loaded-reg)) (not (%c99-m2r-caller-saved? (cdr val))))
+             (loop (cdr xs) (cons e acc)))
+            (else
+             (loop (cdr xs) acc)))))))
+
+(define (%c99-m2r-reg-env-kill env inst)
+  (let loop ((xs env) (acc '()))
+    (if (null? xs)
+        (reverse acc)
+        (let* ((r (caar xs))
+               (val (cdar xs)))
+          (if (or (lir-inst-defines-reg? inst r)
+                  (and (eq? (car val) 'reg) (lir-inst-defines-reg? inst (cdr val))))
+              (loop (cdr xs) acc)
+              (loop (cdr xs) (cons (car xs) acc)))))))
+
+(define (%c99-m2r-forward-blocks insts)
+  (let* ((has-escape?
+          (let loop ((xs insts))
+            (and (pair? xs) (or (%c99-m2r-rsp-escape-inst? (car xs)) (loop (cdr xs))))))
+         (has-rt? (braun-cfg-has-returns-twice? (list (cons 'blocks (list (cons 'entry insts))))))
+         (safe-across-calls? (and (not has-escape?) (not has-rt?))))
+    (let loop ((xs insts) (slot-env '()) (reg-env '()) (acc '()))
+      (if (null? xs)
+          (reverse acc)
+          (let ((inst (car xs)))
+            (if (not (pair? inst))
+                (loop (cdr xs) '() '() (cons inst acc))
+                (let ((op (car inst))
+                      (ld (%c99-m2r-match-rsp-load inst))
+                      (st (%c99-m2r-match-rsp-store inst)))
+                  (cond
+                    ;; 1. Block terminators / labels reset intrablock state
+                    ((or (lir-label-inst? inst)
+                         (lir-inst-terminates-block? inst))
+                     (loop (cdr xs) '() '() (cons inst acc)))
+
+                    ;; 2. Calls preserve non-escaped constant stack slots if no setjmp/rsp-escape
+                    ((%c99-m2r-call-inst? inst)
+                     (loop (cdr xs)
+                           (if safe-across-calls?
+                               (%c99-m2r-slot-env-kill-caller-regs slot-env #t)
+                               '())
+                           '()
+                           (cons inst acc)))
+
+                    ;; 3. Other memory barriers reset everything
+                    ((lir-inst-memory-barrier? inst)
+                     (loop (cdr xs) '() '() (cons inst acc)))
+
+                    ;; 4. Store to negative %rsp slot
+                    ((and st (< (car st) 0))
+                     (let* ((off (car st))
+                            (w (cadr st))
+                            (skind (caddr st))
+                            (src (cadddr st))
+                            (s-env0 (%c99-m2r-slot-env-kill-overlap slot-env off w))
+                            (s-val (cond
+                                     ((integer? src)
+                                      (if (memq skind '(f32 f64))
+                                          #f
+                                          (let ((c-k (%c99-m2r-canon-int-kind skind)))
+                                            (cons 'const (if c-k (%c99-m2r-norm-int c-k src) src)))))
+                                     ((%c99-m2r-reg? src)
+                                      (let ((r-hit (assq src reg-env)))
+                                        (if (and r-hit (eq? (car (cdr r-hit)) 'const))
+                                            (let ((c-k (%c99-m2r-canon-int-kind skind)))
+                                              (cons 'const (if c-k
+                                                               (%c99-m2r-norm-int c-k (cdr (cdr r-hit)))
+                                                               (cdr (cdr r-hit)))))
+                                            (if r-hit (cdr r-hit) (cons 'reg src)))))
+                                     ((and (memq skind '(f64)) (lir-float-register? src))
+                                      (cons 'freg src))
+                                     (else #f)))
+                            (s-env1 (if s-val
+                                        (cons (list off w skind s-val) s-env0)
+                                        s-env0)))
+                       (loop (cdr xs) s-env1 reg-env (cons inst acc))))
+
+                    ;; 5. Store to non-%rsp memory may alias if %rsp escaped
+                    ((memq op '(%store %store-byte %store-typed))
+                     (loop (cdr xs)
+                           (if safe-across-calls? slot-env '())
+                           reg-env
+                           (cons inst acc)))
+
+                    ;; 6. Load from negative %rsp slot
+                    ((and ld (< (cadr ld) 0))
+                     (let* ((dst (car ld))
+                            (off (cadr ld))
+                            (w (caddr ld))
+                            (lkind (cadddr ld))
+                            (l-c-kind (%c99-m2r-canon-int-kind lkind))
+                            (hit (assv off slot-env))
+                            (forwarded-inst
+                             (if (and hit (= (list-ref hit 1) w))
+                                 (let ((skind (list-ref hit 2))
+                                       (vdesc (list-ref hit 3)))
+                                   (cond
+                                     ((and l-c-kind (not (memq skind '(f32 f64))) (eq? (car vdesc) 'const))
+                                      (list '%mov dst (%c99-m2r-norm-int l-c-kind (cdr vdesc))))
+                                     ((and l-c-kind (not (memq skind '(f32 f64))) (memq (car vdesc) '(reg loaded-reg)))
+                                      (let ((sreg (cdr vdesc))
+                                            (s-c-kind (%c99-m2r-canon-int-kind skind))
+                                            (already-ext? (eq? (car vdesc) 'loaded-reg)))
+                                        (cond
+                                          ((or (= w 8)
+                                               (and already-ext? (eq? s-c-kind l-c-kind)))
+                                           (list '%mov dst sreg))
+                                          ((memq l-c-kind '(i8 i16 i32))
+                                           (list '%sext l-c-kind dst sreg))
+                                          ((memq l-c-kind '(u8 u16 u32))
+                                           (list '%zext l-c-kind dst sreg))
+                                          (else #f))))
+                                     ((and (eq? lkind 'f64) (eq? skind 'f64) (eq? (car vdesc) 'freg))
+                                      (list '%fmov dst (cdr vdesc)))
+                                     (else #f)))
+                                 #f))
+                            (emit-i (or forwarded-inst inst))
+                            (r-env1 (%c99-m2r-reg-env-kill reg-env emit-i))
+                            (s-env1
+                             (let loop-kill ((rs (%c99-m2r-all-kill-regs)) (se slot-env))
+                               (if (null? rs)
+                                   se
+                                   (loop-kill (cdr rs)
+                                              (if (lir-inst-defines-reg? emit-i (car rs))
+                                                  (%c99-m2r-slot-env-kill-reg se (car rs))
+                                                  se)))))
+                            (r-env2 (cond
+                                      ((and (pair? emit-i) (eq? (car emit-i) '%mov) (= (length emit-i) 3)
+                                            (%c99-m2r-reg? (cadr emit-i)) (integer? (caddr emit-i)))
+                                       (cons (cons (cadr emit-i) (cons 'const (caddr emit-i))) r-env1))
+                                      ((and (pair? emit-i) (eq? (car emit-i) '%mov) (= (length emit-i) 3)
+                                            (%c99-m2r-reg? (cadr emit-i)) (%c99-m2r-reg? (caddr emit-i)))
+                                       (let ((rh (assq (caddr emit-i) r-env1)))
+                                         (if (and rh (eq? (car (cdr rh)) 'const))
+                                             (cons (cons (cadr emit-i) (cdr rh)) r-env1)
+                                             r-env1)))
+                                      (else r-env1)))
+                            (s-env2 (if (and (not forwarded-inst) l-c-kind (%c99-m2r-reg? dst))
+                                        (cons (list off w lkind (cons 'loaded-reg dst))
+                                              (%c99-m2r-slot-env-kill-overlap s-env1 off w))
+                                        s-env1)))
+                       (loop (cdr xs)
+                             s-env2
+                             r-env2
+                             (if (and (memq (car emit-i) '(%mov %fmov)) (eq? (cadr emit-i) (caddr emit-i)))
+                                 acc
+                                 (cons emit-i acc)))))
+
+                    ;; 7. Any other instruction: propagate reg-env & kill overwritten regs
+                    (else
+                     (let* ((r-env1 (%c99-m2r-reg-env-kill reg-env inst))
+                            (s-env1
+                             (let loop-kill ((rs (%c99-m2r-all-kill-regs)) (se slot-env))
+                               (if (null? rs)
+                                   se
+                                   (loop-kill (cdr rs)
+                                              (if (lir-inst-defines-reg? inst (car rs))
+                                                  (%c99-m2r-slot-env-kill-reg se (car rs))
+                                                  se)))))
+                            (r-env2
+                             (cond
+                               ((and (eq? op '%mov) (= (length inst) 3)
+                                     (%c99-m2r-reg? (cadr inst)) (integer? (caddr inst)))
+                                (cons (cons (cadr inst) (cons 'const (caddr inst))) r-env1))
+                               ((and (eq? op '%mov) (= (length inst) 3)
+                                     (%c99-m2r-reg? (cadr inst)) (%c99-m2r-reg? (caddr inst)))
+                                (let ((rh (assq (caddr inst) reg-env)))
+                                  (if (and rh (not (eq? (cadr inst) (caddr inst))))
+                                      (if (eq? (car (cdr rh)) 'const)
+                                          (cons (cons (cadr inst) (cdr rh)) r-env1)
+                                          r-env1)
+                                      r-env1)))
+                               (else r-env1)))
+                            ;; If %mov reg1 reg2 where reg2 holds a constant in reg-env, replace with (%mov reg1 imm)!
+                            (final-inst
+                             (if (and (eq? op '%mov) (= (length inst) 3)
+                                      (%c99-m2r-reg? (cadr inst)) (%c99-m2r-reg? (caddr inst)))
+                                 (let ((rh (assq (caddr inst) reg-env)))
+                                   (if (and rh (eq? (car (cdr rh)) 'const))
+                                       (list '%mov (cadr inst) (cdr (cdr rh)))
+                                       inst))
+                                 inst)))
+                       (loop (cdr xs) s-env1 r-env2 (cons final-inst acc))))))))))
+    ))
+
+(define (%c99-m2r-elim-dead-stores-intra-block insts)
+  (let* ((has-escape?
+          (let loop ((xs insts))
+            (and (pair? xs) (or (%c99-m2r-rsp-escape-inst? (car xs)) (loop (cdr xs))))))
+         (has-rt? (braun-cfg-has-returns-twice? (list (cons 'blocks (list (cons 'entry insts))))))
+         (safe-across-calls? (and (not has-escape?) (not has-rt?))))
+    (let loop ((xs (reverse insts)) (dead-ivs '()) (acc '()))
+      (if (null? xs)
+          acc
+          (let* ((inst (car xs))
+                 (ld (%c99-m2r-match-rsp-load inst))
+                 (st (%c99-m2r-match-rsp-store inst)))
+            (cond
+              ((or (not (pair? inst))
+                   (lir-label-inst? inst)
+                   (lir-inst-terminates-block? inst))
+               (loop (cdr xs) '() (cons inst acc)))
+              ((%c99-m2r-call-inst? inst)
+               ;; Outside the outgoing call frame, stores strictly overwritten LATER in subsequent blocks aren't tracked here;
+               ;; reset dead-ivs at calls conservatively.
+               (loop (cdr xs) (if safe-across-calls? '() '()) (cons inst acc)))
+              ((lir-inst-memory-barrier? inst)
+               (loop (cdr xs) '() (cons inst acc)))
+              ((and st (< (car st) 0) (<= (+ (car st) (cadr st)) 0))
+               (let* ((off (car st))
+                      (w (cadr st))
+                      (hi (+ off w))
+                      (subsumed? (lir-iv-subsumed? dead-ivs off hi)))
+                 (if subsumed?
+                     (loop (cdr xs) dead-ivs acc)
+                     (loop (cdr xs) (lir-iv-insert dead-ivs off hi) (cons inst acc)))))
+              ((and ld (< (cadr ld) 0))
+               (let ((off (cadr ld))
+                     (w (caddr ld)))
+                 (loop (cdr xs) (lir-iv-remove dead-ivs off (+ off w)) (cons inst acc))))
+              ((and has-escape? (%c99-m2r-tree-has? inst '%load))
+               (loop (cdr xs) '() (cons inst acc)))
+              (else
+               (loop (cdr xs) dead-ivs (cons inst acc)))))))))
+
+(define (c99-lir-mem2reg-function-body body)
+  (if (or (null? body) (%c99-m2r-managed-or-unsafe-body? body))
+      body
+      (let* ((b1 (%c99-m2r-promote-leaf-slots body))
+             (b2 (%c99-m2r-forward-blocks b1))
+             (b3 (%c99-m2r-elim-dead-stores-intra-block b2)))
+        (if (equal? b3 body) body b3))))
+
+(define (%c99-m2r-transform-clause form)
+  (if (not (pair? form))
+      form
+      (case (car form)
+        ((%lir-function)
+         (let ((new-clauses
+                (map (lambda (sub)
+                       (if (and (pair? sub) (eq? (car sub) 'body))
+                           (let* ((old-b (cdr sub))
+                                  (new-b (c99-lir-mem2reg-function-body old-b)))
+                             (if (eq? new-b old-b) sub (cons 'body new-b)))
+                           sub))
+                     (cdr form))))
+           (if (equal? new-clauses (cdr form))
+               form
+               (cons '%lir-function new-clauses))))
+        ((%lir-main)
+         (let ((new-clauses
+                (map (lambda (sub)
+                       (if (and (pair? sub) (eq? (car sub) 'body))
+                           (let* ((old-b (cdr sub))
+                                  (new-b (c99-lir-mem2reg-function-body old-b)))
+                             (if (eq? new-b old-b) sub (cons 'body new-b)))
+                           sub))
+                     (cdr form))))
+           (if (equal? new-clauses (cdr form))
+               form
+               (cons '%lir-main new-clauses))))
+        ((%lir-functions)
+         (let ((new-fns (map %c99-m2r-transform-clause (cdr form))))
+           (if (equal? new-fns (cdr form))
+               form
+               (cons '%lir-functions new-fns))))
+        (else form))))
+
+(define (c99-lir-mem2reg-optimize ir)
+  (cond
+    ((null? ir) '())
+    ((and (pair? ir) (eq? (car ir) '%lir-program))
+     (let ((new-body (map %c99-m2r-transform-clause (cdr ir))))
+       (if (equal? new-body (cdr ir))
+           ir
+           (cons '%lir-program new-body))))
+    ((pair? ir)
+     (if (memq (car ir) '(%lir-function %lir-main))
+         (%c99-m2r-transform-clause ir)
+         (c99-lir-mem2reg-function-body ir)))
+    (else ir)))

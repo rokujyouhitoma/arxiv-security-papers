@@ -3461,7 +3461,7 @@
              %box-fixnum %unbox-fixnum %neg %inc
              %alloc %alloc-stack %managed-alloc %managed-alloc-stack
              %fmov %fadd %fsub %fmul %fdiv
-             %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64 %unbox-flonum
+             %sitofp %fptosi %bitcast-f64-to-i64 %bitcast-i64-to-f64 %box-flonum %unbox-flonum
              %fcmp-ogt %fcmp-oge)
             (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg)))
            ((%global-ref %setb %setbe %seta %setae)

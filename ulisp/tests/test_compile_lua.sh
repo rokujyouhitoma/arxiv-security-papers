@@ -170,21 +170,189 @@ if [ "${BUILD_LUAC:-0}" = "1" ]; then
   ORDERED_TUS+=(luac)
 fi
 
+USE_PCH="${USE_PCH:-1}"
 T0="$(date +%s)"
-PIDS=()
-for ((s = 0; s < JOBS; s++)); do
-  SHARD_SRCS=()
-  for ((i = s; i < ${#ORDERED_TUS[@]}; i += JOBS)); do
-    tu="${ORDERED_TUS[$i]}"
-    SHARD_SRCS+=("$SRC_DIR/${tu}.c")
-  done
-  if [ "${#SHARD_SRCS[@]}" -gt 0 ]; then
-    (
-      "${RUN_CC[@]}" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_SRCS[@]}" > "$OBJ_DIR/shard_${s}.log" 2>&1
-    ) &
-    PIDS+=("$!")
+
+if [ "$USE_PCH" = "1" ]; then
+  echo "  [INFO] Emitting C99 .sbi precompiled headers (lua_core_pch.h.sbi & lua_lib_pch.h.sbi) ..."
+  CORE_PCH_HDR="$OBJ_DIR/lua_core_pch.h"
+  LIB_PCH_HDR="$OBJ_DIR/lua_lib_pch.h"
+  CORE_PCH_SBI="$OBJ_DIR/lua_core_pch.h.sbi"
+  LIB_PCH_SBI="$OBJ_DIR/lua_lib_pch.h.sbi"
+
+  cat > "$CORE_PCH_HDR" << 'EOF'
+#ifndef LUA_CORE
+#define LUA_CORE
+#endif
+#include "lprefix.h"
+#include <ctype.h>
+#include <errno.h>
+#include <float.h>
+#include <limits.h>
+#include <locale.h>
+#include <math.h>
+#include <setjmp.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include "lua.h"
+#include "llimits.h"
+#include "lobject.h"
+#include "lstate.h"
+#include "ltm.h"
+#include "lzio.h"
+#include "lmem.h"
+#include "lgc.h"
+#include "lfunc.h"
+#include "lstring.h"
+#include "ltable.h"
+#include "ldo.h"
+#include "ldebug.h"
+#include "lvm.h"
+#include "lundump.h"
+#include "lapi.h"
+#include "lparser.h"
+#include "llex.h"
+#include "lcode.h"
+#include "lopcodes.h"
+#include "lctype.h"
+EOF
+
+  cat > "$LIB_PCH_HDR" << 'EOF'
+#ifndef LUA_LIB
+#define LUA_LIB
+#endif
+#include "lprefix.h"
+#include <ctype.h>
+#include <errno.h>
+#include <float.h>
+#include <limits.h>
+#include <locale.h>
+#include <math.h>
+#include <setjmp.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
+EOF
+
+  "${RUN_CC[@]}" -emit-pch -DLUA_USE_POSIX -I "$SRC_DIR" "$CORE_PCH_HDR" -o "$CORE_PCH_SBI" > "$OBJ_DIR/pch_core.log" 2>&1 &
+  PCH_PID1="$!"
+  "${RUN_CC[@]}" -emit-pch -DLUA_USE_POSIX -I "$SRC_DIR" "$LIB_PCH_HDR" -o "$LIB_PCH_SBI" > "$OBJ_DIR/pch_lib.log" 2>&1 &
+  PCH_PID2="$!"
+  PCH_RC=0
+  if ! wait "$PCH_PID1"; then
+    cat "$OBJ_DIR/pch_core.log" >&2 || true
+    PCH_RC=1
   fi
-done
+  if ! wait "$PCH_PID2"; then
+    cat "$OBJ_DIR/pch_lib.log" >&2 || true
+    PCH_RC=1
+  fi
+  if [ "$PCH_RC" -ne 0 ]; then
+    echo "ERROR: PCH generation failed" >&2
+    exit 1
+  fi
+  T_PCH="$(date +%s)"
+  echo "  [PASS] Emitted Lua core & lib .sbi PCH in $((T_PCH - T0))s (core=$(stat -c%s "$CORE_PCH_SBI")B, lib=$(stat -c%s "$LIB_PCH_SBI")B)"
+
+  CORE_ORDER=(
+    lvm lparser lcode lapi
+    lgc ldo lobject ltable
+    llex ldebug lstate lfunc
+    lstring lundump ldump lopcodes
+    ltm lmem lzio lctype
+  )
+  LIB_ORDER=(
+    lstrlib lauxlib lbaselib liolib
+    loadlib ldblib lmathlib ltablib
+    loslib lcorolib lutf8lib linit
+  )
+
+  PIDS=()
+  for ((s = 0; s < JOBS; s++)); do
+    SHARD_CORE=()
+    for ((i = s; i < ${#CORE_ORDER[@]}; i += JOBS)); do
+      SHARD_CORE+=("$SRC_DIR/${CORE_ORDER[$i]}.c")
+    done
+    rev_s=$((JOBS - 1 - s))
+    SHARD_LIB=()
+    for ((i = rev_s; i < ${#LIB_ORDER[@]}; i += JOBS)); do
+      SHARD_LIB+=("$SRC_DIR/${LIB_ORDER[$i]}.c")
+    done
+    SHARD_CLI=()
+    if [ "$s" -eq $((JOBS - 1)) ]; then
+      for cli_tu in "${CLI_TUS[@]}"; do
+        SHARD_CLI+=("$SRC_DIR/${cli_tu}.c")
+      done
+    fi
+
+    if [ -n "${ULISP_CC_BIN:-}" ] && [ -x "${ULISP_CC_BIN}" ]; then
+      (
+        [ "${#SHARD_CORE[@]}" -gt 0 ] && "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$CORE_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_CORE[@]}"
+        [ "${#SHARD_LIB[@]}" -gt 0 ] && "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$LIB_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_LIB[@]}"
+        [ "${#SHARD_CLI[@]}" -gt 0 ] && "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_CLI[@]}"
+      ) > "$OBJ_DIR/shard_${s}.log" 2>&1 &
+      PIDS+=("$!")
+    else
+      SHARD_SCM="$OBJ_DIR/shard_${s}.scm"
+      sed '$d' "$ULISP_DIR/build/c_driver_runner.scm" > "$SHARD_SCM"
+      echo "(begin" >> "$SHARD_SCM"
+      if [ "${#SHARD_CORE[@]}" -gt 0 ]; then
+        printf '  (c-driver-main '\''("-DLUA_USE_POSIX" "-O2" "-I" "%s" "-include-pch" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$CORE_PCH_SBI" "$OBJ_DIR/" >> "$SHARD_SCM"
+        for src in "${SHARD_CORE[@]}"; do printf ' "%s"' "$src" >> "$SHARD_SCM"; done
+        echo '))' >> "$SHARD_SCM"
+      fi
+      if [ "${#SHARD_LIB[@]}" -gt 0 ]; then
+        printf '  (c-driver-main '\''("-DLUA_USE_POSIX" "-O2" "-I" "%s" "-include-pch" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$LIB_PCH_SBI" "$OBJ_DIR/" >> "$SHARD_SCM"
+        for src in "${SHARD_LIB[@]}"; do printf ' "%s"' "$src" >> "$SHARD_SCM"; done
+        echo '))' >> "$SHARD_SCM"
+      fi
+      if [ "${#SHARD_CLI[@]}" -gt 0 ]; then
+        printf '  (c-driver-main '\''("-DLUA_USE_POSIX" "-O2" "-I" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$OBJ_DIR/" >> "$SHARD_SCM"
+        for src in "${SHARD_CLI[@]}"; do printf ' "%s"' "$src" >> "$SHARD_SCM"; done
+        echo '))' >> "$SHARD_SCM"
+      fi
+      echo '  (exit 0))' >> "$SHARD_SCM"
+
+      (
+        if [ "${USE_GOSH:-1}" = "1" ] && command -v gosh >/dev/null 2>&1; then
+          "$GOSH_BIN" -usrfi.9 -ugauche.uvector -ugauche.process -uscheme.file -uscheme.bitwise -uscheme.process-context -I "$ULISP_DIR" -I "$ROOT_DIR" "$SHARD_SCM"
+        else
+          "$PYTHON_BIN" -m ilisp "$SHARD_SCM"
+        fi
+      ) > "$OBJ_DIR/shard_${s}.log" 2>&1 &
+      PIDS+=("$!")
+    fi
+  done
+else
+  PIDS=()
+  for ((s = 0; s < JOBS; s++)); do
+    SHARD_SRCS=()
+    for ((i = s; i < ${#ORDERED_TUS[@]}; i += JOBS)); do
+      tu="${ORDERED_TUS[$i]}"
+      SHARD_SRCS+=("$SRC_DIR/${tu}.c")
+    done
+    if [ "${#SHARD_SRCS[@]}" -gt 0 ]; then
+      (
+        "${RUN_CC[@]}" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_SRCS[@]}" > "$OBJ_DIR/shard_${s}.log" 2>&1
+      ) &
+      PIDS+=("$!")
+    fi
+  done
+fi
 
 COMPILE_RC=0
 for idx in "${!PIDS[@]}"; do
