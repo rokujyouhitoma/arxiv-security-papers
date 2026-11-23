@@ -13,7 +13,7 @@ ID: 925
 
 ### 1.1 後続 Issue (#926, #927, #928, #932) との境界
 - **本 Issue (#925) の責務**: 自立型 C99 標準／POSIX/glibc 宣言ヘッダ群の整備、33 TU 一括ビルドを阻害するフロントエンド／バックエンドの複数ファイル連携バグ解消、Lua 5.4.7 全 33 ファイルからのネイティブ `ulisp/build/lua_ulisp` 生成、`lua_gcc` リファレンスバイナリとの対話 REPL ＆ 多項目 `-e` スモーク差分検証、および `make -C ulisp compile_lua` ターゲット確立。
-- **Issue [#926](../926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)**: 本パイプラインが生成した `lua_ulisp` 上で Lua 公式テストスイート（`all.lua`, `gc.lua`, `errors.lua` 等）を網羅実行・長負荷耐性検証する。
+- **Issue [#926](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)**: 本パイプラインが生成した `lua_ulisp` 上で Lua 公式テストスイート（`all.lua`, `gc.lua`, `errors.lua` 等）を網羅実行・長負荷耐性検証する。
 - **Issue [#927](../927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) / [#928](../928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) / [#932](../932-build-native-aot-ulisp-cc-compiler-driver-binary.md)**: `.sbi` PCH・mem2reg（#927）、`musl libc` 自前静的リンク（#928）、および AOT ネイティブコンパイラドライバ `ulisp-cc` 高速化（#932）と連携する。なお、本ハーネスは将来の `ulisp/bin/ulisp-cc` 差し替えを想定したランナー抽象化を備える。
 
 ### 1.2 実コードベース事前監査で判明した 5 大ギャップ
@@ -59,7 +59,7 @@ Lua 5.4.7 の実ソース一括コンパイルに先立ち、現行実装を監�
   - [#923](923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md) (浮動小数点 Sema ＆ IEEE 754 LIR 変換)
   - [#924](924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md) (SSE2 XMM ABI / `libm` ＆ 4系統差分ファジング)
 - **後続・連携 Open Issue**:
-  - [#926](../926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) (Lua 公式テストスイート E2E 実証)
+  - [#926](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) (Lua 公式テストスイート E2E 実証)
   - [#927](../927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) (C ヘッダ `.sbi` PCH ＆ mem2reg 高速化)
   - [#928](../928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) (`musl libc` 完全静的リンク移行)
   - [#932](../932-build-native-aot-ulisp-cc-compiler-driver-binary.md) (ネイティブ AOT `ulisp-cc` ドライババイナリ化)

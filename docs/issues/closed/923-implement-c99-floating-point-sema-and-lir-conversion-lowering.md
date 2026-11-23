@@ -33,7 +33,7 @@ Lua 5.x のデフォルト数値型 `lua_Number`（`double` / `f64`）および�
 - **先行 Issue ([[#826]](826-introduce-typed-machine-lir-and-orthogonalize-boxing-operations.md), [[#832]](832-implement-pure-scheme-bignum-and-ieee-754-conversion-libraries.md), [[#913]](913-implement-c99-lexer-and-token-stream-with-source-span.md), [[#916]](916-implement-c99-sema-core-and-integer-subset-lir-lowering.md), [[#918]](918-implement-c99-struct-union-enum-bitfield-sysv-layout.md)) の責務**: Typed Machine LIR 基盤、Bignum/IEEE 754 基本ライブラリ、C99 Lexer 浮動小数点トークン認識、整数 C99 Sema/Lowering、および構造体/共用体（IEEE bit-punning `union` 含む）SysV レイアウト。
 - **本 Issue (`#923`) の責務**: `float`/`double`（および `long double` エイリアス）の意味解析、10/16 進リテラルの純粋 Scheme 決定論的 IEEE 754 エンコード（`C99-FP-001`/`C99-FP-002`）、`.rodata` 定数プール、単項 `-` / `++`-- / 条件式 / `i64`/`u64`↔`f32`/`f64` 変換・比較（`NaN`/`±Inf`/`-0.0`）の Core LIR Lowering、および Reference VM / 基本 x86-64・Portable C 命令の同期確立。
 - **後続 Issue ([[#924]](../924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md)) の責務**: 多数混合引数（9 個目以降のスタック渡し）、XMM レジスタ干渉グラフ彩色・スピル/リストア最適化、`libm`（`-lm`）外部数学関数リンク統合、および数千パターンの Reference VM / Native ELF / Portable C 3 者差分ファジング（`test_fuzz_xmm_float.sh`）。
-- **後続 Issue ([[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md), [[#926]](../926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)) の責務**: Lua 5.x `lua_Number` / `lmathlib.c` / `lvm.c` 一括ビルドおよび公式テスト（`math.lua` 等）完走。
+- **後続 Issue ([[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md), [[#926]](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)) の責務**: Lua 5.x `lua_Number` / `lmathlib.c` / `lvm.c` 一括ビルドおよび公式テスト（`math.lua` 等）完走。
 
 ---
 
@@ -55,7 +55,7 @@ Lua 5.x のデフォルト数値型 `lua_Number`（`double` / `f64`）および�
 - 後続連携 Issue:
   - [[#924]](../924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md)（SSE2 XMM レジスタ割当・`libm` ＆ 3 者差分ファジング）
   - [[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)（Lua 5.x C コードベース一括ビルド）
-  - [[#926]](../926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)（公式テストスイート `math.lua` 実証）
+  - [[#926]](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)（公式テストスイート `math.lua` 実証）
 
 ---
 

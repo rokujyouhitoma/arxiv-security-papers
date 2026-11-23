@@ -11,7 +11,7 @@ ID: 932
 
 [Issue #924](closed/924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md) における 500 ケース（6,503 行 / 248 KB）浮動小数点差分ファジングのステージ別プロファイリングにより、C99 コンパイルパイプラインのレキサ・パーサ・Nanopass 検証・ELF ビルドのアルゴリズム的最適化後も、**コンパイラ自体をホストインタプリタ（`gosh` / Python `ilisp`）上で実行していることによるインタプリタ実行・起動オーバーヘッド**が最大の残存コストであることが判明した。
 
-本 Issue では、ULisp C99 コンパイラドライバ一式（`compiler_passes.scm` + `vm/lir_interpreter.scm` + `peg/` + `frontend_c/` + `driver/c_driver.scm`）を **ULisp 自身（`ulisp-boot` / `stage2`）でネイティブ x86-64 AOT コンパイルし、スタンドアロン実行バイナリ `ulisp/bin/ulisp-cc` を構築**する。これにより、Lua 5.x 一括ビルド（[#925](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)）・公式テスト完走（[#926](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)）・PCH/mem2reg 高速化（[#927](927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md)）・CI テスト群のコンパイルスループットをさらに **5〜10 倍** 高速化し、インタプリタ起動ボトルネックを根本解消する。
+本 Issue では、ULisp C99 コンパイラドライバ一式（`compiler_passes.scm` + `vm/lir_interpreter.scm` + `peg/` + `frontend_c/` + `driver/c_driver.scm`）を **ULisp 自身（`ulisp-boot` / `stage2`）でネイティブ x86-64 AOT コンパイルし、スタンドアロン実行バイナリ `ulisp/bin/ulisp-cc` を構築**する。これにより、Lua 5.x 一括ビルド（[#925](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)）・公式テスト完走（[#926](closed/926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)）・PCH/mem2reg 高速化（[#927](927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md)）・CI テスト群のコンパイルスループットをさらに **5〜10 倍** 高速化し、インタプリタ起動ボトルネックを根本解消する。
 
 ---
 
