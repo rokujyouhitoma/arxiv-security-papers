@@ -5,9 +5,11 @@
 
 ;;; Global language repository
 (define *nanopass-languages* (cons '() '()))
+(define *nanopass-nt-index-cache* (cons '() '()))
 
 (define (nanopass-clear-languages!)
-  (set-car! *nanopass-languages* '()))
+  (set-car! *nanopass-languages* '())
+  (set-car! *nanopass-nt-index-cache* '()))
 
 (define (nanopass-get-languages)
   (car *nanopass-languages*))
@@ -40,6 +42,7 @@
 ;;; Registration & Lookup
 (define (nanopass-register-language! lang)
   (let ((name (nanopass-lang-name lang)))
+    (set-car! *nanopass-nt-index-cache* '())
     (set-car! *nanopass-languages*
               (cons (cons name lang)
                     (let loop ((rest (car *nanopass-languages*)))
@@ -376,6 +379,79 @@
   (nanopass-ast-valid-nt? lang-name expr
                           (nanopass-lang-entry (nanopass-lookup-language lang-name))))
 
+(define (nanopass-build-nt-index nt-prods lang)
+  (let ((tag-buckets (make-vector 128 '())))
+    (define (add-tag! tag p)
+      (let* ((h (modulo (symbol->hash-idx tag) 128))
+             (bucket (vector-ref tag-buckets h))
+             (slot (assq tag bucket)))
+        (if slot
+            (set-cdr! slot (cons p (cdr slot)))
+            (vector-set! tag-buckets h (cons (list tag p) bucket)))))
+    (let loop ((ps nt-prods) (pair-fb-rev '()) (lit-syms '()) (atom-rev '()))
+      (if (null? ps)
+          (begin
+            (let rev-b ((b 0))
+              (if (< b 128)
+                  (begin
+                    (for-each (lambda (entry) (set-cdr! entry (reverse (cdr entry))))
+                              (vector-ref tag-buckets b))
+                    (rev-b (+ b 1)))))
+            (vector tag-buckets (reverse pair-fb-rev) lit-syms (reverse atom-rev)))
+          (let ((p (car ps)))
+            (cond
+              ((pair? p)
+               (let ((hd (car p)))
+                 (if (and (symbol? hd)
+                          (or (eq? hd 'quote)
+                              (not (nanopass-classify-meta-var hd lang))))
+                     (begin
+                       (add-tag! hd p)
+                       (loop (cdr ps) pair-fb-rev lit-syms atom-rev))
+                     (loop (cdr ps) (cons p pair-fb-rev) lit-syms atom-rev))))
+              ((symbol? p)
+               (let ((cls (nanopass-classify-meta-var p lang)))
+                 (cond
+                   ((not cls)
+                    (loop (cdr ps) pair-fb-rev (cons p lit-syms) atom-rev))
+                   ((eq? (car cls) 'terminal)
+                    (let ((tpred (cadr cls)))
+                      (cond
+                        ((memq tpred '(pair pair?))
+                         (loop (cdr ps) (cons p pair-fb-rev) lit-syms atom-rev))
+                        ((memq tpred '(symbol symbol? number number? integer integer?
+                                       fixnum fixnum? string string? boolean boolean?
+                                       char char? null null? constant constant?))
+                         (loop (cdr ps) pair-fb-rev lit-syms (cons p atom-rev)))
+                        (else
+                         (loop (cdr ps) (cons p pair-fb-rev) lit-syms (cons p atom-rev))))))
+                   (else
+                    (loop (cdr ps) (cons p pair-fb-rev) lit-syms (cons p atom-rev))))))
+              (else
+               (loop (cdr ps) pair-fb-rev lit-syms (cons p atom-rev)))))))))
+
+(define (nanopass-get-nt-index lang nt-name)
+  (let find ((entries (car *nanopass-nt-index-cache*)))
+    (if (pair? entries)
+        (let ((e (car entries)))
+          (if (and (eq? (car e) lang) (eq? (cadr e) nt-name))
+              (caddr e)
+              (find (cdr entries))))
+        (let ((nt-entry (assq nt-name (nanopass-lang-nonterminals lang))))
+          (if (not nt-entry)
+              #f
+              (let ((idx (nanopass-build-nt-index (caddr nt-entry) lang)))
+                (set-car! *nanopass-nt-index-cache*
+                          (cons (list lang nt-name idx) (car *nanopass-nt-index-cache*)))
+                idx))))))
+
+(define (nanopass-match-prod-list ps expr lang curr-nt deep?)
+  (if (null? ps)
+      #f
+      (if (nanopass-production-matches-mode? (car ps) expr lang curr-nt deep?)
+          #t
+          (nanopass-match-prod-list (cdr ps) expr lang curr-nt deep?))))
+
 (define (nanopass-check-node-mode expr nt-name lang deep?)
   ;; Check if expr is a list starting with an explicitly removed production head
   ;; (Only if it is not re-introduced as an active keyword in this language)
@@ -384,19 +460,30 @@
            (memq (car expr) (nanopass-lang-removed-prods lang))
            (not (memq (car expr) (nanopass-lang-keywords lang))))
       #f
-      ;; Check nonterminal productions
-      (let* ((nts (nanopass-lang-nonterminals lang))
-             (nt-entry (assq nt-name nts)))
-        (if (not nt-entry)
+      ;; Check indexed nonterminal productions
+      (let ((idx (nanopass-get-nt-index lang nt-name)))
+        (if (not idx)
             #f
-            (let ((prods (caddr nt-entry)))
-              (let check-p ((ps prods))
-                (if (null? ps)
-                    #f
-                    (let ((p (car ps)))
-                      (if (nanopass-production-matches-mode? p expr lang nt-name deep?)
-                          #t
-                          (check-p (cdr ps)))))))))))
+            (if (pair? expr)
+                (let* ((head (car expr))
+                       (tag-buckets (vector-ref idx 0))
+                       (pair-fallback (vector-ref idx 1))
+                       (tag-hit?
+                        (if (symbol? head)
+                            (let* ((h (modulo (symbol->hash-idx head) 128))
+                                   (slot (assq head (vector-ref tag-buckets h))))
+                              (if slot
+                                  (nanopass-match-prod-list (cdr slot) expr lang nt-name deep?)
+                                  #f))
+                            #f)))
+                  (if tag-hit?
+                      #t
+                      (nanopass-match-prod-list pair-fallback expr lang nt-name deep?)))
+                (let ((lit-syms (vector-ref idx 2))
+                      (atom-prods (vector-ref idx 3)))
+                  (if (and (symbol? expr) (pair? lit-syms) (memq expr lit-syms))
+                      #t
+                      (nanopass-match-prod-list atom-prods expr lang nt-name deep?))))))))
 
 (define (nanopass-check-valid-node expr nt-name lang)
   (nanopass-check-node-mode expr nt-name lang #t))

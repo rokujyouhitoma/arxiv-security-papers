@@ -47,11 +47,12 @@
 ;;; -----------------------------------------------------------------------
 
 (define-record-type <c99-parse-env>
-  (%make-c99-parse-env scope-mgr file text)
+  (%make-c99-parse-env scope-mgr file text line-starts)
   c99-parse-env?
-  (scope-mgr c99-parse-env-scope-mgr c99-parse-env-scope-mgr-set!)
-  (file      c99-parse-env-file      c99-parse-env-file-set!)
-  (text      c99-parse-env-text      c99-parse-env-text-set!))
+  (scope-mgr   c99-parse-env-scope-mgr   c99-parse-env-scope-mgr-set!)
+  (file        c99-parse-env-file        c99-parse-env-file-set!)
+  (text        c99-parse-env-text        c99-parse-env-text-set!)
+  (line-starts c99-parse-env-line-starts c99-parse-env-line-starts-set!))
 
 (define (c99-make-init-scope-manager)
   (let ((mgr (make-scope-manager)))
@@ -60,7 +61,7 @@
 
 (define (make-c99-parse-env . maybe-file)
   (let ((fname (if (pair? maybe-file) (car maybe-file) "<c99-input>")))
-    (%make-c99-parse-env (c99-make-init-scope-manager) fname "")))
+    (%make-c99-parse-env (c99-make-init-scope-manager) fname "" #f)))
 
 (define (c99-push-scope! env kind)
   (scope-manager-push! (c99-parse-env-scope-mgr env) kind))
@@ -165,10 +166,40 @@
 ;;; 4. Source Span Attachment & AST Helpers
 ;;; -----------------------------------------------------------------------
 
+(define (%c99-build-line-starts text)
+  (let ((len (string-length text)))
+    (let loop ((i 0) (acc '(0)))
+      (if (>= i len)
+          (list->vector (reverse acc))
+          (if (char=? (string-ref text i) #\newline)
+              (loop (+ i 1) (cons (+ i 1) acc))
+              (loop (+ i 1) acc))))))
+
+(define (%c99-lookup-line-col line-starts text-len pos)
+  (let* ((p (cond ((< pos 0) 0) ((> pos text-len) text-len) (else pos)))
+         (n (vector-length line-starts)))
+    (if (= n 0)
+        '(1 . 1)
+        (let loop ((lo 0) (hi (- n 1)))
+          (if (>= lo hi)
+              (cons (+ lo 1) (+ (- p (vector-ref line-starts lo)) 1))
+              (let ((mid (quotient (+ lo hi 1) 2)))
+                (if (<= (vector-ref line-starts mid) p)
+                    (loop mid hi)
+                    (loop lo (- mid 1)))))))))
+
 (define (%c99-make-span-from-pos env ctx start-pos end-pos)
   (let* ((txt (parse-ctx-text ctx))
-         (slc (calc-line-col txt start-pos))
-         (elc (calc-line-col txt (max start-pos end-pos))))
+         (ls (if (and (c99-parse-env-line-starts env)
+                      (eq? txt (c99-parse-env-text env)))
+                 (c99-parse-env-line-starts env)
+                 (let ((built (%c99-build-line-starts txt)))
+                   (c99-parse-env-text-set! env txt)
+                   (c99-parse-env-line-starts-set! env built)
+                   built)))
+         (tlen (parse-ctx-length ctx))
+         (slc (%c99-lookup-line-col ls tlen start-pos))
+         (elc (%c99-lookup-line-col ls tlen (max start-pos end-pos))))
     (make-source-span (c99-parse-env-file env)
                       (car slc) (cdr slc)
                       (car elc) (cdr elc)
@@ -341,6 +372,410 @@
                       (ast-with-span (list 'c-binop op-sym acc rhs) sp))))))))
 
 ;;; -----------------------------------------------------------------------
+;;; 4b. Fast Direct C99 Lexical Scanners (Shared by Parser & Lexer)
+;;; -----------------------------------------------------------------------
+
+(define *c99-keyword-symbols*
+  '(auto break case char const continue default do double else enum extern
+    float for goto if inline int long register restrict return short signed
+    sizeof static struct switch typedef union unsigned void volatile while
+    _Bool _Complex _Imaginary _Alignof __alignof__ __alignof
+    __builtin_offsetof __builtin_va_arg))
+
+(define (%c-ident-start-char? ch)
+  (let ((c (char->integer ch)))
+    (or (and (>= c 97) (<= c 122))
+        (and (>= c 65) (<= c 90))
+        (= c 95))))
+
+(define (%c-ident-cont-char? ch)
+  (let ((c (char->integer ch)))
+    (or (and (>= c 97) (<= c 122))
+        (and (>= c 65) (<= c 90))
+        (and (>= c 48) (<= c 57))
+        (= c 95))))
+
+(define (%c-dec-digit-char? ch)
+  (let ((c (char->integer ch)))
+    (and (>= c 48) (<= c 57))))
+
+(define (%c-oct-digit-char? ch)
+  (let ((c (char->integer ch)))
+    (and (>= c 48) (<= c 55))))
+
+(define (%c-hex-digit-char? ch)
+  (let ((c (char->integer ch)))
+    (or (and (>= c 48) (<= c 57))
+        (and (>= c 97) (<= c 102))
+        (and (>= c 65) (<= c 70)))))
+
+(define (%c-ws-char? ch)
+  (let ((c (char->integer ch)))
+    (or (= c 32) (= c 9) (= c 13) (= c 10))))
+
+(define (%c-scan-ws-end text len pos)
+  (let loop ((p pos))
+    (if (>= p len)
+        p
+        (let ((ch (string-ref text p)))
+          (cond
+            ((%c-ws-char? ch)
+             (loop (+ p 1)))
+            ((or (char=? ch #\#)
+                 (and (char=? ch #\/)
+                      (< (+ p 1) len)
+                      (char=? (string-ref text (+ p 1)) #\/)))
+             (let skip-eol ((q (+ p (if (char=? ch #\#) 1 2))))
+               (if (>= q len)
+                   q
+                   (let ((c2 (string-ref text q)))
+                     (if (or (char=? c2 #\newline) (char=? c2 #\return))
+                         (loop q)
+                         (skip-eol (+ q 1)))))))
+            ((and (char=? ch #\/)
+                  (< (+ p 1) len)
+                  (char=? (string-ref text (+ p 1)) #\*))
+             (let skip-bc ((q (+ p 2)))
+               (cond
+                 ((>= (+ q 1) len) p)
+                 ((and (char=? (string-ref text q) #\*)
+                       (char=? (string-ref text (+ q 1)) #\/))
+                  (loop (+ q 2)))
+                 (else (skip-bc (+ q 1))))))
+            (else p))))))
+
+(define (%c-scan-char-lit-end text len pos)
+  (let ((q0 (if (and (< (+ pos 1) len)
+                     (char=? (string-ref text pos) #\L)
+                     (char=? (string-ref text (+ pos 1)) #\'))
+                (+ pos 1)
+                pos)))
+    (if (not (and (< q0 len) (char=? (string-ref text q0) #\')))
+        #f
+        (let loop ((p (+ q0 1)) (count 0))
+          (if (>= p len)
+              #f
+              (let ((ch (string-ref text p)))
+                (cond
+                  ((char=? ch #\')
+                   (if (> count 0) (+ p 1) #f))
+                  ((char=? ch #\\)
+                   (if (< (+ p 1) len)
+                       (loop (+ p 2) (+ count 1))
+                       #f))
+                  ((or (char=? ch #\newline) (char=? ch #\return))
+                   #f)
+                  (else
+                   (loop (+ p 1) (+ count 1))))))))))
+
+(define (%c-scan-string-lit-end text len pos)
+  (let ((q0 (if (and (< (+ pos 1) len)
+                     (char=? (string-ref text pos) #\L)
+                     (char=? (string-ref text (+ pos 1)) #\"))
+                (+ pos 1)
+                pos)))
+    (if (not (and (< q0 len) (char=? (string-ref text q0) #\")))
+        #f
+        (let loop ((p (+ q0 1)))
+          (if (>= p len)
+              #f
+              (let ((ch (string-ref text p)))
+                (cond
+                  ((char=? ch #\")
+                   (+ p 1))
+                  ((char=? ch #\\)
+                   (if (< (+ p 1) len)
+                       (loop (+ p 2))
+                       #f))
+                  ((or (char=? ch #\newline) (char=? ch #\return))
+                   #f)
+                  (else
+                   (loop (+ p 1))))))))))
+
+(define (%c-scan-ident-end text len pos)
+  (if (and (< pos len) (%c-ident-start-char? (string-ref text pos)))
+      (let loop ((p (+ pos 1)))
+        (if (and (< p len) (%c-ident-cont-char? (string-ref text p)))
+            (loop (+ p 1))
+            p))
+      #f))
+
+(define (%c-scan-dec-digits-end text len pos)
+  (let loop ((p pos))
+    (if (and (< p len) (%c-dec-digit-char? (string-ref text p)))
+        (loop (+ p 1))
+        p)))
+
+(define (%c-scan-oct-digits-end text len pos)
+  (let loop ((p pos))
+    (if (and (< p len) (%c-oct-digit-char? (string-ref text p)))
+        (loop (+ p 1))
+        p)))
+
+(define (%c-scan-hex-digits-end text len pos)
+  (let loop ((p pos))
+    (if (and (< p len) (%c-hex-digit-char? (string-ref text p)))
+        (loop (+ p 1))
+        p)))
+
+(define (%c-scan-exponent-end text len pos ch-lo ch-hi)
+  (if (and (< pos len)
+           (let ((ch (string-ref text pos)))
+             (or (char=? ch ch-lo) (char=? ch ch-hi))))
+      (let* ((p1 (+ pos 1))
+             (p2 (if (and (< p1 len)
+                          (let ((s (string-ref text p1)))
+                            (or (char=? s #\+) (char=? s #\-))))
+                     (+ p1 1)
+                     p1))
+             (p3 (%c-scan-dec-digits-end text len p2)))
+        (if (> p3 p2) p3 #f))
+      #f))
+
+(define (%c-scan-float-suffix-guard text len pos)
+  (let ((p1 (if (and (< pos len)
+                     (let ((ch (string-ref text pos)))
+                       (or (char=? ch #\f) (char=? ch #\F)
+                           (char=? ch #\l) (char=? ch #\L))))
+                (+ pos 1)
+                pos)))
+    (if (and (< p1 len) (%c-ident-cont-char? (string-ref text p1)))
+        #f
+        p1)))
+
+(define (%c-scan-float-end text len pos)
+  (if (>= pos len)
+      #f
+      (let ((c0 (string-ref text pos)))
+        (cond
+          ;; Hex float: 0x / 0X ...
+          ((and (char=? c0 #\0)
+                (< (+ pos 2) len)
+                (let ((c1 (string-ref text (+ pos 1))))
+                  (or (char=? c1 #\x) (char=? c1 #\X))))
+           (let* ((q1 (%c-scan-hex-digits-end text len (+ pos 2)))
+                  (n-pre (- q1 (+ pos 2))))
+             (if (and (< q1 len) (char=? (string-ref text q1) #\.))
+                 (let* ((q2 (%c-scan-hex-digits-end text len (+ q1 1)))
+                        (n-post (- q2 (+ q1 1))))
+                   (if (or (> n-pre 0) (> n-post 0))
+                       (let ((exp-end (%c-scan-exponent-end text len q2 #\p #\P)))
+                         (and exp-end (%c-scan-float-suffix-guard text len exp-end)))
+                       #f))
+                 (if (> n-pre 0)
+                     (let ((exp-end (%c-scan-exponent-end text len q1 #\p #\P)))
+                       (and exp-end (%c-scan-float-suffix-guard text len exp-end)))
+                     #f))))
+          ;; Decimal float: [0-9]* '.' [0-9]+ ... | [0-9]+ '.' ... | [0-9]+ dec_exp ...
+          ((or (%c-dec-digit-char? c0) (char=? c0 #\.))
+           (let* ((d1 (%c-scan-dec-digits-end text len pos))
+                  (n-int (- d1 pos)))
+             (if (and (< d1 len) (char=? (string-ref text d1) #\.))
+                 (let* ((d2 (%c-scan-dec-digits-end text len (+ d1 1)))
+                        (n-frac (- d2 (+ d1 1))))
+                   (if (or (> n-int 0) (> n-frac 0))
+                       (let* ((exp-end (%c-scan-exponent-end text len d2 #\e #\E))
+                              (tail-start (or exp-end d2)))
+                         (%c-scan-float-suffix-guard text len tail-start))
+                       #f))
+                 (if (> n-int 0)
+                     (let ((exp-end (%c-scan-exponent-end text len d1 #\e #\E)))
+                       (and exp-end (%c-scan-float-suffix-guard text len exp-end)))
+                     #f))))
+          (else #f)))))
+
+(define (%c-scan-l-suffix text len pos)
+  (if (< pos len)
+      (let ((c0 (string-ref text pos)))
+        (cond
+          ((or (char=? c0 #\l) (char=? c0 #\L))
+           (if (and (< (+ pos 1) len) (char=? (string-ref text (+ pos 1)) c0))
+               (+ pos 2)
+               (+ pos 1)))
+          (else pos)))
+      pos))
+
+(define (%c-scan-int-suffix-guard text len pos)
+  (let ((after
+         (if (< pos len)
+             (let ((c0 (string-ref text pos)))
+               (cond
+                 ((or (char=? c0 #\u) (char=? c0 #\U))
+                  (%c-scan-l-suffix text len (+ pos 1)))
+                 ((or (char=? c0 #\l) (char=? c0 #\L))
+                  (let ((p1 (%c-scan-l-suffix text len pos)))
+                    (if (and (< p1 len)
+                             (let ((cu (string-ref text p1)))
+                               (or (char=? cu #\u) (char=? cu #\U))))
+                        (+ p1 1)
+                        p1)))
+                 (else pos)))
+             pos)))
+    (if (and (< after len) (%c-ident-cont-char? (string-ref text after)))
+        #f
+        after)))
+
+(define (%c-scan-int-end text len pos)
+  (if (not (and (< pos len) (%c-dec-digit-char? (string-ref text pos))))
+      #f
+      (let ((c0 (string-ref text pos)))
+        (cond
+          ((char=? c0 #\0)
+           (if (and (< (+ pos 1) len)
+                    (let ((c1 (string-ref text (+ pos 1))))
+                      (or (char=? c1 #\x) (char=? c1 #\X))))
+               (let ((qh (%c-scan-hex-digits-end text len (+ pos 2))))
+                 (if (> qh (+ pos 2))
+                     (%c-scan-int-suffix-guard text len qh)
+                     (%c-scan-int-suffix-guard text len (+ pos 1))))
+               (%c-scan-int-suffix-guard text len (%c-scan-oct-digits-end text len (+ pos 1)))))
+          (else
+           (%c-scan-int-suffix-guard text len (%c-scan-dec-digits-end text len (+ pos 1))))))))
+
+(define (%c-scan-punct-end text len pos)
+  (if (>= pos len)
+      #f
+      (let ((c0 (string-ref text pos))
+            (c1 (if (< (+ pos 1) len) (string-ref text (+ pos 1)) #f))
+            (c2 (if (< (+ pos 2) len) (string-ref text (+ pos 2)) #f)))
+        (cond
+          ;; 3-char punctuators: <<= >>= ...
+          ((and c2
+                (or (and (char=? c0 #\<) (char=? c1 #\<) (char=? c2 #\=))
+                    (and (char=? c0 #\>) (char=? c1 #\>) (char=? c2 #\=))
+                    (and (char=? c0 #\.) (char=? c1 #\.) (char=? c2 #\.))))
+           (+ pos 3))
+          ;; 2-char punctuators
+          ((and c1
+                (or (and (char=? c0 #\-) (or (char=? c1 #\>) (char=? c1 #\-) (char=? c1 #\=)))
+                    (and (char=? c0 #\+) (or (char=? c1 #\+) (char=? c1 #\=)))
+                    (and (char=? c0 #\<) (or (char=? c1 #\<) (char=? c1 #\=) (char=? c1 #\:) (char=? c1 #\%)))
+                    (and (char=? c0 #\>) (or (char=? c1 #\>) (char=? c1 #\=)))
+                    (and (char=? c0 #\=) (char=? c1 #\=))
+                    (and (char=? c0 #\!) (char=? c1 #\=))
+                    (and (char=? c0 #\&) (or (char=? c1 #\&) (char=? c1 #\=)))
+                    (and (char=? c0 #\|) (or (char=? c1 #\|) (char=? c1 #\=)))
+                    (and (char=? c0 #\*) (char=? c1 #\=))
+                    (and (char=? c0 #\/) (char=? c1 #\=))
+                    (and (char=? c0 #\%) (or (char=? c1 #\=) (char=? c1 #\>) (char=? c1 #\:)))
+                    (and (char=? c0 #\^) (char=? c1 #\=))
+                    (and (char=? c0 #\#) (char=? c1 #\#))
+                    (and (char=? c0 #\:) (char=? c1 #\>))))
+           (+ pos 2))
+          ;; 1-char punctuators: [ ] ( ) { } . & * + - ~ ! / % < > ^ | ? : ; = , #
+          ((case c0
+             ((#\[ #\] #\( #\) #\{ #\} #\. #\& #\* #\+ #\- #\~ #\! #\/ #\% #\< #\> #\^ #\| #\? #\: #\; #\= #\, #\#)
+              #t)
+             (else #f))
+           (+ pos 1))
+          (else #f)))))
+
+(define (%c-scan-raw-token text len pos)
+  (let ((ch-end (%c-scan-char-lit-end text len pos)))
+    (if ch-end
+        (cons 'ch ch-end)
+        (let ((str-end (%c-scan-string-lit-end text len pos)))
+          (if str-end
+              (cons 'str str-end)
+              (let ((id-end (%c-scan-ident-end text len pos)))
+                (if id-end
+                    (let ((sym (string->symbol (substring text pos id-end))))
+                      (cons (if (memq sym *c99-keyword-symbols*) 'kw 'id) id-end))
+                    (let ((flt-end (%c-scan-float-end text len pos)))
+                      (if flt-end
+                          (cons 'flt flt-end)
+                          (let ((int-end (%c-scan-int-end text len pos)))
+                            (if int-end
+                                (cons 'int int-end)
+                                (let ((pun-end (%c-scan-punct-end text len pos)))
+                                  (if pun-end
+                                      (cons 'punct pun-end)
+                                      #f)))))))))))))
+
+(define (%c99-scan-binop text len pos)
+  (if (>= pos len)
+      #f
+      (let ((c0 (string-ref text pos))
+            (c1 (if (< (+ pos 1) len) (string-ref text (+ pos 1)) #f))
+            (c2 (if (< (+ pos 2) len) (string-ref text (+ pos 2)) #f)))
+        (cond
+          ;; prec 1: ||
+          ((and (char=? c0 #\|) c1 (char=? c1 #\|))
+           (list 'lor 1 (+ pos 2)))
+          ;; prec 2: &&
+          ((and (char=? c0 #\&) c1 (char=? c1 #\&))
+           (list 'land 2 (+ pos 2)))
+          ;; prec 3: | !('|' | '=')
+          ((and (char=? c0 #\|) (not (and c1 (or (char=? c1 #\|) (char=? c1 #\=)))))
+           (list 'bit-or 3 (+ pos 1)))
+          ;; prec 4: ^ !'='
+          ((and (char=? c0 #\^) (not (and c1 (char=? c1 #\=))))
+           (list 'bit-xor 4 (+ pos 1)))
+          ;; prec 5: & !('&' | '=')
+          ((and (char=? c0 #\&) (not (and c1 (or (char=? c1 #\&) (char=? c1 #\=)))))
+           (list 'bit-and 5 (+ pos 1)))
+          ;; prec 6: == | !=
+          ((and (char=? c0 #\=) c1 (char=? c1 #\=))
+           (list '== 6 (+ pos 2)))
+          ((and (char=? c0 #\!) c1 (char=? c1 #\=))
+           (list '!= 6 (+ pos 2)))
+          ;; prec 7: <= | >= | < !('<' | '=') | > !('>' | '=')
+          ((and (char=? c0 #\<) c1 (char=? c1 #\=))
+           (list '<= 7 (+ pos 2)))
+          ((and (char=? c0 #\>) c1 (char=? c1 #\=))
+           (list '>= 7 (+ pos 2)))
+          ((and (char=? c0 #\<) (not (and c1 (or (char=? c1 #\<) (char=? c1 #\=)))))
+           (list '< 7 (+ pos 1)))
+          ((and (char=? c0 #\>) (not (and c1 (or (char=? c1 #\>) (char=? c1 #\=)))))
+           (list '> 7 (+ pos 1)))
+          ;; prec 8: << !'=' | >> !'='
+          ((and (char=? c0 #\<) c1 (char=? c1 #\<) (not (and c2 (char=? c2 #\=))))
+           (list '<< 8 (+ pos 2)))
+          ((and (char=? c0 #\>) c1 (char=? c1 #\>) (not (and c2 (char=? c2 #\=))))
+           (list '>> 8 (+ pos 2)))
+          ;; prec 9: + !('+' | '=') | - !('-' | '=' | '>')
+          ((and (char=? c0 #\+) (not (and c1 (or (char=? c1 #\+) (char=? c1 #\=)))))
+           (list '+ 9 (+ pos 1)))
+          ((and (char=? c0 #\-) (not (and c1 (or (char=? c1 #\-) (char=? c1 #\=) (char=? c1 #\>)))))
+           (list '- 9 (+ pos 1)))
+          ;; prec 10: * !'=' | / !('=' | '/' | '*') | % !'='
+          ((and (char=? c0 #\*) (not (and c1 (char=? c1 #\=))))
+           (list '* 10 (+ pos 1)))
+          ((and (char=? c0 #\/) (not (and c1 (or (char=? c1 #\=) (char=? c1 #\/) (char=? c1 #\*)))))
+           (list '/ 10 (+ pos 1)))
+          ((and (char=? c0 #\%) (not (and c1 (char=? c1 #\=))))
+           (list 'rem 10 (+ pos 1)))
+          (else #f)))))
+
+(define (%c99-make-pratt-binop-parser env lookup-cell base-min-prec)
+  (let ((cast-cell (lookup-cell 'cast_expr)))
+    (letrec ((parse-prec
+              (lambda (ctx start-pos min-prec sk fk)
+                ((car cast-cell) ctx start-pos
+                 (lambda (lhs next-pos lhs-fk)
+                   (let ((txt (parse-ctx-text ctx))
+                         (len (parse-ctx-length ctx)))
+                     (let climb ((acc lhs) (cur-pos next-pos) (cur-fk lhs-fk))
+                       (let ((hit (%c99-scan-binop txt len cur-pos)))
+                         (if (and hit (>= (cadr hit) min-prec))
+                             (let* ((op-sym (car hit))
+                                    (prec   (cadr hit))
+                                    (op-end (caddr hit))
+                                    (rhs-pos (%c-scan-ws-end txt len op-end)))
+                               (parse-prec ctx rhs-pos (+ prec 1)
+                                           (lambda (rhs rhs-end rhs-fk)
+                                             (let ((sp (%c99-make-span-from-pos env ctx start-pos rhs-end)))
+                                               (climb (ast-with-span (list 'c-binop op-sym acc rhs) sp)
+                                                      rhs-end
+                                                      rhs-fk)))
+                                           (lambda ()
+                                             (sk acc cur-pos cur-fk))))
+                             (sk acc cur-pos cur-fk))))))
+                 fk))))
+      (lambda (ctx pos sk fk)
+        (parse-prec ctx pos base-min-prec sk fk)))))
+
+;;; -----------------------------------------------------------------------
 ;;; 5. Environment-Aware C99 PEG Compiler (Produces L_c_ast with Span & Binding ID)
 ;;; -----------------------------------------------------------------------
 
@@ -361,27 +796,115 @@
        (set! rule-cells (cons (cons (peg-rule-def-name r) (cons #f '())) rule-cells)))
      rules)
 
-    ;; Compile each rule with C99 semantic hooks
+    ;; Compile each rule with C99 semantic hooks, fast lexical leaves, Pratt expressions,
+    ;; and lean non-LR Packrat memoization
     (for-each
      (lambda (r)
        (let* ((name (peg-rule-def-name r))
-              (raw-body
+              (pratt-level
+               (case name
+                 ((logical_or_expr) 1)
+                 ((logical_and_expr) 2)
+                 ((inclusive_or_expr) 3)
+                 ((exclusive_or_expr) 4)
+                 ((and_expr) 5)
+                 ((equality_expr) 6)
+                 ((relational_expr) 7)
+                 ((shift_expr) 8)
+                 ((additive_expr) 9)
+                 ((multiplicative_expr) 10)
+                 (else #f)))
+              (fast-leaf
+               (case name
+                 ((ws)
+                  (lambda (ctx pos sk fk)
+                    (let ((np (%c-scan-ws-end (parse-ctx-text ctx) (parse-ctx-length ctx) pos)))
+                      (sk "" np fk))))
+                 ((ident_cont)
+                  (lambda (ctx pos sk fk)
+                    (let ((txt (parse-ctx-text ctx))
+                          (len (parse-ctx-length ctx)))
+                      (if (and (< pos len) (%c-ident-cont-char? (string-ref txt pos)))
+                          (sk (string (string-ref txt pos)) (+ pos 1) fk)
+                          (fk)))))
+                 ((c99_keyword)
+                  (lambda (ctx pos sk fk)
+                    (let* ((txt (parse-ctx-text ctx))
+                           (len (parse-ctx-length ctx))
+                           (end (%c-scan-ident-end txt len pos)))
+                      (if (and end (memq (string->symbol (substring txt pos end)) *c99-keyword-symbols*))
+                          (sk (substring txt pos end) end fk)
+                          (fk)))))
+                 ((identifier)
+                  (lambda (ctx pos sk fk)
+                    (let* ((txt (parse-ctx-text ctx))
+                           (len (parse-ctx-length ctx))
+                           (end (%c-scan-ident-end txt len pos)))
+                      (if end
+                          (let ((sym (string->symbol (substring txt pos end))))
+                            (if (memq sym *c99-keyword-symbols*)
+                                (begin
+                                  (parse-ctx-update-max-pos! ctx pos "identifier")
+                                  (fk))
+                                (sk sym end fk)))
+                          (begin
+                            (parse-ctx-update-max-pos! ctx pos "identifier")
+                            (fk))))))
+                 ((constant)
+                  (lambda (ctx pos sk fk)
+                    (let* ((txt (parse-ctx-text ctx))
+                           (len (parse-ctx-length ctx))
+                           (end (or (%c-scan-float-end txt len pos)
+                                    (%c-scan-int-end txt len pos)
+                                    (%c-scan-char-lit-end txt len pos))))
+                      (if end
+                          (let ((sp (%c99-make-span-from-pos env ctx pos end)))
+                            (sk (ast-with-span (list 'c-const (substring txt pos end)) sp) end fk))
+                          (begin
+                            (parse-ctx-update-max-pos! ctx pos "constant")
+                            (fk))))))
+                 ((string_literal)
+                  (lambda (ctx pos sk fk)
+                    (let* ((txt (parse-ctx-text ctx))
+                           (len (parse-ctx-length ctx))
+                           (end (%c-scan-string-lit-end txt len pos)))
+                      (if end
+                          (let ((sp (%c99-make-span-from-pos env ctx pos end)))
+                            (sk (ast-with-span (list 'c-str (substring txt pos end)) sp) end fk))
+                          (begin
+                            (parse-ctx-update-max-pos! ctx pos "string_literal")
+                            (fk))))))
+                 (else #f)))
+              (wrapped
                (cond
-                 ;; Because typedef_name is strictly enforced by scope predicate,
-                 ;; typedef_init_declarator can match full init_declarator (including "T *p;")
-                 ((eq? name 'typedef_init_declarator)
-                  (let ((init-cell (lookup-cell 'init_declarator)))
-                    (lambda (ctx pos sk fk)
-                      ((car init-cell) ctx pos sk fk))))
+                 (pratt-level
+                  (let ((p (%c99-make-pratt-binop-parser env lookup-cell pratt-level)))
+                    (if (peg-rule-def-memoize? r)
+                        (peg:rule-simple name p)
+                        p)))
+                 (fast-leaf fast-leaf)
                  (else
-                  (compile-expr->parser-with-cells (peg-rule-def-expr r) lookup-cell))))
-              (decorated (decorate-c99-rule name raw-body env lookup))
-              (wrapped (if (peg-rule-def-memoize? r)
-                           ;; Do not memoize context-sensitive typedef_name predicate globally across scope mutations
-                           (if (eq? name 'typedef_name)
-                               decorated
-                               (peg:rule name decorated))
-                           decorated)))
+                  (let* ((raw-body
+                          (cond
+                            ;; Because typedef_name is strictly enforced by scope predicate,
+                            ;; typedef_init_declarator can match full init_declarator (including "T *p;")
+                            ((eq? name 'typedef_init_declarator)
+                             (let ((init-cell (lookup-cell 'init_declarator)))
+                               (lambda (ctx pos sk fk)
+                                 ((car init-cell) ctx pos sk fk))))
+                            (else
+                             (compile-expr->parser-with-cells (peg-rule-def-expr r) lookup-cell))))
+                         (decorated (decorate-c99-rule name raw-body env lookup)))
+                    (if (peg-rule-def-memoize? r)
+                        (cond
+                          ;; Do not memoize context-sensitive typedef_name predicate globally across scope mutations
+                          ((eq? name 'typedef_name) decorated)
+                          ((memq name '(direct_declarator direct_abstract_declarator postfix_expr
+                                        declarator abstract_declarator unary_expr cast_expr primary_expr))
+                           (peg:rule name decorated))
+                          (else
+                           (peg:rule-simple name decorated)))
+                        decorated))))))
          (let ((cell (lookup-cell name)))
            (set-car! cell wrapped))))
      rules)
@@ -1025,11 +1548,13 @@
           (c99-parse-env-scope-mgr-set! env (c99-make-init-scope-manager))
           (c99-parse-env-file-set! env filename)
           (c99-parse-env-text-set! env src-text)
+          (c99-parse-env-line-starts-set! env (%c99-build-line-starts src-text))
           cached)
         (let* ((env (make-c99-parse-env filename))
                (getter (compile-c99-rule-getter env))
                (pair (cons env getter)))
           (c99-parse-env-text-set! env src-text)
+          (c99-parse-env-line-starts-set! env (%c99-build-line-starts src-text))
           (set-car! *c99-cached-env-parser* pair)
           pair))))
 

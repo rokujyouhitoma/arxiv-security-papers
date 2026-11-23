@@ -1,0 +1,321 @@
+;;; =======================================================================
+;;; fuzz_xmm_float_gen.scm
+;;; Deterministic 4-Way Floating-Point & SysV XMM ABI Differential Fuzzer (#924)
+;;; Generates <out-dir>/fuzz_suite.c AND executes Reference LIR VM on the
+;;; compiled Typed Machine LIR -> <out-dir>/out_vm.txt for differential comparison
+;;; against Host GCC (-O2 -fno-fast-math), Native ELF (-O0/-O2 & -S+as),
+;;; and Portable C (--target=c -O2).
+;;; Zero local `set!` (ULisp AOT safe).
+;;; =======================================================================
+
+(define *fz-seed-str* (get-environment-variable "FUZZ_SEED"))
+(define *fz-count-str* (get-environment-variable "FUZZ_COUNT"))
+(define *fz-out-dir* (or (get-environment-variable "FUZZ_OUT_DIR") "build/fuzz_xmm_float"))
+
+(define *fz-seed*
+  (let ((n (and *fz-seed-str* (string->number *fz-seed-str*))))
+    (if (and n (integer? n) (> n 0)) n 20261122)))
+
+(define *fz-count*
+  (let ((n (and *fz-count-str* (string->number *fz-count-str*))))
+    (if (and n (integer? n) (>= n 12)) n 120)))
+
+(define *fz-prng* (cons (modulo *fz-seed* 2147483647) '()))
+
+(define (fz-next!)
+  (let ((nxt (modulo (+ (* (car *fz-prng*) 1103515245) 12345) 2147483648)))
+    (set-car! *fz-prng* nxt)
+    nxt))
+
+(define (fz-range lo hi)
+  (let ((span (+ (- hi lo) 1)))
+    (+ lo (modulo (quotient (fz-next!) 16) span))))
+
+(define (fz-choice lst)
+  (list-ref lst (fz-range 0 (- (length lst) 1))))
+
+(define *fz-f64-pool*
+  '("0.0" "-0.0" "1.0" "-1.0" "0.5" "-0.5" "2.25" "-3.75"
+    "0.1" "0.2" "3.141592653589793" "-1e-308" "0x1p-1074"
+    "1e18" "-1e18" "0x1.fffffffffffffp+52" "0x1p+63" "0x1p+100"
+    "(1.0 / 0.0)" "(-1.0 / 0.0)" "(0.0 / 0.0)"))
+
+(define *fz-f64-fin-pool*
+  '("0.0" "-0.0" "1.0" "-1.0" "0.5" "-0.5" "2.25" "-3.75"
+    "0.1" "0.2" "3.141592653589793" "0x1p-1074" "42.5" "-99.125"
+    "1e12" "-1e12" "65536.5" "-65536.5"))
+
+(define *fz-f32-pool*
+  '("0.0f" "-0.0f" "1.0f" "-1.0f" "0.5f" "-0.5f" "2.25f" "-3.5f"
+    "0x1.000001p0f" "0x1p-149f" "1e-38f" "1e18f" "-1e18f"
+    "(1.0f / 0.0f)" "(-1.0f / 0.0f)" "(0.0f / 0.0f)"))
+
+(define *fz-f32-fin-pool*
+  '("0.0f" "-0.0f" "1.0f" "-1.0f" "0.5f" "-0.5f" "2.25f" "-3.5f"
+    "0x1.000001p0f" "0x1p-149f" "42.5f" "-99.125f" "1024.5f" "-1024.5f"))
+
+(define *fz-s64-pool*
+  '("0LL" "1LL" "-1LL" "42LL" "-42LL" "1000000LL" "-1000000LL"
+    "9223372036854775807LL" "-9223372036854775807LL" "-0x7fffffbfffffffffLL"))
+
+(define *fz-u64-pool*
+  '("0ULL" "1ULL" "42ULL" "1000000007ULL"
+    "0x8000000000000000ULL" "0x8000017FFFFFFFFFULL" "0xFFFFFFFFFFFFF800ULL"))
+
+(define (fz-emit-preamble port)
+  (display "typedef unsigned int u32_t;\n" port)
+  (display "typedef unsigned long long u64_t;\n" port)
+  (display "typedef long long s64_t;\n" port)
+  (display "void *memcpy(void *dst, const void *src, unsigned long n);\n" port)
+  (display "int putchar(int c);\n\n" port)
+  (display "static u64_t fz_mix(u64_t h, u64_t v) {\n" port)
+  (display "    h ^= v;\n" port)
+  (display "    return h * 1099511628211ULL;\n" port)
+  (display "}\n\n" port)
+  (display "static u64_t canon_f64(double x) {\n" port)
+  (display "    u64_t b = 0;\n" port)
+  (display "    memcpy(&b, &x, 8);\n" port)
+  (display "    if ((b & 0x7ff0000000000000ULL) == 0x7ff0000000000000ULL &&\n" port)
+  (display "        (b & 0x000fffffffffffffULL) != 0ULL) {\n" port)
+  (display "        return 0x7ff8000000000000ULL;\n" port)
+  (display "    }\n" port)
+  (display "    return b;\n" port)
+  (display "}\n\n" port)
+  (display "static u32_t canon_f32(float x) {\n" port)
+  (display "    u32_t b = 0;\n" port)
+  (display "    memcpy(&b, &x, 4);\n" port)
+  (display "    if ((b & 0x7f800000U) == 0x7f800000U &&\n" port)
+  (display "        (b & 0x007fffffU) != 0U) {\n" port)
+  (display "        return 0x7fc00000U;\n" port)
+  (display "    }\n" port)
+  (display "    return b;\n" port)
+  (display "}\n\n" port)
+  (display "static void emit_str(const char *s) {\n" port)
+  (display "    for (int i = 0; s[i] != 0; i++) putchar((int)(unsigned char)s[i]);\n" port)
+  (display "}\n\n" port)
+  (display "static void emit_hex64(u64_t v) {\n" port)
+  (display "    for (int i = 15; i >= 0; i--) {\n" port)
+  (display "        u64_t d = (v >> (i * 4)) & 15ULL;\n" port)
+  (display "        putchar((d < 10ULL) ? ('0' + (int)d) : ('a' + (int)(d - 10ULL)));\n" port)
+  (display "    }\n" port)
+  (display "}\n\n" port)
+  (display "struct SF2 { float a; float b; };\n" port)
+  (display "struct SDI { double d; int i; };\n" port)
+  (display "struct SFI { float a; int b; };\n" port)
+  (display "struct SBig { double a; double b; double c; };\n\n" port)
+  (display "static u64_t abi_10x(double x0, float x1, double x2, float x3,\n" port)
+  (display "                       double x4, double x5, float x6, double x7,\n" port)
+  (display "                       double s0, float s1) {\n" port)
+  (display "    u64_t h = 14695981039346656037ULL;\n" port)
+  (display "    h = fz_mix(h, canon_f64(x0 + (double)x1 - x2));\n" port)
+  (display "    h = fz_mix(h, canon_f32(x3 + x6 + s1));\n" port)
+  (display "    h = fz_mix(h, canon_f64(x4 * x5 + x7 - s0));\n" port)
+  (display "    return fz_mix(h, canon_f64(s0 + (double)s1));\n" port)
+  (display "}\n\n" port)
+  (display "static u64_t abi_mixed(int g0, double x0, u64_t g1, float x1, int g2, double x2,\n" port)
+  (display "                         u64_t g3, double x3, int g4, float x4, int g5, double x5,\n" port)
+  (display "                         int g6, double x6, u64_t g7, double x7, double s8, int g8, float s9) {\n" port)
+  (display "    u64_t h = 14695981039346656037ULL;\n" port)
+  (display "    u64_t gi = (u64_t)g0 + g1 + (u64_t)g2 + g3 + (u64_t)g4 + (u64_t)g5 + (u64_t)g6 + g7 + (u64_t)g8;\n" port)
+  (display "    h = fz_mix(h, gi);\n" port)
+  (display "    h = fz_mix(h, canon_f64(x0 + (double)x1 + x2 + x3 + (double)x4));\n" port)
+  (display "    h = fz_mix(h, canon_f64(x5 + x6 + x7 + s8 + (double)s9));\n" port)
+  (display "    return h;\n" port)
+  (display "}\n\n" port)
+  (display "static struct SF2 mk_sf2(float a, float b) { struct SF2 s = { a, b }; return s; }\n" port)
+  (display "static struct SDI mk_sdi(double d, int i) { struct SDI s = { d, i }; return s; }\n" port)
+  (display "static struct SFI mk_sfi(float a, int b) { struct SFI s = { a, b }; return s; }\n" port)
+  (display "static struct SBig mk_sbig(double a, double b, double c) { struct SBig s = { a, b, c }; return s; }\n" port)
+  (display "static u64_t eval_aggs(struct SF2 a, struct SDI b, struct SFI c, struct SBig d, double tail) {\n" port)
+  (display "    u64_t h = 14695981039346656037ULL;\n" port)
+  (display "    h = fz_mix(h, (u64_t)canon_f32(a.a));\n" port)
+  (display "    h = fz_mix(h, (u64_t)canon_f32(a.b));\n" port)
+  (display "    h = fz_mix(h, canon_f64(b.d));\n" port)
+  (display "    h = fz_mix(h, (u64_t)(unsigned int)b.i);\n" port)
+  (display "    h = fz_mix(h, (u64_t)canon_f32(c.a));\n" port)
+  (display "    h = fz_mix(h, (u64_t)(unsigned int)c.b);\n" port)
+  (display "    h = fz_mix(h, canon_f64(d.a + d.b - d.c + tail));\n" port)
+  (display "    return h;\n" port)
+  (display "}\n\n" port))
+
+(define (fz-emit-case port idx)
+  (let ((fam (modulo idx 6))
+        (ops '("+" "-" "*" "/")))
+    (display (string-append "static u64_t fuzz_case_" (number->string idx) "(void) {\n") port)
+    (case fam
+      ((0)
+       ;; Double arithmetic + compound + unary neg chains
+       (let ((v0 (fz-choice *fz-f64-pool*))
+             (v1 (fz-choice *fz-f64-pool*))
+             (v2 (fz-choice *fz-f64-fin-pool*))
+             (v3 (fz-choice *fz-f64-pool*))
+             (op1 (fz-choice ops))
+             (op2 (fz-choice ops))
+             (op3 (fz-choice ops))
+             (cop (fz-choice '("+=" "-=" "*=" "/="))))
+         (display (string-append "    double a = " v0 ";\n") port)
+         (display (string-append "    double b = " v1 ";\n") port)
+         (display (string-append "    double c = " v2 ";\n") port)
+         (display (string-append "    double d = " v3 ";\n") port)
+         (display (string-append "    double r = (a " op1 " b) " op2 " (-c);\n") port)
+         (display (string-append "    r " cop " d;\n") port)
+         (display (string-append "    double s = r " op3 " (-a);\n") port)
+         (display "    return fz_mix(canon_f64(r), canon_f64(s));\n" port)))
+      ((1)
+       ;; Float single-precision + f32<->f64 promotion & truncation chains
+       (let ((f0 (fz-choice *fz-f32-pool*))
+             (f1 (fz-choice *fz-f32-pool*))
+             (d0 (fz-choice *fz-f64-pool*))
+             (op1 (fz-choice ops))
+             (op2 (fz-choice ops))
+             (cop (fz-choice '("+=" "-=" "*=" "/="))))
+         (display (string-append "    float x = " f0 ";\n") port)
+         (display (string-append "    float y = " f1 ";\n") port)
+         (display (string-append "    double w = " d0 ";\n") port)
+         (display (string-append "    float z = -(x " op1 " y);\n") port)
+         (display (string-append "    z " cop " (float)w;\n") port)
+         (display (string-append "    double r = ((double)z " op2 " w);\n") port)
+         (display "    return fz_mix((u64_t)canon_f32(z), canon_f64(r));\n" port)))
+      ((2)
+       ;; IEEE 754 comparisons & control-flow (if, ?:, &&, ||, !)
+       (let ((a0 (fz-choice *fz-f64-pool*))
+             (a1 (fz-choice *fz-f64-pool*))
+             (f0 (fz-choice *fz-f32-pool*))
+             (f1 (fz-choice *fz-f32-pool*)))
+         (display (string-append "    double a = " a0 ";\n") port)
+         (display (string-append "    double b = " a1 ";\n") port)
+         (display (string-append "    float c = " f0 ";\n") port)
+         (display (string-append "    float d = " f1 ";\n") port)
+         (display "    u64_t mask = 0ULL;\n" port)
+         (display "    if (a == b) mask |= 1ULL;\n" port)
+         (display "    if (a != b) mask |= 2ULL;\n" port)
+         (display "    if (a < b)  mask |= 4ULL;\n" port)
+         (display "    if (a <= b) mask |= 8ULL;\n" port)
+         (display "    if (a > b)  mask |= 16ULL;\n" port)
+         (display "    if (a >= b) mask |= 32ULL;\n" port)
+         (display "    if (!a)     mask |= 64ULL;\n" port)
+         (display "    if (c < d)  mask |= 128ULL;\n" port)
+         (display "    if (c != d) mask |= 256ULL;\n" port)
+         (display "    double sel = (a && !b) ? (a + 1.5) : ((c || d) ? (b - 2.0) : -0.0);\n" port)
+         (display "    return fz_mix(mask, canon_f64(sel));\n" port)))
+      ((3)
+       ;; Valid-range integer <-> float/double conversions (i64 & u64 >= 2^63)
+       (let ((s0 (fz-choice *fz-s64-pool*))
+             (u0 (fz-choice *fz-u64-pool*))
+             (d0 (fz-choice *fz-f64-fin-pool*))
+             (f0 (fz-choice *fz-f32-fin-pool*)))
+         (display (string-append "    s64_t si = " s0 ";\n") port)
+         (display (string-append "    u64_t ui = " u0 ";\n") port)
+         (display (string-append "    double dv = " d0 ";\n") port)
+         (display (string-append "    float fv = " f0 ";\n") port)
+         (display "    double ds = (double)si;\n" port)
+         (display "    double du = (double)ui;\n" port)
+         (display "    float fs = (float)si;\n" port)
+         (display "    float fu = (float)ui;\n" port)
+         (display "    s64_t back_s = (dv >= -0x1.0p63 && dv < 0x1.0p63) ? (s64_t)dv : -1LL;\n" port)
+         (display "    u64_t back_u = (du >= 0.0 && du < 0x1.0p64) ? (u64_t)du : 0x55ULL;\n" port)
+         (display "    u64_t back_f = ((double)fv >= 0.0 && (double)fv < 0x1.0p64) ? (u64_t)fv : 0x77ULL;\n" port)
+         (display "    u64_t h = fz_mix(canon_f64(ds), canon_f64(du));\n" port)
+         (display "    h = fz_mix(h, fz_mix((u64_t)canon_f32(fs), (u64_t)canon_f32(fu)));\n" port)
+         (display "    return fz_mix(h, fz_mix((u64_t)back_s, back_u ^ back_f));\n" port)))
+      ((4)
+       ;; High-arity SysV XMM & mixed GPR+XMM calls
+       (let ((args10 (let loop ((k 0) (acc '()))
+                       (if (= k 10) (reverse acc)
+                           (loop (+ k 1)
+                                 (cons (if (memq k '(1 3 6 9))
+                                           (fz-choice *fz-f32-pool*)
+                                           (fz-choice *fz-f64-pool*))
+                                       acc)))))
+             (g0 (fz-range -1000 1000))
+             (g1 (fz-range 0 1000000))
+             (g2 (fz-range -1000 1000))
+             (g3 (fz-range 0 1000000))
+             (g4 (fz-range -1000 1000))
+             (g5 (fz-range -1000 1000))
+             (g6 (fz-range -1000 1000))
+             (g7 (fz-range 0 1000000))
+             (g8 (fz-range -1000 1000)))
+         (display (string-append "    u64_t h1 = abi_10x(" (car args10)) port)
+         (for-each (lambda (a) (display (string-append ", " a) port)) (cdr args10))
+         (display ");\n" port)
+         (display (string-append "    u64_t h2 = abi_mixed("
+                                 (number->string g0) ", " (fz-choice *fz-f64-pool*) ", "
+                                 (number->string g1) "ULL, " (fz-choice *fz-f32-pool*) ", "
+                                 (number->string g2) ", " (fz-choice *fz-f64-pool*) ", "
+                                 (number->string g3) "ULL, " (fz-choice *fz-f64-pool*) ", "
+                                 (number->string g4) ", " (fz-choice *fz-f32-pool*) ", "
+                                 (number->string g5) ", " (fz-choice *fz-f64-pool*) ", "
+                                 (number->string g6) ", " (fz-choice *fz-f64-pool*) ", "
+                                 (number->string g7) "ULL, " (fz-choice *fz-f64-pool*) ", "
+                                 (fz-choice *fz-f64-pool*) ", " (number->string g8) ", "
+                                 (fz-choice *fz-f32-pool*) ");\n") port)
+         (display "    return fz_mix(h1, h2);\n" port)))
+      (else
+       ;; Aggregates (SF2, SDI, SFI, 24B SBig sret)
+       (let ((fa (fz-choice *fz-f32-pool*))
+             (fb (fz-choice *fz-f32-pool*))
+             (dd (fz-choice *fz-f64-pool*))
+             (di (fz-range -500 500))
+             (sa (fz-choice *fz-f32-pool*))
+             (sb (fz-range -500 500))
+             (b0 (fz-choice *fz-f64-pool*))
+             (b1 (fz-choice *fz-f64-pool*))
+             (b2 (fz-choice *fz-f64-pool*))
+             (tl (fz-choice *fz-f64-pool*)))
+         (display (string-append "    struct SF2 s1 = mk_sf2(" fa ", " fb ");\n") port)
+         (display (string-append "    struct SDI s2 = mk_sdi(" dd ", " (number->string di) ");\n") port)
+         (display (string-append "    struct SFI s3 = mk_sfi(" sa ", " (number->string sb) ");\n") port)
+         (display (string-append "    struct SBig s4 = mk_sbig(" b0 ", " b1 ", " b2 ");\n") port)
+         (display (string-append "    return eval_aggs(s1, s2, s3, s4, " tl ");\n") port))))
+    (display "}\n\n" port)))
+
+(let ((c-path (string-append *fz-out-dir* "/fuzz_suite.c"))
+      (vm-out-path (string-append *fz-out-dir* "/out_vm.txt")))
+  (display "=======================================================================\n")
+  (display " Generating & Running Reference VM Fuzz Suite (#924)\n")
+  (display "  Seed:  ") (display *fz-seed*) (newline)
+  (display "  Cases: ") (display *fz-count*) (newline)
+  (display "=======================================================================\n")
+  (with-output-to-file c-path
+    (lambda ()
+      (let ((p (current-output-port)))
+        (fz-emit-preamble p)
+        (let loop ((i 0))
+          (if (< i *fz-count*)
+              (begin
+                (fz-emit-case p i)
+                (loop (+ i 1)))))
+        (display "int main(void) {\n" p)
+        (display "    u64_t total = 14695981039346656037ULL;\n" p)
+        (let loop ((i 0))
+          (if (< i *fz-count*)
+              (begin
+                (display (string-append "    { u64_t r = fuzz_case_" (number->string i) "(); total = fz_mix(total, r); emit_str(\"CASE " (number->string i) " \"); emit_hex64(r); putchar('\\n'); }\n") p)
+                (loop (+ i 1)))))
+        (display "    emit_str(\"HASH \"); emit_hex64(total); putchar('\\n');\n" p)
+        (display "    return 0;\n" p)
+        (display "}\n" p))))
+
+  (let* ((lir (c99-compile-file-to-lir c-path (make-default-c-driver-options)))
+         (ok-val (validate-lir lir 'core))
+         (ok-ver (verify-lir lir)))
+    (if (not ok-val) (error "Generated fuzz LIR failed validate-lir" c-path))
+    (if (not ok-ver) (error "Generated fuzz LIR failed verify-lir" c-path))
+    (let ((vm (make-lir-vm))
+          (chars-box (cons '() '())))
+      (vm-set-fuel! vm 50000000)
+      (register-c-foreign-handler! vm 'putchar
+        (lambda (v)
+          (let ((ch (integer->char (bitwise-and (lir-vm-u64 (vm-get-reg v '%rdi)) #xff))))
+            (set-car! chars-box (cons ch (car chars-box)))
+            (vm-set-reg! v '%rax (char->integer ch)))))
+      (lir-vm-load! vm lir)
+      (let ((st (lir-vm-run! vm)))
+        (if (eq? st 'trapped)
+            (error "Reference VM trapped during fuzz suite:" (vm-last-trap vm)))
+        (let ((vm-str (list->string (reverse (car chars-box)))))
+          (with-output-to-file vm-out-path
+            (lambda () (display vm-str)))
+          (display "  [PASS] Reference LIR VM executed ") (display *fz-count*)
+          (display " randomized C99 XMM/FP cases cleanly.\n"))))))
