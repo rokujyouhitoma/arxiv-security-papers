@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **928** | `musl libc` の ULisp 自前ビルドおよび Pass 144 自前 ELF リンカによる完全静的リンク移行 | Feature | In Progress | [928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
 | **929** | DDC (Diverse Double-Compiling) による C コンパイル出力の決定論性・ビット一致検証ハーネスの実装 | Feature | In Progress | [929-implement-ddc-diverse-double-compiling-determinism-verification.md](929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | In Progress | [930-implement-c99-bounds-checking-sanitizer-mode.md](930-implement-c99-bounds-checking-sanitizer-mode.md) |
 | **932** | C99 コンパイラドライバ (`ulisp-cc`) のネイティブ AOT バイナリ化と高速セルフホスト実行基盤の構築 | Feature | New | [932-build-native-aot-ulisp-cc-compiler-driver-binary.md](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) |
@@ -15,6 +14,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **928** | `musl libc` の ULisp 自前ビルドおよび Pass 144 自前 ELF リンカによる完全静的リンク移行 | Feature | 2026-11-23 | [928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md](closed/928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
 | **938** | `make -C ulisp bootstrap` における Pass 128 二次計算量ループおよび `memq` ヒープ肥大化・メモリ超過スラッシングの修正 | Bug | 2026-11-23 | [938-eliminate-bootstrap-quadratic-branch-fusion-and-memq-heap-bloat.md](closed/938-eliminate-bootstrap-quadratic-branch-fusion-and-memq-heap-bloat.md) |
 | **927** | C ヘッダ用 `.sbi` プリコンパイル済みヘッダ (PCH) および mem2reg 反復最適化によるビルド高速化 | Feature | 2026-11-23 | [927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md](closed/927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) |
 | **937** | DSN-33-24 三位一体・二村射影 Scheme インタプリタ自動生成・双対導出 ＆ メタ循環統合アーキテクチャ設計書の策定 | Docs | 2026-11-23 | [937-design-dsn-33-24-futamura-scheme-interpreter-synthesis.md](closed/937-design-dsn-33-24-futamura-scheme-interpreter-synthesis.md) |

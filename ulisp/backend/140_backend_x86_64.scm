@@ -740,7 +740,7 @@
           (loop (cdr xs)
                 (+ idx 1)
                 (if (and (pair? inst)
-                         (memq (car inst) '(%global-set! %store %store-typed)))
+                         (memq (car inst) '(%global-set! %store %store-typed %direct-jump %label)))
                     idx
                     last-set))))))
 
@@ -2085,41 +2085,66 @@
                     (loop-i (cdr is) (cadr src))
                     (loop-i (cdr is) m))))))))
 
+(define *c-tu-weak-fns* (cons '() '()))
+(define *c-tu-weak-data* (cons '() '()))
+
+(define (inline-asm-x86-xmm-reg? reg)
+  (and (symbol? reg)
+       (let ((s (symbol->string reg)))
+         (or (and (>= (string-length s) 4) (string=? (substring s 0 4) "%xmm"))
+             (and (>= (string-length s) 3) (string=? (substring s 0 3) "xmm"))))))
+
+(define (inline-asm-x86-mov-op dst-xmm? src-xmm?)
+  (cond
+    ((and dst-xmm? src-xmm?) "movsd ")
+    ((or dst-xmm? src-xmm?) "movsd ")
+    (else "mov ")))
+
+(define (inline-asm-x86-mov-reg-reg-op dst-xmm? src-xmm?)
+  (cond
+    ((and dst-xmm? src-xmm?) "movsd ")
+    ((or dst-xmm? src-xmm?) "movq ")
+    (else "mov ")))
+
 (define (inline-asm-x86-move-to-reg-acc dst-reg src tmp-reg tmp-save-off acc)
-  (let ((src-reg (inline-asm-canonical-gpr src))
-        (dst-s (inline-asm-x86-reg-str dst-reg)))
+  (let* ((src-reg (inline-asm-canonical-gpr src))
+         (dst-s (inline-asm-x86-reg-str dst-reg))
+         (dst-xmm? (inline-asm-x86-xmm-reg? dst-reg))
+         (src-xmm? (and src-reg (inline-asm-x86-xmm-reg? src-reg))))
     (cond
       (src-reg
        (cond
          ((eq? src-reg dst-reg) acc)
          ((and tmp-save-off (eq? src-reg tmp-reg))
-          (cons (inline-asm-raw (string-append "mov " dst-s ", " (inline-asm-x86-slot-str tmp-save-off))) acc))
+          (cons (inline-asm-raw (string-append (if dst-xmm? "movsd " "mov ") dst-s ", " (inline-asm-x86-slot-str tmp-save-off))) acc))
          (else
-          (cons (inline-asm-raw (string-append "mov " dst-s ", " (inline-asm-x86-reg-str src-reg))) acc))))
+          (cons (inline-asm-raw (string-append (inline-asm-x86-mov-reg-reg-op dst-xmm? src-xmm?) dst-s ", " (inline-asm-x86-reg-str src-reg))) acc))))
       ((integer? src)
        (cons (inline-asm-raw (string-append "mov " dst-s ", " (number->string src))) acc))
       ((and (pair? src) (eq? (car src) '%mem)
             tmp-save-off
             (eq? (inline-asm-canonical-gpr (cadr src)) tmp-reg))
-       (cons (inline-asm-raw (string-append "mov " dst-s ", " (inline-asm-x86-opnd-str src)))
+       (cons (inline-asm-raw (string-append (if dst-xmm? "movsd " "mov ") dst-s ", " (inline-asm-x86-opnd-str src)))
              (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str tmp-reg) ", " (inline-asm-x86-slot-str tmp-save-off)))
                    acc)))
       (else
-       (cons (inline-asm-raw (string-append "mov " dst-s ", " (inline-asm-x86-opnd-str src))) acc)))))
+       (cons (inline-asm-raw (string-append (if dst-xmm? "movsd " "mov ") dst-s ", " (inline-asm-x86-opnd-str src))) acc)))))
 
 (define (inline-asm-x86-store-acc dst src-reg acc)
-  (cond
-    ((inline-asm-canonical-gpr dst)
-     (let ((dg (inline-asm-canonical-gpr dst)))
-       (if (eq? dg src-reg)
-           acc
-           (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str dg) ", " (inline-asm-x86-reg-str src-reg))) acc))))
-    ((and (pair? dst) (eq? (car dst) '%stack))
-     (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str (cadr dst)) ", " (inline-asm-x86-reg-str src-reg))) acc))
-    ((and (pair? dst) (eq? (car dst) '%mem))
-     (cons (inline-asm-raw (string-append "mov " (inline-asm-format-mem-opnd dst #f #f -1) ", " (inline-asm-x86-reg-str src-reg))) acc))
-    (else
-     (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-opnd-str dst) ", " (inline-asm-x86-reg-str src-reg))) acc))))
+  (let ((src-xmm? (inline-asm-x86-xmm-reg? src-reg)))
+    (cond
+      ((inline-asm-canonical-gpr dst)
+       (let* ((dg (inline-asm-canonical-gpr dst))
+              (dg-xmm? (inline-asm-x86-xmm-reg? dg)))
+         (if (eq? dg src-reg)
+             acc
+             (cons (inline-asm-raw (string-append (inline-asm-x86-mov-reg-reg-op dg-xmm? src-xmm?) (inline-asm-x86-reg-str dg) ", " (inline-asm-x86-reg-str src-reg))) acc))))
+      ((and (pair? dst) (eq? (car dst) '%stack))
+       (cons (inline-asm-raw (string-append (if src-xmm? "movsd " "mov ") (inline-asm-x86-slot-str (cadr dst)) ", " (inline-asm-x86-reg-str src-reg))) acc))
+      ((and (pair? dst) (eq? (car dst) '%mem))
+       (cons (inline-asm-raw (string-append (if src-xmm? "movsd " "mov ") (inline-asm-format-mem-opnd dst #f #f -1) ", " (inline-asm-x86-reg-str src-reg))) acc))
+      (else
+       (cons (inline-asm-raw (string-append (if src-xmm? "movsd " "mov ") (inline-asm-x86-opnd-str dst) ", " (inline-asm-x86-reg-str src-reg))) acc)))))
 
 (define (inline-asm-x86-has-tied-input? out-idx in-plans)
   (let loop ((is in-plans))
@@ -2222,12 +2247,13 @@
           (let loop ((sp save-pairs) (acc '()))
             (if (null? sp)
                 acc
-                (let ((p (car sp)))
+                (let* ((p (car sp))
+                       (op-mv (if (inline-asm-x86-xmm-reg? (car p)) "movsd " "mov ")))
                   (loop (cdr sp)
-                        (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str (cdr p)) ", " (inline-asm-x86-reg-str (car p)))) acc))))))
+                        (cons (inline-asm-raw (string-append op-mv (inline-asm-x86-slot-str (cdr p)) ", " (inline-asm-x86-reg-str (car p)))) acc))))))
          (acc2
           (if (and stage-tmp (not (assq stage-tmp save-pairs)))
-              (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str stage-tmp-save-off) ", " (inline-asm-x86-reg-str stage-tmp))) acc1)
+              (cons (inline-asm-raw (string-append (if (inline-asm-x86-xmm-reg? stage-tmp) "movsd " "mov ") (inline-asm-x86-slot-str stage-tmp-save-off) ", " (inline-asm-x86-reg-str stage-tmp))) acc1)
               acc1))
          ;; 2. Cycle-free parallel input/rw staging
          (acc3
@@ -2286,18 +2312,20 @@
                                     (not (memq (inline-asm-canonical-gpr (cadr dst)) save-regs))))
                            (loop (cdr ops) off (inline-asm-x86-store-acc dst carrier acc) def-acc))
                           (else
-                           (loop (cdr ops)
-                                 (- off 8)
-                                 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str off) ", " (inline-asm-x86-reg-str carrier))) acc)
-                                 (cons (list dst off carrier) def-acc)))))))
+                           (let ((op-mv (if (inline-asm-x86-xmm-reg? carrier) "movsd " "mov ")))
+                             (loop (cdr ops)
+                                   (- off 8)
+                                   (cons (inline-asm-raw (string-append op-mv (inline-asm-x86-slot-str off) ", " (inline-asm-x86-reg-str carrier))) acc)
+                                   (cons (list dst off carrier) def-acc))))))))
                 ;; Phase E2: restore saved registers
                 (let* ((acc-restored
                         (let rloop ((sp save-pairs) (a acc))
                           (if (null? sp)
                               a
-                              (let ((p (car sp)))
+                              (let* ((p (car sp))
+                                     (op-mv (if (inline-asm-x86-xmm-reg? (car p)) "movsd " "mov ")))
                                 (rloop (cdr sp)
-                                       (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str (car p)) ", " (inline-asm-x86-slot-str (cdr p)))) a))))))
+                                       (cons (inline-asm-raw (string-append op-mv (inline-asm-x86-reg-str (car p)) ", " (inline-asm-x86-slot-str (cdr p)))) a))))))
                        ;; Phase E3: store deferred outputs
                        (acc-final
                         (let dloop ((ds (reverse def-acc)) (a acc-restored))
@@ -2307,17 +2335,22 @@
                                      (dst (car d))
                                      (doff (cadr d))
                                      (carrier (caddr d))
-                                     (dg (inline-asm-canonical-gpr dst)))
+                                     (dg (inline-asm-canonical-gpr dst))
+                                     (c-xmm? (inline-asm-x86-xmm-reg? carrier)))
                                 (cond
                                   (dg
                                    (dloop (cdr ds)
-                                          (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str dg) ", " (inline-asm-x86-slot-str doff))) a)))
+                                          (cons (inline-asm-raw (string-append (if (inline-asm-x86-xmm-reg? dg)
+                                                                                   (if c-xmm? "movsd " "movq ")
+                                                                                   (if c-xmm? "movsd " "mov "))
+                                                                               (inline-asm-x86-reg-str dg) ", " (inline-asm-x86-slot-str doff))) a)))
                                   ((and (pair? dst) (eq? (car dst) '%mem))
                                    (let* ((c-save (- out-tmp-base (* (+ (length def-acc) 2) 8)))
-                                          (a1 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-slot-str c-save) ", " (inline-asm-x86-reg-str carrier))) a))
-                                          (a2 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str carrier) ", " (inline-asm-x86-slot-str doff))) a1))
-                                          (a3 (cons (inline-asm-raw (string-append "mov " (inline-asm-format-mem-opnd dst #f #f -1) ", " (inline-asm-x86-reg-str carrier))) a2))
-                                          (a4 (cons (inline-asm-raw (string-append "mov " (inline-asm-x86-reg-str carrier) ", " (inline-asm-x86-slot-str c-save))) a3)))
+                                          (op-mv (if c-xmm? "movsd " "mov "))
+                                          (a1 (cons (inline-asm-raw (string-append op-mv (inline-asm-x86-slot-str c-save) ", " (inline-asm-x86-reg-str carrier))) a))
+                                          (a2 (cons (inline-asm-raw (string-append op-mv (inline-asm-x86-reg-str carrier) ", " (inline-asm-x86-slot-str doff))) a1))
+                                          (a3 (cons (inline-asm-raw (string-append op-mv (inline-asm-format-mem-opnd dst #f #f -1) ", " (inline-asm-x86-reg-str carrier))) a2))
+                                          (a4 (cons (inline-asm-raw (string-append op-mv (inline-asm-x86-reg-str carrier) ", " (inline-asm-x86-slot-str c-save))) a3)))
                                      (dloop (cdr ds) a4)))
                                   (else
                                    (dloop (cdr ds) (inline-asm-x86-store-acc dst carrier a)))))))))
@@ -2382,7 +2415,8 @@
                                        (list '%p2align 4)))))
            (base-acc (if is-exported?
                          (if c-tu?
-                             (if (memq label '(__ulisp_setjmp __ulisp_longjmp))
+                             (if (or (memq label '(__ulisp_setjmp __ulisp_longjmp))
+                                     (memq label (car *c-tu-weak-fns*)))
                                  (append init-acc
                                          (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
                                                (list '%raw-asm (string-append "    .weak " label-str))
@@ -2454,25 +2488,45 @@
   (let* ((strings (assq 'strings (cdr prog)))
          (data-clause (assq 'data (cdr prog)))
          (stackmaps (assq 'stackmaps (cdr prog)))
+         (weak-fns-clause (assq 'weak-fns (cdr prog)))
+         (weak-data-clause (assq 'weak-data (cdr prog)))
+         (aliases-clause (assq 'aliases (cdr prog)))
+         (top-asm-clause (assq 'top-asm (cdr prog)))
          (funcs-clause (assq '%lir-functions (cdr prog)))
          (funcs (if funcs-clause (cdr funcs-clause) '()))
          (main-clause (assq '%lir-main (cdr prog))))
+    (set-car! *c-tu-weak-fns* (if (and weak-fns-clause (pair? (cdr weak-fns-clause))) (cadr weak-fns-clause) '()))
+    (set-car! *c-tu-weak-data* (if (and weak-data-clause (pair? (cdr weak-data-clause))) (cadr weak-data-clause) '()))
     (if (eq? (car *backend-gc-mode*) 'c-tu)
         (set-car! *c-tu-globals* (c99-collect-lir-globals prog))
         (set-car! *c-tu-globals* '()))
-    (let ((res
-           (if data-clause
-               (list '%asm-program
-                     (if strings strings '(strings ()))
-                     data-clause
-                     (if stackmaps stackmaps '(stackmaps ()))
-                     (cons '%asm-functions (map select-instructions-function funcs))
-                     (select-instructions-main main-clause))
-               (list '%asm-program
-                     (if strings strings '(strings ()))
-                     (if stackmaps stackmaps '(stackmaps ()))
-                     (cons '%asm-functions (map select-instructions-function funcs))
-                     (select-instructions-main main-clause)))))
+    (let* ((extra-clauses
+            (append
+             (if weak-fns-clause (list weak-fns-clause) '())
+             (append
+              (if weak-data-clause (list weak-data-clause) '())
+              (append
+               (if aliases-clause (list aliases-clause) '())
+               (if top-asm-clause (list top-asm-clause) '())))))
+           (res
+            (if data-clause
+                (append
+                 (list '%asm-program
+                       (if strings strings '(strings ()))
+                       data-clause
+                       (if stackmaps stackmaps '(stackmaps ()))
+                       (cons '%asm-functions (map select-instructions-function funcs))
+                       (select-instructions-main main-clause))
+                 extra-clauses)
+                (append
+                 (list '%asm-program
+                       (if strings strings '(strings ()))
+                       (if stackmaps stackmaps '(stackmaps ()))
+                       (cons '%asm-functions (map select-instructions-function funcs))
+                       (select-instructions-main main-clause))
+                 extra-clauses))))
+      (set-car! *c-tu-weak-fns* '())
+      (set-car! *c-tu-weak-data* '())
       (set-car! *x86-c-tu-hoist-frame* 0)
       (set-car! *x86-c-tu-delta-calls* '())
       (set-car! *x86-c-tu-call-ordinal* 0)
@@ -2743,8 +2797,34 @@
                 (id (cdr entry)))
             (emit (string-append "    .file " (number->string id) " \"" path "\""))))
         (get-source-file-table)))
-  (emit "    .text")
-  (for-each emit-x86-asm-function funcs)
+  (let* ((weak-fns-clause (assq 'weak-fns (cdr asm-prog)))
+         (weak-fns-syms (if (and weak-fns-clause (pair? (cdr weak-fns-clause))) (cadr weak-fns-clause) '()))
+         (weak-data-clause (assq 'weak-data (cdr asm-prog)))
+         (weak-data-syms (if (and weak-data-clause (pair? (cdr weak-data-clause))) (cadr weak-data-clause) '()))
+         (aliases-clause (assq 'aliases (cdr asm-prog)))
+         (aliases-list (if (and aliases-clause (pair? (cdr aliases-clause))) (cadr aliases-clause) '()))
+         (top-asm-clause (assq 'top-asm (cdr asm-prog)))
+         (top-asm-lines (if (and top-asm-clause (pair? (cdr top-asm-clause))) (cadr top-asm-clause) '())))
+    (set-car! *c-tu-weak-data* weak-data-syms)
+    (emit "    .text")
+    (let top-loop ((ls top-asm-lines))
+      (if (pair? ls)
+          (begin
+            (emit (car ls))
+            (top-loop (cdr ls)))))
+    (for-each emit-x86-asm-function funcs)
+    (if (pair? aliases-list)
+        (begin
+          (emit "    .text")
+          (let al-loop ((as aliases-list))
+            (if (pair? as)
+                (let* ((entry (car as))
+                       (alias-str (asm-label->str (car entry)))
+                       (tgt-str (asm-label->str (cadr entry)))
+                       (weak? (caddr entry)))
+                  (emit (string-append (if weak? "    .weak " "    .globl ") alias-str))
+                  (emit (string-append "    .set " alias-str ", " tgt-str))
+                  (al-loop (cdr as))))))))
   (if (and (car *c-tu-has-init?*) (pair? main-body))
       (begin
         (emit "    .p2align 4")
@@ -2818,7 +2898,9 @@
                             (emit (string-append "    .align " (number->string al))))
                         (if (%c99-exported-asm-label? lbl-str)
                             (begin
-                              (emit (string-append "    .globl " lbl-str))
+                              (if (memq (cadr de) (car *c-tu-weak-data*))
+                                  (emit (string-append "    .weak " lbl-str))
+                                  (emit (string-append "    .globl " lbl-str)))
                               (emit (string-append "    .type " lbl-str ", @object"))))
                         (emit (string-append lbl-str ":"))
                         (%c99-emit-x86-data-chunks chunks)))
@@ -2834,7 +2916,9 @@
                             (emit (string-append "    .align " (number->string al))))
                         (if (%c99-exported-asm-label? lbl-str)
                             (begin
-                              (emit (string-append "    .globl " lbl-str))
+                              (if (memq (cadr de) (car *c-tu-weak-data*))
+                                  (emit (string-append "    .weak " lbl-str))
+                                  (emit (string-append "    .globl " lbl-str)))
                               (emit (string-append "    .type " lbl-str ", @object"))))
                         (emit (string-append lbl-str ":"))
                         (if (> sz 0)
@@ -2848,6 +2932,19 @@
                         (emit (string-append g-lbl ":"))
                         (emit "    .quad 0")))
                     gvs))))
+  (let* ((wf-clause (assq 'weak-fns (cdr asm-prog)))
+         (wf-syms (if (and wf-clause (pair? (cdr wf-clause))) (cadr wf-clause) '()))
+         (wd-syms (car *c-tu-weak-data*)))
+    (let wf-loop ((ws wf-syms))
+      (if (pair? ws)
+          (begin
+            (emit (string-append "    .weak " (asm-label->str (car ws))))
+            (wf-loop (cdr ws)))))
+    (let wd-loop ((ws wd-syms))
+      (if (pair? ws)
+          (begin
+            (emit (string-append "    .weak " (asm-label->str (car ws))))
+            (wd-loop (cdr ws))))))
   (emit "    .section .note.GNU-stack,\"\",@progbits"))
 
 (define (emit-x86-asm-program asm-prog gc-mode)

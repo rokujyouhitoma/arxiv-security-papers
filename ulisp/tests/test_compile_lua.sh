@@ -399,22 +399,60 @@ fi
 echo "  [PASS] All static functions & variables have STB_LOCAL binding (0 symbol collisions)"
 
 # -----------------------------------------------------------------------
-# 5. Link Native lua_ulisp (and optional luac_ulisp) + Reference lua_gcc
+# 5. Link Standalone Static lua_ulisp via Pass 144 ELF64 Linker & musl-1.2.5
 # -----------------------------------------------------------------------
 LUA_ULISP_BIN="$ULISP_DIR/build/lua_ulisp"
+LUA_ULISP_STATIC_BIN="$ULISP_DIR/build/lua_ulisp_static"
 LUA_GCC_BIN="$ULISP_DIR/build/lua_gcc"
 HOST_CC="${CC:-cc}"
 
-"$HOST_CC" -no-pie -Wl,-E "${LUA_OBJS[@]}" -lm -ldl -o "$LUA_ULISP_BIN"
-echo "  [PASS] Linked native executable: $LUA_ULISP_BIN ($(stat -c%s "$LUA_ULISP_BIN") bytes)"
+MUSL_LIB_DIR="$ULISP_DIR/build/musl_build/obj/lib"
+if [ ! -f "$MUSL_LIB_DIR/crt1.o" ] || [ ! -f "$MUSL_LIB_DIR/libc.a" ]; then
+  echo "  [INFO] Building musl-1.2.5 crt1.o & libc.a via tests/test_compile_musl.sh ..."
+  USE_GOSH="${USE_GOSH:-1}" bash "$ULISP_DIR/tests/test_compile_musl.sh"
+fi
+
+# Strip host ld/cc/gcc from PATH during Pass 144 static linking to prove zero host linker dependence
+NOHOST_LINK_DIR="$ULISP_DIR/build/nohost_link_tmp_$$"
+mkdir -p "$NOHOST_LINK_DIR"
+for tool in uname env sh bash cat rm mkdir chmod; do
+  if command -v "$tool" >/dev/null 2>&1; then
+    ln -sf "$(command -v "$tool")" "$NOHOST_LINK_DIR/$tool"
+  fi
+done
+
+PATH="$NOHOST_LINK_DIR" "${RUN_CC[@]}" --linker=ulisp -static -nostdlib \
+  "$MUSL_LIB_DIR/crt1.o" "${LUA_OBJS[@]}" "$MUSL_LIB_DIR/libc.a" \
+  -o "$LUA_ULISP_STATIC_BIN"
+rm -rf "$NOHOST_LINK_DIR"
+cp -f "$LUA_ULISP_STATIC_BIN" "$LUA_ULISP_BIN"
+echo "  [PASS] Linked standalone static ELF64 executable via Pass 144 linker: $LUA_ULISP_BIN ($(stat -c%s "$LUA_ULISP_BIN") bytes)"
+
+FILE_DESC="$(file "$LUA_ULISP_BIN")"
+if ! echo "$FILE_DESC" | grep -q "statically linked"; then
+  echo "ERROR: Expected statically linked ELF64 binary, got: $FILE_DESC" >&2
+  exit 1
+fi
+LDD_DESC="$(ldd "$LUA_ULISP_BIN" 2>&1 || true)"
+if ! echo "$LDD_DESC" | grep -qE "not a dynamic executable|statically linked"; then
+  echo "ERROR: Expected 'not a dynamic executable' from ldd, got: $LDD_DESC" >&2
+  exit 1
+fi
+if ! readelf -l "$LUA_ULISP_BIN" | grep -A1 "GNU_STACK" | grep -q "RW "; then
+  echo "ERROR: Expected non-executable GNU_STACK (RW) in $LUA_ULISP_BIN" >&2
+  exit 1
+fi
+echo "  [PASS] Verified standalone static ELF64 properties (file='statically linked', ldd='not a dynamic executable', GNU_STACK='RW')"
 
 if [ "${BUILD_LUAC:-0}" = "1" ]; then
   LUAC_OBJS=()
   for tu in "${CORE_TUS[@]}" "${LIB_TUS[@]}" luac; do
     LUAC_OBJS+=("$OBJ_DIR/${tu}.o")
   done
-  "$HOST_CC" -no-pie -Wl,-E "${LUAC_OBJS[@]}" -lm -ldl -o "$ULISP_DIR/build/luac_ulisp"
-  echo "  [PASS] Linked native bytecode compiler: $ULISP_DIR/build/luac_ulisp"
+  "${RUN_CC[@]}" --linker=ulisp -static -nostdlib \
+    "$MUSL_LIB_DIR/crt1.o" "${LUAC_OBJS[@]}" "$MUSL_LIB_DIR/libc.a" \
+    -o "$ULISP_DIR/build/luac_ulisp"
+  echo "  [PASS] Linked standalone static bytecode compiler: $ULISP_DIR/build/luac_ulisp"
 fi
 
 LUA_DIFF_GCC="${LUA_DIFF_GCC:-1}"

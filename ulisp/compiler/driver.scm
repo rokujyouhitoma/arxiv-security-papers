@@ -858,7 +858,9 @@
   ;; 3c. Builtin Static Linker Mode (ulisp --ld [options] obj1.o [obj2.o ...] [-o output])
   (if (eq? cli-target 'ld-mode)
       (begin
-        (open-and-redirect-output-file! cli-out-file)
+        (if (and cli-out-file (not (string=? cli-out-file "-")))
+            (set-car! *cli-active-output-file* cli-out-file)
+            (open-and-redirect-output-file! cli-out-file))
         (link-elf64-objects-to-file cli-in-files cli-out-file cli-entry-sym)
         (if (and cli-out-file (not (string=? cli-out-file "-")))
             (sys-chmod cli-out-file 493))

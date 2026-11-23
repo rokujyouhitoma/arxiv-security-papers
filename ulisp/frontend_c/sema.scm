@@ -84,7 +84,8 @@
   (%make-sema-env scopes tag-scopes fn-table layout-env visiting-tags nest-depth
                   static-globals curr-ret loop-depth switch-depth
                   switch-stack defined-labels goto-refs
-                  va-tag-type curr-fn-variadic? curr-fn-last-param)
+                  va-tag-type curr-fn-variadic? curr-fn-last-param
+                  weak-fns weak-vars aliases top-asms)
   c99-sema-env?
   (scopes             sema-env-scopes             sema-env-scopes-set!)
   (tag-scopes         sema-env-tag-scopes         sema-env-tag-scopes-set!)
@@ -101,13 +102,18 @@
   (goto-refs          sema-env-goto-refs          sema-env-goto-refs-set!)
   (va-tag-type        sema-env-va-tag-type        sema-env-va-tag-type-set!)
   (curr-fn-variadic?  sema-env-curr-fn-variadic?  sema-env-curr-fn-variadic?-set!)
-  (curr-fn-last-param sema-env-curr-fn-last-param sema-env-curr-fn-last-param-set!))
+  (curr-fn-last-param sema-env-curr-fn-last-param sema-env-curr-fn-last-param-set!)
+  (weak-fns           sema-env-weak-fns           sema-env-weak-fns-set!)
+  (weak-vars          sema-env-weak-vars          sema-env-weak-vars-set!)
+  (aliases            sema-env-aliases            sema-env-aliases-set!)
+  (top-asms           sema-env-top-asms           sema-env-top-asms-set!))
 
 (define (make-c99-sema-env)
   (let* ((lenv (make-c99-layout-env))
          (env (%make-sema-env (list '()) (list '()) '() lenv
                               '() 0 '() 'i32 0 0 '() '() '()
-                              #f #f #f))
+                              #f #f #f
+                              '() '() '() '()))
          (va-tag-ent (sema-alloc-tag! env '__va_list_tag 'struct #t))
          (va-tag-id (list-ref va-tag-ent 2))
          (va-tag-ty (make-c-struct-ref-type va-tag-id '__va_list_tag))
@@ -977,9 +983,13 @@
             (cond
               ((memq it '(typedef extern static auto register))
                (loop (cdr xs) it signedness long-count short? base))
-              ((memq it '(const restrict volatile inline))
+              ((memq it '(const __const __const__
+                          restrict __restrict __restrict__
+                          volatile __volatile __volatile__
+                          inline __inline __inline__
+                          __extension__))
                (loop (cdr xs) storage signedness long-count short? base))
-              ((eq? it 'signed)
+              ((memq it '(signed __signed __signed__))
                (loop (cdr xs) storage 'signed long-count short? base))
               ((eq? it 'unsigned)
                (loop (cdr xs) storage 'unsigned long-count short? base))
@@ -999,6 +1009,15 @@
                (loop (cdr xs) storage signedness long-count short? 'float))
               ((eq? it 'double)
                (loop (cdr xs) storage signedness long-count short? 'double))
+              ((and (pair? it) (eq? (car it) 'c-attr))
+               (loop (cdr xs) storage signedness long-count short? base))
+              ((and (pair? it) (eq? (car it) 'c-typeof))
+               (let* ((payload (cadr it))
+                      (pr (ast-strip-span payload))
+                      (ty (if (and (pair? pr) (eq? (car pr) 'c-type-name))
+                              (sema-resolve-type-name env payload)
+                              (c-typed-type (c99-analyze-expr env payload)))))
+                 (loop (cdr xs) storage signedness long-count short? ty)))
               ((and (pair? it) (eq? (car it) 'c-typedef-name))
                (let ((resolved (sema-lookup-typedef env (cadr it))))
                  (loop (cdr xs) storage signedness long-count short? (or resolved 'i64))))
@@ -1043,6 +1062,8 @@
           ((eq? (car raw) 'c-decl-id)
            (cons (cadr raw) cur-ty))
           ((eq? (car raw) 'c-init-decl)
+           (c99-resolve-declarator-type env cur-ty (cadr raw)))
+          ((eq? (car raw) 'c-attr-decl)
            (c99-resolve-declarator-type env cur-ty (cadr raw)))
           ((eq? (car raw) 'c-ptr-declarator)
            (let loop ((levels (cadr raw)) (t cur-ty))
@@ -2213,6 +2234,60 @@
 ;;; 9. Declaration & Statement Analysis
 ;;; -----------------------------------------------------------------------
 
+(define (%sema-scan-attr-items items weak-box alias-box)
+  (let loop ((xs items))
+    (if (pair? xs)
+        (let ((it (car xs)))
+          (if (and (pair? it) (symbol? (car it)))
+              (let ((aname (car it)))
+                (cond
+                  ((eq? aname 'weak)
+                   (set-car! weak-box #t))
+                  ((and (eq? aname 'alias) (pair? (cdr it)) (string? (cadr it)))
+                   (set-car! alias-box (string->symbol (cadr it)))))))
+          (loop (cdr xs))))))
+
+(define (%sema-extract-attrs specs opt-decl)
+  (let ((weak-box (cons #f '()))
+        (alias-box (cons #f '()))
+        (reg-box (cons #f '())))
+    (let sloop ((xs (if (list? specs) specs '())))
+      (if (pair? xs)
+          (let ((s (car xs)))
+            (if (and (pair? s) (eq? (car s) 'c-attr) (pair? (cdr s)))
+                (%sema-scan-attr-items (cadr s) weak-box alias-box))
+            (sloop (cdr xs)))))
+    (let ((raw-decl (ast-strip-span opt-decl)))
+      (if (and (pair? raw-decl) (eq? (car raw-decl) 'c-attr-decl))
+          (let ((attrs (caddr raw-decl))
+                (reg (cadddr raw-decl)))
+            (if (string? reg)
+                (set-car! reg-box reg))
+            (let aloop ((as (if (list? attrs) attrs '())))
+              (if (pair? as)
+                  (let ((a (car as)))
+                    (if (and (pair? a) (eq? (car a) 'c-attr) (pair? (cdr a)))
+                        (%sema-scan-attr-items (cadr a) weak-box alias-box))
+                    (aloop (cdr as))))))))
+    (list (car weak-box) (car alias-box) (car reg-box))))
+
+(define (%sema-record-weak-fn! env sym)
+  (if (and sym (not (memq sym (sema-env-weak-fns env))))
+      (sema-env-weak-fns-set! env (cons sym (sema-env-weak-fns env)))))
+
+(define (%sema-record-weak-var! env sym)
+  (if (and sym (not (memq sym (sema-env-weak-vars env))))
+      (sema-env-weak-vars-set! env (cons sym (sema-env-weak-vars env)))))
+
+(define (%sema-resolve-alias-target env sym)
+  (let ((fn-hit (sema-lookup-fn env sym)))
+    (if fn-hit
+        (sema-fn-entry-runtime-sym fn-hit)
+        (let ((var-hit (sema-lookup-ordinary env sym)))
+          (if (and var-hit (eq? (car var-hit) 'var))
+              (cadr var-hit)
+              sym)))))
+
 (define (sema-analyze-decl env decl-node)
   (let* ((lenv (sema-env-layout-env env))
          (raw (ast-strip-span decl-node))
@@ -2240,6 +2315,10 @@
               (let* ((id-node (ast-strip-span (car xs)))
                      (decl (cadr id-node))
                      (init-expr (caddr id-node))
+                     (attr-info (%sema-extract-attrs specs decl))
+                     (attr-weak? (car attr-info))
+                     (alias-target (cadr attr-info))
+                     (reg-pin (caddr attr-info))
                      (resolved (c99-resolve-declarator-type env base-ty decl))
                      (sym (car resolved))
                      (ty (cdr resolved)))
@@ -2247,8 +2326,22 @@
                   ((not sym)
                    (loop (cdr xs) acc))
                   ((c-function-type? ty)
-                   (sema-register-fn! env sym ty #f (eq? storage 'static))
-                   (loop (cdr xs) acc))
+                   (let ((rt-sym (sema-fn-entry-runtime-sym
+                                  (sema-register-fn! env sym ty #f (eq? storage 'static)))))
+                     (if alias-target
+                         (let ((tgt-rsym (%sema-resolve-alias-target env alias-target)))
+                           (sema-env-aliases-set!
+                            env (cons (list rt-sym tgt-rsym attr-weak?) (sema-env-aliases env))))
+                         (if attr-weak?
+                             (%sema-record-weak-fn! env rt-sym)))
+                     (loop (cdr xs) acc)))
+                  (alias-target
+                   (let ((in-glob? (sema-in-global-scope? env))
+                         (tgt-rsym (%sema-resolve-alias-target env alias-target)))
+                     (sema-bind-ordinary! env sym (list 'var sym ty (if in-glob? 'extern #f) #f #f))
+                     (sema-env-aliases-set!
+                      env (cons (list sym tgt-rsym attr-weak?) (sema-env-aliases env)))
+                     (loop (cdr xs) (cons (list 'c-typed-decl sym sym ty 'extern #f) acc))))
                   (else
                    (let* ((in-glob? (sema-in-global-scope? env))
                           (existing-local (sema-lookup-ordinary-local env sym))
@@ -2266,10 +2359,7 @@
                                            (string-append "Redefinition of local variable '"
                                                           (symbol->string sym) "'")
                                            decl-node))
-                     (let* ((norm (sema-normalize-initializer env ty init-expr decl-node))
-                            (final-ty (if norm (car norm) ty))
-                            (typed-init (if norm (cdr norm) #f))
-                            (prev-link (and existing (list-ref existing 3)))
+                     (let* ((prev-link (and existing (list-ref existing 3)))
                             (linkage (cond
                                        ((eq? storage 'extern)
                                         (if in-glob? (or prev-link 'extern) 'extern))
@@ -2281,27 +2371,34 @@
                                      (existing (cadr existing))
                                      ((or (eq? linkage 'extern) (eq? linkage 'global)) sym)
                                      ((eq? linkage 'static) (c99-next-static-var-id! sym))
-                                     (else (c99-next-sema-var-id! sym))))
-                            (tentative-incomplete-arr?
-                             (and in-glob?
-                                  (not init-expr)
-                                  (c-array-type? final-ty)
-                                  (not (c-array-length final-ty))
-                                  (c-type-complete? lenv (c-array-elem final-ty)))))
-                       (if (and (not (eq? linkage 'extern))
-                                (not tentative-incomplete-arr?)
-                                (not (c-type-complete? lenv final-ty)))
-                           (%c99-sema-error! "C99-LAY-001"
-                                             (string-append "Variable '" (symbol->string sym) "' has incomplete type")
-                                             decl-node))
-                       (sema-bind-ordinary! env sym (list 'var u-sym final-ty linkage #f))
-                       (let ((decl-rec (list 'c-typed-decl u-sym sym final-ty linkage typed-init)))
-                         (if (and (eq? linkage 'static) (not in-glob?))
-                             (begin
-                               ;; Hoist function-local static to TU globals; omit runtime re-init inside fn
-                               (sema-env-static-globals-set! env (cons decl-rec (sema-env-static-globals env)))
-                               (loop (cdr xs) acc))
-                             (loop (cdr xs) (cons decl-rec acc))))))))))))))
+                                     (else (c99-next-sema-var-id! sym)))))
+                       ;; C99 §6.2.1p7: identifier is in scope at end of declarator (before initializer)
+                       (sema-bind-ordinary! env sym (list 'var u-sym ty linkage #f reg-pin))
+                       (let* ((norm (sema-normalize-initializer env ty init-expr decl-node))
+                              (final-ty (if norm (car norm) ty))
+                              (typed-init (if norm (cdr norm) #f))
+                              (tentative-incomplete-arr?
+                               (and in-glob?
+                                    (not init-expr)
+                                    (c-array-type? final-ty)
+                                    (not (c-array-length final-ty))
+                                    (c-type-complete? lenv (c-array-elem final-ty)))))
+                         (if (and (not (eq? linkage 'extern))
+                                  (not tentative-incomplete-arr?)
+                                  (not (c-type-complete? lenv final-ty)))
+                             (%c99-sema-error! "C99-LAY-001"
+                                               (string-append "Variable '" (symbol->string sym) "' has incomplete type")
+                                               decl-node))
+                         (if (and attr-weak? (not (eq? linkage 'extern)))
+                             (%sema-record-weak-var! env u-sym))
+                         (sema-bind-ordinary! env sym (list 'var u-sym final-ty linkage #f reg-pin))
+                         (let ((decl-rec (list 'c-typed-decl u-sym sym final-ty linkage typed-init)))
+                           (if (and (eq? linkage 'static) (not in-glob?))
+                               (begin
+                                 ;; Hoist function-local static to TU globals; omit runtime re-init inside fn
+                                 (sema-env-static-globals-set! env (cons decl-rec (sema-env-static-globals env)))
+                                 (loop (cdr xs) acc))
+                               (loop (cdr xs) (cons decl-rec acc)))))))))))))))
 
 (define (sema-analyze-stmt env stmt-node)
   (let* ((lenv (sema-env-layout-env env))
@@ -2459,6 +2556,51 @@
          (sema-env-defined-labels-set! env (cons (cons lsym (or sp stmt-node)) (sema-env-defined-labels env)))
          (list 'c-label lsym (sema-analyze-stmt env (caddr raw)))))
 
+      ((c-asm)
+       (let* ((vol? (cadr raw))
+              (tpl-raw (caddr raw))
+              (tpl-str (c99-decode-string-literal tpl-raw))
+              (outs (cadddr raw))
+              (ins (list-ref raw 4))
+              (clobs (list-ref raw 5))
+              (rewrite-pin
+               (lambda (cstr raw-expr is-out?)
+                 (let ((eraw (ast-strip-span raw-expr)))
+                   (if (and (pair? eraw) (eq? (car eraw) 'c-var-ref))
+                       (let ((ent (sema-lookup-ordinary env (cadr eraw))))
+                         (if (and ent (eq? (car ent) 'var) (>= (length ent) 6) (string? (list-ref ent 5)))
+                             (let ((pin (string-append "{" (list-ref ent 5) "}")))
+                               (cond
+                                 ((and is-out? (>= (string-length cstr) 2)
+                                       (or (char=? (string-ref cstr 0) #\=) (char=? (string-ref cstr 0) #\+))
+                                       (member (substring cstr 1 (string-length cstr)) '("r" "q" "rm" "g")))
+                                  (string-append (substring cstr 0 1) pin))
+                                 ((and (not is-out?) (member cstr '("r" "q" "rm" "g")))
+                                  pin)
+                                 (else cstr)))
+                             cstr))
+                       cstr))))
+              (typed-outs
+               (map (lambda (o)
+                      (let* ((oname (car o))
+                             (ocstr0 (c99-decode-string-literal (cadr o)))
+                             (oexpr (caddr o))
+                             (ocstr (rewrite-pin ocstr0 oexpr #t))
+                             (texpr (c99-analyze-expr env oexpr)))
+                        (list oname ocstr texpr)))
+                    outs))
+              (typed-ins
+               (map (lambda (in-op)
+                      (let* ((iname (car in-op))
+                             (icstr0 (c99-decode-string-literal (cadr in-op)))
+                             (iexpr (caddr in-op))
+                             (icstr (rewrite-pin icstr0 iexpr #f))
+                             (texpr (c99-analyze-expr env iexpr)))
+                        (list iname icstr texpr)))
+                    ins))
+              (clob-strs (map c99-decode-string-literal clobs)))
+         (list 'c-typed-asm vol? tpl-str typed-outs typed-ins clob-strs)))
+
       (else
        (%c99-sema-error! "C99-SEMA-003" "Unsupported statement in sema" (or sp stmt-node))))))
 
@@ -2497,9 +2639,12 @@
                          (not (c-type-complete? lenv (cdr pr))))
                     (%c99-sema-error! "C99-LAY-001" "Function parameter has incomplete aggregate type" fn-node)))
               param-pairs)
-    (let ((rt-fn-sym
-           (sema-fn-entry-runtime-sym
-            (sema-register-fn! env fn-sym fn-type #t (eq? storage 'static)))))
+    (let* ((fn-attrs (%sema-extract-attrs specs #f))
+           (rt-fn-sym
+            (sema-fn-entry-runtime-sym
+             (sema-register-fn! env fn-sym fn-type #t (eq? storage 'static)))))
+      (if (car fn-attrs)
+          (%sema-record-weak-fn! env rt-fn-sym))
     (sema-push-scope! env)
     (let ((prev-ret (sema-env-curr-ret env))
           (prev-variadic? (sema-env-curr-fn-variadic? env))
@@ -2551,7 +2696,15 @@
           (sema-env-switch-depth-set! env prev-sw-depth)
           (sema-env-loop-depth-set! env prev-loop-depth)
           (sema-pop-scope! env)
-          (list 'c-typed-fn rt-fn-sym ret-ty (c-fn-variadic? fn-type) typed-params typed-body)))))))
+          (let* ((flat-specs (%c-flatten-raw-specs specs))
+                 (static-inline? (and (eq? storage 'static)
+                                      (or (memq 'inline flat-specs)
+                                          (memq '__inline flat-specs)
+                                          (memq '__inline__ flat-specs))
+                                      #t)))
+            (if static-inline?
+                (list 'c-typed-fn rt-fn-sym ret-ty (c-fn-variadic? fn-type) typed-params typed-body #t)
+                (list 'c-typed-fn rt-fn-sym ret-ty (c-fn-variadic? fn-type) typed-params typed-body)))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 10. Tentative-Definition Deduplication & Program Entrypoint
@@ -2599,8 +2752,64 @@
             ((c-fn-def)
              (let ((fnode (sema-analyze-fn-def env d)))
                (loop (cdr ds) globals (cons fnode funcs))))
+            ((c-top-asm)
+             (let ((asm-str (c99-decode-string-literal (cadr di))))
+               (sema-env-top-asms-set! env (cons asm-str (sema-env-top-asms env)))
+               (loop (cdr ds) globals funcs)))
             (else
              (%c99-sema-error! "C99-SEMA-003" "Invalid top-level external declaration" d)))))))
+
+(define (%sema-collect-fn-refs node acc)
+  (cond
+    ((not (pair? node)) acc)
+    ((and (eq? (car node) 'c-fn-ref) (pair? (cdr node)) (symbol? (cadr node)))
+     (let ((s (cadr node)))
+       (if (memq s acc) acc (cons s acc))))
+    ((and (eq? (car node) 'c-var-ref) (pair? (cdr node)) (symbol? (cadr node)))
+     (let ((s (cadr node)))
+       (if (memq s acc) acc (cons s acc))))
+    (else
+     (%sema-collect-fn-refs (cdr node) (%sema-collect-fn-refs (car node) acc)))))
+
+(define (%sema-prune-unused-static-inlines funcs all-globals aliases)
+  (let* ((init-roots
+          (let gloop ((gs all-globals)
+                      (acc (map cadr aliases)))
+            (if (null? gs)
+                acc
+                (gloop (cdr gs) (%sema-collect-fn-refs (list-ref (car gs) 5) acc)))))
+         (roots
+          (let floop ((fs funcs) (acc init-roots))
+            (if (null? fs)
+                acc
+                (let* ((f (car fs))
+                       (si? (and (>= (length f) 7) (list-ref f 6))))
+                  (if si?
+                      (floop (cdr fs) acc)
+                      (floop (cdr fs) (%sema-collect-fn-refs (list-ref f 5) (cons (list-ref f 1) acc))))))))
+         (reachable
+          (let fixloop ((curr roots))
+            (let ((next
+                   (let floop ((fs funcs) (acc curr))
+                     (if (null? fs)
+                         acc
+                         (let* ((f (car fs))
+                                (fn-sym (list-ref f 1))
+                                (si? (and (>= (length f) 7) (list-ref f 6))))
+                           (if (and si? (memq fn-sym acc))
+                               (floop (cdr fs) (%sema-collect-fn-refs (list-ref f 5) acc))
+                               (floop (cdr fs) acc)))))))
+              (if (= (length next) (length curr))
+                  curr
+                  (fixloop next))))))
+    (let filter-loop ((fs funcs) (acc '()))
+      (if (null? fs)
+          (reverse acc)
+          (let* ((f (car fs))
+                 (si? (and (>= (length f) 7) (list-ref f 6))))
+            (if (or (not si?) (memq (list-ref f 1) reachable))
+                (filter-loop (cdr fs) (cons f acc))
+                (filter-loop (cdr fs) acc)))))))
 
 (define (%c99-finalize-typed-unit env globals-rev funcs-rev)
   (let* ((deduped (%c99-dedupe-globals
@@ -2617,8 +2826,15 @@
                              (make-c-array-type (c-array-elem ty) 1)
                              link (list-ref g 5))
                        g)))
-               deduped)))
-    (list 'c-typed-unit all-globals (reverse funcs-rev) (sema-env-layout-env env))))
+               deduped))
+         (aliases-list (reverse (sema-env-aliases env)))
+         (pruned-funcs (%sema-prune-unused-static-inlines (reverse funcs-rev) all-globals aliases-list))
+         (ext-meta
+          (list (cons 'weak-fns (reverse (sema-env-weak-fns env)))
+                (cons 'weak-data (reverse (sema-env-weak-vars env)))
+                (cons 'aliases aliases-list)
+                (cons 'top-asm (reverse (sema-env-top-asms env))))))
+    (list 'c-typed-unit all-globals pruned-funcs (sema-env-layout-env env) ext-meta)))
 
 (define (c99-analyze-program ast)
   (c99-reset-sema-var-id!)
@@ -2650,7 +2866,11 @@
         (cons 'static-globals (sema-env-static-globals env))
         (cons 'va-tag-type (sema-env-va-tag-type env))
         (cons 'globals-rev globals-rev)
-        (cons 'funcs-rev funcs-rev)))
+        (cons 'funcs-rev funcs-rev)
+        (cons 'weak-fns (sema-env-weak-fns env))
+        (cons 'weak-vars (sema-env-weak-vars env))
+        (cons 'aliases (sema-env-aliases env))
+        (cons 'top-asms (sema-env-top-asms env))))
 
 (define (c99-analyze-header-for-pch ast)
   (c99-reset-sema-var-id!)
@@ -2675,6 +2895,10 @@
          (va-tag-ty (cdr (assq 'va-tag-type alist)))
          (raw-globs (cdr (assq 'globals-rev alist)))
          (raw-funcs (cdr (assq 'funcs-rev alist)))
+         (wf-hit (assq 'weak-fns alist))
+         (wv-hit (assq 'weak-vars alist))
+         (al-hit (assq 'aliases alist))
+         (ta-hit (assq 'top-asms alist))
          ;; Clone fn-table entries first so scopes share exact fresh cells with fn-table
          (new-fn-table
           (map (lambda (slot)
@@ -2704,7 +2928,11 @@
                               '() 0
                               new-sglobs
                               'i32 0 0 '() '() '()
-                              va-tag-ty #f #f)))
+                              va-tag-ty #f #f
+                              (if wf-hit (%c99-sema-copy-proper-list (cdr wf-hit)) '())
+                              (if wv-hit (%c99-sema-copy-proper-list (cdr wv-hit)) '())
+                              (if al-hit (%c99-sema-copy-proper-list (cdr al-hit)) '())
+                              (if ta-hit (%c99-sema-copy-proper-list (cdr ta-hit)) '()))))
     (set-car! *c99-sema-var-id-counter* var-id)
     (list env
           (%c99-sema-copy-proper-list raw-globs)
