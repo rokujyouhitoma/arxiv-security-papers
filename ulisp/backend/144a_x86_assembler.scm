@@ -781,6 +781,9 @@
 ;; reloc format: (list type sym addend patch-offset)
 ;; type: 'rel32, 'rip_disp32, 'abs64
 (define (assemble-inst raw-mnem opnds curr-off)
+  (assemble-inst-with-syms raw-mnem opnds curr-off #f))
+
+(define (assemble-inst-with-syms raw-mnem opnds curr-off sym-map)
   (let ((mnem (canonical-mnem raw-mnem)))
     (case mnem
     ((nop)
@@ -855,12 +858,21 @@
           (let ((id (reg-op-id op)) (ext? (reg-op-ext? op)))
             (list (append (if ext? '(65) '()) (list 255 (make-modrm 3 4 id))) #f)))
          (else
-          ;; jmp rel32: E9 cd
-          (let ((sym (reloc-sym op)) (addend (reloc-addend op)))
-            (list '(233 0 0 0 0)
-                  (list 'rel32 (+ curr-off 1) sym addend)))))))
+          ;; Check if backward local label in .text is within rel8 [-128, +127]: jmp rel8 = EB cb
+          (let* ((sym (reloc-sym op))
+                 (addend (reloc-addend op))
+                 (sym-pair (if (and sym-map (= addend 0)) (symbol-map-get sym-map sym) #f))
+                 (sym-val (if sym-pair (cdr sym-pair) #f))
+                 (disp8 (if (and sym-val (eq? (car sym-val) 'text))
+                            (- (cadr sym-val) (+ curr-off 2))
+                            #f)))
+            (if (and disp8 (>= disp8 -128) (<= disp8 127))
+                (list (list 235 (modulo (if (< disp8 0) (+ disp8 256) disp8) 256)) #f)
+                ;; jmp rel32: E9 cd
+                (list '(233 0 0 0 0)
+                      (list 'rel32 (+ curr-off 1) sym addend))))))))
 
-    ;; Conditional Jumps: jcc label -> 0F 80+cc rel32
+    ;; Conditional Jumps: jcc label -> 70+cc rel8 (backward short) or 0F 80+cc rel32 (near)
     ((je jz jne jnz jl jle jg jge jb jbe ja jae jnc js jns jp jpe jnp jpo)
      (let* ((cc-code (case mnem
                        ((je jz) 132)
@@ -880,9 +892,16 @@
                        (else 132)))
             (op (car opnds))
             (sym (reloc-sym op))
-            (addend (reloc-addend op)))
-       (list (list 15 cc-code 0 0 0 0)
-             (list 'rel32 (+ curr-off 2) sym addend))))
+            (addend (reloc-addend op))
+            (sym-pair (if (and sym-map (= addend 0)) (symbol-map-get sym-map sym) #f))
+            (sym-val (if sym-pair (cdr sym-pair) #f))
+            (disp8 (if (and sym-val (eq? (car sym-val) 'text))
+                       (- (cadr sym-val) (+ curr-off 2))
+                       #f)))
+       (if (and disp8 (>= disp8 -128) (<= disp8 127))
+           (list (list (- cc-code 16) (modulo (if (< disp8 0) (+ disp8 256) disp8) 256)) #f)
+           (list (list 15 cc-code 0 0 0 0)
+                 (list 'rel32 (+ curr-off 2) sym addend)))))
 
     ;; Condition Set: setcc r8 -> 0F 90+cc ModR/M
     ((seto sete setz setne setnz setl setge setle setg setb setbe seta setae setp setpe setnp setpo)
@@ -1927,7 +1946,7 @@
                                                (else
                                                 (loop (cdr ts) (cons (car ts) cur) acc)))))
                                 (opnds (map parse-operand-str opnd-strs))
-                                (res (assemble-inst mnem opnds (if has-lock? (+ text-len 1) text-len))))
+                                (res (assemble-inst-with-syms mnem opnds (if has-lock? (+ text-len 1) text-len) sym-map)))
                            (if (pair? res)
                                (let* ((bytes (if has-lock? (cons 240 (car res)) (car res)))
                                       (reloc (cadr res))
@@ -2416,7 +2435,7 @@
                                                     (loop (cdr ts) (cons (car ts) cur) acc)))))
                                     (opnds (map parse-operand-str opnd-strs))
                                     (text-len (vector-ref lens-vec 0))
-                                    (res (assemble-inst mnem opnds (if has-lock? (+ text-len 1) text-len))))
+                                    (res (assemble-inst-with-syms mnem opnds (if has-lock? (+ text-len 1) text-len) sym-map)))
                                (if (pair? res)
                                    (let* ((bytes (if has-lock? (cons 240 (car res)) (car res)))
                                           (reloc (cadr res))

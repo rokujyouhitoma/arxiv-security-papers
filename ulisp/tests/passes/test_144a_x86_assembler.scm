@@ -95,3 +95,30 @@
   (display (bytevector-length elf))
   (display ")\n"))
 
+;; Test 4: Issue #933 - Backward Short Jump (rel8: EB cb / 75 cb) encoding
+(let* ((lines '("    .intel_syntax noprefix"
+                "    .text"
+                ".L_loop:"
+                "    sub rdi, 1"
+                "    jne .L_loop"
+                "    jmp .L_loop"))
+       (res (assemble-x86-lines lines))
+       (text-bv (car res))
+       (tlen (bytevector-length text-bv)))
+  ;; sub rdi, 1 is 4 bytes (48 83 EF 01)
+  ;; backward jne .L_loop is 2 bytes (75 FA = disp8 -6)
+  ;; backward jmp .L_loop is 2 bytes (EB F8 = disp8 -8)
+  ;; Total text-bv length must be 8 bytes (instead of 4 + 6 + 5 = 15 bytes)
+  (if (and (= tlen 8)
+           (= (bytevector-u8-ref text-bv 4) 117) ;; 0x75 (jne rel8)
+           (= (bytevector-u8-ref text-bv 5) 250) ;; 0xFA (-6)
+           (= (bytevector-u8-ref text-bv 6) 235) ;; 0xEB (jmp rel8)
+           (= (bytevector-u8-ref text-bv 7) 248)) ;; 0xF8 (-8)
+      (display "[PASS] Test 4: backward short jump rel8 (EB cb / 75 cb) encoded in 2 bytes\n")
+      (begin
+        (display "[FAIL] Test 4: unexpected text-bv length or bytes: ")
+        (display tlen)
+        (newline)
+        (exit 1))))
+
+

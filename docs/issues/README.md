@@ -11,15 +11,15 @@
 | **929** | DDC (Diverse Double-Compiling) による C コンパイル出力の決定論性・ビット一致検証ハーネスの実装 | Feature | In Progress | [929-implement-ddc-diverse-double-compiling-determinism-verification.md](929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | In Progress | [930-implement-c99-bounds-checking-sanitizer-mode.md](930-implement-c99-bounds-checking-sanitizer-mode.md) |
 | **932** | C99 コンパイラドライバ (`ulisp-cc`) のネイティブ AOT バイナリ化と高速セルフホスト実行基盤の構築 | Feature | New | [932-build-native-aot-ulisp-cc-compiler-driver-binary.md](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) |
-| **933** | 関数内ローカルラベルの過剰 `.p2align 4` (13万 NOP) 廃止と Pass 144a 短距離ジャンプ最適化によるバイナリサイズ削減 | Feature | New | [933-eliminate-intraprocedural-label-p2align-nop-bloat-and-enable-short-jumps.md](933-eliminate-intraprocedural-label-p2align-nop-bloat-and-enable-short-jumps.md) |
-| **934** | C99 式評価の一時スタックスピルに対するデッドストア除去 (DSE) とレジスタ直接受け渡しによるコードサイズ削減 | Feature | New | [934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md](934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) |
-| **935** | C99 変数ビットシフトの x86-64 `%cl` 単一命令化および重複ゼロ・符号拡張 (`%zext`/`%sext`/`%trunc`) の畳み込み最適化 | Feature | New | [935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md](935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md) |
-| **936** | `c-tu` モードにおける関数プロローグ一括スタックフレーム確保と非 GC 呼び出し時の不要 `%rsp` シフト・`xor r10` 廃止 | Feature | New | [936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md](936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md) |
+| **934** | C99 式評価の一時スタックスピルに対するデッドストア除去 (DSE) とレジスタ直接受け渡しによるコードサイズ削減 | Feature | In Progress | [934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md](934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) |
+| **935** | C99 変数ビットシフトの x86-64 `%cl` 単一命令化および重複ゼロ・符号拡張 (`%zext`/`%sext`/`%trunc`) の畳み込み最適化 | Feature | In Progress | [935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md](935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md) |
+| **936** | `c-tu` モードにおける関数プロローグ一括スタックフレーム確保と非 GC 呼び出し時の不要 `%rsp` シフト・`xor r10` 廃止 | Feature | In Progress | [936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md](936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **933** | 関数内ローカルラベルの過剰 `.p2align 4` (13万 NOP) 廃止と Pass 144a 短距離ジャンプ最適化によるバイナリサイズ削減 | Feature | 2026-11-23 | [933-eliminate-intraprocedural-label-p2align-nop-bloat-and-enable-short-jumps.md](closed/933-eliminate-intraprocedural-label-p2align-nop-bloat-and-enable-short-jumps.md) |
 | **926** | ULisp ビルド版 Lua バイナリによる公式テストスイート完走 E2E 実証ハーネスの構築 | Feature | 2026-11-23 | [926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md](closed/926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) |
 | **925** | Lua 5.x 全 C ソースファイル（コア・標準ライブラリ・CLI）の ULisp 一括ビルドパイプライン構築 | Feature | 2026-11-23 | [925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) |
 | **924** | SSE2 XMM エンコーディング・SysV XMM ABI・`libm` 連携検証 ＆ 浮動小数点差分ファジングスイート構築 | Feature | 2026-11-23 | [924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md](closed/924-verify-sse2-xmm-abi-and-floating-point-differential-fuzzing.md) |
