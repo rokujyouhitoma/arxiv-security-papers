@@ -32,7 +32,7 @@ Lua 5.x C コードベース（`lua_pushfstring`、`luaL_error`、`luaL_argerror
 - **本 Issue (`#921`) の責務**: `<stdarg.h>` ヘッダ整備、`__builtin_va_list` / `__builtin_va_start` / `__builtin_va_arg` / `__builtin_va_end` / `__builtin_va_copy` の構文・意味解析・Core LIR Lowering、可変長関数 176B Register Save Area 生成、全コールサイトの `%al` 規約徹底、および Host `libc` `v*printf` / Host GCC 相互リンク互換確立。
 - **後続 Issue ([[#922]](../922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md)) の責務**: `setjmp`/`longjmp` の `%inline-asm` 実装と生存変数スピル保護。
 - **後続 Issue ([[#923]](../923-implement-c99-floating-point-sema-and-lir-conversion-lowering.md)) の責務**: C99 浮動小数点型（`double`/`float`）の IEEE 754 / SSE2 演算のさらなる拡充。
-- **後続 Issue ([[#925]](../925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)) の責務**: Lua 5.x 全 C ソース群（`lua_pushfstring`, `luaL_error` 含む）一括ビルドパイプライン構築。
+- **後続 Issue ([[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)) の責務**: Lua 5.x 全 C ソース群（`lua_pushfstring`, `luaL_error` 含む）一括ビルドパイプライン構築。
 
 ---
 
@@ -54,7 +54,7 @@ Lua 5.x C コードベース（`lua_pushfstring`、`luaL_error`、`luaL_argerror
   - `#920`: 関数ポインタ・`%call-indirect`・`switch`/`goto` CFG（[[#920]](920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md)）
 - 後続連携 Issue:
   - [[#922]](../922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md)（`setjmp`/`longjmp` と併用する `luaD_throw`/`luaG_runerror` 経路）
-  - [[#925]](../925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)（`lapi.c`, `lauxlib.c`, `lobject.c` 一括ビルド）
+  - [[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)（`lapi.c`, `lauxlib.c`, `lobject.c` 一括ビルド）
 
 ---
 

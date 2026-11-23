@@ -31,7 +31,7 @@ Lua 5.x C コードベース（`lapi.c`, `lauxlib.c`, `lvm.c`, `ldo.c` 等）の
 - **本 Issue (`#920`) の責務**: 関数ポインタ型比較・関数指示子退化・`%call-indirect` 命令新設と全バックエンド/VM 配線、`switch`/`case`/`default`/`break`/`continue`/`goto`/ラベルの厳格 Sema 検証（`C99-CFG-001..004`）、Core LIR `%switch` Lowering と x86-64 3 段階展開（線形 / `.rodata` PC 相対ジャンプテーブル / 二分探索木）、およびフラット LIR ↔ Pass 132 Braun SSA 2 パス遅延 `seal-block` 橋渡し・検証。
 - **後続 Issue ([[#921]](../921-implement-sysv-amd64-stdarg-va-list-lowering.md)) の責務**: `<stdarg.h>` 可変長引数（`va_list`/`va_start`/`va_arg`）の SysV AMD64 ABI Lowering。
 - **後続 Issue ([[#922]](../922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md)) の責務**: `setjmp`/`longjmp` の `%inline-asm` 実装と生存変数スピル保護。
-- **後続 Issue ([[#925]](../925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)) の責務**: Lua 5.x 全 C ソースファイル（`lvm.c`, `lapi.c` 等）の一括ビルドパイプライン構築。
+- **後続 Issue ([[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)) の責務**: Lua 5.x 全 C ソースファイル（`lvm.c`, `lapi.c` 等）の一括ビルドパイプライン構築。
 
 ---
 
@@ -55,7 +55,7 @@ Lua 5.x C コードベース（`lapi.c`, `lauxlib.c`, `lvm.c`, `ldo.c` 等）の
 - 後続連携 Issue:
   - [[#921]](../921-implement-sysv-amd64-stdarg-va-list-lowering.md)（`<stdarg.h>` 可変長引数 SysV ABI Lowering）
   - [[#922]](../922-implement-setjmp-longjmp-inline-asm-and-stack-spill-protection.md)（`setjmp`/`longjmp` 生存変数保護）
-  - [[#925]](../925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)（`lvm.c` / `lapi.c` を含む Lua 5.x 一括ビルド）
+  - [[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)（`lvm.c` / `lapi.c` を含む Lua 5.x 一括ビルド）
 
 ---
 

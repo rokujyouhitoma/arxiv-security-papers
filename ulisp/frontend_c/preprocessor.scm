@@ -44,7 +44,7 @@
   (virtual-files        cpp-ctx-virtual-files        cpp-ctx-virtual-files-set!))
 
 (define *cpp-max-include-depth* 64)
-(define *cpp-max-expansion-steps* 200000)
+(define *cpp-max-expansion-steps* 1000000)
 (define *cpp-include-skip-counter* (cons 0 '()))
 
 (define (cpp-reset-metrics!)
@@ -312,6 +312,10 @@
    "#define HUGE_VALF  (1.0f / 0.0f)\n"
    "#define INFINITY   (1.0f / 0.0f)\n"
    "#define NAN        (0.0f / 0.0f)\n\n"
+   "#define isnan(x)    ((x) != (x))\n"
+   "#define isfinite(x) (((x) - (x)) == 0.0)\n"
+   "#define isinf(x)    (((x) == (x)) && (((x) - (x)) != 0.0))\n"
+   "#define signbit(x)  (((x) < 0.0) || (((x) == 0.0) && ((1.0 / (x)) < 0.0)))\n\n"
    "typedef float float_t;\n"
    "typedef double double_t;\n\n"
    "double acos(double x);\n"
@@ -340,7 +344,9 @@
    "double trunc(double x);\n"
    "double round(double x);\n"
    "double hypot(double x, double y);\n"
-   "double copysign(double x, double y);\n\n"
+   "double copysign(double x, double y);\n"
+   "double fmin(double x, double y);\n"
+   "double fmax(double x, double y);\n\n"
    "float acosf(float x);\n"
    "float asinf(float x);\n"
    "float atanf(float x);\n"
@@ -367,8 +373,183 @@
    "float truncf(float x);\n"
    "float roundf(float x);\n"
    "float hypotf(float x, float y);\n"
-   "float copysignf(float x, float y);\n\n"
+   "float copysignf(float x, float y);\n"
+   "float fminf(float x, float y);\n"
+   "float fmaxf(float x, float y);\n\n"
    "#endif /* _ULISP_MATH_H */\n"))
+
+(define *c99-builtin-stddef-h*
+  (string-append
+   "#ifndef _ULISP_STDDEF_H\n#define _ULISP_STDDEF_H\n"
+   "typedef long ptrdiff_t;\ntypedef unsigned long size_t;\ntypedef int wchar_t;\n"
+   "typedef struct { long long __max_align_ll; double __max_align_d; } max_align_t;\n"
+   "#ifndef NULL\n#define NULL ((void *)0)\n#endif\n"
+   "#ifndef offsetof\n#define offsetof(type, member) __builtin_offsetof(type, member)\n#endif\n"
+   "#endif\n"))
+
+(define *c99-builtin-stdint-h*
+  (string-append
+   "#ifndef _ULISP_STDINT_H\n#define _ULISP_STDINT_H\n"
+   "typedef signed char int8_t; typedef short int16_t; typedef int int32_t; typedef long int64_t;\n"
+   "typedef unsigned char uint8_t; typedef unsigned short uint16_t; typedef unsigned int uint32_t; typedef unsigned long uint64_t;\n"
+   "typedef signed char int_least8_t; typedef short int_least16_t; typedef int int_least32_t; typedef long int_least64_t;\n"
+   "typedef unsigned char uint_least8_t; typedef unsigned short uint_least16_t; typedef unsigned int uint_least32_t; typedef unsigned long uint_least64_t;\n"
+   "typedef signed char int_fast8_t; typedef long int_fast16_t; typedef long int_fast32_t; typedef long int_fast64_t;\n"
+   "typedef unsigned char uint_fast8_t; typedef unsigned long uint_fast16_t; typedef unsigned long uint_fast32_t; typedef unsigned long uint_fast64_t;\n"
+   "typedef long intptr_t; typedef unsigned long uintptr_t;\n"
+   "typedef long intmax_t; typedef unsigned long uintmax_t;\n"
+   "#define INT8_MIN (-128)\n#define INT16_MIN (-32767 - 1)\n#define INT32_MIN (-2147483647 - 1)\n#define INT64_MIN (-9223372036854775807L - 1L)\n"
+   "#define INT8_MAX 127\n#define INT16_MAX 32767\n#define INT32_MAX 2147483647\n#define INT64_MAX 9223372036854775807L\n"
+   "#define UINT8_MAX 255\n#define UINT16_MAX 65535\n#define UINT32_MAX 4294967295U\n#define UINT64_MAX 18446744073709551615UL\n"
+   "#define INTPTR_MIN INT64_MIN\n#define INTPTR_MAX INT64_MAX\n#define UINTPTR_MAX UINT64_MAX\n"
+   "#define INTMAX_MIN INT64_MIN\n#define INTMAX_MAX INT64_MAX\n#define UINTMAX_MAX UINT64_MAX\n"
+   "#define PTRDIFF_MIN INT64_MIN\n#define PTRDIFF_MAX INT64_MAX\n#define SIZE_MAX UINT64_MAX\n"
+   "#define SIG_ATOMIC_MIN INT32_MIN\n#define SIG_ATOMIC_MAX INT32_MAX\n"
+   "#define INT8_C(x) x\n#define INT16_C(x) x\n#define INT32_C(x) x\n#define INT64_C(x) x ## L\n"
+   "#define UINT8_C(x) x\n#define UINT16_C(x) x\n#define UINT32_C(x) x ## U\n#define UINT64_C(x) x ## UL\n"
+   "#define INTMAX_C(x) x ## L\n#define UINTMAX_C(x) x ## UL\n"
+   "#endif\n"))
+
+(define *c99-builtin-stdbool-h*
+  "#ifndef _ULISP_STDBOOL_H\n#define _ULISP_STDBOOL_H\n#define bool _Bool\n#define true 1\n#define false 0\n#define __bool_true_false_are_defined 1\n#endif\n")
+
+(define *c99-builtin-limits-h*
+  (string-append
+   "#ifndef _ULISP_LIMITS_H\n#define _ULISP_LIMITS_H\n"
+   "#define CHAR_BIT 8\n#define MB_LEN_MAX 16\n"
+   "#define SCHAR_MIN (-128)\n#define SCHAR_MAX 127\n#define UCHAR_MAX 255\n"
+   "#define CHAR_MIN SCHAR_MIN\n#define CHAR_MAX SCHAR_MAX\n"
+   "#define SHRT_MIN (-32767 - 1)\n#define SHRT_MAX 32767\n#define USHRT_MAX 65535\n"
+   "#define INT_MIN (-2147483647 - 1)\n#define INT_MAX 2147483647\n#define UINT_MAX 4294967295U\n"
+   "#define LONG_MIN (-9223372036854775807L - 1L)\n#define LONG_MAX 9223372036854775807L\n#define ULONG_MAX 18446744073709551615UL\n"
+   "#define LLONG_MIN (-9223372036854775807LL - 1LL)\n#define LLONG_MAX 9223372036854775807LL\n#define ULLONG_MAX 18446744073709551615ULL\n"
+   "#endif\n"))
+
+(define *c99-builtin-float-h*
+  (string-append
+   "#ifndef _ULISP_FLOAT_H\n#define _ULISP_FLOAT_H\n"
+   "#define FLT_RADIX 2\n#define FLT_ROUNDS 1\n#define FLT_EVAL_METHOD 0\n"
+   "#define FLT_MANT_DIG 24\n#define FLT_DIG 6\n#define FLT_MIN_EXP (-125)\n#define FLT_MAX_EXP 128\n#define FLT_MIN_10_EXP (-37)\n#define FLT_MAX_10_EXP 38\n"
+   "#define FLT_MAX 3.40282347e+38F\n#define FLT_MIN 1.17549435e-38F\n#define FLT_EPSILON 1.19209290e-7F\n"
+   "#define DBL_MANT_DIG 53\n#define DBL_DIG 15\n#define DBL_MIN_EXP (-1021)\n#define DBL_MAX_EXP 1024\n#define DBL_MIN_10_EXP (-307)\n#define DBL_MAX_10_EXP 308\n"
+   "#define DBL_MAX 1.7976931348623157e+308\n#define DBL_MIN 2.2250738585072014e-308\n#define DBL_EPSILON 2.2204460492503131e-16\n"
+   "#define LDBL_MANT_DIG 53\n#define LDBL_DIG 15\n#define LDBL_MIN_EXP (-1021)\n#define LDBL_MAX_EXP 1024\n#define LDBL_MIN_10_EXP (-307)\n#define LDBL_MAX_10_EXP 308\n"
+   "#define LDBL_MAX 1.7976931348623157e+308\n#define LDBL_MIN 2.2250738585072014e-308\n#define LDBL_EPSILON 2.2204460492503131e-16\n"
+   "#endif\n"))
+
+(define *c99-builtin-assert-h*
+  (string-append
+   "#undef assert\n#ifdef NDEBUG\n#define assert(expr) ((void)0)\n#else\n"
+   "#ifndef _ULISP_ASSERT_DECLARED\n#define _ULISP_ASSERT_DECLARED\nextern void abort(void);\n#endif\n"
+   "#define assert(expr) ((expr) ? (void)0 : abort())\n#endif\n"))
+
+(define *c99-builtin-errno-h*
+  (string-append
+   "#ifndef _ULISP_ERRNO_H\n#define _ULISP_ERRNO_H\n"
+   "extern int *__errno_location(void);\n#define errno (*__errno_location())\n"
+   "#define EPERM 1\n#define ENOENT 2\n#define ESRCH 3\n#define EINTR 4\n#define EIO 5\n#define EBADF 9\n"
+   "#define ECHILD 10\n#define EAGAIN 11\n#define ENOMEM 12\n#define EACCES 13\n#define EEXIST 17\n"
+   "#define ENOTDIR 20\n#define EISDIR 21\n#define EINVAL 22\n#define EMFILE 24\n#define ENOSPC 28\n"
+   "#define EPIPE 32\n#define EDOM 33\n#define ERANGE 34\n#define EILSEQ 84\n#endif\n"))
+
+(define *c99-builtin-ctype-h*
+  (string-append
+   "#ifndef _ULISP_CTYPE_H\n#define _ULISP_CTYPE_H\n"
+   "int isalnum(int c);\nint isalpha(int c);\nint isblank(int c);\nint iscntrl(int c);\n"
+   "int isdigit(int c);\nint isgraph(int c);\nint islower(int c);\nint isprint(int c);\n"
+   "int ispunct(int c);\nint isspace(int c);\nint isupper(int c);\nint isxdigit(int c);\n"
+   "int tolower(int c);\nint toupper(int c);\n#endif\n"))
+
+(define *c99-builtin-string-h*
+  (string-append
+   "#ifndef _ULISP_STRING_H\n#define _ULISP_STRING_H\n#include <stddef.h>\n"
+   "void *memcpy(void *dest, const void *src, size_t n);\nvoid *memmove(void *dest, const void *src, size_t n);\n"
+   "void *memset(void *s, int c, size_t n);\nint memcmp(const void *s1, const void *s2, size_t n);\nvoid *memchr(const void *s, int c, size_t n);\n"
+   "char *strcpy(char *dest, const char *src);\nchar *strncpy(char *dest, const char *src, size_t n);\n"
+   "char *strcat(char *dest, const char *src);\nchar *strncat(char *dest, const char *src, size_t n);\n"
+   "int strcmp(const char *s1, const char *s2);\nint strncmp(const char *s1, const char *s2, size_t n);\n"
+   "int strcoll(const char *s1, const char *s2);\nsize_t strxfrm(char *dest, const char *src, size_t n);\n"
+   "char *strchr(const char *s, int c);\nchar *strrchr(const char *s, int c);\n"
+   "size_t strspn(const char *s, const char *accept);\nsize_t strcspn(const char *s, const char *reject);\n"
+   "char *strpbrk(const char *s, const char *accept);\nchar *strstr(const char *haystack, const char *needle);\n"
+   "char *strtok(char *str, const char *delim);\nsize_t strlen(const char *s);\nchar *strerror(int errnum);\n#endif\n"))
+
+(define *c99-builtin-stdio-h*
+  (string-append
+   "#ifndef _ULISP_STDIO_H\n#define _ULISP_STDIO_H\n#include <stddef.h>\n"
+   "typedef struct _IO_FILE FILE;\ntypedef long fpos_t;\n"
+   "extern FILE *stdin;\nextern FILE *stdout;\nextern FILE *stderr;\n"
+   "#define EOF (-1)\n#define BUFSIZ 8192\n#define FOPEN_MAX 16\n#define FILENAME_MAX 4096\n#define L_tmpnam 20\n#define TMP_MAX 238328\n"
+   "#define SEEK_SET 0\n#define SEEK_CUR 1\n#define SEEK_END 2\n#define _IOFBF 0\n#define _IOLBF 1\n#define _IONBF 2\n"
+   "int remove(const char *filename);\nint rename(const char *oldname, const char *newname);\nFILE *tmpfile(void);\nchar *tmpnam(char *s);\n"
+   "int fclose(FILE *stream);\nint fflush(FILE *stream);\nFILE *fopen(const char *filename, const char *mode);\n"
+   "FILE *freopen(const char *filename, const char *mode, FILE *stream);\nvoid setbuf(FILE *stream, char *buf);\nint setvbuf(FILE *stream, char *buf, int mode, size_t size);\n"
+   "int fprintf(FILE *stream, const char *format, ...);\nint fscanf(FILE *stream, const char *format, ...);\nint printf(const char *format, ...);\n"
+   "int scanf(const char *format, ...);\nint snprintf(char *s, size_t n, const char *format, ...);\nint sprintf(char *s, const char *format, ...);\nint sscanf(const char *s, const char *format, ...);\n"
+   "int vfprintf(FILE *stream, const char *format, __builtin_va_list arg);\nint vprintf(const char *format, __builtin_va_list arg);\n"
+   "int vsnprintf(char *s, size_t n, const char *format, __builtin_va_list arg);\nint vsprintf(char *s, const char *format, __builtin_va_list arg);\n"
+   "int fgetc(FILE *stream);\nchar *fgets(char *s, int n, FILE *stream);\nint fputc(int c, FILE *stream);\nint fputs(const char *s, FILE *stream);\n"
+   "int getc(FILE *stream);\nint getchar(void);\nint putc(int c, FILE *stream);\nint putchar(int c);\nint puts(const char *s);\nint ungetc(int c, FILE *stream);\n"
+   "size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream);\nsize_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);\n"
+   "int fgetpos(FILE *stream, fpos_t *pos);\nint fseek(FILE *stream, long offset, int whence);\nint fsetpos(FILE *stream, const fpos_t *pos);\nlong ftell(FILE *stream);\nvoid rewind(FILE *stream);\n"
+   "void clearerr(FILE *stream);\nint feof(FILE *stream);\nint ferror(FILE *stream);\nvoid perror(const char *s);\n"
+   "FILE *fdopen(int fd, const char *mode);\nint fileno(FILE *stream);\nFILE *popen(const char *command, const char *type);\nint pclose(FILE *stream);\n"
+   "int fseeko(FILE *stream, long offset, int whence);\nlong ftello(FILE *stream);\nint getc_unlocked(FILE *stream);\nvoid flockfile(FILE *filehandle);\nvoid funlockfile(FILE *filehandle);\n#endif\n"))
+
+(define *c99-builtin-stdlib-h*
+  (string-append
+   "#ifndef _ULISP_STDLIB_H\n#define _ULISP_STDLIB_H\n#include <stddef.h>\n"
+   "#define EXIT_FAILURE 1\n#define EXIT_SUCCESS 0\n#define RAND_MAX 2147483647\n#define MB_CUR_MAX 1\n"
+   "typedef struct { int quot; int rem; } div_t;\ntypedef struct { long quot; long rem; } ldiv_t;\ntypedef struct { long long quot; long long rem; } lldiv_t;\n"
+   "double atof(const char *nptr);\nint atoi(const char *nptr);\nlong atol(const char *nptr);\nlong long atoll(const char *nptr);\n"
+   "double strtod(const char *nptr, char **endptr);\nfloat strtof(const char *nptr, char **endptr);\nlong double strtold(const char *nptr, char **endptr);\n"
+   "long strtol(const char *nptr, char **endptr, int base);\nlong long strtoll(const char *nptr, char **endptr, int base);\n"
+   "unsigned long strtoul(const char *nptr, char **endptr, int base);\nunsigned long long strtoull(const char *nptr, char **endptr, int base);\n"
+   "int rand(void);\nvoid srand(unsigned int seed);\nvoid *calloc(size_t nmemb, size_t size);\nvoid free(void *ptr);\nvoid *malloc(size_t size);\nvoid *realloc(void *ptr, size_t size);\n"
+   "void abort(void);\nint atexit(void (*func)(void));\nvoid exit(int status);\nvoid _Exit(int status);\nchar *getenv(const char *name);\nint system(const char *string);\n"
+   "void *bsearch(const void *key, const void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));\n"
+   "void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));\n"
+   "int abs(int j);\nlong labs(long j);\nlong long llabs(long long j);\ndiv_t div(int numer, int denom);\nldiv_t ldiv(long numer, long denom);\nlldiv_t lldiv(long long numer, long long denom);\n"
+   "int mkstemp(char *template_path);\n#endif\n"))
+
+(define *c99-builtin-time-h*
+  (string-append
+   "#ifndef _ULISP_TIME_H\n#define _ULISP_TIME_H\n#include <stddef.h>\n"
+   "#define CLOCKS_PER_SEC 1000000L\ntypedef long clock_t;\ntypedef long time_t;\n"
+   "struct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon; int tm_year; int tm_wday; int tm_yday; int tm_isdst; long tm_gmtoff; const char *tm_zone; };\n"
+   "clock_t clock(void);\ndouble difftime(time_t time1, time_t time0);\ntime_t mktime(struct tm *timeptr);\ntime_t time(time_t *timer);\n"
+   "char *asctime(const struct tm *timeptr);\nchar *ctime(const time_t *timer);\nstruct tm *gmtime(const time_t *timer);\nstruct tm *localtime(const time_t *timer);\n"
+   "size_t strftime(char *s, size_t maxsize, const char *format, const struct tm *timeptr);\nstruct tm *gmtime_r(const time_t *timer, struct tm *result);\nstruct tm *localtime_r(const time_t *timer, struct tm *result);\n#endif\n"))
+
+(define *c99-builtin-locale-h*
+  (string-append
+   "#ifndef _ULISP_LOCALE_H\n#define _ULISP_LOCALE_H\n#ifndef NULL\n#define NULL ((void *)0)\n#endif\n"
+   "#define LC_CTYPE 0\n#define LC_NUMERIC 1\n#define LC_TIME 2\n#define LC_COLLATE 3\n#define LC_MONETARY 4\n#define LC_MESSAGES 5\n#define LC_ALL 6\n"
+   "struct lconv { char *decimal_point; char *thousands_sep; char *grouping; char *int_curr_symbol; char *currency_symbol; char *mon_decimal_point; char *mon_thousands_sep; char *mon_grouping; char *positive_sign; char *negative_sign; char int_frac_digits; char frac_digits; char p_cs_precedes; char p_sep_by_space; char n_cs_precedes; char n_sep_by_space; char p_sign_posn; char n_sign_posn; char int_p_cs_precedes; char int_p_sep_by_space; char int_n_cs_precedes; char int_n_sep_by_space; char int_p_sign_posn; char int_n_sign_posn; };\n"
+   "char *setlocale(int category, const char *locale);\nstruct lconv *localeconv(void);\n#endif\n"))
+
+(define *c99-builtin-signal-h*
+  (string-append
+   "#ifndef _ULISP_SIGNAL_H\n#define _ULISP_SIGNAL_H\n"
+   "typedef int sig_atomic_t;\ntypedef void (*__sighandler_t)(int);\n"
+   "#define SIGHUP 1\n#define SIGINT 2\n#define SIGQUIT 3\n#define SIGILL 4\n#define SIGABRT 6\n#define SIGFPE 8\n#define SIGKILL 9\n#define SIGSEGV 11\n#define SIGPIPE 13\n#define SIGALRM 14\n#define SIGTERM 15\n"
+   "#define SIG_ERR ((void (*)(int))-1)\n#define SIG_DFL ((void (*)(int))0)\n#define SIG_IGN ((void (*)(int))1)\n"
+   "#define SA_NOCLDSTOP 0x1\n#define SA_RESETHAND 0x80000000\n#define SA_RESTART 0x10000000\n"
+   "typedef struct { unsigned long __val[16]; } sigset_t;\n"
+   "struct sigaction { __sighandler_t sa_handler; sigset_t sa_mask; int sa_flags; void (*sa_restorer)(void); };\n"
+   "__sighandler_t signal(int sig, __sighandler_t func);\nint raise(int sig);\nint sigemptyset(sigset_t *set);\nint sigfillset(sigset_t *set);\nint sigaddset(sigset_t *set, int signum);\nint sigaction(int sig, const struct sigaction *act, struct sigaction *oldact);\n#endif\n"))
+
+(define *c99-builtin-sys-types-h*
+  "#ifndef _ULISP_SYS_TYPES_H\n#define _ULISP_SYS_TYPES_H\n#include <stddef.h>\ntypedef long off_t;\ntypedef long ssize_t;\ntypedef int pid_t;\ntypedef unsigned int uid_t;\ntypedef unsigned int gid_t;\ntypedef unsigned int mode_t;\n#endif\n")
+
+(define *c99-builtin-unistd-h*
+  "#ifndef _ULISP_UNISTD_H\n#define _ULISP_UNISTD_H\n#include <stddef.h>\n#include <sys/types.h>\n#define STDIN_FILENO 0\n#define STDOUT_FILENO 1\n#define STDERR_FILENO 2\nint isatty(int fd);\nint close(int fd);\nint unlink(const char *pathname);\nssize_t read(int fd, void *buf, size_t count);\nssize_t write(int fd, const void *buf, size_t count);\nvoid _exit(int status);\n#endif\n")
+
+(define *c99-builtin-sys-wait-h*
+  "#ifndef _ULISP_SYS_WAIT_H\n#define _ULISP_SYS_WAIT_H\n#define WTERMSIG(status) ((status) & 0x7f)\n#define WEXITSTATUS(status) (((status) & 0xff00) >> 8)\n#define WSTOPSIG(status) WEXITSTATUS(status)\n#define WIFEXITED(status) (WTERMSIG(status) == 0)\n#define WIFSIGNALED(status) (((signed char)(((status) & 0x7f) + 1) >> 1) > 0)\n#define WIFSTOPPED(status) (((status) & 0xff) == 0x7f)\nint waitpid(int pid, int *wstatus, int options);\n#endif\n")
+
+(define *c99-builtin-dlfcn-h*
+  "#ifndef _ULISP_DLFCN_H\n#define _ULISP_DLFCN_H\n#define RTLD_LOCAL 0x0\n#define RTLD_LAZY 0x1\n#define RTLD_NOW 0x2\n#define RTLD_GLOBAL 0x100\nvoid *dlopen(const char *filename, int flags);\nint dlclose(void *handle);\nvoid *dlsym(void *handle, const char *symbol);\nchar *dlerror(void);\n#endif\n")
 
 (define (make-default-cpp-context . maybe-include-paths)
   (let* ((inc-paths (if (pair? maybe-include-paths)
@@ -380,9 +561,29 @@
                                 0 *cpp-max-include-depth*
                                 0 *cpp-max-expansion-steps*
                                 '())))
-    (cpp-register-virtual-file! ctx "/__ulisp_builtin__/stdarg.h" *c99-builtin-stdarg-h*)
-    (cpp-register-virtual-file! ctx "/__ulisp_builtin__/setjmp.h" *c99-builtin-setjmp-h*)
-    (cpp-register-virtual-file! ctx "/__ulisp_builtin__/math.h" *c99-builtin-math-h*)
+    (for-each
+     (lambda (pair) (cpp-register-virtual-file! ctx (car pair) (cdr pair)))
+     (list (cons "/__ulisp_builtin__/stdarg.h"    *c99-builtin-stdarg-h*)
+           (cons "/__ulisp_builtin__/setjmp.h"    *c99-builtin-setjmp-h*)
+           (cons "/__ulisp_builtin__/math.h"      *c99-builtin-math-h*)
+           (cons "/__ulisp_builtin__/stddef.h"    *c99-builtin-stddef-h*)
+           (cons "/__ulisp_builtin__/stdint.h"    *c99-builtin-stdint-h*)
+           (cons "/__ulisp_builtin__/stdbool.h"   *c99-builtin-stdbool-h*)
+           (cons "/__ulisp_builtin__/limits.h"    *c99-builtin-limits-h*)
+           (cons "/__ulisp_builtin__/float.h"     *c99-builtin-float-h*)
+           (cons "/__ulisp_builtin__/assert.h"    *c99-builtin-assert-h*)
+           (cons "/__ulisp_builtin__/errno.h"     *c99-builtin-errno-h*)
+           (cons "/__ulisp_builtin__/ctype.h"     *c99-builtin-ctype-h*)
+           (cons "/__ulisp_builtin__/string.h"    *c99-builtin-string-h*)
+           (cons "/__ulisp_builtin__/stdio.h"     *c99-builtin-stdio-h*)
+           (cons "/__ulisp_builtin__/stdlib.h"    *c99-builtin-stdlib-h*)
+           (cons "/__ulisp_builtin__/time.h"      *c99-builtin-time-h*)
+           (cons "/__ulisp_builtin__/locale.h"    *c99-builtin-locale-h*)
+           (cons "/__ulisp_builtin__/signal.h"    *c99-builtin-signal-h*)
+           (cons "/__ulisp_builtin__/unistd.h"    *c99-builtin-unistd-h*)
+           (cons "/__ulisp_builtin__/sys/types.h" *c99-builtin-sys-types-h*)
+           (cons "/__ulisp_builtin__/sys/wait.h"  *c99-builtin-sys-wait-h*)
+           (cons "/__ulisp_builtin__/dlfcn.h"     *c99-builtin-dlfcn-h*)))
     (%cpp-register-builtin!
      ctx '__FILE__
      (lambda (call-tok)
@@ -405,7 +606,7 @@
                        (cons '__LINE__ (c-token-hide-set call-tok))))))
     (cpp-define-string! ctx "__STDC__" "1")
     (cpp-define-string! ctx "__STDC_HOSTED__" "1")
-    (cpp-define-string! ctx "__STDC_VERSION__" "199901")
+    (cpp-define-string! ctx "__STDC_VERSION__" "199901L")
     (cpp-define-string! ctx "__x86_64__" "1")
     (cpp-define-string! ctx "__LP64__" "1")
     ctx))

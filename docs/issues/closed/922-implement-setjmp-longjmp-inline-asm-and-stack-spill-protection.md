@@ -35,7 +35,7 @@ Lua 5.x のエラー回復機構（`ldo.c`: `luaD_rawrunprotected`, `LUAI_TRY`, 
 - **先行 Issue ([[#920]](920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md)) の責務**: 関数ポインタ型解決、`%call-indirect`、および Pass 132 Braun SSA CFG ブリッジ（`c99-lir-fn->braun-cfg` / `c99-braun-ssa-transform-fn`）の構築。
 - **先行 Issue ([[#921]](921-implement-sysv-amd64-stdarg-va-list-lowering.md)) の責務**: `<stdarg.h>` 組み込みヘッダ仮想解決、176B Register Save Area、および `lua_pushfstring` / `luaL_error` の可変長引数基盤。
 - **本 Issue (`#922`) の責務**: `<setjmp.h>` 提供、`%inline-asm` による 64B `jmp_buf` 退避/復元、`__ulisp_setjmp`/`__ulisp_longjmp` の glibc 隔離・弱シンボル化、`returns_twice` 関数の二層 mem2reg スピル保護、診断 `C99-JMP-001`、および Native ELF / Portable C / Reference VM 3 者一致と Host GCC 相互アンワインド確立。
-- **後続 Issue ([[#925]](../925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md), [[#926]](../926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)) の責務**: Lua 5.x 全 C ソース群（`ldo.c` の `luaD_rawrunprotected` / `luaD_throw` 含む）一括ビルドおよび公式 `errors.lua` 含む E2E テストスイート完走。
+- **後続 Issue ([[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md), [[#926]](../926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)) の責務**: Lua 5.x 全 C ソース群（`ldo.c` の `luaD_rawrunprotected` / `luaD_throw` 含む）一括ビルドおよび公式 `errors.lua` 含む E2E テストスイート完走。
 - **後続 Issue ([[#928]](../928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md)) の責務**: `musl libc` 自前ビルドおよび Pass 144 ELF リンカ移行（TU 内ユーザー定義 `setjmp` がある場合は本 Issue のルーティングを自動抑止し、弱シンボルを上書き可能にする）。
 
 ---
@@ -57,7 +57,7 @@ Lua 5.x のエラー回復機構（`ldo.c`: `luaD_rawrunprotected`, `LUAI_TRY`, 
   - `#920`: 関数ポインタ間接呼出 ＆ 複雑 CFG Lowering（[[#920]](920-implement-c99-function-pointers-and-switch-goto-cfg-lowering.md)）
   - `#921`: `<stdarg.h>` SysV ABI Lowering（[[#921]](921-implement-sysv-amd64-stdarg-va-list-lowering.md)）
 - 後続連携 Issue:
-  - [[#925]](../925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)（Lua 5.x C コードベース一括ビルド）
+  - [[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)（Lua 5.x C コードベース一括ビルド）
   - [[#926]](../926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)（Lua 公式テストスイート `errors.lua` 例外テスト）
   - [[#928]](../928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md)（`musl libc` 自前ビルド ＆ Pass 144 ELF リンカ移行）
 

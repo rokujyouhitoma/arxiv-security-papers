@@ -21,7 +21,7 @@ ID: 927
   - `#839`: `.sbi` シリアライズ（[ulisp/compiler/sbi.scm](../../ulisp/compiler/sbi.scm)）
   - `#840`: PassManager キャッシュ無効化（[ulisp/compiler/pass_manager.scm](../../ulisp/compiler/pass_manager.scm)）
   - `#914`: C99 CPP（[ulisp/frontend_c/preprocessor.scm](../../ulisp/frontend_c/preprocessor.scm), [[#914]](closed/914-implement-pure-scheme-c99-preprocessor-cpp.md)）
-  - `#925`: Lua 一括ビルド（[[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)）
+  - `#925`: Lua 一括ビルド（[[#925]](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)）
 - 後続連携 Issue:
   - [[#928]](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) (`musl` 大規模ビルド), [[#929]](929-implement-ddc-diverse-double-compiling-determinism-verification.md)
 

@@ -18,7 +18,7 @@ ULisp による C99 コンパイルパイプラインの決定論性（Determini
   - [DSN-33-13 §6.3](../designs/DSN-33-13-ulisp_typed_machine_lir_and_multi_target_backend_architecture.md)
 - 前提基盤（実装済・先行）:
   - `#886`: セルフホスティング不動点検証（[ulisp/tests/test_self_hosting_fixed_point.scm](../../ulisp/tests/test_self_hosting_fixed_point.scm)）
-  - `#925`: Lua 一括ビルド（[[#925]](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)）
+  - `#925`: Lua 一括ビルド（[[#925]](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md)）
   - `#928`: Pass 144 完全静的リンク移行（[[#928]](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md)）
 
 ---

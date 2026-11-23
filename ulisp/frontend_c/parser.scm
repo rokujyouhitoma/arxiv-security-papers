@@ -36,11 +36,15 @@
               (substring str 0 (+ i 1)))))))
 
 (define (%c99-read-grammar-text)
-  (guard (ex (else
-              (guard (ex2 (else
-                           (error "Unable to locate tools/grammars/c99.peg" ex2)))
-                (read-all-file-text "../tools/grammars/c99.peg"))))
-    (read-all-file-text "tools/grammars/c99.peg")))
+  (let loop ((paths '("tools/grammars/c99.peg"
+                      "../tools/grammars/c99.peg"
+                      "../../tools/grammars/c99.peg"
+                      "../../../tools/grammars/c99.peg")))
+    (if (null? paths)
+        (error "Unable to locate tools/grammars/c99.peg")
+        (if (file-exists? (car paths))
+            (read-all-file-text (car paths))
+            (loop (cdr paths))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. C99 Parse Environment (Scope Manager + Typedef Table + Source Span)
