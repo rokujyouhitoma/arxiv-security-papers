@@ -30,7 +30,7 @@
                     pragma-once-files include-guard-cache
                     include-depth max-include-depth
                     expansion-steps max-expansion-steps
-                    virtual-files)
+                    virtual-files included-files macro-buckets)
   cpp-context?
   (include-paths        cpp-ctx-include-paths        cpp-ctx-include-paths-set!)
   (system-include-paths cpp-ctx-system-include-paths cpp-ctx-system-include-paths-set!)
@@ -41,7 +41,16 @@
   (max-include-depth    cpp-ctx-max-include-depth)
   (expansion-steps      cpp-ctx-expansion-steps      cpp-ctx-expansion-steps-set!)
   (max-expansion-steps  cpp-ctx-max-expansion-steps)
-  (virtual-files        cpp-ctx-virtual-files        cpp-ctx-virtual-files-set!))
+  (virtual-files        cpp-ctx-virtual-files        cpp-ctx-virtual-files-set!)
+  (included-files       cpp-ctx-included-files       cpp-ctx-included-files-set!)
+  (macro-buckets        cpp-ctx-macro-buckets        cpp-ctx-macro-buckets-set!))
+
+(define (cpp-record-included-file! ctx path)
+  (if (and (string? path) (> (string-length path) 0))
+      (let ((norm (%cpp-normalize-path path)))
+        (if (not (member norm (cpp-ctx-included-files ctx)))
+            (cpp-ctx-included-files-set!
+             ctx (append (cpp-ctx-included-files ctx) (list norm)))))))
 
 (define *cpp-max-include-depth* 64)
 (define *cpp-max-expansion-steps* 1000000)
@@ -186,27 +195,56 @@
 ;;; 3. Macro Table Operations & Built-in Predefined Macros
 ;;; -----------------------------------------------------------------------
 
+(define (%cpp-sym-bucket sym)
+  (let* ((s (symbol->string sym))
+         (n (string-length s)))
+    (if (= n 0)
+        0
+        (modulo (+ (* (char->integer (string-ref s 0)) 31)
+                   (+ (* (char->integer (string-ref s (- n 1))) 17)
+                      n))
+                128))))
+
+(define (%cpp-bucket-remove lst name-sym)
+  (let loop ((xs lst) (acc '()))
+    (cond
+      ((null? xs) (reverse acc))
+      ((eq? (caar xs) name-sym) (loop (cdr xs) acc))
+      (else (loop (cdr xs) (cons (car xs) acc))))))
+
+(define (%cpp-rebuild-macro-buckets! ctx)
+  (let ((vec (make-vector 128 '())))
+    (for-each
+     (lambda (entry)
+       (let ((idx (%cpp-sym-bucket (car entry))))
+         (vector-set! vec idx (cons entry (vector-ref vec idx)))))
+     (reverse (cpp-ctx-macros ctx)))
+    (cpp-ctx-macro-buckets-set! ctx vec)))
+
 (define (cpp-lookup-macro ctx name-sym)
-  (let ((slot (assq name-sym (cpp-ctx-macros ctx))))
+  (let* ((vec (cpp-ctx-macro-buckets ctx))
+         (slot (assq name-sym (vector-ref vec (%cpp-sym-bucket name-sym)))))
     (if slot (cdr slot) #f)))
 
 (define (%cpp-set-macro! ctx name-sym mac)
-  (let ((filtered
-         (let loop ((xs (cpp-ctx-macros ctx)) (acc '()))
-           (cond
-             ((null? xs) (reverse acc))
-             ((eq? (caar xs) name-sym) (loop (cdr xs) acc))
-             (else (loop (cdr xs) (cons (car xs) acc)))))))
-    (cpp-ctx-macros-set! ctx (cons (cons name-sym mac) filtered))))
+  (let* ((vec (cpp-ctx-macro-buckets ctx))
+         (idx (%cpp-sym-bucket name-sym))
+         (bucket (vector-ref vec idx))
+         (had? (assq name-sym bucket))
+         (new-entry (cons name-sym mac)))
+    (vector-set! vec idx (cons new-entry (if had? (%cpp-bucket-remove bucket name-sym) bucket)))
+    (if had?
+        (cpp-ctx-macros-set! ctx (cons new-entry (%cpp-bucket-remove (cpp-ctx-macros ctx) name-sym)))
+        (cpp-ctx-macros-set! ctx (cons new-entry (cpp-ctx-macros ctx))))))
 
 (define (cpp-undef! ctx name-sym)
-  (let ((filtered
-         (let loop ((xs (cpp-ctx-macros ctx)) (acc '()))
-           (cond
-             ((null? xs) (reverse acc))
-             ((eq? (caar xs) name-sym) (loop (cdr xs) acc))
-             (else (loop (cdr xs) (cons (car xs) acc)))))))
-    (cpp-ctx-macros-set! ctx filtered)))
+  (let* ((vec (cpp-ctx-macro-buckets ctx))
+         (idx (%cpp-sym-bucket name-sym))
+         (bucket (vector-ref vec idx)))
+    (if (assq name-sym bucket)
+        (begin
+          (vector-set! vec idx (%cpp-bucket-remove bucket name-sym))
+          (cpp-ctx-macros-set! ctx (%cpp-bucket-remove (cpp-ctx-macros ctx) name-sym))))))
 
 (define (cpp-define-object! ctx name-sym body-tokens . maybe-span)
   (let ((sp (if (pair? maybe-span) (car maybe-span) #f)))
@@ -560,7 +598,7 @@
                                 '() '() '()
                                 0 *cpp-max-include-depth*
                                 0 *cpp-max-expansion-steps*
-                                '())))
+                                '() '() (make-vector 128 '()))))
     (for-each
      (lambda (pair) (cpp-register-virtual-file! ctx (car pair) (cdr pair)))
      (list (cons "/__ulisp_builtin__/stdarg.h"    *c99-builtin-stdarg-h*)
@@ -1279,6 +1317,7 @@
                     ((%cpp-lookup-virtual-file ctx cand)
                      => (lambda (vtxt) (cons cand vtxt)))
                     ((file-exists? cand)
+                     (cpp-record-included-file! ctx cand)
                      (cons cand (read-all-file-text cand)))
                     (else (loop (cdr dirs)))))))))
     (or found
@@ -1286,7 +1325,9 @@
           (cond
             (direct-v (cons (%cpp-normalize-path target-name) direct-v))
             ((file-exists? target-name)
-             (cons (%cpp-normalize-path target-name) (read-all-file-text target-name)))
+             (let ((np (%cpp-normalize-path target-name)))
+               (cpp-record-included-file! ctx np)
+               (cons np (read-all-file-text np))))
             (else
              (%cpp-raise-error "C99-CPP-001" call-span
                                (string-append "Include file not found: '" target-name "'"))))))))
@@ -1572,4 +1613,115 @@
   (let* ((ctx (if (pair? maybe-ctx) (car maybe-ctx) (make-default-cpp-context)))
          (norm (%cpp-normalize-path filepath))
          (src (read-all-file-text norm)))
+    (if (file-exists? norm)
+        (cpp-record-included-file! ctx norm))
     (cpp-preprocess-string src norm ctx)))
+
+;;; -----------------------------------------------------------------------
+;;; 8. PCH Snapshot Serialization / Deserialization Codec (<cpp-context>)
+;;; -----------------------------------------------------------------------
+
+(define *cpp-default-builtin-macros-cache* (cons #f '()))
+
+(define (%cpp-default-builtin-macros)
+  (or (car *cpp-default-builtin-macros-cache*)
+      (let* ((fresh (make-default-cpp-context))
+             (builtins
+              (let loop ((ms (cpp-ctx-macros fresh)) (acc '()))
+                (cond
+                  ((null? ms) (reverse acc))
+                  ((cpp-macro-builtin-proc (cdar ms))
+                   (loop (cdr ms) (cons (car ms) acc)))
+                  (else (loop (cdr ms) acc))))))
+        (set-car! *cpp-default-builtin-macros-cache* builtins)
+        builtins)))
+
+(define (c-token->sexpr tok)
+  (list 'c-tok
+        (c-token-kind tok)
+        (c-token-lexeme tok)
+        (c-token-value tok)
+        (c-token-span tok)
+        (c-token-at-bol? tok)
+        (c-token-has-leading-space? tok)
+        (map (lambda (s) s) (c-token-hide-set tok))))
+
+(define (sexpr->c-token sx)
+  (if (or (not (pair? sx)) (not (eq? (car sx) 'c-tok)))
+      (error "Invalid serialized <c-token> in PCH" sx))
+  (make-c-token (list-ref sx 1)
+                (list-ref sx 2)
+                (list-ref sx 3)
+                (list-ref sx 4)
+                (list-ref sx 5)
+                (list-ref sx 6)
+                (map (lambda (s) s) (list-ref sx 7))))
+
+(define (cpp-macro->sexpr name mac)
+  (if (cpp-macro-builtin-proc mac)
+      (list 'cpp-builtin name)
+      (list 'cpp-user
+            name
+            (cpp-macro-function-like? mac)
+            (map (lambda (p) p) (cpp-macro-params mac))
+            (cpp-macro-variadic? mac)
+            (map c-token->sexpr (cpp-macro-body mac))
+            (cpp-macro-def-span mac))))
+
+(define (sexpr->cpp-macro sx)
+  (cond
+    ((and (pair? sx) (eq? (car sx) 'cpp-builtin))
+     (let* ((name (cadr sx))
+            (slot (assq name (%cpp-default-builtin-macros))))
+       (if slot
+           (cons name (cdr slot))
+           (error "Unknown builtin CPP macro in PCH" name))))
+    ((and (pair? sx) (eq? (car sx) 'cpp-user))
+     (let ((name (list-ref sx 1))
+           (fn-like? (list-ref sx 2))
+           (params (map (lambda (p) p) (list-ref sx 3)))
+           (variadic? (list-ref sx 4))
+           (body (map sexpr->c-token (list-ref sx 5)))
+           (def-span (list-ref sx 6)))
+       (cons name (make-cpp-macro name fn-like? params variadic? body def-span #f))))
+    (else
+     (error "Invalid serialized <cpp-macro> in PCH" sx))))
+
+(define (cpp-context->pch-sexpr ctx . maybe-root-header)
+  (let* ((root-raw (and (pair? maybe-root-header) (car maybe-root-header)))
+         (root-norm (and (string? root-raw) (> (string-length root-raw) 0)
+                         (%cpp-normalize-path root-raw)))
+         (po-files (let ((cur (cpp-ctx-pragma-once-files ctx)))
+                     (if (and root-norm (not (member root-norm cur)))
+                         (cons root-norm (map (lambda (s) s) cur))
+                         (map (lambda (s) s) cur))))
+         (inc-files (let ((cur (cpp-ctx-included-files ctx)))
+                      (if (and root-norm (file-exists? root-norm) (not (member root-norm cur)))
+                          (cons root-norm (map (lambda (s) s) cur))
+                          (map (lambda (s) s) cur)))))
+    (list 'cpp-pch-v1
+          (cons 'macros
+                (map (lambda (e) (cpp-macro->sexpr (car e) (cdr e)))
+                     (cpp-ctx-macros ctx)))
+          (cons 'pragma-once-files po-files)
+          (cons 'include-guard-cache
+                (map (lambda (e) (cons (car e) (cdr e)))
+                     (cpp-ctx-include-guard-cache ctx)))
+          (cons 'included-files inc-files))))
+
+(define (cpp-restore-context-from-pch! ctx pch-sx)
+  (if (or (not (pair? pch-sx)) (not (eq? (car pch-sx) 'cpp-pch-v1)))
+      (error "Invalid serialized <cpp-context> PCH snapshot" pch-sx))
+  (let* ((alist (cdr pch-sx))
+         (macs-raw (cdr (assq 'macros alist)))
+         (po-raw (cdr (assq 'pragma-once-files alist)))
+         (guards-raw (cdr (assq 'include-guard-cache alist)))
+         (inc-raw (cdr (assq 'included-files alist))))
+    (cpp-ctx-macros-set! ctx (map sexpr->cpp-macro macs-raw))
+    (%cpp-rebuild-macro-buckets! ctx)
+    (cpp-ctx-pragma-once-files-set! ctx (map (lambda (s) s) po-raw))
+    (cpp-ctx-include-guard-cache-set! ctx (map (lambda (e) (cons (car e) (cdr e))) guards-raw))
+    (cpp-ctx-included-files-set! ctx (map (lambda (s) s) inc-raw))
+    (cpp-ctx-include-depth-set! ctx 0)
+    (cpp-ctx-expansion-steps-set! ctx 0)
+    ctx))

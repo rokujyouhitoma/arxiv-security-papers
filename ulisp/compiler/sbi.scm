@@ -1194,19 +1194,13 @@
         (sbi-error! "Cyclic or out-of-bounds DAG child reference" (list cidx max-idx)))
     res))
 
-(define (sbi-deserialize-full bv)
-  (let* ((hdr (sbi-verify-header-and-digest bv))
-         (ir-kind (car hdr))
+(define (%sbi-deserialize-after-deps bv hdr deps pos-sec2)
+  (let* ((ir-kind (car hdr))
          (flags (cadr hdr))
-         (dep-count (caddr hdr))
          (sym-count (cadddr hdr))
          (node-count (list-ref hdr 4))
          (root-idx (list-ref hdr 5))
          (total-len (list-ref hdr 6))
-         ;; Section 1: Dependency header table
-         (dep-res (sbi-read-deps-section bv *sbi-header-size* dep-count total-len))
-         (deps (car dep-res))
-         (pos-sec2 (cdr dep-res))
          ;; Section 2: Interned string/symbol pool
          (strs (make-vector sym-count ""))
          (syms (make-vector sym-count 'sbi-uninit))
@@ -1396,6 +1390,15 @@
           (cons 'node-count node-count)
           (cons 'sym-count sym-count))))
 
+(define (sbi-deserialize-full bv)
+  (let* ((hdr (sbi-verify-header-and-digest bv))
+         (dep-count (caddr hdr))
+         (total-len (list-ref hdr 6))
+         (dep-res (sbi-read-deps-section bv *sbi-header-size* dep-count total-len))
+         (deps (car dep-res))
+         (pos-sec2 (cdr dep-res)))
+    (%sbi-deserialize-after-deps bv hdr deps pos-sec2)))
+
 (define (sbi-deserialize bv)
   (cdr (assq 'ir (sbi-deserialize-full bv))))
 
@@ -1475,6 +1478,35 @@
         (let ((ir (builder-thunk)))
           (sbi-write-file sbi-path ir 'pch dep-paths)
           ir))))
+
+(define (sbi-read-pch-validated sbi-path)
+  (let ((cpath (sbi-coerce-path sbi-path)))
+    (if (not (file-exists? cpath))
+        (list 'error 'missing (string-append "PCH file does not exist: " sbi-path))
+        (let ((bytes (sbi-read-file-bytes cpath)))
+          (if (not bytes)
+              (list 'error 'corrupt (string-append "Unable to read PCH file: " sbi-path))
+              (guard (ex
+                      (else
+                       (let ((msg (if (and (pair? ex) (eq? (car ex) 'sbi-error) (pair? (cdr ex)))
+                                      (cadr ex)
+                                      "Invalid or corrupted .sbi PCH binary")))
+                         (list 'error 'corrupt msg))))
+                (let* ((hdr (sbi-verify-header-and-digest bytes))
+                       (ir-kind (car hdr))
+                       (dep-count (caddr hdr))
+                       (total-len (list-ref hdr 6)))
+                  (if (not (eq? ir-kind 'pch))
+                      (list 'error 'corrupt
+                            (string-append "SBI file is not a precompiled header (ir-kind="
+                                           (symbol->string ir-kind) ")"))
+                      (let* ((dep-res (sbi-read-deps-section bytes *sbi-header-size* dep-count total-len))
+                             (deps (car dep-res)))
+                        (if (not (sbi-deps-all-fresh? deps))
+                            (list 'stale deps)
+                            (let* ((full (%sbi-deserialize-after-deps bytes hdr deps (cdr dep-res)))
+                                   (ir (cdr (assq 'ir full))))
+                              (list 'ok ir deps))))))))))))
 
 (define (sbi-import-forms path)
   (let ((cpath (sbi-coerce-path path)))

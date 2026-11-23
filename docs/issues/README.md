@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **927** | C ヘッダ用 `.sbi` プリコンパイル済みヘッダ (PCH) および mem2reg 反復最適化によるビルド高速化 | Feature | In Progress | [927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md](927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) |
 | **928** | `musl libc` の ULisp 自前ビルドおよび Pass 144 自前 ELF リンカによる完全静的リンク移行 | Feature | In Progress | [928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md](928-compile-musl-libc-with-ulisp-and-migrate-to-pass-144-elf-linker.md) |
 | **929** | DDC (Diverse Double-Compiling) による C コンパイル出力の決定論性・ビット一致検証ハーネスの実装 | Feature | In Progress | [929-implement-ddc-diverse-double-compiling-determinism-verification.md](929-implement-ddc-diverse-double-compiling-determinism-verification.md) |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | In Progress | [930-implement-c99-bounds-checking-sanitizer-mode.md](930-implement-c99-bounds-checking-sanitizer-mode.md) |
@@ -16,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **927** | C ヘッダ用 `.sbi` プリコンパイル済みヘッダ (PCH) および mem2reg 反復最適化によるビルド高速化 | Feature | 2026-11-23 | [927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md](closed/927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) |
 | **937** | DSN-33-24 三位一体・二村射影 Scheme インタプリタ自動生成・双対導出 ＆ メタ循環統合アーキテクチャ設計書の策定 | Docs | 2026-11-23 | [937-design-dsn-33-24-futamura-scheme-interpreter-synthesis.md](closed/937-design-dsn-33-24-futamura-scheme-interpreter-synthesis.md) |
 | **936** | `c-tu` モードにおける関数プロローグ一括スタックフレーム確保と非 GC 呼び出し時の不要 `%rsp` シフト・`xor r10` 廃止 | Feature | 2026-11-23 | [936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md](closed/936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md) |
 | **935** | C99 変数ビットシフトの x86-64 `%cl` 単一命令化および重複ゼロ・符号拡張 (`%zext`/`%sext`/`%trunc`) の畳み込み最適化 | Feature | 2026-11-23 | [935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md](closed/935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md) |

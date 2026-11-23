@@ -632,3 +632,115 @@
      (c99-int->le-bytes (cadr val) 8))
     (else
      (c99-int->le-bytes (vm-f64->ieee754-u64 val) 8))))
+
+;;; -----------------------------------------------------------------------
+;;; 7. PCH Snapshot Serialization / Deserialization Codec (<c-layout-env>)
+;;; -----------------------------------------------------------------------
+
+(define (%c99-clone-shallow-alist xs)
+  (let loop ((cur xs) (acc '()))
+    (if (null? cur)
+        (reverse acc)
+        (let ((e (car cur)))
+          (loop (cdr cur)
+                (cons (if (pair? e) (cons (car e) (cdr e)) e) acc))))))
+
+(define (c99-field-layout->sexpr fl)
+  (list 'c-field-layout
+        (c-field-layout-name fl)
+        (c-field-layout-ctype fl)
+        (c-field-layout-offset fl)
+        (c-field-layout-bit-offset fl)
+        (c-field-layout-bit-width fl)
+        (c-field-layout-storage-unit-offset fl)
+        (c-field-layout-storage-unit-type fl)
+        (c-field-layout-anon-chain fl)))
+
+(define (sexpr->c99-field-layout sx)
+  (%make-c-field-layout
+   (list-ref sx 1)
+   (list-ref sx 2)
+   (list-ref sx 3)
+   (list-ref sx 4)
+   (list-ref sx 5)
+   (list-ref sx 6)
+   (list-ref sx 7)
+   (list-ref sx 8)))
+
+(define (c99-struct-layout->sexpr sl)
+  (list 'c-struct-layout
+        (c-struct-layout-tag-id sl)
+        (c-struct-layout-kind sl)
+        (c-struct-layout-tag sl)
+        (c-struct-layout-size sl)
+        (c-struct-layout-align sl)
+        (map c99-field-layout->sexpr (c-struct-layout-fields sl))
+        (map c99-field-layout->sexpr (c-struct-layout-direct-fields sl))
+        (c-struct-layout-has-fam? sl)
+        (c-struct-layout-complete? sl)
+        (c-struct-layout-eightbytes sl)))
+
+(define (sexpr->c99-struct-layout sx)
+  (%make-c-struct-layout
+   (list-ref sx 1)
+   (list-ref sx 2)
+   (list-ref sx 3)
+   (list-ref sx 4)
+   (list-ref sx 5)
+   (map sexpr->c99-field-layout (list-ref sx 6))
+   (map sexpr->c99-field-layout (list-ref sx 7))
+   (list-ref sx 8)
+   (list-ref sx 9)
+   (let ((eb (list-ref sx 10)))
+     (if (list? eb) (map (lambda (x) x) eb) eb))))
+
+(define (c99-enum-layout->sexpr el)
+  (list 'c-enum-layout
+        (c-enum-layout-tag-id el)
+        (c-enum-layout-tag el)
+        (c-enum-layout-complete? el)
+        (c-enum-layout-enumerators el)))
+
+(define (sexpr->c99-enum-layout sx)
+  (%make-c-enum-layout
+   (list-ref sx 1)
+   (list-ref sx 2)
+   (list-ref sx 3)
+   (%c99-clone-shallow-alist (list-ref sx 4))))
+
+(define (c99-layout-env->sexpr lenv)
+  (let* ((limit (car (c-layout-env-next-id lenv)))
+         (vec (car (c-layout-env-vec-box lenv)))
+         (entries
+          (let loop ((i 0) (acc '()))
+            (if (>= i limit)
+                (reverse acc)
+                (let ((e (if (< i (vector-length vec)) (vector-ref vec i) #f)))
+                  (loop (+ i 1)
+                        (cons (cond
+                                ((c-struct-layout? e) (c99-struct-layout->sexpr e))
+                                ((c-enum-layout? e)   (c99-enum-layout->sexpr e))
+                                (else #f))
+                              acc)))))))
+    (list 'c-layout-env-v1 limit entries)))
+
+(define (sexpr->c99-layout-env sx)
+  (if (or (not (pair? sx)) (not (eq? (car sx) 'c-layout-env-v1)))
+      (error "Invalid serialized c-layout-env snapshot" sx))
+  (let* ((limit (cadr sx))
+         (entries (caddr sx))
+         (cap (let loop ((c 64)) (if (> c limit) c (loop (* c 2)))))
+         (vec (make-vector cap #f)))
+    (let loop ((i 0) (es entries))
+      (if (and (pair? es) (< i cap))
+          (let ((e (car es)))
+            (vector-set! vec i
+                         (cond
+                           ((not e) #f)
+                           ((and (pair? e) (eq? (car e) 'c-struct-layout))
+                            (sexpr->c99-struct-layout e))
+                           ((and (pair? e) (eq? (car e) 'c-enum-layout))
+                            (sexpr->c99-enum-layout e))
+                           (else #f)))
+            (loop (+ i 1) (cdr es)))))
+    (%make-c-layout-env (cons limit '()) (cons vec '()))))
