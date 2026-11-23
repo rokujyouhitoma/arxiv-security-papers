@@ -16,6 +16,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **937** | DSN-33-24 三位一体・二村射影 Scheme インタプリタ自動生成・双対導出 ＆ メタ循環統合アーキテクチャ設計書の策定 | Docs | 2026-11-23 | [937-design-dsn-33-24-futamura-scheme-interpreter-synthesis.md](closed/937-design-dsn-33-24-futamura-scheme-interpreter-synthesis.md) |
 | **936** | `c-tu` モードにおける関数プロローグ一括スタックフレーム確保と非 GC 呼び出し時の不要 `%rsp` シフト・`xor r10` 廃止 | Feature | 2026-11-23 | [936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md](closed/936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md) |
 | **935** | C99 変数ビットシフトの x86-64 `%cl` 単一命令化および重複ゼロ・符号拡張 (`%zext`/`%sext`/`%trunc`) の畳み込み最適化 | Feature | 2026-11-23 | [935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md](closed/935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md) |
 | **934** | C99 式評価の一時スタックスピルに対するデッドストア除去 (DSE) とレジスタ直接受け渡しによるコードサイズ削減 | Feature | 2026-11-23 | [934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md](closed/934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) |
