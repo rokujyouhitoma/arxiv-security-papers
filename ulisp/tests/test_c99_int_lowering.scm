@@ -321,4 +321,54 @@ int main(void) {
                 2503
                 (vm-get-reg vm '%rax)))
 
+;; 6.4 Issue #935: Variable bit shifts (%cl single inst) across 32/64-bit, signed/unsigned, counts 0..63 & CWE-681 upper-bits
+(let* ((src "
+int shl32(int x, int n) { return x << n; }
+int sar32(int x, int n) { return x >> n; }
+unsigned int shr32(unsigned int x, int n) { return x >> n; }
+unsigned int shr32_dirty(long long raw, int n) { return ((unsigned int)raw) >> n; }
+long long shl64(long long x, int n) { return x << n; }
+long long sar64(long long x, int n) { return x >> n; }
+unsigned long long shr64(unsigned long long x, int n) { return x >> n; }
+int main(void) {
+  int a = shl32(3, 4);                  /* 48 */
+  int b = shl32(1, 32);                 /* 32-bit mask & 31 -> shift by 0 = 1 */
+  int c = sar32(-16, 2);                /* -4 */
+  int d = sar32(-16, 33);               /* 32-bit mask & 31 -> shift by 1 = -8 */
+  unsigned int e = shr32(0x80000000U, 31); /* 1 */
+  unsigned int f = shr32_dirty(-1LL, 1); /* upper 32 bits must zero-extend before >> 1 -> 0x7FFFFFFF */
+  long long g = shl64(1LL, 40);         /* 1099511627776 */
+  long long h = sar64(-1024LL, 3);      /* -128 */
+  unsigned long long i = shr64(0x8000000000000000ULL, 63); /* 1 */
+  if (a != 48) return 1;
+  if (b != 1) return 2;
+  if (c != -4) return 3;
+  if (d != -8) return 4;
+  if (e != 1U) return 5;
+  if (f != 0x7FFFFFFFU) return 6;
+  if (g != 1099511627776LL) return 7;
+  if (h != -128LL) return 8;
+  if (i != 1ULL) return 9;
+  return 0;
+}")
+       (lir (c99-compile-string-to-lir src "var_shifts.c"))
+       (opt (lir-peephole-optimize lir))
+       (vm (make-lir-vm))
+       (has-sh-skip?
+        (let scan ((x opt))
+          (cond
+            ((symbol? x)
+             (let ((s (symbol->string x)))
+               (and (>= (string-length s) 7)
+                    (string=? (substring s 0 7) ".L_sh_s"))))
+            ((pair? x) (or (scan (car x)) (scan (cdr x))))
+            (else #f)))))
+  (assert-true "6.4a variable shift program satisfies L_lir_canonical?" (L_lir_canonical? opt))
+  (assert-false "6.4b variable shifts emit zero barrel-shifter sh_skip labels" has-sh-skip?)
+  (lir-vm-load! vm opt)
+  (lir-vm-run! vm)
+  (assert-equal "6.4c variable shifts compute exact C99 values across 32/64-bit & CWE-681 guard"
+                0
+                (vm-get-reg vm '%rax)))
+
 (test-end "C99 Sema Core & Integer Subset Core LIR Lowering (Issue #916)")

@@ -575,6 +575,305 @@
     (else ir)))
 
 ;;; -----------------------------------------------------------------------
+;;; Linear O(N) Algebraic Zero/Sign-Extension Folding (Issue #935)
+;;; -----------------------------------------------------------------------
+
+(define (lir-ext-inst->kind inst)
+  (and (pair? inst)
+       (= (length inst) 4)
+       (lir-peephole-reg? (caddr inst))
+       (lir-peephole-reg? (cadddr inst))
+       (let ((op (car inst))
+             (mty (cadr inst)))
+         (case op
+           ((%trunc %zext)
+            (case mty
+              ((i8 u8) 'u8)
+              ((i16 u16) 'u16)
+              ((i32 u32) 'u32)
+              (else #f)))
+           ((%sext)
+            (case mty
+              ((i8) 'i8)
+              ((i16) 'i16)
+              ((i32) 'i32)
+              (else #f)))
+           (else #f)))))
+
+(define (lir-ext-kind-width kind)
+  (case kind
+    ((u8 i8) 8)
+    ((u16 i16) 16)
+    ((u32 i32 u31) 32)
+    (else #f)))
+
+(define (lir-ext-normalize-const kind v)
+  (case kind
+    ((u8)  (modulo v 256))
+    ((u16) (modulo v 65536))
+    ((u32) (modulo v 4294967296))
+    ((i8)  (let ((m (modulo v 256))) (if (>= m 128) (- m 256) m)))
+    ((i16) (let ((m (modulo v 65536))) (if (>= m 32768) (- m 65536) m)))
+    ((i32) (let ((m (modulo v 4294967296))) (if (>= m 2147483648) (- m 4294967296) m)))
+    (else v)))
+
+(define (lir-ext-fact-subsumes? fact target-kind)
+  (cond
+    ((not fact) #f)
+    ((and (pair? fact) (eq? (car fact) 'const))
+     (= (cdr fact) (lir-ext-normalize-const target-kind (cdr fact))))
+    (else
+     (case fact
+       ((u8)  (memq target-kind '(u8 u16 i16 u32 i32)))
+       ((i8)  (memq target-kind '(i8 i16 i32)))
+       ((u16) (memq target-kind '(u16 u32 i32)))
+       ((i16) (memq target-kind '(i16 i32)))
+       ((u31) (memq target-kind '(u32 i32)))
+       ((u32) (eq? target-kind 'u32))
+       ((i32) (eq? target-kind 'i32))
+       (else #f)))))
+
+(define (lir-ext-reg-overlaps? r1 r2)
+  (or (equal? r1 r2)
+      (lir-reg-aliases? r1 r2)
+      (and (memq r1 '(%rax %al)) (memq r2 '(%rax %al)))
+      (and (memq r1 '(%rcx %cl)) (memq r2 '(%rcx %cl)))))
+
+(define (lir-ext-env-lookup env reg)
+  (let ((hit (assoc reg env)))
+    (and hit (cdr hit))))
+
+(define (lir-ext-env-kill env reg)
+  (let loop ((xs env) (acc '()))
+    (if (null? xs)
+        (reverse acc)
+        (loop (cdr xs)
+              (if (lir-ext-reg-overlaps? (caar xs) reg)
+                  acc
+                  (cons (car xs) acc))))))
+
+(define (lir-ext-env-set env reg fact)
+  (let ((cleaned (lir-ext-env-kill env reg)))
+    (if fact
+        (cons (cons reg fact) cleaned)
+        cleaned)))
+
+(define (lir-ext-env-kill-by-inst env inst)
+  (let loop ((xs env) (acc '()))
+    (if (null? xs)
+        (reverse acc)
+        (let* ((r (caar xs))
+               (killed?
+                (or (lir-inst-defines-reg? inst r)
+                    (and (eq? r '%rax) (lir-inst-defines-reg? inst '%al))
+                    (and (eq? r '%al) (lir-inst-defines-reg? inst '%rax))
+                    (and (eq? r '%rcx) (lir-inst-defines-reg? inst '%cl))
+                    (and (eq? r '%cl) (lir-inst-defines-reg? inst '%rcx))
+                    (and (pair? inst)
+                         (memq (car inst) '(%push %pop))
+                         (eq? r '%rsp)))))
+          (loop (cdr xs) (if killed? acc (cons (car xs) acc)))))))
+
+(define (lir-ext-safe-intra-block-op? op)
+  (memq op '(%loc %mov %load %load-byte-zx %load-typed %store %store-byte %store-typed
+              %add %raw-add %sub %raw-sub %imul %raw-mul %neg %inc
+              %bit-and %bit-or %bit-xor %shl %shr %sar
+              %cmp %raw-cmp %setb %setbe %seta %setae %set-boolean
+              %cqo %idiv %udiv %urem %trunc %zext %sext
+              %fmov %fadd %fsub %fmul %fdiv %fneg %fpext %fptrunc
+              %fcmp %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge
+              %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64
+              %global-addr %global-ref %global-set! %code-ref %str-ref %not %push %pop
+              %add-overflow %sub-overflow %mul-overflow
+              %box-fixnum %unbox-fixnum %box-flonum %unbox-flonum)))
+
+(define (lir-ext-try-fold-imm-prev acc reg target-kind)
+  (let loop ((xs acc) (locs '()))
+    (cond
+      ((null? xs) #f)
+      ((and (pair? (car xs)) (eq? (caar xs) '%loc))
+       (loop (cdr xs) (cons (car xs) locs)))
+      ((and (pair? (car xs))
+            (eq? (caar xs) '%mov)
+            (= (length (car xs)) 3)
+            (equal? (cadar xs) reg)
+            (integer? (caddr (car xs))))
+       (let ((nv (lir-ext-normalize-const target-kind (caddr (car xs)))))
+         (if (and (not (= nv 0)) (>= nv -2147483648) (<= nv 2147483647))
+             (cons nv (append (reverse locs) (cons (list '%mov reg nv) (cdr xs))))
+             #f)))
+      (else #f))))
+
+(define (lir-ext-try-overwrite-prev acc reg target-w)
+  (let loop ((xs acc) (locs '()))
+    (cond
+      ((null? xs) #f)
+      ((and (pair? (car xs)) (eq? (caar xs) '%loc))
+       (loop (cdr xs) (cons (car xs) locs)))
+      (else
+       (let ((pk (lir-ext-inst->kind (car xs))))
+         (if (and pk
+                  (equal? (caddr (car xs)) reg)
+                  (equal? (cadddr (car xs)) reg)
+                  (>= (lir-ext-kind-width pk) target-w))
+             (append (reverse locs) (cdr xs))
+             #f))))))
+
+(define (lir-ext-shr-nonneg v cnt)
+  (let loop ((x v) (k (modulo cnt 64)))
+    (if (or (<= k 0) (= x 0))
+        x
+        (loop (quotient x 2) (- k 1)))))
+
+(define (lir-ext-uint-range-fact n)
+  (cond
+    ((< n 0) #f)
+    ((<= n 255) 'u8)
+    ((<= n 65535) 'u16)
+    ((<= n 2147483647) 'u31)
+    ((<= n 4294967295) 'u32)
+    (else #f)))
+
+(define (lir-ext-post-inst-env env inst)
+  (let ((op (car inst))
+        (env1 (lir-ext-env-kill-by-inst env inst)))
+    (case op
+      ((%mov)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (cond
+           ((and (lir-peephole-reg? dst) (integer? src))
+            (lir-ext-env-set env1 dst (cons 'const src)))
+           ((and (lir-peephole-reg? dst) (lir-peephole-reg? src))
+            (lir-ext-env-set env1 dst (lir-ext-env-lookup env src)))
+           (else env1))))
+      ((%load-typed)
+       (let ((mty (cadr inst)) (dst (caddr inst)))
+         (if (and (lir-peephole-reg? dst) (memq mty '(i8 u8 i16 u16 i32 u32)))
+             (lir-ext-env-set env1 dst mty)
+             env1)))
+      ((%load-byte-zx %setb %setbe %seta %setae %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
+       (let ((dst (cadr inst)))
+         (if (lir-peephole-reg? dst)
+             (lir-ext-env-set env1 dst 'u8)
+             env1)))
+      ((%bit-and)
+       (let ((dst (cadr inst)) (src (caddr inst)))
+         (if (and (lir-peephole-reg? dst) (integer? src) (>= src 0) (<= src 2147483647))
+             (lir-ext-env-set env1 dst (lir-ext-uint-range-fact src))
+             env1)))
+      ((%shr)
+       (if (= (length inst) 4)
+           (let* ((dst (cadr inst))
+                  (src (caddr inst))
+                  (cnt (cadddr inst))
+                  (sf (and (lir-peephole-reg? src) (lir-ext-env-lookup env src))))
+             (if (lir-peephole-reg? dst)
+                 (cond
+                   ((memq sf '(u8 u16 u31 u32))
+                    (lir-ext-env-set env1 dst sf))
+                   ((and (pair? sf) (eq? (car sf) 'const) (>= (cdr sf) 0))
+                    (if (integer? cnt)
+                        (lir-ext-env-set env1 dst (cons 'const (lir-ext-shr-nonneg (cdr sf) cnt)))
+                        (lir-ext-env-set env1 dst (lir-ext-uint-range-fact (cdr sf)))))
+                   (else env1))
+                 env1))
+           (let* ((dst (cadr inst))
+                  (cnt (caddr inst))
+                  (df (and (lir-peephole-reg? dst) (lir-ext-env-lookup env dst))))
+             (if (lir-peephole-reg? dst)
+                 (cond
+                   ((memq df '(u8 u16 u31 u32))
+                    (lir-ext-env-set env1 dst df))
+                   ((and (pair? df) (eq? (car df) 'const) (>= (cdr df) 0))
+                    (if (integer? cnt)
+                        (lir-ext-env-set env1 dst (cons 'const (lir-ext-shr-nonneg (cdr df) cnt)))
+                        (lir-ext-env-set env1 dst (lir-ext-uint-range-fact (cdr df)))))
+                   (else env1))
+                 env1))))
+      ((%sar)
+       (let* ((dst (cadr inst))
+              (df (and (lir-peephole-reg? dst) (lir-ext-env-lookup env dst))))
+         (if (and (lir-peephole-reg? dst) (memq df '(i8 i16 i32 u8 u16 u31 u32)))
+             (lir-ext-env-set env1 dst df)
+             env1)))
+      (else env1))))
+
+(define (lir-fold-redundant-extensions insts)
+  (if (null? insts)
+      '()
+      (let loop ((xs insts) (env '()) (acc '()))
+        (if (null? xs)
+            (reverse acc)
+            (let* ((inst (car xs))
+                   (rest (cdr xs))
+                   (tk (lir-ext-inst->kind inst)))
+              (cond
+                (tk
+                 (let* ((dst (caddr inst))
+                        (src (cadddr inst))
+                        (sf (lir-ext-env-lookup env src)))
+                   (cond
+                     ((and sf (lir-ext-fact-subsumes? sf tk))
+                      (if (equal? dst src)
+                          (loop rest env acc)
+                          (loop rest
+                                (lir-ext-env-set env dst sf)
+                                (cons (list '%mov dst src) acc))))
+                     ((equal? dst src)
+                      (let ((imm-fold (lir-ext-try-fold-imm-prev acc dst tk)))
+                        (if imm-fold
+                            (loop rest
+                                  (lir-ext-env-set env dst (cons 'const (car imm-fold)))
+                                  (cdr imm-fold))
+                            (let ((trimmed (lir-ext-try-overwrite-prev acc dst (lir-ext-kind-width tk))))
+                              (loop rest
+                                    (lir-ext-env-set env dst tk)
+                                    (cons inst (or trimmed acc)))))))
+                     (else
+                      (loop rest
+                            (lir-ext-env-set env dst tk)
+                            (cons inst acc))))))
+                ((and (pair? inst) (lir-ext-safe-intra-block-op? (car inst)))
+                 (loop rest (lir-ext-post-inst-env env inst) (cons inst acc)))
+                (else
+                 (loop rest '() (cons inst acc)))))))))
+
+(define (lir-ext-transform-clause form)
+  (if (not (pair? form))
+      form
+      (case (car form)
+        ((%lir-function)
+         (cons '%lir-function
+               (map (lambda (sub)
+                      (if (and (pair? sub) (eq? (car sub) 'body))
+                          (cons 'body (lir-fold-redundant-extensions (cdr sub)))
+                          sub))
+                    (cdr form))))
+        ((%lir-main)
+         (cons '%lir-main
+               (map (lambda (sub)
+                      (if (and (pair? sub) (eq? (car sub) 'body))
+                          (cons 'body (lir-fold-redundant-extensions (cdr sub)))
+                          sub))
+                    (cdr form))))
+        ((%lir-functions)
+         (cons '%lir-functions
+               (map lir-ext-transform-clause (cdr form))))
+        (else form))))
+
+(define (lir-fold-redundant-extensions-in-ir ir)
+  (cond
+    ((null? ir) '())
+    ((and (pair? ir) (eq? (car ir) '%lir-program))
+     (cons '%lir-program
+           (map lir-ext-transform-clause (cdr ir))))
+    ((pair? ir)
+     (if (memq (car ir) '(%lir-function %lir-main))
+         (lir-ext-transform-clause ir)
+         (lir-fold-redundant-extensions ir)))
+    (else ir)))
+
+;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: lir-peephole-window-pass (fuse-window-rules) + DSE
 ;;; -----------------------------------------------------------------------
 
@@ -594,10 +893,15 @@
 
 (define (lir-peephole-optimize ir)
   (let* ((w1 (lir-peephole-window-pass ir))
-         (dse (lir-eliminate-dead-stack-stores-in-ir w1)))
+         (e1 (lir-fold-redundant-extensions-in-ir w1))
+         (dse (lir-eliminate-dead-stack-stores-in-ir e1)))
     (if (equal? w1 dse)
         dse
-        (lir-peephole-window-pass dse))))
+        (let* ((w2 (lir-peephole-window-pass dse))
+               (e2 (lir-fold-redundant-extensions-in-ir w2)))
+          (if (equal? e2 w2)
+              e2
+              (lir-eliminate-dead-stack-stores-in-ir e2))))))
 
 (define (optimize-peephole-fixpoint insts)
   (lir-peephole-optimize insts))

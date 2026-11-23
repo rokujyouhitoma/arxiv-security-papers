@@ -121,4 +121,30 @@
         (newline)
         (exit 1))))
 
+;; Test 5: Issue #935 - Variable Shift by CL (shl/shr/sar rax, cl -> 48 D3 E0/E8/F8)
+(let* ((lines '("    .intel_syntax noprefix"
+                "    .text"
+                "    shl rax, cl"
+                "    shr rax, cl"
+                "    sar rax, cl"))
+       (res (assemble-x86-lines lines))
+       (text-bv (car res))
+       (tlen (bytevector-length text-bv)))
+  (if (and (= tlen 9)
+           (= (bytevector-u8-ref text-bv 0) 72)
+           (= (bytevector-u8-ref text-bv 1) 211)
+           (= (bytevector-u8-ref text-bv 2) 224)
+           (= (bytevector-u8-ref text-bv 3) 72)
+           (= (bytevector-u8-ref text-bv 4) 211)
+           (= (bytevector-u8-ref text-bv 5) 232)
+           (= (bytevector-u8-ref text-bv 6) 72)
+           (= (bytevector-u8-ref text-bv 7) 211)
+           (= (bytevector-u8-ref text-bv 8) 248))
+      (display "[PASS] Test 5: shl/shr/sar rax, cl encoded as REX.W D3 E0/E8/F8\n")
+      (begin
+        (display "[FAIL] Test 5: unexpected CL shift encoding length/bytes: ")
+        (display tlen)
+        (newline)
+        (exit 1))))
+
 

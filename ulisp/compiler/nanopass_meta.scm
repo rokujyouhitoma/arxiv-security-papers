@@ -3644,7 +3644,7 @@
         ((%fneg %fpext %fptrunc %trunc %zext %sext)
          (let ((src (cadddr inst)))
            (if (lir-peephole-reg? src) (list src) '())))
-        ((%add %raw-add %sub %raw-sub %imul %raw-mul %bit-and %bit-or %bit-xor %shl %shr %sar
+        ((%add %raw-add %sub %raw-sub %imul %raw-mul %bit-and %bit-or %bit-xor %shl %sar
           %fadd %fsub %fmul %fdiv)
          (let ((dst (cadr inst)) (src (caddr inst)))
            (cond
@@ -3652,6 +3652,20 @@
              ((lir-peephole-reg? dst) (list dst))
              ((lir-peephole-reg? src) (list src))
              (else '()))))
+        ((%shr)
+         (if (= (length inst) 4)
+             (let ((src (caddr inst)) (cnt (cadddr inst)))
+               (cond
+                 ((and (lir-peephole-reg? src) (lir-peephole-reg? cnt)) (list src cnt))
+                 ((lir-peephole-reg? src) (list src))
+                 ((lir-peephole-reg? cnt) (list cnt))
+                 (else '())))
+             (let ((dst (cadr inst)) (cnt (caddr inst)))
+               (cond
+                 ((and (lir-peephole-reg? dst) (lir-peephole-reg? cnt)) (list dst cnt))
+                 ((lir-peephole-reg? dst) (list dst))
+                 ((lir-peephole-reg? cnt) (list cnt))
+                 (else '())))))
         ((%cmp %raw-cmp %fcmp)
          (let ((op1 (cadr inst)) (op2 (caddr inst)))
            (cond

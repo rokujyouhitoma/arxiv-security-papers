@@ -214,6 +214,57 @@
   (if (file-exists? tu2) (delete-file tu2))
   (if (file-exists? tmp-dir) (process-exec (list "rmdir" tmp-dir))))
 
+;; 7. Issue #935: Variable shift parity across Native ELF, Portable C, and LIR VM (including <<= and >>=)
+(let* ((tmp-dir "/tmp/ulisp_test_c99_var_shifts_935")
+       (src-file (string-append tmp-dir "/shift_parity.c"))
+       (elf-bin (string-append tmp-dir "/shift_native"))
+       (c-bin (string-append tmp-dir "/shift_c"))
+       (c-src
+        (string-append
+         "static unsigned int rotl32(unsigned int x, int n) {\n"
+         "  return (x << n) | (x >> (32 - n));\n"
+         "}\n"
+         "static int s_asr(int x, int n) { x >>= n; return x; }\n"
+         "static unsigned long long u64_sh(unsigned long long x, int n) {\n"
+         "  x <<= n;\n"
+         "  return x >> (n & 7);\n"
+         "}\n"
+         "int main(void) {\n"
+         "  unsigned int r = rotl32(0x12345678U, 8);\n"
+         "  int neg = s_asr(-256, 3);\n"
+         "  unsigned long long v64 = u64_sh(0x00FFULL, 36);\n"
+         "  unsigned int mask32 = (1U << 32);\n"
+         "  if (r != 0x34567812U) return 1;\n"
+         "  if (neg != -32) return 2;\n"
+         "  if (v64 != (0x00FF000000000ULL >> 4)) return 3;\n"
+         "  if (mask32 != 1U) return 4;\n"
+         "  return 0;\n"
+         "}\n")))
+  (if (file-exists? elf-bin) (delete-file elf-bin))
+  (if (file-exists? c-bin) (delete-file c-bin))
+  (if (not (file-exists? tmp-dir))
+      (process-exec (list "mkdir" "-p" tmp-dir)))
+  (%c-drv-write-text-file! src-file c-src)
+  (lua-idiom-assert-equal
+   "var shift Native ELF compiles cleanly"
+   0 (c-driver-cli-main (list "-O2" src-file "-o" elf-bin)))
+  (lua-idiom-assert-equal
+   "var shift Native ELF returns 0"
+   0 (process-exec (list elf-bin)))
+  (lua-idiom-assert-equal
+   "var shift --target=c compiles cleanly"
+   0 (c-driver-cli-main (list "--target=c" "-O2" src-file "-o" c-bin)))
+  (lua-idiom-assert-equal
+   "var shift --target=c returns 0"
+   0 (process-exec (list c-bin)))
+  (lua-idiom-assert-equal
+   "var shift --target=vm returns 0"
+   0 (c-driver-cli-main (list "--target=vm" src-file)))
+  (if (file-exists? elf-bin) (delete-file elf-bin))
+  (if (file-exists? c-bin) (delete-file c-bin))
+  (if (file-exists? src-file) (delete-file src-file))
+  (if (file-exists? tmp-dir) (process-exec (list "rmdir" tmp-dir))))
+
 (display "Summary: ")
 (display (car *lua-idiom-pass*))
 (display " passed, ")

@@ -40,4 +40,19 @@
   (assert-true "lir generated for c backend" (pair? lir))
   (assert-equal "lir tag" '%lir-program (car lir)))
 
+;; 7. Issue #935: Variable register shift count C emission with unsigned &63 mask
+(let ((captured '()))
+  (set-emit-line-sink! (lambda (line) (set! captured (cons line captured))))
+  (emit-c-instruction '(%shl %rax %rcx))
+  (emit-c-instruction '(%shr %rax %rcx))
+  (emit-c-instruction '(%shr %rbx %rax %rcx))
+  (emit-c-instruction '(%sar %rax %rcx))
+  (set-emit-line-sink! #f)
+  (assert-equal "emit-c-instruction emits masked uint64_t shifts for %rcx"
+                '("    reg_rax = ((uint64_t)reg_rax) << ((uint64_t)reg_rcx & 63);"
+                  "    reg_rax = ((uint64_t)reg_rax) >> ((uint64_t)reg_rcx & 63);"
+                  "    reg_rbx = ((uint64_t)reg_rax) >> ((uint64_t)reg_rcx & 63);"
+                  "    reg_rax = (uint64_t)(((int64_t)reg_rax) >> ((uint64_t)reg_rcx & 63));")
+                (reverse captured)))
+
 (test-end "Pass 160 (Portable C Backend)")

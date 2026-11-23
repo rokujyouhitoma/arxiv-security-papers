@@ -10,7 +10,7 @@
   - [#926 (Lua 5.4.7 公式テストスイート E2E ＆ GCC vs ULisp 性能比較ハーネス)](../../docs/issues/closed/926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md)
   - [#933 (関数内ローカルラベルの過剰 `.p2align 4` 廃止と Pass 144a 短距離ジャンプ最適化)](../../docs/issues/closed/933-eliminate-intraprocedural-label-p2align-nop-bloat-and-enable-short-jumps.md)
   - [#934 (C99 式評価の一時スタックスピル DSE ＆ レジスタ直接受け渡し)](../../docs/issues/closed/934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md)
-  - [#935 (C99 変数ビットシフト `%cl` 単一命令化 ＆ 重複拡張畳み込み)](../../docs/issues/935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md)
+  - [#935 (C99 変数ビットシフト `%cl` 単一命令化 ＆ 重複拡張畳み込み)](../../docs/issues/closed/935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md)
   - [#936 (`c-tu` プロローグ一括フレーム確保 ＆ `xor r10` 廃止)](../../docs/issues/936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md)
 
 ---
@@ -31,26 +31,26 @@
 
 ### 2.1 バイナリサイズ・ELF セクション・機械語命令数の比較と最適化推移
 
-| 指標 (Metric) | `lua_gcc` (GCC 13.3 `-O2`) | `lua_ulisp` (Initial #925) | `lua_ulisp` (After #933) | `lua_ulisp` (After #934) | #933 → #934 改善量 | 現在の対 GCC 比率 |
-| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Total ELF File Size** | 313,904 B | 1,048,592 B (`3.34x`) | 925,712 B (`2.95x`) | **696,336 B** | **-229,376 B (-24.8%)** | **2.22x** |
-| **`.text` (Machine Code, `size -B`)** | 267,873 B | 975,001 B (`3.64x`) | 852,127 B (`3.18x`) | **622,032 B** | **-230,095 B (-27.0%)** | **2.32x** |
-| **`.data` (Initialized Data)** | 6,064 B | 6,264 B (`1.03x`) | 6,264 B (`1.03x`) | **6,264 B** | ±0 B | **1.03x** |
-| **`.bss` (Zero-Init Data)** | 56 B | 64 B (`1.14x`) | 64 B (`1.14x`) | **64 B** | ±0 B | **1.14x** |
-| **総機械語命令数 (`objdump -d`)** | 50,975 命令 | 322,305 命令 (`6.32x`) | 199,641 命令 (`3.92x`) | **148,632 命令** | **-51,009 命令 (-25.6%)** | **2.92x** |
-| **`%rsp` 相対命令数 (`[rsp...]`)** | 6,412 命令 | — | 62,176 命令 (`31.1%`) | **23,730 命令 (`16.0%`)** | **-38,446 命令 (-61.8%)** | **3.70x** |
-| ├ `%rsp` ストア命令数 (`rsp_store`) | — | — | 28,437 命令 | **6,955 命令** | **-21,482 命令 (-75.5%)** | — |
-| ├ `%rsp` ロード命令数 (`rsp_load`) | — | — | 32,756 命令 | **15,818 命令** | **-16,938 命令 (-51.7%)** | — |
-| └ `%rsp` アドレス取得 (`lea`) | — | — | 977 命令 | **957 命令** | -20 命令 (-2.0%) | — |
-| **`nop` パディング命令数** | 341 命令 (`0.67%`) | 130,175 命令 (`40.39%`) | 7,548 命令 (`3.78%`) | **8,084 命令 (`5.44%`)** | +536 命令 | — |
+| 指標 (Metric) | `lua_gcc` (GCC 13.3 `-O2`) | `lua_ulisp` (Initial #925) | `lua_ulisp` (After #933) | `lua_ulisp` (After #934) | `lua_ulisp` (After #935) | #934 → #935 改善量 | 現在の対 GCC 比率 |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Total ELF File Size** | 313,904 B | 1,048,592 B (`3.34x`) | 925,712 B (`2.95x`) | 696,336 B (`2.22x`) | **630,800 B** | **-65,536 B (-9.4%)** | **2.01x** |
+| **`.text` (Machine Code, `size -B`)** | 267,873 B | 975,001 B (`3.64x`) | 852,127 B (`3.18x`) | 622,032 B (`2.32x`) | **555,073 B** | **-66,959 B (-10.8%)** | **2.07x** |
+| **`.data` (Initialized Data)** | 6,064 B | 6,264 B (`1.03x`) | 6,264 B (`1.03x`) | 6,264 B (`1.03x`) | **6,264 B** | ±0 B | **1.03x** |
+| **`.bss` (Zero-Init Data)** | 56 B | 64 B (`1.14x`) | 64 B (`1.14x`) | 64 B (`1.14x`) | **64 B** | ±0 B | **1.14x** |
+| **総機械語命令数 (`objdump -d`)** | 50,975 命令 | 322,305 命令 (`6.32x`) | 199,641 命令 (`3.92x`) | 148,632 命令 (`2.92x`) | **132,959 命令** | **-15,673 命令 (-10.5%)** | **2.61x** |
+| **`%rsp` 相対命令数 (`[rsp...]`)** | 6,412 命令 | — | 62,176 命令 (`31.1%`) | 23,730 命令 (`16.0%`) | **23,717 命令 (`17.8%`)** | -13 命令 (-0.1%) | **3.70x** |
+| ├ `%rsp` ストア命令数 (`rsp_store`) | — | — | 28,437 命令 | 6,955 命令 | **6,954 命令** | -1 命令 | — |
+| ├ `%rsp` ロード命令数 (`rsp_load`) | — | — | 32,756 命令 | 15,818 命令 | **15,806 命令** | -12 命令 | — |
+| └ `%rsp` アドレス取得 (`lea`) | — | — | 977 命令 | 957 命令 | **957 命令** | ±0 命令 | — |
+| **`nop` パディング命令数** | 341 命令 (`0.67%`) | 130,175 命令 (`40.39%`) | 7,548 命令 (`3.78%`) | 8,084 命令 (`5.44%`) | **8,091 命令 (`6.09%`)** | +7 命令 | — |
 
 ```mermaid
 xychart-beta
     title "Lua 5.4.7 ELF Binary & .text Section Size (KB)"
-    x-axis ["lua_gcc (GCC -O2)", "lua_ulisp (Initial #925)", "lua_ulisp (After #933)", "lua_ulisp (After #934)"]
+    x-axis ["lua_gcc (GCC -O2)", "lua_ulisp (Initial #925)", "lua_ulisp (After #933)", "lua_ulisp (After #934)", "lua_ulisp (After #935)"]
     y-axis "Size (KB)" 0 --> 1100
-    bar [306.5, 1024.0, 904.0, 680.0]
-    bar [261.6, 952.1, 832.2, 607.5]
+    bar [306.5, 1024.0, 904.0, 680.0, 616.0]
+    bar [261.6, 952.1, 832.2, 607.5, 542.1]
 ```
 
 ---
@@ -59,19 +59,19 @@ xychart-beta
 
 `LUA_FULL_BIG=1 make -C ulisp test_lua_e2e` における公式 Lua 5.4.7 テストスイート（171 チェックポイント行・GC メモリ収束が `lua_gcc` と差分ゼロで完全一致）の実測実行時間：
 
-| スイート / モジュール | `lua_gcc` (GCC `-O2`) | `lua_ulisp` (#933) | `lua_ulisp` (After #934) | 対 GCC 比率 (After #934) | 検証ステータス |
-| :--- | ---: | ---: | ---: | ---: | :---: |
-| **Official `all.lua` (`_U=true`, 全 26 モジュール合計)** | 0.470 s | 1.170〜1.310 s | **1.130 s** | **2.40x** | PASS (`final OK !!!`) |
-| **Heavy `big.lua` (非 soft 大規模テーブル＆コルーチン)** | 0.126 s | 0.269〜0.297 s | **0.284 s** | **2.25x** | PASS |
-| `all.lua` module: `calls.lua` | 0.0651 s | 0.2626 s | **0.2378 s** | **3.65x** | PASS |
-| `all.lua` module: `locals.lua` | 0.1063 s | 0.1459 s | **0.2131 s** | **2.01x** | PASS |
-| `all.lua` module: `cstack.lua` | 0.0730 s | 0.1249 s | **0.1172 s** | **1.61x** | PASS |
-| `all.lua` module: `constructs.lua` | 0.0366 s | 0.0963 s | **0.0783 s** | **2.14x** | PASS |
-| `all.lua` module: `db.lua` | 0.0217 s | 0.0776 s | **0.0743 s** | **3.42x** | PASS |
-| `all.lua` module: `math.lua` | 0.0118 s | 0.0800 s | **0.0664 s** | **5.63x** | PASS |
-| `all.lua` module: `sort.lua` | 0.0153 s | 0.0546 s | **0.0496 s** | **3.24x** | PASS |
-| `all.lua` module: `nextvar.lua` | 0.0142 s | 0.0270 s | **0.0267 s** | **1.88x** | PASS |
-| `all.lua` module: `errors.lua` | 0.0044 s | 0.0176 s | **0.0132 s** | **2.98x** | PASS |
+| スイート / モジュール | `lua_gcc` (GCC `-O2`) | `lua_ulisp` (#933) | `lua_ulisp` (After #934) | `lua_ulisp` (After #935) | 対 GCC 比率 (After #935) | 検証ステータス |
+| :--- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Official `all.lua` (`_U=true`, 全 26 モジュール合計)** | 0.510 s | 1.170〜1.310 s | 1.130 s | **1.010 s** | **1.98x** | PASS (`final OK !!!`) |
+| **Heavy `big.lua` (非 soft 大規模テーブル＆コルーチン)** | 0.166 s | 0.269〜0.297 s | 0.284 s | **0.257 s** | **1.55x** | PASS |
+| `all.lua` module: `calls.lua` | 0.0963 s | 0.2626 s | 0.2378 s | **0.2248 s** | **2.33x** | PASS |
+| `all.lua` module: `locals.lua` | 0.1154 s | 0.1459 s | 0.2131 s | **0.1574 s** | **1.36x** | PASS |
+| `all.lua` module: `cstack.lua` | 0.0774 s | 0.1249 s | 0.1172 s | **0.1089 s** | **1.41x** | PASS |
+| `all.lua` module: `constructs.lua` | 0.0302 s | 0.0963 s | 0.0783 s | **0.0768 s** | **2.54x** | PASS |
+| `all.lua` module: `db.lua` | 0.0234 s | 0.0776 s | 0.0743 s | **0.0641 s** | **2.74x** | PASS |
+| `all.lua` module: `math.lua` | 0.0130 s | 0.0800 s | 0.0664 s | **0.0538 s** | **4.14x** | PASS |
+| `all.lua` module: `sort.lua` | 0.0179 s | 0.0546 s | 0.0496 s | **0.0470 s** | **2.62x** | PASS |
+| `all.lua` module: `nextvar.lua` | 0.0145 s | 0.0270 s | 0.0267 s | **0.0246 s** | **1.69x** | PASS |
+| `all.lua` module: `errors.lua` | 0.0047 s | 0.0176 s | 0.0132 s | **0.0125 s** | **2.65x** | PASS |
 
 ---
 
@@ -79,13 +79,13 @@ xychart-beta
 
 5 種類の代表的な VM ワークロードにおける `lua_gcc` vs `lua_ulisp` の実行時間および出力チェックサム完全一致検証：
 
-| ワークロード | 内容・反復回数 | `lua_gcc` (s) | `lua_ulisp` (After #933) | `lua_ulisp` (After #934) | 対 GCC 比率 (After #934) | チェックサム完全一致検証 |
-| :--- | :--- | ---: | ---: | ---: | ---: | :---: |
-| **`table_hash_array`** | 配列 25万件 + ハッシュ表 10万件 挿入＆探索 | 0.0867 s | 0.1723 s (`2.39x`) | **0.1822 s** | **2.10x** | Exact Match (`67500300000`) |
-| **`string_pattern_pack`** | `string.format` + `match` + `pack`/`unpack` 10万回 | 0.1118 s | 0.3203 s (`3.46x`) | **0.3045 s** | **2.72x** | Exact Match (`16250125000`) |
-| **`fib_recursion`** | 再帰関数呼び出し `fib(31)` (2,692,537 回呼び出し) | 0.0925 s | 0.4718 s (`4.83x〜6.48x`) | **0.4429 s** | **4.79x** | Exact Match (`1346269`) |
-| **`coroutine_gc_churn`** | コルーチン `resume`/`yield` + 短命テーブル 20万個 GC | 0.0268 s | 0.1531 s (`6.18x〜7.34x`) | **0.1334 s** | **4.99x** | Exact Match (`40000600000`) |
-| **`vm_arith_loop`** | 整数ビット演算 + IEEE754 浮動小数点ループ 500万回 | 0.1049 s | 0.7253 s (`7.37x〜8.63x`) | **0.7222 s** | **6.88x** | Exact Match (`37491572188592:625001.50`) |
+| ワークロード | 内容・反復回数 | `lua_gcc` (s) | `lua_ulisp` (After #933) | `lua_ulisp` (After #934) | `lua_ulisp` (After #935) | 対 GCC 比率 (After #935) | チェックサム完全一致検証 |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **`table_hash_array`** | 配列 25万件 + ハッシュ表 10万件 挿入＆探索 | 0.0853 s | 0.1723 s (`2.39x`) | 0.1822 s (`2.10x`) | **0.2039 s** | **2.39x** | Exact Match (`67500300000`) |
+| **`string_pattern_pack`** | `string.format` + `match` + `pack`/`unpack` 10万回 | 0.1031 s | 0.3203 s (`3.46x`) | 0.3045 s (`2.72x`) | **0.2469 s** | **2.39x** | Exact Match (`16250125000`) |
+| **`fib_recursion`** | 再帰関数呼び出し `fib(31)` (2,692,537 回呼び出し) | 0.0883 s | 0.4718 s (`4.83x〜6.48x`) | 0.4429 s (`4.79x`) | **0.3631 s** | **4.11x** | Exact Match (`1346269`) |
+| **`coroutine_gc_churn`** | コルーチン `resume`/`yield` + 短命テーブル 20万個 GC | 0.0331 s | 0.1531 s (`6.18x〜7.34x`) | 0.1334 s (`4.99x`) | **0.1069 s** | **3.23x** | Exact Match (`40000600000`) |
+| **`vm_arith_loop`** | 整数ビット演算 + IEEE754 浮動小数点ループ 500万回 | 0.0926 s | 0.7253 s (`7.37x〜8.63x`) | 0.7222 s (`6.88x`) | **0.5087 s** | **5.50x** | Exact Match (`37491572188592:625001.50`) |
 
 ---
 
@@ -97,7 +97,7 @@ xychart-beta
 | :---: | :--- | :--- | :---: | :--- |
 | **[#933](../../docs/issues/closed/933-eliminate-intraprocedural-label-p2align-nop-bloat-and-enable-short-jumps.md)** | 関数内ローカルラベルの過剰 `.p2align 4` 廃止 ＆ Pass 144a 後方短距離ジャンプ (`rel8`) | [140_backend_x86_64.scm](../backend/140_backend_x86_64.scm), [144a_x86_assembler.scm](../backend/144a_x86_assembler.scm) | **完了 (Closed)** | `nop` 命令 **130,175 → 7,548 (-94.2%)**、バイナリ **-122.9 KB**、`fib_recursion` 等高速化 |
 | **[#934](../../docs/issues/closed/934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md)** | C99 式評価の一時スタックスピルに対する Dead Store Elimination (DSE) ＆ 単純右辺 Spill-Free 評価 | [lower_to_lir.scm](../frontend_c/lower_to_lir.scm), [133_lir_peephole.scm](../lir/133_lir_peephole.scm) | **完了 (Closed)** | `%rsp` 命令 **62,176 → 23,730 (-61.8%)**（`rsp_store` -75.5%）、`.text` **-230.1 KB (-27.0%)**、ELF **696,336 B (`2.22x`)**、`all.lua` **1.130s (`2.40x`)** |
-| **[#935](../../docs/issues/935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md)** | 変数ビットシフトの `shl/shr/sar reg, cl` 単一命令化（6段分岐廃止）＆ 連続 `%zext`/`%sext` 畳み込み | [lower_to_lir.scm](../frontend_c/lower_to_lir.scm), [133_lir_peephole.scm](../lir/133_lir_peephole.scm), [140_backend_x86_64.scm](../backend/140_backend_x86_64.scm) | Open (In Progress) | 変数シフト 1 箇所 35 命令 → 1 命令化 ＋ 重複拡張 `15,924` 命令削減（約 40〜80 KB 縮小） |
+| **[#935](../../docs/issues/closed/935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md)** | 変数ビットシフトの `shl/shr/sar reg, cl` 単一命令化（分岐廃止）＆ Pass 133 線形 `O(N)` 整数拡張畳み込み | [lower_to_lir.scm](../frontend_c/lower_to_lir.scm), [133_lir_peephole.scm](../lir/133_lir_peephole.scm), [140_backend_x86_64.scm](../backend/140_backend_x86_64.scm) | **完了 (Closed)** | バレルシフタ **473 → 0 箇所**（`cl` シフト 473 件）、レジスタ間拡張 **14,980 → 7,651 (-48.9%)**、`.text` **-67.0 KB (-10.8%, `2.07x`)**、ELF **630,800 B (`2.01x`)**、`all.lua` **1.010 s (`1.98x`)** |
 | **[#936](../../docs/issues/936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md)** | `c-tu` モードでの Managed GC 用 `xor r10, r10` 廃止 ＆ コールサイト連続 `add/sub rsp` 相殺 | [140_backend_x86_64.scm](../backend/140_backend_x86_64.scm), [143_backend_x86_peephole.scm](../backend/143_backend_x86_peephole.scm) | Open (In Progress) | 全 C 関数呼び出しサイトの `xor r10, r10` 0 件化 ＆ `sub/add rsp` (`8,520` 命令) 削減 |
 
 ---

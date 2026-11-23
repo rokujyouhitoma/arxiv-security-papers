@@ -303,4 +303,101 @@
                 in-u64
                 out-u64))
 
+;; 22. Issue #935: Identical and monotone integer extension folding + f32/f64 exclusion
+(let* ((in-ident '((%mov %rax %rdi)
+                   (%sext i32 %rax %rax)
+                   (%sext i32 %rax %rax)
+                   (%return %rax)))
+       (in-u8 '((%load-typed u8 %rax %rsp -8)
+                (%sext i32 %rax %rax)
+                (%zext u32 %rax %rax)
+                (%return %rax)))
+       (in-i8 '((%load-typed i8 %rax %rsp -8)
+                (%sext i32 %rax %rax)
+                (%zext u32 %rax %rax)
+                (%return %rax)))
+       (in-u32 '((%load-typed u32 %rax %rsp -8)
+                 (%sext i32 %rax %rax)
+                 (%return %rax)))
+       (in-i32 '((%load-typed i32 %rax %rsp -8)
+                 (%sext i32 %rax %rax)
+                 (%return %rax)))
+       (in-imm1 '((%mov %rax 42)
+                  (%sext i32 %rax %rax)
+                  (%zext u8 %rax %rax)
+                  (%return %rax)))
+       (in-imm2 '((%mov %rax 300)
+                  (%zext u8 %rax %rax)
+                  (%return %rax)))
+       (in-fp '((%trunc f32 %xmm0 %xmm0)
+                (%zext f64 %xmm0 %xmm0)
+                (%return))))
+  (assert-equal "identical %sext i32 duplicate eliminated"
+                '((%mov %rax %rdi) (%sext i32 %rax %rax) (%return %rax))
+                (optimize-peephole-fixpoint in-ident))
+  (assert-equal "u8 load subsumes both %sext i32 and %zext u32"
+                '((%load-typed u8 %rax %rsp -8) (%return %rax))
+                (optimize-peephole-fixpoint in-u8))
+  (assert-equal "i8 load drops %sext i32 but keeps narrowing %zext u32"
+                '((%load-typed i8 %rax %rsp -8) (%zext u32 %rax %rax) (%return %rax))
+                (optimize-peephole-fixpoint in-i8))
+  (assert-equal "u32 load does NOT subsume %sext i32"
+                in-u32
+                (optimize-peephole-fixpoint in-u32))
+  (assert-equal "i32 load drops redundant %sext i32"
+                '((%load-typed i32 %rax %rsp -8) (%return %rax))
+                (optimize-peephole-fixpoint in-i32))
+  (assert-equal "const 42 subsumes %sext i32 and %zext u8"
+                '((%mov %rax 42) (%return %rax))
+                (optimize-peephole-fixpoint in-imm1))
+  (assert-equal "const 300 followed by %zext u8 folds to const 44"
+                '((%mov %rax 44) (%return %rax))
+                (optimize-peephole-fixpoint in-imm2))
+  (assert-equal "f32/f64 conversions are never touched by integer extension folding"
+                in-fp
+                (optimize-peephole-fixpoint in-fp)))
+
+;; 23. Issue #935: Adjacent overwrite, non-self %mov, shift/mask facts, call barrier, %rcx schema
+(let* ((in-over '((%mov %rax %rdi)
+                  (%zext u32 %rax %rax)
+                  (%sext i32 %rax %rax)
+                  (%return %rax)))
+       (in-nonself '((%load-typed u8 %rbx %rsp -8)
+                     (%zext u32 %rax %rbx)
+                     (%return %rax)))
+       (in-and '((%mov %rax %rdi)
+                 (%bit-and %rax 255)
+                 (%sext i32 %rax %rax)
+                 (%return %rax)))
+       (in-sar '((%mov %rax %rdi)
+                 (%sext i32 %rax %rax)
+                 (%sar %rax %rcx)
+                 (%sext i32 %rax %rax)
+                 (%return %rax)))
+       (in-call '((%sext i32 %rax %rax)
+                  (%direct-call foo 0)
+                  (%sext i32 %rax %rax)
+                  (%return %rax)))
+       (rcx-prog (make-test-program '((%bit-and %rcx 31)
+                                      (%zext u32 %rax %rax)
+                                      (%shr %rax %rcx)
+                                      (%return %rax)))))
+  (assert-equal "adjacent equal/narrower ext overwrites previous ext"
+                '((%mov %rax %rdi) (%sext i32 %rax %rax) (%return %rax))
+                (optimize-peephole-fixpoint in-over))
+  (assert-equal "subsumed non-self ext becomes plain %mov"
+                '((%load-typed u8 %rbx %rsp -8) (%mov %rax %rbx) (%return %rax))
+                (optimize-peephole-fixpoint in-nonself))
+  (assert-equal "%bit-and 255 infers u8 and drops following %sext i32"
+                '((%mov %rax %rdi) (%bit-and %rax 255) (%return %rax))
+                (optimize-peephole-fixpoint in-and))
+  (assert-equal "i32 preserved across variable %sar %rcx drops trailing %sext i32"
+                '((%mov %rax %rdi) (%sext i32 %rax %rax) (%sar %rax %rcx) (%return %rax))
+                (optimize-peephole-fixpoint in-sar))
+  (assert-equal "call barrier invalidates extension state conservatively"
+                in-call
+                (optimize-peephole-fixpoint in-call))
+  (assert-true "program with (%shr %rax %rcx) satisfies L_lir_canonical?"
+               (L_lir_canonical? (lir-peephole-optimize rcx-prog))))
+
 (test-end "Pass 133 (LIR Peephole & DCE)")
