@@ -171,4 +171,24 @@
 (reset-picopass-provenance!)
 (disable-picopass-provenance!)
 
+;; 14. LEA + Add/Sub constant folding (rule-x86-lea-add-fold, Issue #936)
+(assert-equal "lea + negative imm add folds displacement"
+              '((lea rax (%disp 8 rsp)) (ret))
+              (optimize-x86-peephole-insts '((lea rax (%disp 40 rsp)) (add rax (%imm -32)) (ret))))
+(assert-equal "lea + negating add folds to mov base"
+              '((mov rax rsp) (ret))
+              (optimize-x86-peephole-insts '((lea rax (%disp 40 rsp)) (add rax (%imm -40)) (ret))))
+(assert-equal "lea + positive sub folds displacement"
+              '((lea rcx (%disp 40 rsp)) (ret))
+              (optimize-x86-peephole-insts '((lea rcx (%disp 56 rsp)) (sub rcx 16) (ret))))
+(assert-equal "lea + zero-sum self base eliminates completely"
+              '((ret))
+              (optimize-x86-peephole-insts '((lea rsp (%disp 16 rsp)) (sub rsp 16) (ret))))
+(assert-equal "lea + add before flag-consuming jcc is NOT folded"
+              '((lea rax (%disp 40 rsp)) (add rax (%imm -32)) (jcc je L_ok) (ret))
+              (optimize-x86-peephole-insts '((lea rax (%disp 40 rsp)) (add rax (%imm -32)) (jcc je L_ok) (ret))))
+(assert-true "folded lea program satisfies L_asm_x86?"
+             (L_asm_x86? (optimize-x86-peephole
+                           (make-test-asm-program '((lea rax (%disp 40 rsp)) (add rax (%imm -24)) (ret))))))
+
 (test-end "Pass 143 (x86-64 Machine Peephole)")

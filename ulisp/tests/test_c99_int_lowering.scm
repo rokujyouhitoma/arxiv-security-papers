@@ -371,4 +371,48 @@ int main(void) {
                 0
                 (vm-get-reg vm '%rax)))
 
+;; 6.5 Issue #936: Omit SysV AMD64 %al setup on prototyped non-variadic external %c-call, keep on variadic & K&R
+(let* ((src "
+int ext_add(int a, int b);
+double ext_dadd(double x, double y);
+int ext_fmt(const char *fmt, ...);
+int main(void) {
+  int r1 = ext_add(10, 20);
+  double r2 = ext_dadd(1.5, 2.5);
+  int r3 = ext_fmt(\"%d %f\", r1, r2);
+  return r1 + (int)r2 + r3;
+}")
+       (lir (c99-compile-string-to-lir src "ext_al_setup.c"))
+       (funcs (cdr (assq '%lir-functions (cdr lir))))
+       (main-fn (car funcs))
+       (main-body (cdr (assq 'body (cddr main-fn))))
+       (find-c-call
+        (lambda (name)
+          (let loop ((is main-body))
+            (cond
+              ((null? is) #f)
+              ((and (pair? (car is)) (eq? (caar is) '%c-call) (equal? (cadar is) name))
+               (car is))
+              (else (loop (cdr is)))))))
+       (c-add (find-c-call "ext_add"))
+       (c-dadd (find-c-call "ext_dadd"))
+       (c-fmt (find-c-call "ext_fmt"))
+       (kr-fty (make-c-fn-type 'i32 '() #f))
+       (void-fty (make-c-fn-type 'i32 '() #f))
+       (var-fty (make-c-fn-type 'i32 '(i32) #t)))
+  (assert-true "6.5a %al-omitted external calls satisfy validate-core-lir" (validate-core-lir lir))
+  (assert-true "6.5b %al-omitted external calls satisfy L_lir_core?" (L_lir_core? lir))
+  (assert-equal "6.5c prototyped non-variadic int external %c-call omits %al" 3 (length c-add))
+  (assert-equal "6.5d prototyped non-variadic double external %c-call omits %al" 3 (length c-dadd))
+  (assert-equal "6.5e variadic external %c-call retains %al setup" 4 (length c-fmt))
+  (assert-equal "6.5f variadic %c-call passes xmm count 1 in %al" 1 (cadddr c-fmt))
+  (assert-false "6.5g %c99-call-needs-al? returns #f for void(void) with 0 args"
+                (%c99-call-needs-al? void-fty '()))
+  (assert-true "6.5h %c99-call-needs-al? preserves #t for unprototyped K&R call with args"
+               (%c99-call-needs-al? kr-fty '(dummy-arg)))
+  (assert-true "6.5i %c99-call-needs-al? returns #t for variadic prototype"
+               (%c99-call-needs-al? var-fty '(a b)))
+  (assert-true "6.5j %c99-call-needs-al? returns #t for non-function pointer fallback"
+               (%c99-call-needs-al? 'i64 '())))
+
 (test-end "C99 Sema Core & Integer Subset Core LIR Lowering (Issue #916)")
