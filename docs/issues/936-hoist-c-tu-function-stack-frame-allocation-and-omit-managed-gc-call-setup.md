@@ -47,7 +47,7 @@ ID: 936
   - [#925](closed/925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) (Lua 5.4.7 全 33 TU ビルドパイプライン)
   - [#926](closed/926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) (Lua 5.4.7 公式テストスイート E2E ＆ GCC vs ULisp 性能比較)
   - [#933](closed/933-eliminate-intraprocedural-label-p2align-nop-bloat-and-enable-short-jumps.md) (関数内ラベル `.p2align 4` `nop` 廃止)
-  - [#934](934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) (一時スタックスピル DSE)
+  - [#934](closed/934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) (一時スタックスピル DSE)
   - [#935](935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md) (変数シフト `%cl` 単一命令化 ＆ 重複拡張畳み込み)
 
 ---
@@ -74,7 +74,7 @@ flowchart TD
 | :--- | :--- | :--- |
 | **Project Manager (PM)** | ガバナンス・優先順位 | [#933](closed/933-eliminate-intraprocedural-label-p2align-nop-bloat-and-enable-short-jumps.md)〜[#935](935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md) と組み合わせることで `lua_ulisp` のコールサイトオーバーヘッドを削減する総仕上げ Issue として承認。 |
 | **IT Specialist (PLC)** | 呼出規約・コード生成 | `140_backend_x86_64.scm` L1428 (`%direct-call`) および L1437 (`%direct-jump`) の `"    xor r10, r10"` は `(not (eq? (car *backend-gc-mode*) 'c-tu))` でガードするだけで即座に全 C 関数呼び出し・末尾ジャンプから除去できる。 |
-| **Systems Architect** | ABI・スタック整合性 | `va_start` (`[rsp + 8]`)、7 個目以降のスタック引数渡し、および `__ulisp_setjmp` が `%rsp` の位置に依存しているため、コールサイト間の `add rsp, N` / `sub rsp, N` 相殺は間に `%rsp` 相対メモリアクセスが存在しない場合に限定するか、オフセットを一貫シフトさせること。また [#934](934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) で一時スピルスロットが大幅に減少しローカル変数が `mem2reg` でレジスタ化されると、関数の必要スタックフレームサイズ自体が `0` になる関数が多数出現するため、実使用される `%rsp` スロットの最大オフセットから `frame-size` を再計算すれば、スタックを使用しない関数の全コールサイトから `sub/add rsp` を丸ごと消去できる！ |
+| **Systems Architect** | ABI・スタック整合性 | `va_start` (`[rsp + 8]`)、7 個目以降のスタック引数渡し、および `__ulisp_setjmp` が `%rsp` の位置に依存しているため、コールサイト間の `add rsp, N` / `sub rsp, N` 相殺は間に `%rsp` 相対メモリアクセスが存在しない場合に限定するか、オフセットを一貫シフトさせること。また [#934](closed/934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) で一時スピルスロットが大幅に減少しローカル変数が `mem2reg` でレジスタ化されると、関数の必要スタックフレームサイズ自体が `0` になる関数が多数出現するため、実使用される `%rsp` スロットの最大オフセットから `frame-size` を再計算すれば、スタックを使用しない関数の全コールサイトから `sub/add rsp` を丸ごと消去できる！ |
 | **Information Security Specialist** | スタックアラインメント (CWE-787) | SysV AMD64 ABI は `call` 命令実行直前の `%rsp` が必ず 16 バイト境界（関数エントリ直後は `rsp % 16 == 8`）であることを要求する（SSE2 `movaps` アラインメント例外防止）。したがって、スタックフレームサイズ `frame-size` が `0` の関数であっても、`call` 実行前に `%rsp` を 16 バイト境界に揃えるための最小 8 バイト調整（またはプロローグでの 8 バイト確保 `sub rsp, 8` / `add rsp, 8`）を維持する必要がある点に注意すること。 |
 | **Software Quality Assurance** | 回帰テスト・ABI 検証 | `test_c99_stdarg`, `test_c99_setjmp_longjmp`, `test_c99_sse2_xmm_abi`, および `make -C ulisp test_lua_e2e` の 100% PASS を必須完了条件とする。 |
 
@@ -116,7 +116,7 @@ Target Branch: `feat/936-hoist-c-tu-stack-frame-and-omit-xor-r10`
 
 ### WP2: 連続コールサイトの `add rsp, N` / `sub rsp, N` 対消滅と実使用フレームサイズ引き締め (`140_backend_x86_64.scm` & `143_backend_x86_peephole.scm`)
 1. [ulisp/backend/143_backend_x86_peephole.scm](../../ulisp/backend/143_backend_x86_peephole.scm)（および `140_backend_x86_64.scm` の文字列/S式命令エミッタ）において、`add rsp, N` の直後に `sub rsp, N` が続くパターンを対消滅させる。
-2. `c-tu` 関数において、`mem2reg` および [#934](934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) の DSE 適用後に実際に残存している `%rsp` スロットの最大負オフセットに基づいて `frame-size` を引き締め、128 バイト超過 immediate (`sub rsp, imm32` 7 バイト) から 8-bit immediate (`sub rsp, imm8` 4 バイト) への縮小およびスタック局所性向上を実現する。
+2. `c-tu` 関数において、`mem2reg` および [#934](closed/934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) の DSE 適用後に実際に残存している `%rsp` スロットの最大負オフセットに基づいて `frame-size` を引き締め、128 バイト超過 immediate (`sub rsp, imm32` 7 バイト) から 8-bit immediate (`sub rsp, imm8` 4 バイト) への縮小およびスタック局所性向上を実現する。
 
 ### WP3: 回帰テスト・Lua 5.4.7 E2E 検証・最終性能＆サイズ比較レポート更新
 1. `make -C ulisp compiler.scm` で `ulisp/compiler.scm` を再生成する。

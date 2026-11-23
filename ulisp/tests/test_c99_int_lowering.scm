@@ -226,4 +226,99 @@
                (and (pair? e5) (eq? (car e5) 'c99-sema-error)
                     (equal? (cadr e5) "C99-SEMA-005"))))
 
+;;; -----------------------------------------------------------------------
+;;; Group 6: Register-Only Expr Lowering, imm32 Safety & Call Args (#934)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 6: Temporary Spill Elimination & Register Forwarding ---\n")
+
+;; 6.1 Width-safe imm32: (unsigned int)-1 must NOT sign-extend to 64-bit -1
+(let* ((src "
+int main(void) {
+  unsigned long ul = 0x00000000FFFFFFFFUL;
+  unsigned int u = (unsigned int)ul;
+  int r1 = (ul == (unsigned long)(unsigned int)-1) ? 10 : 0;
+  int r2 = (u < (unsigned int)-1) ? 0 : 20;
+  int r3 = ((int)-1 < 0) ? 4 : 0;
+  return r1 + r2 + r3;
+}")
+       (lir (c99-compile-string-to-lir src "imm32_sign.c"))
+       (opt (lir-peephole-optimize lir))
+       (vm (make-lir-vm)))
+  (assert-true "6.1a unsigned imm32 safety satisfies L_lir_core" (L_lir_core? opt))
+  (lir-vm-load! vm opt)
+  (lir-vm-run! vm)
+  (assert-equal "6.1b (unsigned int)-1 compares as 0x00000000FFFFFFFF"
+                34
+                (vm-get-reg vm '%rax)))
+
+;; 6.2 Deeply nested call-free arithmetic + member + index produces 0 temporary spills
+(let* ((src "
+struct Pt { long x; long y; long z; };
+long eval_deep(struct Pt *p, long *arr, long a, long b, long c, long d, long e) {
+  return (a + (b * (c - 3))) + p->y + arr[2] + (e ^ d);
+}
+int main(void) {
+  struct Pt pt;
+  long arr[4];
+  pt.x = 1; pt.y = 100; pt.z = 2;
+  arr[0] = 5; arr[1] = 6; arr[2] = 50; arr[3] = 7;
+  return (int)eval_deep(&pt, arr, 10, 2, 20, 3, 4);
+}")
+       (lir (c99-compile-string-to-lir src "deep_reg_stack.c"))
+       (opt (lir-peephole-optimize lir))
+       (vm (make-lir-vm))
+       (funcs (cdr (assq '%lir-functions (cdr opt))))
+       (eval-fn (let find-fn ((fs funcs))
+                  (cond
+                    ((null? fs) #f)
+                    ((and (pair? (car fs)) (pair? (cdar fs)) (eq? (cadar fs) 'eval_deep))
+                     (car fs))
+                    (else (find-fn (cdr fs))))))
+       (eval-body (cdr (assq 'body (cddr eval-fn))))
+       (rsp-stores (let count-s ((is eval-body) (k 0))
+                     (if (null? is)
+                         k
+                         (let ((in (car is)))
+                           (count-s (cdr is)
+                                    (if (and (pair? in)
+                                             (memq (car in) '(%store %store-typed))
+                                             (or (eq? (cadr in) '%rsp)
+                                                 (and (eq? (car in) '%store-typed)
+                                                      (eq? (caddr in) '%rsp))))
+                                        (+ k 1)
+                                        k)))))))
+  (lir-vm-load! vm opt)
+  (lir-vm-run! vm)
+  ;; c-3=17, b*17=34, a+34=44, +100 +50 + (4^3=7) = 201
+  (assert-equal "6.2a deeply nested call-free expression computes exact value"
+                201
+                (vm-get-reg vm '%rax))
+  (assert-true "6.2b eval_deep has zero extra temporary stack spill stores beyond param homes"
+               (<= rsp-stores 7)))
+
+;; 6.3 Multi-arg call side-effect order preserved across register & stack fallbacks
+(let* ((src "
+int g_log = 0;
+int bump(int k) { g_log = g_log * 10 + k; return g_log; }
+int f4(int a, int b, int c, int d) {
+  return a * 1000 + b * 100 + c * 10 + d;
+}
+int main(void) {
+  int x = 2;
+  int r1 = f4(bump(1), x, (x += 3), bump(4));
+  int r2 = f4(1, 2, 3, 4);
+  return r1 + r2 + x;
+}")
+       (lir (c99-compile-string-to-lir src "call_order.c"))
+       (opt (lir-peephole-optimize lir))
+       (vm (make-lir-vm)))
+  (assert-true "6.3a call order program satisfies L_lir_canonical?" (L_lir_canonical? opt))
+  (lir-vm-load! vm opt)
+  (lir-vm-run! vm)
+  ;; bump(1)->1 (g_log=1); x->2; x+=3->5; bump(4)->14
+  ;; r1 = 1*1000 + 2*100 + 5*10 + 14 = 1264; r2 = 1234; x = 5 => 2503
+  (assert-equal "6.3b multi-arg call preserves left-to-right side effects without spills"
+                2503
+                (vm-get-reg vm '%rax)))
+
 (test-end "C99 Sema Core & Integer Subset Core LIR Lowering (Issue #916)")

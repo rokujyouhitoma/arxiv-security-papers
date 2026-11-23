@@ -188,4 +188,119 @@
                   (%return))
                 out))
 
+;; 16. Redundant self fmov elimination (Issue #934)
+(let* ((in-insts '((%fmov %xmm2 %xmm2) (%return)))
+       (out (optimize-peephole-fixpoint in-insts)))
+  (assert-equal "redundant self fmov eliminated"
+                '((%return))
+                out))
+
+;; 17. f64 Store-Reload forwarding vs f32 precision guard (Issue #934)
+(let* ((in-f64 '((%store-typed f64 %rsp 16 %xmm0)
+                 (%mov %rcx 1)
+                 (%load-typed f64 %xmm1 %rsp 16)
+                 (%return)))
+       (out-f64 (optimize-peephole-fixpoint in-f64))
+       (in-f32 '((%store-typed f32 %rsp 16 %xmm0)
+                 (%load-typed f32 %xmm1 %rsp 16)
+                 (%return)))
+       (out-f32 (optimize-peephole-fixpoint in-f32)))
+  (assert-equal "f64 store-load forwarded to fmov across distance=1"
+                '((%store-typed f64 %rsp 16 %xmm0)
+                  (%mov %rcx 1)
+                  (%fmov %xmm1 %xmm0)
+                  (%return))
+                out-f64)
+  (assert-equal "f32 store-load NOT converted to fmov (160_backend_c precision preserved)"
+                in-f32
+                out-f32))
+
+;; 18. Backward DSE kills overwritten negative slot store across basic block, preserves positive offsets
+(let* ((in-insts '((%store %rsp -16 %rax)
+                   (%store %rsp 8 %rdi)
+                   (%mov %rbx 1)
+                   (%store %rsp -16 %rcx)
+                   (%jump L_read)
+                   (%label L_dead)
+                   (%return)
+                   (%label L_read)
+                   (%load %rdx %rsp -16)
+                   (%return)))
+       (out (optimize-peephole-fixpoint in-insts)))
+  (assert-equal "overwritten negative slot eliminated, caller +8 preserved"
+                '((%store %rsp 8 %rdi)
+                  (%mov %rbx 1)
+                  (%store %rsp -16 %rcx)
+                  (%jump L_read)
+                  (%label L_dead)
+                  (%return)
+                  (%label L_read)
+                  (%load %rdx %rsp -16)
+                  (%return))
+                out))
+
+;; 19. Backward DSE eliminates dead store before %return, preserves (%stack -16) return operand
+(let* ((in1 '((%store %rsp -16 %rax)
+              (%mov %rax 7)
+              (%return %rax)))
+       (out1 (optimize-peephole-fixpoint in1))
+       (in2 '((%store %rsp -16 %rax)
+              (%store %rsp -24 %rbx)
+              (%return (%stack -16))))
+       (out2 (optimize-peephole-fixpoint in2)))
+  (assert-equal "dead store before %return eliminated"
+                '((%mov %rax 7)
+                  (%return %rax))
+                out1)
+  (assert-equal "store live for (%stack -16) return preserved while -24 eliminated"
+                '((%store %rsp -16 %rax)
+                  (%return (%stack -16)))
+                out2))
+
+;; 20. Call memory barrier and %rsp escape conservatively preserve stores
+(let* ((in-call '((%store %rsp -64 %rdi)
+                  (%direct-call foo 64)
+                  (%return)))
+       (out-call (optimize-peephole-fixpoint in-call))
+       (in-esc '((%store %rsp -16 %rdi)
+                 (%mov %rdx %rsp)
+                 (%add %rdx -16)
+                 (%load %rax %rdx 0)
+                 (%return)))
+       (out-esc (optimize-peephole-fixpoint in-esc)))
+  (assert-equal "outgoing stack store before call barrier preserved"
+                in-call
+                out-call)
+  (assert-equal "%rsp escape conservatively preserves negative store before indirect load"
+                in-esc
+                out-esc))
+
+;; 21. Leaf whole-function unread DSE vs overlapping partial u32 + i64 read interval safety
+(let* ((in-leaf '((%store %rsp -16 %rdi)
+                  (%store %rsp -24 %rsi)
+                  (%jump-cond je L_zero)
+                  (%load %rax %rsp -16)
+                  (%return)
+                  (%label L_zero)
+                  (%mov %rax 0)
+                  (%return)))
+       (out-leaf (optimize-peephole-fixpoint in-leaf))
+       (in-u64 '((%store-typed u32 %rsp -16 %rax)
+                 (%store-typed u32 %rsp -12 %rcx)
+                 (%load %rax %rsp -16)
+                 (%return)))
+       (out-u64 (optimize-peephole-fixpoint in-u64)))
+  (assert-equal "leaf function drops completely unread -24 param spill across branch"
+                '((%store %rsp -16 %rdi)
+                  (%jump-cond je L_zero)
+                  (%load %rax %rsp -16)
+                  (%return)
+                  (%label L_zero)
+                  (%mov %rax 0)
+                  (%return))
+                out-leaf)
+  (assert-equal "overlapping u32+u32 split stores preserved for 8B load at -16"
+                in-u64
+                out-u64))
+
 (test-end "Pass 133 (LIR Peephole & DCE)")
