@@ -142,6 +142,63 @@
            (if (eq? v #f) #f then))
          (list 'if test then #f)))))
 
+(define (cp0-eq-testable-const-list? lst)
+  (let loop ((xs lst) (n 0))
+    (cond
+      ((null? xs) #t)
+      ((> n 256) #f)
+      ((not (pair? xs)) #f)
+      (else
+       (let ((k (car xs)))
+         (and (or (symbol? k) (boolean? k) (null? k))
+              (loop (cdr xs) (+ n 1))))))))
+
+(define (cp0-build-eq-chain var lst)
+  (let loop ((xs lst))
+    (cond
+      ((null? xs) #f)
+      ((null? (cdr xs))
+       (list 'eq? var (val->ast-const (car xs))))
+      (else
+       (list 'if
+             (list 'eq? var (val->ast-const (car xs)))
+             #t
+             (loop (cdr xs)))))))
+
+(define (cp0-lower-memq-bool expr lst then-expr else-expr)
+  (cond
+    ((const? expr)
+     (if (memq (extract-const-val expr) lst)
+         then-expr
+         else-expr))
+    ((null? lst)
+     (if (pure-expr? expr)
+         else-expr
+         (list 'begin expr else-expr)))
+    ((symbol? expr)
+     (if (and (eq? then-expr #t) (eq? else-expr #f))
+         (cp0-build-eq-chain expr lst)
+         (list 'if (cp0-build-eq-chain expr lst) then-expr else-expr)))
+    (else
+     (let ((tmp (unique-symbol "__cp0_mq_")))
+       (list 'let (list (list tmp expr))
+             (if (and (eq? then-expr #t) (eq? else-expr #f))
+                 (cp0-build-eq-chain tmp lst)
+                 (list 'if (cp0-build-eq-chain tmp lst) then-expr else-expr)))))))
+
+(define-picopass rule-cp0-memq-quoted-bool
+  :reads '(if not memq) :writes '(if let begin eq?)
+  (Expr
+    ((if (memq ,expr (quote ,lst)) ,then ,else-val)
+     (guard (cp0-eq-testable-const-list? lst))
+     (cp0-lower-memq-bool expr lst then else-val))
+    ((if (memq ,expr (quote ,lst)) ,then)
+     (guard (cp0-eq-testable-const-list? lst))
+     (cp0-lower-memq-bool expr lst then #f))
+    ((not (memq ,expr (quote ,lst)))
+     (guard (cp0-eq-testable-const-list? lst))
+     (cp0-lower-memq-bool expr lst #f #t))))
+
 (define-picopass rule-cp0-flatten-begin
   :reads '(begin) :writes '(begin)
   (Expr
@@ -251,6 +308,7 @@
     (fuse-rules :order post
       rule-cp0-prune-if-3
       rule-cp0-prune-if-2
+      rule-cp0-memq-quoted-bool
       rule-cp0-flatten-begin
       rule-cp0-dead-let
       rule-cp0-dead-letrec

@@ -126,4 +126,40 @@
                     ((pair? node) (or (has-sym? (car node)) (has-sym? (cdr node))))
                     (else #f)))))
 
+;; 11. Quoted-list memq lowering in boolean contexts (Issue #938)
+(let ((has-sym? (lambda (tree target)
+                  (let walk ((x tree))
+                    (cond
+                      ((eq? x target) #t)
+                      ((pair? x) (or (walk (car x)) (walk (cdr x))))
+                      (else #f))))))
+  (let ((opt-if (cp0-optimize '(if (memq x '(alpha beta gamma)) 'hit 'miss)))
+        (opt-not (cp0-optimize '(not (memq x '(one two)))))
+        (opt-val (cp0-optimize '(memq x '(alpha beta gamma))))
+        (opt-const (cp0-optimize '(if (memq 'beta '(alpha beta gamma)) 10 20))))
+    (assert-equal "if memq quoted list eliminates memq allocation"
+                  #f
+                  (has-sym? opt-if 'memq))
+    (assert-equal "if memq quoted list behaves identically on hit"
+                  'hit
+                  (eval `(let ((x 'beta)) ,opt-if) (interaction-environment)))
+    (assert-equal "if memq quoted list behaves identically on miss"
+                  'miss
+                  (eval `(let ((x 'delta)) ,opt-if) (interaction-environment)))
+    (assert-equal "not memq quoted list eliminates memq allocation"
+                  #f
+                  (has-sym? opt-not 'memq))
+    (assert-equal "not memq quoted list evaluates #f on match"
+                  #f
+                  (eval `(let ((x 'one)) ,opt-not) (interaction-environment)))
+    (assert-equal "not memq quoted list evaluates #t on miss"
+                  #t
+                  (eval `(let ((x 'three)) ,opt-not) (interaction-environment)))
+    (assert-equal "value-position memq preserves R7RS sublist return value"
+                  '(beta gamma)
+                  (eval `(let ((x 'beta)) ,opt-val) (interaction-environment)))
+    (assert-equal "constant memq inside if folds statically"
+                  10
+                  opt-const)))
+
 (test-end "Pass 050 (CP0 Optimization)")

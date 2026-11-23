@@ -45,7 +45,14 @@
     ((null? (cdr datum-list))
      (list 'eqv? k-var (list 'quote (car datum-list))))
     (else
-     (cons 'or (map (lambda (d) (list 'eqv? k-var (list 'quote d))) datum-list)))))
+     ;; Emit direct nested (if (eqv? ...) #t ...) instead of (or ...) so case-tests
+     ;; do not generate per-arm let/or_tmp wrappers or temporary stack spills.
+     (let loop ((ds datum-list))
+       (if (null? (cdr ds))
+           (list 'eqv? k-var (list 'quote (car ds)))
+           (list 'if (list 'eqv? k-var (list 'quote (car ds)))
+                 #t
+                 (loop (cdr ds))))))))
 
 (define (desugar-case key clauses)
   (let ((k-var (unique-symbol "case_key_")))

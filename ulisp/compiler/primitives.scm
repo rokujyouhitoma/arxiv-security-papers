@@ -4,45 +4,61 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)))
+  (case op
+    ((read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
+     #t)
+    (else #f)))
 
 (define (unary-prim? op)
-  (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
-             integer->symbol symbol->integer
-             zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-             boolean? char? null? not symbol?
-             car cdr pair? procedure? string?
-             write-char %write-char write-byte write-u8 write-string %write-string flush-output-port ulisp-flush eof-object?
-             make-string string-length
-             bytevector? bytevector-length make-bytevector %make-bytevector
-             vector? vector-length make-vector %make-vector
-             raise %raise
-             %set-heap-ptr! %ptr-tag %ptr-untag
-             %to-raw %to-fixnum
-             %box-fixnum %unbox-fixnum
-             %box-flonum %unbox-flonum %sitofp %fptosi
-             %udiv %urem %setb %setbe %seta %setae)))
+  (case op
+    ((fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
+      integer->symbol symbol->integer
+      zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+      boolean? char? null? not symbol?
+      car cdr pair? procedure? string?
+      write-char %write-char write-byte write-u8 write-string %write-string flush-output-port ulisp-flush eof-object?
+      make-string string-length
+      bytevector? bytevector-length make-bytevector %make-bytevector
+      vector? vector-length make-vector %make-vector
+      raise %raise
+      %set-heap-ptr! %ptr-tag %ptr-untag
+      %to-raw %to-fixnum
+      %box-fixnum %unbox-fixnum
+      %box-flonum %unbox-flonum %sitofp %fptosi
+      %udiv %urem %setb %setbe %seta %setae)
+     #t)
+    (else #f)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
-             bytevector-u8-ref vector-ref
-             %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
-             %raw-add %raw-sub %raw-mul %raw-cmp
-             %fadd %fsub %fmul %fdiv %fcmp %fmov
-             %udiv %urem %shr)))
+  (case op
+    ((+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
+      bytevector-u8-ref vector-ref
+      %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
+      %raw-add %raw-sub %raw-mul %raw-cmp
+      %fadd %fsub %fmul %fdiv %fcmp %fmov
+      %udiv %urem %shr)
+     #t)
+    (else #f)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!
-             %udiv %urem %shr %setb %setbe %seta %setae)))
+  (case op
+    ((string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!
+      %udiv %urem %shr %setb %setbe %seta %setae)
+     #t)
+    (else #f)))
 
 (define (quadrop-prim? op)
-  (memq op '(%add-overflow %sub-overflow %mul-overflow)))
+  (case op
+    ((%add-overflow %sub-overflow %mul-overflow) #t)
+    (else #f)))
 
 (define (septop-prim? op)
-  (memq op '(%raw-syscall)))
+  (eq? op '%raw-syscall))
 
 (define (closure-prim? op)
-  (memq op '(%make-closure %make-closure-env %closure-ref %closure-set!)))
+  (case op
+    ((%make-closure %make-closure-env %closure-ref %closure-set!) #t)
+    (else #f)))
 
 (define (lir-primitive? op)
   (or (zero-arg-prim? op)
@@ -54,19 +70,22 @@
       (closure-prim? op)))
 
 (define (pure-prim? op)
-  (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
-             integer->symbol symbol->integer
-             zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-             boolean? char? null? not symbol? list?
-             car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
-             bytevector? bytevector-length vector? vector-length %num-args
-             %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-             %box-flonum %unbox-flonum %sitofp %fptosi
-             + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? %closure-ref
-             %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
-             %fadd %fsub %fmul %fdiv %fcmp %fmov
-             %udiv %urem %shr %setb %setbe %seta %setae
-             %add-overflow %sub-overflow %mul-overflow)))
+  (case op
+    ((fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
+      integer->symbol symbol->integer
+      zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+      boolean? char? null? not symbol? list?
+      car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
+      bytevector? bytevector-length vector? vector-length %num-args
+      %to-raw %to-fixnum %box-fixnum %unbox-fixnum
+      %box-flonum %unbox-flonum %sitofp %fptosi
+      + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? %closure-ref
+      %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
+      %fadd %fsub %fmul %fdiv %fcmp %fmov
+      %udiv %urem %shr %setb %setbe %seta %setae
+      %add-overflow %sub-overflow %mul-overflow)
+     #t)
+    (else #f)))
 
 (define (const? x)
   (or (number? x)
@@ -93,14 +112,19 @@
     (else (list 'quote v))))
 
 (define (commutative-op? op)
-  (memq op '(+ * = eq? eqv? char=? boolean=? symbol=?)))
+  (case op
+    ((+ * = eq? eqv? char=? boolean=? symbol=?) #t)
+    (else #f)))
 
 (define (type-predicate-op? op)
-  (memq op '(fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-             pair? null? boolean? char? symbol? list? zero? procedure? string?)))
+  (case op
+    ((fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+      pair? null? boolean? char? symbol? list? zero? procedure? string?)
+     #t)
+    (else #f)))
 
 (define (pure-accessor-op? op)
-  (memq op '(car cdr)))
+  (or (eq? op 'car) (eq? op 'cdr)))
 
 (define (pure-expr? expr)
   (cond
@@ -214,38 +238,50 @@
 
 (define (builtin-fixed-arity op)
   (cond
-    ((memq op '(write-char write-u8 write-string flush-output-port read-char peek-char)) #f)
+    ((case op ((write-char write-u8 write-string flush-output-port read-char peek-char) #t) (else #f)) #f)
     ((eq? op '-) #f)
     ((zero-arg-prim? op) 0)
-    ((memq op '(open-output-string)) 0)
+    ((eq? op 'open-output-string) 0)
     ((unary-prim? op) 1)
     ((binop-prim? op) 2)
     ((triop-prim? op) 3)
     ((septop-prim? op) 7)
-    ((memq op '(caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
-                cadddr cddddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
-                cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
-                reverse length
-                string->list list->string string->vector vector->string
-                utf8->string string->utf8
-                close-port close-input-port close-output-port get-output-string
-                open-input-string force promise?
-                abs exact-integer-sqrt
-                char-alphabetic? char-numeric? char-whitespace?
-                char-upper-case? char-lower-case? digit-value
-                char-upcase char-downcase char-foldcase
-                string-upcase string-downcase string-foldcase)) 1)
-    ((memq op '(append equal? memq assq memv assv member assoc string=?
-                string-append2 bytevector-append2 list-ref list-tail
-                modulo floor/ floor-quotient floor-remainder
-                truncate/ truncate-quotient truncate-remainder)) 2)
+    ((case op
+       ((caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
+         cadddr cddddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+         cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+         reverse length
+         string->list list->string string->vector vector->string
+         utf8->string string->utf8
+         close-port close-input-port close-output-port get-output-string
+         open-input-string force promise?
+         abs exact-integer-sqrt
+         char-alphabetic? char-numeric? char-whitespace?
+         char-upper-case? char-lower-case? digit-value
+         char-upcase char-downcase char-foldcase
+         string-upcase string-downcase string-foldcase)
+        #t)
+       (else #f))
+     1)
+    ((case op
+       ((append equal? memq assq memv assv member assoc string=?
+         string-append2 bytevector-append2 list-ref list-tail
+         modulo floor/ floor-quotient floor-remainder
+         truncate/ truncate-quotient truncate-remainder)
+        #t)
+       (else #f))
+     2)
     (else #f)))
 
 (define (builtin-min-arity op)
   (cond
-    ((memq op '(list vector string-append string)) 0)
-    ((memq op '(string<=? string>=? string<? string>?
-                string-ci=? string-ci<? string-ci>? string-ci<=? string-ci>=?
-                char-ci=? char-ci<? char-ci>? char-ci<=? char-ci>=?)) 1)
-    ((memq op '(%with-handler map for-each apply)) 2)
+    ((case op ((list vector string-append string) #t) (else #f)) 0)
+    ((case op
+       ((string<=? string>=? string<? string>?
+         string-ci=? string-ci<? string-ci>? string-ci<=? string-ci>=?
+         char-ci=? char-ci<? char-ci>? char-ci<=? char-ci>=?)
+        #t)
+       (else #f))
+     1)
+    ((case op ((%with-handler map for-each apply) #t) (else #f)) 2)
     (else #f)))

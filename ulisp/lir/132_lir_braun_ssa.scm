@@ -762,13 +762,19 @@
 ;;; -----------------------------------------------------------------------
 
 (define (%c99-m2r-reg? x)
-  (memq x '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
-            %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15 %al %cl)))
+  (case x
+    ((%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+      %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15 %al %cl)
+     #t)
+    (else #f)))
 
 (define (%c99-m2r-caller-saved? x)
-  (memq x '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al %cl
-            %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
-            %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15)))
+  (case x
+    ((%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al %cl
+      %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+      %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15)
+     #t)
+    (else #f)))
 
 (define (%c99-m2r-tree-has? tree sym)
   (cond

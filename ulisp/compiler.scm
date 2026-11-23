@@ -267,87 +267,90 @@
 (define (set-stdlib-enabled! val) (set-car! *stdlib-enabled* val))
 
 (define (is-known-stdlib-symbol? sym)
-  (memq sym '(*stdout-port*
-              *stdin-port*
-              *stderr-port*
-              *current-input-port-cell*
-              *current-output-port-cell*
-              *current-error-port-cell*
-              port-newline
-              port-display
-              port-display-string
-              port-write
-              port-write-char
-              port-write-u8
-              port-write-string
-              port-write-bytevector
-              port-write-bytevector-range
-              port-flush-output
-              port-read
-              port-read-char
-              port-peek-char
-              port-read-line
-              port-read-u8
-              port-peek-u8
-              port-char-ready?
-              port-u8-ready?
-              port-close
-              close-port
-              close-input-port
-              close-output-port
-              current-input-port
-              current-output-port
-              current-error-port
-              open-input-file
-              open-output-file
-              open-binary-input-file
-              open-binary-output-file
-              open-input-string
-              open-output-string
-              get-output-string
-              call-with-port
-              string->number-core
-              %eqv?
-              %number?
-              %complex?
-              %real?
-              %rational?
-              %integer?
-              %exact?
-              %inexact?
-              ulisp-flonum-tag
-              pos-inf
-              neg-inf
-              nan
-              make-hash-table
-              hash-table-ref
-              hash-table-set!
-              hash-table-delete!
-              hash-table-contains?
-              hash-table-size
-              hash-table-keys
-              hash-table-values
-              number->string
-              string->number
-              exact
-              inexact
-              floor
-              ceiling
-              truncate
-              round
-              sin
-              cos
-              tan
-              asin
-              acos
-              atan
-              sqrt
-              exp
-              log
-              expt
-              %synapse-safepoint-poll!
-              synapse-safepoint-poll!
-              %safepoint-poll!)))
+  (case sym
+    ((*stdout-port*
+      *stdin-port*
+      *stderr-port*
+      *current-input-port-cell*
+      *current-output-port-cell*
+      *current-error-port-cell*
+      port-newline
+      port-display
+      port-display-string
+      port-write
+      port-write-char
+      port-write-u8
+      port-write-string
+      port-write-bytevector
+      port-write-bytevector-range
+      port-flush-output
+      port-read
+      port-read-char
+      port-peek-char
+      port-read-line
+      port-read-u8
+      port-peek-u8
+      port-char-ready?
+      port-u8-ready?
+      port-close
+      close-port
+      close-input-port
+      close-output-port
+      current-input-port
+      current-output-port
+      current-error-port
+      open-input-file
+      open-output-file
+      open-binary-input-file
+      open-binary-output-file
+      open-input-string
+      open-output-string
+      get-output-string
+      call-with-port
+      string->number-core
+      %eqv?
+      %number?
+      %complex?
+      %real?
+      %rational?
+      %integer?
+      %exact?
+      %inexact?
+      ulisp-flonum-tag
+      pos-inf
+      neg-inf
+      nan
+      make-hash-table
+      hash-table-ref
+      hash-table-set!
+      hash-table-delete!
+      hash-table-contains?
+      hash-table-size
+      hash-table-keys
+      hash-table-values
+      number->string
+      string->number
+      exact
+      inexact
+      floor
+      ceiling
+      truncate
+      round
+      sin
+      cos
+      tan
+      asin
+      acos
+      atan
+      sqrt
+      exp
+      log
+      expt
+      %synapse-safepoint-poll!
+      synapse-safepoint-poll!
+      %safepoint-poll!)
+     #t)
+    (else #f)))
 
 (define (stdlib-symbol? sym)
   (and (stdlib-enabled?)
@@ -2784,45 +2787,61 @@
 
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
-  (memq op '(read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)))
+  (case op
+    ((read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
+     #t)
+    (else #f)))
 
 (define (unary-prim? op)
-  (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
-             integer->symbol symbol->integer
-             zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-             boolean? char? null? not symbol?
-             car cdr pair? procedure? string?
-             write-char %write-char write-byte write-u8 write-string %write-string flush-output-port ulisp-flush eof-object?
-             make-string string-length
-             bytevector? bytevector-length make-bytevector %make-bytevector
-             vector? vector-length make-vector %make-vector
-             raise %raise
-             %set-heap-ptr! %ptr-tag %ptr-untag
-             %to-raw %to-fixnum
-             %box-fixnum %unbox-fixnum
-             %box-flonum %unbox-flonum %sitofp %fptosi
-             %udiv %urem %setb %setbe %seta %setae)))
+  (case op
+    ((fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
+      integer->symbol symbol->integer
+      zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+      boolean? char? null? not symbol?
+      car cdr pair? procedure? string?
+      write-char %write-char write-byte write-u8 write-string %write-string flush-output-port ulisp-flush eof-object?
+      make-string string-length
+      bytevector? bytevector-length make-bytevector %make-bytevector
+      vector? vector-length make-vector %make-vector
+      raise %raise
+      %set-heap-ptr! %ptr-tag %ptr-untag
+      %to-raw %to-fixnum
+      %box-fixnum %unbox-fixnum
+      %box-flonum %unbox-flonum %sitofp %fptosi
+      %udiv %urem %setb %setbe %seta %setae)
+     #t)
+    (else #f)))
 
 (define (binop-prim? op)
-  (memq op '(+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
-             bytevector-u8-ref vector-ref
-             %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
-             %raw-add %raw-sub %raw-mul %raw-cmp
-             %fadd %fsub %fmul %fdiv %fcmp %fmov
-             %udiv %urem %shr)))
+  (case op
+    ((+ - * = < <= > >= modulo quotient / string-ref cons set-car! set-cdr! eq? eqv? char=? boolean=? symbol=?
+      bytevector-u8-ref vector-ref
+      %raw-load %raw-load-u8 %ptr-add %ptr-tag-add bitwise-and bitwise-ior bitwise-arithmetic-shift
+      %raw-add %raw-sub %raw-mul %raw-cmp
+      %fadd %fsub %fmul %fdiv %fcmp %fmov
+      %udiv %urem %shr)
+     #t)
+    (else #f)))
 
 (define (triop-prim? op)
-  (memq op '(string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!
-             %udiv %urem %shr %setb %setbe %seta %setae)))
+  (case op
+    ((string-set! bytevector-u8-set! vector-set! %raw-store! %atomic-cas!
+      %udiv %urem %shr %setb %setbe %seta %setae)
+     #t)
+    (else #f)))
 
 (define (quadrop-prim? op)
-  (memq op '(%add-overflow %sub-overflow %mul-overflow)))
+  (case op
+    ((%add-overflow %sub-overflow %mul-overflow) #t)
+    (else #f)))
 
 (define (septop-prim? op)
-  (memq op '(%raw-syscall)))
+  (eq? op '%raw-syscall))
 
 (define (closure-prim? op)
-  (memq op '(%make-closure %make-closure-env %closure-ref %closure-set!)))
+  (case op
+    ((%make-closure %make-closure-env %closure-ref %closure-set!) #t)
+    (else #f)))
 
 (define (lir-primitive? op)
   (or (zero-arg-prim? op)
@@ -2834,19 +2853,22 @@
       (closure-prim? op)))
 
 (define (pure-prim? op)
-  (memq op '(fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
-             integer->symbol symbol->integer
-             zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-             boolean? char? null? not symbol? list?
-             car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
-             bytevector? bytevector-length vector? vector-length %num-args
-             %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-             %box-flonum %unbox-flonum %sitofp %fptosi
-             + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? %closure-ref
-             %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
-             %fadd %fsub %fmul %fdiv %fcmp %fmov
-             %udiv %urem %shr %setb %setbe %seta %setae
-             %add-overflow %sub-overflow %mul-overflow)))
+  (case op
+    ((fxadd1 fxsub1 fixnum->char char->fixnum integer->char char->integer
+      integer->symbol symbol->integer
+      zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+      boolean? char? null? not symbol? list?
+      car cdr pair? procedure? string? string-length %ptr-add %ptr-tag %ptr-untag %ptr-tag-add
+      bytevector? bytevector-length vector? vector-length %num-args
+      %to-raw %to-fixnum %box-fixnum %unbox-fixnum
+      %box-flonum %unbox-flonum %sitofp %fptosi
+      + - * = < <= > >= modulo quotient / eq? eqv? char=? boolean=? symbol=? %closure-ref
+      %raw-load-u8 %raw-add %raw-sub %raw-mul %raw-cmp
+      %fadd %fsub %fmul %fdiv %fcmp %fmov
+      %udiv %urem %shr %setb %setbe %seta %setae
+      %add-overflow %sub-overflow %mul-overflow)
+     #t)
+    (else #f)))
 
 (define (const? x)
   (or (number? x)
@@ -2873,14 +2895,19 @@
     (else (list 'quote v))))
 
 (define (commutative-op? op)
-  (memq op '(+ * = eq? eqv? char=? boolean=? symbol=?)))
+  (case op
+    ((+ * = eq? eqv? char=? boolean=? symbol=?) #t)
+    (else #f)))
 
 (define (type-predicate-op? op)
-  (memq op '(fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-             pair? null? boolean? char? symbol? list? zero? procedure? string?)))
+  (case op
+    ((fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+      pair? null? boolean? char? symbol? list? zero? procedure? string?)
+     #t)
+    (else #f)))
 
 (define (pure-accessor-op? op)
-  (memq op '(car cdr)))
+  (or (eq? op 'car) (eq? op 'cdr)))
 
 (define (pure-expr? expr)
   (cond
@@ -2994,40 +3021,52 @@
 
 (define (builtin-fixed-arity op)
   (cond
-    ((memq op '(write-char write-u8 write-string flush-output-port read-char peek-char)) #f)
+    ((case op ((write-char write-u8 write-string flush-output-port read-char peek-char) #t) (else #f)) #f)
     ((eq? op '-) #f)
     ((zero-arg-prim? op) 0)
-    ((memq op '(open-output-string)) 0)
+    ((eq? op 'open-output-string) 0)
     ((unary-prim? op) 1)
     ((binop-prim? op) 2)
     ((triop-prim? op) 3)
     ((septop-prim? op) 7)
-    ((memq op '(caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
-                cadddr cddddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
-                cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
-                reverse length
-                string->list list->string string->vector vector->string
-                utf8->string string->utf8
-                close-port close-input-port close-output-port get-output-string
-                open-input-string force promise?
-                abs exact-integer-sqrt
-                char-alphabetic? char-numeric? char-whitespace?
-                char-upper-case? char-lower-case? digit-value
-                char-upcase char-downcase char-foldcase
-                string-upcase string-downcase string-foldcase)) 1)
-    ((memq op '(append equal? memq assq memv assv member assoc string=?
-                string-append2 bytevector-append2 list-ref list-tail
-                modulo floor/ floor-quotient floor-remainder
-                truncate/ truncate-quotient truncate-remainder)) 2)
+    ((case op
+       ((caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
+         cadddr cddddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+         cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+         reverse length
+         string->list list->string string->vector vector->string
+         utf8->string string->utf8
+         close-port close-input-port close-output-port get-output-string
+         open-input-string force promise?
+         abs exact-integer-sqrt
+         char-alphabetic? char-numeric? char-whitespace?
+         char-upper-case? char-lower-case? digit-value
+         char-upcase char-downcase char-foldcase
+         string-upcase string-downcase string-foldcase)
+        #t)
+       (else #f))
+     1)
+    ((case op
+       ((append equal? memq assq memv assv member assoc string=?
+         string-append2 bytevector-append2 list-ref list-tail
+         modulo floor/ floor-quotient floor-remainder
+         truncate/ truncate-quotient truncate-remainder)
+        #t)
+       (else #f))
+     2)
     (else #f)))
 
 (define (builtin-min-arity op)
   (cond
-    ((memq op '(list vector string-append string)) 0)
-    ((memq op '(string<=? string>=? string<? string>?
-                string-ci=? string-ci<? string-ci>? string-ci<=? string-ci>=?
-                char-ci=? char-ci<? char-ci>? char-ci<=? char-ci>=?)) 1)
-    ((memq op '(%with-handler map for-each apply)) 2)
+    ((case op ((list vector string-append string) #t) (else #f)) 0)
+    ((case op
+       ((string<=? string>=? string<? string>?
+         string-ci=? string-ci<? string-ci>? string-ci<=? string-ci>=?
+         char-ci=? char-ci<? char-ci>? char-ci<=? char-ci>=?)
+        #t)
+       (else #f))
+     1)
+    ((case op ((%with-handler map for-each apply) #t) (else #f)) 2)
     (else #f)))
 ;;; =======================================================================
 ;;; ULisp Compiler: Nanopass Framework Metadata & Reflection Engine
@@ -5161,7 +5200,7 @@
 ;;; =======================================================================
 
 (define *nanopass-window-fixpoint-limit* 16)
-(define *nanopass-window-step-limit* 1024)
+(define *nanopass-window-step-limit* 16384)
 
 ;;; Single-pass sliding window traversal:
 ;;; Evaluates try-match-proc at each instruction boundary.
@@ -6540,13 +6579,16 @@
             (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
                 (lir-reg-aliases? reg '%rax)))
            ((%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer)
-            (or (memq reg '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al
-                            %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
-                            %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
+            (or (case reg
+                  ((%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al
+                    %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                    %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15)
+                   #t)
+                  (else #f))
                 (and (eq? (current-target-arch) 'aarch64)
                      (or (lir-reg-aliases? reg '%rax) (lir-reg-aliases? reg '%rbx)))))
            ((%syscall)
-            (or (memq reg '(%rax %rcx %r11))
+            (or (case reg ((%rax %rcx %r11) #t) (else #f))
                 (and (eq? (current-target-arch) 'aarch64) (lir-reg-aliases? reg '%rax))))
            ((%set-values-count)
             (lir-reg-aliases? reg '%rdx))
@@ -6558,10 +6600,13 @@
 
 (define (lir-inst-memory-barrier? inst)
   (and (pair? inst)
-       (or (memq (car inst) '(%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer
-                              %syscall %memory-fence %managed-safepoint-poll %push %pop %raise
-                              %capture-cc %push-handler %pop-handler
-                              %store-values-buf))
+       (or (case (car inst)
+             ((%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer
+               %syscall %memory-fence %managed-safepoint-poll %push %pop %raise
+               %capture-cc %push-handler %pop-handler
+               %store-values-buf)
+              #t)
+             (else #f))
            (and (eq? (car inst) '%inline-asm)
                 (lir-inline-asm-memory-barrier? inst)))))
 
@@ -19431,22 +19476,25 @@
 
 ;;; Built-in core keywords and primitives that must NOT be renamed during hygienic expansion
 (define (core-form-or-primitive? sym)
-  (memq sym '(if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
-              let-syntax letrec-syntax cond-expand include include-ci assume assert
-              cond case and or when unless delay delay-force do case-lambda
-              receive rec and-let* cut cute <> <...>
-              cons car cdr pair? null? list append not eq? eqv? equal?
-              list-copy make-list
-              vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector vector->string vector->string-range
-              string string-ref string-set! string-length make-string string-append string-copy string-copy! string-fill! string-map string-for-each substring string=? string<? string>? string<=? string>=? string->symbol symbol->string string->list string->list-range list->string string->vector string->vector-range
-              bytevector bytevector-u8-ref bytevector-u8-set! bytevector-length make-bytevector bytevector-copy bytevector-copy! bytevector-append bytevector=?
-              + - * = < > <= >= modulo quotient / square remainder gcd gcd-2 lcm lcm-2 expt %math-abs
-              zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
-              boolean? char? symbol? string? list? vector? bytevector?
-              write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
-              values call-with-values dynamic-wind call/cc call-with-current-continuation
-              guard raise %raw-call/cc %with-handler
-              %memory-fence %atomic-cas!)))
+  (case sym
+    ((if begin lambda let let* letrec letrec* quote set! define define-values define-syntax syntax-rules syntax-error define-record-type
+      let-syntax letrec-syntax cond-expand include include-ci assume assert
+      cond case and or when unless delay delay-force do case-lambda
+      receive rec and-let* cut cute <> <...>
+      cons car cdr pair? null? list append not eq? eqv? equal?
+      list-copy make-list
+      vector vector-ref vector-set! vector-length make-vector vector-copy vector-copy! vector-append vector-fill! vector-map vector-for-each vector->list list->vector vector->string vector->string-range
+      string string-ref string-set! string-length make-string string-append string-copy string-copy! string-fill! string-map string-for-each substring string=? string<? string>? string<=? string>=? string->symbol symbol->string string->list string->list-range list->string string->vector string->vector-range
+      bytevector bytevector-u8-ref bytevector-u8-set! bytevector-length make-bytevector bytevector-copy bytevector-copy! bytevector-append bytevector=?
+      + - * = < > <= >= modulo quotient / square remainder gcd gcd-2 lcm lcm-2 expt %math-abs
+      zero? fixnum? integer? number? exact? exact-integer? inexact? real? rational? complex?
+      boolean? char? symbol? string? list? vector? bytevector?
+      write-char %write-char write-string %write-string read-char %read-char peek-char %peek-char eof-object?
+      values call-with-values dynamic-wind call/cc call-with-current-continuation
+      guard raise %raw-call/cc %with-handler
+      %memory-fence %atomic-cas!)
+     #t)
+    (else #f)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Pattern Matching Utilities
@@ -20820,7 +20868,14 @@
     ((null? (cdr datum-list))
      (list 'eqv? k-var (list 'quote (car datum-list))))
     (else
-     (cons 'or (map (lambda (d) (list 'eqv? k-var (list 'quote d))) datum-list)))))
+     ;; Emit direct nested (if (eqv? ...) #t ...) instead of (or ...) so case-tests
+     ;; do not generate per-arm let/or_tmp wrappers or temporary stack spills.
+     (let loop ((ds datum-list))
+       (if (null? (cdr ds))
+           (list 'eqv? k-var (list 'quote (car ds)))
+           (list 'if (list 'eqv? k-var (list 'quote (car ds)))
+                 #t
+                 (loop (cdr ds))))))))
 
 (define (desugar-case key clauses)
   (let ((k-var (unique-symbol "case_key_")))
@@ -22853,6 +22908,63 @@
            (if (eq? v #f) #f then))
          (list 'if test then #f)))))
 
+(define (cp0-eq-testable-const-list? lst)
+  (let loop ((xs lst) (n 0))
+    (cond
+      ((null? xs) #t)
+      ((> n 256) #f)
+      ((not (pair? xs)) #f)
+      (else
+       (let ((k (car xs)))
+         (and (or (symbol? k) (boolean? k) (null? k))
+              (loop (cdr xs) (+ n 1))))))))
+
+(define (cp0-build-eq-chain var lst)
+  (let loop ((xs lst))
+    (cond
+      ((null? xs) #f)
+      ((null? (cdr xs))
+       (list 'eq? var (val->ast-const (car xs))))
+      (else
+       (list 'if
+             (list 'eq? var (val->ast-const (car xs)))
+             #t
+             (loop (cdr xs)))))))
+
+(define (cp0-lower-memq-bool expr lst then-expr else-expr)
+  (cond
+    ((const? expr)
+     (if (memq (extract-const-val expr) lst)
+         then-expr
+         else-expr))
+    ((null? lst)
+     (if (pure-expr? expr)
+         else-expr
+         (list 'begin expr else-expr)))
+    ((symbol? expr)
+     (if (and (eq? then-expr #t) (eq? else-expr #f))
+         (cp0-build-eq-chain expr lst)
+         (list 'if (cp0-build-eq-chain expr lst) then-expr else-expr)))
+    (else
+     (let ((tmp (unique-symbol "__cp0_mq_")))
+       (list 'let (list (list tmp expr))
+             (if (and (eq? then-expr #t) (eq? else-expr #f))
+                 (cp0-build-eq-chain tmp lst)
+                 (list 'if (cp0-build-eq-chain tmp lst) then-expr else-expr)))))))
+
+(define-picopass rule-cp0-memq-quoted-bool
+  :reads '(if not memq) :writes '(if let begin eq?)
+  (Expr
+    ((if (memq ,expr (quote ,lst)) ,then ,else-val)
+     (guard (cp0-eq-testable-const-list? lst))
+     (cp0-lower-memq-bool expr lst then else-val))
+    ((if (memq ,expr (quote ,lst)) ,then)
+     (guard (cp0-eq-testable-const-list? lst))
+     (cp0-lower-memq-bool expr lst then #f))
+    ((not (memq ,expr (quote ,lst)))
+     (guard (cp0-eq-testable-const-list? lst))
+     (cp0-lower-memq-bool expr lst #f #t))))
+
 (define-picopass rule-cp0-flatten-begin
   :reads '(begin) :writes '(begin)
   (Expr
@@ -22962,6 +23074,7 @@
     (fuse-rules :order post
       rule-cp0-prune-if-3
       rule-cp0-prune-if-2
+      rule-cp0-memq-quoted-bool
       rule-cp0-flatten-begin
       rule-cp0-dead-let
       rule-cp0-dead-letrec
@@ -29777,48 +29890,114 @@
        ((equal? cc "jg")  "jle")
        (else #f)))))
 
-(define (%bf-c99-add-label-ref! tbl lbl)
-  (let ((slot (assq lbl (car tbl))))
-    (if slot
-        (set-cdr! slot (+ (cdr slot) 1))
-        (set-car! tbl (cons (cons lbl 1) (car tbl))))))
+(define (%bf-ht-make)
+  (make-vector 1024 '()))
+
+(define (%bf-ht-ref ht sym default)
+  (let* ((idx (symbol->hash-idx sym))
+         (entry (assq sym (vector-ref ht idx))))
+    (if entry (cdr entry) default)))
+
+(define (%bf-ht-set! ht sym val)
+  (let* ((idx (symbol->hash-idx sym))
+         (bucket (vector-ref ht idx))
+         (entry (assq sym bucket)))
+    (if entry
+        (set-cdr! entry val)
+        (vector-set! ht idx (cons (cons sym val) bucket)))))
+
+(define (%bf-ht-inc! ht sym)
+  (let* ((idx (symbol->hash-idx sym))
+         (bucket (vector-ref ht idx))
+         (entry (assq sym bucket)))
+    (if entry
+        (set-cdr! entry (+ (cdr entry) 1))
+        (vector-set! ht idx (cons (cons sym 1) bucket)))))
+
+(define (%bf-c99-has-cmp-rax-zero? insts)
+  (let loop ((xs insts))
+    (if (null? xs)
+        #f
+        (let ((inst (car xs)))
+          (if (and (pair? inst)
+                   (eq? (car inst) '%cmp)
+                   (pair? (cdr inst))
+                   (eq? (cadr inst) '%rax)
+                   (pair? (cddr inst))
+                   (eqv? (caddr inst) 0)
+                   (null? (cdddr inst)))
+              #t
+              (loop (cdr xs)))))))
+
+(define (%bf-c99-drop-adjacent-jumps insts)
+  ;; O(N) fast pass for Scheme & simple functions: handles Patterns B3/B4
+  ;; without allocating hash tables or scanning lists twice; returns original
+  ;; `insts` by eq? when unchanged.
+  (let loop ((xs insts) (rev-prefix '()) (changed? #f))
+    (if (null? xs)
+        (if changed? (reverse rev-prefix) insts)
+        (let ((i0 (car xs))
+              (t1 (cdr xs)))
+          (if (and (pair? t1)
+                   (pair? i0)
+                   (pair? (car t1))
+                   (eq? (caar t1) '%label)
+                   (pair? (cdar t1))
+                   (let ((next-lbl (cadar t1))
+                         (op (car i0)))
+                     (or (and (eq? op '%jump-cond)
+                              (pair? (cdr i0))
+                              (pair? (cddr i0))
+                              (null? (cdddr i0))
+                              (eq? (caddr i0) next-lbl))
+                         (and (eq? op '%direct-jump)
+                              (pair? (cdr i0))
+                              (eq? (cadr i0) next-lbl)))))
+              (loop t1
+                    (if changed?
+                        rev-prefix
+                        (let copy ((p insts) (acc '()))
+                          (if (eq? p xs)
+                              acc
+                              (copy (cdr p) (cons (car p) acc)))))
+                    #t)
+              (loop t1
+                    (if changed? (cons i0 rev-prefix) rev-prefix)
+                    changed?))))))
 
 (define (%bf-c99-count-label-refs insts)
-  (let ((def-lbls-box (cons '() '()))
-        (refs-box (cons '() '())))
+  (let ((def-ht (%bf-ht-make))
+        (refs-ht (%bf-ht-make)))
     (for-each
      (lambda (inst)
-       (if (and (pair? inst) (eq? (car inst) '%label) (pair? (cdr inst)))
-           (set-car! def-lbls-box (cons (cadr inst) (car def-lbls-box)))))
+       (if (and (pair? inst) (eq? (car inst) '%label) (pair? (cdr inst)) (symbol? (cadr inst)))
+           (%bf-ht-set! def-ht (cadr inst) #t)))
      insts)
-    (let ((def-lbls (car def-lbls-box)))
-      (letrec ((scan-refs
-                (lambda (x)
-                  (cond
-                    ((symbol? x)
-                     (if (memq x def-lbls) (%bf-c99-add-label-ref! refs-box x)))
-                    ((pair? x)
-                     (scan-refs (car x))
-                     (scan-refs (cdr x)))))))
-        (for-each
-         (lambda (inst)
-           (if (not (and (pair? inst) (eq? (car inst) '%label)))
-               (scan-refs inst)))
-         insts)))
-    (car refs-box)))
-
-(define (%bf-c99-label-ref-count refs lbl)
-  (let ((s (assq lbl refs)))
-    (if s (cdr s) 0)))
+    (letrec ((scan-refs
+              (lambda (x)
+                (cond
+                  ((symbol? x)
+                   (if (%bf-ht-ref def-ht x #f)
+                       (%bf-ht-inc! refs-ht x)))
+                  ((pair? x)
+                   (scan-refs (car x))
+                   (scan-refs (cdr x)))))))
+      (for-each
+       (lambda (inst)
+         (if (not (and (pair? inst) (eq? (car inst) '%label)))
+             (scan-refs inst)))
+       insts))
+    refs-ht))
 
 (define (%bf-c99-build-label-map insts)
-  (let loop ((xs insts) (acc '()))
-    (if (null? xs)
-        (reverse acc)
-        (let ((inst (car xs)))
-          (if (and (pair? inst) (eq? (car inst) '%label) (pair? (cdr inst)))
-              (loop (cdr xs) (cons (cons (cadr inst) (cdr xs)) acc))
-              (loop (cdr xs) acc))))))
+  (let ((lbl-ht (%bf-ht-make)))
+    (let loop ((xs insts))
+      (if (null? xs)
+          lbl-ht
+          (let ((inst (car xs)))
+            (if (and (pair? inst) (eq? (car inst) '%label) (pair? (cdr inst)) (symbol? (cadr inst)))
+                (%bf-ht-set! lbl-ht (cadr inst) (cdr xs)))
+            (loop (cdr xs)))))))
 
 (define (%bf-c99-tree-has? tree sym)
   (cond
@@ -29828,7 +30007,7 @@
          (%bf-c99-tree-has? (cdr tree) sym)))
     (else #f)))
 
-(define (%bf-c99-rax-overwritten-before-read? insts lbl-map depth)
+(define (%bf-c99-rax-overwritten-before-read? insts lbl-ht depth)
   (if (> depth 8)
       #f
       (let loop ((xs insts) (steps 0))
@@ -29841,23 +30020,25 @@
              (cond
                ((eq? op '%label)
                 (loop (cdr xs) steps))
-               ((memq op '(%direct-jump %jump))
-                (let ((slot (assq (cadr inst) lbl-map)))
-                  (if slot
-                      (%bf-c99-rax-overwritten-before-read? (cdr slot) lbl-map (+ depth 1))
+               ((or (eq? op '%direct-jump) (eq? op '%jump))
+                (let ((tail (and (symbol? (cadr inst)) (%bf-ht-ref lbl-ht (cadr inst) #f))))
+                  (if tail
+                      (%bf-c99-rax-overwritten-before-read? tail lbl-ht (+ depth 1))
                       #f)))
-               ((and (eq? op '%mov) (>= (length inst) 3) (eq? (cadr inst) '%rax))
+               ((and (eq? op '%mov) (pair? (cdr inst)) (pair? (cddr inst)) (null? (cdddr inst))
+                     (eq? (cadr inst) '%rax))
                 (not (%bf-c99-tree-has? (caddr inst) '%rax)))
-               ((and (eq? op '%load) (>= (length inst) 4) (eq? (cadr inst) '%rax))
+               ((and (eq? op '%load) (pair? (cdr inst)) (pair? (cddr inst)) (pair? (cdddr inst))
+                     (eq? (cadr inst) '%rax))
                 (and (not (eq? (caddr inst) '%rax))
                      (not (%bf-c99-tree-has? (cadddr inst) '%rax))))
                ((and (eq? op '%load-typed) (>= (length inst) 5) (eq? (caddr inst) '%rax))
                 (and (not (eq? (cadddr inst) '%rax))
                      (not (%bf-c99-tree-has? (car (cddddr inst)) '%rax))))
-               ((and (memq op '(%global-addr %global-ref %str-ref %code-ref %pop %load-byte-zx))
-                     (>= (length inst) 2)
+               ((and (case op ((%global-addr %global-ref %str-ref %code-ref %pop %load-byte-zx) #t) (else #f))
+                     (pair? (cdr inst))
                      (eq? (cadr inst) '%rax))
-                (if (>= (length inst) 3)
+                (if (pair? (cddr inst))
                     (not (%bf-c99-tree-has? (cddr inst) '%rax))
                     #t))
                ;; Calls read %rax only for varargs (%al) if not cleared, conservatively check %rax mention
@@ -29882,131 +30063,188 @@
 (define (%bf-c99-apply-redirects insts redirects)
   (if (null? redirects)
       insts
-      (letrec ((rw
-                (lambda (x)
-                  (cond
-                    ((symbol? x)
-                     (if (assq x redirects)
-                         (%bf-c99-resolve-redirect redirects x)
-                         x))
-                    ((pair? x)
-                     (cons (rw (car x)) (rw (cdr x))))
-                    (else x)))))
-        (map (lambda (inst)
-               (if (and (pair? inst) (eq? (car inst) '%label))
-                   inst
-                   (rw inst)))
-             insts))))
+      (let ((redir-ht (%bf-ht-make)))
+        (for-each (lambda (p)
+                    (%bf-ht-set! redir-ht (car p) (%bf-c99-resolve-redirect redirects (car p))))
+                  redirects)
+        (letrec ((rw
+                  (lambda (x)
+                    (cond
+                      ((symbol? x)
+                       (or (%bf-ht-ref redir-ht x #f) x))
+                      ((pair? x)
+                       (cons (rw (car x)) (rw (cdr x))))
+                      (else x)))))
+          (map (lambda (inst)
+                 (if (and (pair? inst) (eq? (car inst) '%label))
+                     inst
+                     (rw inst)))
+               insts)))))
+
+(define (%bf-c99-match-mov-rax-k? inst)
+  (and (pair? inst)
+       (eq? (car inst) '%mov)
+       (pair? (cdr inst))
+       (eq? (cadr inst) '%rax)
+       (pair? (cddr inst))
+       (null? (cdddr inst))
+       (let ((k (caddr inst)))
+         (or (eqv? k 0) (eqv? k 1)))))
+
+(define (%bf-c99-cmp-rax-0? inst)
+  (and (pair? inst)
+       (eq? (car inst) '%cmp)
+       (pair? (cdr inst))
+       (eq? (cadr inst) '%rax)
+       (pair? (cddr inst))
+       (eqv? (caddr inst) 0)
+       (null? (cdddr inst))))
 
 (define (%bf-c99-fuse-once insts)
   (if (or (null? insts) (null? (cdr insts)))
       insts
-      (let* ((refs (%bf-c99-count-label-refs insts))
-             (lbl-map (%bf-c99-build-label-map insts))
+      (let* ((refs-ht (%bf-c99-count-label-refs insts))
+             (lbl-ht (%bf-c99-build-label-map insts))
              (redirect-box (cons '() '()))
              (dead-rax?
               (lambda (fallthrough target-lbl)
-                (and (%bf-c99-rax-overwritten-before-read? fallthrough lbl-map 0)
-                     (let ((t-slot (assq target-lbl lbl-map)))
-                       (and t-slot
-                            (%bf-c99-rax-overwritten-before-read? (cdr t-slot) lbl-map 0)))))))
-        (let loop ((xs insts) (acc '()))
+                (and (%bf-c99-rax-overwritten-before-read? fallthrough lbl-ht 0)
+                     (let ((t-tail (and (symbol? target-lbl) (%bf-ht-ref lbl-ht target-lbl #f))))
+                       (and t-tail
+                            (%bf-c99-rax-overwritten-before-read? t-tail lbl-ht 0))))))
+             (copy-prefix
+              (lambda (stop-cell)
+                (let loop ((p insts) (acc '()))
+                  (if (eq? p stop-cell)
+                      acc
+                      (loop (cdr p) (cons (car p) acc)))))))
+        (let loop ((xs insts) (acc '()) (changed? #f))
           (if (null? xs)
-              (%bf-c99-apply-redirects (reverse acc) (car redirect-box))
+              (if changed?
+                  (%bf-c99-apply-redirects (reverse acc) (car redirect-box))
+                  insts)
               (let ((i0 (car xs))
                     (t1 (cdr xs)))
                 (cond
                   ;; Pattern B1: 9-instruction C99 comparison materialization + compare-zero + branch
-                  ((and (>= (length xs) 9)
-                        (pair? (list-ref xs 0)) (eq? (car (list-ref xs 0)) '%cmp)
-                        (pair? (list-ref xs 1)) (eq? (car (list-ref xs 1)) '%jump-cond)
-                        (pair? (list-ref xs 2)) (equal? (list-ref xs 2) '(%mov %rax 0))
-                        (pair? (list-ref xs 3)) (eq? (car (list-ref xs 3)) '%direct-jump)
-                        (pair? (list-ref xs 4)) (eq? (car (list-ref xs 4)) '%label)
-                        (pair? (list-ref xs 5)) (equal? (list-ref xs 5) '(%mov %rax 1))
-                        (pair? (list-ref xs 6)) (eq? (car (list-ref xs 6)) '%label)
-                        (pair? (list-ref xs 7)) (equal? (list-ref xs 7) '(%cmp %rax 0))
-                        (pair? (list-ref xs 8)) (eq? (car (list-ref xs 8)) '%jump-cond)
-                        (eq? (caddr (list-ref xs 1)) (cadr (list-ref xs 4)))
-                        (eq? (cadr (list-ref xs 3)) (cadr (list-ref xs 6)))
-                        (= (%bf-c99-label-ref-count refs (cadr (list-ref xs 4))) 1)
-                        (= (%bf-c99-label-ref-count refs (cadr (list-ref xs 6))) 1)
-                        (memq (cadr (list-ref xs 8)) '(je jne))
-                        (%bf-c99-invert-cc (cadr (list-ref xs 1)))
-                        (dead-rax? (list-tail xs 9) (caddr (list-ref xs 8))))
-                   (let* ((cc (cadr (list-ref xs 1)))
-                          (jcc (cadr (list-ref xs 8)))
-                          (target (caddr (list-ref xs 8)))
-                          (fused-cc (if (eq? jcc 'je) (%bf-c99-invert-cc cc) cc)))
-                     (loop (list-tail xs 9)
+                  ((and (pair? i0)
+                        (eq? (car i0) '%cmp)
+                        (pair? t1) (pair? (cdr t1)) (pair? (cddr t1)) (pair? (cdddr t1))
+                        (let ((t5 (cddddr t1)))
+                          (and (pair? t5) (pair? (cdr t5)) (pair? (cddr t5)) (pair? (cdddr t5))
+                               (let ((x1 (car t1))
+                                     (x2 (cadr t1))
+                                     (x3 (caddr t1))
+                                     (x4 (cadddr t1))
+                                     (x5 (car t5))
+                                     (x6 (cadr t5))
+                                     (x7 (caddr t5))
+                                     (x8 (cadddr t5)))
+                                 (and (pair? x1) (eq? (car x1) '%jump-cond)
+                                      (pair? x2) (eq? (car x2) '%mov) (pair? (cdr x2)) (eq? (cadr x2) '%rax)
+                                      (pair? (cddr x2)) (eqv? (caddr x2) 0) (null? (cdddr x2))
+                                      (pair? x3) (eq? (car x3) '%direct-jump)
+                                      (pair? x4) (eq? (car x4) '%label)
+                                      (pair? x5) (eq? (car x5) '%mov) (pair? (cdr x5)) (eq? (cadr x5) '%rax)
+                                      (pair? (cddr x5)) (eqv? (caddr x5) 1) (null? (cdddr x5))
+                                      (pair? x6) (eq? (car x6) '%label)
+                                      (%bf-c99-cmp-rax-0? x7)
+                                      (pair? x8) (eq? (car x8) '%jump-cond)
+                                      (eq? (caddr x1) (cadr x4))
+                                      (eq? (cadr x3) (cadr x6))
+                                      (symbol? (cadr x4)) (= (%bf-ht-ref refs-ht (cadr x4) 0) 1)
+                                      (symbol? (cadr x6)) (= (%bf-ht-ref refs-ht (cadr x6) 0) 1)
+                                      (or (eq? (cadr x8) 'je) (eq? (cadr x8) 'jne))
+                                      (%bf-c99-invert-cc (cadr x1))
+                                      (dead-rax? (cddddr t5) (caddr x8)))))))
+                   (let* ((t5 (cddddr t1))
+                          (x1 (car t1))
+                          (x8 (cadddr t5))
+                          (cc (cadr x1))
+                          (jcc (cadr x8))
+                          (target (caddr x8))
+                          (fused-cc (if (eq? jcc 'je) (%bf-c99-invert-cc cc) cc))
+                          (cur-acc (if changed? acc (copy-prefix xs))))
+                     (loop (cddddr t5)
                            (cons (list '%jump-cond fused-cc target)
-                                 (cons (list-ref xs 0) acc)))))
+                                 (cons i0 cur-acc))
+                           #t)))
 
                   ;; Pattern B2: Short-circuit && / || diamond tail feeding (%cmp %rax 0) (%jump-cond je/jne target)
-                  ((and (>= (length xs) 7)
-                        (pair? (list-ref xs 0)) (eq? (car (list-ref xs 0)) '%mov)
-                        (= (length (list-ref xs 0)) 3)
-                        (eq? (cadr (list-ref xs 0)) '%rax)
-                        (memq (caddr (list-ref xs 0)) '(0 1))
-                        (pair? (list-ref xs 1)) (eq? (car (list-ref xs 1)) '%direct-jump)
-                        (pair? (list-ref xs 2)) (eq? (car (list-ref xs 2)) '%label)
-                        (pair? (list-ref xs 3)) (eq? (car (list-ref xs 3)) '%mov)
-                        (= (length (list-ref xs 3)) 3)
-                        (eq? (cadr (list-ref xs 3)) '%rax)
-                        (memq (caddr (list-ref xs 3)) '(0 1))
-                        (not (= (caddr (list-ref xs 0)) (caddr (list-ref xs 3))))
-                        (pair? (list-ref xs 4)) (eq? (car (list-ref xs 4)) '%label)
-                        (pair? (list-ref xs 5)) (equal? (list-ref xs 5) '(%cmp %rax 0))
-                        (pair? (list-ref xs 6)) (eq? (car (list-ref xs 6)) '%jump-cond)
-                        (eq? (cadr (list-ref xs 1)) (cadr (list-ref xs 4)))
-                        (= (%bf-c99-label-ref-count refs (cadr (list-ref xs 4))) 1)
-                        (memq (cadr (list-ref xs 6)) '(je jne))
-                        (not (eq? (caddr (list-ref xs 6)) (cadr (list-ref xs 2))))
-                        (not (eq? (caddr (list-ref xs 6)) (cadr (list-ref xs 4))))
-                        (dead-rax? (list-tail xs 7) (caddr (list-ref xs 6))))
-                   (let* ((k1 (caddr (list-ref xs 0)))
-                          (mid-lbl (cadr (list-ref xs 2)))
-                          (jcc (cadr (list-ref xs 6)))
-                          (target (caddr (list-ref xs 6)))
-                          (k1-taken? (if (eq? jcc 'je) (= k1 0) (not (= k1 0)))))
+                  ((and (%bf-c99-match-mov-rax-k? i0)
+                        (pair? t1) (pair? (cdr t1)) (pair? (cddr t1)) (pair? (cdddr t1))
+                        (let ((t5 (cddddr t1)))
+                          (and (pair? t5) (pair? (cdr t5))
+                               (let ((x1 (car t1))
+                                     (x2 (cadr t1))
+                                     (x3 (caddr t1))
+                                     (x4 (cadddr t1))
+                                     (x5 (car t5))
+                                     (x6 (cadr t5)))
+                                 (and (pair? x1) (eq? (car x1) '%direct-jump)
+                                      (pair? x2) (eq? (car x2) '%label)
+                                      (%bf-c99-match-mov-rax-k? x3)
+                                      (not (= (caddr i0) (caddr x3)))
+                                      (pair? x4) (eq? (car x4) '%label)
+                                      (%bf-c99-cmp-rax-0? x5)
+                                      (pair? x6) (eq? (car x6) '%jump-cond)
+                                      (eq? (cadr x1) (cadr x4))
+                                      (symbol? (cadr x4)) (= (%bf-ht-ref refs-ht (cadr x4) 0) 1)
+                                      (or (eq? (cadr x6) 'je) (eq? (cadr x6) 'jne))
+                                      (not (eq? (caddr x6) (cadr x2)))
+                                      (not (eq? (caddr x6) (cadr x4)))
+                                      (dead-rax? (cddr t5) (caddr x6)))))))
+                   (let* ((t5 (cddddr t1))
+                          (x2 (cadr t1))
+                          (x6 (cadr t5))
+                          (k1 (caddr i0))
+                          (mid-lbl (cadr x2))
+                          (jcc (cadr x6))
+                          (target (caddr x6))
+                          (k1-taken? (if (eq? jcc 'je) (= k1 0) (not (= k1 0))))
+                          (cur-acc (if changed? acc (copy-prefix xs))))
                      (if k1-taken?
-                         ;; k1 jumps to target; k2 (i.e. mid-lbl) falls through directly
-                         (loop (list-tail xs 7)
+                         (loop (cddr t5)
                                (cons (list '%label mid-lbl)
-                                     (cons (list '%direct-jump target) acc)))
-                         ;; k1 falls through; mid-lbl (k2) jumps to target
+                                     (cons (list '%direct-jump target) cur-acc))
+                               #t)
                          (begin
                            (set-car! redirect-box (cons (cons mid-lbl target) (car redirect-box)))
-                           (loop (list-tail xs 7) acc)))))
+                           (loop (cddr t5) cur-acc #t)))))
 
                   ;; Pattern B3: Conditional jump to immediately following label -> drop jump
                   ((and (pair? t1)
                         (pair? i0)
                         (eq? (car i0) '%jump-cond)
-                        (= (length i0) 3)
+                        (pair? (cdr i0)) (pair? (cddr i0)) (null? (cdddr i0))
                         (pair? (car t1))
                         (eq? (caar t1) '%label)
                         (eq? (caddr i0) (cadar t1)))
-                   (loop t1 acc))
+                   (loop t1 (if changed? acc (copy-prefix xs)) #t))
 
                   ;; Pattern B4: Direct jump to immediately following label -> drop jump
                   ((and (pair? t1)
                         (pair? i0)
                         (eq? (car i0) '%direct-jump)
+                        (pair? (cdr i0))
                         (pair? (car t1))
                         (eq? (caar t1) '%label)
                         (eq? (cadr i0) (cadar t1)))
-                   (loop t1 acc))
+                   (loop t1 (if changed? acc (copy-prefix xs)) #t))
 
                   (else
-                   (loop t1 (cons i0 acc))))))))))
+                   (loop t1 (if changed? (cons i0 acc) acc) changed?)))))))))
 
 (define (lir-fuse-c99-branches-in-body insts)
-  (let ((r1 (%bf-c99-fuse-once insts)))
-    (if (equal? r1 insts)
-        insts
-        (let ((r2 (%bf-c99-fuse-once r1)))
-          (if (equal? r2 r1) r1 r2)))))
+  (if (or (null? insts) (null? (cdr insts)))
+      insts
+      (if (%bf-c99-has-cmp-rax-zero? insts)
+          (let ((r1 (%bf-c99-fuse-once insts)))
+            (if (eq? r1 insts)
+                insts
+                (let ((r2 (%bf-c99-fuse-once r1)))
+                  (if (eq? r2 r1) r1 r2))))
+          (%bf-c99-drop-adjacent-jumps insts))))
 
 (define (%bf-c99-transform-clause form)
   (if (not (pair? form))
@@ -30020,7 +30258,7 @@
                                    (if (eq? nb ob) sub (cons 'body nb)))
                                  sub))
                            (cdr form))))
-           (if (equal? new-c (cdr form)) form (cons '%lir-function new-c))))
+           (cons '%lir-function new-c)))
         ((%lir-main)
          (let ((new-c (map (lambda (sub)
                              (if (and (pair? sub) (eq? (car sub) 'body))
@@ -30029,20 +30267,19 @@
                                    (if (eq? nb ob) sub (cons 'body nb)))
                                  sub))
                            (cdr form))))
-           (if (equal? new-c (cdr form)) form (cons '%lir-main new-c))))
+           (cons '%lir-main new-c)))
         ((%lir-functions)
          (let ((nf (map %bf-c99-transform-clause (cdr form))))
-           (if (equal? nf (cdr form)) form (cons '%lir-functions nf))))
+           (cons '%lir-functions nf)))
         (else form))))
 
 (define (lir-fuse-c99-branches-in-ir ir)
   (cond
     ((null? ir) '())
     ((and (pair? ir) (eq? (car ir) '%lir-program))
-     (let ((nb (map %bf-c99-transform-clause (cdr ir))))
-       (if (equal? nb (cdr ir)) ir (cons '%lir-program nb))))
+     (cons '%lir-program (map %bf-c99-transform-clause (cdr ir))))
     ((pair? ir)
-     (if (memq (car ir) '(%lir-function %lir-main))
+     (if (or (eq? (car ir) '%lir-function) (eq? (car ir) '%lir-main))
          (%bf-c99-transform-clause ir)
          (lir-fuse-c99-branches-in-body ir)))
     (else ir)))
@@ -30050,7 +30287,7 @@
 (define (lir-fuse-branches ir)
   (let* ((w (%lir-fuse-branches-window ir))
          (c (lir-fuse-c99-branches-in-ir w)))
-    (if (equal? c ir) ir c)))
+    (if (eq? c ir) ir c)))
 
 (define (optimize-branch-fusion insts)
   (lir-fuse-branches insts))
@@ -32419,13 +32656,19 @@
 ;;; -----------------------------------------------------------------------
 
 (define (%c99-m2r-reg? x)
-  (memq x '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
-            %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15 %al %cl)))
+  (case x
+    ((%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+      %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15 %al %cl)
+     #t)
+    (else #f)))
 
 (define (%c99-m2r-caller-saved? x)
-  (memq x '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al %cl
-            %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
-            %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15)))
+  (case x
+    ((%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al %cl
+      %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+      %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15)
+     #t)
+    (else #f)))
 
 (define (%c99-m2r-tree-has? tree sym)
   (cond
@@ -33116,11 +33359,14 @@
 
 (define (lir-unconditional-terminator? inst)
   (and (pair? inst)
-       (memq (car inst) '(%jump %direct-jump %switch %return))))
+       (case (car inst)
+         ((%jump %direct-jump %switch %return) #t)
+         (else #f))))
 
 (define (lir-label-inst? inst)
   (and (pair? inst)
-       (memq (car inst) '(%label %block))))
+       (let ((op (car inst)))
+         (or (eq? op '%label) (eq? op '%block)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; First-Class LIR Peephole Picopass Rules (DSN-33-01 T5.3)
@@ -33484,17 +33730,21 @@
       #f
       (let ((op (car inst)))
         (cond
-          ((memq op '(%inline-asm %alloc-stack %managed-alloc-stack %capture-cc))
+          ((case op
+             ((%inline-asm %alloc-stack %managed-alloc-stack %capture-cc) #t)
+             (else #f))
            #t)
-          ((memq op '(%store %store-byte))
+          ((or (eq? op '%store) (eq? op '%store-byte))
            (and (>= (length inst) 4) (eq? (list-ref inst 3) '%rsp)))
           ((eq? op '%store-typed)
            (and (>= (length inst) 5) (eq? (list-ref inst 4) '%rsp)))
-          ((memq op '(%load %load-byte-zx))
+          ((or (eq? op '%load) (eq? op '%load-byte-zx))
            (and (>= (length inst) 4) (eq? (list-ref inst 3) '%rsp)))
           ((eq? op '%load-typed)
            (and (>= (length inst) 5) (eq? (list-ref inst 4) '%rsp)))
-          ((memq op '(%add %sub %raw-add %raw-sub))
+          ((case op
+             ((%add %sub %raw-add %raw-sub) #t)
+             (else #f))
            (and (>= (length inst) 3)
                 (or (eq? (caddr inst) '%rsp)
                     (and (not (eq? (cadr inst) '%rsp))
@@ -33508,15 +33758,18 @@
 (define (lir-dse-inst-indirect-read? inst)
   (and (pair? inst)
        (let ((op (car inst)))
-         (or (and (memq op '(%load %load-byte-zx))
+         (or (and (or (eq? op '%load) (eq? op '%load-byte-zx))
                   (>= (length inst) 4)
                   (not (eq? (caddr inst) '%rsp)))
              (and (eq? op '%load-typed)
                   (>= (length inst) 5)
                   (not (eq? (cadddr inst) '%rsp)))
-             (memq op '(%unbox-flonum %unbox-fixnum %atomic-cas!
-                        %managed-unbox %managed-write-barrier
-                        %box-flonum %managed-box))))))
+             (case op
+               ((%unbox-flonum %unbox-fixnum %atomic-cas!
+                 %managed-unbox %managed-write-barrier
+                 %box-flonum %managed-box)
+                #t)
+               (else #f))))))
 
 (define (lir-dse-neg-store-range inst)
   ;; Returns (lo . hi) if inst stores strictly into negative %rsp offset (< 0) with known integer width, else #f
@@ -33617,8 +33870,13 @@
              (loop (cdr xs) #f (cdr live1))))))))
 
 (define (lir-eliminate-dead-stack-stores insts)
-  (if (null? insts)
-      '()
+  (if (or (null? insts)
+          (not (let has-neg? ((xs insts))
+                 (and (pair? xs)
+                      (or (and (not (lir-dse-tree-contains-sym? (car xs) '%stack))
+                               (lir-dse-neg-store-range (car xs)))
+                          (has-neg? (cdr xs)))))))
+      insts
       (let* ((has-escape?
               (let loop ((xs insts))
                 (and (pair? xs)
@@ -33637,9 +33895,10 @@
              (leaf-read-ivs (cdr leaf-info)))
         (let loop ((xs (reverse insts))
                    (live '(all-except))
-                   (acc '()))
+                   (acc '())
+                   (changed? #f))
           (if (null? xs)
-              acc
+              (if changed? acc insts)
               (let* ((inst (car xs))
                      (st (and (not (lir-dse-tree-contains-sym? inst '%stack))
                               (lir-dse-neg-store-range inst))))
@@ -33650,8 +33909,8 @@
                                            (not (lir-iv-overlaps? leaf-read-ivs lo hi)))
                                       (lir-dse-live-dead? live lo hi))))
                       (if dead?
-                          (loop (cdr xs) live acc)
-                          (loop (cdr xs) (lir-dse-live-mark-written live lo hi) (cons inst acc))))
+                          (loop (cdr xs) live acc #t)
+                          (loop (cdr xs) (lir-dse-live-mark-written live lo hi) (cons inst acc) changed?)))
                     (let ((next-live
                            (cond
                              ((and (pair? inst) (eq? (car inst) '%return))
@@ -33673,42 +33932,61 @@
                               '(all-except))
                              (else
                               (lir-dse-fold-stack-opnds inst live)))))
-                      (loop (cdr xs) next-live (cons inst acc))))))))))
+                      (loop (cdr xs) next-live (cons inst acc) changed?)))))))))
 
-(define (lir-dse-transform-clause form)
+(define (%lir-map-keep-eq proc xs)
+  (let loop ((rem xs) (acc '()) (changed? #f))
+    (if (null? rem)
+        (if changed? (reverse acc) xs)
+        (let* ((orig (car rem))
+               (mapped (proc orig)))
+          (if (eq? mapped orig)
+              (loop (cdr rem) (cons orig acc) changed?)
+              (loop (cdr rem) (cons mapped acc) #t))))))
+
+(define (%lir-transform-fn-body form body-fn)
   (if (not (pair? form))
       form
       (case (car form)
-        ((%lir-function)
-         (cons '%lir-function
-               (map (lambda (sub)
-                      (if (and (pair? sub) (eq? (car sub) 'body))
-                          (cons 'body (lir-eliminate-dead-stack-stores (cdr sub)))
-                          sub))
-                    (cdr form))))
-        ((%lir-main)
-         (cons '%lir-main
-               (map (lambda (sub)
-                      (if (and (pair? sub) (eq? (car sub) 'body))
-                          (cons 'body (lir-eliminate-dead-stack-stores (cdr sub)))
-                          sub))
-                    (cdr form))))
+        ((%lir-function %lir-main)
+         (let ((new-rest
+                (%lir-map-keep-eq
+                 (lambda (sub)
+                   (if (and (pair? sub) (eq? (car sub) 'body))
+                       (let* ((ob (cdr sub))
+                              (nb (body-fn ob)))
+                         (if (eq? nb ob) sub (cons 'body nb)))
+                       sub))
+                 (cdr form))))
+           (if (eq? new-rest (cdr form))
+               form
+               (cons (car form) new-rest))))
         ((%lir-functions)
-         (cons '%lir-functions
-               (map lir-dse-transform-clause (cdr form))))
+         (let ((new-fns (%lir-map-keep-eq (lambda (f) (%lir-transform-fn-body f body-fn)) (cdr form))))
+           (if (eq? new-fns (cdr form))
+               form
+               (cons '%lir-functions new-fns))))
         (else form))))
 
-(define (lir-eliminate-dead-stack-stores-in-ir ir)
+(define (%lir-transform-ir-bodies ir body-fn transform-raw-list?)
   (cond
     ((null? ir) '())
     ((and (pair? ir) (eq? (car ir) '%lir-program))
-     (cons '%lir-program
-           (map lir-dse-transform-clause (cdr ir))))
+     (let ((new-clauses (%lir-map-keep-eq (lambda (c) (%lir-transform-fn-body c body-fn)) (cdr ir))))
+       (if (eq? new-clauses (cdr ir))
+           ir
+           (cons '%lir-program new-clauses))))
     ((pair? ir)
-     (if (memq (car ir) '(%lir-function %lir-main))
-         (lir-dse-transform-clause ir)
-         (lir-eliminate-dead-stack-stores ir)))
+     (if (or (eq? (car ir) '%lir-function) (eq? (car ir) '%lir-main))
+         (%lir-transform-fn-body ir body-fn)
+         (if transform-raw-list? (body-fn ir) ir)))
     (else ir)))
+
+(define (lir-dse-transform-clause form)
+  (%lir-transform-fn-body form lir-eliminate-dead-stack-stores))
+
+(define (lir-eliminate-dead-stack-stores-in-ir ir)
+  (%lir-transform-ir-bodies ir lir-eliminate-dead-stack-stores #t))
 
 ;;; -----------------------------------------------------------------------
 ;;; Linear O(N) Algebraic Zero/Sign-Extension Folding (Issue #935)
@@ -33760,11 +34038,11 @@
      (= (cdr fact) (lir-ext-normalize-const target-kind (cdr fact))))
     (else
      (case fact
-       ((u8)  (memq target-kind '(u8 u16 i16 u32 i32)))
-       ((i8)  (memq target-kind '(i8 i16 i32)))
-       ((u16) (memq target-kind '(u16 u32 i32)))
-       ((i16) (memq target-kind '(i16 i32)))
-       ((u31) (memq target-kind '(u32 i32)))
+       ((u8)  (case target-kind ((u8 u16 i16 u32 i32) #t) (else #f)))
+       ((i8)  (case target-kind ((i8 i16 i32) #t) (else #f)))
+       ((u16) (case target-kind ((u16 u32 i32) #t) (else #f)))
+       ((i16) (or (eq? target-kind 'i16) (eq? target-kind 'i32)))
+       ((u31) (or (eq? target-kind 'u32) (eq? target-kind 'i32)))
        ((u32) (eq? target-kind 'u32))
        ((i32) (eq? target-kind 'i32))
        (else #f)))))
@@ -33772,8 +34050,8 @@
 (define (lir-ext-reg-overlaps? r1 r2)
   (or (equal? r1 r2)
       (lir-reg-aliases? r1 r2)
-      (and (memq r1 '(%rax %al)) (memq r2 '(%rax %al)))
-      (and (memq r1 '(%rcx %cl)) (memq r2 '(%rcx %cl)))))
+      (and (or (eq? r1 '%rax) (eq? r1 '%al)) (or (eq? r2 '%rax) (eq? r2 '%al)))
+      (and (or (eq? r1 '%rcx) (eq? r1 '%cl)) (or (eq? r2 '%rcx) (eq? r2 '%cl)))))
 
 (define (lir-ext-env-lookup env reg)
   (let ((hit (assoc reg env)))
@@ -33806,22 +34084,25 @@
                     (and (eq? r '%rcx) (lir-inst-defines-reg? inst '%cl))
                     (and (eq? r '%cl) (lir-inst-defines-reg? inst '%rcx))
                     (and (pair? inst)
-                         (memq (car inst) '(%push %pop))
+                         (or (eq? (car inst) '%push) (eq? (car inst) '%pop))
                          (eq? r '%rsp)))))
           (loop (cdr xs) (if killed? acc (cons (car xs) acc)))))))
 
 (define (lir-ext-safe-intra-block-op? op)
-  (memq op '(%loc %mov %load %load-byte-zx %load-typed %store %store-byte %store-typed
-              %add %raw-add %sub %raw-sub %imul %raw-mul %neg %inc
-              %bit-and %bit-or %bit-xor %shl %shr %sar
-              %cmp %raw-cmp %setb %setbe %seta %setae %set-boolean
-              %cqo %idiv %udiv %urem %trunc %zext %sext
-              %fmov %fadd %fsub %fmul %fdiv %fneg %fpext %fptrunc
-              %fcmp %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge
-              %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64
-              %global-addr %global-ref %global-set! %code-ref %str-ref %not %push %pop
-              %add-overflow %sub-overflow %mul-overflow
-              %box-fixnum %unbox-fixnum %box-flonum %unbox-flonum)))
+  (case op
+    ((%loc %mov %load %load-byte-zx %load-typed %store %store-byte %store-typed
+      %add %raw-add %sub %raw-sub %imul %raw-mul %neg %inc
+      %bit-and %bit-or %bit-xor %shl %shr %sar
+      %cmp %raw-cmp %setb %setbe %seta %setae %set-boolean
+      %cqo %idiv %udiv %urem %trunc %zext %sext
+      %fmov %fadd %fsub %fmul %fdiv %fneg %fpext %fptrunc
+      %fcmp %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge
+      %sitofp %uitofp %fptosi %fptoui %bitcast-f64-to-i64 %bitcast-i64-to-f64
+      %global-addr %global-ref %global-set! %code-ref %str-ref %not %push %pop
+      %add-overflow %sub-overflow %mul-overflow
+      %box-fixnum %unbox-fixnum %box-flonum %unbox-flonum)
+     #t)
+    (else #f)))
 
 (define (lir-ext-try-fold-imm-prev acc reg target-kind)
   (let loop ((xs acc) (locs '()))
@@ -33884,7 +34165,8 @@
            (else env1))))
       ((%load-typed)
        (let ((mty (cadr inst)) (dst (caddr inst)))
-         (if (and (lir-peephole-reg? dst) (memq mty '(i8 u8 i16 u16 i32 u32)))
+         (if (and (lir-peephole-reg? dst)
+                  (case mty ((i8 u8 i16 u16 i32 u32) #t) (else #f)))
              (lir-ext-env-set env1 dst mty)
              env1)))
       ((%load-byte-zx %setb %setbe %seta %setae %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge)
@@ -33905,7 +34187,7 @@
                   (sf (and (lir-peephole-reg? src) (lir-ext-env-lookup env src))))
              (if (lir-peephole-reg? dst)
                  (cond
-                   ((memq sf '(u8 u16 u31 u32))
+                   ((case sf ((u8 u16 u31 u32) #t) (else #f))
                     (lir-ext-env-set env1 dst sf))
                    ((and (pair? sf) (eq? (car sf) 'const) (>= (cdr sf) 0))
                     (if (integer? cnt)
@@ -33918,7 +34200,7 @@
                   (df (and (lir-peephole-reg? dst) (lir-ext-env-lookup env dst))))
              (if (lir-peephole-reg? dst)
                  (cond
-                   ((memq df '(u8 u16 u31 u32))
+                   ((case df ((u8 u16 u31 u32) #t) (else #f))
                     (lir-ext-env-set env1 dst df))
                    ((and (pair? df) (eq? (car df) 'const) (>= (cdr df) 0))
                     (if (integer? cnt)
@@ -33929,17 +34211,28 @@
       ((%sar)
        (let* ((dst (cadr inst))
               (df (and (lir-peephole-reg? dst) (lir-ext-env-lookup env dst))))
-         (if (and (lir-peephole-reg? dst) (memq df '(i8 i16 i32 u8 u16 u31 u32)))
+         (if (and (lir-peephole-reg? dst)
+                  (case df ((i8 i16 i32 u8 u16 u31 u32) #t) (else #f)))
              (lir-ext-env-set env1 dst df)
              env1)))
       (else env1))))
 
+(define (%lir-copy-prefix insts stop-cell)
+  (let loop ((p insts) (acc '()))
+    (if (eq? p stop-cell)
+        acc
+        (loop (cdr p) (cons (car p) acc)))))
+
 (define (lir-fold-redundant-extensions insts)
-  (if (null? insts)
-      '()
-      (let loop ((xs insts) (env '()) (acc '()))
+  (if (or (null? insts)
+          (not (let has-ext? ((xs insts))
+                 (and (pair? xs)
+                      (or (lir-ext-inst->kind (car xs))
+                          (has-ext? (cdr xs)))))))
+      insts
+      (let loop ((xs insts) (env '()) (acc '()) (changed? #f))
         (if (null? xs)
-            (reverse acc)
+            (if changed? (reverse acc) insts)
             (let* ((inst (car xs))
                    (rest (cdr xs))
                    (tk (lir-ext-inst->kind inst)))
@@ -33950,64 +34243,49 @@
                         (sf (lir-ext-env-lookup env src)))
                    (cond
                      ((and sf (lir-ext-fact-subsumes? sf tk))
-                      (if (equal? dst src)
-                          (loop rest env acc)
-                          (loop rest
-                                (lir-ext-env-set env dst sf)
-                                (cons (list '%mov dst src) acc))))
+                      (let ((cur-acc (if changed? acc (%lir-copy-prefix insts xs))))
+                        (if (equal? dst src)
+                            (loop rest env cur-acc #t)
+                            (loop rest
+                                  (lir-ext-env-set env dst sf)
+                                  (cons (list '%mov dst src) cur-acc)
+                                  #t))))
                      ((equal? dst src)
-                      (let ((imm-fold (lir-ext-try-fold-imm-prev acc dst tk)))
+                      (let* ((cur-acc (if changed? acc (%lir-copy-prefix insts xs)))
+                             (imm-fold (lir-ext-try-fold-imm-prev cur-acc dst tk)))
                         (if imm-fold
                             (loop rest
                                   (lir-ext-env-set env dst (cons 'const (car imm-fold)))
-                                  (cdr imm-fold))
-                            (let ((trimmed (lir-ext-try-overwrite-prev acc dst (lir-ext-kind-width tk))))
-                              (loop rest
-                                    (lir-ext-env-set env dst tk)
-                                    (cons inst (or trimmed acc)))))))
+                                  (cdr imm-fold)
+                                  #t)
+                            (let ((trimmed (lir-ext-try-overwrite-prev cur-acc dst (lir-ext-kind-width tk))))
+                              (if trimmed
+                                  (loop rest
+                                        (lir-ext-env-set env dst tk)
+                                        (cons inst trimmed)
+                                        #t)
+                                  (loop rest
+                                        (lir-ext-env-set env dst tk)
+                                        (if changed? (cons inst acc) acc)
+                                        changed?))))))
                      (else
                       (loop rest
                             (lir-ext-env-set env dst tk)
-                            (cons inst acc))))))
+                            (if changed? (cons inst acc) acc)
+                            changed?)))))
                 ((and (pair? inst) (lir-ext-safe-intra-block-op? (car inst)))
-                 (loop rest (lir-ext-post-inst-env env inst) (cons inst acc)))
+                 (loop rest
+                       (lir-ext-post-inst-env env inst)
+                       (if changed? (cons inst acc) acc)
+                       changed?))
                 (else
-                 (loop rest '() (cons inst acc)))))))))
+                 (loop rest '() (if changed? (cons inst acc) acc) changed?))))))))
 
 (define (lir-ext-transform-clause form)
-  (if (not (pair? form))
-      form
-      (case (car form)
-        ((%lir-function)
-         (cons '%lir-function
-               (map (lambda (sub)
-                      (if (and (pair? sub) (eq? (car sub) 'body))
-                          (cons 'body (lir-fold-redundant-extensions (cdr sub)))
-                          sub))
-                    (cdr form))))
-        ((%lir-main)
-         (cons '%lir-main
-               (map (lambda (sub)
-                      (if (and (pair? sub) (eq? (car sub) 'body))
-                          (cons 'body (lir-fold-redundant-extensions (cdr sub)))
-                          sub))
-                    (cdr form))))
-        ((%lir-functions)
-         (cons '%lir-functions
-               (map lir-ext-transform-clause (cdr form))))
-        (else form))))
+  (%lir-transform-fn-body form lir-fold-redundant-extensions))
 
 (define (lir-fold-redundant-extensions-in-ir ir)
-  (cond
-    ((null? ir) '())
-    ((and (pair? ir) (eq? (car ir) '%lir-program))
-     (cons '%lir-program
-           (map lir-ext-transform-clause (cdr ir))))
-    ((pair? ir)
-     (if (memq (car ir) '(%lir-function %lir-main))
-         (lir-ext-transform-clause ir)
-         (lir-fold-redundant-extensions ir)))
-    (else ir)))
+  (%lir-transform-ir-bodies ir lir-fold-redundant-extensions #t))
 
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: lir-peephole-window-pass (fuse-window-rules) + DSE
@@ -34030,17 +34308,17 @@
 
 (define (lir-peephole-eval-bin-const op v1 v2)
   (cond
-    ((memq op '(%add %raw-add))
+    ((or (eq? op '%add) (eq? op '%raw-add))
      (if (and (lir-peephole-imm32? v1) (lir-peephole-imm32? v2))
          (let ((res (+ v1 v2)))
            (if (lir-peephole-imm32? res) res #f))
          #f))
-    ((memq op '(%sub %raw-sub))
+    ((or (eq? op '%sub) (eq? op '%raw-sub))
      (if (and (lir-peephole-imm32? v1) (lir-peephole-imm32? v2))
          (let ((res (- v1 v2)))
            (if (lir-peephole-imm32? res) res #f))
          #f))
-    ((memq op '(%imul %raw-mul))
+    ((or (eq? op '%imul) (eq? op '%raw-mul))
      (if (and (integer? v1) (integer? v2)
               (>= v1 -1000000) (<= v1 1000000)
               (>= v2 -1000000) (<= v2 1000000))
@@ -34091,105 +34369,97 @@
     (else #f)))
 
 (define (lir-peephole-fold-int-const-ops insts)
-  (let loop ((xs insts) (cenv '()) (acc '()))
-    (if (null? xs)
-        (reverse acc)
-        (let ((inst (car xs))
-              (rest (cdr xs)))
-          (if (not (pair? inst))
-              (loop rest '() (cons inst acc))
-              (let ((op (car inst)))
-                (cond
-                  ((and (eq? op '%mov) (= (length inst) 3) (lir-peephole-reg? (cadr inst)))
-                   (let* ((dst (cadr inst))
-                          (src (caddr inst))
-                          (c1 (lir-ext-env-kill cenv dst)))
-                     (cond
-                       ((lir-peephole-imm32? src)
-                        (loop rest (cons (cons dst src) c1) (cons inst acc)))
-                       ((and (lir-peephole-reg? src) (assq src cenv))
-                        => (lambda (h)
-                             (let ((kv (cdr h)))
-                               (loop rest (cons (cons dst kv) c1) (cons (list '%mov dst kv) acc)))))
-                       (else
-                        (loop rest c1 (cons inst acc))))))
-                  ((and (memq op '(%neg %inc)) (= (length inst) 2)
-                        (lir-peephole-reg? (cadr inst))
-                        (assq (cadr inst) cenv))
-                   => (lambda (h)
-                        (let ((nv (lir-peephole-eval-unary-const op (cdr h))))
-                          (if nv
-                              (let ((c1 (cons (cons (cadr inst) nv) (lir-ext-env-kill cenv (cadr inst)))))
-                                (loop rest c1 (cons (list '%mov (cadr inst) nv) acc)))
-                              (loop rest (lir-ext-env-kill cenv (cadr inst)) (cons inst acc))))))
-                  ((and (memq op '(%add %raw-add %sub %raw-sub %imul %raw-mul
-                                        %bit-and %bit-or %bit-xor %shl %shr %sar))
-                        (= (length inst) 3)
-                        (lir-peephole-reg? (cadr inst))
-                        (assq (cadr inst) cenv))
-                   => (lambda (h)
-                        (let* ((r (cadr inst))
-                               (rhs (caddr inst))
-                               (kv (cond ((integer? rhs) rhs)
-                                         ((and (lir-peephole-reg? rhs) (assq rhs cenv))
-                                          (cdr (assq rhs cenv)))
-                                         (else #f)))
-                               (nv (if kv (lir-peephole-eval-bin-const op (cdr h) kv) #f)))
-                          (if nv
-                              (let ((c1 (cons (cons r nv) (lir-ext-env-kill cenv r))))
-                                (loop rest c1 (cons (list '%mov r nv) acc)))
-                              (loop rest (lir-ext-env-kill cenv r) (cons inst acc))))))
-                  ((and (lir-ext-safe-intra-block-op? op)
-                        (not (lir-label-inst? inst))
-                        (not (lir-inst-terminates-block? inst)))
-                   (loop rest
-                         (let kill ((es cenv) (ka '()))
-                           (if (null? es)
-                               (reverse ka)
-                               (kill (cdr es)
-                                     (if (lir-inst-defines-reg? inst (caar es))
-                                         ka
-                                         (cons (car es) ka)))))
-                         (cons inst acc)))
-                  (else
-                   (loop rest '() (cons inst acc))))))))))
+  (if (null? insts)
+      insts
+      (let loop ((xs insts) (cenv '()) (acc '()) (changed? #f))
+        (if (null? xs)
+            (if changed? (reverse acc) insts)
+            (let ((inst (car xs))
+                  (rest (cdr xs)))
+              (if (not (pair? inst))
+                  (loop rest '() (if changed? (cons inst acc) acc) changed?)
+                  (let ((op (car inst)))
+                    (cond
+                      ((and (eq? op '%mov)
+                            (pair? (cdr inst)) (pair? (cddr inst)) (null? (cdddr inst))
+                            (lir-peephole-reg? (cadr inst)))
+                       (let* ((dst (cadr inst))
+                              (src (caddr inst))
+                              (c1 (if (null? cenv) '() (lir-ext-env-kill cenv dst))))
+                         (cond
+                           ((lir-peephole-imm32? src)
+                            (loop rest (cons (cons dst src) c1)
+                                  (if changed? (cons inst acc) acc) changed?))
+                           ((and (pair? c1) (lir-peephole-reg? src) (assq src cenv))
+                            => (lambda (h)
+                                 (let ((kv (cdr h))
+                                       (cur-acc (if changed? acc (%lir-copy-prefix insts xs))))
+                                   (loop rest (cons (cons dst kv) c1)
+                                         (cons (list '%mov dst kv) cur-acc) #t))))
+                           ((and (null? c1) (lir-peephole-reg? src) (assq src cenv))
+                            => (lambda (h)
+                                 (let ((kv (cdr h))
+                                       (cur-acc (if changed? acc (%lir-copy-prefix insts xs))))
+                                   (loop rest (cons (cons dst kv) c1)
+                                         (cons (list '%mov dst kv) cur-acc) #t))))
+                           (else
+                            (loop rest c1 (if changed? (cons inst acc) acc) changed?)))))
+                      ((and (or (eq? op '%neg) (eq? op '%inc))
+                            (pair? (cdr inst)) (null? (cddr inst))
+                            (lir-peephole-reg? (cadr inst))
+                            (pair? cenv)
+                            (assq (cadr inst) cenv))
+                       => (lambda (h)
+                            (let ((nv (lir-peephole-eval-unary-const op (cdr h))))
+                              (if nv
+                                  (let ((c1 (cons (cons (cadr inst) nv) (lir-ext-env-kill cenv (cadr inst))))
+                                        (cur-acc (if changed? acc (%lir-copy-prefix insts xs))))
+                                    (loop rest c1 (cons (list '%mov (cadr inst) nv) cur-acc) #t))
+                                  (loop rest (lir-ext-env-kill cenv (cadr inst))
+                                        (if changed? (cons inst acc) acc) changed?)))))
+                      ((and (case op
+                              ((%add %raw-add %sub %raw-sub %imul %raw-mul
+                                %bit-and %bit-or %bit-xor %shl %shr %sar)
+                               #t)
+                              (else #f))
+                            (pair? (cdr inst)) (pair? (cddr inst)) (null? (cdddr inst))
+                            (lir-peephole-reg? (cadr inst))
+                            (pair? cenv)
+                            (assq (cadr inst) cenv))
+                       => (lambda (h)
+                            (let* ((r (cadr inst))
+                                   (rhs (caddr inst))
+                                   (kv (cond ((integer? rhs) rhs)
+                                             ((and (lir-peephole-reg? rhs) (assq rhs cenv))
+                                              (cdr (assq rhs cenv)))
+                                             (else #f)))
+                                   (nv (if kv (lir-peephole-eval-bin-const op (cdr h) kv) #f)))
+                              (if nv
+                                  (let ((c1 (cons (cons r nv) (lir-ext-env-kill cenv r)))
+                                        (cur-acc (if changed? acc (%lir-copy-prefix insts xs))))
+                                    (loop rest c1 (cons (list '%mov r nv) cur-acc) #t))
+                                  (loop rest (lir-ext-env-kill cenv r)
+                                        (if changed? (cons inst acc) acc) changed?)))))
+                      ((and (lir-ext-safe-intra-block-op? op)
+                            (not (lir-label-inst? inst))
+                            (not (lir-inst-terminates-block? inst)))
+                       (loop rest
+                             (if (null? cenv)
+                                 '()
+                                 (let kill ((es cenv) (ka '()))
+                                   (if (null? es)
+                                       (reverse ka)
+                                       (kill (cdr es)
+                                             (if (lir-inst-defines-reg? inst (caar es))
+                                                 ka
+                                                 (cons (car es) ka))))))
+                             (if changed? (cons inst acc) acc)
+                             changed?))
+                      (else
+                       (loop rest '() (if changed? (cons inst acc) acc) changed?))))))))))
 
 (define (lir-peephole-fold-consts-in-ir ir)
-  (cond
-    ((null? ir) '())
-    ((and (pair? ir) (eq? (car ir) '%lir-program))
-     (cons '%lir-program
-           (map (lambda (c)
-                  (cond
-                    ((and (pair? c) (memq (car c) '(%lir-function %lir-main)))
-                     (cons (car c)
-                           (map (lambda (sub)
-                                  (if (and (pair? sub) (eq? (car sub) 'body))
-                                      (cons 'body (lir-peephole-fold-int-const-ops (cdr sub)))
-                                      sub))
-                                (cdr c))))
-                    ((and (pair? c) (eq? (car c) '%lir-functions))
-                     (cons '%lir-functions
-                           (map (lambda (fn)
-                                  (cons (car fn)
-                                        (map (lambda (sub)
-                                               (if (and (pair? sub) (eq? (car sub) 'body))
-                                                   (cons 'body (lir-peephole-fold-int-const-ops (cdr sub)))
-                                                   sub))
-                                             (cdr fn))))
-                                (cdr c))))
-                    (else c)))
-                (cdr ir))))
-    ((pair? ir)
-     (if (memq (car ir) '(%lir-function %lir-main))
-         (cons (car ir)
-               (map (lambda (sub)
-                      (if (and (pair? sub) (eq? (car sub) 'body))
-                          (cons 'body (lir-peephole-fold-int-const-ops (cdr sub)))
-                          sub))
-                    (cdr ir)))
-         ir))
-    (else ir)))
+  (%lir-transform-ir-bodies ir lir-peephole-fold-int-const-ops #f))
 
 (define-pass lir-peephole-window-pass : L_lir_canonical (ir) -> L_lir_canonical ()
   (fuse-window-rules
@@ -34206,18 +34476,42 @@
     rule-lir-redundant-loc-elim
     rule-lir-unreachable-dce))
 
+(define (%lir-all-eq? xs ys)
+  (cond
+    ((eq? xs ys) #t)
+    ((and (pair? xs) (pair? ys))
+     (and (eq? (car xs) (car ys))
+          (%lir-all-eq? (cdr xs) (cdr ys))))
+    (else (and (null? xs) (null? ys)))))
+
+(define (%lir-program-bodies-unchanged? a b)
+  (cond
+    ((eq? a b) #t)
+    ((and (pair? a) (pair? b) (eq? (car a) '%lir-program) (eq? (car b) '%lir-program))
+     (let ((fa (assq '%lir-functions (cdr a)))
+           (fb (assq '%lir-functions (cdr b)))
+           (ma (assq '%lir-main (cdr a)))
+           (mb (assq '%lir-main (cdr b))))
+       (and (or (eq? ma mb) (equal? ma mb))
+            (cond
+              ((eq? fa fb) #t)
+              ((and (pair? fa) (pair? fb))
+               (%lir-all-eq? (cdr fa) (cdr fb)))
+              (else #f)))))
+    (else #f)))
+
 (define (lir-peephole-optimize ir)
   (let* ((c1 (lir-peephole-fold-consts-in-ir ir))
          (w1 (lir-peephole-window-pass c1))
          (e1 (lir-fold-redundant-extensions-in-ir w1))
-         (dse (lir-eliminate-dead-stack-stores-in-ir e1)))
-    (if (equal? ir dse)
+         (d1 (lir-eliminate-dead-stack-stores-in-ir e1)))
+    (if (or (eq? d1 ir) (%lir-program-bodies-unchanged? ir d1))
         ir
-        (let* ((c2 (lir-peephole-fold-consts-in-ir dse))
+        (let* ((c2 (lir-peephole-fold-consts-in-ir d1))
                (w2 (lir-peephole-window-pass c2))
                (e2 (lir-fold-redundant-extensions-in-ir w2)))
-          (if (equal? e2 w2)
-              e2
+          (if (or (eq? e2 w2) (%lir-program-bodies-unchanged? w2 e2))
+              (if (%lir-program-bodies-unchanged? d1 e2) d1 e2)
               (lir-eliminate-dead-stack-stores-in-ir e2))))))
 
 (define (optimize-peephole-fixpoint insts)
@@ -34663,11 +34957,13 @@
                (cadr x)
                x)))
     (and (symbol? r)
-         (memq r '(%rax rax %rbx rbx %rcx rcx %rdx rdx
-                   %rsi rsi %rdi rdi %rbp rbp
-                   %r8 r8 %r9 r9 %r10 r10 %r11 r11
-                   %r12 r12 %r13 r13 %r14 r14 %r15 r15))
-         #t)))
+         (case r
+           ((%rax rax %rbx rbx %rcx rcx %rdx rdx
+             %rsi rsi %rdi rdi %rbp rbp
+             %r8 r8 %r9 r9 %r10 r10 %r11 r11
+             %r12 r12 %r13 r13 %r14 r14 %r15 r15)
+            #t)
+           (else #f)))))
 
 (define (x86-tree-has-rsp-or-stack? x)
   (cond
@@ -35152,8 +35448,11 @@
 
 (define (x86-param-location idx param)
   (cond
-    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
-                   rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15))
+    ((case param
+       ((%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
+         rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15)
+        #t)
+       (else #f))
      param)
     ((and (pair? param) (eq? (car param) '%reg))
      (cadr param))
@@ -36973,10 +37272,13 @@
                    (and (> (string-length s) 0)
                         (char=? (string-ref s 0) #\.))))
             (emit-inst2 "jmp" (asm-label->str target)))
-           ((memq target '(%rax rax %rbx rbx %rcx rcx %rdx rdx
-                           %rsi rsi %rdi rdi %rbp rbp %rsp rsp
-                           %r8  r8  %r9  r9  %r10 r10 %r11 r11
-                           %r12 r12 %r13 r13 %r14 r14 %r15 r15))
+           ((case target
+              ((%rax rax %rbx rbx %rcx rcx %rdx rdx
+                %rsi rsi %rdi rdi %rbp rbp %rsp rsp
+                %r8  r8  %r9  r9  %r10 r10 %r11 r11
+                %r12 r12 %r13 r13 %r14 r14 %r15 r15)
+               #t)
+              (else #f))
             (emit-inst2 "jmp" (asm-opnd->str target)))
            (else
             (emit-inst2 "jmp" (asm-label->str target))))))
@@ -37001,10 +37303,13 @@
          (cond
            ((string? target)
             (emit-inst2 "call" target))
-           ((memq target '(%rax rax %rbx rbx %rcx rcx %rdx rdx
-                           %rsi rsi %rdi rdi %rbp rbp %rsp rsp
-                           %r8  r8  %r9  r9  %r10 r10 %r11 r11
-                           %r12 r12 %r13 r13 %r14 r14 %r15 r15))
+           ((case target
+              ((%rax rax %rbx rbx %rcx rcx %rdx rdx
+                %rsi rsi %rdi rdi %rbp rbp %rsp rsp
+                %r8  r8  %r9  r9  %r10 r10 %r11 r11
+                %r12 r12 %r13 r13 %r14 r14 %r15 r15)
+               #t)
+              (else #f))
             (emit-inst2 "call" (asm-opnd->str target)))
            (else
             (emit-inst2 "call" (asm-label->str target))))))

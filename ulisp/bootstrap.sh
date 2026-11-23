@@ -136,7 +136,9 @@ mkdir -p "$BUILD_DIR"
 # Apply compiler profile for self-hosting compiler execution (Issue #567)
 export ULISP_GC_PROFILE=compiler
 
-if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
+if [ "${BOOTSTRAP_MODULAR:-0}" = "1" ]; then
+    echo "[0/4] Preparing modular 5-way parallel bootstrap..."
+elif [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
     echo "[0/4] Preparing split-linked bootstrap (compiler_entry.scm + build/ulisp_stdlib.o)..."
     make -C "$ULISP_DIR" compiler build/ulisp_stdlib.o
     echo "(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints)" > "$BUILD_DIR/compiler_input.scm"
@@ -506,8 +508,29 @@ verify_and_promote() {
 }
 
 if [ "${BOOTSTRAP_MODULAR:-0}" = "1" ]; then
-    JOBS="$(nproc 2>/dev/null || echo 4)"
-    echo "=== [MODULAR PARALLEL BOOTSTRAP] Running 5-Module Parallel Compilation (make -j$JOBS) ==="
+    CPU_JOBS="$(nproc 2>/dev/null || echo 4)"
+    if [ -n "${BOOTSTRAP_JOBS:-}" ]; then
+        JOBS="$BOOTSTRAP_JOBS"
+    elif [ -r /proc/meminfo ]; then
+        MEM_AVAIL_KB="$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null || echo 0)"
+        if [ "${MEM_AVAIL_KB:-0}" -gt 0 ]; then
+            # Reserve ~2.5 GB per concurrent compiler process to prevent swap thrashing
+            MEM_JOBS=$(( MEM_AVAIL_KB / (2500 * 1024) ))
+            if [ "$MEM_JOBS" -lt 1 ]; then
+                MEM_JOBS=1
+            fi
+            if [ "$MEM_JOBS" -lt "$CPU_JOBS" ]; then
+                JOBS="$MEM_JOBS"
+            else
+                JOBS="$CPU_JOBS"
+            fi
+        else
+            JOBS="$CPU_JOBS"
+        fi
+    else
+        JOBS="$CPU_JOBS"
+    fi
+    echo "=== [MODULAR PARALLEL BOOTSTRAP] Running 5-Module Parallel Compilation (make -j$JOBS; CPU=$CPU_JOBS) ==="
     make -C "$ULISP_DIR" -j"$JOBS" build/meta/compiler_env.sbi build/ulisp_stdlib.o
 
     echo "[1/3] Stage 1 (Modular): Parallel compiling 5 compiler modules using native seed..."
