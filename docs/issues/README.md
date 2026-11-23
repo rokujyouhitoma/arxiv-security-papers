@@ -15,6 +15,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **938** | `make -C ulisp bootstrap` における Pass 128 二次計算量ループおよび `memq` ヒープ肥大化・メモリ超過スラッシングの修正 | Bug | 2026-11-23 | [938-eliminate-bootstrap-quadratic-branch-fusion-and-memq-heap-bloat.md](closed/938-eliminate-bootstrap-quadratic-branch-fusion-and-memq-heap-bloat.md) |
 | **927** | C ヘッダ用 `.sbi` プリコンパイル済みヘッダ (PCH) および mem2reg 反復最適化によるビルド高速化 | Feature | 2026-11-23 | [927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md](closed/927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md) |
 | **937** | DSN-33-24 三位一体・二村射影 Scheme インタプリタ自動生成・双対導出 ＆ メタ循環統合アーキテクチャ設計書の策定 | Docs | 2026-11-23 | [937-design-dsn-33-24-futamura-scheme-interpreter-synthesis.md](closed/937-design-dsn-33-24-futamura-scheme-interpreter-synthesis.md) |
 | **936** | `c-tu` モードにおける関数プロローグ一括スタックフレーム確保と非 GC 呼び出し時の不要 `%rsp` シフト・`xor r10` 廃止 | Feature | 2026-11-23 | [936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md](closed/936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md) |

@@ -97,5 +97,52 @@
     (assert-true "define-pass lir-fuse-branches eliminates %set-boolean" (null? set-booleans))
     (assert-true "fused program satisfies L_lir_canonical schema" (L_lir_canonical? fused))))
 
+;; Test 4: C99 Pattern B1/B2/B3/B4 correctness and O(N) large Scheme body scaling (Issue #938)
+(let* ((c99-ir (list '%lir-program
+                     '(strings ())
+                     '(stackmaps ())
+                     '(%lir-functions)
+                     (list '%lir-main
+                           '(frame-size 0)
+                           '(body (%cmp %rdi %rsi)
+                                  (%jump-cond jge L_false_0)
+                                  (%mov %rax 0)
+                                  (%direct-jump L_join_0)
+                                  (%label L_false_0)
+                                  (%mov %rax 1)
+                                  (%label L_join_0)
+                                  (%cmp %rax 0)
+                                  (%jump-cond jne L_taken_0)
+                                  (%jump-cond jne L_next_fall)
+                                  (%label L_next_fall)
+                                  (%direct-jump L_fall2)
+                                  (%label L_fall2)
+                                  (%mov %rax 1)
+                                  (%return %rax)
+                                  (%label L_taken_0)
+                                  (%mov %rax 2)
+                                  (%return %rax)))))
+       (c99-fused (lir-fuse-branches c99-ir))
+       (c99-body (cdr (assq 'body (cdr (assq '%lir-main (cdr c99-fused))))))
+       (scheme-insts (let loop ((i 0) (acc '()))
+                       (if (= i 5000)
+                           (reverse (cons '(%return %rax) acc))
+                           (loop (+ i 1)
+                                 (cons (list '%mov '%rax i) acc)))))
+       (scheme-ir (list '%lir-program
+                        '(strings ())
+                        '(stackmaps ())
+                        '(%lir-functions)
+                        (list '%lir-main '(frame-size 0) (cons 'body scheme-insts))))
+       (scheme-fused (lir-fuse-branches scheme-ir))
+       (scheme-out-body (cdr (assq 'body (cdr (assq '%lir-main (cdr scheme-fused)))))))
+  (assert-true "C99 Pattern B1 fuses to %jump-cond jge L_taken_0"
+               (member '(%jump-cond jge L_taken_0) c99-body))
+  (assert-true "C99 Pattern B3/B4 eliminates adjacent label jumps"
+               (not (member '(%direct-jump L_fall2) c99-body)))
+  (assert-equal "Large 5001-inst Scheme body preserves exact length under fast path"
+                5001
+                (length scheme-out-body)))
+
 (newline)
 (test-end "Pass 128 (Condition Branch Flag Fusion)")

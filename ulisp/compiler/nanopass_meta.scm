@@ -2130,7 +2130,7 @@
 ;;; =======================================================================
 
 (define *nanopass-window-fixpoint-limit* 16)
-(define *nanopass-window-step-limit* 1024)
+(define *nanopass-window-step-limit* 16384)
 
 ;;; Single-pass sliding window traversal:
 ;;; Evaluates try-match-proc at each instruction boundary.
@@ -3509,13 +3509,16 @@
             (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
                 (lir-reg-aliases? reg '%rax)))
            ((%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer)
-            (or (memq reg '(%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al
-                            %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
-                            %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
+            (or (case reg
+                  ((%rax %rcx %rdx %rsi %rdi %r8 %r9 %r10 %r11 %al
+                    %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                    %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15)
+                   #t)
+                  (else #f))
                 (and (eq? (current-target-arch) 'aarch64)
                      (or (lir-reg-aliases? reg '%rax) (lir-reg-aliases? reg '%rbx)))))
            ((%syscall)
-            (or (memq reg '(%rax %rcx %r11))
+            (or (case reg ((%rax %rcx %r11) #t) (else #f))
                 (and (eq? (current-target-arch) 'aarch64) (lir-reg-aliases? reg '%rax))))
            ((%set-values-count)
             (lir-reg-aliases? reg '%rdx))
@@ -3527,10 +3530,13 @@
 
 (define (lir-inst-memory-barrier? inst)
   (and (pair? inst)
-       (or (memq (car inst) '(%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer
-                              %syscall %memory-fence %managed-safepoint-poll %push %pop %raise
-                              %capture-cc %push-handler %pop-handler
-                              %store-values-buf))
+       (or (case (car inst)
+             ((%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer
+               %syscall %memory-fence %managed-safepoint-poll %push %pop %raise
+               %capture-cc %push-handler %pop-handler
+               %store-values-buf)
+              #t)
+             (else #f))
            (and (eq? (car inst) '%inline-asm)
                 (lir-inline-asm-memory-barrier? inst)))))
 

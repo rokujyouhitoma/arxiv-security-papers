@@ -283,11 +283,13 @@
                (cadr x)
                x)))
     (and (symbol? r)
-         (memq r '(%rax rax %rbx rbx %rcx rcx %rdx rdx
-                   %rsi rsi %rdi rdi %rbp rbp
-                   %r8 r8 %r9 r9 %r10 r10 %r11 r11
-                   %r12 r12 %r13 r13 %r14 r14 %r15 r15))
-         #t)))
+         (case r
+           ((%rax rax %rbx rbx %rcx rcx %rdx rdx
+             %rsi rsi %rdi rdi %rbp rbp
+             %r8 r8 %r9 r9 %r10 r10 %r11 r11
+             %r12 r12 %r13 r13 %r14 r14 %r15 r15)
+            #t)
+           (else #f)))))
 
 (define (x86-tree-has-rsp-or-stack? x)
   (cond
@@ -772,8 +774,11 @@
 
 (define (x86-param-location idx param)
   (cond
-    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
-                   rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15))
+    ((case param
+       ((%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
+         rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15)
+        #t)
+       (else #f))
      param)
     ((and (pair? param) (eq? (car param) '%reg))
      (cadr param))
@@ -2593,10 +2598,13 @@
                    (and (> (string-length s) 0)
                         (char=? (string-ref s 0) #\.))))
             (emit-inst2 "jmp" (asm-label->str target)))
-           ((memq target '(%rax rax %rbx rbx %rcx rcx %rdx rdx
-                           %rsi rsi %rdi rdi %rbp rbp %rsp rsp
-                           %r8  r8  %r9  r9  %r10 r10 %r11 r11
-                           %r12 r12 %r13 r13 %r14 r14 %r15 r15))
+           ((case target
+              ((%rax rax %rbx rbx %rcx rcx %rdx rdx
+                %rsi rsi %rdi rdi %rbp rbp %rsp rsp
+                %r8  r8  %r9  r9  %r10 r10 %r11 r11
+                %r12 r12 %r13 r13 %r14 r14 %r15 r15)
+               #t)
+              (else #f))
             (emit-inst2 "jmp" (asm-opnd->str target)))
            (else
             (emit-inst2 "jmp" (asm-label->str target))))))
@@ -2621,10 +2629,13 @@
          (cond
            ((string? target)
             (emit-inst2 "call" target))
-           ((memq target '(%rax rax %rbx rbx %rcx rcx %rdx rdx
-                           %rsi rsi %rdi rdi %rbp rbp %rsp rsp
-                           %r8  r8  %r9  r9  %r10 r10 %r11 r11
-                           %r12 r12 %r13 r13 %r14 r14 %r15 r15))
+           ((case target
+              ((%rax rax %rbx rbx %rcx rcx %rdx rdx
+                %rsi rsi %rdi rdi %rbp rbp %rsp rsp
+                %r8  r8  %r9  r9  %r10 r10 %r11 r11
+                %r12 r12 %r13 r13 %r14 r14 %r15 r15)
+               #t)
+              (else #f))
             (emit-inst2 "call" (asm-opnd->str target)))
            (else
             (emit-inst2 "call" (asm-label->str target))))))
