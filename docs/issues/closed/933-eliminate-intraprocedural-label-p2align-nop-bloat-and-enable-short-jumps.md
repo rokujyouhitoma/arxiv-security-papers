@@ -34,7 +34,7 @@ ID: 933
 - 関連 Issue:
   - [#925](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) (Lua 5.4.7 全 33 TU 一括ビルドパイプライン)
   - [#926](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md) (Lua 5.4.7 公式テストスイート完走 ＆ GCC vs ULisp 性能・サイズ比較ハーネス)
-  - [#934](../934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) (一時スタックスピル DSE ＆ レジスタ直接受け渡し)
+  - [#934](934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md) (一時スタックスピル DSE ＆ レジスタ直接受け渡し)
   - [#935](../935-optimize-variable-bit-shift-cl-codegen-and-redundant-sign-zero-extension-folding.md) (変数シフト `%cl` 単一命令化 ＆ 重複拡張畳み込み)
   - [#936](../936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md) (`c-tu` プロローグ一括フレーム確保 ＆ `xor r10` 廃止)
 
@@ -63,7 +63,7 @@ flowchart TD
 
 | エージェント | 専門領域 | 監査所見・承認条件 |
 | :--- | :--- | :--- |
-| **Project Manager (PM)** | ガバナンス・優先順位 | `.text` 肥大化の単一最大要因（13万 `nop` = 40.4%）を最小リスクで解消する最優先 Issue として承認。[#934](../934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md)〜[#936](../936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md) の先陣として実装する。 |
+| **Project Manager (PM)** | ガバナンス・優先順位 | `.text` 肥大化の単一最大要因（13万 `nop` = 40.4%）を最小リスクで解消する最優先 Issue として承認。[#934](934-implement-temporary-stack-spill-dead-store-elimination-and-expr-register-forwarding.md)〜[#936](../936-hoist-c-tu-function-stack-frame-allocation-and-omit-managed-gc-call-setup.md) の先陣として実装する。 |
 | **IT Specialist (PLC)** | コンパイラ・アセンブラ | `select-instructions-function` (L2034–2038) は関数シンボル直前に独立して `.p2align 4` を出力しているため、`(%label)` / `(%block)` 側の `(%p2align 4)` を `c-tu` モードで抑制しても関数エントリの 16B アラインは 100% 維持される。 |
 | **Systems Architect** | パイプライン統合 | Managed GC モード（Scheme のタグ付き継続リターンアドレス検証）には一切変更を加えず、`*backend-gc-mode*` が `'c-tu` の場合のみ関数内パディングを止めるため、既存の Scheme AOT / JIT / 継続テストへの影響はゼロ。 |
 | **Information Security Specialist** | バイナリ整合性・CWE | ガジェット密度や間接分岐境界への悪影響はなく、関数エントリ（関数ポインタ呼び出しターゲット）は従来通り 16B アラインを維持する。 |

@@ -70,6 +70,12 @@ ulisp/docs/
    - R7RS-small (Section 4〜6 / 全16標準ライブラリ) の完全対応・部分対応・未対応機能一覧
    - R7RS-large (Red Edition, Tangerine Edition, 主要SRFI) の対応状況
    - AOT コンパイラとしての設計トレードオフと未実装機能ロードマップ
+2. **[ベンチマーク・性能実測リファレンス (Lua 5.4.7 `lua_gcc` vs `lua_ulisp` & Scheme AOT)](ref_benchmarks.md)** (`ref_benchmarks.md`)
+   - 無改変 Lua 5.4.7 全 33 TU ビルドにおける `lua_gcc` (GCC `-O2`) vs `lua_ulisp` (ULisp `-O2`) のバイナリサイズ・命令数・`all.lua` / `big.lua`・VM マイクロベンチマーク比較と最適化推移 (#925〜#936)
+   - Scheme ネイティブ AOT / Portable C / Pure C / Chez Scheme / Gauche の正典実行性能ベースライン要約
+2. **[ベンチマーク・性能実測リファレンス (Lua 5.4.7 `lua_gcc` vs `lua_ulisp` & Scheme AOT)](ref_benchmarks.md)** (`ref_benchmarks.md`)
+   - 無改変 Lua 5.4.7 全 33 TU ビルドにおける `lua_gcc` (GCC `-O2`) vs `lua_ulisp` (ULisp `-O2`) のバイナリサイズ・命令数・`all.lua` / `big.lua`・VM マイクロベンチマーク比較と最適化推移 (#925〜#936)
+   - Scheme ネイティブ AOT / Portable C / Pure C / Chez Scheme / Gauche の正典実行性能ベースライン要約
 
 ---
 
