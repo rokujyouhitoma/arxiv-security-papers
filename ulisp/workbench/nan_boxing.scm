@@ -16,24 +16,18 @@
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
-;;; 1. 64-bit NaN-Boxing Constants (DSN-33-04 §2.3)
+;;; 1. 64-bit NaN-Boxing Constants (Derived from repr:nan-boxing-64bit SSOT)
 ;;; -----------------------------------------------------------------------
 
-;; Quiet NaN base prefix: 0x7FF8000000000000
-;; = (* 4095 2251799813685248) = 9221120237041090560
-(define NAN_BOX_BASE 9221120237041090560)
-
-;; 48-bit payload mask: 0x0000FFFFFFFFFFFF = 281474976710655
-(define NAN_PAYLOAD_MASK 281474976710655)
-
-;; 48-bit tag shift unit: 1 << 48 = 281474976710656
-(define NAN_TAG_UNIT 281474976710656)
+(define NAN_BOX_BASE     (repr-nan-box-base 'repr:nan-boxing-64bit))
+(define NAN_PAYLOAD_MASK (repr-nan-box-payload-mask 'repr:nan-boxing-64bit))
+(define NAN_TAG_UNIT     (repr-nan-box-tag-unit 'repr:nan-boxing-64bit))
 
 ;; Tag IDs
-(define NAN_TAG_FLONUM  0) ; Raw double / unboxed float
-(define NAN_TAG_INT32   1) ; 32-bit signed int
-(define NAN_TAG_SPECIAL 2) ; Immediates
-(define NAN_TAG_POINTER 3) ; 48-bit heap pointer
+(define NAN_TAG_FLONUM  (repr-nan-box-subtag 'flonum 'repr:nan-boxing-64bit))
+(define NAN_TAG_INT32   (repr-nan-box-subtag 'fixnum 'repr:nan-boxing-64bit))
+(define NAN_TAG_SPECIAL (repr-nan-box-subtag 'imm 'repr:nan-boxing-64bit))
+(define NAN_TAG_POINTER (repr-nan-box-subtag 'pointer 'repr:nan-boxing-64bit))
 
 ;; Special Immediate Codes
 (define NAN_SPECIAL_FALSE 0)
@@ -69,17 +63,12 @@
 
 ;;; Returns #t if v is a NaN-boxed value (greater than or equal to NAN_BOX_BASE)
 (define (nan-boxed? v)
-  (and (integer? v)
-       (>= v NAN_BOX_BASE)))
+  (repr-nan-boxed-value? v 'repr:nan-boxing-64bit))
 
 ;;; Extracts the tag ID (0..3) from a NaN-boxed value.
 ;;; If v is a flonum or below NAN_BOX_BASE, returns 0 (NAN_TAG_FLONUM).
 (define (nan-tag-of v)
-  (if (not (nan-boxed? v))
-      NAN_TAG_FLONUM
-      (let* ((offset (- v NAN_BOX_BASE))
-             (tag-idx (quotient offset NAN_TAG_UNIT)))
-        tag-idx)))
+  (repr-nan-tag-of v 'repr:nan-boxing-64bit))
 
 ;;; -----------------------------------------------------------------------
 ;;; 4. 32-bit Integer Packing & Unpacking (CWE-190 Defense)
@@ -119,18 +108,17 @@
       (nan-box-error! "nan-box-pointer: invalid pointer" ptr)
       (if (or (< ptr 0) (> ptr NAN_PAYLOAD_MASK))
           (nan-box-error! "nan-box-pointer: non-canonical pointer exceeds 48 bits" ptr)
-          (+ NAN_BOX_BASE (* NAN_TAG_POINTER NAN_TAG_UNIT) ptr))))
+          (repr-nan-box-pointer ptr 'repr:nan-boxing-64bit))))
 
 ;;; Checks if v is a NaN-boxed heap pointer
 (define (nan-is-pointer? v)
-  (and (nan-boxed? v)
-       (= (nan-tag-of v) NAN_TAG_POINTER)))
+  (repr-nan-pointer? v 'repr:nan-boxing-64bit))
 
 ;;; Unpacks a 48-bit heap pointer
 (define (nan-unbox-pointer v)
   (if (not (nan-is-pointer? v))
       (nan-box-error! "nan-unbox-pointer: type assertion failure, not a NaN-boxed pointer" v)
-      (%nan-bit-and v NAN_PAYLOAD_MASK)))
+      (repr-nan-unbox-pointer v 'repr:nan-boxing-64bit)))
 
 ;;; -----------------------------------------------------------------------
 ;;; 6. Special Immediates Packing & Unpacking
@@ -138,18 +126,17 @@
 
 ;;; Packs a special immediate code into a NaN-boxed word
 (define (nan-box-special id)
-  (+ NAN_BOX_BASE (* NAN_TAG_SPECIAL NAN_TAG_UNIT) id))
+  (repr-nan-box-special id 'repr:nan-boxing-64bit))
 
 ;;; Checks if v is a NaN-boxed special immediate
 (define (nan-is-special? v)
-  (and (nan-boxed? v)
-       (= (nan-tag-of v) NAN_TAG_SPECIAL)))
+  (repr-nan-special? v 'repr:nan-boxing-64bit))
 
 ;;; Unpacks a special immediate code
 (define (nan-unbox-special v)
   (if (not (nan-is-special? v))
       (nan-box-error! "nan-unbox-special: not a NaN-boxed special immediate" v)
-      (%nan-bit-and v NAN_PAYLOAD_MASK)))
+      (repr-nan-unbox-special v 'repr:nan-boxing-64bit)))
 
 (define (nan-is-false? v) (= v (nan-box-special NAN_SPECIAL_FALSE)))
 (define (nan-is-true? v)  (= v (nan-box-special NAN_SPECIAL_TRUE)))

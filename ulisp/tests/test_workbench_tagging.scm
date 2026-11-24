@@ -243,4 +243,47 @@
   (assert-true "residual contains (+ dyn_a 10)"
                (ast-contains? '+ residual)))
 
+;;; -----------------------------------------------------------------------
+;;; Group 5: SSOT Parity with define-value-repr (Issue #944)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 5: SSOT Parity with define-value-repr ---\n")
+
+(assert-equal "5.1 Guest 3-bit constants match repr:guest-3bit-tagged"
+              (list GUEST_TAG_FIXNUM GUEST_TAG_PAIR GUEST_TAG_SYMBOL
+                    GUEST_TAG_CLOSURE GUEST_TAG_VECTOR GUEST_TAG_INSTANCE
+                    GUEST_TAG_FLONUM GUEST_TAG_SPECIAL GUEST_TAG_MASK
+                    GUEST_FIXNUM_MIN GUEST_FIXNUM_MAX)
+              (list (repr-fixnum-tag 'repr:guest-3bit-tagged)
+                    (repr-heap-tag 'pair 'repr:guest-3bit-tagged)
+                    (repr-heap-tag 'symbol 'repr:guest-3bit-tagged)
+                    (repr-heap-tag 'closure 'repr:guest-3bit-tagged)
+                    (repr-heap-tag 'vector 'repr:guest-3bit-tagged)
+                    (repr-heap-tag 'instance 'repr:guest-3bit-tagged)
+                    (repr-heap-tag 'flonum 'repr:guest-3bit-tagged)
+                    (repr-special-tag 'repr:guest-3bit-tagged)
+                    (repr-pointer-mask 'repr:guest-3bit-tagged)
+                    (repr-fixnum-min 'repr:guest-3bit-tagged)
+                    (repr-fixnum-max 'repr:guest-3bit-tagged)))
+
+(assert-equal "5.2 NaN-boxing constants match repr:nan-boxing-64bit"
+              (list NAN_BOX_BASE NAN_PAYLOAD_MASK NAN_TAG_UNIT
+                    NAN_TAG_FLONUM NAN_TAG_INT32 NAN_TAG_SPECIAL NAN_TAG_POINTER)
+              (list (repr-nan-box-base 'repr:nan-boxing-64bit)
+                    (repr-nan-box-payload-mask 'repr:nan-boxing-64bit)
+                    (repr-nan-box-tag-unit 'repr:nan-boxing-64bit)
+                    (repr-nan-box-subtag 'flonum 'repr:nan-boxing-64bit)
+                    (repr-nan-box-subtag 'fixnum 'repr:nan-boxing-64bit)
+                    (repr-nan-box-subtag 'imm 'repr:nan-boxing-64bit)
+                    (repr-nan-box-subtag 'pointer 'repr:nan-boxing-64bit)))
+
+(assert-equal "5.3 Guest and NaN-box packers equal SSOT encoders"
+              (list (guest-pack-fixnum -77)
+                    (guest-pack-special GUEST_SPECIAL_UNDEF)
+                    (nan-box-pointer 8192)
+                    (nan-box-special NAN_SPECIAL_NIL))
+              (list (repr-encode-fixnum -77 'repr:guest-3bit-tagged)
+                    (repr-encode-special 3 'repr:guest-3bit-tagged)
+                    (repr-nan-box-pointer 8192 'repr:nan-boxing-64bit)
+                    (repr-nan-box-special 2 'repr:nan-boxing-64bit)))
+
 (display "\n[RESULT] All Language Workbench Guest Value Tagging & NaN-Boxing tests PASSED!\n")
