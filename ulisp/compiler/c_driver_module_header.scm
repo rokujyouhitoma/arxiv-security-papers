@@ -2763,4 +2763,40 @@
   %bf-c99-transform-clause
   lir-fuse-c99-branches-in-ir
   optimize-branch-fusion
+  *lir-vm-errno-addr*
+  vm-extract-meta-list
+  vm-libc-read-cstr
+  vm-libc-read-cstr-limit
+  vm-libc-cstr-len
+  vm-libc-record-alloc!
+  vm-libc-lookup-alloc
+  vm-libc-isspace?
+  vm-libc-digit-val
+  vm-libc-strtol-impl
+  vm-libc-cstr-has-byte?
+  vm-libc-va-next-gp!
+  vm-libc-va-next-fp!
+  vm-clone-vec
+  vm-libc-next-gpr-arg
+  vm-libc-next-fp-arg
+  vm-libc-str-upcase
+  vm-libc-pad-str
+  vm-libc-parse-fmt-flags
+  vm-libc-parse-fmt-uint
+  vm-libc-parse-fmt-len
+  vm-libc-format-spec
+  vm-libc-format-to-string
+  vm-libc-write-formatted!
+  vm-invoke-code-ptr-2!
+  vm-libc-swap-elems!
+  vm-libc-qsort!
+  eval-lir-program-checked
+  %c-drv-parse-uint
+  *c99-driver-vm-fuel*
+  %c99-merge-meta-list
+  %c99-merge-insert-fn
+  %c99-rewrite-alias-entry
+  c99-eval-lir-program-checked
+  c-driver-run-vm
+  c99-diff-vm-vs-native
 )
