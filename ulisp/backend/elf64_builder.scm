@@ -50,7 +50,7 @@
 
 (define (elf64-list->bytevector lst)
   (let* ((len (length lst))
-         (bv (make-bytevector len)))
+         (bv (make-bytevector len 0)))
     (let loop ((i 0) (rest lst))
       (if (null? rest)
           bv
@@ -166,7 +166,7 @@
     (elf64-list->bytevector str-list)))
 
 (define (dwarf-make-debug-info-bytes text-vaddr text-len name-str-off prod-str-off)
-  (let ((bv (make-bytevector 40)))
+  (let ((bv (make-bytevector 40 0)))
     (elf64-set-u32-le! bv 0 36)                       ; unit_length = 36
     (elf64-set-u16-le! bv 4 3)                        ; version = 3
     (elf64-set-u32-le! bv 6 0)                        ; debug_abbrev_offset = 0
@@ -236,7 +236,7 @@
                        (if first?
                            (let* ((target-pc (+ text-vaddr off))
                                   (set-addr-bytes (append '(0 9 2)
-                                                          (let ((bv (make-bytevector 8)))
+                                                          (let ((bv (make-bytevector 8 0)))
                                                             (elf64-set-u64-le! bv 0 target-pc)
                                                             (let bloop ((i 0) (ba '()))
                                                               (if (< i 8)
@@ -258,7 +258,7 @@
                              (loop (cdr entries) off line fid #f new-acc))))))))
          (unit-content-len (+ (+ 6 hdr-len) (length prog-bytes)))
          (total-len (+ 4 unit-content-len))
-         (bv (make-bytevector total-len)))
+         (bv (make-bytevector total-len 0)))
     (elf64-set-u32-le! bv 0 unit-content-len)
     (elf64-set-u16-le! bv 4 3)
     (elf64-set-u32-le! bv 6 hdr-len)
@@ -309,7 +309,7 @@
                    (loop (cdr syms) (dwarf-app3 '(0) (reverse chars) acc))))))
          (num-syms (+ (length syms-with-stroff) 1))
          (symtab-len (* num-syms 24))
-         (symtab-bv (make-bytevector symtab-len)))
+         (symtab-bv (make-bytevector symtab-len 0)))
     (let loop ((syms syms-with-stroff) (idx 1))
       (if (pair? syms)
           (let* ((item (car syms))
@@ -340,7 +340,7 @@
   (let ((p-len (if (bytevector? payload-bv) (bytevector-length payload-bv) 0))
         (r-len (if (bytevector? rodata-bv) (bytevector-length rodata-bv) 0)))
     (if (= p-len 0)
-        (cons (if (bytevector? rodata-bv) rodata-bv (make-bytevector 0)) 0)
+        (cons (if (bytevector? rodata-bv) rodata-bv (make-bytevector 0 0)) 0)
         (let* ((aligned-r-len (elf64-align-up r-len 16))
                (total-len (+ aligned-r-len p-len)))
           (if (> total-len 67108864) ; *max-rodata-size* (64MB)
@@ -442,7 +442,7 @@
          (shstrtab-len (bytevector-length shstrtab-bytes))
          (shoff (elf64-align-up (+ data-file-offset data-len) 8))
          (shstrtab-offset (+ shoff (* 6 64)))
-         (elf-bv (make-bytevector (+ shstrtab-offset shstrtab-len))))
+         (elf-bv (make-bytevector (+ shstrtab-offset shstrtab-len) 0)))
     (elf64-write-core! elf-bv (+ (+ 4194304 text-file-offset) entry-offset) shoff 6 5
                        text-bv rodata-bv data-bv text-file-offset text-segment-filesz
                        data-file-offset bss-size)
@@ -482,7 +482,7 @@
          (strtab-off (elf64-align-up (+ symtab-off (bytevector-length symtab-bv)) 8))
          (shoff (elf64-align-up (+ strtab-off (bytevector-length strtab-bv)) 8))
          (shstrtab-offset (+ shoff (* 12 64)))
-         (elf-bv (make-bytevector (+ shstrtab-offset shstrtab-len))))
+         (elf-bv (make-bytevector (+ shstrtab-offset shstrtab-len) 0)))
     (elf64-write-core! elf-bv (+ text-vaddr entry-offset) shoff 12 11
                        text-bv rodata-bv data-bv text-file-offset text-segment-filesz
                        data-file-offset bss-size)
@@ -660,9 +660,9 @@
                          1
                          (let ((last-m (let l ((x syms-meta)) (if (null? (cdr x)) (car x) (l (cdr x))))))
                            (+ (+ (caddr last-m) (string-length (car last-m))) 1))))
-         (strtab-bv (make-bytevector strtab-len))
+         (strtab-bv (make-bytevector strtab-len 0))
          (num-syms (+ 7 (length syms-meta)))
-         (symtab-bv (make-bytevector (* num-syms 24))))
+         (symtab-bv (make-bytevector (* num-syms 24) 0)))
     (for-each (lambda (s) (symbol-map-set! weak-set s #t)) weak-syms)
     (for-each (lambda (s) (symbol-map-set! globl-set s #t)) globl-syms)
     (for-each (lambda (e)
@@ -744,7 +744,7 @@
                              (loop (cdr rs) acc)))))
          (count (length sec-rels))
          (is-sm? (vector? sym-idx-map))
-         (bv (make-bytevector (* count 24))))
+         (bv (make-bytevector (* count 24) 0)))
     (let loop ((rs sec-rels) (i 0))
       (if (pair? rs)
           (let* ((r (car rs))
@@ -820,7 +820,7 @@
          (shstrtab-len (bytevector-length shstrtab-bv))
          (shoff (elf64-align-up (+ shstrtab-off shstrtab-len) 8))
          (total-len (+ shoff (* 16 64)))
-         (elf-bv (make-bytevector total-len)))
+         (elf-bv (make-bytevector total-len 0)))
     ;; Write ELF64 header (ET_REL, 16 sections, shstrndx = 15)
     (elf64-write-rel-ehdr! elf-bv shoff 16 15)
     ;; Copy section payloads
@@ -917,7 +917,7 @@
           (loop (+ i 1) (cons (integer->char (bytevector-u8-ref bv i)) chars))))))
 
 (define (elf64-sub-bytevector src off len)
-  (let ((dst (make-bytevector len)))
+  (let ((dst (make-bytevector len 0)))
     (elf64-copy-bytes! dst 0 src off len)
     dst))
 
@@ -1126,7 +1126,7 @@
                                            path))
                   (let ((data-bv (if (and (> sh-size 0) (not (= sh-type 8)))
                                      (elf64-sub-bytevector bv sh-offset sh-size)
-                                     (make-bytevector 0))))
+                                     (make-bytevector 0 0))))
                     (loop-shdr (+ idx 1)
                                (cons (vector idx sec-name sh-type sh-flags sh-size
                                              (if (< sh-align 1) 1 sh-align)
@@ -1138,12 +1138,12 @@
                                          (let ((s (vector-ref sec-vec i)))
                                            (if (= (vector-ref s 2) 2) s (find-sym (+ i 1))))
                                          #f)))
-                       (symtab-bv (if symtab-sec (vector-ref symtab-sec 8) (make-bytevector 0)))
+                       (symtab-bv (if symtab-sec (vector-ref symtab-sec 8) (make-bytevector 0 0)))
                        (strtab-idx (if symtab-sec (vector-ref symtab-sec 6) 0))
                        (strtab-sec (if (and (>= strtab-idx 0) (< strtab-idx (vector-length sec-vec)))
                                        (vector-ref sec-vec strtab-idx)
                                        #f))
-                       (strtab-bv (if strtab-sec (vector-ref strtab-sec 8) (make-bytevector 0)))
+                       (strtab-bv (if strtab-sec (vector-ref strtab-sec 8) (make-bytevector 0 0)))
                        (sym-count (quotient (bytevector-length symtab-bv) 24))
                        (sym-vec (make-vector sym-count #f)))
                   (let loop-sym ((k 0))

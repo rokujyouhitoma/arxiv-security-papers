@@ -30,7 +30,8 @@
                     pragma-once-files include-guard-cache
                     include-depth max-include-depth
                     expansion-steps max-expansion-steps
-                    virtual-files included-files macro-buckets)
+                    virtual-files included-files macro-buckets
+                    file-prefix-maps)
   cpp-context?
   (include-paths        cpp-ctx-include-paths        cpp-ctx-include-paths-set!)
   (system-include-paths cpp-ctx-system-include-paths cpp-ctx-system-include-paths-set!)
@@ -43,7 +44,8 @@
   (max-expansion-steps  cpp-ctx-max-expansion-steps)
   (virtual-files        cpp-ctx-virtual-files        cpp-ctx-virtual-files-set!)
   (included-files       cpp-ctx-included-files       cpp-ctx-included-files-set!)
-  (macro-buckets        cpp-ctx-macro-buckets        cpp-ctx-macro-buckets-set!))
+  (macro-buckets        cpp-ctx-macro-buckets        cpp-ctx-macro-buckets-set!)
+  (file-prefix-maps     cpp-ctx-file-prefix-maps     cpp-ctx-file-prefix-maps-set!))
 
 (define (cpp-record-included-file! ctx path)
   (if (and (string? path) (> (string-length path) 0))
@@ -176,6 +178,110 @@
          ctx (%cpp-insert-before-builtins (cpp-ctx-system-include-paths ctx) norm))
         (cpp-ctx-include-paths-set!
          ctx (append (cpp-ctx-include-paths ctx) (list norm))))))
+
+(define (cpp-add-file-prefix-map! ctx old-prefix new-prefix)
+  (let ((norm-old (%cpp-normalize-path old-prefix)))
+    (cpp-ctx-file-prefix-maps-set!
+     ctx
+     (append (cpp-ctx-file-prefix-maps ctx)
+             (list (cons norm-old new-prefix))))))
+
+(define (cpp-apply-file-prefix-map ctx path)
+  (if (or (not (string? path)) (null? (cpp-ctx-file-prefix-maps ctx)))
+      path
+      (let* ((norm (%cpp-normalize-path path))
+             (nlen (string-length norm))
+             (best
+              (let loop ((ms (cpp-ctx-file-prefix-maps ctx)) (cur #f))
+                (if (null? ms)
+                    cur
+                    (let* ((m (car ms))
+                           (old (car m))
+                           (olen (string-length old))
+                           (hit?
+                            (and (> olen 0)
+                                 (>= nlen olen)
+                                 (string-starts-with? norm old)
+                                 (or (= nlen olen)
+                                     (string=? old "/")
+                                     (char=? (string-ref norm olen) #\/)))))
+                      (if (and hit?
+                               (or (not cur)
+                                   (> olen (string-length (car cur)))))
+                          (loop (cdr ms) m)
+                          (loop (cdr ms) cur)))))))
+        (if (not best)
+            norm
+            (let* ((old (car best))
+                   (new (cdr best))
+                   (olen (string-length old))
+                   (rest (substring norm olen nlen))
+                   (rlen (string-length rest))
+                   (new-len (string-length new))
+                   (clean-rest
+                    (if (and (> rlen 0)
+                             (char=? (string-ref rest 0) #\/)
+                             (or (= new-len 0)
+                                 (char=? (string-ref new (- new-len 1)) #\/)))
+                        (substring rest 1 rlen)
+                        rest)))
+              (string-append new clean-rest))))))
+
+(define (%cpp-pad2 n)
+  (if (< n 10)
+      (string-append "0" (number->string n))
+      (number->string n)))
+
+(define (%cpp-pad2-space n)
+  (if (< n 10)
+      (string-append " " (number->string n))
+      (number->string n)))
+
+(define (%cpp-month-abbrev m)
+  (case m
+    ((1) "Jan") ((2) "Feb") ((3) "Mar") ((4) "Apr")
+    ((5) "May") ((6) "Jun") ((7) "Jul") ((8) "Aug")
+    ((9) "Sep") ((10) "Oct") ((11) "Nov") ((12) "Dec")
+    (else "Jan")))
+
+;; Deterministic UTC breakdown using Hinnant civil-from-days (never reads wall-clock)
+(define (%cpp-epoch->date-time-strings epoch-secs)
+  (let* ((e (if (and (integer? epoch-secs) (>= epoch-secs 0)) epoch-secs 0))
+         (days (quotient e 86400))
+         (rem (modulo e 86400))
+         (hh (quotient rem 3600))
+         (rem2 (modulo rem 3600))
+         (mm (quotient rem2 60))
+         (ss (modulo rem2 60))
+         (z (+ days 719468))
+         (era (if (>= z 0)
+                  (quotient z 146097)
+                  (quotient (- z 146096) 146097)))
+         (doe (- z (* era 146097)))
+         (yoe (quotient (+ (- doe (quotient doe 1460))
+                           (- (quotient doe 36524) (quotient doe 146096)))
+                        365))
+         (y0 (+ yoe (* era 400)))
+         (doy (- doe (+ (* 365 yoe) (- (quotient yoe 4) (quotient yoe 100)))))
+         (mp (quotient (+ (* 5 doy) 2) 153))
+         (d (+ (- doy (quotient (+ (* 153 mp) 2) 5)) 1))
+         (m (+ mp (if (< mp 10) 3 -9)))
+         (y (+ y0 (if (<= m 2) 1 0)))
+         (date-str (string-append (%cpp-month-abbrev m) " "
+                                  (%cpp-pad2-space d) " "
+                                  (number->string y)))
+         (time-str (string-append (%cpp-pad2 hh) ":"
+                                  (%cpp-pad2 mm) ":"
+                                  (%cpp-pad2 ss))))
+    (cons date-str time-str)))
+
+(define (%cpp-deterministic-epoch)
+  (let ((s (or (guard (ex (else #f)) (get-environment-variable "SOURCE_DATE_EPOCH"))
+               (guard (ex (else #f)) (sys-getenv "SOURCE_DATE_EPOCH")))))
+    (if (and (string? s) (> (string-length s) 0))
+        (let ((v (string->number s 10)))
+          (if (and (integer? v) (exact? v) (>= v 0)) v 0))
+        0)))
 
 (define (cpp-register-virtual-file! ctx filepath content-str)
   (let* ((norm (%cpp-normalize-path filepath))
@@ -598,7 +704,8 @@
                                 '() '() '()
                                 0 *cpp-max-include-depth*
                                 0 *cpp-max-expansion-steps*
-                                '() '() (make-vector 128 '()))))
+                                '() '() (make-vector 128 '())
+                                '())))
     (for-each
      (lambda (pair) (cpp-register-virtual-file! ctx (car pair) (cdr pair)))
      (list (cons "/__ulisp_builtin__/stdarg.h"    *c99-builtin-stdarg-h*)
@@ -624,9 +731,9 @@
            (cons "/__ulisp_builtin__/dlfcn.h"     *c99-builtin-dlfcn-h*)))
     (%cpp-register-builtin!
      ctx '__FILE__
-     (lambda (call-tok)
+     (lambda (cur-ctx call-tok)
        (let* ((sp (c-token-span call-tok))
-              (f  (span-file sp))
+              (f  (cpp-apply-file-prefix-map cur-ctx (span-file sp)))
               (lex (string-append "\"" (%cpp-escape-c-string f) "\"")))
          (make-c-token 'string-lit lex f sp
                        (c-token-at-bol? call-tok)
@@ -634,7 +741,7 @@
                        (cons '__FILE__ (c-token-hide-set call-tok))))))
     (%cpp-register-builtin!
      ctx '__LINE__
-     (lambda (call-tok)
+     (lambda (cur-ctx call-tok)
        (let* ((sp (c-token-span call-tok))
               (ln (span-start-line sp))
               (lex (number->string ln)))
@@ -642,6 +749,26 @@
                        (c-token-at-bol? call-tok)
                        (c-token-has-leading-space? call-tok)
                        (cons '__LINE__ (c-token-hide-set call-tok))))))
+    (%cpp-register-builtin!
+     ctx '__DATE__
+     (lambda (cur-ctx call-tok)
+       (let* ((sp (c-token-span call-tok))
+              (dt (car (%cpp-epoch->date-time-strings (%cpp-deterministic-epoch))))
+              (lex (string-append "\"" dt "\"")))
+         (make-c-token 'string-lit lex dt sp
+                       (c-token-at-bol? call-tok)
+                       (c-token-has-leading-space? call-tok)
+                       (cons '__DATE__ (c-token-hide-set call-tok))))))
+    (%cpp-register-builtin!
+     ctx '__TIME__
+     (lambda (cur-ctx call-tok)
+       (let* ((sp (c-token-span call-tok))
+              (tm (cdr (%cpp-epoch->date-time-strings (%cpp-deterministic-epoch))))
+              (lex (string-append "\"" tm "\"")))
+         (make-c-token 'string-lit lex tm sp
+                       (c-token-at-bol? call-tok)
+                       (c-token-has-leading-space? call-tok)
+                       (cons '__TIME__ (c-token-hide-set call-tok))))))
     (cpp-define-string! ctx "__STDC__" "1")
     (cpp-define-string! ctx "__STDC_HOSTED__" "1")
     (cpp-define-string! ctx "__STDC_VERSION__" "199901L")
@@ -991,7 +1118,7 @@
                   ((cpp-macro-builtin-proc mac)
                    => (lambda (bproc)
                         (%cpp-inc-expansion-step! ctx (c-token-span tok))
-                        (loop tail (cons (bproc tok) out))))
+                        (loop tail (cons (bproc ctx tok) out))))
                   ((not (cpp-macro-function-like? mac))
                    (%cpp-inc-expansion-step! ctx (c-token-span tok))
                    (let* ((new-hs (%hide-set-add (c-token-hide-set tok) sym))

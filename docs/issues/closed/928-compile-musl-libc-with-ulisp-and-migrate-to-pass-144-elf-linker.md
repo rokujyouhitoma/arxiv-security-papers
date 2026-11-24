@@ -62,7 +62,7 @@ ID: 928
   - [#926](926-verify-lua-5x-official-test-suite-e2e-selfhost-ci.md): Lua 5.4.7 公式テストスイート E2E 検証基盤
   - [#927](927-implement-c-header-sbi-pch-and-iterative-mem2reg-optimization.md): SBI ヘッダ PCH・反復 SSA/mem2reg 最適化
 - **後続連携 Issue**:
-  - [#929](../929-implement-ddc-diverse-double-compiling-determinism-verification.md): DDC (Diverse Double-Compiling) 決定論的完全静的セルフホスト検証
+  - [#929](929-implement-ddc-diverse-double-compiling-determinism-verification.md): DDC (Diverse Double-Compiling) 決定論的完全静的セルフホスト検証
   - [#932](../932-build-native-aot-ulisp-cc-compiler-driver-binary.md): ネイティブ AOT `ulisp-cc` コンパイラドライババイナリ構築
 
 ---
