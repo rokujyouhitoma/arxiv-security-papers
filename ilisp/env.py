@@ -132,6 +132,7 @@ from ilisp.numbers import (
 )
 from ilisp.types import (
     NIL,
+    UNBOUND,
     Bytevector,
     Cell,
     Char,
@@ -139,6 +140,7 @@ from ilisp.types import (
     Continuation,
     ErrorObject,
     EscapeContinuation,
+    GlobalCell,
     MutableString,
     Parameter,
     Primitive,
@@ -229,15 +231,31 @@ _SHADOW_TRACKED_SYMBOLS: frozenset[Symbol] = _SPECIAL_FORM_SYMBOLS | frozenset(
 )
 
 
+def _is_macro_val(val: Any) -> bool:
+    """Return True if val is a Scheme macro or syntax-rules transformer."""
+    val_t = type(val)
+    if val_t.__name__ == "Procedure":
+        return bool(val.is_macro)
+    return val_t.__name__ == "SyntaxRulesTransformer" or hasattr(val, "transform")
+
+
 class Environment:
     """Lexical Environment frame with parent scoping chain."""
 
-    __slots__ = ("parent", "bindings", "_has_shadowed_sf")
+    __slots__ = (
+        "parent",
+        "bindings",
+        "_has_shadowed_sf",
+        "_global_cells",
+        "_macro_epoch",
+    )
 
     _mutation_hook: Optional[Any] = None
     parent: Optional[Environment]
     bindings: Dict[Symbol, Any]
     _has_shadowed_sf: bool
+    _global_cells: Optional[Dict[Symbol, GlobalCell]]
+    _macro_epoch: int
 
     def __init__(
         self,
@@ -247,18 +265,22 @@ class Environment:
     ) -> None:
         self.parent = parent
         self.bindings = bindings if bindings is not None else {}
+        self._macro_epoch = 0
         if parent is None:
             self._has_shadowed_sf = False
-        elif has_shadowed_sf is not None:
-            self._has_shadowed_sf = has_shadowed_sf
-        elif parent._has_shadowed_sf:
-            self._has_shadowed_sf = True
-        elif self.bindings:
-            self._has_shadowed_sf = any(
-                k in _SHADOW_TRACKED_SYMBOLS for k in self.bindings
-            )
+            self._global_cells = {}
         else:
-            self._has_shadowed_sf = False
+            self._global_cells = None
+            if has_shadowed_sf is not None:
+                self._has_shadowed_sf = has_shadowed_sf
+            elif parent._has_shadowed_sf:
+                self._has_shadowed_sf = True
+            elif self.bindings:
+                self._has_shadowed_sf = any(
+                    k in _SHADOW_TRACKED_SYMBOLS for k in self.bindings
+                )
+            else:
+                self._has_shadowed_sf = False
 
     @property
     def root(self) -> Environment:
@@ -268,14 +290,34 @@ class Environment:
             curr = curr.parent
         return curr
 
+    def get_global_cell(self, sym: Symbol) -> GlobalCell:
+        """Return or create the GlobalCell for `sym` on the root environment."""
+        root_env = self.root
+        cells = root_env._global_cells
+        assert cells is not None
+        cell = cells.get(sym)
+        if cell is None:
+            cur_val = root_env.bindings.get(sym, UNBOUND)
+            if type(cur_val) is Cell:
+                cur_val = cur_val.get()
+            cell = GlobalCell(sym, cur_val)
+            cells[sym] = cell
+        return cell
+
     def define(self, sym: Symbol, val: Any) -> None:
         """Bind variable in the current local environment frame."""
+        old_val = self.bindings.get(sym, _SENTINEL)
         self.bindings[sym] = val
-        if (
-            self.parent is not None
-            and not self._has_shadowed_sf
-            and sym in _SHADOW_TRACKED_SYMBOLS
-        ):
+        if self.parent is None:
+            if self._global_cells is not None:
+                cell = self._global_cells.get(sym)
+                if cell is not None:
+                    cell.value = val.get() if type(val) is Cell else val
+            if _is_macro_val(val) or (
+                old_val is not _SENTINEL and _is_macro_val(old_val)
+            ):
+                self._macro_epoch += 1
+        elif not self._has_shadowed_sf and sym in _SHADOW_TRACKED_SYMBOLS:
             self._has_shadowed_sf = True
 
     def lookup(self, sym: Symbol) -> Any:
@@ -314,6 +356,13 @@ class Environment:
                     if Environment._mutation_hook is not None:
                         Environment._mutation_hook(curr, sym, bound)
                     curr.bindings[sym] = val
+                if curr.parent is None:
+                    if curr._global_cells is not None:
+                        cell = curr._global_cells.get(sym)
+                        if cell is not None:
+                            cell.value = val.get() if type(val) is Cell else val
+                    if _is_macro_val(val) or _is_macro_val(bound):
+                        curr._macro_epoch += 1
                 return
             curr = curr.parent
         raise NameError(f"Cannot set! unbound variable: '{sym.name}'")
@@ -344,6 +393,22 @@ def set_interaction_environment(env: Optional[Environment]) -> None:
     """Set the currently active interactive REPL/session root environment."""
     global _CURRENT_INTERACTION_ENVIRONMENT
     _CURRENT_INTERACTION_ENVIRONMENT = env
+
+
+_STDLIB_FORMS_CACHE: Dict[str, List[Any]] = {}
+
+
+def _load_cached_stdlib(path_str: str, env_target: Environment) -> None:
+    """Load and evaluate an immutable stdlib file using cached parsed forms."""
+    from ilisp.evaluator import eval_expr
+    from ilisp.reader import read_all_from_file
+
+    forms = _STDLIB_FORMS_CACHE.get(path_str)
+    if forms is None:
+        forms = read_all_from_file(path_str)
+        _STDLIB_FORMS_CACHE[path_str] = forms
+    for f in forms:
+        eval_expr(f, env_target)
 
 
 def make_initial_env(preload_stdlib: bool = True) -> Environment:
@@ -835,14 +900,28 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
                     out.append(fn(car(curr)))
                     curr = cdr(curr)
             elif tp is Procedure:
+                from ilisp.compiler_ir import ensure_compiled, run_compiled_1arg
                 from ilisp.evaluator import _apply_procedure
 
-                while type(curr) is Cons:
-                    out.append(_apply_procedure(proc, [curr.car]))
-                    curr = curr.cdr
-                while is_pair(curr):
-                    out.append(_apply_procedure(proc, [car(curr)]))
-                    curr = cdr(curr)
+                compiled = (
+                    ensure_compiled(proc)
+                    if (not proc.is_macro and Environment._mutation_hook is None)
+                    else None
+                )
+                if compiled is not None:
+                    while type(curr) is Cons:
+                        out.append(run_compiled_1arg(proc, compiled, curr.car))
+                        curr = curr.cdr
+                    while is_pair(curr):
+                        out.append(run_compiled_1arg(proc, compiled, car(curr)))
+                        curr = cdr(curr)
+                else:
+                    while type(curr) is Cons:
+                        out.append(_apply_procedure(proc, [curr.car]))
+                        curr = curr.cdr
+                    while is_pair(curr):
+                        out.append(_apply_procedure(proc, [car(curr)]))
+                        curr = cdr(curr)
             elif callable(proc):
                 while type(curr) is Cons:
                     out.append(proc(curr.car))
@@ -891,14 +970,28 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
                     fn(car(curr))
                     curr = cdr(curr)
             elif tp is Procedure:
+                from ilisp.compiler_ir import ensure_compiled, run_compiled_1arg
                 from ilisp.evaluator import _apply_procedure
 
-                while type(curr) is Cons:
-                    _apply_procedure(proc, [curr.car])
-                    curr = curr.cdr
-                while is_pair(curr):
-                    _apply_procedure(proc, [car(curr)])
-                    curr = cdr(curr)
+                compiled = (
+                    ensure_compiled(proc)
+                    if (not proc.is_macro and Environment._mutation_hook is None)
+                    else None
+                )
+                if compiled is not None:
+                    while type(curr) is Cons:
+                        run_compiled_1arg(proc, compiled, curr.car)
+                        curr = curr.cdr
+                    while is_pair(curr):
+                        run_compiled_1arg(proc, compiled, car(curr))
+                        curr = cdr(curr)
+                else:
+                    while type(curr) is Cons:
+                        _apply_procedure(proc, [curr.car])
+                        curr = curr.cdr
+                    while is_pair(curr):
+                        _apply_procedure(proc, [car(curr)])
+                        curr = cdr(curr)
             elif callable(proc):
                 while type(curr) is Cons:
                     proc(curr.car)
@@ -950,18 +1043,36 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
                     out.append(val)
                 curr = cdr(curr)
         elif tp is Procedure:
+            from ilisp.compiler_ir import ensure_compiled, run_compiled_1arg
             from ilisp.evaluator import _apply_procedure
 
-            while type(curr) is Cons:
-                val = curr.car
-                if _apply_procedure(pred, [val]) is not False:
-                    out.append(val)
-                curr = curr.cdr
-            while is_pair(curr):
-                val = car(curr)
-                if _apply_procedure(pred, [val]) is not False:
-                    out.append(val)
-                curr = cdr(curr)
+            compiled = (
+                ensure_compiled(pred)
+                if (not pred.is_macro and Environment._mutation_hook is None)
+                else None
+            )
+            if compiled is not None:
+                while type(curr) is Cons:
+                    val = curr.car
+                    if run_compiled_1arg(pred, compiled, val) is not False:
+                        out.append(val)
+                    curr = curr.cdr
+                while is_pair(curr):
+                    val = car(curr)
+                    if run_compiled_1arg(pred, compiled, val) is not False:
+                        out.append(val)
+                    curr = cdr(curr)
+            else:
+                while type(curr) is Cons:
+                    val = curr.car
+                    if _apply_procedure(pred, [val]) is not False:
+                        out.append(val)
+                    curr = curr.cdr
+                while is_pair(curr):
+                    val = car(curr)
+                    if _apply_procedure(pred, [val]) is not False:
+                        out.append(val)
+                    curr = cdr(curr)
         elif callable(pred):
             while type(curr) is Cons:
                 val = curr.car
@@ -992,14 +1103,28 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
                 acc = fn(acc, car(curr))
                 curr = cdr(curr)
         elif tp is Procedure:
+            from ilisp.compiler_ir import ensure_compiled, run_compiled_2arg
             from ilisp.evaluator import _apply_procedure
 
-            while type(curr) is Cons:
-                acc = _apply_procedure(proc, [acc, curr.car])
-                curr = curr.cdr
-            while is_pair(curr):
-                acc = _apply_procedure(proc, [acc, car(curr)])
-                curr = cdr(curr)
+            compiled = (
+                ensure_compiled(proc)
+                if (not proc.is_macro and Environment._mutation_hook is None)
+                else None
+            )
+            if compiled is not None:
+                while type(curr) is Cons:
+                    acc = run_compiled_2arg(proc, compiled, acc, curr.car)
+                    curr = curr.cdr
+                while is_pair(curr):
+                    acc = run_compiled_2arg(proc, compiled, acc, car(curr))
+                    curr = cdr(curr)
+            else:
+                while type(curr) is Cons:
+                    acc = _apply_procedure(proc, [acc, curr.car])
+                    curr = curr.cdr
+                while is_pair(curr):
+                    acc = _apply_procedure(proc, [acc, car(curr)])
+                    curr = cdr(curr)
         elif callable(proc):
             while type(curr) is Cons:
                 acc = proc(acc, curr.car)
@@ -2638,9 +2763,9 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     if preload_stdlib:
         stdlib_path = Path(__file__).parent / "stdlib" / "base.ilisp"
         if stdlib_path.exists():
-            prim_load(str(stdlib_path))
+            _load_cached_stdlib(str(stdlib_path), env)
         python_lib_path = Path(__file__).parent / "stdlib" / "python.ilisp"
         if python_lib_path.exists():
-            prim_load(str(python_lib_path))
+            _load_cached_stdlib(str(python_lib_path), env)
 
     return env
