@@ -2,7 +2,7 @@
         test_delimcc test_tracer test_jit_tracer test_auto_instrument test_jit_annotations test_optimizer test_jit_optimizer test_jit_buffer test_guard_elimination test_bridge test_examples test_exceptions test_values test_call_cc test_eqv test_syntax_rules test_let_syntax test_ports test_record test_promise test_case_lambda test_stdlib test_base_procedures test_srfi1 test_srfi_133 test_srfi_151 test_srfi_143 test_yellow_docket_macros test_srfi_115 test_srfi_180 test_srfi_214 test_srfi_101 test_srfi_135 test_gc_ephemeron test_hashtable test_letrec_star test_file_port test_string_to_number test_max_min test_format test_sort test_printer test_char test_r7rs_cond_expand test_r7rs_include_ci test_r7rs_bytevector_ports test_r7rs_time test_srfi_141_division test_srfi_111_boxes test_srfi_145_assume test_srfi_64 test_srfi_78 test_srfi_252 test_bignum test_ieee754 test_gc_growth test_gc_profile test_gc_hybrid test_gc_stress test_gc_stats \
         test_split_link test_incremental test_differential_elf test_builtin_as test_builtin_ld test_onestep_compile lint_sexpr test_lint_sexpr test_reader_eof test_arena test_atomic test_queue test_channel test_boundary test_epoch test_context_switch test_context_switch_aarch64 test_scheduler test_multithread_scheduler test_links_monitors test_task_mailbox test_let_it_crash test_supervisor test_futex test_registry test_crash_logger test_io_uring test_concurrency_osal test_preemption test_eval_adapter test_concurrency_harness test_concurrency_ci test_concurrency_stress test_pass_split_planes test_pass_check_affine test_pass_fbip test_pass_inline_hotpath test_pass_inject_safepoints test_nanopass_source_span test_diagnostic_reporter test_eval_in_language test_stage_dict test_psds_provenance test_eval_in_stage test_single_source_oracle test_bta_lattice test_speculative_trap_demotion test_csp_boundary_validator test_specialization_widening test_nanopass_stagepoly_lang test_stage_poly_lower test_grammar_conformance_assertion test_stage_oracle test_residual_contification test_freeze_graph_rodata test_dataplane_tag_stripping test_futamura_projection test_residual_anf_to_lir test_self_hosting_fixed_point test_typed_lir test_braun_ssa_arbitrary_cfg test_lir_overflow_and_unsigned test_sysv_abi_calls test_elf_sections_and_reloc test_fuzz_lir test_lir_interpreter test_lir_dialect_separation test_value_representation test_scope_and_binding test_inline_asm test_ir_serialization test_workbench_frame test_workbench_tagging test_workbench_cogen \
         test_workbench_dwarf test_workbench_cti_ql_e2e \
-        test_peg test_peg_runtime test_peg_compiler test_peg_self_hosting test_peg_cpython_e2e test_peg_grammars test_c99_peg_grammar test_c99_lexer test_c99_preprocessor test_c99_parser test_c99_gnu_ext test_c99_int_lowering test_c99_struct_union_layout test_c99_pointers_and_escape test_c99_funcptr_and_switch_cfg test_c99_stdarg test_c99_setjmp_longjmp test_c99_bounds_sanitizer test_c99_floating_point test_sse2_xmm_abi test_fuzz_xmm_float test_c99_e2e test_c99_stdlib_headers test_c99_lua_idioms test_c99_pch_opt test_c_ddc_unit test_c_ddc test_elf_static_linker compile_musl compile_lua test_lua_e2e \
+        test_peg test_peg_runtime test_peg_compiler test_peg_self_hosting test_peg_cpython_e2e test_peg_grammars test_c99_peg_grammar test_c99_lexer test_c99_preprocessor test_c99_parser test_c99_gnu_ext test_c99_int_lowering test_c99_struct_union_layout test_c99_pointers_and_escape test_c99_funcptr_and_switch_cfg test_c99_stdarg test_c99_setjmp_longjmp test_c99_bounds_sanitizer test_c99_floating_point test_sse2_xmm_abi test_fuzz_xmm_float test_c99_e2e test_c99_stdlib_headers test_c99_lua_idioms test_c99_pch_opt test_c_ddc_unit test_c_ddc test_elf_static_linker compile_musl compile_lua test_lua_e2e ulisp-cc test_ulisp_cc_native \
         bootstrap_pure bootstrap_pure_elf bootstrap_pure_tools test_pure_bootstrap \
         bootstrap_verify_modular bootstrap_verify_monolithic
 
@@ -63,12 +63,12 @@ ULISP_RUNTIME_LIBS = runtime/gc.scm runtime/io.scm runtime/printer.scm runtime/e
 
 ULISP_STD_LIBS = lib/posix.scm lib/list.scm lib/predicates.scm lib/math.scm lib/char.scm lib/string.scm lib/port.scm lib/printer.scm \
                  lib/reader.scm lib/equality.scm lib/bytevector.scm \
-                 lib/vector.scm lib/bignum.scm lib/ieee754.scm lib/promise.scm lib/exception.scm lib/values.scm \
+                 lib/vector.scm lib/bignum.scm lib/bitwise.scm lib/ieee754.scm lib/promise.scm lib/exception.scm lib/values.scm \
                  lib/continuation.scm lib/parameter.scm lib/hashtable.scm lib/comparator.scm \
                  lib/format.scm lib/sort.scm lib/box.scm lib/ephemeron.scm lib/test.scm lib/check.scm lib/property.scm lib/gc.scm lib/eval.scm \
                  $(ULISP_RUNTIME_LIBS)
 
-ULISP_LARGE_LIBS = lib/set.scm lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/charset.scm lib/mapping.scm lib/ilist.scm lib/ideque.scm lib/rlist.scm lib/text.scm lib/bitwise.scm lib/fixnum.scm lib/maybe.scm
+ULISP_LARGE_LIBS = lib/set.scm lib/stream.scm lib/generator.scm lib/list-queue.scm lib/lseq.scm lib/charset.scm lib/mapping.scm lib/ilist.scm lib/ideque.scm lib/rlist.scm lib/text.scm lib/fixnum.scm lib/maybe.scm
 
 COMPILER_BASE = compiler/helpers.scm \
                 compiler/diagnostic.scm \
@@ -154,7 +154,7 @@ build/compiler_passes.scm: $(PASSES_LIB)
 	cat $^ > $@
 
 lint_sexpr:
-	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) $(ULISP_LARGE_LIBS) tests/passes/common.scm tests/test_numeric_tower.scm tests/test_aarch64_qemu_smoke.scm lib/srfi/1.sld lib/scheme/list.sld tests/test_srfi1.scm lib/srfi/133.sld lib/srfi/133.scm lib/scheme/vector.sld tests/test_srfi_133.scm lib/srfi/151.sld lib/scheme/bitwise.sld tests/test_srfi_151.scm lib/fixnum.scm lib/srfi/143.sld lib/scheme/fixnum.sld tests/test_srfi_143.scm lib/srfi/8.sld lib/srfi/26.sld lib/srfi/31.sld lib/srfi/2.sld lib/srfi/61.sld tests/test_yellow_docket_macros.scm lib/regex.scm lib/srfi/115.sld lib/scheme/regex.sld tests/test_srfi_115.scm lib/json.scm lib/srfi/180.sld lib/scheme/json.sld tests/test_srfi_180.scm lib/flexvector.scm lib/srfi/214.sld lib/scheme/flexvector.sld tests/test_srfi_214.scm lib/maybe.scm lib/srfi/189.sld lib/scheme/maybe.sld tests/test_srfi_189.scm lib/srfi/101.sld lib/scheme/rlist.sld tests/test_srfi_101.scm lib/srfi/135.sld lib/scheme/text.sld tests/test_srfi_135.scm lib/ephemeron.scm lib/srfi/124.sld lib/scheme/ephemeron.sld tests/test_gc_ephemeron.scm lib/srfi/64.sld tests/test_srfi_64.scm lib/srfi/78.sld tests/test_srfi_78.scm lib/srfi/252.sld tests/test_srfi_252.scm lib/srfi/69.sld lib/srfi/125.sld lib/scheme/hash-table.sld tests/test_hashtable.scm lib/scheme/file.sld tests/test_file_port.scm tests/test_string_to_number.scm tests/test_max_min.scm lib/srfi/28.sld lib/srfi/48.sld lib/scheme/format.sld tests/test_format.scm lib/srfi/132.sld lib/srfi/95.sld lib/scheme/sort.sld tests/test_sort.scm lib/scheme/write.sld tests/test_printer.scm runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm $(ROOT_DIR)/tests/concurrency/test_context_switch_aarch64.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/futex.scm lib/ulisp/concurrency/futex.sld $(ROOT_DIR)/tests/concurrency/test_futex.scm runtime/concurrency/registry.scm lib/ulisp/concurrency/registry.sld $(ROOT_DIR)/tests/concurrency/test_registry.scm runtime/concurrency/crash_logger.scm lib/ulisp/concurrency/crash_logger.sld $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm runtime/concurrency/io_uring.scm lib/ulisp/concurrency/io_uring.sld $(ROOT_DIR)/tests/concurrency/test_io_uring.scm runtime/concurrency/io_kqueue.scm lib/ulisp/concurrency/io_kqueue.sld runtime/concurrency/osal.scm lib/ulisp/concurrency/osal.sld $(ROOT_DIR)/tests/concurrency/test_concurrency_osal.scm runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm runtime/concurrency/eval_adapter.scm lib/ulisp/concurrency/eval_adapter.sld $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/inline_hotpath.sld $(ROOT_DIR)/tests/concurrency/test_pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
+	@$(PYTHON) scripts/lint_sexpr.py $(PASSES) $(ULISP_STD_LIBS) $(ULISP_LARGE_LIBS) c_driver_entry.scm compiler/c_driver_module_header.scm tests/passes/common.scm tests/test_numeric_tower.scm tests/test_aarch64_qemu_smoke.scm lib/srfi/1.sld lib/scheme/list.sld tests/test_srfi1.scm lib/srfi/133.sld lib/srfi/133.scm lib/scheme/vector.sld tests/test_srfi_133.scm lib/srfi/151.sld lib/scheme/bitwise.sld tests/test_srfi_151.scm lib/fixnum.scm lib/srfi/143.sld lib/scheme/fixnum.sld tests/test_srfi_143.scm lib/srfi/8.sld lib/srfi/26.sld lib/srfi/31.sld lib/srfi/2.sld lib/srfi/61.sld tests/test_yellow_docket_macros.scm lib/regex.scm lib/srfi/115.sld lib/scheme/regex.sld tests/test_srfi_115.scm lib/json.scm lib/srfi/180.sld lib/scheme/json.sld tests/test_srfi_180.scm lib/flexvector.scm lib/srfi/214.sld lib/scheme/flexvector.sld tests/test_srfi_214.scm lib/maybe.scm lib/srfi/189.sld lib/scheme/maybe.sld tests/test_srfi_189.scm lib/srfi/101.sld lib/scheme/rlist.sld tests/test_srfi_101.scm lib/srfi/135.sld lib/scheme/text.sld tests/test_srfi_135.scm lib/ephemeron.scm lib/srfi/124.sld lib/scheme/ephemeron.sld tests/test_gc_ephemeron.scm lib/srfi/64.sld tests/test_srfi_64.scm lib/srfi/78.sld tests/test_srfi_78.scm lib/srfi/252.sld tests/test_srfi_252.scm lib/srfi/69.sld lib/srfi/125.sld lib/scheme/hash-table.sld tests/test_hashtable.scm lib/scheme/file.sld tests/test_file_port.scm tests/test_string_to_number.scm tests/test_max_min.scm lib/srfi/28.sld lib/srfi/48.sld lib/scheme/format.sld tests/test_format.scm lib/srfi/132.sld lib/srfi/95.sld lib/scheme/sort.sld tests/test_sort.scm lib/scheme/write.sld tests/test_printer.scm runtime/concurrency/arena.scm lib/ulisp/concurrency/arena.sld $(ROOT_DIR)/tests/concurrency/test_arena.scm runtime/concurrency/atomic.scm lib/ulisp/concurrency/atomic.sld $(ROOT_DIR)/tests/concurrency/test_atomic.scm runtime/concurrency/queue.scm lib/ulisp/concurrency/queue.sld $(ROOT_DIR)/tests/concurrency/test_queue.scm runtime/concurrency/channel.scm lib/ulisp/concurrency/channel.sld $(ROOT_DIR)/tests/concurrency/test_channel.scm runtime/concurrency/boundary.scm lib/ulisp/concurrency/boundary.sld $(ROOT_DIR)/tests/concurrency/test_boundary.scm runtime/concurrency/epoch.scm lib/ulisp/concurrency/epoch.sld $(ROOT_DIR)/tests/concurrency/test_epoch.scm runtime/concurrency/context.scm lib/ulisp/concurrency/context.sld $(ROOT_DIR)/tests/concurrency/test_context_switch.scm $(ROOT_DIR)/tests/concurrency/test_context_switch_aarch64.scm runtime/concurrency/deque.scm lib/ulisp/concurrency/deque.sld runtime/concurrency/futex.scm lib/ulisp/concurrency/futex.sld $(ROOT_DIR)/tests/concurrency/test_futex.scm runtime/concurrency/registry.scm lib/ulisp/concurrency/registry.sld $(ROOT_DIR)/tests/concurrency/test_registry.scm runtime/concurrency/crash_logger.scm lib/ulisp/concurrency/crash_logger.sld $(ROOT_DIR)/tests/concurrency/test_crash_logger.scm runtime/concurrency/io_uring.scm lib/ulisp/concurrency/io_uring.sld $(ROOT_DIR)/tests/concurrency/test_io_uring.scm runtime/concurrency/io_kqueue.scm lib/ulisp/concurrency/io_kqueue.sld runtime/concurrency/osal.scm lib/ulisp/concurrency/osal.sld $(ROOT_DIR)/tests/concurrency/test_concurrency_osal.scm runtime/concurrency/scheduler.scm lib/ulisp/concurrency/scheduler.sld $(ROOT_DIR)/tests/concurrency/test_scheduler.scm runtime/concurrency/preempt.scm lib/ulisp/concurrency/preempt.sld $(ROOT_DIR)/tests/concurrency/test_preemption.scm runtime/concurrency/eval_adapter.scm lib/ulisp/concurrency/eval_adapter.sld $(ROOT_DIR)/tests/concurrency/test_eval_adapter.scm $(ROOT_DIR)/tests/concurrency/concurrency_harness.scm lib/ulisp/concurrency/passes/pass_split_planes.scm lib/ulisp/concurrency/passes/split_planes.sld $(ROOT_DIR)/tests/concurrency/test_pass_split_planes.scm lib/ulisp/concurrency/passes/pass_check_affine.scm lib/ulisp/concurrency/passes/check_affine.sld $(ROOT_DIR)/tests/concurrency/test_pass_check_affine.scm lib/ulisp/concurrency/passes/pass_fbip.scm lib/ulisp/concurrency/passes/fbip.sld $(ROOT_DIR)/tests/concurrency/test_pass_fbip.scm lib/ulisp/concurrency/passes/pass_inline_hotpath.scm lib/ulisp/concurrency/passes/inline_hotpath.sld $(ROOT_DIR)/tests/concurrency/test_pass_inline_hotpath.scm lib/ulisp/concurrency/passes/pass_inject_safepoints.scm lib/ulisp/concurrency/passes/inject_safepoints.sld $(ROOT_DIR)/tests/concurrency/test_pass_inject_safepoints.scm $(ROOT_DIR)/benchmarks/concurrency/bench_microtasks.scm $(ROOT_DIR)/benchmarks/concurrency/bench_latency_under_gc.scm
 
 test_lint_sexpr:
 	@$(PYTHON) tests/test_lint_sexpr.py
@@ -1029,7 +1029,8 @@ test_fuzz_xmm_float: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COM
 build/c_driver_runner.scm: build/compiler_passes.scm vm/lir_interpreter.scm $(C99_FRONTEND_SOURCES) driver/c_driver.scm
 	@mkdir -p build
 	@$(PYTHON) scripts/lint_sexpr.py driver/c_driver.scm
-	cat build/compiler_passes.scm vm/lir_interpreter.scm $(C99_FRONTEND_SOURCES) driver/c_driver.scm > $@
+	@printf ';; Host Gauche compatibility shim for process-exec (Issue #932)\n(cond-expand\n  (gauche\n   (define (process-exec argv)\n     (let ((p (run-process argv :wait #t)))\n       (sys-wait-exit-status (process-exit-status p)))))\n  (else))\n' > $@
+	cat build/compiler_passes.scm vm/lir_interpreter.scm $(C99_FRONTEND_SOURCES) driver/c_driver.scm >> $@
 	@printf '\n(exit (c-driver-cli-main (cdr (command-line))))\n' >> $@
 
 test_c99_e2e: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm build/c_driver_runner.scm tests/test_c99_e2e_hello.scm tests/test_c99_e2e_hello.sh
@@ -1294,7 +1295,7 @@ test_srfi_133: $(COMPILER_DEP)
 
 test_srfi_151: $(COMPILER_DEP)
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) lib/bitwise.scm tests/test_srfi_151.scm > build/test_srfi_151_input.scm
+	cat $(ULISP_STD_LIBS) tests/test_srfi_151.scm > build/test_srfi_151_input.scm
 	$(ULISP_COMPILER) build/test_srfi_151_input.scm > build/test_srfi_151.s
 	$(AS) $(ASFLAGS) build/test_srfi_151.s -o build/test_srfi_151.o
 	$(LD) $(LDFLAGS) build/test_srfi_151.o -o build/test_srfi_151
@@ -1302,7 +1303,7 @@ test_srfi_151: $(COMPILER_DEP)
 
 test_srfi_143: $(COMPILER_DEP)
 	@mkdir -p build
-	cat $(ULISP_STD_LIBS) lib/bitwise.scm lib/fixnum.scm tests/test_srfi_143.scm > build/test_srfi_143_input.scm
+	cat $(ULISP_STD_LIBS) lib/fixnum.scm tests/test_srfi_143.scm > build/test_srfi_143_input.scm
 	$(ULISP_COMPILER) build/test_srfi_143_input.scm > build/test_srfi_143.s
 	$(AS) $(ASFLAGS) build/test_srfi_143.s -o build/test_srfi_143.o
 	$(LD) $(LDFLAGS) build/test_srfi_143.o -o build/test_srfi_143
@@ -1960,6 +1961,95 @@ build/ulisp-modular: $(MODULAR_COMPILER_OBJS)
 	$(LD) $(LDFLAGS) $^ -o $@
 	cp -f $@ bin/ulisp-modular
 
+# --- Native AOT C99 Compiler Driver Binary: bin/ulisp-cc (Issue #932) ---
+build/c99_grammar_embedded.scm: $(ROOT_DIR)/tools/grammars/c99.peg scripts/embed_c99_grammar.py
+	@mkdir -p build
+	$(PYTHON) scripts/embed_c99_grammar.py --input $< --output $@
+
+build/meta/c_driver_env.sbi: compiler/module_header.scm compiler/c_driver_module_header.scm
+	@mkdir -p build/meta
+	@$(PYTHON) scripts/lint_sexpr.py compiler/module_header.scm compiler/c_driver_module_header.scm
+	cat $^ > $@
+
+build/c99_vm_in.scm: vm/lir_interpreter.scm build/meta/c_driver_env.sbi
+	@mkdir -p build
+	@$(PYTHON) scripts/lint_sexpr.py vm/lir_interpreter.scm
+	@echo '(!gc none) (!module-name c99_vm) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/c_driver_env.sbi")' > $@
+	@cat vm/lir_interpreter.scm >> $@
+
+build/c99_vm.s: build/c99_vm_in.scm $(COMPILER_DEP)
+	@mkdir -p build
+	@echo "=== Compiling C99 Reference LIR VM Module (c99_vm) ==="
+	$(call COMPILE_SCM_TO_S,build/c99_vm_in.scm,$@)
+
+build/c99_vm.o: build/c99_vm.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/c99_frontend_in.scm: $(C99_FRONTEND_SOURCES) build/c99_grammar_embedded.scm build/meta/c_driver_env.sbi
+	@mkdir -p build
+	@$(PYTHON) scripts/lint_sexpr.py $(C99_FRONTEND_SOURCES)
+	@echo '(!gc none) (!module-name c99_frontend) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/c_driver_env.sbi")' > $@
+	@cat $(C99_FRONTEND_SOURCES) build/c99_grammar_embedded.scm >> $@
+
+build/c99_frontend.s: build/c99_frontend_in.scm $(COMPILER_DEP)
+	@mkdir -p build
+	@echo "=== Compiling C99 Frontend & Embedded PEG Module (c99_frontend) ==="
+	$(call COMPILE_SCM_TO_S,build/c99_frontend_in.scm,$@)
+
+build/c99_frontend.o: build/c99_frontend.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/c99_driver_in.scm: driver/c_driver.scm build/meta/c_driver_env.sbi
+	@mkdir -p build
+	@$(PYTHON) scripts/lint_sexpr.py driver/c_driver.scm
+	@echo '(!gc none) (!module-name c99_driver) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/c_driver_env.sbi")' > $@
+	@cat driver/c_driver.scm >> $@
+
+build/c99_driver.s: build/c99_driver_in.scm $(COMPILER_DEP)
+	@mkdir -p build
+	@echo "=== Compiling C99 Driver Module (c99_driver) ==="
+	$(call COMPILE_SCM_TO_S,build/c99_driver_in.scm,$@)
+
+build/c99_driver.o: build/c99_driver.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+build/c_driver_entry_in.scm: c_driver_entry.scm build/meta/c_driver_env.sbi
+	@mkdir -p build
+	@$(PYTHON) scripts/lint_sexpr.py c_driver_entry.scm
+	@echo '(!gc none) (!allow-extern #t) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/c_driver_env.sbi")' > $@
+	@cat c_driver_entry.scm >> $@
+
+build/c_driver_entry.s: build/c_driver_entry_in.scm $(COMPILER_DEP)
+	@mkdir -p build
+	@echo "=== Compiling C99 Driver Entrypoint (c_driver_entry) ==="
+	$(call COMPILE_SCM_TO_S,build/c_driver_entry_in.scm,$@)
+
+build/c_driver_entry.o: build/c_driver_entry.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+C_DRIVER_OBJS = build/ulisp_stdlib.o \
+                build/compiler_base.o \
+                build/frontend_passes.o \
+                build/lir_passes.o \
+                build/backend_passes.o \
+                build/c99_vm.o \
+                build/c99_frontend.o \
+                build/c99_driver.o \
+                build/c_driver_entry.o
+
+bin/ulisp-cc: $(C_DRIVER_OBJS)
+	@mkdir -p bin build
+	@echo "=== Statically Linking Native AOT C99 Compiler Driver ($@) ==="
+	$(LD) $(LDFLAGS) $^ -o $@
+	@chmod +x $@
+
+ulisp-cc: bin/ulisp-cc
+
+test_ulisp_cc_native: bin/ulisp-cc build/c_driver_runner.scm tests/test_ulisp_cc_native.sh
+	@mkdir -p build
+	@chmod +x tests/test_ulisp_cc_native.sh
+	@USE_GOSH="$(USE_GOSH)" bash tests/test_ulisp_cc_native.sh
+
 # --- Stage-Specific Modular Parallel Bootstrap Targets (Issue #778) ---
 MODULAR_MODULES = compiler_base frontend_passes lir_passes backend_passes compiler_driver
 
@@ -2246,7 +2336,7 @@ test_numeric_tower: $(COMPILER_DEP) build/ulisp_stdlib.o
 
 verify_zero_gauche:
 	@echo "=== Checking for unexpected Gauche references in compiler & runner sources ==="
-	@if git grep -n "([g]auche" -- compiler/ backend/ runtime/ build/*.scm 2>/dev/null; then \
+	@if git grep -n "([g]auche" -- compiler/ backend/ runtime/ driver/ build/*.scm 2>/dev/null; then \
 		echo "ERROR: Unexpected Gauche branch found in compiler/runner sources!" && exit 1; \
 	fi
 	@echo "[PASS] Zero Gauche dependency check passed."

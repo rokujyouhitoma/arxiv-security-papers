@@ -627,7 +627,7 @@
                           ((eq? (caar ps) (cdar ps)) (filter-self (cdr ps) acc))
                           (else (filter-self (cdr ps) (cons (car ps) acc)))))))
     (if (pair? pending)
-        (let* ((srcs (map cdr pending))
+        (let* ((srcs (map (lambda (p) (cdr p)) pending))
                (ready (let find-ready ((ps pending))
                         (cond
                           ((null? ps) #f)

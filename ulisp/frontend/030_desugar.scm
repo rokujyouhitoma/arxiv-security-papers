@@ -42,6 +42,7 @@
 
       ;; --- Pass 028: Bindings & Internal Definitions ---
       rule-desugar-case-lambda
+      rule-desugar-rest-lambda
       rule-desugar-let*
       rule-desugar-letrec*
       rule-desugar-named-let

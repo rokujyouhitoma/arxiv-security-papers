@@ -289,7 +289,7 @@
     (sk 'cut pos (lambda () (fk)))))
 
 ;;; Sequence combinator: e1 e2 ...
-(define (peg:seq . parsers)
+(define (peg:seq-list parsers)
   (cond
     ((null? parsers)
      (lambda (ctx pos sk fk) (sk '() pos fk)))
@@ -311,8 +311,11 @@
                     (loop (cdr ps) next-pos (cons v vals) next-fk))
                   curr-fk))))))))
 
+(define (peg:seq . parsers)
+  (peg:seq-list parsers))
+
 ;;; Ordered Choice combinator: e1 | e2 | ...
-(define (peg:alt . parsers)
+(define (peg:alt-list parsers)
   (cond
     ((null? parsers)
      (lambda (ctx pos sk fk) (fk)))
@@ -328,6 +331,9 @@
                   sk
                   (lambda ()
                     (loop (cdr ps)))))))))))
+
+(define (peg:alt . parsers)
+  (peg:alt-list parsers))
 
 ;;; Repetition: 0 or more (*) with progress guard against infinite loops
 (define (peg:star parser)
@@ -460,64 +466,63 @@
                (parse-ctx-touched-lr-set! ctx '()))
            (parse-ctx-depth-set! ctx (+ depth 1))
            (parse-ctx-in-progress-add! ctx key)
-           (let ((matched #f)
-                 (res-val #f)
-                 (res-pos #f))
+           (let ((res (vector #f #f #f)))
              (parser-proc
               ctx pos
               (lambda (v next-pos ifk)
-                (set! matched #t)
-                (set! res-val v)
-                (set! res-pos next-pos))
+                (vector-set! res 0 #t)
+                (vector-set! res 1 v)
+                (vector-set! res 2 next-pos))
               (lambda ()
-                (set! matched #f)))
+                (vector-set! res 0 #f)))
              (parse-ctx-depth-set! ctx depth)
              (parse-ctx-in-progress-delete! ctx key)
-             (if (and (pair? (parse-ctx-lr-detected ctx))
-                      (parse-ctx-lr-detected? ctx key))
-                 (begin
-                   (parse-ctx-lr-detected-delete! ctx key)
-                   (if matched
-                       ;; Seed growth loop for left-recursion
-                       (let grow ((curr-val res-val) (curr-pos res-pos))
-                         (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done curr-val curr-pos #t '()))
-                         (parse-ctx-clear-lr-dependent-memo! ctx pos key)
-                         (let ((step-matched #f)
-                               (step-val #f)
-                               (step-pos #f))
-                           (parser-proc
-                            ctx pos
-                            (lambda (v p ifk)
-                              (set! step-matched #t)
-                              (set! step-val v)
-                              (set! step-pos p))
-                            (lambda () (set! step-matched #f)))
-                           (if (and step-matched (> step-pos curr-pos))
-                               (grow step-val step-pos)
-                               (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
-                                 (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done curr-val curr-pos #f ext-deps))
-                                 (parse-ctx-touched-lr-set! ctx outer-touched)
-                                 (if (pair? ext-deps)
-                                     (parse-ctx-touched-lr-merge! ctx ext-deps))
-                                 (sk curr-val curr-pos fk)))))
-                       (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
-                         (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'fail #f pos #f ext-deps))
-                         (parse-ctx-touched-lr-set! ctx outer-touched)
-                         (if (pair? ext-deps)
-                             (parse-ctx-touched-lr-merge! ctx ext-deps))
-                         (fk))))
-                 (let* ((cur-touched (parse-ctx-touched-lr ctx))
-                        (ext-deps (if (null? cur-touched) '() (%filter-out-key cur-touched key))))
-                   (if matched
-                       (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done res-val res-pos #f ext-deps))
-                       (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'fail #f pos #f ext-deps)))
-                   (if (or (pair? outer-touched) (pair? cur-touched))
-                       (parse-ctx-touched-lr-set! ctx outer-touched))
-                   (if (pair? ext-deps)
-                       (parse-ctx-touched-lr-merge! ctx ext-deps))
-                   (if matched
-                       (sk res-val res-pos fk)
-                       (fk)))))))))))
+             (let ((matched (vector-ref res 0))
+                   (res-val (vector-ref res 1))
+                   (res-pos (vector-ref res 2)))
+               (if (and (pair? (parse-ctx-lr-detected ctx))
+                        (parse-ctx-lr-detected? ctx key))
+                   (begin
+                     (parse-ctx-lr-detected-delete! ctx key)
+                     (if matched
+                         ;; Seed growth loop for left-recursion
+                         (let grow ((curr-val res-val) (curr-pos res-pos))
+                           (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done curr-val curr-pos #t '()))
+                           (parse-ctx-clear-lr-dependent-memo! ctx pos key)
+                           (let ((step (vector #f #f #f)))
+                             (parser-proc
+                              ctx pos
+                              (lambda (v p ifk)
+                                (vector-set! step 0 #t)
+                                (vector-set! step 1 v)
+                                (vector-set! step 2 p))
+                              (lambda () (vector-set! step 0 #f)))
+                             (if (and (vector-ref step 0) (> (vector-ref step 2) curr-pos))
+                                 (grow (vector-ref step 1) (vector-ref step 2))
+                                 (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
+                                   (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done curr-val curr-pos #f ext-deps))
+                                   (parse-ctx-touched-lr-set! ctx outer-touched)
+                                   (if (pair? ext-deps)
+                                       (parse-ctx-touched-lr-merge! ctx ext-deps))
+                                   (sk curr-val curr-pos fk)))))
+                         (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
+                           (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'fail #f pos #f ext-deps))
+                           (parse-ctx-touched-lr-set! ctx outer-touched)
+                           (if (pair? ext-deps)
+                               (parse-ctx-touched-lr-merge! ctx ext-deps))
+                           (fk))))
+                   (let* ((cur-touched (parse-ctx-touched-lr ctx))
+                          (ext-deps (if (null? cur-touched) '() (%filter-out-key cur-touched key))))
+                     (if matched
+                         (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done res-val res-pos #f ext-deps))
+                         (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'fail #f pos #f ext-deps)))
+                     (if (or (pair? outer-touched) (pair? cur-touched))
+                         (parse-ctx-touched-lr-set! ctx outer-touched))
+                     (if (pair? ext-deps)
+                         (parse-ctx-touched-lr-merge! ctx ext-deps))
+                     (if matched
+                         (sk res-val res-pos fk)
+                         (fk))))))))))))
 
 ;;; Fast Packrat memoization for provably non-left-recursive rules
 (define (peg:rule-simple rule-name parser-proc)
@@ -563,40 +568,36 @@
 (define (peg-parse-partial parser text . maybe-pos)
   (let* ((start-pos (if (pair? maybe-pos) (car maybe-pos) 0))
          (ctx (make-parse-context text))
-         (matched #f)
-         (result-val #f)
-         (result-pos #f))
+         (res (vector #f #f #f)))
     (parser
      ctx start-pos
      (lambda (val next-pos fk)
-       (set! matched #t)
-       (set! result-val val)
-       (set! result-pos next-pos))
+       (vector-set! res 0 #t)
+       (vector-set! res 1 val)
+       (vector-set! res 2 next-pos))
      (lambda ()
-       (set! matched #f)))
-    (if matched
-        (cons result-val result-pos)
+       (vector-set! res 0 #f)))
+    (if (vector-ref res 0)
+        (cons (vector-ref res 1) (vector-ref res 2))
         #f)))
 
 (define (peg-parse parser text)
   (let* ((ctx (make-parse-context text))
          (txt-len (string-length text))
-         (matched #f)
-         (result-val #f)
-         (result-pos #f))
+         (res (vector #f #f #f)))
     (parser
      ctx 0
      (lambda (val next-pos fk)
        (if (= next-pos txt-len)
            (begin
-             (set! matched #t)
-             (set! result-val val)
-             (set! result-pos next-pos))
+             (vector-set! res 0 #t)
+             (vector-set! res 1 val)
+             (vector-set! res 2 next-pos))
            (fk)))
      (lambda ()
-       (set! matched #f)))
-    (if matched
-        result-val
+       (vector-set! res 0 #f)))
+    (if (vector-ref res 0)
+        (vector-ref res 1)
         (let* ((err-pos (parse-ctx-max-pos ctx))
                (lc (calc-line-col text err-pos))
                (exp (parse-ctx-expected ctx)))

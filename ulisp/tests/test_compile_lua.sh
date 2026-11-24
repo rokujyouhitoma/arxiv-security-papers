@@ -301,9 +301,9 @@ EOF
 
     if [ -n "${ULISP_CC_BIN:-}" ] && [ -x "${ULISP_CC_BIN}" ]; then
       (
-        [ "${#SHARD_CORE[@]}" -gt 0 ] && "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$CORE_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_CORE[@]}"
-        [ "${#SHARD_LIB[@]}" -gt 0 ] && "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$LIB_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_LIB[@]}"
-        [ "${#SHARD_CLI[@]}" -gt 0 ] && "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_CLI[@]}"
+        if [ "${#SHARD_CORE[@]}" -gt 0 ]; then "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$CORE_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_CORE[@]}"; fi
+        if [ "${#SHARD_LIB[@]}" -gt 0 ]; then "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$LIB_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_LIB[@]}"; fi
+        if [ "${#SHARD_CLI[@]}" -gt 0 ]; then "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_CLI[@]}"; fi
       ) > "$OBJ_DIR/shard_${s}.log" 2>&1 &
       PIDS+=("$!")
     else

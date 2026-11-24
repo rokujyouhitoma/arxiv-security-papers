@@ -182,6 +182,14 @@
         (%safe-flush)
         (error "Assertion failed: values are not equal" label))))
 
+;; Host Gauche compatibility for process-exec in test runners (Issue #932)
+(cond-expand
+  (gauche
+   (define (process-exec argv)
+     (let ((p (run-process argv :wait #t)))
+       (sys-wait-exit-status (process-exit-status p)))))
+  (else))
+
 ;; SRFI 64 aliases
 (define test-assert assert-true)
 (define test-equal assert-equal)

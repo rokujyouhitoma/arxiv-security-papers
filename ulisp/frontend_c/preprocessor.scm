@@ -941,13 +941,13 @@
 
 (define (%cpp-subst-body ctx body call-tok raw-env)
   (let ((call-span (c-token-span call-tok))
-        (expanded-cache '()))
+        (expanded-cache-box (cons '() '())))
     (define (get-expanded sym raw-toks)
-      (let ((slot (assq sym expanded-cache)))
+      (let ((slot (assq sym (car expanded-cache-box))))
         (if slot
             (cdr slot)
             (let ((exp (%cpp-expand-stream ctx raw-toks)))
-              (set! expanded-cache (cons (cons sym exp) expanded-cache))
+              (set-car! expanded-cache-box (cons (cons sym exp) (car expanded-cache-box)))
               exp))))
     (let loop ((rest body) (prev-paste? #f) (items '()))
       (if (null? rest)

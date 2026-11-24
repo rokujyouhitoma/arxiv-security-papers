@@ -35,16 +35,54 @@
               (loop (- i 1))
               (substring str 0 (+ i 1)))))))
 
+(define *c99-embedded-grammar-text* (cons #f '()))
+
+(define (c99-register-embedded-grammar! txt)
+  (set-car! *c99-embedded-grammar-text* txt))
+
+(define (%c99-safe-grammar-path? p)
+  (and (string? p)
+       (> (string-length p) 0)
+       (let ((len (string-length p)))
+         (let loop ((i 0))
+           (if (< i len)
+               (let* ((ch (string-ref p i))
+                      (code (char->integer ch)))
+                 (cond
+                   ((or (= code 0) (< code 32)
+                        (char=? ch #\;) (char=? ch #\|) (char=? ch #\&)
+                        (char=? ch #\$) (char=? ch #\`) (char=? ch #\<) (char=? ch #\>))
+                    #f)
+                   ((and (char=? ch #\.)
+                         (< (+ i 1) len)
+                         (char=? (string-ref p (+ i 1)) #\.)
+                         (or (= i 0) (char=? (string-ref p (- i 1)) #\/))
+                         (or (= (+ i 2) len) (char=? (string-ref p (+ i 2)) #\/)))
+                    #f)
+                   (else (loop (+ i 1)))))
+               #t)))))
+
 (define (%c99-read-grammar-text)
-  (let loop ((paths '("tools/grammars/c99.peg"
-                      "../tools/grammars/c99.peg"
-                      "../../tools/grammars/c99.peg"
-                      "../../../tools/grammars/c99.peg")))
-    (if (null? paths)
-        (error "Unable to locate tools/grammars/c99.peg")
-        (if (file-exists? (car paths))
-            (read-all-file-text (car paths))
-            (loop (cdr paths))))))
+  (let ((env-path (guard (ex (else #f)) (get-environment-variable "ULISP_C99_GRAMMAR"))))
+    (cond
+      ((and (string? env-path) (> (string-length env-path) 0))
+       (if (not (%c99-safe-grammar-path? env-path))
+           (error "Unsafe ULISP_C99_GRAMMAR path rejected" env-path))
+       (if (file-exists? env-path)
+           (read-all-file-text env-path)
+           (error "ULISP_C99_GRAMMAR file not found" env-path)))
+      ((string? (car *c99-embedded-grammar-text*))
+       (car *c99-embedded-grammar-text*))
+      (else
+       (let loop ((paths '("tools/grammars/c99.peg"
+                           "../tools/grammars/c99.peg"
+                           "../../tools/grammars/c99.peg"
+                           "../../../tools/grammars/c99.peg")))
+         (if (null? paths)
+             (error "Unable to locate tools/grammars/c99.peg")
+             (if (file-exists? (car paths))
+                 (read-all-file-text (car paths))
+                 (loop (cdr paths)))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. C99 Parse Environment (Scope Manager + Typedef Table + Source Span)
@@ -856,19 +894,15 @@
 (define (compile-c99-rule-getter env)
   (let* ((grammar (c99-peg-grammar-ast))
          (rules (peg-grammar-def-rules grammar))
-         (rule-cells '()))
+         (rule-cells
+          (map (lambda (r) (cons (peg-rule-def-name r) (cons #f '())))
+               rules)))
     (define (lookup-cell name)
       (let ((slot (assq name rule-cells)))
         (if slot (cdr slot) #f)))
     (define (lookup name)
       (let ((cell (lookup-cell name)))
         (if cell (car cell) #f)))
-
-    ;; Initialize forward mutable cell slots (proc . '())
-    (for-each
-     (lambda (r)
-       (set! rule-cells (cons (cons (peg-rule-def-name r) (cons #f '())) rule-cells)))
-     rules)
 
     ;; Compile each rule with C99 semantic hooks, fast lexical leaves, Pratt expressions,
     ;; and lean non-LR Packrat memoization
@@ -1198,7 +1232,7 @@
               base-parser))
 
     ((designation)
-     (peg:map car base-parser))
+     (peg:map (lambda (x) (car x)) base-parser))
 
     ((initializer_item)
      (peg:map (lambda (res)
@@ -1306,20 +1340,20 @@
                     fk)))
 
     ((compound_stmt)
-     (let ((ready #f) (p-lbrace #f) (p-items #f) (p-rbrace #f))
+     (let ((st (vector #f #f #f #f)))
        (lambda (ctx pos sk fk)
-         (if (not ready)
+         (if (not (vector-ref st 0))
              (begin
-               (set! p-lbrace (peg:seq (peg:lit "{") (lookup 'ws)))
-               (set! p-items  (peg:star (lookup 'block_item)))
-               (set! p-rbrace (peg:seq (peg:lit "}") (lookup 'ws)))
-               (set! ready #t)))
-         (p-lbrace ctx pos
+               (vector-set! st 1 (peg:seq (peg:lit "{") (lookup 'ws)))
+               (vector-set! st 2 (peg:star (lookup 'block_item)))
+               (vector-set! st 3 (peg:seq (peg:lit "}") (lookup 'ws)))
+               (vector-set! st 0 #t)))
+         ((vector-ref st 1) ctx pos
                    (lambda (_lb pos1 fk1)
                      (c99-push-scope! env 'block)
-                     (p-items ctx pos1
+                     ((vector-ref st 2) ctx pos1
                               (lambda (items pos2 fk2)
-                                (p-rbrace ctx pos2
+                                ((vector-ref st 3) ctx pos2
                                           (lambda (_rb end-pos fk3)
                                             (c99-pop-scope! env)
                                             (let ((sp (%c99-make-span-from-pos env ctx pos end-pos)))
@@ -1334,21 +1368,21 @@
                    fk))))
 
     ((function_definition)
-     (let ((ready #f) (p-specs #f) (p-decl #f) (p-attrs #f) (p-dlist #f) (p-body #f))
+     (let ((st (vector #f #f #f #f #f #f)))
        (lambda (ctx pos sk fk)
-         (if (not ready)
+         (if (not (vector-ref st 0))
              (begin
-               (set! p-specs (lookup 'declaration_specifiers))
-               (set! p-decl  (lookup 'declarator))
-               (set! p-attrs (peg:star (lookup 'gnu_attribute)))
-               (set! p-dlist (peg:opt (lookup 'declaration_list)))
-               (set! p-body  (lookup 'compound_stmt))
-               (set! ready #t)))
-         (p-specs ctx pos
+               (vector-set! st 1 (lookup 'declaration_specifiers))
+               (vector-set! st 2 (lookup 'declarator))
+               (vector-set! st 3 (peg:star (lookup 'gnu_attribute)))
+               (vector-set! st 4 (peg:opt (lookup 'declaration_list)))
+               (vector-set! st 5 (lookup 'compound_stmt))
+               (vector-set! st 0 #t)))
+         ((vector-ref st 1) ctx pos
                   (lambda (specs pos1 fk1)
-                    (p-decl ctx pos1
+                    ((vector-ref st 2) ctx pos1
                             (lambda (decl pos2 fk2)
-                              (p-attrs ctx pos2
+                              ((vector-ref st 3) ctx pos2
                                        (lambda (fn-attrs pos2b fk2b)
                                          (let* ((fn-names (%c99-extract-declarator-names decl))
                                                 (fn-sym (if (pair? fn-names) (car fn-names) 'anon_fn))
@@ -1362,9 +1396,9 @@
                                                          (let ((b (c99-register-var! env psym 'parameter fn-sp)))
                                                            (list psym (binding-id b))))
                                                        param-syms)))
-                                             (p-dlist ctx pos2b
+                                             ((vector-ref st 4) ctx pos2b
                                                       (lambda (dlist pos3 fk3)
-                                                        (p-body ctx pos3
+                                                        ((vector-ref st 5) ctx pos3
                                                                 (lambda (body end-pos fk4)
                                                                   (c99-pop-scope! env)
                                                                   (let ((sp (%c99-make-span-from-pos env ctx pos end-pos)))
@@ -1722,22 +1756,20 @@
                      (error "Unknown C99 grammar entry rule" entry-rule)))
          (ctx (make-parse-context src-text))
          (txt-len (string-length src-text))
-         (matched #f)
-         (result-val #f)
-         (result-pos 0))
+         (res (vector #f #f 0)))
     (parser
      ctx 0
      (lambda (val next-pos fk)
        (if (= next-pos txt-len)
            (begin
-             (set! matched #t)
-             (set! result-val val)
-             (set! result-pos next-pos))
+             (vector-set! res 0 #t)
+             (vector-set! res 1 val)
+             (vector-set! res 2 next-pos))
            (fk)))
      (lambda ()
-       (set! matched #f)))
-    (if matched
-        result-val
+       (vector-set! res 0 #f)))
+    (if (vector-ref res 0)
+        (vector-ref res 1)
         (let* ((err-pos (parse-ctx-max-pos ctx))
                (lc (calc-line-col src-text err-pos))
                (exp (parse-ctx-expected ctx))

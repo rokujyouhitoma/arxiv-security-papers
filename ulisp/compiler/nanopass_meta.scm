@@ -69,20 +69,23 @@
             #f))))
 
 (define (nanopass-meta-var-matches-str? s prefs s-len)
-  (if (null? prefs)
+  (if (or (null? prefs) (string=? s "?"))
       #f
       (let* ((p (symbol->raw-name (car prefs)))
              (p-len (string-length p)))
-        (if (and (>= s-len p-len)
+        (if (and (not (string=? p "?"))
+                 (>= s-len p-len)
                  (string-starts-with? s p)
                  (nanopass-meta-suffix-check? s p-len s-len))
             #t
             (nanopass-meta-var-matches-str? s (cdr prefs) s-len)))))
 
 (define (nanopass-meta-var-matches? sym prefixes)
-  (let* ((s (symbol->raw-name sym))
-         (s-len (string-length s)))
-    (nanopass-meta-var-matches-str? s prefixes s-len)))
+  (if (memq sym prefixes)
+      #t
+      (let* ((s (symbol->raw-name sym))
+             (s-len (string-length s)))
+        (nanopass-meta-var-matches-str? s prefixes s-len))))
 
 ;;; Identify nonterminal or terminal for a pattern variable
 ;;; Returns (terminal pred) or (nonterminal nt-sym) or #f
@@ -101,6 +104,22 @@
         (if (nanopass-meta-var-matches-str? var-str (cadr nt) s-len)
             (list 'nonterminal (car nt))
             (nanopass-check-nts-str var-str s-len (cdr nts))))))
+
+(define (%nanopass-check-terms-exact var ts)
+  (if (null? ts)
+      #f
+      (let ((term (car ts)))
+        (if (memq var (cadr term))
+            (list 'terminal (car term))
+            (%nanopass-check-terms-exact var (cdr ts))))))
+
+(define (%nanopass-check-nts-exact var nts)
+  (if (null? nts)
+      #f
+      (let ((nt (car nts)))
+        (if (memq var (cadr nt))
+            (list 'nonterminal (car nt))
+            (%nanopass-check-nts-exact var (cdr nts))))))
 
 (define (nanopass-classify-meta-var-uncached var-str lang)
   (let ((s-len (string-length var-str))
@@ -122,8 +141,14 @@
              (bucket (vector-ref *classify-meta-var-cache* h)))
         (let loop ((entries bucket))
           (if (null? entries)
-              (let* ((var-str (symbol->raw-name var))
-                     (res (nanopass-classify-meta-var-uncached var-str lang))
+              (let* ((exact-res (or (%nanopass-check-terms-exact var (nanopass-lang-terminals lang))
+                                    (%nanopass-check-nts-exact var (nanopass-lang-nonterminals lang))))
+                     (res (if exact-res
+                              exact-res
+                              (let ((var-str (symbol->raw-name var)))
+                                (if (string=? var-str "?")
+                                    #f
+                                    (nanopass-classify-meta-var-uncached var-str lang)))))
                      (new-entry (cons (cons var lang-name) res)))
                 (vector-set! *classify-meta-var-cache* h (cons new-entry bucket))
                 res)

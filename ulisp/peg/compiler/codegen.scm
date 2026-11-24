@@ -80,13 +80,13 @@
      (let ((sub-parsers
             (map (lambda (e) (compile-expr->parser-with-cells e lookup-cell))
                  (peg-seq-expr-elements expr))))
-       (apply peg:seq sub-parsers)))
+       (peg:seq-list sub-parsers)))
 
     ((peg-choice-expr? expr)
      (let ((sub-parsers
             (map (lambda (e) (compile-expr->parser-with-cells e lookup-cell))
                  (peg-choice-expr-alternatives expr))))
-       (apply peg:alt sub-parsers)))
+       (peg:alt-list sub-parsers)))
 
     ((peg-repeat-expr? expr)
      (let ((inner (compile-expr->parser-with-cells (peg-repeat-expr-expr expr) lookup-cell))
@@ -165,13 +165,13 @@
      (let ((sub-parsers
             (map (lambda (e) (compile-expr->parser e lookup-rule))
                  (peg-seq-expr-elements expr))))
-       (apply peg:seq sub-parsers)))
+       (peg:seq-list sub-parsers)))
 
     ((peg-choice-expr? expr)
      (let ((sub-parsers
             (map (lambda (e) (compile-expr->parser e lookup-rule))
                  (peg-choice-expr-alternatives expr))))
-       (apply peg:alt sub-parsers)))
+       (peg:alt-list sub-parsers)))
 
     ((peg-repeat-expr? expr)
      (let ((inner (compile-expr->parser (peg-repeat-expr-expr expr) lookup-rule))
@@ -225,17 +225,14 @@
 ;;; Returns a procedure: (lambda (entry-rule-name-or-default) -> parser-closure)
 (define (compile-grammar-rules grammar)
   (let* ((rules (peg-grammar-def-rules grammar))
-         (rule-cells '()))
+         (rule-cells
+          (map (lambda (r) (cons (peg-rule-def-name r) (cons #f '())))
+               rules)))
     (define (lookup-cell name)
       (let ((slot (assq name rule-cells)))
         (if slot
             (cdr slot)
             #f)))
-    ;; Populate rule-cells with forward mutable box pairs (proc . '())
-    (for-each
-     (lambda (r)
-       (set! rule-cells (cons (cons (peg-rule-def-name r) (cons #f '())) rule-cells)))
-     rules)
     ;; Compile and assign each rule wrapped in Warth Packrat memoization
     (for-each
      (lambda (r)
@@ -262,11 +259,15 @@
       (let ((cell (lookup-cell rule-name)))
         (if cell (car cell) #f)))))
 
-(define (compile-grammar-entry-parser grammar . maybe-entry)
-  (let* ((rules (peg-grammar-def-rules grammar))
-         (first-rule-name (if (pair? rules)
-                              (peg-rule-def-name (car rules))
-                              (error "Grammar has no rules defined")))
-         (entry-name (if (pair? maybe-entry) (car maybe-entry) first-rule-name))
-         (rule-getter (compile-grammar-rules grammar)))
-    (rule-getter entry-name)))
+(define compile-grammar-entry-parser
+  (case-lambda
+    ((grammar)
+     (compile-grammar-entry-parser grammar #f))
+    ((grammar entry-arg)
+     (let* ((rules (peg-grammar-def-rules grammar))
+            (first-rule-name (if (pair? rules)
+                                 (peg-rule-def-name (car rules))
+                                 (error "Grammar has no rules defined")))
+            (entry-name (or entry-arg first-rule-name))
+            (rule-getter (compile-grammar-rules grammar)))
+       (rule-getter entry-name)))))

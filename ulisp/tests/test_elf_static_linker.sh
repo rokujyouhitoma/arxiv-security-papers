@@ -11,7 +11,9 @@ OUT_DIR="$ULISP_DIR/build/test_elf_static_linker"
 GOSH_BIN="${GOSH_BIN:-$(command -v gosh 2>/dev/null || true)}"
 USE_GOSH="${USE_GOSH:-1}"
 
-if [ "$USE_GOSH" = "1" ] && [ -n "$GOSH_BIN" ]; then
+if [ -n "${ULISP_CC_BIN:-}" ] && [ -x "${ULISP_CC_BIN}" ]; then
+    RUN_DRIVER=("$ULISP_CC_BIN")
+elif [ "$USE_GOSH" = "1" ] && [ -n "$GOSH_BIN" ]; then
     RUN_DRIVER=("$GOSH_BIN" -usrfi.9 -ugauche.uvector -ugauche.process -uscheme.file -uscheme.bitwise -uscheme.process-context -I "$ULISP_DIR" -I "$(dirname "$ULISP_DIR")" "$ULISP_DIR/build/c_driver_runner.scm")
 else
     echo "[SKIP/INFO] Running with Python ILisp not configured for this shell check"

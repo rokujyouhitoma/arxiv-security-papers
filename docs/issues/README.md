@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **932** | C99 コンパイラドライバ (`ulisp-cc`) のネイティブ AOT バイナリ化と高速セルフホスト実行基盤の構築 | Feature | In Progress | [932-build-native-aot-ulisp-cc-compiler-driver-binary.md](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) |
 | **942** | 混合器 (mix) の完成：`specialize-or-widen` の `eval-in-stage-apply` 接続と第1二村射影実証・DSN-33-24 Phase I3 整合化 | Feature | New | [942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md](942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md) |
 | **943** | Case A の C99 拡張：LIR 参照 VM の検査付き C インタプリタ実行可否検証と差分診断ハーネス構築 | Feature | New | [943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md](943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md) |
 | **944** | Host / Guest 値表現の単一情報源化 (`define-value-repr` によるタグ操作・GC・プリンタの統一生成) | Feature | New | [944-unify-host-and-guest-value-representation-via-define-value-repr.md](944-unify-host-and-guest-value-representation-via-define-value-repr.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **932** | C99 コンパイラドライバ (`ulisp-cc`) のネイティブ AOT バイナリ化と高速セルフホスト実行基盤の構築 | Feature | 2026-11-25 | [932-build-native-aot-ulisp-cc-compiler-driver-binary.md](closed/932-build-native-aot-ulisp-cc-compiler-driver-binary.md) |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | 2026-11-25 | [930-implement-c99-bounds-checking-sanitizer-mode.md](closed/930-implement-c99-bounds-checking-sanitizer-mode.md) |
 | **941** | ILISP Phase 3: `--backend=py_ast` R7RS 完全対応 & CPython バイトコード高速実行 | Feature | 2026-11-24 | [941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md](closed/941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md) |
 | **940** | ILISP Phase 2: 事前コンパイルドクロージャ・静的マクロ展開およびレキシカルスロット配列 VM の実装 | Feature | 2026-11-24 | [940-implement-ilisp-precompiled-closure-and-lexical-slot-vm.md](closed/940-implement-ilisp-precompiled-closure-and-lexical-slot-vm.md) |

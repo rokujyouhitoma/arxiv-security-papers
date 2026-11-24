@@ -29,6 +29,26 @@
     ((read-u8) (port-read-u8 *stdin-port*))
     ((read-u8 p) (port-read-u8 p))))
 
+(define-syntax read-char
+  (syntax-rules ()
+    ((read-char) (port-read-char (current-input-port)))
+    ((read-char p) (port-read-char p))))
+
+(define-syntax read-string
+  (syntax-rules ()
+    ((read-string k) (port-read-string k (current-input-port)))
+    ((read-string k p) (port-read-string k p))))
+
+(define-syntax write-string
+  (syntax-rules ()
+    ((write-string s) (port-write-string s (current-output-port)))
+    ((write-string s p) (port-write-string s p))))
+
+(define-syntax flush-output-port
+  (syntax-rules ()
+    ((flush-output-port) (port-flush-output (current-output-port)))
+    ((flush-output-port p) (port-flush-output p))))
+
 (define-syntax write-u8
   (syntax-rules ()
     ((write-u8 b) (port-write-u8 b *stdout-port*))
@@ -142,6 +162,36 @@
   current-jiffy
   jiffies-per-second
   sys-getenv
+  get-environment-variable
+  get-environment-variables
+  command-line
+  sys-chmod
+  sys-fork
+  sys-execve
+  sys-wait4
+  sys-waitpid
+  process-exec
+  file-exists?
+  delete-file
+  open-input-file
+  open-output-file
+  close-input-port
+  close-output-port
+  call-with-input-file
+  call-with-output-file
+  current-input-port
+  current-output-port
+  current-error-port
+  port-read-string
+  port-write-string
+  port-flush-output
+  num-bitwise-and
+  num-bitwise-ior
+  ulisp_fn_num_bitwise_and
+  ulisp_fn_num_bitwise_ior
+  bitwise-not
+  bitwise-xor
+  arithmetic-shift
   sys-bench-passes?
   sys-clock-gettime-monotonic
   gc-current-heap-bytes
@@ -343,6 +393,39 @@
   eval-in-stage
   make-later-dict
   run-triple-differential-oracle
-  verify-residual-anf-conformance)
+  verify-residual-anf-conformance
+  %number?
+  %complex?
+  %real?
+  %rational?
+  %integer?
+  %exact?
+  %inexact?
+  %exact-integer?)
+
+(define-syntax number?
+  (syntax-rules ()
+    ((_ x) (let ((__v x)) (if (fixnum? __v) #t (%number? __v))))))
+(define-syntax complex?
+  (syntax-rules ()
+    ((_ x) (let ((__v x)) (if (fixnum? __v) #t (%complex? __v))))))
+(define-syntax real?
+  (syntax-rules ()
+    ((_ x) (let ((__v x)) (if (fixnum? __v) #t (%real? __v))))))
+(define-syntax rational?
+  (syntax-rules ()
+    ((_ x) (let ((__v x)) (if (fixnum? __v) #t (%rational? __v))))))
+(define-syntax integer?
+  (syntax-rules ()
+    ((_ x) (let ((__v x)) (if (fixnum? __v) #t (%integer? __v))))))
+(define-syntax exact?
+  (syntax-rules ()
+    ((_ x) (let ((__v x)) (if (fixnum? __v) #t (%exact? __v))))))
+(define-syntax inexact?
+  (syntax-rules ()
+    ((_ x) (let ((__v x)) (if (fixnum? __v) #f (%inexact? __v))))))
+(define-syntax exact-integer?
+  (syntax-rules ()
+    ((_ x) (let ((__v x)) (if (fixnum? __v) #t (%exact-integer? __v))))))
 
 

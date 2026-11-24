@@ -886,13 +886,6 @@
                (%c-drv-write-bytes-file! out-path obj-bv)
                out-path)))))))
 
-(cond-expand
-  (gauche
-   (define (process-exec argv)
-     (let ((p (run-process argv :wait #t)))
-       (sys-wait-exit-status (process-exit-status p)))))
-  (else))
-
 (define (%c-drv-find-host-cc)
   (let ((env-cc (get-environment-variable "CC")))
     (cond
@@ -921,12 +914,13 @@
 
 (define (%c-drv-make-executable! path)
   (c99-assert-safe-arg! path "-o")
-  (if (not (sys-chmod path 493))
-      (let ((rc (process-exec (list "chmod" "755" path))))
-        (if (not (= rc 0))
-            (%c-drv-error! "C99-DRV-003"
-                           (string-append "Failed to set executable permissions on " path)
-                           path))))
+  (let ((r (sys-chmod path 493)))
+    (if (or (not r) (and (number? r) (< r 0)))
+        (let ((rc (process-exec (list "chmod" "755" path))))
+          (if (not (= rc 0))
+              (%c-drv-error! "C99-DRV-003"
+                             (string-append "Failed to set executable permissions on " path)
+                             path)))))
   #t)
 
 (define (c-link-objects obj-files out-file opts)

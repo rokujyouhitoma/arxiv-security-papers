@@ -23,6 +23,7 @@
 (include "lib/exception.scm")
 (include "lib/values.scm")
 (include "lib/bignum.scm")
+(include "lib/bitwise.scm")
 (include "lib/ieee754.scm")
 (include "lib/continuation.scm")
 (include "lib/parameter.scm")
