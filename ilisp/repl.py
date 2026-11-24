@@ -30,8 +30,17 @@ def run_string(
 
     if backend == "py_ast":
         from ilisp.backend.py_codegen.compiler import compile_ilisp
+        from ilisp.env import set_interaction_environment
 
-        return compile_ilisp(code, env=env, filename=filename)
+        set_interaction_environment(env.root)
+        res = compile_ilisp(code, env=env, filename=filename)
+        try:
+            from ilisp.port import get_current_output_port
+
+            get_current_output_port().flush()
+        except Exception:
+            pass
+        return res
 
     if backend in {"native", "ulisp"}:
         import tempfile

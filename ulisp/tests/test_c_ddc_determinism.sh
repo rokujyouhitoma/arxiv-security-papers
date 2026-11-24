@@ -58,7 +58,8 @@ if ! command -v gosh >/dev/null 2>&1; then
 fi
 GOSH_BIN="$(command -v gosh)"
 RUN_GOSH=("$GOSH_BIN" -usrfi.9 -ugauche.uvector -ugauche.process -uscheme.file -uscheme.bitwise -uscheme.process-context -I "$ULISP_DIR" -I "$ROOT_DIR" "$ULISP_DIR/build/c_driver_runner.scm" --)
-RUN_ILISP=("$PYTHON_BIN" -m ilisp "$ULISP_DIR/build/c_driver_runner.scm" --)
+ILISP_BACKEND="${ILISP_BACKEND:-interp}"
+RUN_ILISP=("$PYTHON_BIN" -m ilisp --backend="$ILISP_BACKEND" "$ULISP_DIR/build/c_driver_runner.scm" --)
 
 MUSL_DIR="$ULISP_DIR/build/third_party/musl-1.2.5"
 MUSL_BUILD_DIR="$ULISP_DIR/build/musl_build/obj"
@@ -192,7 +193,7 @@ cat >> "$ILISP_BATCH_SCM" << EOF
                    "-o" "$DDC_TMP/t1_out_ilisp/ddc_app_static"))
   (exit 0))
 EOF
-"$PYTHON_BIN" -m ilisp "$ILISP_BATCH_SCM"
+"$PYTHON_BIN" -m ilisp --backend="$ILISP_BACKEND" "$ILISP_BATCH_SCM"
 
 assert_sha256_equal "Tier 1 .sbi PCH (gosh vs ilisp)" "$DDC_TMP/t1_out_gosh/common.h.sbi" "$DDC_TMP/t1_out_ilisp/common.h.sbi"
 assert_sha256_equal "Tier 1 mod_a.o (gosh vs ilisp)" "$DDC_TMP/t1_out_gosh/mod_a.o" "$DDC_TMP/t1_out_ilisp/mod_a.o"
