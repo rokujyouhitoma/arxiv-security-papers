@@ -168,14 +168,16 @@
 (let* ((ast '(%synapse-safepoint-poll!))
        (lir (generate-lir (closure-convert (anf-all (cp0-optimize (desugar-all ast)))))))
   ;; Phase 1: zero-arg primitive selection must never be a silent NOP
-  (assert-true "safepoint poll lowers to %memory-fence in LIR"
-               (test-aarch64-tree-contains? lir '(%memory-fence)))
+  (assert-true "safepoint poll lowers to %safepoint-poll in LIR"
+               (test-aarch64-tree-contains? lir '(%safepoint-poll)))
   (assert-true "safepoint poll yields #t (111) in LIR"
                (test-aarch64-tree-contains? lir '(%mov %rax 111)))
   ;; Phase 2: runtime unlinked -> weak stubs emitted exactly once
   (let ((lines (test-aarch64-capture lir)))
-    (assert-true "emitted asm contains dmb ish fence for safepoint poll"
-                 (test-aarch64-lines-contain? lines "dmb ish"))
+    (assert-true "emitted asm contains ldarb safepoint flag poll"
+                 (test-aarch64-lines-contain? lines "ldarb"))
+    (assert-true "emitted asm references ulisp_safepoint_flag"
+                 (test-aarch64-lines-contain? lines "ulisp_safepoint_flag"))
     (assert-equal "weak fn stub label emitted exactly once" 1
                   (test-aarch64-count-lines lines "ulisp_fn__pctsynapse_safepoint_poll_excl:"))
     (assert-true "fn stub marked .weak"

@@ -181,6 +181,7 @@
     (%syscall)
     (%syscall si)
     (%memory-fence)
+    (%safepoint-poll)
     (%atomic-cas! reg1 reg2 reg3)
     (%inline-asm str asm_clause ...))
   (StringEntry (se)
@@ -415,6 +416,7 @@
     (%syscall)
     (%syscall si)
     (%memory-fence)
+    (%safepoint-poll)
     (%atomic-cas! reg1 reg2 reg3)
     (%inline-asm str asm_clause ...)
 

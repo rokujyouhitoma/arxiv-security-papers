@@ -1154,6 +1154,9 @@
           ((%block)
            #t) ; Block params assigned on jump
 
+          ((%safepoint-poll %memory-fence)
+           #t) ; Safepoint poll / fence no-op in interpreter stepping
+
           ;; --- Data Movement & Memory ---
           ((%mov)
            (let ((dst (cadr inst))

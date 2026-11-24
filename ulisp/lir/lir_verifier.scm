@@ -20,7 +20,6 @@
     %managed-alloc
     %managed-alloc-stack
     %managed-safepoint-poll
-    %safepoint-poll
     %managed-write-barrier
     %managed-box
     %managed-unbox
@@ -613,7 +612,7 @@
              (else
               (lir-report-error "%shr format must be (%shr <opnd> <count>) or (%shr <dst-reg> <src-opnd> <count>)" inst))))
 
-          ((%cqo %raise %memory-fence)
+          ((%cqo %raise %memory-fence %safepoint-poll)
            (if (= (length inst) 1)
                #t
                (lir-report-error (string-append (symbol->string op) " takes zero operands") inst)))

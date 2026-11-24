@@ -2789,7 +2789,7 @@
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
   (case op
-    ((read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-symtab-bounds %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
+    ((read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-safepoint-flag-ptr %get-environ-ptr %get-symtab-bounds %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
      #t)
     (else #f)))
 
@@ -6670,7 +6670,7 @@
   (and (pair? inst)
        (or (case (car inst)
              ((%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer
-               %syscall %memory-fence %managed-safepoint-poll %push %pop %raise
+               %syscall %memory-fence %managed-safepoint-poll %safepoint-poll %push %pop %raise
                %capture-cc %push-handler %pop-handler
                %store-values-buf)
               #t)
@@ -11953,7 +11953,7 @@
     power-assert-report dump-lir-unbound-variable-diagnostic
     %raw-load %raw-load-u8 %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
     %ptr-add %ptr-tag %ptr-untag %ptr-tag-add %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-symtab-bounds %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap
+    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-safepoint-flag-ptr %get-environ-ptr %get-symtab-bounds %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap
     %memory-fence %atomic-cas!))
 
 (define (scope-primitive-symbol? sym)
@@ -24374,7 +24374,7 @@
      (type-boolean))
     ((memq op '(make-string string-ref))
      (if (eq? op 'make-string) (type-string) (type-char)))
-    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %get-environ-ptr %get-symtab-bounds %get-initial-heap-ptr %get-initial-heap sys-initial-heap %raw-load %raw-load-u8 %ptr-add %ptr-tag-add))
+    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %get-safepoint-flag-ptr %get-environ-ptr %get-symtab-bounds %get-initial-heap-ptr %get-initial-heap sys-initial-heap %raw-load %raw-load-u8 %ptr-add %ptr-tag-add))
      (type-fixnum))
     (else (type-top))))
 
@@ -25736,6 +25736,9 @@
               (check-direct-call-arity op (length (cdr expr)) expr))
           (let ((known-entry (and (symbol? op) (assq op var-map))))
             (cond
+              ;; 0. Compiler / LIR primitive in operator position always lowers as primitive
+              ((and (symbol? op) (lir-primitive? op))
+               (cons op (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
               ;; 1. Local known function via var-map (%known-fn label)
               ((and known-entry (pair? (cdr known-entry)) (eq? (cadr known-entry) '%known-fn))
                (let ((label (caddr known-entry))
@@ -26564,6 +26567,7 @@
     (%syscall)
     (%syscall si)
     (%memory-fence)
+    (%safepoint-poll)
     (%atomic-cas! reg1 reg2 reg3)
     (%inline-asm str asm_clause ...))
   (StringEntry (se)
@@ -26798,6 +26802,7 @@
     (%syscall)
     (%syscall si)
     (%memory-fence)
+    (%safepoint-poll)
     (%atomic-cas! reg1 reg2 reg3)
     (%inline-asm str asm_clause ...)
 
@@ -26873,7 +26878,6 @@
     %managed-alloc
     %managed-alloc-stack
     %managed-safepoint-poll
-    %safepoint-poll
     %managed-write-barrier
     %managed-box
     %managed-unbox
@@ -27466,7 +27470,7 @@
              (else
               (lir-report-error "%shr format must be (%shr <opnd> <count>) or (%shr <dst-reg> <src-opnd> <count>)" inst))))
 
-          ((%cqo %raise %memory-fence)
+          ((%cqo %raise %memory-fence %safepoint-poll)
            (if (= (length inst) 1)
                #t
                (lir-report-error (string-append (symbol->string op) " takes zero operands") inst)))
@@ -29542,6 +29546,11 @@
           (loop (cdr es) (cons (car es) prologue))))))
     (else #f)))
 
+(define (lir-safepoint-poll-form? e)
+  (and (pair? e)
+       (null? (cdr e))
+       (memq (car e) '(%synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!))))
+
 (define (lir-compile-let bindings body si env tail?)
   (let ((term-info (terminal-cont-call-info body bindings env)))
     (cond
@@ -29552,7 +29561,13 @@
               (f-name (cadr term-info))
               (target-info (caddr term-info))
               (exprs (map cadr bindings)))
-         (for-each (lambda (p) (lir-compile-expr p si env #f)) prologue)
+         (for-each (lambda (p)
+                     (if (lir-safepoint-poll-form? p)
+                         (begin
+                           (track-lir-si! si)
+                           (emit-lir! '(%safepoint-poll)))
+                         (lir-compile-expr p si env #f)))
+                   prologue)
          (lir-compile-in-place-cont-call f-name exprs target-info si env)))
 
     ;; Flag / Branch Fusion on ANF: (let ((var (cmp-or-pred-expr ...))) (if var then-e else-e))
@@ -29717,7 +29732,11 @@
         (if (null? (cdr es))
             (lir-compile-expr (car es) si env tail?)
             (begin
-              (lir-compile-expr (car es) si env #f)
+              (if (lir-safepoint-poll-form? (car es))
+                  (begin
+                    (track-lir-si! si)
+                    (emit-lir! '(%safepoint-poll)))
+                  (lir-compile-expr (car es) si env #f))
               (loop (cdr es)))))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 127: LIR Runtime & Advanced Features Pass
@@ -30543,6 +30562,8 @@
        (emit-lir! '(%mov %rax %r12)))
       ((%get-gc-state-ptr)
        (emit-lir! (list '%code-ref '%rax "ulisp_gc_state")))
+      ((%get-safepoint-flag-ptr)
+       (emit-lir! (list '%code-ref '%rax "ulisp_safepoint_flag")))
       ((%get-environ-ptr)
        (emit-lir! (list '%code-ref '%rax "ulisp_environ")))
       ((%get-symtab-bounds)
@@ -30564,7 +30585,8 @@
       ((flush-output-port ulisp-flush)
        (emit-lir! (list '%c-call "ulisp_flush" frame-shift)))
       ((%synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
-       (emit-lir! '(%memory-fence))
+       (track-lir-si! si)
+       (emit-lir! '(%safepoint-poll))
        (emit-lir! (list '%mov '%rax (repr-encode-void))))
       ((%memory-fence)
        (emit-lir! '(%memory-fence))
@@ -31852,7 +31874,6 @@
     %managed-alloc
     %managed-alloc-stack
     %managed-safepoint-poll
-    %safepoint-poll
     %managed-write-barrier
     %managed-box
     %managed-unbox
@@ -31904,7 +31925,7 @@
 
           ;; 3. Safepoint Polling: (%managed-safepoint-poll) / (%safepoint-poll)
           ((%managed-safepoint-poll %safepoint-poll)
-           (list '(%memory-fence)))
+           (list '(%safepoint-poll)))
 
           ;; 4. Write Barrier: (%managed-write-barrier obj offset val)
           ((%managed-write-barrier)
@@ -36008,6 +36029,19 @@
       ((%memory-fence)
        (list (list '%raw-asm "    mfence")))
 
+      ((%safepoint-poll)
+       (let* ((done-lbl (unique-label "L_sp_done"))
+              (raw-fs (car *inline-asm-frame-size*))
+              (needed (if (> raw-fs 0) (+ raw-fs 8) 16))
+              (rem (modulo needed 16))
+              (shift (if (= rem 0) needed (+ needed (- 16 rem)))))
+         (list (list '%raw-asm "    cmp byte ptr [rip + ulisp_safepoint_flag], 0")
+               (list '%raw-asm (string-append "    je " done-lbl))
+               (list '%raw-asm (string-append "    sub rsp, " (number->string shift)))
+               (list '%raw-asm "    call ulisp_safepoint_slow_trampoline")
+               (list '%raw-asm (string-append "    add rsp, " (number->string shift)))
+               (list '%label (string->symbol done-lbl)))))
+
       ((%atomic-cas!)
        (let ((dst (cadr inst))
              (box (caddr inst))
@@ -37728,7 +37762,9 @@
 (define (emit-x86-function fn)
   (let* ((label (cadr fn))
          (label-str (asm-label->str label))
+         (frame-size-entry (assq 'frame-size (cddr fn)))
          (body (cdr (assq 'body (cddr fn)))))
+    (set-car! *inline-asm-frame-size* (if frame-size-entry (cadr frame-size-entry) 0))
     (scan-x86-blocks! body)
     (emit "    .p2align 4")
     (emit (string-append label-str ":"))
@@ -38666,6 +38702,11 @@
     (emit "    .weak ulisp_values_buf")
     (emit "ulisp_values_buf:")
     (emit "    .zero 512")
+    (emit "    .align 8")
+    (emit "    .globl ulisp_safepoint_flag")
+    (emit "    .weak ulisp_safepoint_flag")
+    (emit "ulisp_safepoint_flag:")
+    (emit "    .quad 0")
     (let loop ((gvs (car *top-level-vars*)))
       (if (pair? gvs)
           (let ((v (car gvs)))
@@ -38790,6 +38831,38 @@
     (emit "    mov rax, 47")
     (emit "    mov rdx, 111")
     (emit "    cmovne rax, rdx")
+    (emit "    ret")
+    (emit "")
+    ;; Safepoint Slow-Path Trampoline (preserves all caller-saved GP regs & passes 0-arg ABI)
+    (emit "    .globl ulisp_safepoint_slow_trampoline")
+    (emit "    .weak ulisp_safepoint_slow_trampoline")
+    (emit "    .type ulisp_safepoint_slow_trampoline, @function")
+    (emit "    .p2align 4")
+    (emit "ulisp_safepoint_slow_trampoline:")
+    (emit "    sub rsp, 80")
+    (emit "    mov [rsp + 0], rax")
+    (emit "    mov [rsp + 8], rcx")
+    (emit "    mov [rsp + 16], rdx")
+    (emit "    mov [rsp + 24], rsi")
+    (emit "    mov [rsp + 32], rdi")
+    (emit "    mov [rsp + 40], r8")
+    (emit "    mov [rsp + 48], r9")
+    (emit "    mov [rsp + 56], r10")
+    (emit "    mov [rsp + 64], r11")
+    (emit "    mov qword ptr [rsp + 72], 0")
+    (emit "    xor eax, eax")
+    (emit "    xor r10d, r10d")
+    (emit "    call ulisp_fn__pctsynapse_safepoint_poll_excl")
+    (emit "    mov rax, [rsp + 0]")
+    (emit "    mov rcx, [rsp + 8]")
+    (emit "    mov rdx, [rsp + 16]")
+    (emit "    mov rsi, [rsp + 24]")
+    (emit "    mov rdi, [rsp + 32]")
+    (emit "    mov r8,  [rsp + 40]")
+    (emit "    mov r9,  [rsp + 48]")
+    (emit "    mov r10, [rsp + 56]")
+    (emit "    mov r11, [rsp + 64]")
+    (emit "    add rsp, 80")
     (emit "    ret")
     (emit "")
     ;; Default Weak Stubs for Synapse Safepoint Poll (No-op when concurrency runtime is unlinked)
@@ -46493,6 +46566,8 @@
          (rem (modulo raw 16)))
     (if (= rem 0) raw (+ raw (- 16 rem)))))
 
+(define *arm-current-frame-size* (cons 64 '()))
+
 ;;; Block Arguments tracking and parallel copy for SSA LIR (AArch64)
 (define *arm-block-params* (cons '() '()))
 
@@ -46705,6 +46780,31 @@
 
       ((%memory-fence)
        (emit "    dmb ish"))
+
+      ((%safepoint-poll)
+       (let* ((done-lbl (unique-label "L_sp_done"))
+              (raw-fs (car *arm-current-frame-size*))
+              (total-shift (arm-align-frame-shift (if (> raw-fs 0) (+ raw-fs 16) 64))))
+         (emit "    adrp x9, ulisp_safepoint_flag")
+         (emit "    add x9, x9, :lo12:ulisp_safepoint_flag")
+         (emit "    ldarb w9, [x9]")
+         (emit (string-append "    cbz w9, " done-lbl))
+         (arm-emit-sub-sp (+ total-shift 80))
+         (emit "    stp x0, x1, [sp, #0]")
+         (emit "    stp x2, x3, [sp, #16]")
+         (emit "    stp x4, x5, [sp, #32]")
+         (emit "    stp x6, x7, [sp, #48]")
+         (emit "    stp x10, x30, [sp, #64]")
+         (emit "    mov x7, #0")
+         (emit "    mov x10, #0")
+         (emit "    bl ulisp_fn__pctsynapse_safepoint_poll_excl")
+         (emit "    ldp x0, x1, [sp, #0]")
+         (emit "    ldp x2, x3, [sp, #16]")
+         (emit "    ldp x4, x5, [sp, #32]")
+         (emit "    ldp x6, x7, [sp, #48]")
+         (emit "    ldp x10, x30, [sp, #64]")
+         (arm-emit-add-sp (+ total-shift 80))
+         (emit (string-append done-lbl ":"))))
 
       ((%syscall)
        (if (pair? (cdr inst))
@@ -47610,7 +47710,9 @@
 (define (emit-arm-function fn)
   (let* ((label (cadr fn))
          (label-str (if (symbol? label) (symbol->string label) label))
+         (frame-size-entry (assq 'frame-size (cddr fn)))
          (body (cdr (assq 'body (cddr fn)))))
+    (set-car! *arm-current-frame-size* (if frame-size-entry (cadr frame-size-entry) 64))
     (scan-arm-blocks! body)
     (emit "    .p2align 4")
     (emit (string-append "    .globl " label-str))
@@ -47721,6 +47823,9 @@
                 (emit "    cbz x9, 2f")
                 (emit "    blr x9")
                 (emit "2:")))))
+    (set-car! *arm-current-frame-size*
+              (let ((fs (assq 'frame-size (cdr main-clause))))
+                (if fs (cadr fs) 64)))
     (scan-arm-blocks! main-body)
     (emit-arm-body main-body #t)
     (if (module-mode?)
@@ -47948,6 +48053,11 @@
           (emit "ulisp_gvar__pctsynapse_safepoint_poll_excl:")
           (emit "    .xword ulisp_fn__pctsynapse_safepoint_poll_excl")))
     (emit "    .bss")
+    (emit "    .align 3")
+    (emit "    .globl ulisp_safepoint_flag")
+    (emit "    .weak ulisp_safepoint_flag")
+    (emit "ulisp_safepoint_flag:")
+    (emit "    .xword 0")
     (emit "    .align 3")
     (emit "    .globl ulisp_stack_base")
     (emit "    .weak ulisp_stack_base")
@@ -48877,6 +48987,9 @@
 
       ((%memory-fence)
        (emit "    __sync_synchronize();"))
+
+      ((%safepoint-poll)
+       (emit "    if (__atomic_load_n(&ulisp_safepoint_flag, __ATOMIC_ACQUIRE)) { ulisp_safepoint_slow_path(); }"))
 
       ((%syscall)
        (if (pair? (cdr inst))
@@ -49872,6 +49985,8 @@
     (emit "static uint64_t ulisp_argv[1] ULISP_UNUSED = {0};")
     (emit "static uint64_t ulisp_environ[3] ULISP_UNUSED = {0, 0, 0};")
     (emit "static uint64_t ulisp_symtab_bounds[2] ULISP_UNUSED = {0, 0};")
+    (emit "static volatile uint8_t ulisp_safepoint_flag ULISP_UNUSED = 0;")
+    (emit "static void ulisp_safepoint_slow_path(void) ULISP_UNUSED {}")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     (if (eq? gc-mode 'stress)

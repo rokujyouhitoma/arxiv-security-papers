@@ -55,11 +55,22 @@
   (let ((idx (%current-worker-tls-index)))
     (vector-ref *worker-current-task-tls* idx)))
 
+(define (%any-synapse-task-active?)
+  (declare (no-safepoints))
+  (let loop ((i 0))
+    (cond
+      ((>= i 64) #f)
+      ((vector-ref *worker-current-task-tls* i) #t)
+      (else (loop (+ i 1))))))
+
 (define (%set-current-synapse-task! task)
+  (declare (no-safepoints))
   (let* ((idx (%current-worker-tls-index))
          (old (vector-ref *worker-current-task-tls* idx)))
     (vector-set! *worker-current-task-tls* idx task)
     (atomic-set! *active-current-task-box* task)
+    (%raw-store! (%get-safepoint-flag-ptr) 0
+                 (%to-raw (if (or task (%any-synapse-task-active?)) 1 0)))
     old))
 
 ;; Optional callback `(lambda (task) ...)` invoked when a suspended task

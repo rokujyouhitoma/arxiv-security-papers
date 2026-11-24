@@ -5,7 +5,7 @@
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
   (case op
-    ((read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-symtab-bounds %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
+    ((read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-safepoint-flag-ptr %get-environ-ptr %get-symtab-bounds %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
      #t)
     (else #f)))
 

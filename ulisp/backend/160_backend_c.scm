@@ -828,6 +828,9 @@
       ((%memory-fence)
        (emit "    __sync_synchronize();"))
 
+      ((%safepoint-poll)
+       (emit "    if (__atomic_load_n(&ulisp_safepoint_flag, __ATOMIC_ACQUIRE)) { ulisp_safepoint_slow_path(); }"))
+
       ((%syscall)
        (if (pair? (cdr inst))
            (let ((si (cadr inst)))
@@ -1822,6 +1825,8 @@
     (emit "static uint64_t ulisp_argv[1] ULISP_UNUSED = {0};")
     (emit "static uint64_t ulisp_environ[3] ULISP_UNUSED = {0, 0, 0};")
     (emit "static uint64_t ulisp_symtab_bounds[2] ULISP_UNUSED = {0, 0};")
+    (emit "static volatile uint8_t ulisp_safepoint_flag ULISP_UNUSED = 0;")
+    (emit "static void ulisp_safepoint_slow_path(void) ULISP_UNUSED {}")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     (if (eq? gc-mode 'stress)
