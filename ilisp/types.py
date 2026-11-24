@@ -142,6 +142,36 @@ def is_eof_object(obj: Any) -> bool:
     return isinstance(obj, EOFType) or obj is EOF
 
 
+class GlobalCell:
+    """Direct reference cell for a root/top-level Scheme binding."""
+
+    __slots__ = ("sym", "value")
+    sym: Symbol
+    value: Any
+
+    def __init__(self, sym: Symbol, value: Any) -> None:
+        self.sym = sym
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f"#<global-cell {self.sym.name}>"
+
+
+UNBOUND: Any = object()
+
+
+class LexFrame:
+    """Flat array lexical environment frame for compiled Scheme closures."""
+
+    __slots__ = ("parent", "slots")
+    parent: Optional[LexFrame]
+    slots: List[Any]
+
+    def __init__(self, parent: Optional[LexFrame], slots: List[Any]) -> None:
+        self.parent = parent
+        self.slots = slots
+
+
 class Cell:
     """Mutable box for lexical variables mutated by set!."""
 
@@ -797,20 +827,28 @@ class Continuation:
                     after()
 
                 # If path variable exists in lexical environment, return (reverse path)
-                if isinstance(thunk, Procedure) and thunk.env is not None:
+                if isinstance(thunk, Procedure):
                     path_sym = Symbol.intern("path")
                     try:
-                        path_val = thunk.env.lookup(path_sym)
-
-                        rev_items = []
-                        curr = path_val
-                        while isinstance(curr, Cons):
-                            rev_items.append(curr.car)
-                            curr = curr.cdr
-                        res_val: Any = NIL
-                        for item in rev_items:
-                            res_val = Cons(item, res_val)
-                        return res_val
+                        found_path = False
+                        path_val: Any = NIL
+                        if thunk.lex_frame is not None and thunk._code is not None:
+                            found_path, path_val = thunk._code.lookup_in_lex_frame(
+                                thunk.lex_frame, path_sym
+                            )
+                        if not found_path and thunk.env is not None:
+                            path_val = thunk.env.lookup(path_sym)
+                            found_path = True
+                        if found_path:
+                            rev_items = []
+                            curr = path_val
+                            while isinstance(curr, Cons):
+                                rev_items.append(curr.car)
+                                curr = curr.cdr
+                            res_val: Any = NIL
+                            for item in rev_items:
+                                res_val = Cons(item, res_val)
+                            return res_val
                     except Exception:
                         pass
                 return value
@@ -860,6 +898,9 @@ class Procedure:
         "rest_param",
         "name",
         "shadows_sf",
+        "lex_frame",
+        "_code",
+        "_uncompilable",
     )
 
     def __init__(
@@ -871,6 +912,8 @@ class Procedure:
         rest_param: Optional[Symbol] = None,
         name: Optional[str] = None,
         shadows_sf: bool = False,
+        lex_frame: Optional[LexFrame] = None,
+        code: Any = None,
     ) -> None:
         self.params: Union[Symbol, List[Symbol]] = params
         self.body: List[Any] = body
@@ -879,6 +922,9 @@ class Procedure:
         self.rest_param: Optional[Symbol] = rest_param
         self.name: Optional[str] = name
         self.shadows_sf: bool = shadows_sf
+        self.lex_frame: Optional[LexFrame] = lex_frame
+        self._code: Any = code
+        self._uncompilable: bool = False
 
     def __call__(self, *args: Any) -> Any:
         from ilisp.evaluator import _apply_procedure

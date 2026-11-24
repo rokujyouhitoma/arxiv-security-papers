@@ -33,7 +33,7 @@ ID: 941
 
 - **関連 Issue**:
   - [#939](closed/939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md)（Phase 1: 特殊形式ネイティブ化および高速リーダー）
-  - [#940](940-implement-ilisp-precompiled-closure-and-lexical-slot-vm.md)（Phase 2: 事前コンパイルドクロージャ＋レキシカルスロット VM）
+  - [#940](closed/940-implement-ilisp-precompiled-closure-and-lexical-slot-vm.md)（Phase 2: 事前コンパイルドクロージャ＋レキシカルスロット VM）
   - [#929](closed/929-implement-ddc-diverse-double-compiling-determinism-verification.md)（DDC 検証での `ilisp` 高速実行基盤）
 - **対象コンポーネント**:
   - [compiler.py](../../ilisp/backend/py_codegen/compiler.py), [repl.py](../../ilisp/repl.py), [env.py](../../ilisp/env.py), [types.py](../../ilisp/types.py)

@@ -11,6 +11,7 @@ import importlib
 from fractions import Fraction
 from typing import Any, Callable, List, Optional, Tuple
 
+from ilisp.compiler_ir import call_compiled_procedure
 from ilisp.env import (
     _SENTINEL,
     _SHADOW_TRACKED_SYMBOLS,
@@ -1709,6 +1710,9 @@ def eval_expr(expr: Any, env: Environment, step_hook: Optional[StepHook] = None)
                     if not is_null(curr_arg):
                         raise TypeError(f"Improper argument list: {curr_expr.cdr!r}")
 
+                if Environment._mutation_hook is None:
+                    return call_compiled_procedure(fn, eval_args)
+
                 call_env = _bind_procedure_call(fn, eval_args)
                 body = fn.body
                 if not body:
@@ -1804,6 +1808,12 @@ def _bind_procedure_call(proc: Procedure, args: List[Any]) -> Environment:
     """Create local call environment binding procedure parameters to arguments."""
     params = proc.params
     p_env: Environment = proc.env
+    if proc.lex_frame is not None and proc._code is not None:
+        psnap = proc._code.parent_visible
+        if psnap:
+            from ilisp.compiler_ir import _materialize_bridge_env
+
+            p_env, _ = _materialize_bridge_env(proc._code, proc.lex_frame, psnap)
     shadows = p_env._has_shadowed_sf or proc.shadows_sf
     if isinstance(params, Symbol):
         new_bindings = {params: to_lisp_list(args)}
@@ -1837,13 +1847,20 @@ def _bind_procedure_call(proc: Procedure, args: List[Any]) -> Environment:
     return Environment(parent=p_env, bindings=new_bindings, has_shadowed_sf=shadows)
 
 
-def _apply_procedure(proc: Procedure, args: List[Any]) -> Any:
-    """Directly evaluate a procedure or macro body, returning the result."""
+def _apply_procedure_treewalk(proc: Procedure, args: List[Any]) -> Any:
+    """Directly evaluate a procedure or macro body via tree-walk evaluator."""
     call_env = _bind_procedure_call(proc, args)
     result: Any = NIL
     for expr in proc.body:
         result = eval_expr(expr, call_env)
     return result
+
+
+def _apply_procedure(proc: Procedure, args: List[Any]) -> Any:
+    """Invoke a procedure or macro using VM if compiled or tree-walk fallback."""
+    if not proc.is_macro and Environment._mutation_hook is None:
+        return call_compiled_procedure(proc, args)
+    return _apply_procedure_treewalk(proc, args)
 
 
 def eval_quasiquote(template: Any, env: Environment, depth: int = 1) -> Any:
