@@ -70,16 +70,31 @@
   (assert-true "get-all-symbols contains car" (pair? (assq 'car syms)))
   (assert-true "get-all-symbols contains error-object" (pair? (assq 'error-object syms))))
 
-;; 7. Issue #933: Intraprocedural %label / %block .p2align 4 suppression in c-tu mode
+;; 7. Issue #933 & #954: Intraprocedural %label / %block .p2align 4 restricted to loop headers in managed mode (and omitted in c-tu)
 (let ((saved-mode (car *backend-gc-mode*)))
   (set-car! *backend-gc-mode* 'managed)
-  (assert-equal "managed mode %label emits %p2align 4"
-                '((%p2align 4) (%label .L_test_managed))
+  (assert-equal "managed mode non-loop %label omits %p2align 4 (#954)"
+                '((%label .L_test_managed))
                 (lower-lir-instruction '(%label .L_test_managed)))
+  (assert-equal "managed mode .add_slow %label omits %p2align 4 (#954)"
+                '((%label .add_slow_1))
+                (lower-lir-instruction '(%label .add_slow_1)))
+  (assert-equal "managed mode .L_else %block omits %p2align 4 (#954)"
+                '((%label .L_else_1) (mov rax (%imm 7)))
+                (lower-lir-instruction '(%block .L_else_1 () (%mov %rax 7))))
+  (assert-equal "managed mode loop-head %label keeps %p2align 4 (#954)"
+                '((%p2align 4) (%label .L_loop_head_fn_1))
+                (lower-lir-instruction '(%label .L_loop_head_fn_1)))
+  (assert-equal "managed mode cont-entry %block keeps %p2align 4 (#954)"
+                '((%p2align 4) (%label .L_cont_entry_1) (mov rax (%imm 7)))
+                (lower-lir-instruction '(%block .L_cont_entry_1 () (%mov %rax 7))))
   (set-car! *backend-gc-mode* 'c-tu)
   (assert-equal "c-tu mode %label omits %p2align 4"
                 '((%label .L_test_ctu))
                 (lower-lir-instruction '(%label .L_test_ctu)))
+  (assert-equal "c-tu mode loop-head %label also omits %p2align 4"
+                '((%label .L_loop_head_ctu_1))
+                (lower-lir-instruction '(%label .L_loop_head_ctu_1)))
   (assert-equal "c-tu mode %block omits %p2align 4"
                 '((%label .L_blk_ctu) (mov rax (%imm 7)))
                 (lower-lir-instruction '(%block .L_blk_ctu () (%mov %rax 7))))
