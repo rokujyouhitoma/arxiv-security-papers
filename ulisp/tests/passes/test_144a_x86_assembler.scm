@@ -176,4 +176,42 @@
         (newline)
         (exit 1))))
 
+;; Test 7: Issue #955 - jo / jno short (70/71 rel8) and near (0F 80/81 rel32) encoding
+(let* ((lines '("    .intel_syntax noprefix"
+                "    .text"
+                ".L_back:"
+                "    jo .L_fwd"
+                "    jno .L_fwd"
+                "    jo .L_back"
+                "    jno .L_back"
+                ".L_fwd:"
+                "    ret"))
+       (res (assemble-x86-lines lines))
+       (text-bv (car res))
+       (tlen (bytevector-length text-bv)))
+  ;; forward jo rel32  : 0F 80 + 4 bytes (len 6, target offset 16 -> rel32 = 10)
+  ;; forward jno rel32 : 0F 81 + 4 bytes (len 6, target offset 16 -> rel32 = 4)
+  ;; backward jo rel8  : 70 F2 (len 2, disp8 = 0 - 14 = -14 = 0xF2 = 242)
+  ;; backward jno rel8 : 71 F0 (len 2, disp8 = 0 - 16 = -16 = 0xF0 = 240)
+  ;; ret               : C3 (len 1)
+  ;; Total: 17 bytes
+  (if (and (= tlen 17)
+           (= (bytevector-u8-ref text-bv 0) 15)   ;; 0x0F
+           (= (bytevector-u8-ref text-bv 1) 128)  ;; 0x80 (jo rel32)
+           (= (bytevector-u8-ref text-bv 2) 10)   ;; rel32 = 10
+           (= (bytevector-u8-ref text-bv 6) 15)   ;; 0x0F
+           (= (bytevector-u8-ref text-bv 7) 129)  ;; 0x81 (jno rel32)
+           (= (bytevector-u8-ref text-bv 8) 4)    ;; rel32 = 4
+           (= (bytevector-u8-ref text-bv 12) 112) ;; 0x70 (jo rel8)
+           (= (bytevector-u8-ref text-bv 13) 242) ;; 0xF2 (-14)
+           (= (bytevector-u8-ref text-bv 14) 113) ;; 0x71 (jno rel8)
+           (= (bytevector-u8-ref text-bv 15) 240) ;; 0xF0 (-16)
+           (= (bytevector-u8-ref text-bv 16) 195));; 0xC3 (ret)
+      (display "[PASS] Test 7: jo/jno short (70/71) and near (0F 80/81) encoding verified (#955)\n")
+      (begin
+        (display "[FAIL] Test 7: unexpected jo/jno encoding length/bytes: ")
+        (display tlen)
+        (newline)
+        (exit 1))))
+
 

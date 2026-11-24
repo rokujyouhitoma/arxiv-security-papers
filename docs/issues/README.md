@@ -15,7 +15,6 @@
 | **948** | Direct-Style 静的 `.scm` PEG パーサージェネレータバックエンド (`emit_scheme.scm`) の実装と `peg_meta.peg` ソース自己ホスト不動点実証 | Feature | New | [948-implement-direct-style-static-scheme-peg-parser-generator-backend.md](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) |
 | **949** | `tools/grammars/c99.peg` の静的 `.scm` パーサー生成移行 (`generated_c99_parser.scm`) と C99 フック統合・CPS 全廃 | Feature | New | [949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md](949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) |
 | **950** | Direct-Style PEG インタプリタ × `mix`（第1二村射影）による小規模文法自動段階化と `emit_scheme.scm` 生成パーサーとの双対検証 | Feature | New | [950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md](950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md) |
-| **955** | 算術 fast path の短縮：オーバーフロー分岐の `jo` 融合と定数オペランドのタグ検査畳み込み | Feature | New | [955-fuse-overflow-branch-to-jo-and-fold-constant-tag-checks.md](955-fuse-overflow-branch-to-jo-and-fold-constant-tag-checks.md) |
 | **956** | 並行処理ビルド向け safepoint の `mfence` 単体展開を実フラグ poll（`cmp` + `jne slow`）へ置換 | Feature | New | [956-replace-safepoint-mfence-with-real-flag-poll-for-concurrent-builds.md](956-replace-safepoint-mfence-with-real-flag-poll-for-concurrent-builds.md) |
 | **957** | 算術・比較 slow path のインライン展開廃止と共有スタブ化 | Feature | New | [957-share-arithmetic-and-compare-slow-path-stubs.md](957-share-arithmetic-and-compare-slow-path-stubs.md) |
 | **958** | 関数入口の未使用 `r10` / `argc` スピル削除と小さなアクセサのインライン化（Scheme モード） | Feature | New | [958-eliminate-unused-prologue-spills-and-inline-small-accessors.md](958-eliminate-unused-prologue-spills-and-inline-small-accessors.md) |
@@ -27,6 +26,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **955** | 算術 fast path の短縮：オーバーフロー分岐の `jo` 融合と定数オペランドのタグ検査畳み込み | Feature | 2026-11-25 | [955-fuse-overflow-branch-to-jo-and-fold-constant-tag-checks.md](closed/955-fuse-overflow-branch-to-jo-and-fold-constant-tag-checks.md) |
 | **954** | Scheme コード生成における内部ラベル `.p2align` の削減（ループ先頭・関数入口限定） | Feature | 2026-11-25 | [954-restrict-p2align-to-loop-headers-and-function-entries-in-scheme-codegen.md](closed/954-restrict-p2align-to-loop-headers-and-function-entries-in-scheme-codegen.md) |
 | **953** | x86-64 即値 `mov` の短縮符号化（`mov r32, imm32` / `xor r32, r32`）を `140` と `144a` の双方に適用 | Feature | 2026-11-25 | [953-shorten-immediate-mov-encoding-in-x86-backend-and-assembler.md](closed/953-shorten-immediate-mov-encoding-in-x86-backend-and-assembler.md) |
 | **952** | 配布用 `ulisp-boot` / `ulisp-cc` の strip と `.debug` 分離ファイル化 | Feature | 2026-11-25 | [952-strip-release-binaries-and-split-debug-symbols.md](closed/952-strip-release-binaries-and-split-debug-symbols.md) |
