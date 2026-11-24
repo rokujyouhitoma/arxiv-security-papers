@@ -445,6 +445,17 @@ with open(sys.argv[1]) as f1, open(sys.argv[2]) as f2:
     fi
 }
 
+strip_with_debug() {
+    local target_bin="$1"
+    if [ "${BOOTSTRAP_PURE:-0}" != "1" ] && command -v objcopy >/dev/null 2>&1 && command -v strip >/dev/null 2>&1; then
+        rm -f "${target_bin}.debug"
+        if objcopy --only-keep-debug "$target_bin" "${target_bin}.debug" 2>/dev/null; then
+            strip --strip-all "$target_bin" 2>/dev/null || true
+            (cd "$(dirname "$target_bin")" && objcopy --add-gnu-debuglink="$(basename "$target_bin").debug" "$(basename "$target_bin")" 2>/dev/null) || true
+        fi
+    fi
+}
+
 verify_and_promote() {
     local final_compiler="$1"
     local final_stage_name="$2"
@@ -483,6 +494,7 @@ verify_and_promote() {
         mkdir -p "$ULISP_DIR/bin"
         cp -f "$final_compiler" "$BUILD_DIR/ulisp-modular"
         cp -f "$final_compiler" "$ULISP_DIR/bin/ulisp-modular"
+        strip_with_debug "$ULISP_DIR/bin/ulisp-modular"
         chmod +x "$BUILD_DIR/ulisp-modular" "$ULISP_DIR/bin/ulisp-modular"
     elif [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
         cp -f "$final_compiler" "$BUILD_DIR/ulisp-fast"
@@ -492,6 +504,7 @@ verify_and_promote() {
     if [ "$should_promote" = "1" ]; then
         mkdir -p "$ULISP_DIR/bin"
         cp -f "$final_compiler" "$BOOT_BIN"
+        strip_with_debug "$BOOT_BIN"
         chmod +x "$BOOT_BIN"
         echo "Updated local bootstrap seed cache ($BOOT_BIN) with verified $final_stage_name compiler."
     else

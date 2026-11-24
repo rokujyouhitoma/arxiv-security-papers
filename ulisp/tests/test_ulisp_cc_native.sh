@@ -129,6 +129,19 @@ EOF
 )
 echo "  [PASS] Section 1: All CWD=/tmp modes + unsafe grammar guard passed"
 
+# Issue #952: Verify release binary is stripped while preserving runtime symtab and split .debug
+CC_SECTIONS="$(readelf -S -W "$ULISP_CC")"
+if printf '%s\n' "$CC_SECTIONS" | grep -q '\.symtab'; then
+  echo "ERROR: $ULISP_CC still contains .symtab after strip!" >&2
+  exit 1
+fi
+printf '%s\n' "$CC_SECTIONS" | grep -q 'ulisp_symtab_sec' || { echo "ERROR: Missing ulisp_symtab_sec in $ULISP_CC" >&2; exit 1; }
+printf '%s\n' "$CC_SECTIONS" | grep -q 'ulisp_globals_sec' || { echo "ERROR: Missing ulisp_globals_sec in $ULISP_CC" >&2; exit 1; }
+printf '%s\n' "$CC_SECTIONS" | grep -q '\.gnu_debuglink' || { echo "ERROR: Missing .gnu_debuglink in $ULISP_CC" >&2; exit 1; }
+test -s "${ULISP_CC}.debug" || { echo "ERROR: Missing split debug file ${ULISP_CC}.debug" >&2; exit 1; }
+[ "$(nm "${ULISP_CC}.debug" | grep -c 'ulisp_fn_')" -gt 0 ] || { echo "ERROR: ${ULISP_CC}.debug missing symbols" >&2; exit 1; }
+echo "  [PASS] Section 1b: Stripped binary + split .debug + runtime symtab verified (#952)"
+
 # ------------------------------------------------------------------------------
 # Section 2: 100% SHA-256 Bit-Exact Parity vs gosh c_driver_runner.scm
 # ------------------------------------------------------------------------------
