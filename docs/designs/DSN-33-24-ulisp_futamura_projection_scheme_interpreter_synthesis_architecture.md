@@ -506,7 +506,7 @@ $$\forall p \in L_{\text{core}}, \forall \rho \in \mathrm{Env}: \quad V_{\text{N
 | :--- | :--- | :--- | :--- | :---: |
 | **Phase I1** | **ケースA基盤** | `eval-in-stage` (`Now` 辞書)、`eval-residual-anf-expr`、`<lir-vm>` (`vm/lir_interpreter.scm`)、R7RS `lib/eval.scm`、`.sbi` v2 DAG キャッシュ | #716, #834, #839, #872, #881 | **完了** |
 | **Phase I2** | **ケースB基盤** | `jit-merge-point!` / `jit-guard-type!`、`auto_instrument.scm`、限定継続 `delimcc.scm`、トレース部分評価器 `pe.scm`、`driver/jit.scm` | #507, #511, #898, #899, #900, #901 | **完了** |
-| **Phase I3** | **ケースC基盤** | 4値 BTA 束、`stage-poly-lower`、`<guest-frame-descriptor>`、`ulisp/workbench/cogen.scm` (`derive-cogen-compiler`, `--cogen`) | #874, #879, #885, #892, #895, #909 | **完了** |
+| **Phase I3** | **ケースC基盤** | 4値 BTA 束、`stage-poly-lower`、`<guest-frame-descriptor>`、`ulisp/workbench/cogen.scm` (`derive-cogen-compiler`, `--cogen`)、`eval-in-stage-apply` × `specialize-or-widen` 接続 | #874, #877, #879, #885, #892, #895, #909, #942 | **完了** |
 | **Phase I4** | **三位一体統合実証** | ケースA・B・C の3方式すべてを単一の Scheme サブセット評価器に対して一気通貫で駆動し、**四重差分オラクル（Quadruple-Differential Oracle）** と Tower Collapse・Self-Cogen 閉路を E2E で一括検証する統合ハーネスの構築 | #937 (設計) ＆ 後続実装 Issue | **設計完了 / 実装準備完了** |
 
 ### 8.2 4大品質ゲート遵守規準

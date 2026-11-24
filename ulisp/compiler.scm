@@ -13597,6 +13597,9 @@
            ((cadr) (if (and (pair? v) (pair? (cdr v))) (cadr v) *ctfe-failure*))
            ((cdar) (if (and (pair? v) (pair? (car v))) (cdar v) *ctfe-failure*))
            ((cddr) (if (and (pair? v) (pair? (cdr v))) (cddr v) *ctfe-failure*))
+           ((caddr) (if (and (pair? v) (pair? (cdr v)) (pair? (cddr v))) (caddr v) *ctfe-failure*))
+           ((cdddr) (if (and (pair? v) (pair? (cdr v)) (pair? (cddr v))) (cdddr v) *ctfe-failure*))
+           ((cadddr) (if (and (pair? v) (pair? (cdr v)) (pair? (cddr v)) (pair? (cdddr v))) (cadddr v) *ctfe-failure*))
            ((length) (if (list? v) (length v) *ctfe-failure*))
            ((reverse) (if (list? v) (reverse v) *ctfe-failure*))
            ((bitwise-not) (if (number? v) (ctfe-bitwise-not v) *ctfe-failure*))
@@ -13667,6 +13670,8 @@
            ((symbol=?) (if (and (symbol? v1) (symbol? v2)) (eq? v1 v2) *ctfe-failure*))
            ((cons) (cons v1 v2))
            ((append) (if (list? v1) (append v1 v2) *ctfe-failure*))
+           ((assq) (if (list? v2) (assq v1 v2) *ctfe-failure*))
+           ((memq) (if (list? v2) (memq v1 v2) *ctfe-failure*))
            ((bitwise-and) (if (and (number? v1) (number? v2)) (ctfe-bitwise-and v1 v2) *ctfe-failure*))
            ((bitwise-ior) (if (and (number? v1) (number? v2)) (ctfe-bitwise-ior v1 v2) *ctfe-failure*))
            ((bitwise-xor) (if (and (number? v1) (number? v2)) (ctfe-bitwise-xor v1 v2) *ctfe-failure*))
@@ -14070,6 +14075,9 @@
     ((eq? op 'cadr) (if (and (pair? a) (pair? (cdr a))) (cadr a) *ctfe-failure*))
     ((eq? op 'cdar) (if (and (pair? a) (pair? (car a))) (cdar a) *ctfe-failure*))
     ((eq? op 'cddr) (if (and (pair? a) (pair? (cdr a))) (cddr a) *ctfe-failure*))
+    ((eq? op 'caddr) (if (and (pair? a) (pair? (cdr a)) (pair? (cddr a))) (caddr a) *ctfe-failure*))
+    ((eq? op 'cdddr) (if (and (pair? a) (pair? (cdr a)) (pair? (cddr a))) (cdddr a) *ctfe-failure*))
+    ((eq? op 'cadddr) (if (and (pair? a) (pair? (cdr a)) (pair? (cddr a)) (pair? (cdddr a))) (cadddr a) *ctfe-failure*))
     ((eq? op 'length) (if (list? a) (length a) *ctfe-failure*))
     ((eq? op 'reverse) (if (list? a) (reverse a) *ctfe-failure*))
     ((eq? op '-) (if (number? a) (%ctfe-num-guard (- 0 a)) *ctfe-failure*))
@@ -14101,6 +14109,8 @@
     ((eq? op 'char=?) (if (and (char? a) (char? b)) (char=? a b) *ctfe-failure*))
     ((eq? op 'boolean=?) (if (and (boolean? a) (boolean? b)) (eq? a b) *ctfe-failure*))
     ((eq? op 'cons) (cons a b))
+    ((eq? op 'assq) (if (list? b) (assq a b) *ctfe-failure*))
+    ((eq? op 'memq) (if (list? b) (memq a b) *ctfe-failure*))
     ((eq? op 'bitwise-and) (ctfe-bitwise-and a b))
     ((eq? op 'bitwise-ior) (ctfe-bitwise-ior a b))
     ((eq? op 'bitwise-xor) (ctfe-bitwise-xor a b))
@@ -14146,9 +14156,11 @@
     ((and (pair? callee-proc) (eq? (car callee-proc) '%ctfe-closure))
      (let* ((params (cadr callee-proc))
             (body (caddr callee-proc))
-            (cenv (cadddr callee-proc)))
+            (cenv (cadddr callee-proc))
+            (fn-name (if (pair? (cddddr callee-proc)) (car (cddddr callee-proc)) #f)))
        (if (= (length params) (length arg-vals))
-           (let ((call-env (ctfe-env-extend* cenv params arg-vals)))
+           (let* ((rec-env (if fn-name (ctfe-env-extend cenv fn-name callee-proc) cenv))
+                  (call-env (ctfe-env-extend* rec-env params arg-vals)))
              (ctfe-eval body call-env *ctfe-default-step-limit* *ctfe-default-depth-limit*))
            *ctfe-failure*)))
     (else *ctfe-failure*)))
@@ -14367,7 +14379,7 @@
   (if (memq sym '(+ - * / quotient modulo remainder abs min max
                   not null? pair? boolean? number? symbol? string? char?
                   zero? list?
-                  car cdr caar cadr cdar cddr length reverse cons list append
+                  car cdr caar cadr cdar cddr caddr cdddr cadddr length reverse cons list append
                   assq memq
                   eq? eqv? equal? char=? boolean=? symbol=? = < <= > >=
                   bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
@@ -14390,7 +14402,7 @@
 
 (define (stage-pure-effect-free? sym)
   (if (memq sym '(+ - * abs not null? pair? boolean? number? symbol? string? char?
-                  zero? list? length reverse cons list append
+                  zero? list? caddr cdddr cadddr length reverse cons list append
                   assq memq
                   eq? eqv? equal? char=? boolean=? symbol=? = < <= > >=
                   bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
@@ -14410,7 +14422,7 @@
       #f))
 
 (define (stage-potentially-trapping-prim? sym)
-  (if (memq sym '(/ quotient modulo remainder car cdr caar cadr cdar cddr vector-ref string-ref local-slot-ref))
+  (if (memq sym '(/ quotient modulo remainder car cdr caar cadr cdar cddr caddr cdddr cadddr vector-ref string-ref local-slot-ref))
       #t
       #f))
 
@@ -14465,6 +14477,50 @@
                     (stage-lift-val dict (stage-val-payload sv) sv)
                     (stage-val-payload sv))))
         (cons p (extract-lifted-payloads dict (cdr svs))))))
+
+(define (stage-cxr dict steps sv loc)
+  (let loop ((st steps) (curr sv))
+    (cond
+      ((or (ctfe-failure? curr) (stage-csp-error? curr)) curr)
+      ((null? st) curr)
+      ((eq? (car st) 'car)
+       (loop (cdr st) (stage-car dict curr loc)))
+      (else
+       (loop (cdr st) (stage-cdr dict curr loc))))))
+
+(define (stage-assq-psds key-val env-sv)
+  (cond
+    ((not (stage-val? env-sv)) #f)
+    ((stage-val-pure-static? env-sv)
+     (let ((p (stage-val-payload env-sv)))
+       (if (list? p)
+           (let ((found (assq key-val p)))
+             (if found
+                 (make-static-val 'pair found #f #f)
+                 (make-static-val 'boolean #f #f #f)))
+           #f)))
+    ((stage-val-partially-static? env-sv)
+     (let ((p (stage-val-payload env-sv)))
+       (if (pair? p)
+           (let ((entry-sv (car p))
+                 (rest-sv (cdr p)))
+             (cond
+               ((and (stage-val? entry-sv)
+                     (stage-val-pure-static? entry-sv)
+                     (pair? (stage-val-payload entry-sv))
+                     (eq? (car (stage-val-payload entry-sv)) key-val))
+                entry-sv)
+               ((and (stage-val? entry-sv)
+                     (stage-val-partially-static? entry-sv)
+                     (pair? (stage-val-payload entry-sv))
+                     (stage-val? (car (stage-val-payload entry-sv)))
+                     (stage-val-pure-static? (car (stage-val-payload entry-sv)))
+                     (eq? (stage-val-payload (car (stage-val-payload entry-sv))) key-val))
+                entry-sv)
+               (else
+                (stage-assq-psds key-val rest-sv))))
+           #f)))
+    (else #f)))
 
 (define (eval-in-stage-apply-known-prim dict op args loc)
   (let ((nargs (length args)))
@@ -14544,7 +14600,26 @@
          ((and (eq? op 'cdr) (= nargs 1))
           (stage-cdr dict (car args) loc))
 
-         ;; Guest Frame Lowering: assq (DSN-33-04 §2.2 & Issue #892)
+         ;; PSDS compound pair accessors (caar, cadr, cdar, cddr, caddr, cdddr, cadddr)
+         ((and (memq op '(caar cadr cdar cddr caddr cdddr cadddr))
+               (= nargs 1)
+               (or (stage-val-pure-static? (car args))
+                   (stage-val-partially-static? (car args))))
+          (let ((steps (cond
+                         ((eq? op 'caar) '(car car))
+                         ((eq? op 'cadr) '(cdr car))
+                         ((eq? op 'cdar) '(car cdr))
+                         ((eq? op 'cddr) '(cdr cdr))
+                         ((eq? op 'caddr) '(cdr cdr car))
+                         ((eq? op 'cdddr) '(cdr cdr cdr))
+                         (else '(cdr cdr cdr car)))))
+            (let ((res (stage-cxr dict steps (car args) loc)))
+              (if (or (ctfe-failure? res) (stage-csp-error? res))
+                  (let ((lifted (extract-lifted-payloads dict args)))
+                    (make-dynamic-val 'any (cons op lifted) loc #f))
+                  res))))
+
+         ;; Guest Frame Lowering & PSDS/Dynamic assq (DSN-33-04 §2.2 & Issue #892, #942)
          ((and (eq? op 'assq) (= nargs 2))
           (let ((key-sv (car args))
                 (env-sv (cadr args)))
@@ -14565,6 +14640,22 @@
                        (stage-cons key-sv (make-dynamic-val 'any val-expr loc #f) loc #f))
                      (let* ((lifted (extract-lifted-payloads dict args)))
                        (make-dynamic-val 'any (cons 'assq lifted) loc #f)))))
+              ;; PSDS environment spine lookup
+              ((and (stage-val-pure-static? key-sv)
+                    (or (stage-val-pure-static? env-sv)
+                        (stage-val-partially-static? env-sv)))
+               (let ((found (stage-assq-psds (stage-val-payload key-sv) env-sv)))
+                 (if found
+                     found
+                     (let ((lifted (extract-lifted-payloads dict args)))
+                       (make-dynamic-val 'any (cons 'assq lifted) loc #f)))))
+              ;; Static symbol key lookup in dynamic guest runtime alist: resolve variable reference via PSDS pair
+              ((and (stage-val-pure-static? key-sv)
+                    (symbol? (stage-val-payload key-sv))
+                    (stage-val-pure-dynamic? env-sv))
+               (stage-cons key-sv
+                           (make-dynamic-val 'any (stage-val-payload key-sv) loc #f)
+                           loc #f))
               (else
                (let* ((lifted (extract-lifted-payloads dict args)))
                  (make-dynamic-val 'any (cons 'assq lifted) loc #f))))))
@@ -14700,6 +14791,92 @@
                          (else (cons op lifted)))))
                   (make-dynamic-val 'any res-call loc #f))))))))))
 
+(define *active-spec-memo-cell* (cons #f '()))
+(define *last-spec-memo-cell* (cons #f '()))
+(define *active-spec-body-cache-cell* (cons '() '()))
+(define *active-spec-arg-sizes-cell* (cons '() '()))
+
+(define (get-last-spec-memo-table)
+  (car *last-spec-memo-cell*))
+
+(define (with-spec-memo-table memo thunk)
+  (let ((prev-memo (car *active-spec-memo-cell*))
+        (prev-cache (car *active-spec-body-cache-cell*))
+        (prev-sizes (car *active-spec-arg-sizes-cell*)))
+    (set-car! *active-spec-memo-cell* memo)
+    (set-car! *active-spec-body-cache-cell* '())
+    (set-car! *active-spec-arg-sizes-cell* '())
+    (let ((res (thunk)))
+      (set-car! *last-spec-memo-cell* memo)
+      (set-car! *active-spec-memo-cell* prev-memo)
+      (set-car! *active-spec-body-cache-cell* prev-cache)
+      (set-car! *active-spec-arg-sizes-cell* prev-sizes)
+      res)))
+
+(define (stage-any-static-or-psds? svs)
+  (cond
+    ((null? svs) #f)
+    ((or (stage-val-pure-static? (car svs))
+         (stage-val-partially-static? (car svs)))
+     #t)
+    (else (stage-any-static-or-psds? (cdr svs)))))
+
+(define (stage-ast-pair-weight x)
+  (if (pair? x)
+      (+ 1 (+ (stage-ast-pair-weight (car x)) (stage-ast-pair-weight (cdr x))))
+      0))
+
+(define (stage-sv-structural-sizes svs)
+  (if (null? svs)
+      '()
+      (let ((sv (car svs)))
+        (cons (if (stage-val-pure-static? sv)
+                  (stage-ast-pair-weight (stage-val-payload sv))
+                  #f)
+              (stage-sv-structural-sizes (cdr svs))))))
+
+(define (stage-structural-descent? prev-sizes curr-sizes)
+  (and prev-sizes
+       curr-sizes
+       (= (length prev-sizes) (length curr-sizes))
+       (let loop ((ps prev-sizes) (cs curr-sizes) (shrank? #f) (grew? #f))
+         (cond
+           (grew? #f)
+           ((null? ps) shrank?)
+           ((not (car ps))
+            (if (car cs)
+                (loop (cdr ps) (cdr cs) shrank? #t)
+                (loop (cdr ps) (cdr cs) shrank? grew?)))
+           ((not (car cs))
+            (loop (cdr ps) (cdr cs) shrank? grew?))
+           ((< (car cs) (car ps))
+            (loop (cdr ps) (cdr cs) #t grew?))
+           ((> (car cs) (car ps))
+            (loop (cdr ps) (cdr cs) shrank? #t))
+           (else
+            (loop (cdr ps) (cdr cs) shrank? grew?))))))
+
+(define (stage-subst-params expr subst-alist)
+  (cond
+    ((null? subst-alist) expr)
+    ((symbol? expr)
+     (let ((hit (assq expr subst-alist)))
+       (if hit (cdr hit) expr)))
+    ((not (pair? expr)) expr)
+    ((eq? (car expr) 'quote) expr)
+    (else
+     (cons (stage-subst-params (car expr) subst-alist)
+           (stage-subst-params (cdr expr) subst-alist)))))
+
+(define (stage-cache-body-sv! spec-fn body-sv)
+  (set-car! *active-spec-body-cache-cell*
+            (cons (cons spec-fn body-sv)
+                  (car *active-spec-body-cache-cell*))))
+
+(define (stage-lookup-cached-body-sv spec-fn)
+  (let ((entry (assq spec-fn (car *active-spec-body-cache-cell*))))
+    (if entry (cdr entry) #f)))
+
 (define (eval-in-stage-apply dict env head args-exprs fuel depth)
   (let loop ((exprs args-exprs)
              (curr-fuel fuel)
@@ -14710,27 +14887,155 @@
          (if (stage-known-primitive? head)
              (eval-in-stage-apply-known-prim dict head evaled-args #f)
              ;; Variable or lambda application
-             (let ((callee-sv (if (symbol? head)
-                                  (eval-in-stage dict env head curr-fuel depth)
-                                  (eval-in-stage dict env head curr-fuel depth))))
+             (let ((callee-sv (eval-in-stage dict env head curr-fuel depth)))
                (cond
                  ((stage-csp-error? callee-sv) callee-sv)
                  ((stage-dict-now? dict)
                   (let ((callee (stage-val-payload callee-sv))
                         (arg-vals (extract-payloads evaled-args)))
-                    (let ((res (stage-emit-call dict callee arg-vals)))
-                      (if (ctfe-failure? res)
-                          (stage-signal-csp-error dict 'now-call-failed (cons head arg-vals))
-                          (make-static-val (stage-constant-type res) res #f #f)))))
+                    (if (and (pair? callee)
+                             (eq? (car callee) '%ctfe-closure)
+                             (= (length (cadr callee)) (length evaled-args)))
+                        (let* ((params (cadr callee))
+                               (fbody (caddr callee))
+                               (cenv (cadddr callee))
+                               (c-fname (if (pair? (cddddr callee)) (car (cddddr callee)) (if (symbol? head) head #f)))
+                               (rec-env (if c-fname (stage-env-extend cenv c-fname callee-sv) cenv))
+                               (call-env (let bind ((ps params) (vs evaled-args) (ce rec-env))
+                                           (if (null? ps) ce (bind (cdr ps) (cdr vs) (stage-env-extend ce (car ps) (car vs)))))))
+                          (eval-in-stage dict call-env fbody curr-fuel depth))
+                        (let ((res (stage-emit-call dict callee arg-vals)))
+                          (if (ctfe-failure? res)
+                              (stage-signal-csp-error dict 'now-call-failed (cons head arg-vals))
+                              (make-static-val (stage-constant-type res) res #f #f))))))
                  (else
-                  ;; Later dict: emit residual call
-                  (let* ((callee-expr (stage-val-payload callee-sv))
-                         (arg-exprs (extract-lifted-payloads dict evaled-args))
-                         (csp-err (find-first-csp-error arg-exprs)))
-                    (if csp-err
-                        csp-err
-                        (let ((res (stage-emit-call dict callee-expr arg-exprs)))
-                          (make-dynamic-val 'any res #f #f))))))))))
+                  ;; Later dict: if user closure + static/PSDS args + active memo table -> specialize-or-widen
+                  (let* ((callee-payload (stage-val-payload callee-sv))
+                         (memo (car *active-spec-memo-cell*)))
+                    (if (and memo
+                             (pair? callee-payload)
+                             (eq? (car callee-payload) '%ctfe-closure)
+                             (= (length (cadr callee-payload)) (length evaled-args))
+                             (stage-any-static-or-psds? evaled-args))
+                        (let* ((params (cadr callee-payload))
+                               (fbody (caddr callee-payload))
+                               (cenv (cadddr callee-payload))
+                               (c-fname (if (pair? (cddddr callee-payload))
+                                            (car (cddddr callee-payload))
+                                            (if (symbol? head) head 'anon$fn)))
+                               (fn-name (if (symbol? head) head c-fname))
+                               (prev-sizes-map (car *active-spec-arg-sizes-cell*))
+                               (prev-entry (assq fn-name prev-sizes-map))
+                               (prev-sizes (if prev-entry (cdr prev-entry) #f))
+                               (curr-sizes (stage-sv-structural-sizes evaled-args))
+                               (structural-step? (stage-structural-descent? prev-sizes curr-sizes))
+                               (cur-depth (spec-memo-current-depth memo))
+                               (call-spec-depth (if structural-step? 0 cur-depth))
+                               (body-sv-box (cons #f '()))
+                               (builder
+                                (lambda (spec-fn arg-svs)
+                                  (let* ((rec-env (stage-env-extend cenv fn-name callee-sv))
+                                         (env-and-dyn
+                                          (let bind ((ps params) (as arg-svs) (ce rec-env) (dp '()))
+                                            (if (null? ps)
+                                                (cons ce (reverse dp))
+                                                (let ((p (car ps))
+                                                      (a (car as)))
+                                                  (if (or (stage-val-pure-static? a)
+                                                          (stage-val-partially-static? a))
+                                                      (bind (cdr ps) (cdr as) (stage-env-extend ce p a) dp)
+                                                      (bind (cdr ps)
+                                                            (cdr as)
+                                                            (stage-env-extend ce p (make-dynamic-val (stage-val-tag a) p #f #f))
+                                                            (cons p dp)))))))
+                                         (call-env (car env-and-dyn))
+                                         (dyn-params (cdr env-and-dyn)))
+                                    (set-car! *active-spec-arg-sizes-cell*
+                                              (cons (cons fn-name curr-sizes) prev-sizes-map))
+                                    (let ((res-sv (eval-in-stage dict call-env fbody curr-fuel depth)))
+                                      (set-car! *active-spec-arg-sizes-cell* prev-sizes-map)
+                                      (set-car! body-sv-box res-sv)
+                                      (let ((res-pay (if (stage-val? res-sv)
+                                                         (if (stage-val-pure-static? res-sv)
+                                                             (stage-lift-val dict (stage-val-payload res-sv) res-sv)
+                                                             (stage-val-payload res-sv))
+                                                         res-sv)))
+                                        (list 'define (cons spec-fn dyn-params) res-pay))))))
+                               (spec-res (specialize-or-widen memo fn-name evaled-args call-spec-depth builder))
+                               (status (car spec-res))
+                               (target-fn (cadr spec-res))
+                               (dyn-arg-payloads
+                                (let collect ((as evaled-args) (acc-d '()))
+                                  (if (null? as)
+                                      (reverse acc-d)
+                                      (let ((a (car as)))
+                                        (if (or (stage-val-pure-static? a)
+                                                (stage-val-partially-static? a))
+                                            (collect (cdr as) acc-d)
+                                            (collect (cdr as) (cons (stage-val-payload a) acc-d)))))))
+                               (dyn-params-only
+                                (let collect-p ((ps params) (as evaled-args) (acc-p '()))
+                                  (if (null? ps)
+                                      (reverse acc-p)
+                                      (let ((a (car as)))
+                                        (if (or (stage-val-pure-static? a)
+                                                (stage-val-partially-static? a))
+                                            (collect-p (cdr ps) (cdr as) acc-p)
+                                            (collect-p (cdr ps) (cdr as) (cons (car ps) acc-p))))))))
+                          (cond
+                            ((eq? status 'specialized)
+                             (let ((body-sv (car body-sv-box)))
+                               (stage-cache-body-sv! target-fn body-sv)
+                               (cond
+                                 ((stage-csp-error? body-sv) body-sv)
+                                 ((equal? dyn-arg-payloads dyn-params-only)
+                                  body-sv)
+                                 ((stage-val-pure-static? body-sv)
+                                  body-sv)
+                                 (else
+                                  (let ((subst (let mk ((ps dyn-params-only) (vs dyn-arg-payloads) (sa '()))
+                                                 (if (or (null? ps) (null? vs))
+                                                     sa
+                                                     (mk (cdr ps) (cdr vs) (cons (cons (car ps) (car vs)) sa))))))
+                                    (make-dynamic-val (stage-val-tag body-sv)
+                                                      (stage-subst-params (stage-val-payload body-sv) subst)
+                                                      #f #f))))))
+                            ((eq? status 'cached)
+                             (let ((cached-sv (stage-lookup-cached-body-sv target-fn)))
+                               (cond
+                                 ((not cached-sv)
+                                  ;; Cyclic specialization call: emit direct residual call to target-fn
+                                  (make-dynamic-val 'any (stage-emit-call dict target-fn dyn-arg-payloads) #f #f))
+                                 ((equal? dyn-arg-payloads dyn-params-only)
+                                  cached-sv)
+                                 ((stage-val-pure-static? cached-sv)
+                                  cached-sv)
+                                 (else
+                                  (let ((subst (let mk ((ps dyn-params-only) (vs dyn-arg-payloads) (sa '()))
+                                                 (if (or (null? ps) (null? vs))
+                                                     sa
+                                                     (mk (cdr ps) (cdr vs) (cons (cons (car ps) (car vs)) sa))))))
+                                    (make-dynamic-val (stage-val-tag cached-sv)
+                                                      (stage-subst-params (stage-val-payload cached-sv) subst)
+                                                      #f #f))))))
+                            (else
+                             ;; Widened: emit generic residual call with all evaluated arguments lifted
+                             (let* ((arg-exprs (extract-lifted-payloads dict evaled-args))
+                                    (csp-err (find-first-csp-error arg-exprs)))
+                               (if csp-err
+                                   csp-err
+                                   (make-dynamic-val 'any (stage-emit-call dict target-fn arg-exprs) #f #f))))))
+                        ;; Standard Later dict call residualization
+                        (let* ((callee-expr (if (and (pair? callee-payload)
+                                                     (eq? (car callee-payload) '%ctfe-closure))
+                                                (if (symbol? head) head (if (pair? (cddddr callee-payload)) (car (cddddr callee-payload)) callee-payload))
+                                                callee-payload))
+                               (arg-exprs (extract-lifted-payloads dict evaled-args))
+                               (csp-err (find-first-csp-error arg-exprs)))
+                          (if csp-err
+                              csp-err
+                              (let ((res (stage-emit-call dict callee-expr arg-exprs)))
+                                (make-dynamic-val 'any res #f #f))))))))))))
       ((<= curr-fuel 0)
        (stage-signal-csp-error dict 'ctfe-fuel-exhausted head))
       (else
@@ -14782,9 +15087,10 @@
                   acc-dyn))
            (else
             ;; Later dict:
-            ;; Pure-static values are bound directly to env (inlined at compile time!)
+            ;; Pure-static or partially-static values are bound directly to env (inlined/projected at compile time!)
             ;; Dynamic values are bound to env as dynamic variable reference, and scheduled for residual let
-            (if (stage-val-pure-static? val-sv)
+            (if (or (stage-val-pure-static? val-sv)
+                    (stage-val-partially-static? val-sv))
                 (loop (cdr bs)
                       (stage-env-extend curr-env var val-sv)
                       (- curr-fuel 1)
@@ -14833,8 +15139,9 @@
                   (- curr-fuel 1)
                   acc-dyn))
            (else
-            ;; Later dict:
-            (if (stage-val-pure-static? val-sv)
+            ;; Later dict (let*): keep pure-static and partially-static values in env
+            (if (or (stage-val-pure-static? val-sv)
+                    (stage-val-partially-static? val-sv))
                 (loop (cdr bs)
                       (stage-env-extend curr-env var val-sv)
                       (- curr-fuel 1)
@@ -14847,6 +15154,42 @@
 ;;; -----------------------------------------------------------------------
 ;;; 12. Main eval-in-stage Core Loop
 ;;; -----------------------------------------------------------------------
+
+(define (stage-wrap-body exprs)
+  (cond
+    ((null? exprs) #f)
+    ((null? (cdr exprs)) (car exprs))
+    (else (cons 'begin exprs))))
+
+(define (stage-desugar-cond clauses)
+  (cond
+    ((null? clauses) #f)
+    ((and (pair? (car clauses)) (eq? (caar clauses) 'else))
+     (stage-wrap-body (cdar clauses)))
+    ((pair? (car clauses))
+     (let ((test (caar clauses))
+           (body (cdar clauses)))
+       (if (null? body)
+           (list 'let (list (list '__cond_tmp test))
+                 (list 'if '__cond_tmp '__cond_tmp (stage-desugar-cond (cdr clauses))))
+           (list 'if test
+                 (stage-wrap-body body)
+                 (stage-desugar-cond (cdr clauses))))))
+    (else #f)))
+
+(define (stage-desugar-and args)
+  (cond
+    ((null? args) #t)
+    ((null? (cdr args)) (car args))
+    (else (list 'if (car args) (stage-desugar-and (cdr args)) #f))))
+
+(define (stage-desugar-or args)
+  (cond
+    ((null? args) #f)
+    ((null? (cdr args)) (car args))
+    (else
+     (list 'let (list (list '__or_tmp (car args)))
+           (list 'if '__or_tmp '__or_tmp (stage-desugar-or (cdr args)))))))
 
 (define (eval-in-stage dict env expr fuel depth)
   ;; 1. Resource bounds check (CWE-400 guard)
@@ -14871,9 +15214,12 @@
      (let ((entry (stage-env-lookup-entry env expr)))
        (if entry
            (let ((found (cdr entry)))
-             (if (stage-val? found)
-                 found
-                 (make-static-val (stage-constant-type found) found #f #f)))
+             (cond
+               ((stage-val? found) found)
+               ((and (pair? found) (eq? (car found) '%ctfe-closure))
+                (make-static-val 'closure found #f #f))
+               (else
+                (make-static-val (stage-constant-type found) found #f #f))))
            (if (stage-dict-now? dict)
                (stage-signal-csp-error dict 'unbound-variable expr)
                (make-dynamic-val 'unknown expr #f #f)))))
@@ -14919,31 +15265,67 @@
                                #f)))))
                    (make-dynamic-val 'any res-expr #f #f)))))))
 
-         ;; Sequential: (begin e ...)
+         ;; Sequential: (begin e ...) with internal define support
          ((begin)
-          (let loop ((es (cdr expr)) (curr-fuel f1) (last-sv (make-static-val 'unspecified #f #f #f)))
+          (let loop ((es (cdr expr))
+                     (curr-env env)
+                     (curr-fuel f1)
+                     (last-sv (make-static-val 'unspecified #f #f #f)))
             (cond
               ((null? es) last-sv)
               ((<= curr-fuel 0) (stage-signal-csp-error dict 'ctfe-fuel-exhausted expr))
               (else
-               (let ((sv (eval-in-stage dict env (car es) (- curr-fuel 1) d1)))
-                 (if (stage-csp-error? sv)
-                     sv
-                     (loop (cdr es) (- curr-fuel 1) sv)))))))
+               (let ((form (car es)))
+                 (if (and (pair? form) (eq? (car form) 'define) (pair? (cdr form)))
+                     (let* ((target (cadr form))
+                            (def-name (if (pair? target) (car target) target))
+                            (def-sv (eval-in-stage dict curr-env form (- curr-fuel 1) d1)))
+                       (if (stage-csp-error? def-sv)
+                           def-sv
+                           (loop (cdr es)
+                                 (stage-env-extend curr-env def-name def-sv)
+                                 (- curr-fuel 1)
+                                 def-sv)))
+                     (let ((sv (eval-in-stage dict curr-env form (- curr-fuel 1) d1)))
+                       (if (stage-csp-error? sv)
+                           sv
+                           (loop (cdr es) curr-env (- curr-fuel 1) sv)))))))))
 
-         ;; Local Bindings: (let ((var val) ...) body)
+         ;; Function / variable definition: (define (fn params ...) body ...)
+         ((define)
+          (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+              (let ((target (cadr expr)))
+                (if (pair? target)
+                    (let ((fn-name (car target))
+                          (params (cdr target))
+                          (fbody (stage-wrap-body (cddr expr))))
+                      (make-static-val 'closure (list '%ctfe-closure params fbody env fn-name) #f #f))
+                    (eval-in-stage dict env (caddr expr) f1 d1)))
+              (stage-signal-csp-error dict 'invalid-define-syntax expr)))
+
+         ;; Derived conditionals & short-circuit logic
+         ((cond)
+          (eval-in-stage dict env (stage-desugar-cond (cdr expr)) f1 d1))
+
+         ((and)
+          (eval-in-stage dict env (stage-desugar-and (cdr expr)) f1 d1))
+
+         ((or)
+          (eval-in-stage dict env (stage-desugar-or (cdr expr)) f1 d1))
+
+         ;; Local Bindings: (let ((var val) ...) body ...)
          ((let let-anf)
           (if (and (pair? (cdr expr)) (pair? (cddr expr)))
               (let ((bindings (cadr expr))
-                    (body (caddr expr)))
+                    (body (stage-wrap-body (cddr expr))))
                 (eval-in-stage-let dict env bindings body f1 d1))
               (stage-signal-csp-error dict 'invalid-let-syntax expr)))
 
-         ;; Sequential Bindings: (let* ((var val) ...) body)
+         ;; Sequential Bindings: (let* ((var val) ...) body ...)
          ((let*)
           (if (and (pair? (cdr expr)) (pair? (cddr expr)))
               (let ((bindings (cadr expr))
-                    (body (caddr expr)))
+                    (body (stage-wrap-body (cddr expr))))
                 (eval-in-stage-let* dict env bindings body f1 d1))
               (stage-signal-csp-error dict 'invalid-let-syntax expr)))
 
@@ -14951,7 +15333,7 @@
          ((lambda)
           (if (and (pair? (cdr expr)) (pair? (cddr expr)))
               (let ((params (cadr expr))
-                    (lbody (caddr expr)))
+                    (lbody (stage-wrap-body (cddr expr))))
                 (if (stage-dict-now? dict)
                     (make-static-val 'closure (list '%ctfe-closure params lbody env) #f #f)
                     (make-dynamic-val 'procedure expr #f #f)))
@@ -15547,7 +15929,12 @@
   (case-lambda
     ((expr env)
      (let* ((later-d (make-later-dict))
-            (res-sv (eval-in-stage later-d env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
+            (res-sv (if (car *active-spec-memo-cell*)
+                        (eval-in-stage later-d env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*)
+                        (with-spec-memo-table
+                         (make-spec-memo-table)
+                         (lambda ()
+                           (eval-in-stage later-d env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*))))))
        (cond
          ((stage-csp-error? res-sv)
           res-sv)

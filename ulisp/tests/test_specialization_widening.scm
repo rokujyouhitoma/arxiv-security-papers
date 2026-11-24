@@ -132,4 +132,47 @@
     (assert-equal "5.2 First residual fn name" 'dispatch$spec0 (caar (cdar defs)))
     (assert-equal "5.3 Second residual fn name" 'dispatch$spec1 (caar (cdr (cadr defs))))))
 
+;;; -----------------------------------------------------------------------
+;;; Group 6: End-to-End eval-in-stage-apply Specialization & Widening (#942)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 6: End-to-End eval-in-stage-apply Specialization (#942) ---\n")
+
+;; 6.1 Memoization reuse across calls with identical static signatures
+(let* ((prog-reuse
+        '(begin
+           (define (add-k k x) (+ k x))
+           (+ (add-k 10 a) (add-k 10 b))))
+       (lowered (stage-poly-lower prog-reuse '()))
+       (memo (get-last-spec-memo-table))
+       (res-val (eval-residual-anf-expr lowered '((a . 3) (b . 4)))))
+  (assert-equal "6.1 Specialized reuse computes (10+3)+(10+4)=27" 27 res-val)
+  (assert-equal "6.2 Cache hit creates exactly 1 add-k$spec instance" 1 (spec-memo-instance-count memo 'add-k))
+  (assert-true "6.3 add-k calls completely specialized away"
+               (and (not (equal? (spec-memo-residual-fns memo) '()))
+                    (= (length (spec-memo-residual-fns memo)) 1))))
+
+;; 6.2 Instance limit (*max-spec-instances* = 8) widening through eval-in-stage-apply
+(let* ((prog-9-calls
+        '(begin
+           (define (scale k x) (* k x))
+           (+ (+ (+ (scale 1 a) (scale 2 a)) (+ (scale 3 a) (scale 4 a)))
+              (+ (+ (scale 5 a) (scale 6 a)) (+ (scale 7 a) (+ (scale 8 a) (scale 9 a)))))))
+       (lowered-9 (stage-poly-lower prog-9-calls '()))
+       (memo-9 (get-last-spec-memo-table)))
+  (assert-equal "6.4 Instance limit caps scale$spec at 8" 8 (spec-memo-instance-count memo-9 'scale))
+  (assert-equal "6.5 9th call widened cleanly via residual call" 8 (length (spec-memo-residual-fns memo-9))))
+
+;; 6.3 Recursion depth limit (*max-spec-depth* = 4) triggers widening fallback
+(let* ((prog-deep-rec
+        '(begin
+           (define (down n acc)
+             (if (= n 0)
+                 acc
+                 (down (- n 1) (+ acc 1))))
+           (down 6 dyn-acc)))
+       (lowered-rec (stage-poly-lower prog-deep-rec '()))
+       (memo-rec (get-last-spec-memo-table)))
+  (assert-equal "6.6 Recursion depth 5 triggers widening at 5 instances (depth 0..4)"
+                5 (spec-memo-instance-count memo-rec 'down)))
+
 (display "\n[RESULT] All Specialization Memoization & Widening tests PASSED!\n")
