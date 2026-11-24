@@ -3,15 +3,35 @@
 ;;; Conforms to DSN-25 & DSN-33-04 §3, Issue #894
 ;;; =======================================================================
 
-;;; Helper to read an entire file into a string
+;;; Helper to read an entire file into a string using bulk read-string chunks
 (define (read-all-file-text path)
   (call-with-input-file path
     (lambda (port)
-      (let loop ((chars '()))
-        (let ((c (read-char port)))
-          (if (eof-object? c)
-              (list->string (reverse chars))
-              (loop (cons c chars))))))))
+      (let loop ((chunks '()))
+        (let ((chunk (read-string 65536 port)))
+          (if (or (eof-object? chunk) (= (string-length chunk) 0))
+              (cond
+                ((null? chunks) "")
+                ((null? (cdr chunks)) (car chunks))
+                (else
+                 (let* ((ordered (reverse chunks))
+                        (total (let sum ((cs ordered) (n 0))
+                                 (if (null? cs)
+                                     n
+                                     (sum (cdr cs) (+ n (string-length (car cs)))))))
+                        (out (make-string total)))
+                   (let copy-chunks ((cs ordered) (off 0))
+                     (if (null? cs)
+                         out
+                         (let* ((s (car cs))
+                                (slen (string-length s)))
+                           (let copy-chars ((i 0))
+                             (if (< i slen)
+                                 (begin
+                                   (string-set! out (+ off i) (string-ref s i))
+                                   (copy-chars (+ i 1)))))
+                           (copy-chunks (cdr cs) (+ off slen))))))))
+              (loop (cons chunk chunks))))))))
 
 ;;; Compiles a <peg-grammar-def> AST into an executable entry parser
 (define (compile-peg-grammar grammar-ast . maybe-entry)

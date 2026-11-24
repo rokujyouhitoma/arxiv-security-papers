@@ -227,10 +227,10 @@
   (define dot-tok (tok "."))
   (define eq-tok (tok "="))
 
-  (define choice-parser #f)
+  (define choice-parser-box (cons #f '()))
   ;; Forward reference for choice_expr
   (define (choice-ref ctx pos sk fk)
-    (choice-parser ctx pos sk fk))
+    ((car choice-parser-box) ctx pos sk fk))
 
   ;; Primary expression
   (define primary-parser
@@ -381,24 +381,24 @@
   (define grammar-file-parser
     (peg:map (lambda (res)
                (let* ((items (cadr res))
-                      (grammar-name 'AnonymousGrammar)
-                      (dirs '())
-                      (rules '()))
+                      (state (vector 'AnonymousGrammar '() '())))
                  (for-each
                   (lambda (item)
                     (cond
                       ((peg-rule-def? item)
-                       (set! rules (cons item rules)))
+                       (vector-set! state 2 (cons item (vector-ref state 2))))
                       ((pair? item)
                        (if (eq? (car item) 'grammar)
-                           (set! grammar-name (cadr item))
-                           (set! dirs (cons item dirs))))))
+                           (vector-set! state 0 (cadr item))
+                           (vector-set! state 1 (cons item (vector-ref state 1)))))))
                   items)
-                 (make-peg-grammar-def grammar-name (reverse rules) (reverse dirs))))
+                 (make-peg-grammar-def (vector-ref state 0)
+                                       (reverse (vector-ref state 2))
+                                       (reverse (vector-ref state 1)))))
              (peg:seq (peg:meta-ws)
                       (peg:star (peg:alt directive-parser rule-parser)))))
 
-  (set! choice-parser choice-parser-internal)
+  (set-car! choice-parser-box choice-parser-internal)
   grammar-file-parser)
 
 (define *meta-grammar-parser* (build-meta-grammar-parser))

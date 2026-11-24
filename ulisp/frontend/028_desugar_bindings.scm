@@ -247,6 +247,11 @@
   (Expr
     ((case-lambda . ,clauses) (desugar-case-lambda clauses))))
 
+(define-picopass rule-desugar-rest-lambda
+  (Expr
+    ((lambda ,formals . ,bodies) (guard (not (list? formals)))
+     (desugar-case-lambda (list (cons formals bodies))))))
+
 (define-picopass rule-desugar-let*
   (Expr
     ((let* ,bindings . ,bodies) (desugar-let* bindings bodies))))
@@ -415,6 +420,7 @@
 (define-pass desugar-bindings : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-case-lambda
+    rule-desugar-rest-lambda
     rule-desugar-let*
     rule-desugar-letrec*
     rule-desugar-named-let

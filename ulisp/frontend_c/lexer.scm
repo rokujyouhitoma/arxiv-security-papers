@@ -473,23 +473,43 @@
             (integer->char (+ 48 d1))
             (integer->char (+ 48 d0)))))
 
+(define (%c-escape-byte-for-c code)
+  (cond
+    ((= code 10) "\\n")
+    ((= code 9)  "\\t")
+    ((= code 13) "\\r")
+    ((= code 92) "\\\\")
+    ((= code 34) "\\\"")
+    ((or (< code 32) (>= code 127))
+     (%c-byte->octal3-escape code))
+    (else (string (integer->char code)))))
+
 (define (%c-escape-string-for-c str)
   (let ((n (string-length str)))
     (let loop ((i 0) (parts '()))
       (if (>= i n)
           (apply string-append (reverse parts))
-          (let* ((ch (string-ref str i))
-                 (code (char->integer ch))
-                 (seg (cond
-                        ((= code 10) "\\n")
-                        ((= code 9)  "\\t")
-                        ((= code 13) "\\r")
-                        ((= code 92) "\\\\")
-                        ((= code 34) "\\\"")
-                        ((or (< code 32) (>= code 127))
-                         (%c-byte->octal3-escape code))
-                        (else (string ch)))))
-            (loop (+ i 1) (cons seg parts)))))))
+          (let ((code (char->integer (string-ref str i))))
+            (loop (+ i 1) (cons (%c-escape-byte-for-c code) parts)))))))
+
+(define (%c-token->decoded-chars tok)
+  (let* ((lexeme (c-token-lexeme tok))
+         (len (string-length lexeme))
+         (body-start (if (and (> len 0) (char=? (string-ref lexeme 0) #\L)) 2 1))
+         (body-end (if (> len 0) (- len 1) 0))
+         (sp (c-token-span tok)))
+    (%c-decode-escaped-chars lexeme body-start body-end
+                             (span-file sp) (span-start-line sp) (span-start-col sp)
+                             (span-end-line sp) (span-end-col sp))))
+
+(define (%c-flatten-char-lists lists-rev)
+  (let outer ((ls (reverse lists-rev)) (acc '()))
+    (if (null? ls)
+        (reverse acc)
+        (let inner ((cs (car ls)) (a acc))
+          (if (null? cs)
+              (outer (cdr ls) a)
+              (inner (cdr cs) (cons (car cs) a)))))))
 
 (define (c-concat-adjacent-string-tokens tokens)
   (let loop ((rest tokens) (acc '()))
@@ -498,33 +518,43 @@
        (reverse acc))
       ((eq? (c-token-kind (car rest)) 'string-lit)
        (let ((first-tok (car rest)))
-         (let gather ((cur-rest (cdr rest))
-                      (vals (list (c-token-value first-tok)))
-                      (last-tok first-tok))
-           (if (and (pair? cur-rest)
-                    (eq? (c-token-kind (car cur-rest)) 'string-lit))
-               (gather (cdr cur-rest)
-                       (cons (c-token-value (car cur-rest)) vals)
-                       (car cur-rest))
-               (let* ((merged-val (apply string-append (reverse vals)))
-                      (merged-lex (string-append "\"" (%c-escape-string-for-c merged-val) "\""))
-                      (s1 (c-token-span first-tok))
-                      (s2 (c-token-span last-tok))
-                      (merged-sp (make-source-span
-                                  (span-file s1)
-                                  (span-start-line s1) (span-start-col s1)
-                                  (span-end-line s2) (span-end-col s2)
-                                  (span-macro-origin s1)
-                                  (next-source-span-id!)))
-                      (merged-tok (make-c-token
-                                   'string-lit
-                                   merged-lex
-                                   merged-val
-                                   merged-sp
-                                   (c-token-at-bol? first-tok)
-                                   (c-token-has-leading-space? first-tok)
-                                   (c-token-hide-set first-tok))))
-                 (loop cur-rest (cons merged-tok acc)))))))
+         (if (or (null? (cdr rest))
+                 (not (eq? (c-token-kind (cadr rest)) 'string-lit)))
+             (loop (cdr rest) (cons first-tok acc))
+             (let gather ((cur-rest (cdr rest))
+                          (toks (list first-tok))
+                          (last-tok first-tok))
+               (if (and (pair? cur-rest)
+                        (eq? (c-token-kind (car cur-rest)) 'string-lit))
+                   (gather (cdr cur-rest)
+                           (cons (car cur-rest) toks)
+                           (car cur-rest))
+                   (let* ((char-lists (map %c-token->decoded-chars toks))
+                          (merged-chars (%c-flatten-char-lists char-lists))
+                          (merged-val (list->string merged-chars))
+                          (merged-lex (string-append
+                                       "\""
+                                       (apply string-append
+                                              (map (lambda (c) (%c-escape-byte-for-c (char->integer c)))
+                                                   merged-chars))
+                                       "\""))
+                          (s1 (c-token-span first-tok))
+                          (s2 (c-token-span last-tok))
+                          (merged-sp (make-source-span
+                                      (span-file s1)
+                                      (span-start-line s1) (span-start-col s1)
+                                      (span-end-line s2) (span-end-col s2)
+                                      (span-macro-origin s1)
+                                      (next-source-span-id!)))
+                          (merged-tok (make-c-token
+                                       'string-lit
+                                       merged-lex
+                                       merged-val
+                                       merged-sp
+                                       (c-token-at-bol? first-tok)
+                                       (c-token-has-leading-space? first-tok)
+                                       (c-token-hide-set first-tok))))
+                     (loop cur-rest (cons merged-tok acc))))))))
       (else
        (loop (cdr rest) (cons (car rest) acc))))))
 

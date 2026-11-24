@@ -354,9 +354,12 @@
                  (sym-bucket (vector-ref *symbol-sym-buckets* sym-b-idx)))
             (if (%sym-id-taken? candidate sym-bucket)
                 (loop (modulo (+ (* cand-h 33) 1) 16777213))
-                (let ((entry (cons str candidate)))
+                (let ((entry (cons str candidate))
+                      (c-idx (bitwise-and pos-cand 4095)))
                   (vector-set! *symbol-str-buckets* b-idx (cons entry bucket))
                   (vector-set! *symbol-sym-buckets* sym-b-idx (cons entry sym-bucket))
+                  (vector-set! *sym-cache-sym* c-idx candidate)
+                  (vector-set! *sym-cache-str* c-idx str)
                   (set-car! *symbol-registry* (cons entry (car *symbol-registry*)))
                   candidate)))))))
 
@@ -803,6 +806,37 @@
               (car entry)
               (loop (cdr es)))))))
 
+(define (%symtab-cstr->string ptr)
+  (let len-loop ((len 0))
+    (if (= (%raw-load-u8 ptr len) 0)
+        (let ((s (make-string len)))
+          (let copy-loop ((i 0))
+            (if (< i len)
+                (begin
+                  (string-set! s i (integer->char (%raw-load-u8 ptr i)))
+                  (copy-loop (+ i 1)))
+                s)))
+        (len-loop (+ len 1)))))
+
+(define (%symtab-lookup-string sym)
+  (let ((bp (%get-symtab-bounds)))
+    (if (= bp 0)
+        #f
+        (let ((base (%raw-load bp 0))
+              (cnt  (%to-fixnum (%raw-load bp 8))))
+          (if (or (= base 0) (<= cnt 0))
+              #f
+              (let loop ((idx 0))
+                (if (< idx cnt)
+                    (let ((off (* idx 16)))
+                      (if (eq? (%raw-load base off) sym)
+                          (let ((cstr (%raw-load base (+ off 8))))
+                            (if (= cstr 0)
+                                #f
+                                (%symtab-cstr->string cstr)))
+                          (loop (+ idx 1))))
+                    #f)))))))
+
 (define (symbol->string sym)
   (let* ((h (symbol->integer sym))
          (pos-h (if (< h 0) (- 0 h) h))
@@ -815,10 +849,18 @@
                (found (%symbol-find-string sym bucket))
                (res (if found
                         found
-                        (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
-                          (if known known "?")))))
-          (vector-set! *sym-cache-sym* c-idx sym)
-          (vector-set! *sym-cache-str* c-idx res)
+                        (let ((static-str (%symtab-lookup-string sym)))
+                          (if static-str
+                              (begin
+                                (vector-set! *symbol-sym-buckets* b-idx
+                                             (cons (cons static-str sym) bucket))
+                                static-str)
+                              (let ((known (%sym-assoc-string sym *known-runtime-symbols*)))
+                                (if known known "?")))))))
+          (if (not (string=? res "?"))
+              (begin
+                (vector-set! *sym-cache-sym* c-idx sym)
+                (vector-set! *sym-cache-str* c-idx res)))
           res))))
 
 (define (string-copy-range str start end)

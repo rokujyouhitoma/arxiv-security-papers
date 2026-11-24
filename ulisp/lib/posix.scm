@@ -21,6 +21,9 @@
    (define *sys-faccessat* 48)
    (define *sys-unlinkat* 35)
    (define *sys-dup3* 24)
+   (define *sys-clone* 220)
+   (define *sys-execve* 221)
+   (define *sys-wait4* 260)
    (define *sys-mmap* 222)
    (define *sys-mremap* 216)
    (define *sys-munmap* 215)
@@ -35,7 +38,10 @@
    (define *sys-lseek* 8)
    (define *sys-access* 21)
    (define *sys-dup2* 33)
+   (define *sys-fork* 57)
+   (define *sys-execve* 59)
    (define *sys-exit* 60)
+   (define *sys-wait4* 61)
    (define *sys-unlink* 87)
    (define *sys-mmap* 9)
    (define *sys-munmap* 11)
@@ -477,6 +483,153 @@
 ;; Environment variable query fallback (Issue #621)
 (define (sys-getenv name)
   (get-environment-variable name))
+
+;;; -----------------------------------------------------------------------
+;;; Subprocess Creation & Execution (Issue #932 - Zero Shell execve)
+;;; -----------------------------------------------------------------------
+
+(cond-expand
+  ((or aarch64 arm64)
+   (define (sys-fork)
+     ;; SIGCHLD = 17
+     (%to-fixnum (%raw-syscall (%to-raw *sys-clone*) (%to-raw 17) 0 0 0 0 0))))
+  (else
+   (define (sys-fork)
+     (%to-fixnum (%raw-syscall (%to-raw *sys-fork*) 0 0 0 0 0 0)))))
+
+(define (sys-execve path argv-ptr envp-ptr)
+  (let ((path-ptr (if (string? path) (%ptr-untag path) path)))
+    (%to-fixnum (%raw-syscall (%to-raw *sys-execve*) path-ptr argv-ptr envp-ptr 0 0 0))))
+
+(define (sys-wait4 pid status-ptr options rusage-ptr)
+  (%to-fixnum (%raw-syscall (%to-raw *sys-wait4*) (%to-raw pid) status-ptr (%to-raw options) rusage-ptr 0 0)))
+
+(define (sys-waitpid pid)
+  (let* ((st-cell (cons 0 0))
+         (st-ptr (%ptr-untag st-cell)))
+    (%raw-store! st-ptr 0 0)
+    (let loop ()
+      (let ((ret (sys-wait4 pid st-ptr 0 0)))
+        (cond
+          ((= ret -4) (loop)) ; EINTR: retry wait4
+          ((< ret 0) -1)
+          (else
+           ;; Decode POSIX wait status without raw double-untagging:
+           ;; %raw-load-u8 already returns a tagged fixnum.
+           (let* ((lo (%raw-load-u8 st-ptr 0))
+                  (hi (%raw-load-u8 st-ptr 1))
+                  (termsig (bitwise-and lo 127)))
+             (if (= termsig 0)
+                 hi
+                 (+ 128 termsig)))))))))
+
+(define (%posix-safe-arg? s)
+  (and (string? s)
+       (let ((len (string-length s)))
+         (let loop ((i 0))
+           (if (< i len)
+               (if (= (char->integer (string-ref s i)) 0)
+                   #f
+                   (loop (+ i 1)))
+               #t)))))
+
+(define (%posix-string-contains-char? s ch)
+  (let ((len (string-length s)))
+    (let loop ((i 0))
+      (cond
+        ((>= i len) #f)
+        ((char=? (string-ref s i) ch) #t)
+        (else (loop (+ i 1)))))))
+
+(define (%posix-str-append2 a b)
+  (let* ((la (string-length a))
+         (lb (string-length b))
+         (res (make-string (+ la lb))))
+    (let loop-a ((i 0))
+      (if (< i la)
+          (begin
+            (string-set! res i (string-ref a i))
+            (loop-a (+ i 1)))
+          (let loop-b ((j 0))
+            (if (< j lb)
+                (begin
+                  (string-set! res (+ la j) (string-ref b j))
+                  (loop-b (+ j 1)))
+                res))))))
+
+(define (%posix-split-path path-str)
+  (let ((len (string-length path-str)))
+    (let loop ((start 0) (i 0) (acc '()))
+      (if (>= i len)
+          (%posix-reverse (cons (%posix-substring path-str start len) acc))
+          (if (char=? (string-ref path-str i) #\:)
+              (loop (+ i 1) (+ i 1) (cons (%posix-substring path-str start i) acc))
+              (loop start (+ i 1) acc))))))
+
+(define (%posix-resolve-executable prog)
+  (let ((plen (string-length prog)))
+    (if (= plen 0)
+        #f
+        (if (%posix-string-contains-char? prog #\/)
+            ;; X_OK = 1
+            (if (= (sys-access prog 1) 0) prog #f)
+            (let* ((env-path (or (get-environment-variable "PATH") "/usr/local/bin:/usr/bin:/bin"))
+                   (dirs (%posix-split-path env-path)))
+              (let search ((ds dirs))
+                (if (null? ds)
+                    #f
+                    (let* ((d (car ds))
+                           (dlen (string-length d))
+                           (cand (cond
+                                   ((= dlen 0) prog)
+                                   ((char=? (string-ref d (- dlen 1)) #\/)
+                                    (%posix-str-append2 d prog))
+                                   (else
+                                    (%posix-str-append2 d (%posix-str-append2 "/" prog))))))
+                      (if (= (sys-access cand 1) 0)
+                          cand
+                          (search (cdr ds)))))))))))
+
+(define (process-exec argv)
+  (if (not (pair? argv))
+      (error "process-exec: expected non-empty list of strings" argv))
+  (let ((n
+         (let validate ((cur argv) (cnt 0))
+           (cond
+             ((null? cur) cnt)
+             ((pair? cur)
+              (let ((s (car cur)))
+                (if (not (%posix-safe-arg? s))
+                    (error "process-exec: invalid or NUL argument" s))
+                (validate (cdr cur) (+ cnt 1))))
+             (else
+              (error "process-exec: expected proper list of strings" argv))))))
+    (let ((prog (car argv)))
+      (if (= (string-length prog) 0)
+          (error "process-exec: empty executable name" prog))
+      (let ((exe (%posix-resolve-executable prog)))
+        (if (not exe)
+            127
+            (let* ((bv (%make-bytevector (* (+ n 1) 8)))
+                   (base (%ptr-add (%ptr-untag bv) 8)))
+              (let fill ((i 0) (cur argv))
+                (if (< i n)
+                    (begin
+                      (%raw-store! base (* i 8) (%ptr-untag (car cur)))
+                      (fill (+ i 1) (cdr cur)))
+                    (%raw-store! base (* n 8) 0)))
+              (flush-output-port)
+              (let ((pid (sys-fork)))
+                (cond
+                  ((< pid 0) -1)
+                  ((= pid 0)
+                   (sys-execve exe base (sys-environ-ptr))
+                   ;; Raw _exit(127) without flushing parent stdio buffers
+                   (%raw-syscall (%to-raw *sys-exit*) (%to-raw 127) 0 0 0 0 0))
+                  (else
+                   ;; Keep bv/argv live past waitpid before returning
+                   (let ((rc (sys-waitpid pid)))
+                     (if (bytevector? bv) rc rc)))))))))))
 
 ;; §6.14 System interface - features (R7RS-small, Issue #705, #706, #707, #708, #709, #710, #819, #820, #821)
 (cond-expand

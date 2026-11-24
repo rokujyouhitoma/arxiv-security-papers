@@ -25,7 +25,9 @@ else
 fi
 
 run_ucc() {
-    if [ "${USE_GOSH:-0}" = "1" ] && command -v gosh >/dev/null 2>&1; then
+    if [ -n "${ULISP_CC_BIN:-}" ] && [ -x "${ULISP_CC_BIN}" ]; then
+        "$ULISP_CC_BIN" "$@"
+    elif [ "${USE_GOSH:-0}" = "1" ] && command -v gosh >/dev/null 2>&1; then
         gosh -usrfi.9 -ugauche.uvector -ugauche.process -uscheme.file -uscheme.bitwise -uscheme.process-context -I "$ULISP_DIR" -I "$ROOT_DIR" "$DRIVER_RUNNER" "$@"
     else
         PYTHONPATH="$ROOT_DIR" "$PYTHON" -m ilisp "$DRIVER_RUNNER" -- "$@"

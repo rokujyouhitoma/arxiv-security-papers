@@ -29,6 +29,12 @@
 (define (num-modulo a b)
   (bignum-demote (bignum-modulo (%ensure-bignum a) (%ensure-bignum b))))
 
+(define (num-bitwise-and a b)
+  (bignum-demote (bignum-bitwise-and (%ensure-bignum a) (%ensure-bignum b))))
+
+(define (num-bitwise-ior a b)
+  (bignum-demote (bignum-bitwise-ior (%ensure-bignum a) (%ensure-bignum b))))
+
 ;; ---------------------------------------------------------------------
 ;; §6.2.6 square
 ;; ---------------------------------------------------------------------

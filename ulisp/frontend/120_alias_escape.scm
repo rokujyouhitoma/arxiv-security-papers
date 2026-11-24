@@ -82,7 +82,7 @@
 ;;; - It is passed as an argument to an external call (non-primitive / escaping op)
 ;;; - It is stored into another escaping data structure or global
 ;;; Employs the Monotone Framework Lattice Join to ensure set deduplication and monotonicity.
-(define (collect-escaped-vars expr is-tail)
+(define (collect-escaped-vars-in expr is-tail tco-context?)
   (let ((lat (escape-lattice)))
     (cond
       ((symbol? expr)
@@ -94,13 +94,13 @@
          (case op
            ((quote) (lattice-bottom lat))
            ((annotate)
-            (collect-escaped-vars (caddr expr) is-tail))
+            (collect-escaped-vars-in (caddr expr) is-tail tco-context?))
            ((if)
-            (let ((test-esc (collect-escaped-vars (cadr expr) #f))
-                  (then-esc (collect-escaped-vars (caddr expr) is-tail))
+            (let ((test-esc (collect-escaped-vars-in (cadr expr) #f tco-context?))
+                  (then-esc (collect-escaped-vars-in (caddr expr) is-tail tco-context?))
                   (else-esc (if (null? (cdddr expr))
                                 (lattice-bottom lat)
-                                (collect-escaped-vars (cadddr expr) is-tail))))
+                                (collect-escaped-vars-in (cadddr expr) is-tail tco-context?))))
               (lattice-join lat test-esc (lattice-join lat then-esc else-esc))))
            ((begin)
             (let loop ((es (cdr expr)) (acc (lattice-bottom lat)))
@@ -108,7 +108,7 @@
                   acc
                   (let ((tail? (and is-tail (null? (cdr es)))))
                     (loop (cdr es)
-                          (lattice-join lat acc (collect-escaped-vars (car es) tail?)))))))
+                          (lattice-join lat acc (collect-escaped-vars-in (car es) tail? tco-context?)))))))
          ((let)
           (let* ((bindings (cadr expr))
                  (body (caddr expr))
@@ -116,12 +116,12 @@
                   (let loop ((bs bindings) (acc (lattice-bottom lat)))
                     (if (null? bs) acc
                         (loop (cdr bs)
-                              (lattice-join lat acc (collect-escaped-vars (cadar bs) #f))))))
-                 (body-escs (collect-escaped-vars body is-tail)))
+                              (lattice-join lat acc (collect-escaped-vars-in (cadar bs) #f tco-context?))))))
+                 (body-escs (collect-escaped-vars-in body is-tail tco-context?)))
             (lattice-join lat b-escs body-escs)))
          ;; Safe local destructors: car, cdr, %closure-ref, null?, pair? do NOT cause target to escape
          ((car cdr null? pair? not zero? fixnum? integer? string? boolean?)
-          (collect-escaped-vars (cadr expr) #f))
+          (collect-escaped-vars-in (cadr expr) #f tco-context?))
          ((%closure-ref %global-ref)
           (lattice-bottom lat))
          ((%direct-call)
@@ -131,27 +131,31 @@
                   (loop (cdr args)
                         (if (symbol? arg)
                             (lattice-join lat (list arg) acc)
-                            (lattice-join lat (collect-escaped-vars arg #f) acc)))))))
+                            (lattice-join lat (collect-escaped-vars-in arg #f tco-context?) acc)))))))
          ((%global-set!)
           (let ((stored-val (caddr expr)))
             (if (symbol? stored-val)
                 (list stored-val)
-                (collect-escaped-vars stored-val #f))))
+                (collect-escaped-vars-in stored-val #f tco-context?))))
          ;; Mutations: if storing a value into a heap object, the stored value escapes!
          ((set-car! set-cdr!)
           (let ((stored-val (caddr expr)))
             (if (symbol? stored-val)
-                (lattice-join lat (list stored-val) (collect-escaped-vars (cadr expr) #f))
-                (collect-escaped-vars stored-val #f))))
+                (lattice-join lat (list stored-val) (collect-escaped-vars-in (cadr expr) #f tco-context?))
+                (collect-escaped-vars-in stored-val #f tco-context?))))
          ((vector-set!)
           (let ((stored-val (cadddr expr)))
             (if (symbol? stored-val)
                 (lattice-join lat (list stored-val)
-                              (lattice-join lat (collect-escaped-vars (cadr expr) #f)
-                                            (collect-escaped-vars (caddr expr) #f)))
-                (lattice-join lat (collect-escaped-vars (cadr expr) #f)
-                              (lattice-join lat (collect-escaped-vars (caddr expr) #f)
-                                            (collect-escaped-vars stored-val #f))))))
+                              (lattice-join lat (collect-escaped-vars-in (cadr expr) #f tco-context?)
+                                            (collect-escaped-vars-in (caddr expr) #f tco-context?)))
+                (lattice-join lat (collect-escaped-vars-in (cadr expr) #f tco-context?)
+                              (lattice-join lat (collect-escaped-vars-in (caddr expr) #f tco-context?)
+                                            (collect-escaped-vars-in stored-val #f tco-context?))))))
+         ((%cont-fun)
+          (lattice-join lat
+                        (collect-escaped-vars-in (cadddr expr) #t tco-context?)
+                        (collect-escaped-vars-in (cadr (cdddr expr)) is-tail tco-context?)))
          ;; Standard function call or primitive: all arguments escape unless known safe
          (else
           (let ((args-esc
@@ -161,16 +165,21 @@
                          (loop (cdr args)
                                (if (symbol? arg)
                                    (lattice-join lat (list arg) acc)
-                                   (lattice-join lat (collect-escaped-vars arg #f) acc))))))))
+                                   (lattice-join lat (collect-escaped-vars-in arg #f tco-context?) acc))))))))
             (if (symbol? op)
-                args-esc
-                (lattice-join lat (collect-escaped-vars op #f) args-esc))))))))))
+                (if (and is-tail tco-context?)
+                    (lattice-join lat (list op) args-esc)
+                    args-esc)
+                (lattice-join lat (collect-escaped-vars-in op #f tco-context?) args-esc))))))))))
+
+(define (collect-escaped-vars expr is-tail)
+  (collect-escaped-vars-in expr is-tail #f))
 
 ;;; -----------------------------------------------------------------------
 ;;; Part 3: AST Transformation (Stack Promotion & Redundant Load Elimination)
 ;;; -----------------------------------------------------------------------
 
-(define (alias-escape-transform-expr expr escaped-set avail-loads)
+(define (alias-escape-transform-expr-in expr escaped-set avail-loads tco-context?)
   (cond
     ((not (pair? expr)) expr)
     (else
@@ -179,25 +188,25 @@
          ((quote) expr)
          ((annotate)
           (list 'annotate (cadr expr)
-                (alias-escape-transform-expr (caddr expr) escaped-set avail-loads)))
+                (alias-escape-transform-expr-in (caddr expr) escaped-set avail-loads tco-context?)))
 
          ;; TBAA Load: (car p), (cdr p), (%closure-ref c i)
          ((car cdr %closure-ref)
           (let ((cached-var (tbaa-find-load expr avail-loads)))
             (if cached-var
                 cached-var
-                (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                (cons op (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                               (cdr expr))))))
 
          ;; TBAA Store: invalidates only non-disjoint types
          ((set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store! %atomic-cas! %memory-fence)
-          (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+          (cons op (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                         (cdr expr))))
 
          ((%direct-call)
           (cons '%direct-call
                 (cons (cadr expr)
-                      (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                      (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                            (cddr expr)))))
 
          ((%global-ref)
@@ -205,14 +214,14 @@
 
          ((%global-set!)
           (list '%global-set! (cadr expr)
-                (alias-escape-transform-expr (caddr expr) escaped-set avail-loads)))
+                (alias-escape-transform-expr-in (caddr expr) escaped-set avail-loads tco-context?)))
 
          ((if)
-          (let* ((test (alias-escape-transform-expr (cadr expr) escaped-set avail-loads))
-                 (then (alias-escape-transform-expr (caddr expr) escaped-set avail-loads))
+          (let* ((test (alias-escape-transform-expr-in (cadr expr) escaped-set avail-loads tco-context?))
+                 (then (alias-escape-transform-expr-in (caddr expr) escaped-set avail-loads tco-context?))
                  (else-part (if (null? (cdddr expr))
                                 #f
-                                (alias-escape-transform-expr (cadddr expr) escaped-set avail-loads))))
+                                (alias-escape-transform-expr-in (cadddr expr) escaped-set avail-loads tco-context?))))
             (list 'if test then else-part)))
 
          ((begin)
@@ -220,7 +229,7 @@
             (if (null? es)
                 (cons 'begin (reverse acc))
                 (let* ((e (car es))
-                       (transformed (alias-escape-transform-expr e escaped-set cur-loads))
+                       (transformed (alias-escape-transform-expr-in e escaped-set cur-loads tco-context?))
                        (next-loads
                         (if (and (pair? e) (memq (car e) '(set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store! %atomic-cas! %memory-fence)))
                             (tbaa-invalidate-loads e cur-loads)
@@ -241,21 +250,21 @@
                          ;; Non-escaping pair: promote to %stack-cons
                          ((and (not escapes?) (pair? val) (eq? (car val) 'cons))
                           (list var (cons '%stack-cons
-                                          (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                                          (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                                                (cdr val)))))
                          ;; Non-escaping %make-closure-env: promote to (annotate #:stack-alloc (%make-closure-env ...))
                          ((and (not escapes?) (pair? val) (eq? (car val) '%make-closure-env))
                           (list var (list 'annotate *stack-alloc-attr*
                                           (cons '%make-closure-env
-                                                (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                                                (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                                                      (cdr val))))))
                          ;; Non-escaping closure: promote to %make-stack-closure
                          ((and (not escapes?) (pair? val) (eq? (car val) '%make-closure))
                           (list var (cons '%make-stack-closure
-                                          (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                                          (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                                                (cdr val)))))
                          (else
-                          (list var (alias-escape-transform-expr val escaped-set avail-loads))))))
+                          (list var (alias-escape-transform-expr-in val escaped-set avail-loads tco-context?))))))
                    bindings))
                  ;; Record available loads from bindings
                  (new-avail-loads
@@ -271,7 +280,7 @@
                               (let ((tc (tbaa-type-class rhs)))
                                 (loop (cdr bs) (cons (list rhs tc v) cur-loads)))
                               (loop (cdr bs) cur-loads))))))
-                 (new-body (alias-escape-transform-expr body escaped-set new-avail-loads)))
+                 (new-body (alias-escape-transform-expr-in body escaped-set new-avail-loads tco-context?)))
             (list 'let trans-bindings new-body)))
 
          ((%cont-fun)
@@ -279,23 +288,26 @@
                  (params (caddr expr))
                  (f-body (cadddr expr))
                  (in-body (cadr (cdddr expr)))
-                 (f-esc (collect-escaped-vars f-body #t))
-                 (new-f-body (alias-escape-transform-expr f-body f-esc avail-loads))
-                 (new-in-body (alias-escape-transform-expr in-body escaped-set avail-loads)))
+                 (f-esc (collect-escaped-vars-in f-body #t tco-context?))
+                 (new-f-body (alias-escape-transform-expr-in f-body f-esc avail-loads tco-context?))
+                 (new-in-body (alias-escape-transform-expr-in in-body escaped-set avail-loads tco-context?)))
             (list '%cont-fun f-name params new-f-body new-in-body)))
 
          (else
-          (cons (alias-escape-transform-expr op escaped-set avail-loads)
-                (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+          (cons (alias-escape-transform-expr-in op escaped-set avail-loads tco-context?)
+                (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                      (cdr expr)))))))))
+
+(define (alias-escape-transform-expr expr escaped-set avail-loads)
+  (alias-escape-transform-expr-in expr escaped-set avail-loads #f))
 
 ;;; Optimize a single procedure or top-level expression
 (define (alias-escape-optimize-function fn-def)
   (let* ((label (cadr fn-def))
          (params (caddr fn-def))
          (body (cadddr fn-def))
-         (escaped-set (collect-escaped-vars body #t))
-         (optimized-body (alias-escape-transform-expr body escaped-set '())))
+         (escaped-set (collect-escaped-vars-in body #t #t))
+         (optimized-body (alias-escape-transform-expr-in body escaped-set '() #t)))
     (list '%function label params optimized-body)))
 
 ;;; Pass 6b Main Entrypoint

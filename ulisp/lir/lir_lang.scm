@@ -185,6 +185,7 @@
     (%inline-asm str asm_clause ...))
   (StringEntry (se)
     (lbl str)
+    (lbl (bytes n ...))
     (str1 str2))
   (DataChunk (dc)
     n
@@ -429,6 +430,7 @@
     (%store-values-buf si cnt))
   (StringEntry (se)
     (lbl str)
+    (lbl (bytes n ...))
     (str1 str2))
   (DataChunk (dc)
     n

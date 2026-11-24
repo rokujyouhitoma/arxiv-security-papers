@@ -150,43 +150,63 @@
              (exp-val (if exp-idx
                           (%parse-signed-int-range str (+ exp-idx 1) end 10)
                           0)))
-        (if (or (not exp-val) (>= mstart mend) (> exp-val 15) (< exp-val -15))
+        (if (or (not exp-val) (>= mstart mend) (> exp-val 1024) (< exp-val -1024))
             #f
             (let ((dot-idx (%find-char-in-range str mstart mend #\.)))
               (if dot-idx
                   (let* ((ilen (- dot-idx mstart))
                          (flen (- mend (+ dot-idx 1)))
+                         (eff-flen (if (> flen 12) 12 flen))
                          (ipart (if (= ilen 0)
                                     0
                                     (%parse-uint-range str mstart dot-idx 10 *ulisp-fixnum-max*)))
-                         (fpart (if (= flen 0)
+                         (fpart-all (if (= flen 0)
+                                        0
+                                        (%parse-uint-range str (+ dot-idx 1) mend 10 *ulisp-fixnum-max*)))
+                         (fpart (if (= eff-flen 0)
                                     0
-                                    (%parse-uint-range str (+ dot-idx 1) mend 10 *ulisp-fixnum-max*))))
+                                    (%parse-uint-range str (+ dot-idx 1) (+ (+ dot-idx 1) eff-flen) 10 *ulisp-fixnum-max*))))
                     (if (or (and (= ilen 0) (= flen 0))
                             (not ipart)
-                            (not fpart)
-                            (> flen 12))
+                            (not fpart-all)
+                            (not fpart))
                         #f
-                        (let* ((fscale (%int-expt 10 flen))
-                               (base-rat (make-rational (+ (* ipart fscale) fpart) fscale))
-                               (scaled-rat
-                                (cond
-                                  ((= exp-val 0) base-rat)
-                                  ((> exp-val 0) (rat* base-rat (%int-expt 10 exp-val)))
-                                  (else (rat/ base-rat (%int-expt 10 (- 0 exp-val))))))
-                               (signed-rat (if neg? (rat- scaled-rat) scaled-rat)))
-                          (cons 'inexact-real signed-rat))))
+                        (cond
+                          ((> exp-val 15)
+                           (if (and (= ipart 0) (= fpart-all 0))
+                               (cons 'inexact-real 0)
+                               (cons 'inexact-inf (if neg? -inf.0 +inf.0))))
+                          ((< exp-val -15)
+                           (cons 'inexact-real 0))
+                          (else
+                           (let* ((fscale (%int-expt 10 eff-flen))
+                                  (base-rat (make-rational (+ (* ipart fscale) fpart) fscale))
+                                  (scaled-rat
+                                   (cond
+                                     ((= exp-val 0) base-rat)
+                                     ((> exp-val 0) (rat* base-rat (%int-expt 10 exp-val)))
+                                     (else (rat/ base-rat (%int-expt 10 (- 0 exp-val))))))
+                                  (signed-rat (if neg? (rat- scaled-rat) scaled-rat)))
+                             (cons 'inexact-real signed-rat))))))
                   ;; No dot, must have exp-idx
                   (let ((ipart (%parse-uint-range str mstart mend 10 *ulisp-fixnum-max*)))
                     (if (not ipart)
                         #f
-                        (let* ((scaled-rat
-                                (cond
-                                  ((= exp-val 0) ipart)
-                                  ((> exp-val 0) (* ipart (%int-expt 10 exp-val)))
-                                  (else (make-rational ipart (%int-expt 10 (- 0 exp-val))))))
-                               (signed-rat (if neg? (rat- scaled-rat) scaled-rat)))
-                          (cons 'inexact-real signed-rat))))))))))
+                        (cond
+                          ((> exp-val 15)
+                           (if (= ipart 0)
+                               (cons 'inexact-real 0)
+                               (cons 'inexact-inf (if neg? -inf.0 +inf.0))))
+                          ((< exp-val -15)
+                           (cons 'inexact-real 0))
+                          (else
+                           (let* ((scaled-rat
+                                   (cond
+                                     ((= exp-val 0) ipart)
+                                     ((> exp-val 0) (* ipart (%int-expt 10 exp-val)))
+                                     (else (make-rational ipart (%int-expt 10 (- 0 exp-val))))))
+                                  (signed-rat (if neg? (rat- scaled-rat) scaled-rat)))
+                             (cons 'inexact-real signed-rat))))))))))))
 
 (define (%parse-real-token str start end radix exactness-pref)
   (cond
@@ -216,10 +236,12 @@
                (let ((dec-res (%parse-decimal-or-exp-range str start end)))
                  (if (not dec-res)
                      #f
-                     (let ((exact-rat (cdr dec-res)))
-                       (if (eq? exactness-pref 'exact)
-                           exact-rat
-                           (inexact exact-rat)))))
+                     (if (eq? (car dec-res) 'inexact-inf)
+                         (if (eq? exactness-pref 'exact) #f (cdr dec-res))
+                         (let ((exact-rat (cdr dec-res)))
+                           (if (eq? exactness-pref 'exact)
+                               exact-rat
+                               (inexact exact-rat))))))
                (let ((ival (%parse-signed-int-range str start end radix)))
                  (if (not ival)
                      #f

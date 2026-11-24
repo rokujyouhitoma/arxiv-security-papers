@@ -24,7 +24,6 @@
 (define (abs x) (if (< x 0) (- 0 x) x))
 (define (safe-car x) (if (pair? x) (car x) '()))
 (define (safe-cdr x) (if (pair? x) (cdr x) '()))
-(define (sys-chmod path mode) #f)
 
 (define (string-starts-with? s prefix)
   (let ((slen (string-length s))
@@ -1476,6 +1475,8 @@
     (ulisp_fn_num_lt_eq . "ulisp_fn_num_lt_eq")
     (ulisp_fn_num_gt . "ulisp_fn_num_gt")
     (ulisp_fn_num_gt_eq . "ulisp_fn_num_gt_eq")
+    (ulisp_fn_num_bitwise_and . "ulisp_fn_num_bitwise_and")
+    (ulisp_fn_num_bitwise_ior . "ulisp_fn_num_bitwise_ior")
     (... . "...")
     (_ . "_")
     (guard . "guard")
@@ -2788,7 +2789,7 @@
 ;;; Primitive procedure categorization predicates
 (define (zero-arg-prim? op)
   (case op
-    ((read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
+    ((read-char %read-char peek-char %peek-char eof-object flush-output-port ulisp-flush %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-symtab-bounds %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap %num-args %memory-fence %synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!)
      #t)
     (else #f)))
 
@@ -3139,20 +3140,23 @@
             #f))))
 
 (define (nanopass-meta-var-matches-str? s prefs s-len)
-  (if (null? prefs)
+  (if (or (null? prefs) (string=? s "?"))
       #f
       (let* ((p (symbol->raw-name (car prefs)))
              (p-len (string-length p)))
-        (if (and (>= s-len p-len)
+        (if (and (not (string=? p "?"))
+                 (>= s-len p-len)
                  (string-starts-with? s p)
                  (nanopass-meta-suffix-check? s p-len s-len))
             #t
             (nanopass-meta-var-matches-str? s (cdr prefs) s-len)))))
 
 (define (nanopass-meta-var-matches? sym prefixes)
-  (let* ((s (symbol->raw-name sym))
-         (s-len (string-length s)))
-    (nanopass-meta-var-matches-str? s prefixes s-len)))
+  (if (memq sym prefixes)
+      #t
+      (let* ((s (symbol->raw-name sym))
+             (s-len (string-length s)))
+        (nanopass-meta-var-matches-str? s prefixes s-len))))
 
 ;;; Identify nonterminal or terminal for a pattern variable
 ;;; Returns (terminal pred) or (nonterminal nt-sym) or #f
@@ -3171,6 +3175,22 @@
         (if (nanopass-meta-var-matches-str? var-str (cadr nt) s-len)
             (list 'nonterminal (car nt))
             (nanopass-check-nts-str var-str s-len (cdr nts))))))
+
+(define (%nanopass-check-terms-exact var ts)
+  (if (null? ts)
+      #f
+      (let ((term (car ts)))
+        (if (memq var (cadr term))
+            (list 'terminal (car term))
+            (%nanopass-check-terms-exact var (cdr ts))))))
+
+(define (%nanopass-check-nts-exact var nts)
+  (if (null? nts)
+      #f
+      (let ((nt (car nts)))
+        (if (memq var (cadr nt))
+            (list 'nonterminal (car nt))
+            (%nanopass-check-nts-exact var (cdr nts))))))
 
 (define (nanopass-classify-meta-var-uncached var-str lang)
   (let ((s-len (string-length var-str))
@@ -3192,8 +3212,14 @@
              (bucket (vector-ref *classify-meta-var-cache* h)))
         (let loop ((entries bucket))
           (if (null? entries)
-              (let* ((var-str (symbol->raw-name var))
-                     (res (nanopass-classify-meta-var-uncached var-str lang))
+              (let* ((exact-res (or (%nanopass-check-terms-exact var (nanopass-lang-terminals lang))
+                                    (%nanopass-check-nts-exact var (nanopass-lang-nonterminals lang))))
+                     (res (if exact-res
+                              exact-res
+                              (let ((var-str (symbol->raw-name var)))
+                                (if (string=? var-str "?")
+                                    #f
+                                    (nanopass-classify-meta-var-uncached var-str lang)))))
                      (new-entry (cons (cons var lang-name) res)))
                 (vector-set! *classify-meta-var-cache* h (cons new-entry bucket))
                 res)
@@ -8054,16 +8080,38 @@
   (let ((pass-form (cons 'define-pass (cdr form))))
     (nanopass-expand-define-pass-with-trace pass-form #t)))
 
+(define (%nanopass-collect-spec-sym-names tree)
+  (let ((acc
+         (let loop ((node tree) (seen '()))
+           (cond
+             ((symbol? node)
+              (let ((nm (symbol->raw-name node)))
+                (if (and (string? nm)
+                         (> (string-length nm) 0)
+                         (not (string=? nm "?"))
+                         (not (member nm seen)))
+                    (cons nm seen)
+                    seen)))
+             ((pair? node)
+              (loop (cdr node) (loop (car node) seen)))
+             (else seen)))))
+    (reverse acc)))
+
 ;;; Expand define-language AST
 (define (nanopass-expand-define-language form)
   (let* ((name (cadr form))
-         (clauses (cddr form)))
+         (clauses (cddr form))
+         (sym-names (%nanopass-collect-spec-sym-names (cons name clauses))))
     (list 'begin
           (list 'define (string->symbol (string-append "__lang_" (symbol->raw-name name)))
-                (list (string->symbol "nanopass-register-language!")
-                      (list (string->symbol "nanopass-parse-language-spec")
-                            (list 'quote name)
-                            (list 'quote clauses))))
+                (list 'begin
+                      (list 'for-each
+                            (list 'lambda (list 's) (list 'string->symbol 's))
+                            (list 'quote sym-names))
+                      (list (string->symbol "nanopass-register-language!")
+                            (list (string->symbol "nanopass-parse-language-spec")
+                                  (list 'quote name)
+                                  (list 'quote clauses)))))
           (list 'define (string->symbol (string-append "parse-" (symbol->raw-name name)))
                 (list 'lambda (list 'expr)
                       (list (string->symbol "nanopass-parse") (list 'quote name) 'expr)))
@@ -11905,7 +11953,7 @@
     power-assert-report dump-lir-unbound-variable-diagnostic
     %raw-load %raw-load-u8 %raw-store! %raw-syscall %raw-add %raw-sub %raw-mul %raw-cmp
     %ptr-add %ptr-tag %ptr-untag %ptr-tag-add %to-raw %to-fixnum %box-fixnum %unbox-fixnum
-    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap
+    %num-args %get-rsp %get-heap-ptr %get-heap-limit-ptr %get-gc-state-ptr %get-environ-ptr %get-symtab-bounds %get-stackmap-table %get-initial-heap-ptr %get-initial-heap sys-initial-heap
     %memory-fence %atomic-cas!))
 
 (define (scope-primitive-symbol? sym)
@@ -13505,9 +13553,13 @@
 
 (define (ctfe-valid-fixnum? v)
   (and (integer? v)
+       (exact? v)
        (let ((q (quotient v 1073741824)))
          (and (<= q 2147483647)
               (>= q -2147483647)))))
+
+(define (%ctfe-num-guard r)
+  (if (ctfe-valid-fixnum? r) r *ctfe-failure*))
 
 (define (ctfe-apply-primitive op args)
   (let ((nargs (length args)))
@@ -13676,7 +13728,11 @@
          (res (eval-in-stage now-d env expr fuel depth)))
     (cond
       ((stage-csp-error? res) *ctfe-failure*)
-      ((stage-val? res) (stage-val-payload res))
+      ((stage-val? res)
+       (let ((payload (stage-val-payload res)))
+         (if (and (number? payload) (not (ctfe-valid-fixnum? payload)))
+             *ctfe-failure*
+             payload)))
       (else *ctfe-failure*))))
 
 ;;; -----------------------------------------------------------------------
@@ -13998,7 +14054,7 @@
 
 (define (now-dict-apply-prim-1 dict op a)
   (cond
-    ((eq? op 'abs) (if (< a 0) (- 0 a) a))
+    ((eq? op 'abs) (if (number? a) (%ctfe-num-guard (if (< a 0) (- 0 a) a)) *ctfe-failure*))
     ((eq? op 'not) (if a #f #t))
     ((eq? op 'null?) (null? a))
     ((eq? op 'pair?) (pair? a))
@@ -14016,7 +14072,7 @@
     ((eq? op 'cddr) (if (and (pair? a) (pair? (cdr a))) (cddr a) *ctfe-failure*))
     ((eq? op 'length) (if (list? a) (length a) *ctfe-failure*))
     ((eq? op 'reverse) (if (list? a) (reverse a) *ctfe-failure*))
-    ((eq? op '-) (if (number? a) (- 0 a) *ctfe-failure*))
+    ((eq? op '-) (if (number? a) (%ctfe-num-guard (- 0 a)) *ctfe-failure*))
     ((eq? op 'string-length) (if (string? a) (string-length a) *ctfe-failure*))
     ((eq? op 'vector-length) (if (vector? a) (vector-length a) *ctfe-failure*))
     ((eq? op 'bitwise-not) (if (number? a) (ctfe-bitwise-not a) *ctfe-failure*))
@@ -14024,12 +14080,15 @@
 
 (define (now-dict-apply-prim-2 dict op a b)
   (cond
-    ((eq? op '+) (+ a b))
-    ((eq? op '-) (- a b))
-    ((eq? op '*) (* a b))
-    ((or (eq? op 'quotient) (eq? op '/)) (if (= b 0) *ctfe-failure* (quotient a b)))
-    ((eq? op 'modulo) (if (= b 0) *ctfe-failure* (modulo a b)))
-    ((eq? op 'remainder) (if (= b 0) *ctfe-failure* (remainder a b)))
+    ((eq? op '+) (if (and (number? a) (number? b)) (%ctfe-num-guard (+ a b)) *ctfe-failure*))
+    ((eq? op '-) (if (and (number? a) (number? b)) (%ctfe-num-guard (- a b)) *ctfe-failure*))
+    ((eq? op '*) (if (and (number? a) (number? b)) (%ctfe-num-guard (* a b)) *ctfe-failure*))
+    ((or (eq? op 'quotient) (eq? op '/))
+     (if (and (number? a) (number? b) (not (= b 0))) (%ctfe-num-guard (quotient a b)) *ctfe-failure*))
+    ((eq? op 'modulo)
+     (if (and (number? a) (number? b) (not (= b 0))) (%ctfe-num-guard (modulo a b)) *ctfe-failure*))
+    ((eq? op 'remainder)
+     (if (and (number? a) (number? b) (not (= b 0))) (%ctfe-num-guard (remainder a b)) *ctfe-failure*))
     ((eq? op 'min) (if (and (number? a) (number? b)) (min a b) *ctfe-failure*))
     ((eq? op 'max) (if (and (number? a) (number? b)) (max a b) *ctfe-failure*))
     ((eq? op '=) (= a b))
@@ -21419,6 +21478,11 @@
   (Expr
     ((case-lambda . ,clauses) (desugar-case-lambda clauses))))
 
+(define-picopass rule-desugar-rest-lambda
+  (Expr
+    ((lambda ,formals . ,bodies) (guard (not (list? formals)))
+     (desugar-case-lambda (list (cons formals bodies))))))
+
 (define-picopass rule-desugar-let*
   (Expr
     ((let* ,bindings . ,bodies) (desugar-let* bindings bodies))))
@@ -21587,6 +21651,7 @@
 (define-pass desugar-bindings : L_src (ir) -> L_src ()
   (fuse-rules
     rule-desugar-case-lambda
+    rule-desugar-rest-lambda
     rule-desugar-let*
     rule-desugar-letrec*
     rule-desugar-named-let
@@ -21865,6 +21930,7 @@
 
       ;; --- Pass 028: Bindings & Internal Definitions ---
       rule-desugar-case-lambda
+      rule-desugar-rest-lambda
       rule-desugar-let*
       rule-desugar-letrec*
       rule-desugar-named-let
@@ -23661,7 +23727,7 @@
                                     (list #f (cadr then-res) env-test)
                                     (lvn-eval (cadddr expr) env-test)))
                       (opt-else (car else-res))
-                      (alloc-res (lvn-alloc-vn env-test (list 'if opt-test opt-then opt-else) '()))
+                      (alloc-res (lvn-alloc-vn (lvn-invalidate-pairs env-test) (list 'if opt-test opt-then opt-else) '()))
                       (new-vn (car alloc-res))
                       (new-env (cdr alloc-res)))
                  (list (list 'if opt-test opt-then opt-else) new-vn new-env))))))
@@ -23708,7 +23774,7 @@
                          (list (car b) (lvn-expr (cadr b) (make-lvn-env))))
                        bindings))
                  (opt-body (lvn-expr body (make-lvn-env)))
-                 (alloc-res (lvn-alloc-vn env (list 'letrec opt-bindings opt-body) '())))
+                 (alloc-res (lvn-alloc-vn (lvn-invalidate-pairs env) (list 'letrec opt-bindings opt-body) '())))
             (list (list 'letrec opt-bindings opt-body) (car alloc-res) (cdr alloc-res))))
          ((lambda)
           (let* ((params (cadr expr))
@@ -23782,7 +23848,7 @@
             (if (symbol? opt-op)
                 (lvn-eval-call opt-op opt-args vn-args cur-env)
                 (let* ((call-expr (cons opt-op opt-args))
-                       (alloc-res (lvn-alloc-vn cur-env call-expr '())))
+                       (alloc-res (lvn-alloc-vn (lvn-invalidate-pairs cur-env) call-expr '())))
                   (list call-expr (car alloc-res) (cdr alloc-res)))))))))
     (else
      (list expr 0 env))))
@@ -24308,7 +24374,7 @@
      (type-boolean))
     ((memq op '(make-string string-ref))
      (if (eq? op 'make-string) (type-string) (type-char)))
-    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %get-environ-ptr %get-initial-heap-ptr %get-initial-heap sys-initial-heap %raw-load %raw-load-u8 %ptr-add %ptr-tag-add))
+    ((memq op '(%get-rsp %get-heap-ptr %get-gc-state-ptr %get-environ-ptr %get-symtab-bounds %get-initial-heap-ptr %get-initial-heap sys-initial-heap %raw-load %raw-load-u8 %ptr-add %ptr-tag-add))
      (type-fixnum))
     (else (type-top))))
 
@@ -26073,7 +26139,7 @@
 ;;; - It is passed as an argument to an external call (non-primitive / escaping op)
 ;;; - It is stored into another escaping data structure or global
 ;;; Employs the Monotone Framework Lattice Join to ensure set deduplication and monotonicity.
-(define (collect-escaped-vars expr is-tail)
+(define (collect-escaped-vars-in expr is-tail tco-context?)
   (let ((lat (escape-lattice)))
     (cond
       ((symbol? expr)
@@ -26085,13 +26151,13 @@
          (case op
            ((quote) (lattice-bottom lat))
            ((annotate)
-            (collect-escaped-vars (caddr expr) is-tail))
+            (collect-escaped-vars-in (caddr expr) is-tail tco-context?))
            ((if)
-            (let ((test-esc (collect-escaped-vars (cadr expr) #f))
-                  (then-esc (collect-escaped-vars (caddr expr) is-tail))
+            (let ((test-esc (collect-escaped-vars-in (cadr expr) #f tco-context?))
+                  (then-esc (collect-escaped-vars-in (caddr expr) is-tail tco-context?))
                   (else-esc (if (null? (cdddr expr))
                                 (lattice-bottom lat)
-                                (collect-escaped-vars (cadddr expr) is-tail))))
+                                (collect-escaped-vars-in (cadddr expr) is-tail tco-context?))))
               (lattice-join lat test-esc (lattice-join lat then-esc else-esc))))
            ((begin)
             (let loop ((es (cdr expr)) (acc (lattice-bottom lat)))
@@ -26099,7 +26165,7 @@
                   acc
                   (let ((tail? (and is-tail (null? (cdr es)))))
                     (loop (cdr es)
-                          (lattice-join lat acc (collect-escaped-vars (car es) tail?)))))))
+                          (lattice-join lat acc (collect-escaped-vars-in (car es) tail? tco-context?)))))))
          ((let)
           (let* ((bindings (cadr expr))
                  (body (caddr expr))
@@ -26107,12 +26173,12 @@
                   (let loop ((bs bindings) (acc (lattice-bottom lat)))
                     (if (null? bs) acc
                         (loop (cdr bs)
-                              (lattice-join lat acc (collect-escaped-vars (cadar bs) #f))))))
-                 (body-escs (collect-escaped-vars body is-tail)))
+                              (lattice-join lat acc (collect-escaped-vars-in (cadar bs) #f tco-context?))))))
+                 (body-escs (collect-escaped-vars-in body is-tail tco-context?)))
             (lattice-join lat b-escs body-escs)))
          ;; Safe local destructors: car, cdr, %closure-ref, null?, pair? do NOT cause target to escape
          ((car cdr null? pair? not zero? fixnum? integer? string? boolean?)
-          (collect-escaped-vars (cadr expr) #f))
+          (collect-escaped-vars-in (cadr expr) #f tco-context?))
          ((%closure-ref %global-ref)
           (lattice-bottom lat))
          ((%direct-call)
@@ -26122,27 +26188,31 @@
                   (loop (cdr args)
                         (if (symbol? arg)
                             (lattice-join lat (list arg) acc)
-                            (lattice-join lat (collect-escaped-vars arg #f) acc)))))))
+                            (lattice-join lat (collect-escaped-vars-in arg #f tco-context?) acc)))))))
          ((%global-set!)
           (let ((stored-val (caddr expr)))
             (if (symbol? stored-val)
                 (list stored-val)
-                (collect-escaped-vars stored-val #f))))
+                (collect-escaped-vars-in stored-val #f tco-context?))))
          ;; Mutations: if storing a value into a heap object, the stored value escapes!
          ((set-car! set-cdr!)
           (let ((stored-val (caddr expr)))
             (if (symbol? stored-val)
-                (lattice-join lat (list stored-val) (collect-escaped-vars (cadr expr) #f))
-                (collect-escaped-vars stored-val #f))))
+                (lattice-join lat (list stored-val) (collect-escaped-vars-in (cadr expr) #f tco-context?))
+                (collect-escaped-vars-in stored-val #f tco-context?))))
          ((vector-set!)
           (let ((stored-val (cadddr expr)))
             (if (symbol? stored-val)
                 (lattice-join lat (list stored-val)
-                              (lattice-join lat (collect-escaped-vars (cadr expr) #f)
-                                            (collect-escaped-vars (caddr expr) #f)))
-                (lattice-join lat (collect-escaped-vars (cadr expr) #f)
-                              (lattice-join lat (collect-escaped-vars (caddr expr) #f)
-                                            (collect-escaped-vars stored-val #f))))))
+                              (lattice-join lat (collect-escaped-vars-in (cadr expr) #f tco-context?)
+                                            (collect-escaped-vars-in (caddr expr) #f tco-context?)))
+                (lattice-join lat (collect-escaped-vars-in (cadr expr) #f tco-context?)
+                              (lattice-join lat (collect-escaped-vars-in (caddr expr) #f tco-context?)
+                                            (collect-escaped-vars-in stored-val #f tco-context?))))))
+         ((%cont-fun)
+          (lattice-join lat
+                        (collect-escaped-vars-in (cadddr expr) #t tco-context?)
+                        (collect-escaped-vars-in (cadr (cdddr expr)) is-tail tco-context?)))
          ;; Standard function call or primitive: all arguments escape unless known safe
          (else
           (let ((args-esc
@@ -26152,16 +26222,21 @@
                          (loop (cdr args)
                                (if (symbol? arg)
                                    (lattice-join lat (list arg) acc)
-                                   (lattice-join lat (collect-escaped-vars arg #f) acc))))))))
+                                   (lattice-join lat (collect-escaped-vars-in arg #f tco-context?) acc))))))))
             (if (symbol? op)
-                args-esc
-                (lattice-join lat (collect-escaped-vars op #f) args-esc))))))))))
+                (if (and is-tail tco-context?)
+                    (lattice-join lat (list op) args-esc)
+                    args-esc)
+                (lattice-join lat (collect-escaped-vars-in op #f tco-context?) args-esc))))))))))
+
+(define (collect-escaped-vars expr is-tail)
+  (collect-escaped-vars-in expr is-tail #f))
 
 ;;; -----------------------------------------------------------------------
 ;;; Part 3: AST Transformation (Stack Promotion & Redundant Load Elimination)
 ;;; -----------------------------------------------------------------------
 
-(define (alias-escape-transform-expr expr escaped-set avail-loads)
+(define (alias-escape-transform-expr-in expr escaped-set avail-loads tco-context?)
   (cond
     ((not (pair? expr)) expr)
     (else
@@ -26170,25 +26245,25 @@
          ((quote) expr)
          ((annotate)
           (list 'annotate (cadr expr)
-                (alias-escape-transform-expr (caddr expr) escaped-set avail-loads)))
+                (alias-escape-transform-expr-in (caddr expr) escaped-set avail-loads tco-context?)))
 
          ;; TBAA Load: (car p), (cdr p), (%closure-ref c i)
          ((car cdr %closure-ref)
           (let ((cached-var (tbaa-find-load expr avail-loads)))
             (if cached-var
                 cached-var
-                (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                (cons op (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                               (cdr expr))))))
 
          ;; TBAA Store: invalidates only non-disjoint types
          ((set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store! %atomic-cas! %memory-fence)
-          (cons op (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+          (cons op (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                         (cdr expr))))
 
          ((%direct-call)
           (cons '%direct-call
                 (cons (cadr expr)
-                      (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                      (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                            (cddr expr)))))
 
          ((%global-ref)
@@ -26196,14 +26271,14 @@
 
          ((%global-set!)
           (list '%global-set! (cadr expr)
-                (alias-escape-transform-expr (caddr expr) escaped-set avail-loads)))
+                (alias-escape-transform-expr-in (caddr expr) escaped-set avail-loads tco-context?)))
 
          ((if)
-          (let* ((test (alias-escape-transform-expr (cadr expr) escaped-set avail-loads))
-                 (then (alias-escape-transform-expr (caddr expr) escaped-set avail-loads))
+          (let* ((test (alias-escape-transform-expr-in (cadr expr) escaped-set avail-loads tco-context?))
+                 (then (alias-escape-transform-expr-in (caddr expr) escaped-set avail-loads tco-context?))
                  (else-part (if (null? (cdddr expr))
                                 #f
-                                (alias-escape-transform-expr (cadddr expr) escaped-set avail-loads))))
+                                (alias-escape-transform-expr-in (cadddr expr) escaped-set avail-loads tco-context?))))
             (list 'if test then else-part)))
 
          ((begin)
@@ -26211,7 +26286,7 @@
             (if (null? es)
                 (cons 'begin (reverse acc))
                 (let* ((e (car es))
-                       (transformed (alias-escape-transform-expr e escaped-set cur-loads))
+                       (transformed (alias-escape-transform-expr-in e escaped-set cur-loads tco-context?))
                        (next-loads
                         (if (and (pair? e) (memq (car e) '(set-car! set-cdr! %closure-set! vector-set! bytevector-u8-set! %raw-store! %atomic-cas! %memory-fence)))
                             (tbaa-invalidate-loads e cur-loads)
@@ -26232,21 +26307,21 @@
                          ;; Non-escaping pair: promote to %stack-cons
                          ((and (not escapes?) (pair? val) (eq? (car val) 'cons))
                           (list var (cons '%stack-cons
-                                          (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                                          (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                                                (cdr val)))))
                          ;; Non-escaping %make-closure-env: promote to (annotate #:stack-alloc (%make-closure-env ...))
                          ((and (not escapes?) (pair? val) (eq? (car val) '%make-closure-env))
                           (list var (list 'annotate *stack-alloc-attr*
                                           (cons '%make-closure-env
-                                                (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                                                (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                                                      (cdr val))))))
                          ;; Non-escaping closure: promote to %make-stack-closure
                          ((and (not escapes?) (pair? val) (eq? (car val) '%make-closure))
                           (list var (cons '%make-stack-closure
-                                          (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+                                          (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                                                (cdr val)))))
                          (else
-                          (list var (alias-escape-transform-expr val escaped-set avail-loads))))))
+                          (list var (alias-escape-transform-expr-in val escaped-set avail-loads tco-context?))))))
                    bindings))
                  ;; Record available loads from bindings
                  (new-avail-loads
@@ -26262,7 +26337,7 @@
                               (let ((tc (tbaa-type-class rhs)))
                                 (loop (cdr bs) (cons (list rhs tc v) cur-loads)))
                               (loop (cdr bs) cur-loads))))))
-                 (new-body (alias-escape-transform-expr body escaped-set new-avail-loads)))
+                 (new-body (alias-escape-transform-expr-in body escaped-set new-avail-loads tco-context?)))
             (list 'let trans-bindings new-body)))
 
          ((%cont-fun)
@@ -26270,23 +26345,26 @@
                  (params (caddr expr))
                  (f-body (cadddr expr))
                  (in-body (cadr (cdddr expr)))
-                 (f-esc (collect-escaped-vars f-body #t))
-                 (new-f-body (alias-escape-transform-expr f-body f-esc avail-loads))
-                 (new-in-body (alias-escape-transform-expr in-body escaped-set avail-loads)))
+                 (f-esc (collect-escaped-vars-in f-body #t tco-context?))
+                 (new-f-body (alias-escape-transform-expr-in f-body f-esc avail-loads tco-context?))
+                 (new-in-body (alias-escape-transform-expr-in in-body escaped-set avail-loads tco-context?)))
             (list '%cont-fun f-name params new-f-body new-in-body)))
 
          (else
-          (cons (alias-escape-transform-expr op escaped-set avail-loads)
-                (map (lambda (e) (alias-escape-transform-expr e escaped-set avail-loads))
+          (cons (alias-escape-transform-expr-in op escaped-set avail-loads tco-context?)
+                (map (lambda (e) (alias-escape-transform-expr-in e escaped-set avail-loads tco-context?))
                      (cdr expr)))))))))
+
+(define (alias-escape-transform-expr expr escaped-set avail-loads)
+  (alias-escape-transform-expr-in expr escaped-set avail-loads #f))
 
 ;;; Optimize a single procedure or top-level expression
 (define (alias-escape-optimize-function fn-def)
   (let* ((label (cadr fn-def))
          (params (caddr fn-def))
          (body (cadddr fn-def))
-         (escaped-set (collect-escaped-vars body #t))
-         (optimized-body (alias-escape-transform-expr body escaped-set '())))
+         (escaped-set (collect-escaped-vars-in body #t #t))
+         (optimized-body (alias-escape-transform-expr-in body escaped-set '() #t)))
     (list '%function label params optimized-body)))
 
 ;;; Pass 6b Main Entrypoint
@@ -26490,6 +26568,7 @@
     (%inline-asm str asm_clause ...))
   (StringEntry (se)
     (lbl str)
+    (lbl (bytes n ...))
     (str1 str2))
   (DataChunk (dc)
     n
@@ -26734,6 +26813,7 @@
     (%store-values-buf si cnt))
   (StringEntry (se)
     (lbl str)
+    (lbl (bytes n ...))
     (str1 str2))
   (DataChunk (dc)
     n
@@ -28383,7 +28463,10 @@
          (is-stack-closure? (and (symbol? proc) (memq proc stack-vars)))
          (can-tco? (and tail?
                         (not is-stack-closure?)
-                        (if cur-num-params (= cur-num-params num-args) #f)))
+                        (if cur-num-params
+                            (or (= cur-num-params num-args)
+                                (and (<= cur-num-params 6) (<= num-args 6)))
+                            #f)))
          (frame-shift (align-frame-shift (if (= num-args 0)
                                              (- 0 si)
                                              (- (* 8 (- num-args 1)) si))))
@@ -28477,7 +28560,11 @@
   (let* ((num-args (length args))
          (cur-params-entry (assq '%num-params env))
          (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
-         (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
+         (can-tco? (and tail?
+                        (if cur-num-params
+                            (or (= cur-num-params num-args)
+                                (and (<= cur-num-params 6) (<= num-args 6)))
+                            #f)))
          (cur-fn-entry (assq '%current-func env))
          (is-self-call (and cur-fn-entry (eq? (cdr cur-fn-entry) label)))
          (loop-head-entry (and is-self-call (assq '%self-loop-head env)))
@@ -28492,7 +28579,7 @@
                   (emit-direct-simple-arg! (car as) (list-ref *arg-registers* i) env)
                   (loop (cdr as) (+ i 1)))))
           (if can-tco?
-              (if self-loop-head
+              (if (and self-loop-head (= cur-num-params num-args))
                   (emit-lir! (list '%jump self-loop-head))
                   (begin
                     (emit-lir! (list '%mov '%rax (* num-args 4)))
@@ -28533,7 +28620,7 @@
                             (emit-lir! (list '%load '%r11 '%rsp temp-offset))
                             (emit-lir! (list '%store '%rsp param-offset '%r11))
                             (loop (+ i 1))))))
-                (if self-loop-head
+                (if (and self-loop-head (= cur-num-params num-args))
                     (emit-lir! (list '%jump self-loop-head))
                     (begin
                       (emit-lir! (list '%mov '%rax (* num-args 4)))
@@ -29517,7 +29604,7 @@
             (label (cadr body))
             (cur-params-entry (assq '%num-params env))
             (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
-            (can-tco? (and tail? (if cur-num-params (= cur-num-params 1) #f)))
+            (can-tco? (and tail? (if cur-num-params (<= cur-num-params 6) #f)))
             (frame-shift (align-frame-shift (- 0 si))))
        (lir-compile-expr val si env #f)
        (emit-lir! '(%mov %rdi %rax))
@@ -30427,6 +30514,8 @@
        (emit-lir! (list '%code-ref '%rax "ulisp_gc_state")))
       ((%get-environ-ptr)
        (emit-lir! (list '%code-ref '%rax "ulisp_environ")))
+      ((%get-symtab-bounds)
+       (emit-lir! (list '%code-ref '%rax "ulisp_symtab_bounds")))
       ((%get-heap-limit-ptr)
        (emit-lir! (list '%code-ref '%rax "ulisp_heap_limit")))
       ((%get-stackmap-table)
@@ -31006,9 +31095,35 @@
                              (else 'ulisp_fn_num_gt_eq)))))
             (lir-compile-relop cc slow si env)))
          ((bitwise-and)
-          (emit-lir! (list '%bit-and '%rax (list '%stack si))))
+          (if (or (raw-expr? e1 raw-vars) (raw-expr? e2 raw-vars))
+              (emit-lir! (list '%bit-and '%rax (list '%stack si)))
+              (let ((lbl-slow (unique-label-sym "bitand_slow"))
+                    (lbl-done (unique-label-sym "bitand_done")))
+                (emit-lir! '(%mov %rdx %rax))
+                (emit-lir! (list '%bit-or '%rdx (list '%stack si)))
+                (emit-lir! (list '%bit-and '%rdx 3))
+                (emit-lir! (list '%cmp '%rdx 0))
+                (emit-lir! (list '%jump-cond "jne" lbl-slow))
+                (emit-lir! (list '%bit-and '%rax (list '%stack si)))
+                (emit-lir! (list '%jump lbl-done))
+                (emit-lir! (list '%label lbl-slow))
+                (lir-emit-bin-slow-call! 'ulisp_fn_num_bitwise_and si env)
+                (emit-lir! (list '%label lbl-done)))))
          ((bitwise-ior)
-          (emit-lir! (list '%bit-or '%rax (list '%stack si))))
+          (if (or (raw-expr? e1 raw-vars) (raw-expr? e2 raw-vars))
+              (emit-lir! (list '%bit-or '%rax (list '%stack si)))
+              (let ((lbl-slow (unique-label-sym "bitior_slow"))
+                    (lbl-done (unique-label-sym "bitior_done")))
+                (emit-lir! '(%mov %rdx %rax))
+                (emit-lir! (list '%bit-or '%rdx (list '%stack si)))
+                (emit-lir! (list '%bit-and '%rdx 3))
+                (emit-lir! (list '%cmp '%rdx 0))
+                (emit-lir! (list '%jump-cond "jne" lbl-slow))
+                (emit-lir! (list '%bit-or '%rax (list '%stack si)))
+                (emit-lir! (list '%jump lbl-done))
+                (emit-lir! (list '%label lbl-slow))
+                (lir-emit-bin-slow-call! 'ulisp_fn_num_bitwise_ior si env)
+                (emit-lir! (list '%label lbl-done)))))
          ((%raw-load)
           (emit-lir! '(%sar %rax 2))
           (emit-lir! (list '%load '%rdx '%rsp si))
@@ -34700,7 +34815,8 @@
     (cld)
     (rep-movsb))
   (StringEntry (se)
-    (lbl str))
+    (lbl str)
+    (lbl (bytes n ...)))
   (DataChunk (dc)
     n
     (zero n)
@@ -34789,7 +34905,8 @@
     (svc imm)
     (dmb op))
   (StringEntry (se)
-    (lbl str))
+    (lbl str)
+    (lbl (bytes n ...)))
   (SafepointEntry (sm)
     (lbl frame_size bitmap))
   (FunctionDecl (f)
@@ -37431,12 +37548,40 @@
                          ((eq? cc 'le) "le")
                          ((eq? cc 'g) "g")
                          ((eq? cc 'ge) "ge")
+                         ((eq? cc 'a) "a")
+                         ((eq? cc 'ae) "ae")
+                         ((eq? cc 'b) "b")
+                         ((eq? cc 'be) "be")
+                         ((eq? cc 's) "s")
+                         ((eq? cc 'ns) "ns")
+                         ((eq? cc 'p) "p")
+                         ((eq? cc 'np) "np")
+                         ((eq? cc 'o) "o")
+                         ((eq? cc 'no) "no")
+                         ((eq? cc 'c) "c")
+                         ((eq? cc 'nc) "nc")
+                         ((eq? cc 'z) "z")
+                         ((eq? cc 'nz) "nz")
                          ((eq? cc 'sete) "e")
                          ((eq? cc 'setne) "ne")
                          ((eq? cc 'setl) "l")
                          ((eq? cc 'setle) "le")
                          ((eq? cc 'setg) "g")
                          ((eq? cc 'setge) "ge")
+                         ((eq? cc 'seta) "a")
+                         ((eq? cc 'setae) "ae")
+                         ((eq? cc 'setb) "b")
+                         ((eq? cc 'setbe) "be")
+                         ((eq? cc 'sets) "s")
+                         ((eq? cc 'setns) "ns")
+                         ((eq? cc 'setp) "p")
+                         ((eq? cc 'setnp) "np")
+                         ((eq? cc 'seto) "o")
+                         ((eq? cc 'setno) "no")
+                         ((eq? cc 'setc) "c")
+                         ((eq? cc 'setnc) "nc")
+                         ((eq? cc 'setz) "z")
+                         ((eq? cc 'setnz) "nz")
                          ((symbol? cc)
                           (let ((s (symbol->raw-name cc)))
                             (if (string=? s "?") "e" s)))
@@ -37473,6 +37618,20 @@
                          ((eq? cc 'jle) "jle")
                          ((eq? cc 'jg) "jg")
                          ((eq? cc 'jge) "jge")
+                         ((eq? cc 'ja) "ja")
+                         ((eq? cc 'jae) "jae")
+                         ((eq? cc 'jb) "jb")
+                         ((eq? cc 'jbe) "jbe")
+                         ((eq? cc 'js) "js")
+                         ((eq? cc 'jns) "jns")
+                         ((eq? cc 'jp) "jp")
+                         ((eq? cc 'jnp) "jnp")
+                         ((eq? cc 'jo) "jo")
+                         ((eq? cc 'jno) "jno")
+                         ((eq? cc 'jc) "jc")
+                         ((eq? cc 'jnc) "jnc")
+                         ((eq? cc 'jz) "jz")
+                         ((eq? cc 'jnz) "jnz")
                          ((symbol? cc)
                           (let ((s (symbol->raw-name cc)))
                             (if (string=? s "?") "je" s)))
@@ -37645,9 +37804,13 @@
                              (raw-str (cadr entry)))
                         (emit "    .p2align 3")
                         (emit (string-append lbl-str ":"))
-                        (if (%c99-string-needs-raw-bytes? raw-str)
-                            (%c99-emit-x86-data-chunks (%c99-string->cstr-bytes raw-str))
-                            (emit (string-append "    .asciz \"" (escape-gas-string raw-str) "\"")))))
+                        (cond
+                          ((and (pair? raw-str) (eq? (car raw-str) 'bytes))
+                           (%c99-emit-x86-data-chunks (append (cdr raw-str) '(0))))
+                          ((%c99-string-needs-raw-bytes? raw-str)
+                           (%c99-emit-x86-data-chunks (%c99-string->cstr-bytes raw-str)))
+                          (else
+                           (emit (string-append "    .asciz \"" (escape-gas-string raw-str) "\""))))))
                     str-entries))))
   (emit-x86-switch-jump-tables!)
   (let* ((data-clause (assq 'data (cdr asm-prog)))
@@ -37788,6 +37951,13 @@
     (emit "    mov [rax], rdx")                 ; ulisp_environ[0] = envp
     (emit "    mov [rax + 8], rcx")             ; ulisp_environ[1] = argc
     (emit "    mov [rax + 16], rsi")            ; ulisp_environ[2] = argv
+    (emit "    lea rax, [rip + ulisp_symtab_bounds]")
+    (emit "    lea r8, [rip + __start_ulisp_symtab_sec]")
+    (emit "    lea r9, [rip + __stop_ulisp_symtab_sec]")
+    (emit "    mov [rax], r8")
+    (emit "    sub r9, r8")
+    (emit "    shr r9, 4")
+    (emit "    mov [rax + 8], r9")
     (emit "    lea rax, [rip + ulisp_argc]")
     (emit "    mov [rax], rcx")
     (emit "    lea rax, [rip + ulisp_argv]")
@@ -38297,8 +38467,21 @@
                   (let ((g-lbl (mangle-gvar-label v)))
                     (emit (string-append "    .quad " g-lbl))))
                 gvs))
-    ;; Emit symbols metadata table in .rodata section
+    ;; Emit symbols metadata table in modular section + legacy .rodata table
     (let ((syms (get-all-symbols)))
+      (emit "    .section ulisp_symtab_sec, \"a\"")
+      (emit "    .p2align 3")
+      (let loop ((ss syms) (idx 0))
+        (if (not (null? ss))
+            (let* ((entry (car ss))
+                   (id (cadr entry))
+                   (str (caddr entry))
+                   (sym-lbl (string-append ".L_sym_name_" (number->string idx))))
+              (if (and (string? str) (> (string-length str) 0) (not (string=? str "?")))
+                  (begin
+                    (emit (string-append "    .quad " (number->string id)))
+                    (emit (string-append "    .quad " sym-lbl))))
+              (loop (cdr ss) (+ idx 1)))))
       (emit "    .section .rodata")
       (emit "    .align 8")
       (emit "    .globl __ulisp_symbol_table")
@@ -38374,6 +38557,12 @@
     (emit "    .weak ulisp_environ")
     (emit "ulisp_environ:")
     (emit "    .quad 0")
+    (emit "    .quad 0")
+    (emit "    .quad 0")
+    (emit "    .align 8")
+    (emit "    .globl ulisp_symtab_bounds")
+    (emit "    .weak ulisp_symtab_bounds")
+    (emit "ulisp_symtab_bounds:")
     (emit "    .quad 0")
     (emit "    .quad 0")
     (emit "    .align 8")
@@ -38491,6 +38680,8 @@
     (emit "    .space 256")
     (emit "    .weak __start_ulisp_globals_sec")
     (emit "    .weak __stop_ulisp_globals_sec")
+    (emit "    .weak __start_ulisp_symtab_sec")
+    (emit "    .weak __stop_ulisp_symtab_sec")
     (emit "    .globl ulisp_peek_buf")
     (emit "    .weak ulisp_peek_buf")
     (emit "ulisp_peek_buf:")
@@ -40128,6 +40319,22 @@
   (emit "    push r12")
   (emit "    push r13")
   (emit "    mov rbx, rdi")              ; rbx = target symbol id
+  (emit "    lea r12, [rip + __start_ulisp_symtab_sec]")
+  (emit "    lea r13, [rip + __stop_ulisp_symtab_sec]")
+  (emit ".L_fss_sec_loop:")
+  (emit "    cmp r12, r13")
+  (emit "    jae .L_fss_sec_done")
+  (emit "    cmp rbx, [r12]")
+  (emit "    je .L_fss_sec_found")
+  (emit "    add r12, 16")
+  (emit "    jmp .L_fss_sec_loop")
+  (emit ".L_fss_sec_found:")
+  (emit "    mov rax, [r12 + 8]")
+  (emit "    pop r13")
+  (emit "    pop r12")
+  (emit "    pop rbx")
+  (emit "    ret")
+  (emit ".L_fss_sec_done:")
   (emit "    lea r12, [rip + __ulisp_symbol_table]")
   (emit "    mov r13, [r12]")            ; count
   (emit "    test r13, r13")
@@ -40600,7 +40807,7 @@
                (emit "    xor rax, rax"))
            (emit "    ret")
            (emit ""))))
-   '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq" "ulisp_fn_num_lt" "ulisp_fn_num_lt_eq" "ulisp_fn_num_gt" "ulisp_fn_num_gt_eq" "ulisp_fn_num_quotient" "ulisp_fn_num_modulo"))
+   '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq" "ulisp_fn_num_lt" "ulisp_fn_num_lt_eq" "ulisp_fn_num_gt" "ulisp_fn_num_gt_eq" "ulisp_fn_num_quotient" "ulisp_fn_num_modulo" "ulisp_fn_num_bitwise_and" "ulisp_fn_num_bitwise_ior"))
   (emit ".L_str_unhandled_exn: .asciz \"*** ERROR: unhandled exception: \"")
   (emit ".L_str_err_prefix: .asciz \"*** ERROR: \"")
   (emit ".L_str_irritants_prefix: .asciz \"    Irritants: \"")
@@ -47708,6 +47915,12 @@
     (emit "    .weak ulisp_environ")
     (emit "ulisp_environ:")
     (emit "    .xword 0")
+    (emit "    .align 3")
+    (emit "    .globl ulisp_symtab_bounds")
+    (emit "    .weak ulisp_symtab_bounds")
+    (emit "ulisp_symtab_bounds:")
+    (emit "    .quad 0")
+    (emit "    .quad 0")
     (let loop ((gvs (car *top-level-vars*)))
       (if (pair? gvs)
           (let ((v (car gvs)))
@@ -47775,30 +47988,33 @@
               (if b (scan-insts (cdr b)))))
         (reverse (car seen-box))))))
 
+(define (%c99-escape-c-byte code)
+  (cond
+    ((= code 10) "\\n")
+    ((= code 9)  "\\t")
+    ((= code 13) "\\r")
+    ((= code 92) "\\\\")
+    ((= code 34) "\\\"")
+    ((or (< code 32) (>= code 127))
+     (let* ((d2 (quotient code 64))
+            (r2 (modulo code 64))
+            (d1 (quotient r2 8))
+            (d0 (modulo r2 8)))
+       (string #\\
+               (integer->char (+ 48 d2))
+               (integer->char (+ 48 d1))
+               (integer->char (+ 48 d0)))))
+    (else (string (integer->char code)))))
+
 (define (%c99-escape-c-string-bytes s)
-  (let ((n (string-length s)))
-    (let loop ((i 0) (parts '()))
-      (if (>= i n)
-          (apply string-append (reverse parts))
-          (let* ((ch (string-ref s i))
-                 (code (modulo (char->integer ch) 256))
-                 (seg (cond
-                        ((= code 10) "\\n")
-                        ((= code 9)  "\\t")
-                        ((= code 13) "\\r")
-                        ((= code 92) "\\\\")
-                        ((= code 34) "\\\"")
-                        ((or (< code 32) (>= code 127))
-                         (let* ((d2 (quotient code 64))
-                                (r2 (modulo code 64))
-                                (d1 (quotient r2 8))
-                                (d0 (modulo r2 8)))
-                           (string #\\
-                                   (integer->char (+ 48 d2))
-                                   (integer->char (+ 48 d1))
-                                   (integer->char (+ 48 d0)))))
-                        (else (string ch)))))
-            (loop (+ i 1) (cons seg parts)))))))
+  (if (and (pair? s) (eq? (car s) 'bytes))
+      (apply string-append (map %c99-escape-c-byte (cdr s)))
+      (let ((n (string-length s)))
+        (let loop ((i 0) (parts '()))
+          (if (>= i n)
+              (apply string-append (reverse parts))
+              (let ((code (modulo (char->integer (string-ref s i)) 256)))
+                (loop (+ i 1) (cons (%c99-escape-c-byte code) parts))))))))
 
 (define (c-backend-fn-label lbl)
   (let ((s (c-sanitize-label lbl)))
@@ -49559,6 +49775,7 @@
     (emit "static uint64_t ulisp_argc[1] ULISP_UNUSED = {0};")
     (emit "static uint64_t ulisp_argv[1] ULISP_UNUSED = {0};")
     (emit "static uint64_t ulisp_environ[3] ULISP_UNUSED = {0, 0, 0};")
+    (emit "static uint64_t ulisp_symtab_bounds[2] ULISP_UNUSED = {0, 0};")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     (if (eq? gc-mode 'stress)
@@ -50108,7 +50325,7 @@
        (lambda (name)
          (if (not (c-has-fn? name))
              (emit (string-append "static void " name "(void) { ulisp_unhandled_exception(0); }"))))
-       '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq" "ulisp_fn_num_lt" "ulisp_fn_num_lt_eq" "ulisp_fn_num_gt" "ulisp_fn_num_gt_eq" "ulisp_fn_num_quotient" "ulisp_fn_num_modulo")))
+       '("ulisp_fn_num_plus" "ulisp_fn_num_" "ulisp_fn_num_star" "ulisp_fn_num_slash" "ulisp_fn_num_eq" "ulisp_fn_num_lt" "ulisp_fn_num_lt_eq" "ulisp_fn_num_gt" "ulisp_fn_num_gt_eq" "ulisp_fn_num_quotient" "ulisp_fn_num_modulo" "ulisp_fn_num_bitwise_and" "ulisp_fn_num_bitwise_ior")))
     (emit "")
     ;; Emit string literals
     (if (not (null? (car *strings*)))
@@ -50196,6 +50413,8 @@
     (emit "    ulisp_environ[0] = (uint64_t)(uintptr_t)(envp ? envp : ulisp_get_environ());")
     (emit "    ulisp_environ[1] = (uint64_t)argc;")
     (emit "    ulisp_environ[2] = (uint64_t)(uintptr_t)argv;")
+    (emit "    ulisp_symtab_bounds[0] = (uint64_t)(uintptr_t)ulisp_symbol_table;")
+    (emit "    ulisp_symtab_bounds[1] = (uint64_t)ulisp_symbol_count;")
     (emit "    signal(SIGSEGV, crash_handler);")
     (emit "    _setmode(_fileno(stdin), _O_BINARY);")
     (emit "    _setmode(_fileno(stdout), _O_BINARY);")
@@ -50206,6 +50425,8 @@
     (emit "    ulisp_environ[0] = (uint64_t)(uintptr_t)(envp ? envp : ulisp_get_environ());")
     (emit "    ulisp_environ[1] = (uint64_t)argc;")
     (emit "    ulisp_environ[2] = (uint64_t)(uintptr_t)argv;")
+    (emit "    ulisp_symtab_bounds[0] = (uint64_t)(uintptr_t)ulisp_symbol_table;")
+    (emit "    ulisp_symtab_bounds[1] = (uint64_t)ulisp_symbol_count;")
     (emit "    struct sigaction sa;")
     (emit "    memset(&sa, 0, sizeof(sa));")
     (emit "    sa.sa_sigaction = crash_handler;")

@@ -104,7 +104,7 @@
             (label (cadr body))
             (cur-params-entry (assq '%num-params env))
             (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
-            (can-tco? (and tail? (if cur-num-params (= cur-num-params 1) #f)))
+            (can-tco? (and tail? (if cur-num-params (<= cur-num-params 6) #f)))
             (frame-shift (align-frame-shift (- 0 si))))
        (lir-compile-expr val si env #f)
        (emit-lir! '(%mov %rdi %rax))

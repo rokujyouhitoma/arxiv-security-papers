@@ -1030,16 +1030,38 @@
   (let ((pass-form (cons 'define-pass (cdr form))))
     (nanopass-expand-define-pass-with-trace pass-form #t)))
 
+(define (%nanopass-collect-spec-sym-names tree)
+  (let ((acc
+         (let loop ((node tree) (seen '()))
+           (cond
+             ((symbol? node)
+              (let ((nm (symbol->raw-name node)))
+                (if (and (string? nm)
+                         (> (string-length nm) 0)
+                         (not (string=? nm "?"))
+                         (not (member nm seen)))
+                    (cons nm seen)
+                    seen)))
+             ((pair? node)
+              (loop (cdr node) (loop (car node) seen)))
+             (else seen)))))
+    (reverse acc)))
+
 ;;; Expand define-language AST
 (define (nanopass-expand-define-language form)
   (let* ((name (cadr form))
-         (clauses (cddr form)))
+         (clauses (cddr form))
+         (sym-names (%nanopass-collect-spec-sym-names (cons name clauses))))
     (list 'begin
           (list 'define (string->symbol (string-append "__lang_" (symbol->raw-name name)))
-                (list (string->symbol "nanopass-register-language!")
-                      (list (string->symbol "nanopass-parse-language-spec")
-                            (list 'quote name)
-                            (list 'quote clauses))))
+                (list 'begin
+                      (list 'for-each
+                            (list 'lambda (list 's) (list 'string->symbol 's))
+                            (list 'quote sym-names))
+                      (list (string->symbol "nanopass-register-language!")
+                            (list (string->symbol "nanopass-parse-language-spec")
+                                  (list 'quote name)
+                                  (list 'quote clauses)))))
           (list 'define (string->symbol (string-append "parse-" (symbol->raw-name name)))
                 (list 'lambda (list 'expr)
                       (list (string->symbol "nanopass-parse") (list 'quote name) 'expr)))

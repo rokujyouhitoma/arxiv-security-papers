@@ -35,7 +35,9 @@
 
 ;; bitwise-xor: n-ary bitwise exclusive OR
 (define (%bitwise-xor2 a b)
-  (- (bitwise-ior a b) (bitwise-and a b)))
+  (if (or (bignum? a) (bignum? b))
+      (bignum-demote (bignum-bitwise-xor (%ensure-bignum a) (%ensure-bignum b)))
+      (- (bitwise-ior a b) (bitwise-and a b))))
 
 (define bitwise-xor
   (case-lambda
@@ -91,23 +93,22 @@
 ;; §2 / SRFI 151: Integer Operations & Shift (4 Procedures)
 ;; =======================================================================
 
-;; arithmetic-shift: Arithmetic shift i by count bits
+;; arithmetic-shift: Arithmetic shift i by count bits (bignum-safe, Issue #932)
 (define (arithmetic-shift i count)
   (cond
     ((zero? count) i)
+    ((or (bignum? i) (>= count 60) (<= count -60))
+     (bignum-demote
+      (if (> count 0)
+          (bignum-shift-left (%ensure-bignum i) count)
+          (bignum-shift-right (%ensure-bignum i) (- 0 count)))))
     ((> count 0)
-     (if (>= count 62)
-         0
-         (* i (%bitwise-expt-2 count))))
+     (* i (%bitwise-expt-2 count)))
     (else
      (let ((shift (- count)))
-       (cond
-         ((>= shift 62)
-          (if (< i 0) -1 0))
-         ((>= i 0)
-          (quotient i (%bitwise-expt-2 shift)))
-         (else
-          (%bitwise-ashr i shift)))))))
+       (if (>= i 0)
+           (quotient i (%bitwise-expt-2 shift))
+           (%bitwise-ashr i shift))))))
 
 ;; bit-count: Population count of set bits (for negative, count of cleared bits)
 (define (bit-count i)

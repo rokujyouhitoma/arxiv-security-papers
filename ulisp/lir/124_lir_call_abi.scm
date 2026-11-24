@@ -18,7 +18,10 @@
          (is-stack-closure? (and (symbol? proc) (memq proc stack-vars)))
          (can-tco? (and tail?
                         (not is-stack-closure?)
-                        (if cur-num-params (= cur-num-params num-args) #f)))
+                        (if cur-num-params
+                            (or (= cur-num-params num-args)
+                                (and (<= cur-num-params 6) (<= num-args 6)))
+                            #f)))
          (frame-shift (align-frame-shift (if (= num-args 0)
                                              (- 0 si)
                                              (- (* 8 (- num-args 1)) si))))
@@ -112,7 +115,11 @@
   (let* ((num-args (length args))
          (cur-params-entry (assq '%num-params env))
          (cur-num-params (if cur-params-entry (cdr cur-params-entry) #f))
-         (can-tco? (and tail? (if cur-num-params (= cur-num-params num-args) #f)))
+         (can-tco? (and tail?
+                        (if cur-num-params
+                            (or (= cur-num-params num-args)
+                                (and (<= cur-num-params 6) (<= num-args 6)))
+                            #f)))
          (cur-fn-entry (assq '%current-func env))
          (is-self-call (and cur-fn-entry (eq? (cdr cur-fn-entry) label)))
          (loop-head-entry (and is-self-call (assq '%self-loop-head env)))
@@ -127,7 +134,7 @@
                   (emit-direct-simple-arg! (car as) (list-ref *arg-registers* i) env)
                   (loop (cdr as) (+ i 1)))))
           (if can-tco?
-              (if self-loop-head
+              (if (and self-loop-head (= cur-num-params num-args))
                   (emit-lir! (list '%jump self-loop-head))
                   (begin
                     (emit-lir! (list '%mov '%rax (* num-args 4)))
@@ -168,7 +175,7 @@
                             (emit-lir! (list '%load '%r11 '%rsp temp-offset))
                             (emit-lir! (list '%store '%rsp param-offset '%r11))
                             (loop (+ i 1))))))
-                (if self-loop-head
+                (if (and self-loop-head (= cur-num-params num-args))
                     (emit-lir! (list '%jump self-loop-head))
                     (begin
                       (emit-lir! (list '%mov '%rax (* num-args 4)))

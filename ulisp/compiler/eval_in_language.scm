@@ -166,9 +166,13 @@
 
 (define (ctfe-valid-fixnum? v)
   (and (integer? v)
+       (exact? v)
        (let ((q (quotient v 1073741824)))
          (and (<= q 2147483647)
               (>= q -2147483647)))))
+
+(define (%ctfe-num-guard r)
+  (if (ctfe-valid-fixnum? r) r *ctfe-failure*))
 
 (define (ctfe-apply-primitive op args)
   (let ((nargs (length args)))
@@ -337,7 +341,11 @@
          (res (eval-in-stage now-d env expr fuel depth)))
     (cond
       ((stage-csp-error? res) *ctfe-failure*)
-      ((stage-val? res) (stage-val-payload res))
+      ((stage-val? res)
+       (let ((payload (stage-val-payload res)))
+         (if (and (number? payload) (not (ctfe-valid-fixnum? payload)))
+             *ctfe-failure*
+             payload)))
       (else *ctfe-failure*))))
 
 ;;; -----------------------------------------------------------------------
@@ -659,7 +667,7 @@
 
 (define (now-dict-apply-prim-1 dict op a)
   (cond
-    ((eq? op 'abs) (if (< a 0) (- 0 a) a))
+    ((eq? op 'abs) (if (number? a) (%ctfe-num-guard (if (< a 0) (- 0 a) a)) *ctfe-failure*))
     ((eq? op 'not) (if a #f #t))
     ((eq? op 'null?) (null? a))
     ((eq? op 'pair?) (pair? a))
@@ -677,7 +685,7 @@
     ((eq? op 'cddr) (if (and (pair? a) (pair? (cdr a))) (cddr a) *ctfe-failure*))
     ((eq? op 'length) (if (list? a) (length a) *ctfe-failure*))
     ((eq? op 'reverse) (if (list? a) (reverse a) *ctfe-failure*))
-    ((eq? op '-) (if (number? a) (- 0 a) *ctfe-failure*))
+    ((eq? op '-) (if (number? a) (%ctfe-num-guard (- 0 a)) *ctfe-failure*))
     ((eq? op 'string-length) (if (string? a) (string-length a) *ctfe-failure*))
     ((eq? op 'vector-length) (if (vector? a) (vector-length a) *ctfe-failure*))
     ((eq? op 'bitwise-not) (if (number? a) (ctfe-bitwise-not a) *ctfe-failure*))
@@ -685,12 +693,15 @@
 
 (define (now-dict-apply-prim-2 dict op a b)
   (cond
-    ((eq? op '+) (+ a b))
-    ((eq? op '-) (- a b))
-    ((eq? op '*) (* a b))
-    ((or (eq? op 'quotient) (eq? op '/)) (if (= b 0) *ctfe-failure* (quotient a b)))
-    ((eq? op 'modulo) (if (= b 0) *ctfe-failure* (modulo a b)))
-    ((eq? op 'remainder) (if (= b 0) *ctfe-failure* (remainder a b)))
+    ((eq? op '+) (if (and (number? a) (number? b)) (%ctfe-num-guard (+ a b)) *ctfe-failure*))
+    ((eq? op '-) (if (and (number? a) (number? b)) (%ctfe-num-guard (- a b)) *ctfe-failure*))
+    ((eq? op '*) (if (and (number? a) (number? b)) (%ctfe-num-guard (* a b)) *ctfe-failure*))
+    ((or (eq? op 'quotient) (eq? op '/))
+     (if (and (number? a) (number? b) (not (= b 0))) (%ctfe-num-guard (quotient a b)) *ctfe-failure*))
+    ((eq? op 'modulo)
+     (if (and (number? a) (number? b) (not (= b 0))) (%ctfe-num-guard (modulo a b)) *ctfe-failure*))
+    ((eq? op 'remainder)
+     (if (and (number? a) (number? b) (not (= b 0))) (%ctfe-num-guard (remainder a b)) *ctfe-failure*))
     ((eq? op 'min) (if (and (number? a) (number? b)) (min a b) *ctfe-failure*))
     ((eq? op 'max) (if (and (number? a) (number? b)) (max a b) *ctfe-failure*))
     ((eq? op '=) (= a b))

@@ -2390,6 +2390,19 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
             )
             raise SchemeException(err)
 
+    def prim_sys_chmod(path: Any, mode: Any) -> Any:
+        import os
+
+        if not isinstance(path, (str, MutableString)):
+            raise TypeError(f"sys-chmod: expected string path, got {path!r}")
+        if isinstance(mode, bool) or not isinstance(mode, int):
+            raise TypeError(f"sys-chmod: expected integer mode, got {mode!r}")
+        try:
+            os.chmod(string_val(path), int(mode))
+            return 0
+        except OSError:
+            return -1
+
     # Register all primitives
     primitives: Dict[str, Callable[..., Any]] = {
         # Pairs and Lists (R7RS 6.4)
@@ -2755,6 +2768,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "features": prim_features,
         "file-exists?": prim_file_exists_p,
         "delete-file": prim_delete_file,
+        "sys-chmod": prim_sys_chmod,
         "process-exec": prim_process_exec,
     }
 
