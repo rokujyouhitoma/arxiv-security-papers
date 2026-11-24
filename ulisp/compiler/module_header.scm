@@ -252,9 +252,12 @@
   repr:scheme-64bit-tagged
   repr:c-unboxed
   repr:nan-boxing-64bit
+  repr:guest-3bit-tagged
   scheme-standard
   c-unboxed
   nan-boxing-64bit
+  guest-3bit-tagged
+  guest-tagged
   current-value-repr
   with-value-repr
   repr-encode-immediate
@@ -262,6 +265,33 @@
   repr-emit-unbox-fixnum
   repr-emit-box-flonum
   repr-emit-unbox-flonum
+  repr-special-tag
+  repr-special-shift
+  repr-encode-special-with
+  repr-encode-special
+  repr-decode-special-with
+  repr-decode-special
+  repr-encode-undef
+  repr-nan-box-base
+  repr-nan-box-payload-mask
+  repr-nan-box-tag-shift
+  repr-nan-box-tag-unit
+  repr-nan-box-subtag
+  repr-nan-boxed-value?
+  repr-nan-tag-of
+  repr-nan-box-pointer
+  repr-nan-pointer?
+  repr-nan-unbox-pointer
+  repr-nan-box-special
+  repr-nan-special?
+  repr-nan-unbox-special
+  repr-gc-heap-tags-with
+  repr-gc-heap-tags
+  repr-gc-heap-value?
+  repr-gc-untag-ptr
+  repr-format-tagged-value
+  repr-runtime-constant-alist
+  repr-generate-runtime-printer-defs
   make-binding
   binding?
   binding-id

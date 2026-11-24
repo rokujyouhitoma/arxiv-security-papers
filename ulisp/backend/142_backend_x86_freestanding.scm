@@ -23,8 +23,8 @@
   (emit "    mov byte ptr [rdx], 0")
   (emit "    lea rdx, [rip + ulisp_peek_buf]")
   (emit "    movzx rax, byte ptr [rdx]")
-  (emit "    shl rax, 8")
-  (emit "    or rax, 14")              ; CHAR_TAG
+  (emit (string-append "    shl rax, " (number->string (repr-char-shift))))
+  (emit (string-append "    or rax, " (number->string (repr-char-tag))))              ; CHAR_TAG
   (emit "    ret")
   (emit ".L_read_direct:")
   (emit "    xor rax, rax")            ; sys_read
@@ -36,11 +36,11 @@
   (emit "    jle .L_read_eof")
   (emit "    lea rdx, [rip + ulisp_io_buf]")
   (emit "    movzx rax, byte ptr [rdx]")
-  (emit "    shl rax, 8")
-  (emit "    or rax, 14")
+  (emit (string-append "    shl rax, " (number->string (repr-char-shift))))
+  (emit (string-append "    or rax, " (number->string (repr-char-tag))))
   (emit "    ret")
   (emit ".L_read_eof:")
-  (emit "    mov rax, 79")             ; EOF_OBJECT
+  (emit (string-append "    mov rax, " (number->string (repr-encode-eof))))             ; EOF_OBJECT
   (emit "    ret")
   (emit "")
   (emit "    .globl ulisp_peek_char")
@@ -63,11 +63,11 @@
   (emit ".L_peek_buf_ready:")
   (emit "    lea rdx, [rip + ulisp_peek_buf]")
   (emit "    movzx rax, byte ptr [rdx]")
-  (emit "    shl rax, 8")
-  (emit "    or rax, 14")
+  (emit (string-append "    shl rax, " (number->string (repr-char-shift))))
+  (emit (string-append "    or rax, " (number->string (repr-char-tag))))
   (emit "    ret")
   (emit ".L_peek_eof:")
-  (emit "    mov rax, 79")
+  (emit (string-append "    mov rax, " (number->string (repr-encode-eof))))
   (emit "    ret")
   (emit "")
   (emit "    .globl ulisp_flush")
@@ -85,7 +85,7 @@
   (emit "    lea rsi, [rip + ulisp_out_buf]")
   (emit "    syscall")
   (emit ".L_flush_done:")
-  (emit "    mov rax, 111")            ; #t (0x6F)
+  (emit (string-append "    mov rax, " (number->string (repr-encode-boolean #t))))            ; #t (0x6F)
   (emit "    ret")
   (emit "")
   (emit "    .globl ulisp_flush_stderr")
@@ -103,7 +103,7 @@
   (emit "    lea rsi, [rip + ulisp_out_buf]")
   (emit "    syscall")
   (emit ".L_flush_stderr_done:")
-  (emit "    mov rax, 111")            ; #t (0x6F)
+  (emit (string-append "    mov rax, " (number->string (repr-encode-boolean #t))))            ; #t (0x6F)
   (emit "    ret")
   (emit "")
   (emit "    .globl ulisp_emit_byte")
@@ -123,7 +123,7 @@
   (emit "    call ulisp_flush")
   (emit "    add rsp, 8")
   (emit ".L_emit_byte_ret:")
-  (emit "    mov rax, 111")
+  (emit (string-append "    mov rax, " (number->string (repr-encode-boolean #t))))
   (emit "    ret")
   (emit "")
   (emit "    .globl ulisp_write_char")
@@ -131,7 +131,7 @@
   (emit "    .type ulisp_write_char, @function")
   (emit "    .p2align 4")
   (emit "ulisp_write_char:")
-  (emit "    sar rdi, 8")
+  (emit (string-append "    sar rdi, " (number->string (repr-char-shift))))
   (emit "    jmp ulisp_emit_byte")
   (emit "")
   (emit "    .globl ulisp_emit_str")
@@ -152,7 +152,7 @@
   (emit ".L_strlen_done:")
   (emit "    add rsp, 8")
   (emit "    pop rbx")
-  (emit "    mov rax, 111")
+  (emit (string-append "    mov rax, " (number->string (repr-encode-boolean #t))))
   (emit "    ret")
   (emit "")
   (emit "    .globl ulisp_write_string")
@@ -160,7 +160,7 @@
   (emit "    .type ulisp_write_string, @function")
   (emit "    .p2align 4")
   (emit "ulisp_write_string:")
-  (emit "    sub rdi, 3")              ; untag string (tag 3)
+  (emit (string-append "    sub rdi, " (number->string (repr-heap-tag 'string))))              ; untag string (tag 3)
   (emit "    jmp ulisp_emit_str")
   (emit "")
   ;; 3. Scheme Value Printer: ulisp_print_value
@@ -173,80 +173,80 @@
   (emit "    push r12")
   (emit "    push r13")
   (emit "    mov rbx, rdi")
-  (emit "    test rbx, 3")
+  (emit (string-append "    test rbx, " (number->string (repr-fixnum-mask))))
   (emit "    jnz .L_pv_not_fixnum")
-  (emit "    sar rbx, 2")
+  (emit (string-append "    sar rbx, " (number->string (repr-fixnum-shift))))
   (emit "    mov rdi, rbx")
   (emit "    call ulisp_print_fixnum")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_fixnum:")
-  (emit "    cmp rbx, 47")              ; #f
+  (emit (string-append "    cmp rbx, " (number->string (repr-encode-boolean #f))))              ; #f
   (emit "    jne .L_pv_not_false")
   (emit "    lea rdi, [rip + .L_str_false]")
   (emit "    call ulisp_emit_str")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_false:")
-  (emit "    cmp rbx, 111")             ; #t
+  (emit (string-append "    cmp rbx, " (number->string (repr-encode-boolean #t))))             ; #t
   (emit "    jne .L_pv_not_true")
   (emit "    lea rdi, [rip + .L_str_true]")
   (emit "    call ulisp_emit_str")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_true:")
-  (emit "    cmp rbx, 63")              ; ()
+  (emit (string-append "    cmp rbx, " (number->string (repr-encode-null))))              ; ()
   (emit "    jne .L_pv_not_nil")
   (emit "    lea rdi, [rip + .L_str_nil]")
   (emit "    call ulisp_emit_str")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_nil:")
-  (emit "    cmp rbx, 79")              ; eof
+  (emit (string-append "    cmp rbx, " (number->string (repr-encode-eof))))              ; eof
   (emit "    jne .L_pv_not_eof")
   (emit "    lea rdi, [rip + .L_str_eof]")
   (emit "    call ulisp_emit_str")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_eof:")
   (emit "    mov rax, rbx")
-  (emit "    and rax, 255")
-  (emit "    cmp rax, 14")              ; char tag
+  (emit (string-append "    and rax, " (number->string (repr-char-mask))))
+  (emit (string-append "    cmp rax, " (number->string (repr-char-tag))))              ; char tag
   (emit "    jne .L_pv_not_char")
   (emit "    mov rdi, rbx")
-  (emit "    sar rdi, 8")
+  (emit (string-append "    sar rdi, " (number->string (repr-char-shift))))
   (emit "    call ulisp_print_char")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_char:")
   (emit "    mov rax, rbx")
-  (emit "    and rax, 7")
-  (emit "    cmp rax, 3")              ; string tag
+  (emit (string-append "    and rax, " (number->string (repr-pointer-mask))))
+  (emit (string-append "    cmp rax, " (number->string (repr-heap-tag 'string))))              ; string tag
   (emit "    jne .L_pv_not_string")
   (emit "    mov rdi, 34")             ; '\"'
   (emit "    call ulisp_emit_byte")
   (emit "    mov rdi, rbx")
-  (emit "    sub rdi, 3")
+  (emit (string-append "    sub rdi, " (number->string (repr-heap-tag 'string))))
   (emit "    call ulisp_emit_str")
   (emit "    mov rdi, 34")
   (emit "    call ulisp_emit_byte")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_string:")
-  (emit "    cmp rax, 7")              ; bytevector tag
+  (emit (string-append "    cmp rax, " (number->string (repr-heap-tag 'bytevector))))              ; bytevector tag
   (emit "    jne .L_pv_not_bytevector")
   (emit "    mov rdi, rbx")
   (emit "    call ulisp_print_bytevector")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_bytevector:")
-  (emit "    cmp rax, 5")              ; vector tag
+  (emit (string-append "    cmp rax, " (number->string (repr-heap-tag 'vector))))              ; vector tag
   (emit "    jne .L_pv_not_vector")
   (emit "    mov rdi, rbx")
   (emit "    call ulisp_print_vector")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_vector:")
-  (emit "    cmp rax, 1")              ; pair tag
+  (emit (string-append "    cmp rax, " (number->string (repr-heap-tag 'pair))))              ; pair tag
   (emit "    jne .L_pv_not_pair")
   (emit "    mov rdi, rbx")
   (emit "    call ulisp_print_pair")
   (emit "    jmp .L_pv_done")
   (emit ".L_pv_not_pair:")
   (emit "    mov rax, rbx")
-  (emit "    and rax, 255")
-  (emit "    cmp rax, 2")              ; symbol tag
+  (emit (string-append "    and rax, " (number->string (repr-symbol-mask))))
+  (emit (string-append "    cmp rax, " (number->string (repr-symbol-tag))))              ; symbol tag
   (emit "    jne .L_pv_unknown")
   (emit "    mov rdi, rbx")
   (emit "    call ulisp_print_symbol")
@@ -423,14 +423,14 @@
   (emit "    call ulisp_emit_byte")
   (emit ".L_pair_no_space:")
   (emit "    xor r12, r12")
-  (emit "    mov rdi, [rbx - 1]")      ; car
+  (emit (string-append "    mov rdi, [rbx - " (number->string (repr-heap-tag 'pair)) "]"))      ; car
   (emit "    call ulisp_print_value")
-  (emit "    mov rbx, [rbx + 7]")      ; cdr
-  (emit "    cmp rbx, 63")             ; EMPTY_LIST
+  (emit (string-append "    mov rbx, [rbx + " (number->string (repr-field-offset 'pair 8)) "]"))      ; cdr
+  (emit (string-append "    cmp rbx, " (number->string (repr-encode-null))))             ; EMPTY_LIST
   (emit "    je .L_pair_done")
   (emit "    mov rax, rbx")
-  (emit "    and rax, 7")
-  (emit "    cmp rax, 1")              ; PAIR_TAG
+  (emit (string-append "    and rax, " (number->string (repr-pointer-mask))))
+  (emit (string-append "    cmp rax, " (number->string (repr-heap-tag 'pair))))              ; PAIR_TAG
   (emit "    je .L_pair_loop")
   (emit "    lea rdi, [rip + .L_str_dot]")
   (emit "    call ulisp_emit_str")
@@ -448,11 +448,11 @@
   (emit "    push rbx")
   (emit "    push r12")
   (emit "    push r13")
-  (emit "    mov rbx, rdi")            ; tagged bytevector (tag 7)
+  (emit "    mov rbx, rdi")            ; tagged bytevector
   (emit "    lea rdi, [rip + .L_str_u8_prefix]")
   (emit "    call ulisp_emit_str")
-  (emit "    mov r12, [rbx - 7]")      ; len (fixnum)
-  (emit "    sar r12, 2")              ; raw len
+  (emit (string-append "    mov r12, [rbx - " (number->string (repr-heap-tag 'bytevector)) "]"))      ; len (fixnum)
+  (emit (string-append "    sar r12, " (number->string (repr-fixnum-shift))))              ; raw len
   (emit "    xor r13, r13")            ; index = 0
   (emit ".L_pbv_loop:")
   (emit "    cmp r13, r12")
@@ -462,7 +462,7 @@
   (emit "    mov dil, 32")             ; ' '
   (emit "    call ulisp_emit_byte")
   (emit ".L_pbv_elem:")
-  (emit "    movzx rdi, byte ptr [rbx - 7 + 8 + r13]")
+  (emit (string-append "    movzx rdi, byte ptr [rbx - " (number->string (repr-heap-tag 'bytevector)) " + 8 + r13]"))
   (emit "    call ulisp_print_fixnum")
   (emit "    inc r13")
   (emit "    jmp .L_pbv_loop")
@@ -479,11 +479,11 @@
   (emit "    push rbx")
   (emit "    push r12")
   (emit "    push r13")
-  (emit "    mov rbx, rdi")            ; tagged vector (tag 5)
+  (emit "    mov rbx, rdi")            ; tagged vector
   (emit "    lea rdi, [rip + .L_str_vec_prefix]")
   (emit "    call ulisp_emit_str")
-  (emit "    mov r12, [rbx - 5]")      ; len (fixnum)
-  (emit "    sar r12, 2")              ; raw len
+  (emit (string-append "    mov r12, [rbx - " (number->string (repr-heap-tag 'vector)) "]"))      ; len (fixnum)
+  (emit (string-append "    sar r12, " (number->string (repr-fixnum-shift))))              ; raw len
   (emit "    xor r13, r13")            ; index = 0
   (emit ".L_pvec_loop:")
   (emit "    cmp r13, r12")
@@ -493,7 +493,7 @@
   (emit "    mov dil, 32")             ; ' '
   (emit "    call ulisp_emit_byte")
   (emit ".L_pvec_elem:")
-  (emit "    mov rdi, [rbx - 5 + 8 + r13*8]")
+  (emit (string-append "    mov rdi, [rbx - " (number->string (repr-heap-tag 'vector)) " + 8 + r13*8]"))
   (emit "    call ulisp_print_value")
   (emit "    inc r13")
   (emit "    jmp .L_pvec_loop")

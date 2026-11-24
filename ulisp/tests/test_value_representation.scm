@@ -297,6 +297,105 @@
               42
               (eval-lir-program lowered-c-prog))
 
+;;; -----------------------------------------------------------------------
+;;; Group 6: Host / Guest Value Representation SSOT, GC Tags & Printer
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 6: Host / Guest SSOT, GC Tags & Polymorphic Printer ---\n")
+
+;; 6.1 repr:guest-3bit-tagged registration & encoding
+(assert-equal "6.1a repr:guest-3bit-tagged resolves via aliases"
+              'repr:guest-3bit-tagged
+              (value-repr-name (get-value-repr 'guest-3bit-tagged)))
+
+(assert-equal "6.1b guest-3bit-tagged fixnum & special encoding/decoding"
+              (list 336 -24 42 -3 7 15 23 31 0 1 2 3)
+              (list (repr-encode-fixnum 42 'repr:guest-3bit-tagged)
+                    (repr-encode-fixnum -3 'repr:guest-3bit-tagged)
+                    (repr-decode-fixnum 336 'repr:guest-3bit-tagged)
+                    (repr-decode-fixnum -24 'repr:guest-3bit-tagged)
+                    (repr-encode-special 0 'repr:guest-3bit-tagged)
+                    (repr-encode-special 1 'repr:guest-3bit-tagged)
+                    (repr-encode-special 2 'repr:guest-3bit-tagged)
+                    (repr-encode-special 3 'repr:guest-3bit-tagged)
+                    (repr-decode-special 7 'repr:guest-3bit-tagged)
+                    (repr-decode-special 15 'repr:guest-3bit-tagged)
+                    (repr-decode-special 23 'repr:guest-3bit-tagged)
+                    (repr-decode-special 31 'repr:guest-3bit-tagged)))
+
+;; 6.2 GC heap tags & discriminator across representations
+(assert-equal "6.2a repr-gc-heap-tags across host, guest, nan-box, and c-unboxed"
+              (list '(1 3 5 7)
+                    '(1 2 3 4 5 6)
+                    '(3)
+                    '())
+              (list (repr-gc-heap-tags 'repr:scheme-64bit-tagged)
+                    (repr-gc-heap-tags 'repr:guest-3bit-tagged)
+                    (repr-gc-heap-tags 'repr:nan-boxing-64bit)
+                    (repr-gc-heap-tags 'repr:c-unboxed)))
+
+(assert-equal "6.2b repr-gc-heap-value? & repr-gc-untag-ptr host vs guest vs nan-box"
+              (list #t #t #f #f 4096
+                    #t #t #f #f 4096
+                    #t #f 4096)
+              (let ((nan-ptr (repr-nan-box-pointer 4096 'repr:nan-boxing-64bit))
+                    (nan-fx  (repr-encode-fixnum 42 'repr:nan-boxing-64bit)))
+                (list (repr-gc-heap-value? 4097 'repr:scheme-64bit-tagged)
+                      (repr-gc-heap-value? 4103 'repr:scheme-64bit-tagged)
+                      (repr-gc-heap-value? 168 'repr:scheme-64bit-tagged)
+                      (repr-gc-heap-value? 111 'repr:scheme-64bit-tagged)
+                      (repr-gc-untag-ptr 4101 'repr:scheme-64bit-tagged)
+                      (repr-gc-heap-value? 4098 'repr:guest-3bit-tagged)
+                      (repr-gc-heap-value? 4101 'repr:guest-3bit-tagged)
+                      (repr-gc-heap-value? 336 'repr:guest-3bit-tagged)
+                      (repr-gc-heap-value? 31 'repr:guest-3bit-tagged)
+                      (repr-gc-untag-ptr 4102 'repr:guest-3bit-tagged)
+                      (repr-gc-heap-value? nan-ptr 'repr:nan-boxing-64bit)
+                      (repr-gc-heap-value? nan-fx 'repr:nan-boxing-64bit)
+                      (repr-gc-untag-ptr nan-ptr 'repr:nan-boxing-64bit))))
+
+;; 6.3 Polymorphic repr-format-tagged-value across representations
+(assert-equal "6.3 repr-format-tagged-value formats Host, Guest, and NaN-Box values uniformly"
+              (list "42" "#f" "#t" "()" "#<eof>" "#\\space" "#<pair:4096>"
+                    "42" "#f" "#t" "()" "#<undef>" "#<symbol:4096>" "#<instance:4096>"
+                    "42" "#<undef>" "#<ptr:4096>")
+              (list (repr-format-tagged-value 168 'repr:scheme-64bit-tagged)
+                    (repr-format-tagged-value 47 'repr:scheme-64bit-tagged)
+                    (repr-format-tagged-value 111 'repr:scheme-64bit-tagged)
+                    (repr-format-tagged-value 63 'repr:scheme-64bit-tagged)
+                    (repr-format-tagged-value 79 'repr:scheme-64bit-tagged)
+                    (repr-format-tagged-value (repr-encode-char #\space 'repr:scheme-64bit-tagged) 'repr:scheme-64bit-tagged)
+                    (repr-format-tagged-value 4097 'repr:scheme-64bit-tagged)
+                    (repr-format-tagged-value 336 'repr:guest-3bit-tagged)
+                    (repr-format-tagged-value 7 'repr:guest-3bit-tagged)
+                    (repr-format-tagged-value 15 'repr:guest-3bit-tagged)
+                    (repr-format-tagged-value 23 'repr:guest-3bit-tagged)
+                    (repr-format-tagged-value 31 'repr:guest-3bit-tagged)
+                    (repr-format-tagged-value 4098 'repr:guest-3bit-tagged)
+                    (repr-format-tagged-value 4101 'repr:guest-3bit-tagged)
+                    (repr-format-tagged-value (repr-encode-fixnum 42 'repr:nan-boxing-64bit) 'repr:nan-boxing-64bit)
+                    (repr-format-tagged-value (repr-nan-box-special 3 'repr:nan-boxing-64bit) 'repr:nan-boxing-64bit)
+                    (repr-format-tagged-value (repr-nan-box-pointer 4096 'repr:nan-boxing-64bit) 'repr:nan-boxing-64bit)))
+
+;; 6.4 Runtime printer constant generator & macro expansion
+(assert-equal "6.4 :bind-runtime-constants emits canonical runtime/printer.scm constants"
+              (list 21 3 1 5 7 255 14 255 2 8 47 111 63 79)
+              (let ((expanded (expand-define-value-repr '(define-value-repr :bind-runtime-constants repr:scheme-64bit-tagged)))
+                    (alist (repr-runtime-constant-alist repr:scheme-64bit-tagged)))
+                (list (length (cdr expanded))
+                      (cdr (assq '*fixnum-mask* alist))
+                      (cdr (assq '*pair-tag* alist))
+                      (cdr (assq '*vector-tag* alist))
+                      (cdr (assq '*bytevector-tag* alist))
+                      (cdr (assq '*char-mask* alist))
+                      (cdr (assq '*char-tag* alist))
+                      (cdr (assq '*symbol-mask* alist))
+                      (cdr (assq '*symbol-tag* alist))
+                      (cdr (assq '*symbol-shift* alist))
+                      (cdr (assq '*bool-false* alist))
+                      (cdr (assq '*bool-true* alist))
+                      (cdr (assq '*empty-list* alist))
+                      (cdr (assq '*eof-object* alist)))))
+
 (display "\n-------------------------------------------------------\n")
 (display " [RESULT] Pluggable Value Representation: ALL TESTS PASSED!\n")
 (display "-------------------------------------------------------\n")

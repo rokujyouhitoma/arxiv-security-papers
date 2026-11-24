@@ -184,13 +184,17 @@
 ;;; -----------------------------------------------------------------------
 
 (define (expand-define-value-repr form)
-  (let ((name (cadr form))
-        (clauses (cddr form)))
-    (list 'define name
-          (list 'register-value-repr!
-                (list 'make-value-repr-from-clauses
-                      (list 'quote name)
-                      (list 'quote clauses))))))
+  (if (and (pair? (cdr form)) (eq? (cadr form) ':bind-runtime-constants))
+      (let* ((target (if (pair? (cddr form)) (caddr form) 'repr:scheme-64bit-tagged))
+             (spec (get-value-repr target)))
+        (repr-generate-runtime-printer-defs spec))
+      (let ((name (cadr form))
+            (clauses (cddr form)))
+        (list 'define name
+              (list 'register-value-repr!
+                    (list 'make-value-repr-from-clauses
+                          (list 'quote name)
+                          (list 'quote clauses)))))))
 
 (define-macro (define-value-repr . args)
   (expand-define-value-repr (cons 'define-value-repr args)))
@@ -334,11 +338,69 @@
           (:payload-mask 281474976710655)
           (:tag-shift 48)
           (:tag-unit 281474976710656)
+          (:flonum-nan-tag 0)
           (:fixnum-nan-tag 1)
           (:imm-nan-tag 2)
           (:pointer-nan-tag 3))))))
 
 (define nan-boxing-64bit repr:nan-boxing-64bit)
+
+;; 5.4 Guest Workbench 64-bit 3-bit Tagged Representation (DSN-33-04 §2.3 & Issue #944)
+;; Low 3-bit tags: 0=Fixnum (61-bit signed), 1=Pair, 2=Symbol, 3=Closure,
+;; 4=Vector, 5=Instance, 6=Flonum, 7=Special Immediates (#f=7, #t=15, nil=23, undef=31)
+(define repr:guest-3bit-tagged
+  (register-value-repr!
+    (make-value-repr-from-clauses
+      'repr:guest-3bit-tagged
+      '((:word-bits 64)
+        (:aliases guest-3bit-tagged guest-tagged)
+        (:fixnum
+          (:shift 3)
+          (:tag-bits 0)
+          (:tag-mask 7)
+          (:step 8)
+          (:min -1152921504606846976)
+          (:max 1152921504606846975))
+        (:immediates
+          (:special-tag   7)
+          (:special-shift 3)
+          (:special-false 0)
+          (:special-true  1)
+          (:special-nil   2)
+          (:special-undef 3)
+          (:boolean-false 7)
+          (:boolean-true  15)
+          (:boolean-mask  -9)
+          (:null          23)
+          (:undef         31)
+          (:eof           31)
+          (:void          31)
+          (:char-shift    8)
+          (:char-op-shift 5)
+          (:char-tag      15)
+          (:char-mask     255)
+          (:symbol-shift  3)
+          (:symbol-tag    2)
+          (:symbol-mask   7))
+        (:pointer
+          (:align 8)
+          (:tag-bits 0)
+          (:tag-mask 7)
+          (:untag-mask -8)
+          (:pair-tag       1)
+          (:symbol-tag     2)
+          (:closure-tag    3)
+          (:vector-tag     4)
+          (:instance-tag   5)
+          (:flonum-tag     6)
+          (:special-tag    7)
+          (:string-tag     2)
+          (:bytevector-tag 4)
+          (:flonum-cell-bytes 16)
+          (:flonum-offset  2))))))
+
+(define guest-3bit-tagged repr:guest-3bit-tagged)
+(define guest-tagged repr:guest-3bit-tagged)
 
 ;; Initialize default representation
 (set-current-value-repr! repr:scheme-64bit-tagged)
@@ -553,11 +615,14 @@
 (define (repr-heap-tag-with kind r)
   (case kind
     ((pair)       (value-repr-prop r 'pointer ':pair-tag 1))
+    ((symbol)     (value-repr-prop r 'pointer ':symbol-tag (value-repr-prop r 'immediates ':symbol-tag 2)))
     ((closure procedure) (value-repr-prop r 'pointer ':closure-tag 1))
     ((string)     (value-repr-prop r 'pointer ':string-tag 3))
     ((vector)     (value-repr-prop r 'pointer ':vector-tag 5))
+    ((instance)   (value-repr-prop r 'pointer ':instance-tag 5))
     ((bytevector) (value-repr-prop r 'pointer ':bytevector-tag 7))
     ((flonum)     (value-repr-prop r 'pointer ':flonum-tag 11))
+    ((special)    (value-repr-prop r 'pointer ':special-tag (value-repr-prop r 'immediates ':special-tag 7)))
     (else         (value-repr-prop r 'pointer ':tag-bits 0))))
 
 (define repr-heap-tag
@@ -572,6 +637,389 @@
   (case-lambda
     ((kind byte-offset) (repr-field-offset-with kind byte-offset (current-value-repr)))
     ((kind byte-offset opt-repr) (repr-field-offset-with kind byte-offset (get-value-repr opt-repr)))))
+
+(define (repr-untag-pointer-with ptr-val r)
+  (if (repr-nan-boxed-with? r)
+      (ctfe-bitwise-and ptr-val (repr-nan-box-payload-mask-with r))
+      (ctfe-bitwise-and ptr-val (repr-pointer-untag-mask-with r))))
+
+;;; -----------------------------------------------------------------------
+;;; 7b. Guest Special Immediates, Fixnum Bounds & NaN-Boxing Helpers
+;;; -----------------------------------------------------------------------
+
+(define repr-special-tag
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':special-tag 7))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':special-tag 7))))
+
+(define repr-special-shift
+  (case-lambda
+    (() (value-repr-prop (current-value-repr) 'immediates ':special-shift 3))
+    ((opt-repr) (value-repr-prop (get-value-repr opt-repr) 'immediates ':special-shift 3))))
+
+(define (repr-encode-special-with id r)
+  (let ((shift (value-repr-prop r 'immediates ':special-shift 3))
+        (tag (value-repr-prop r 'immediates ':special-tag 7)))
+    (ctfe-bitwise-ior (repr-arithmetic-shift id shift) tag)))
+
+(define repr-encode-special
+  (case-lambda
+    ((id) (repr-encode-special-with id (current-value-repr)))
+    ((id opt-repr) (repr-encode-special-with id (get-value-repr opt-repr)))))
+
+(define (repr-decode-special-with encoded r)
+  (let ((shift (value-repr-prop r 'immediates ':special-shift 3)))
+    (repr-arithmetic-shift encoded (- shift))))
+
+(define repr-decode-special
+  (case-lambda
+    ((encoded) (repr-decode-special-with encoded (current-value-repr)))
+    ((encoded opt-repr) (repr-decode-special-with encoded (get-value-repr opt-repr)))))
+
+(define (repr-encode-undef-with r)
+  (value-repr-prop r 'immediates ':undef (value-repr-prop r 'immediates ':void 111)))
+
+(define repr-encode-undef
+  (case-lambda
+    (() (repr-encode-undef-with (current-value-repr)))
+    ((opt-repr) (repr-encode-undef-with (get-value-repr opt-repr)))))
+
+(define (repr-fixnum-min-with r)
+  (let ((explicit (value-repr-prop r 'fixnum ':min #f)))
+    (if explicit
+        explicit
+        (let ((shift (value-repr-prop r 'fixnum ':shift 0)))
+          (- 0 (repr-arithmetic-shift 1 (- 62 shift)))))))
+
+(define repr-fixnum-min
+  (case-lambda
+    (() (repr-fixnum-min-with (current-value-repr)))
+    ((opt-repr) (repr-fixnum-min-with (get-value-repr opt-repr)))))
+
+(define (repr-fixnum-max-with r)
+  (let ((explicit (value-repr-prop r 'fixnum ':max #f)))
+    (if explicit
+        explicit
+        (- 0 (+ (repr-fixnum-min-with r) 1)))))
+
+(define repr-fixnum-max
+  (case-lambda
+    (() (repr-fixnum-max-with (current-value-repr)))
+    ((opt-repr) (repr-fixnum-max-with (get-value-repr opt-repr)))))
+
+(define (repr-nan-box-base-with r)
+  (let ((raw (value-repr-prop r 'nan-box ':nan-base 0)))
+    (if (= raw 0) (default-nan-box-base) raw)))
+
+(define repr-nan-box-base
+  (case-lambda
+    (() (repr-nan-box-base-with (current-value-repr)))
+    ((opt-repr) (repr-nan-box-base-with (get-value-repr opt-repr)))))
+
+(define (repr-nan-box-payload-mask-with r)
+  (value-repr-prop r 'nan-box ':payload-mask 281474976710655))
+
+(define repr-nan-box-payload-mask
+  (case-lambda
+    (() (repr-nan-box-payload-mask-with (current-value-repr)))
+    ((opt-repr) (repr-nan-box-payload-mask-with (get-value-repr opt-repr)))))
+
+(define (repr-nan-box-tag-shift-with r)
+  (value-repr-prop r 'nan-box ':tag-shift 48))
+
+(define repr-nan-box-tag-shift
+  (case-lambda
+    (() (repr-nan-box-tag-shift-with (current-value-repr)))
+    ((opt-repr) (repr-nan-box-tag-shift-with (get-value-repr opt-repr)))))
+
+(define (repr-nan-box-tag-unit-with r)
+  (value-repr-prop r 'nan-box ':tag-unit 281474976710656))
+
+(define repr-nan-box-tag-unit
+  (case-lambda
+    (() (repr-nan-box-tag-unit-with (current-value-repr)))
+    ((opt-repr) (repr-nan-box-tag-unit-with (get-value-repr opt-repr)))))
+
+(define (repr-nan-box-subtag-with kind r)
+  (case kind
+    ((flonum)    (value-repr-prop r 'nan-box ':flonum-nan-tag 0))
+    ((fixnum)    (value-repr-prop r 'nan-box ':fixnum-nan-tag 1))
+    ((imm special) (value-repr-prop r 'nan-box ':imm-nan-tag 2))
+    ((pointer)   (value-repr-prop r 'nan-box ':pointer-nan-tag 3))
+    (else        0)))
+
+(define repr-nan-box-subtag
+  (case-lambda
+    ((kind) (repr-nan-box-subtag-with kind (current-value-repr)))
+    ((kind opt-repr) (repr-nan-box-subtag-with kind (get-value-repr opt-repr)))))
+
+(define (repr-nan-boxed-value?-with v r)
+  (and (integer? v)
+       (>= v (repr-nan-box-base-with r))))
+
+(define repr-nan-boxed-value?
+  (case-lambda
+    ((v) (repr-nan-boxed-value?-with v (current-value-repr)))
+    ((v opt-repr) (repr-nan-boxed-value?-with v (get-value-repr opt-repr)))))
+
+(define (repr-nan-tag-of-with v r)
+  (if (not (repr-nan-boxed-value?-with v r))
+      (repr-nan-box-subtag-with 'flonum r)
+      (quotient (- v (repr-nan-box-base-with r))
+                (repr-nan-box-tag-unit-with r))))
+
+(define repr-nan-tag-of
+  (case-lambda
+    ((v) (repr-nan-tag-of-with v (current-value-repr)))
+    ((v opt-repr) (repr-nan-tag-of-with v (get-value-repr opt-repr)))))
+
+(define (repr-nan-box-pointer-with ptr r)
+  (+ (+ (repr-nan-box-base-with r)
+        (* (repr-nan-box-subtag-with 'pointer r) (repr-nan-box-tag-unit-with r)))
+     ptr))
+
+(define repr-nan-box-pointer
+  (case-lambda
+    ((ptr) (repr-nan-box-pointer-with ptr (current-value-repr)))
+    ((ptr opt-repr) (repr-nan-box-pointer-with ptr (get-value-repr opt-repr)))))
+
+(define (repr-nan-pointer?-with v r)
+  (and (repr-nan-boxed-value?-with v r)
+       (= (repr-nan-tag-of-with v r) (repr-nan-box-subtag-with 'pointer r))))
+
+(define repr-nan-pointer?
+  (case-lambda
+    ((v) (repr-nan-pointer?-with v (current-value-repr)))
+    ((v opt-repr) (repr-nan-pointer?-with v (get-value-repr opt-repr)))))
+
+(define (repr-nan-unbox-pointer-with v r)
+  (ctfe-bitwise-and v (repr-nan-box-payload-mask-with r)))
+
+(define repr-nan-unbox-pointer
+  (case-lambda
+    ((v) (repr-nan-unbox-pointer-with v (current-value-repr)))
+    ((v opt-repr) (repr-nan-unbox-pointer-with v (get-value-repr opt-repr)))))
+
+(define (repr-nan-box-special-with id r)
+  (+ (+ (repr-nan-box-base-with r)
+        (* (repr-nan-box-subtag-with 'imm r) (repr-nan-box-tag-unit-with r)))
+     id))
+
+(define repr-nan-box-special
+  (case-lambda
+    ((id) (repr-nan-box-special-with id (current-value-repr)))
+    ((id opt-repr) (repr-nan-box-special-with id (get-value-repr opt-repr)))))
+
+(define (repr-nan-special?-with v r)
+  (and (repr-nan-boxed-value?-with v r)
+       (= (repr-nan-tag-of-with v r) (repr-nan-box-subtag-with 'imm r))))
+
+(define repr-nan-special?
+  (case-lambda
+    ((v) (repr-nan-special?-with v (current-value-repr)))
+    ((v opt-repr) (repr-nan-special?-with v (get-value-repr opt-repr)))))
+
+(define (repr-nan-unbox-special-with v r)
+  (ctfe-bitwise-and v (repr-nan-box-payload-mask-with r)))
+
+(define repr-nan-unbox-special
+  (case-lambda
+    ((v) (repr-nan-unbox-special-with v (current-value-repr)))
+    ((v opt-repr) (repr-nan-unbox-special-with v (get-value-repr opt-repr)))))
+
+;;; -----------------------------------------------------------------------
+;;; 7c. Unified GC Heap Tag Queries, Polymorphic Value Formatter & Printer SSOT
+;;; -----------------------------------------------------------------------
+
+(define (%repr-insert-sorted-unique x sorted)
+  (cond
+    ((null? sorted) (list x))
+    ((= x (car sorted)) sorted)
+    ((< x (car sorted)) (cons x sorted))
+    (else (cons (car sorted) (%repr-insert-sorted-unique x (cdr sorted))))))
+
+(define (repr-gc-heap-tags-with r)
+  (let ((align (value-repr-prop r 'pointer ':align 8)))
+    (cond
+      ((repr-nan-boxed-with? r)
+       (list (repr-nan-box-subtag-with 'pointer r)))
+      ((<= align 1)
+       '())
+      (else
+       (let ((special-tag (value-repr-prop r 'immediates ':special-tag -1))
+             (prop-keys '(:pair-tag :symbol-tag :closure-tag :string-tag
+                          :vector-tag :instance-tag :flonum-tag :bytevector-tag)))
+         (let loop ((ks prop-keys) (res '()))
+           (if (null? ks)
+               res
+               (let ((t (value-repr-prop r 'pointer (car ks) -1)))
+                 (if (and (integer? t)
+                          (> t 0)
+                          (< t align)
+                          (not (= t special-tag)))
+                     (loop (cdr ks) (%repr-insert-sorted-unique t res))
+                     (loop (cdr ks) res))))))))))
+
+(define repr-gc-heap-tags
+  (case-lambda
+    (() (repr-gc-heap-tags-with (current-value-repr)))
+    ((opt-repr) (repr-gc-heap-tags-with (get-value-repr opt-repr)))))
+
+(define (repr-gc-heap-value?-with val r)
+  (if (repr-nan-boxed-with? r)
+      (repr-nan-pointer?-with val r)
+      (and (integer? val)
+           (> val 0)
+           (let ((ptr-mask (value-repr-prop r 'pointer ':tag-mask 7))
+                 (untag-mask (repr-pointer-untag-mask-with r))
+                 (align (value-repr-prop r 'pointer ':align 8)))
+             (and (> ptr-mask 0)
+                  (>= (ctfe-bitwise-and val untag-mask) align)
+                  (not (= val (value-repr-prop r 'immediates ':boolean-false -1)))
+                  (not (= val (value-repr-prop r 'immediates ':boolean-true -1)))
+                  (not (= val (value-repr-prop r 'immediates ':null -1)))
+                  (not (= val (value-repr-prop r 'immediates ':eof -1)))
+                  (not (= val (value-repr-prop r 'immediates ':void -1)))
+                  (not (= val (value-repr-prop r 'immediates ':undef -1)))
+                  (if (member (ctfe-bitwise-and val ptr-mask)
+                              (repr-gc-heap-tags-with r))
+                      #t
+                      #f))))))
+
+(define repr-gc-heap-value?
+  (case-lambda
+    ((val) (repr-gc-heap-value?-with val (current-value-repr)))
+    ((val opt-repr) (repr-gc-heap-value?-with val (get-value-repr opt-repr)))))
+
+(define (repr-gc-untag-ptr-with val r)
+  (if (repr-nan-boxed-with? r)
+      (repr-nan-unbox-pointer-with val r)
+      (ctfe-bitwise-and val (repr-pointer-untag-mask-with r))))
+
+(define repr-gc-untag-ptr
+  (case-lambda
+    ((val) (repr-gc-untag-ptr-with val (current-value-repr)))
+    ((val opt-repr) (repr-gc-untag-ptr-with val (get-value-repr opt-repr)))))
+
+(define (repr-format-tagged-value-with val r)
+  (if (repr-nan-boxed-with? r)
+      (if (not (repr-nan-boxed-value?-with val r))
+          (string-append "#<flonum:" (if (number? val) (number->string val) "?") ">")
+          (let ((subtag (repr-nan-tag-of-with val r)))
+            (cond
+              ((= subtag (repr-nan-box-subtag-with 'fixnum r))
+               (number->string (repr-decode-fixnum-with val r)))
+              ((= subtag (repr-nan-box-subtag-with 'imm r))
+               (let ((code (repr-nan-unbox-special-with val r)))
+                 (cond
+                   ((= code 0) "#f")
+                   ((= code 1) "#t")
+                   ((= code 2) "()")
+                   ((= code 3) "#<undef>")
+                   (else (string-append "#<imm:" (number->string code) ">")))))
+              ((= subtag (repr-nan-box-subtag-with 'pointer r))
+               (string-append "#<ptr:" (number->string (repr-nan-unbox-pointer-with val r)) ">"))
+              (else
+               (string-append "#<nan:" (number->string val) ">")))))
+      (if (not (integer? val))
+          "#<non-int>"
+          (let ((fx-mask (value-repr-prop r 'fixnum ':tag-mask 0))
+                (fx-tag (value-repr-prop r 'fixnum ':tag-bits 0))
+                (special-tag (value-repr-prop r 'immediates ':special-tag -1))
+                (ptr-mask (value-repr-prop r 'pointer ':tag-mask 7)))
+            (cond
+              ((and (> fx-mask 0) (= (ctfe-bitwise-and val fx-mask) fx-tag))
+               (number->string (repr-decode-fixnum-with val r)))
+              ((and (> special-tag 0) (= (ctfe-bitwise-and val ptr-mask) special-tag))
+               (let ((code (repr-decode-special-with val r)))
+                 (cond
+                   ((= code (value-repr-prop r 'immediates ':special-false 0)) "#f")
+                   ((= code (value-repr-prop r 'immediates ':special-true 1)) "#t")
+                   ((= code (value-repr-prop r 'immediates ':special-nil 2)) "()")
+                   ((= code (value-repr-prop r 'immediates ':special-undef 3)) "#<undef>")
+                   (else (string-append "#<special:" (number->string code) ">")))))
+              ((> special-tag 0)
+               (let ((ptag (ctfe-bitwise-and val ptr-mask))
+                     (untagged (repr-untag-pointer-with val r)))
+                 (cond
+                   ((= ptag (repr-heap-tag-with 'pair r))     (string-append "#<pair:" (number->string untagged) ">"))
+                   ((= ptag (repr-heap-tag-with 'symbol r))   (string-append "#<symbol:" (number->string untagged) ">"))
+                   ((= ptag (repr-heap-tag-with 'closure r))  (string-append "#<closure:" (number->string untagged) ">"))
+                   ((= ptag (repr-heap-tag-with 'vector r))   (string-append "#<vector:" (number->string untagged) ">"))
+                   ((= ptag (repr-heap-tag-with 'instance r)) (string-append "#<instance:" (number->string untagged) ">"))
+                   ((= ptag (repr-heap-tag-with 'flonum r))   (string-append "#<flonum:" (number->string untagged) ">"))
+                   (else (string-append "#<unknown:" (number->string val) ">")))))
+              ((= val (value-repr-prop r 'immediates ':boolean-false 47)) "#f")
+              ((= val (value-repr-prop r 'immediates ':boolean-true 111)) "#t")
+              ((= val (value-repr-prop r 'immediates ':null 63)) "()")
+              ((= val (value-repr-prop r 'immediates ':eof 79)) "#<eof>")
+              ((and (= (ctfe-bitwise-and val (value-repr-prop r 'immediates ':char-mask 255))
+                       (value-repr-prop r 'immediates ':char-tag 14))
+                    (> (value-repr-prop r 'immediates ':char-mask 255) 0))
+               (let ((c (ctfe-bitwise-and (repr-arithmetic-shift val (- (value-repr-prop r 'immediates ':char-shift 8)))
+                                          255)))
+                 (cond
+                   ((= c 10) "#\\newline")
+                   ((= c 32) "#\\space")
+                   ((= c 9)  "#\\tab")
+                   ((= c 13) "#\\return")
+                   (else (string-append "#\\" (list->string (list (integer->char c))))))))
+              ((= (ctfe-bitwise-and val (value-repr-prop r 'immediates ':symbol-mask 255))
+                  (value-repr-prop r 'immediates ':symbol-tag 2))
+               (let* ((sym-shift (+ (value-repr-prop r 'immediates ':symbol-shift 6)
+                                    (value-repr-prop r 'fixnum ':shift 2)))
+                      (sym-id (repr-arithmetic-shift val (- sym-shift))))
+                 (string-append "#<symbol-" (number->string sym-id) ">")))
+              (else
+               (let ((ptag (ctfe-bitwise-and val ptr-mask))
+                     (untagged (repr-untag-pointer-with val r)))
+                 (cond
+                   ((= ptag (repr-heap-tag-with 'pair r))       (string-append "#<pair:" (number->string untagged) ">"))
+                   ((= ptag (repr-heap-tag-with 'string r))     (string-append "#<string:" (number->string untagged) ">"))
+                   ((= ptag (repr-heap-tag-with 'vector r))     (string-append "#<vector:" (number->string untagged) ">"))
+                   ((= ptag (repr-heap-tag-with 'bytevector r)) (string-append "#<bytevector:" (number->string untagged) ">"))
+                   (else (string-append "#<unknown:" (number->string val) ">"))))))))))
+
+(define repr-format-tagged-value
+  (case-lambda
+    ((val) (repr-format-tagged-value-with val (current-value-repr)))
+    ((val opt-repr) (repr-format-tagged-value-with val (get-value-repr opt-repr)))))
+
+(define (repr-runtime-constant-alist r)
+  (let* ((fx-mask (value-repr-prop r 'fixnum ':tag-mask 0))
+         (fx-tag (value-repr-prop r 'fixnum ':tag-bits 0))
+         (fx-shift (value-repr-prop r 'fixnum ':shift 0))
+         (ptr-mask (value-repr-prop r 'pointer ':tag-mask 7))
+         (sym-shift (value-repr-prop r 'immediates ':symbol-full-shift
+                                     (+ (value-repr-prop r 'immediates ':symbol-shift 6)
+                                        fx-shift))))
+    (list
+      (cons '*fixnum-mask*     fx-mask)
+      (cons '*fixnum-tag*      fx-tag)
+      (cons '*fixnum-shift*    fx-shift)
+      (cons '*pair-mask*       ptr-mask)
+      (cons '*pair-tag*        (repr-heap-tag-with 'pair r))
+      (cons '*string-mask*     ptr-mask)
+      (cons '*string-tag*      (repr-heap-tag-with 'string r))
+      (cons '*vector-mask*     ptr-mask)
+      (cons '*vector-tag*      (repr-heap-tag-with 'vector r))
+      (cons '*bytevector-mask* ptr-mask)
+      (cons '*bytevector-tag*  (repr-heap-tag-with 'bytevector r))
+      (cons '*char-mask*       (value-repr-prop r 'immediates ':char-mask 255))
+      (cons '*char-tag*        (value-repr-prop r 'immediates ':char-tag 14))
+      (cons '*char-shift*      (value-repr-prop r 'immediates ':char-shift 8))
+      (cons '*symbol-mask*     (value-repr-prop r 'immediates ':symbol-mask 255))
+      (cons '*symbol-tag*      (value-repr-prop r 'immediates ':symbol-tag 2))
+      (cons '*symbol-shift*    sym-shift)
+      (cons '*bool-false*      (value-repr-prop r 'immediates ':boolean-false 47))
+      (cons '*bool-true*       (value-repr-prop r 'immediates ':boolean-true 111))
+      (cons '*empty-list*      (value-repr-prop r 'immediates ':null 63))
+      (cons '*eof-object*      (value-repr-prop r 'immediates ':eof 79)))))
+
+(define (repr-generate-runtime-printer-defs r)
+  (cons 'begin
+        (map (lambda (kv) (list 'define (car kv) (cdr kv)))
+             (repr-runtime-constant-alist r))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 8. Boxing & Unboxing LIR Code Generators

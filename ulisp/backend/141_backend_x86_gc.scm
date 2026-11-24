@@ -37,7 +37,7 @@
   (emit "    cmp qword ptr [r11 + 88], 1")
   (emit "    jne .L_wb_restore")
   (emit "    mov r8, rax")
-  (emit "    and r8, -8")
+  (emit (string-append "    and r8, " (number->string (repr-pointer-untag-mask))))
   (emit "    mov r9, [r11 + 0]")
   (emit "    cmp r8, r9")
   (emit "    jb .L_wb_restore")
@@ -477,10 +477,10 @@
   (emit "    test r8, r8")
   (emit "    jz .L_gc_dual_finish")
   (emit "    mov r10, [r8 + 40]")
-  (emit "    mov qword ptr [r8 + 16], 47")      ; key = #f
-  (emit "    mov qword ptr [r8 + 24], 47")      ; datum = #f
-  (emit "    mov qword ptr [r8 + 32], 111")     ; broken? = #t
-  (emit "    mov qword ptr [r8 + 40], 47")      ; next = #f
+  (emit (string-append "    mov qword ptr [r8 + 16], " (number->string (repr-encode-boolean #f))))      ; key = #f
+  (emit (string-append "    mov qword ptr [r8 + 24], " (number->string (repr-encode-boolean #f))))      ; datum = #f
+  (emit (string-append "    mov qword ptr [r8 + 32], " (number->string (repr-encode-boolean #t))))      ; broken? = #t
+  (emit (string-append "    mov qword ptr [r8 + 40], " (number->string (repr-encode-boolean #f))))      ; next = #f
   (emit "    mov r8, r10")
   (emit "    jmp .L_gc_dual_ephem_break_loop")
   (emit ".L_gc_dual_finish:")
@@ -867,10 +867,10 @@
   (emit "    test r8, r8")
   (emit "    jz .L_gc_minor_finish")
   (emit "    mov r10, [r8 + 40]")
-  (emit "    mov qword ptr [r8 + 16], 47")      ; key = #f
-  (emit "    mov qword ptr [r8 + 24], 47")      ; datum = #f
-  (emit "    mov qword ptr [r8 + 32], 111")     ; broken? = #t
-  (emit "    mov qword ptr [r8 + 40], 47")      ; next = #f
+  (emit (string-append "    mov qword ptr [r8 + 16], " (number->string (repr-encode-boolean #f))))      ; key = #f
+  (emit (string-append "    mov qword ptr [r8 + 24], " (number->string (repr-encode-boolean #f))))      ; datum = #f
+  (emit (string-append "    mov qword ptr [r8 + 32], " (number->string (repr-encode-boolean #t))))      ; broken? = #t
+  (emit (string-append "    mov qword ptr [r8 + 40], " (number->string (repr-encode-boolean #f))))      ; next = #f
   (emit "    mov r8, r10")
   (emit "    jmp .L_gc_minor_ephem_break_loop")
   (emit ".L_gc_minor_finish:")
@@ -973,20 +973,17 @@
   ;; --- Helpers ---
   (emit ".L_gc_copy_if_heap_dual:")
   (emit "    mov rax, rdi")
-  (emit "    and rax, 7")
-  (emit "    cmp rax, 1")
-  (emit "    je .L_gc_dual_tag_ok")
-  (emit "    cmp rax, 3")
-  (emit "    je .L_gc_dual_tag_ok")
-  (emit "    cmp rax, 5")
-  (emit "    je .L_gc_dual_tag_ok")
-  (emit "    cmp rax, 7")
-  (emit "    je .L_gc_dual_tag_ok")
+  (emit (string-append "    and rax, " (number->string (repr-pointer-mask))))
+  (for-each
+    (lambda (tag)
+      (emit (string-append "    cmp rax, " (number->string tag)))
+      (emit "    je .L_gc_dual_tag_ok"))
+    (repr-gc-heap-tags))
   (emit "    mov rax, rdi")
   (emit "    ret")
   (emit ".L_gc_dual_tag_ok:")
   (emit "    mov r8, rdi")
-  (emit "    and r8, -8")
+  (emit (string-append "    and r8, " (number->string (repr-pointer-untag-mask))))
   (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    mov r9, [r11 + 0]")
   (emit "    mov r10, [r11 + 16]")
@@ -997,11 +994,11 @@
   (emit "    jae .L_gc_ret_dual_orig")
   (emit "    mov r10, [r8 - 8]")
   (emit "    mov rax, r10")
-  (emit "    and rax, 7")
+  (emit (string-append "    and rax, " (number->string (repr-pointer-mask))))
   (emit "    test rax, rax")
   (emit "    jz .L_gc_do_copy_dual")
   (emit "    mov rax, r10")
-  (emit "    and rax, -8")
+  (emit (string-append "    and rax, " (number->string (repr-pointer-untag-mask))))
   (emit "    mov r9, [r11 + 8]")
   (emit "    cmp rax, r9")
   (emit "    jb .L_gc_do_copy_dual")
@@ -1026,7 +1023,7 @@
   (emit ".L_gc_dual_copy_done:")
   (emit "    lea r10, [r9 + 8]")
   (emit "    mov rcx, rdi")
-  (emit "    and rcx, 7")
+  (emit (string-append "    and rcx, " (number->string (repr-pointer-mask))))
   (emit "    or r10, rcx")
   (emit "    mov [r8 - 8], r10")
   (emit "    add r9, rax")
@@ -1039,20 +1036,17 @@
 
   (emit ".L_gc_promote_if_nursery:")
   (emit "    mov rax, rdi")
-  (emit "    and rax, 7")
-  (emit "    cmp rax, 1")
-  (emit "    je .L_gc_nursery_tag_ok")
-  (emit "    cmp rax, 3")
-  (emit "    je .L_gc_nursery_tag_ok")
-  (emit "    cmp rax, 5")
-  (emit "    je .L_gc_nursery_tag_ok")
-  (emit "    cmp rax, 7")
-  (emit "    je .L_gc_nursery_tag_ok")
+  (emit (string-append "    and rax, " (number->string (repr-pointer-mask))))
+  (for-each
+    (lambda (tag)
+      (emit (string-append "    cmp rax, " (number->string tag)))
+      (emit "    je .L_gc_nursery_tag_ok"))
+    (repr-gc-heap-tags))
   (emit "    mov rax, rdi")
   (emit "    ret")
   (emit ".L_gc_nursery_tag_ok:")
   (emit "    mov r8, rdi")
-  (emit "    and r8, -8")
+  (emit (string-append "    and r8, " (number->string (repr-pointer-untag-mask))))
   (emit "    lea r11, [rip + ulisp_gc_state]")
   (emit "    mov r9, [r11 + 0]")
   (emit "    mov r10, [r11 + 8]")
@@ -1063,11 +1057,11 @@
   (emit "    jae .L_gc_ret_nursery_orig")
   (emit "    mov r10, [r8 - 8]")
   (emit "    mov rax, r10")
-  (emit "    and rax, 7")
+  (emit (string-append "    and rax, " (number->string (repr-pointer-mask))))
   (emit "    test rax, rax")
   (emit "    jz .L_gc_do_promote")
   (emit "    mov rax, r10")
-  (emit "    and rax, -8")
+  (emit (string-append "    and rax, " (number->string (repr-pointer-untag-mask))))
   (emit "    mov r9, [r11 + 16]")
   (emit "    cmp rax, r9")
   (emit "    jb .L_gc_do_promote")
@@ -1093,7 +1087,7 @@
   (emit ".L_gc_promote_done:")
   (emit "    lea r10, [r9 + 8]")
   (emit "    mov rcx, rdi")
-  (emit "    and rcx, 7")
+  (emit (string-append "    and rcx, " (number->string (repr-pointer-mask))))
   (emit "    or r10, rcx")
   (emit "    mov [r8 - 8], r10")
   (emit "    add r9, rax")

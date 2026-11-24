@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **944** | Host / Guest 値表現の単一情報源化 (`define-value-repr` によるタグ操作・GC・プリンタの統一生成) | Feature | New | [944-unify-host-and-guest-value-representation-via-define-value-repr.md](944-unify-host-and-guest-value-representation-via-define-value-repr.md) |
 | **945** | Lua 5.4.7 ビルド 60 秒のフェーズ別内訳プロファイリングとアセンブラ往復コスト定量化 | Feature | New | [945-profile-lua-547-c99-build-phase-breakdown-on-linux.md](945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) |
 | **946** | SQL 実行器における式文字列のレコード毎再解析の解消と AST 事前コンパイル化 | Feature | New | [946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md](946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md) |
 | **947** | オントロジー推論ルール `master_rules.json` の未使用状態の解消と `EdgeInferenceRuleRegistry` 読み込み整合化 | Feature | New | [947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md](947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md) |
@@ -23,6 +22,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **944** | Host / Guest 値表現の単一情報源化 (`define-value-repr` によるタグ操作・GC・プリンタの統一生成) | Feature | 2026-11-25 | [944-unify-host-and-guest-value-representation-via-define-value-repr.md](closed/944-unify-host-and-guest-value-representation-via-define-value-repr.md) |
 | **943** | Case A の C99 拡張：LIR 参照 VM の検査付き C インタプリタ実行可否検証と差分診断ハーネス構築 | Feature | 2026-11-25 | [943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md](closed/943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md) |
 | **942** | 混合器 (mix) の完成：`specialize-or-widen` の `eval-in-stage-apply` 接続と第1二村射影実証・DSN-33-24 Phase I3 整合化 | Feature | 2026-11-25 | [942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md](closed/942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md) |
 | **956** | 並行処理ビルド向け safepoint の `mfence` 単体展開を実フラグ poll（`cmp` + `jne slow`）へ置換 | Feature | 2026-11-25 | [956-replace-safepoint-mfence-with-real-flag-poll-for-concurrent-builds.md](closed/956-replace-safepoint-mfence-with-real-flag-poll-for-concurrent-builds.md) |

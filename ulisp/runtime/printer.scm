@@ -6,34 +6,8 @@
 ;;; print_scheme_value, print_pair_elements, raw tag discrimination
 ;;; =======================================================================
 
-(define *fixnum-mask*     3)
-(define *fixnum-tag*      0)
-(define *fixnum-shift*    2)
-
-(define *pair-mask*       7)
-(define *pair-tag*        1)
-
-(define *string-mask*     7)
-(define *string-tag*      3)
-
-(define *vector-mask*     7)
-(define *vector-tag*      5)
-
-(define *bytevector-mask* 7)
-(define *bytevector-tag*  7)
-
-(define *char-mask*       255)
-(define *char-tag*        14)
-(define *char-shift*      8)
-
-(define *symbol-mask*     255)
-(define *symbol-tag*      2)
-(define *symbol-shift*    8)
-
-(define *bool-false*      47) ; 0x2F
-(define *bool-true*       111); 0x6F
-(define *empty-list*      63) ; 0x3F
-(define *eof-object*      79) ; 0x4F
+;;; Runtime tag constants derived from repr:scheme-64bit-tagged SSOT
+(define-value-repr :bind-runtime-constants repr:scheme-64bit-tagged)
 
 (define (runtime-print-pair-elements p)
   (let loop ((curr p) (first? #t))

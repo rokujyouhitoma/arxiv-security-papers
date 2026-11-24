@@ -93,13 +93,13 @@ COMPILER_BASE = compiler/helpers.scm \
                 compiler/dataflow.scm \
                 compiler/binding.scm \
                 compiler/scope.scm \
+                compiler/eval_in_language.scm \
+                compiler/value_repr.scm \
                 workbench/frame.scm \
                 workbench/value_tagging.scm \
                 workbench/nan_boxing.scm \
                 workbench/cogen.scm \
-                compiler/eval_in_language.scm \
                 compiler/calling_convention.scm \
-                compiler/value_repr.scm \
                 compiler/sbi.scm
 
 FRONTEND_PASSES = frontend/frontend_lang.scm \
