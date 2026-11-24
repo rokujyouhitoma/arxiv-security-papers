@@ -43,6 +43,41 @@
     ((and (pair? e) (eq? (car e) '%unbox-fixnum) (integer? (cadr e))) (cadr e))
     (else #f)))
 
+(define (lir-known-fixnum-const? e)
+  (let ((x (if (ast-has-span? e) (ast-strip-span e) e)))
+    (cond
+      ((integer? x)
+       (let ((q (quotient x 1073741824)))
+         (and (< q 536870912) (> q -536870912))))
+      ((and (pair? x)
+            (memq (car x) '(quote atom-value %unbox-fixnum %box-fixnum))
+            (pair? (cdr x)))
+       (lir-known-fixnum-const? (cadr x)))
+      (else #f))))
+
+(define (emit-lir-bin-tag-check! e1 e2 si lbl-slow)
+  (let ((k1? (lir-known-fixnum-const? e1))
+        (k2? (lir-known-fixnum-const? e2)))
+    (cond
+      ((and k1? k2?)
+       #f)
+      (k2?
+       (emit-lir! (list '%load '%rdx '%rsp si))
+       (emit-lir! (list '%bit-and '%rdx 3))
+       (emit-lir! (list '%cmp '%rdx 0))
+       (emit-lir! (list '%jump-cond "jne" lbl-slow)))
+      (k1?
+       (emit-lir! '(%mov %rdx %rax))
+       (emit-lir! (list '%bit-and '%rdx 3))
+       (emit-lir! (list '%cmp '%rdx 0))
+       (emit-lir! (list '%jump-cond "jne" lbl-slow)))
+      (else
+       (emit-lir! '(%mov %rdx %rax))
+       (emit-lir! (list '%bit-or '%rdx (list '%stack si)))
+       (emit-lir! (list '%bit-and '%rdx 3))
+       (emit-lir! (list '%cmp '%rdx 0))
+       (emit-lir! (list '%jump-cond "jne" lbl-slow))))))
+
 (define (lir-num-cmp-slow-fn op)
   (case op
     ((=)  'ulisp_fn_num_eq)
@@ -130,11 +165,7 @@
              (let ((lbl-slow (unique-label-sym "cmp_br_slow"))
                    (lbl-cont (unique-label-sym "cmp_br_cont"))
                    (jump-if-true? (string=? (jmp-cc-fn '=) "je")))
-               (emit-lir! '(%mov %rdx %rax))
-               (emit-lir! (list '%bit-or '%rdx (list '%stack si)))
-               (emit-lir! (list '%bit-and '%rdx 3))
-               (emit-lir! (list '%cmp '%rdx 0))
-               (emit-lir! (list '%jump-cond "jne" lbl-slow))
+               (emit-lir-bin-tag-check! e1 e2 si lbl-slow)
                (emit-lir! (list '%cmp (list '%stack si) '%rax))
                (emit-lir! (list '%jump-cond jmp-op target-label))
                (emit-lir! (list '%jump lbl-cont))

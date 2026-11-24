@@ -199,4 +199,47 @@
               '((mov rax (%imm 0)) (set e al) (ret))
               (optimize-x86-peephole-insts '((mov rax (%imm 0)) (set e al) (ret))))
 
+;; 16. Overflow branch fusion: seto dl + movzx rdx, dl + cmp rdx, 0 + jne/je -> jo/jno (Issue #955)
+(assert-equal "seto dl + movzx rdx, dl + cmp rdx 0 + jne fuses to jcc jo"
+              '((add rcx (%disp -8 rsp)) (jcc jo L_slow) (ret))
+              (optimize-x86-peephole-insts
+                '((add rcx (%disp -8 rsp))
+                  (%raw-asm "    seto dl")
+                  (%raw-asm "    movzx rdx, dl")
+                  (cmp rdx (%imm 0))
+                  (jcc jne L_slow)
+                  (ret))))
+(assert-equal "seto dl + movzx rdx, dl + cmp rdx 0 + je fuses to jcc jno"
+              '((sub rcx rax) (jcc jno L_ok) (ret))
+              (optimize-x86-peephole-insts
+                '((sub rcx rax)
+                  (%raw-asm "    seto dl")
+                  (%raw-asm "    movzx rdx, dl")
+                  (cmp rdx 0)
+                  (jcc je L_ok)
+                  (ret))))
+
+;; 17. Redundant cmp reg, 0 elimination after bitwise AND (Issue #955)
+(assert-equal "and + cmp 0 + jcc jne eliminates redundant cmp 0"
+              '((and rdx (%imm 3)) (jcc jne L_slow) (ret))
+              (optimize-x86-peephole-insts
+                '((and rdx (%imm 3))
+                  (cmp rdx (%imm 0))
+                  (jcc jne L_slow)
+                  (ret))))
+(assert-equal "and + cmp 0 + sete al eliminates redundant cmp 0"
+              '((and rax (%imm 3)) (%raw-asm "    sete al") (ret))
+              (optimize-x86-peephole-insts
+                '((and rax (%imm 3))
+                  (cmp rax (%imm 0))
+                  (%raw-asm "    sete al")
+                  (ret))))
+(assert-equal "and + cmp 0 + signed jl preserves cmp 0 (OF check)"
+              '((and rax (%imm 255)) (cmp rax 0) (jcc jl L_neg) (ret))
+              (optimize-x86-peephole-insts
+                '((and rax (%imm 255))
+                  (cmp rax 0)
+                  (jcc jl L_neg)
+                  (ret))))
+
 (test-end "Pass 143 (x86-64 Machine Peephole)")

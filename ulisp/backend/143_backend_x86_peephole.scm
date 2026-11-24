@@ -185,6 +185,43 @@
      (guard (x86-asm-jump-targets-ret-across-labels? lbl rest))
      (cons '(ret) rest))))
 
+;; Rule 6: Overflow Flag Branch Fusion (Issue #955)
+;; (%raw-asm "    seto dl") (%raw-asm "    movzx rdx, dl") (cmp rdx 0) (jcc jne/je L)
+;; -> (jcc jo/jno L)
+(define-picopass rule-x86-overflow-branch-fuse
+  (InstWindow
+    (((%raw-asm ,s1) (%raw-asm ,s2) (cmp ,reg ,imm) (jcc ,cc ,lbl) . ,rest)
+     (guard (and (string? s1)
+                 (string=? s1 "    seto dl")
+                 (string? s2)
+                 (string=? s2 "    movzx rdx, dl")
+                 (eq? reg 'rdx)
+                 (x86-asm-zero-imm? imm)
+                 (memq cc '(jne jnz je jz))))
+     (cons (list 'jcc (if (memq cc '(jne jnz)) 'jo 'jno) lbl) rest))))
+
+;; Rule 7: Redundant Compare-Zero Elimination After Bitwise AND (Issue #955)
+;; (and reg imm) (cmp reg 0) (jcc je/jne/jz/jnz L) -> (and reg imm) (jcc je/jne/jz/jnz L)
+;; (and reg imm) (cmp reg 0) (%raw-asm "    sete al" / "    setne al") -> (and reg imm) (%raw-asm ...)
+(define-picopass rule-x86-and-cmp-zero-branch-fuse
+  (InstWindow
+    (((and ,r1 ,mask) (cmp ,r2 ,zero) (jcc ,cc ,lbl) . ,rest)
+     (guard (and (x86-asm-reg? r1)
+                 (equal? r1 r2)
+                 (x86-asm-zero-imm? zero)
+                 (memq cc '(je jne jz jnz))))
+     (cons (list 'and r1 mask)
+           (cons (list 'jcc cc lbl) rest)))
+    (((and ,r1 ,mask) (cmp ,r2 ,zero) (%raw-asm ,s) . ,rest)
+     (guard (and (x86-asm-reg? r1)
+                 (equal? r1 r2)
+                 (x86-asm-zero-imm? zero)
+                 (string? s)
+                 (or (string=? s "    sete al")
+                     (string=? s "    setne al"))))
+     (cons (list 'and r1 mask)
+           (cons (list '%raw-asm s) rest)))))
+
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: x86-peephole-pass (fuse-window-rules)
 ;;; -----------------------------------------------------------------------
@@ -198,6 +235,8 @@
     rule-x86-jump-p2align-next-label
     rule-x86-lea-optimize
     rule-x86-lea-add-fold
+    rule-x86-overflow-branch-fuse
+    rule-x86-and-cmp-zero-branch-fuse
     rule-x86-unreachable-dce
     rule-x86-jump-to-ret))
 
