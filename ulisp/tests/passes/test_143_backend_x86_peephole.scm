@@ -191,4 +191,12 @@
              (L_asm_x86? (optimize-x86-peephole
                            (make-test-asm-program '((lea rax (%disp 40 rsp)) (add rax (%imm -24)) (ret))))))
 
+;; 15. Zero-idiom XOR preserves RFLAGS when followed by flag consumer (Issue #953)
+(assert-equal "mov reg 0 before jcc is NOT folded to xor"
+              '((mov rax 0) (jcc je L_ok) (ret))
+              (optimize-x86-peephole-insts '((mov rax 0) (jcc je L_ok) (ret))))
+(assert-equal "mov reg 0 before set is NOT folded to xor"
+              '((mov rax (%imm 0)) (set e al) (ret))
+              (optimize-x86-peephole-insts '((mov rax (%imm 0)) (set e al) (ret))))
+
 (test-end "Pass 143 (x86-64 Machine Peephole)")

@@ -147,4 +147,33 @@
         (newline)
         (exit 1))))
 
+;; Test 6: Issue #953 - Short 32-bit zero-extending encoding for mov r64, imm32 (0 <= imm < 2^32)
+(let* ((lines '("    .intel_syntax noprefix"
+                "    .text"
+                "    mov rax, 42"
+                "    mov r10, 42"
+                "    mov rax, -1"))
+       (res (assemble-x86-lines lines))
+       (text-bv (car res))
+       (tlen (bytevector-length text-bv)))
+  ;; mov rax, 42  -> B8 2A 00 00 00 (5 bytes)
+  ;; mov r10, 42  -> 41 BA 2A 00 00 00 (6 bytes)
+  ;; mov rax, -1  -> 48 C7 C0 FF FF FF FF (7 bytes)
+  ;; Total: 18 bytes
+  (if (and (= tlen 18)
+           (= (bytevector-u8-ref text-bv 0) 184) ;; 0xB8
+           (= (bytevector-u8-ref text-bv 1) 42)
+           (= (bytevector-u8-ref text-bv 5) 65)  ;; 0x41 (REX.B)
+           (= (bytevector-u8-ref text-bv 6) 186) ;; 0xBA
+           (= (bytevector-u8-ref text-bv 7) 42)
+           (= (bytevector-u8-ref text-bv 11) 72) ;; 0x48 (REX.W)
+           (= (bytevector-u8-ref text-bv 12) 199) ;; 0xC7
+           (= (bytevector-u8-ref text-bv 13) 192)) ;; 0xC0
+      (display "[PASS] Test 6: mov r64, imm32 short 5/6-byte encoding verified (#953)\n")
+      (begin
+        (display "[FAIL] Test 6: unexpected mov r64, imm32 encoding length/bytes: ")
+        (display tlen)
+        (newline)
+        (exit 1))))
+
 

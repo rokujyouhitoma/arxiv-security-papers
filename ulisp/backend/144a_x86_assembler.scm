@@ -1272,7 +1272,14 @@
                  (list (append (if (reg-ext? d-info) (list rex) '())
                                (cons opc (split-u32-le val))) #f)))
 
-              ;; 64-bit reg:
+              ;; 64-bit reg with non-negative 32-bit imm: zero-extending 32-bit B8+rd imm32 (Issue #953)
+              ((and (>= val 0) (<= (quotient val 4) 1073741823))
+               (let* ((rex (make-rex #f #f #f (reg-ext? d-info)))
+                      (opc (+ 184 (modulo (reg-id d-info) 8))))
+                 (list (append (if (reg-ext? d-info) (list rex) '())
+                               (cons opc (split-u32-le val))) #f)))
+
+              ;; 64-bit reg with negative 32-bit sign-extended imm: REX.W C7 /0 imm32
               ((let ((q (quotient val 4)))
                  (and (>= q -536870912) (<= q 536870911)))
                ;; 32-bit sign-extended: REX.W C7 /0 imm32
