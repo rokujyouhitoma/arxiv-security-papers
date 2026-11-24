@@ -78,13 +78,23 @@
                  (x86-asm-reg? r2)))
      (cons (list 'mov r1 r2) rest))))
 
-;; Rule 3: Zero-idiom XOR Optimization
+(define (x86-asm-reads-flags? inst)
+  (and (pair? inst)
+       (or (memq (car inst) '(jcc set))
+           (and (eq? (car inst) '%raw-asm)
+                (string? (cadr inst))
+                (or (string-starts-with? (cadr inst) "    set")
+                    (string-starts-with? (cadr inst) "    cmov")
+                    (string-starts-with? (cadr inst) "    j"))))))
+
+;; Rule 3: Zero-idiom XOR Optimization (guard against live RFLAGS, Issue #953)
 ;; (mov reg 0) / (mov reg (%imm 0)) -> (xor reg reg)
 (define-picopass rule-x86-zero-xor
   (InstWindow
     (((mov ,reg ,imm) . ,rest)
      (guard (and (x86-asm-reg? reg)
-                 (x86-asm-zero-imm? imm)))
+                 (x86-asm-zero-imm? imm)
+                 (or (null? rest) (not (x86-asm-reads-flags? (car rest))))))
      (cons (list 'xor reg reg) rest))))
 
 ;; Rule 4: Redundant Jump to Next Immediate Label
@@ -116,15 +126,6 @@
                      (and (pair? imm) (eq? (car imm) '%imm) (integer? (cadr imm))))))
      (let ((c (if (integer? imm) imm (cadr imm))))
        (cons (list 'lea r1 (list '%disp c r2)) rest)))))
-
-(define (x86-asm-reads-flags? inst)
-  (and (pair? inst)
-       (or (memq (car inst) '(jcc set))
-           (and (eq? (car inst) '%raw-asm)
-                (string? (cadr inst))
-                (or (string-starts-with? (cadr inst) "    set")
-                    (string-starts-with? (cadr inst) "    cmov")
-                    (string-starts-with? (cadr inst) "    j"))))))
 
 (define (x86-imm-int opnd)
   (cond

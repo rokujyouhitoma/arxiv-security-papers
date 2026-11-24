@@ -1265,7 +1265,7 @@
               (d-str (reg->str dst))
               (s-str (if (pair? src) (hoist-operand->str src) (reg->str src))))
          (list (list '%raw-asm (string-append "    movq r11, " s-str))
-               (list '%raw-asm "    mov r10, 1")
+               (list '%raw-asm "    mov r10d, 1")
                (list '%raw-asm (string-append "    shl r10, " (number->string bit-pos)))
                (list '%raw-asm "    xor r11, r10")
                (list '%raw-asm (string-append "    movq " d-str ", r11")))))
@@ -1857,7 +1857,7 @@
               (list '%raw-asm "    mov rdi, [r11 - 48]")
               (list '%raw-asm "    cmp rdi, r11")
               (list '%raw-asm "    jne 5f")
-              (list '%raw-asm "    xor rdi, rdi")
+              (list '%raw-asm "    xor edi, edi")
               (list '%raw-asm "5:")
               (list '%raw-asm "    mov [r8], rdi")
               (list '%raw-asm "    jmp 1b")
@@ -1921,7 +1921,7 @@
                   (list '%raw-asm (string-append (symbol->string call-0-lbl) ":")))
             sub-shift
             (list (list '%raw-asm "    mov r11, [r10 - 1]")
-                  (list '%raw-asm "    mov rax, 0")
+                  (list '%raw-asm "    xor eax, eax")
                   (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
@@ -1931,7 +1931,7 @@
                   (list '%raw-asm "    mov rdi, rax"))
             sub-shift
             (list (list '%raw-asm "    mov r11, [r10 - 1]")
-                  (list '%raw-asm "    mov rax, 4")
+                  (list '%raw-asm "    mov eax, 4")
                   (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
@@ -1945,7 +1945,7 @@
                   (list '%raw-asm "    mov rsi, rax"))
             sub-shift
             (list (list '%raw-asm "    mov r11, [r10 - 1]")
-                  (list '%raw-asm "    mov rax, 8")
+                  (list '%raw-asm "    mov eax, 8")
                   (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
@@ -1962,7 +1962,7 @@
                   (list '%raw-asm "    mov rdx, rax"))
             sub-shift
             (list (list '%raw-asm "    mov r11, [r10 - 1]")
-                  (list '%raw-asm "    mov rax, 12")
+                  (list '%raw-asm "    mov eax, 12")
                   (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
@@ -1982,7 +1982,7 @@
                   (list '%raw-asm "    mov rcx, rax"))
             sub-shift
             (list (list '%raw-asm "    mov r11, [r10 - 1]")
-                  (list '%raw-asm "    mov rax, 16")
+                  (list '%raw-asm "    mov eax, 16")
                   (list '%raw-asm "    call r11"))
             add-shift
             (list (list '%raw-asm (string-append "    jmp " exit-str))
@@ -2001,7 +2001,7 @@
                (list '%raw-asm "    cmp rcx, 8388608")
                (list '%raw-asm "    jbe .L_cap_size_ok")
                (list '%raw-asm ".L_cap_fallback_size:")
-               (list '%raw-asm "    mov rcx, 65536")
+               (list '%raw-asm "    mov ecx, 65536")
                (list '%raw-asm ".L_cap_size_ok:")
                (list '%raw-asm "    mov r8, rcx")
                (list '%raw-asm "    add r8, 111")
@@ -2536,6 +2536,25 @@
 ;;; Stage 2: Code Emission (L_asm_x86 AST -> GNU x86-64 Intel Syntax)
 ;;; -----------------------------------------------------------------------
 
+(define (x86-extract-imm-int opnd)
+  (cond
+    ((integer? opnd) opnd)
+    ((and (pair? opnd) (eq? (car opnd) '%imm) (integer? (cadr opnd))) (cadr opnd))
+    (else #f)))
+
+(define (x86-gp64-opnd->reg32-str opnd)
+  (let ((sym (if (and (pair? opnd) (eq? (car opnd) '%reg))
+                 (if (and (pair? (cdr opnd)) (pair? (cddr opnd)))
+                     (caddr opnd)
+                     (cadr opnd))
+                 opnd)))
+    (case sym
+      ((%rax rax) "eax") ((%rbx rbx) "ebx") ((%rcx rcx) "ecx") ((%rdx rdx) "edx")
+      ((%rsi rsi) "esi") ((%rdi rdi) "edi") ((%rbp rbp) "ebp") ((%rsp rsp) "esp")
+      ((%r8  r8)  "r8d") ((%r9  r9)  "r9d") ((%r10 r10) "r10d") ((%r11 r11) "r11d")
+      ((%r12 r12) "r12d") ((%r13 r13) "r13d") ((%r14 r14) "r14d") ((%r15 r15) "r15d")
+      (else #f))))
+
 (define (emit-x86-asm-inst inst)
   (let ((op (car inst)))
     (case op
@@ -2562,8 +2581,12 @@
       ((%raw-asm)
        (emit (cadr inst)))
       ((mov)
-       (let ((dst-str (asm-opnd->str (cadr inst)))
-             (src-str (asm-opnd->str (caddr inst))))
+       (let* ((dst (cadr inst))
+              (src (caddr inst))
+              (dst-32 (x86-gp64-opnd->reg32-str dst))
+              (src-imm (x86-extract-imm-int src))
+              (dst-str (asm-opnd->str dst))
+              (src-str (asm-opnd->str src)))
          (if (and (not (eq? (car *backend-gc-mode*) 'c-tu))
                   (string=? dst-str "rax")
                   (or (string=? src-str "[rax - 1]")
@@ -2574,7 +2597,12 @@
                (emit "    cmp rcx, 1")
                (emit "    jne ulisp_pair_type_error")
                (emit-inst3 "mov" dst-str src-str))
-             (emit-inst3 "mov" dst-str src-str))))
+             (if (and dst-32
+                      src-imm
+                      (>= src-imm 0)
+                      (<= (quotient src-imm 4) 1073741823))
+                 (emit-inst3 "mov" dst-32 src-str)
+                 (emit-inst3 "mov" dst-str src-str)))))
       ((movzx)
        (emit-inst3 "movzx" (asm-opnd->str (cadr inst)) (asm-opnd->str (caddr inst))))
       ((lea)
@@ -2590,7 +2618,11 @@
       ((or)
        (emit-inst3 "or" (asm-opnd->str (cadr inst)) (asm-opnd->str (caddr inst))))
       ((xor)
-       (emit-inst3 "xor" (asm-opnd->str (cadr inst)) (asm-opnd->str (caddr inst))))
+       (let ((dst-32 (x86-gp64-opnd->reg32-str (cadr inst)))
+             (src-32 (x86-gp64-opnd->reg32-str (caddr inst))))
+         (if (and dst-32 src-32 (string=? dst-32 src-32))
+             (emit-inst3 "xor" dst-32 src-32)
+             (emit-inst3 "xor" (asm-opnd->str (cadr inst)) (asm-opnd->str (caddr inst))))))
       ((shl)
        (let ((cnt (caddr inst)))
          (emit-inst3 "shl"

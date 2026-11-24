@@ -242,4 +242,23 @@
                       (not (member '(%raw-asm "    add rsp, 72") mb)))))
   (set-car! *backend-gc-mode* saved-mode))
 
+;; 11. Issue #953: Short 32-bit zero-extending GAS emission for non-negative imm32 mov & self-xor
+(let ((captured '()))
+  (set-emit-line-sink! (lambda (line) (set! captured (cons line captured))))
+  (emit-x86-asm-inst '(mov rax (%imm 42)))
+  (emit-x86-asm-inst '(mov r10 (%imm 7)))
+  (emit-x86-asm-inst '(mov rax (%imm -1)))
+  (emit-x86-asm-inst '(mov rax (%imm 4294967296)))
+  (emit-x86-asm-inst '(xor rax rax))
+  (emit-x86-asm-inst '(xor r10 r10))
+  (set-emit-line-sink! #f)
+  (assert-equal "emit-x86-asm-inst shortens non-negative imm32 mov and self-xor"
+                '("    mov eax, 42"
+                  "    mov r10d, 7"
+                  "    mov rax, -1"
+                  "    mov rax, 4294967296"
+                  "    xor eax, eax"
+                  "    xor r10d, r10d")
+                (reverse captured)))
+
 (test-end "Pass 140 (x86-64 Backend)")
