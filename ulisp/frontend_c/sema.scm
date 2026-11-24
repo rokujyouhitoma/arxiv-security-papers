@@ -15,8 +15,10 @@
 ;;; 1. Typed AST Constructors & Accessors
 ;;; -----------------------------------------------------------------------
 
-(define (make-c-typed ty inner)
-  (list 'c-typed ty inner))
+(define (make-c-typed ty inner . maybe-span)
+  (if (and (pair? maybe-span) (car maybe-span))
+      (list 'c-typed ty inner (car maybe-span))
+      (list 'c-typed ty inner)))
 
 (define (c-typed? node)
   (and (pair? node) (eq? (car node) 'c-typed)))
@@ -26,6 +28,11 @@
 
 (define (c-typed-inner node)
   (if (c-typed? node) (caddr node) node))
+
+(define (c-typed-span node)
+  (if (and (c-typed? node) (pair? (cdddr node)))
+      (cadddr node)
+      #f))
 
 (define (c99-apply-implicit-cast typed-expr target-type)
   (let ((src-type (c-typed-type typed-expr)))
@@ -1284,7 +1291,8 @@
               (if (eq? (c-ptr-target dt) 'void)
                   (%c99-sema-error! "C99-PTR-002" "Cannot dereference void pointer" (or sp node)))
               (make-c-typed (c-ptr-target dt)
-                            (list 'c-unop 'deref (c99-apply-implicit-cast sub dt)))))
+                            (list 'c-unop 'deref (c99-apply-implicit-cast sub dt))
+                            sp)))
            (else
             (%c99-sema-error! "C99-SEMA-003" "Unsupported unary operator" (or sp node))))))
 
@@ -1473,7 +1481,7 @@
                                                         "Compound arithmetic assignment requires arithmetic operands"
                                                         (or sp node)))
                                   (c99-usual-arithmetic-type lt rt)))))
-                 (make-c-typed lt (list 'c-assign op lhs (c99-apply-implicit-cast (c99-apply-implicit-cast rhs rt) comp-ty)))))
+                 (make-c-typed lt (list 'c-assign op lhs (c99-apply-implicit-cast (c99-apply-implicit-cast rhs rt) comp-ty)) sp)))
              (begin
                (if (not (c99-assign-compatible? env lt rt (cadddr raw)))
                    (cond
@@ -1493,7 +1501,7 @@
                                         (string-append "Incompatible assignment from "
                                                        (c-type->string rt) " to " (c-type->string lt))
                                         (or sp node)))))
-               (make-c-typed lt (list 'c-assign '= lhs (c99-apply-implicit-cast (c99-apply-implicit-cast rhs rt) lt)))))))
+               (make-c-typed lt (list 'c-assign '= lhs (c99-apply-implicit-cast (c99-apply-implicit-cast rhs rt) lt)) sp)))))
 
       ((c-ternary)
        (let* ((thn-raw (caddr raw))
@@ -1604,7 +1612,8 @@
            (make-c-typed (c-field-layout-ctype fl)
                          (list 'c-member
                                (if deref? (c99-apply-implicit-cast base (c99-array-decay bty)) base)
-                               fsym deref?)))))
+                               fsym deref?)
+                         sp))))
 
       ((c-compound-lit)
        (let* ((target-ty (sema-resolve-type-name env (cadr raw)))
@@ -1764,7 +1773,8 @@
                   (not (c-type-complete? lenv (c-ptr-target at))))
              (%c99-sema-error! "C99-LAY-001" "Array subscript on pointer to incomplete aggregate type" (or sp node)))
          (make-c-typed (c-ptr-target at)
-                       (list 'c-index arr (c99-apply-implicit-cast idx 'i64)))))
+                       (list 'c-index arr (c99-apply-implicit-cast idx 'i64))
+                       sp)))
 
       (else
        (%c99-sema-error! "C99-SEMA-003" "Unsupported expression node in sema" (or sp node))))))
