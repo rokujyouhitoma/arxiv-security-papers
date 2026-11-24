@@ -10,9 +10,22 @@
 
 AS ?= as
 LD ?= ld
+OBJCOPY ?= objcopy
+STRIP ?= strip
 ASFLAGS ?= --64
 LDFLAGS ?= -m elf_x86_64 -static
 CC ?= gcc
+
+# Issue #952: Split debug symbols (.symtab / .strtab) into <bin>.debug and strip release binary.
+# Preserves allocatable runtime sections (ulisp_symtab_sec, ulisp_globals_sec) and attaches .gnu_debuglink.
+define STRIP_WITH_DEBUG
+	@if command -v $(OBJCOPY) >/dev/null 2>&1 && command -v $(STRIP) >/dev/null 2>&1; then \
+		rm -f $(1).debug && \
+		$(OBJCOPY) --only-keep-debug $(1) $(1).debug && \
+		$(STRIP) --strip-all $(1) && \
+		(cd $(dir $(1)) && $(OBJCOPY) --add-gnu-debuglink=$(notdir $(1)).debug $(notdir $(1))); \
+	fi
+endef
 CFLAGS = -Wall -Wextra -O0 -g
 CFLAGS_JIT = -no-pie -Wall -O2
 
@@ -1796,6 +1809,12 @@ bootstrap_verify_monolithic: stage2 stage3
 		echo "SUCCESS: Fixed-point convergence confirmed (Stage 2 and Stage 3 outputs are bit-for-bit identical)!"; \
 		mkdir -p bin; \
 		cp -f build/scheme-stage3 bin/ulisp-boot; \
+		if command -v $(OBJCOPY) >/dev/null 2>&1 && command -v $(STRIP) >/dev/null 2>&1; then \
+			rm -f bin/ulisp-boot.debug && \
+			$(OBJCOPY) --only-keep-debug bin/ulisp-boot bin/ulisp-boot.debug && \
+			$(STRIP) --strip-all bin/ulisp-boot && \
+			(cd bin && $(OBJCOPY) --add-gnu-debuglink=ulisp-boot.debug ulisp-boot); \
+		fi; \
 		cp -f build/scheme-stage3 build/ulisp-fast; \
 		chmod +x bin/ulisp-boot build/ulisp-fast; \
 		echo "Seed binary bin/ulisp-boot updated successfully."; \
@@ -1963,6 +1982,7 @@ build/ulisp-modular: $(MODULAR_COMPILER_OBJS)
 	@echo "=== Statically Linking Modular ULisp Binary ($@) ==="
 	$(LD) $(LDFLAGS) $^ -o $@
 	cp -f $@ bin/ulisp-modular
+	$(call STRIP_WITH_DEBUG,bin/ulisp-modular)
 
 # --- Native AOT C99 Compiler Driver Binary: bin/ulisp-cc (Issue #932) ---
 build/c99_grammar_embedded.scm: $(ROOT_DIR)/tools/grammars/c99.peg scripts/embed_c99_grammar.py
@@ -2044,6 +2064,7 @@ bin/ulisp-cc: $(C_DRIVER_OBJS)
 	@mkdir -p bin build
 	@echo "=== Statically Linking Native AOT C99 Compiler Driver ($@) ==="
 	$(LD) $(LDFLAGS) $^ -o $@
+	$(call STRIP_WITH_DEBUG,$@)
 	@chmod +x $@
 
 ulisp-cc: bin/ulisp-cc
@@ -2123,6 +2144,8 @@ bootstrap_verify_modular:
 	@mkdir -p bin
 	@cp -f build/stage3-modular bin/ulisp-boot
 	@cp -f build/stage3-modular bin/ulisp-modular
+	$(call STRIP_WITH_DEBUG,bin/ulisp-boot)
+	$(call STRIP_WITH_DEBUG,bin/ulisp-modular)
 	@cp -f build/stage3-modular build/ulisp-modular
 	@cp -f build/stage3-modular build/ulisp-fast
 	@chmod +x bin/ulisp-boot bin/ulisp-modular build/ulisp-modular build/ulisp-fast
