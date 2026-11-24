@@ -18,7 +18,6 @@
     %managed-alloc
     %managed-alloc-stack
     %managed-safepoint-poll
-    %safepoint-poll
     %managed-write-barrier
     %managed-box
     %managed-unbox
@@ -70,7 +69,7 @@
 
           ;; 3. Safepoint Polling: (%managed-safepoint-poll) / (%safepoint-poll)
           ((%managed-safepoint-poll %safepoint-poll)
-           (list '(%memory-fence)))
+           (list '(%safepoint-poll)))
 
           ;; 4. Write Barrier: (%managed-write-barrier obj offset val)
           ((%managed-write-barrier)

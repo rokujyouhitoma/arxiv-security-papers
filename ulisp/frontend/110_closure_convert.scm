@@ -202,6 +202,9 @@
               (check-direct-call-arity op (length (cdr expr)) expr))
           (let ((known-entry (and (symbol? op) (assq op var-map))))
             (cond
+              ;; 0. Compiler / LIR primitive in operator position always lowers as primitive
+              ((and (symbol? op) (lir-primitive? op))
+               (cons op (map (lambda (e) (convert-expr e var-map)) (cdr expr))))
               ;; 1. Local known function via var-map (%known-fn label)
               ((and known-entry (pair? (cdr known-entry)) (eq? (cadr known-entry) '%known-fn))
                (let ((label (caddr known-entry))

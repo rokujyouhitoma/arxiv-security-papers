@@ -42,6 +42,11 @@
           (loop (cdr es) (cons (car es) prologue))))))
     (else #f)))
 
+(define (lir-safepoint-poll-form? e)
+  (and (pair? e)
+       (null? (cdr e))
+       (memq (car e) '(%synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!))))
+
 (define (lir-compile-let bindings body si env tail?)
   (let ((term-info (terminal-cont-call-info body bindings env)))
     (cond
@@ -52,7 +57,13 @@
               (f-name (cadr term-info))
               (target-info (caddr term-info))
               (exprs (map cadr bindings)))
-         (for-each (lambda (p) (lir-compile-expr p si env #f)) prologue)
+         (for-each (lambda (p)
+                     (if (lir-safepoint-poll-form? p)
+                         (begin
+                           (track-lir-si! si)
+                           (emit-lir! '(%safepoint-poll)))
+                         (lir-compile-expr p si env #f)))
+                   prologue)
          (lir-compile-in-place-cont-call f-name exprs target-info si env)))
 
     ;; Flag / Branch Fusion on ANF: (let ((var (cmp-or-pred-expr ...))) (if var then-e else-e))
@@ -217,5 +228,9 @@
         (if (null? (cdr es))
             (lir-compile-expr (car es) si env tail?)
             (begin
-              (lir-compile-expr (car es) si env #f)
+              (if (lir-safepoint-poll-form? (car es))
+                  (begin
+                    (track-lir-si! si)
+                    (emit-lir! '(%safepoint-poll)))
+                  (lir-compile-expr (car es) si env #f))
               (loop (cdr es)))))))

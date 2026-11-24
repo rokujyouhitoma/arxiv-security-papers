@@ -3599,7 +3599,7 @@
   (and (pair? inst)
        (or (case (car inst)
              ((%c-call %call-foreign %call-closure %direct-call %call-indirect %dispatch-consumer
-               %syscall %memory-fence %managed-safepoint-poll %push %pop %raise
+               %syscall %memory-fence %managed-safepoint-poll %safepoint-poll %push %pop %raise
                %capture-cc %push-handler %pop-handler
                %store-values-buf)
               #t)

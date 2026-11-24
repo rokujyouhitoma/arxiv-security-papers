@@ -213,8 +213,8 @@
 
 ;; 3.7 %managed-safepoint-poll lowering
 (define safepoint-insts '((%managed-safepoint-poll)))
-(assert-equal "3.7 %managed-safepoint-poll expands to (%memory-fence)"
-              '((%memory-fence))
+(assert-equal "3.7 %managed-safepoint-poll expands to (%safepoint-poll)"
+              '((%safepoint-poll))
               (lower-managed-inst-list safepoint-insts))
 
 ;; 3.8 %managed-write-barrier lowering
