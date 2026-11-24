@@ -825,6 +825,46 @@
           (sbi-ht-set! node-ht key idx)
           idx))))
 
+(define (%sbi-make-pos-inf)
+  (let loop ((i 0) (v 2.0))
+    (if (= i 10) v (loop (+ i 1) (* v v)))))
+
+(define (%sbi-canonical-flonum-string x)
+  (cond
+    ((not (= x x)) "+nan.0")
+    ((and (not (= x 0.0)) (= x (* 2.0 x)))
+     (if (< x 0.0) "-inf.0" "+inf.0"))
+    (else
+     (let* ((s (number->string x))
+            (n (string-length s))
+            (e-pos
+             (let loop ((i 0))
+               (if (>= i n)
+                   #f
+                   (let ((c (string-ref s i)))
+                     (if (or (char=? c #\e) (char=? c #\E)
+                             (char=? c #\d) (char=? c #\D)
+                             (char=? c #\f) (char=? c #\F))
+                         i
+                         (loop (+ i 1))))))))
+       (if (not e-pos)
+           s
+           (let* ((mant (substring s 0 e-pos))
+                  (after (+ e-pos 1))
+                  (has-sign? (and (< after n)
+                                  (or (char=? (string-ref s after) #\+)
+                                      (char=? (string-ref s after) #\-))))
+                  (neg-exp? (and has-sign? (char=? (string-ref s after) #\-)))
+                  (dstart (if has-sign? (+ after 1) after))
+                  (digits
+                   (let skip0 ((j dstart))
+                     (cond
+                       ((>= j n) "0")
+                       ((and (char=? (string-ref s j) #\0) (< (+ j 1) n))
+                        (skip0 (+ j 1)))
+                       (else (substring s j n))))))
+             (string-append mant "e" (if neg-exp? "-" "") digits)))))))
+
 (define (sbi-emit-node! st x depth)
   (if (> depth 4096)
       (sbi-error! "SBI DAG nesting depth limit exceeded (possible cycle)" depth))
@@ -959,8 +999,9 @@
                 (sbi-buf-sleb128! nw x)
                 (sbi-ht-set! fht x idx)
                 idx))))
-       ((and (vector? x) (= (vector-length x) 2) (eq? (vector-ref x 0) 'ulisp-flonum-tag))
-        (let* ((sidx (sbi-intern-string! st (number->string x)))
+       ((or (inexact? x)
+            (and (vector? x) (= (vector-length x) 2) (eq? (vector-ref x 0) 'ulisp-flonum-tag)))
+        (let* ((sidx (sbi-intern-string! st (%sbi-canonical-flonum-string x)))
                (key (list *sbi-tag-flonum* sidx)))
           (sbi-encode-compound-node! st key
             (lambda (nw)
@@ -1252,7 +1293,13 @@
                    (if (>= sidx sym-count)
                        (sbi-error! "Number string pool index out of bounds" sidx))
                    (let* ((str (vector-ref strs sidx))
-                          (num (string->number str)))
+                          (num (cond
+                                 ((string=? str "+inf.0") (%sbi-make-pos-inf))
+                                 ((string=? str "-inf.0") (- 0.0 (%sbi-make-pos-inf)))
+                                 ((or (string=? str "+nan.0") (string=? str "-nan.0"))
+                                  (let ((pinf (%sbi-make-pos-inf)))
+                                    (- pinf pinf)))
+                                 (else (string->number str)))))
                      (if (not num)
                          (sbi-error! "Invalid numeric representation in SBI pool" str))
                      (vector-set! nodes i num)

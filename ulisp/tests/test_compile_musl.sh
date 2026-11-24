@@ -407,21 +407,25 @@ if [ "${#MISSING_OBJS[@]}" -gt 0 ]; then
             -I "$MUSL_DIR/src/include" \
             -I "$MUSL_DIR/src/internal" \
             -I "$MUSL_DIR/include" \
+            ${MUSL_EXTRA_CFLAGS:-} \
             -c -o "$MUSL_OBJ_DIR/" "${SHARD_SRCS[@]}"
         ) > "$MUSL_BUILD_DIR/musl_shard_${s}.log" 2>&1 &
         PIDS+=("$!")
       else
         SHARD_SCM="$MUSL_BUILD_DIR/musl_shard_${s}.scm"
         sed '$d' "$ULISP_DIR/build/c_driver_runner.scm" > "$SHARD_SCM"
-        printf '(begin\n  (c-driver-main '\''("-D_XOPEN_SOURCE=700" "-nostdinc" "-I" "%s" "-I" "%s" "-I" "%s" "-I" "%s" "-I" "%s" "-I" "%s" "-I" "%s" "-c" "-o" "%s"' \
+        printf '(begin\n  (c-driver-main '\''("-D_XOPEN_SOURCE=700" "-nostdinc" "-I" "%s" "-I" "%s" "-I" "%s" "-I" "%s" "-I" "%s" "-I" "%s" "-I" "%s"' \
           "$MUSL_BUILD_DIR/include" \
           "$MUSL_DIR/arch/x86_64" \
           "$MUSL_DIR/arch/generic" \
           "$MUSL_BUILD_DIR/src/internal" \
           "$MUSL_DIR/src/include" \
           "$MUSL_DIR/src/internal" \
-          "$MUSL_DIR/include" \
-          "$MUSL_OBJ_DIR/" >> "$SHARD_SCM"
+          "$MUSL_DIR/include" >> "$SHARD_SCM"
+        for extra_f in ${MUSL_EXTRA_CFLAGS:-}; do
+          printf ' "%s"' "$extra_f" >> "$SHARD_SCM"
+        done
+        printf ' "-c" "-o" "%s"' "$MUSL_OBJ_DIR/" >> "$SHARD_SCM"
         for src in "${SHARD_SRCS[@]}"; do
           printf ' "%s"' "$src" >> "$SHARD_SCM"
         done
@@ -461,7 +465,7 @@ fi
 # -----------------------------------------------------------------------
 cp -f "$MUSL_OBJ_DIR/crt1.o" "$MUSL_LIB_DIR/crt1.o"
 rm -f "$MUSL_LIB_DIR/libc.a"
-ar rcs "$MUSL_LIB_DIR/libc.a" "${LIBC_OBJS[@]}"
+ar rcsD "$MUSL_LIB_DIR/libc.a" "${LIBC_OBJS[@]}"
 echo "  [PASS] Produced musl artifacts: $MUSL_LIB_DIR/crt1.o ($(stat -c%s "$MUSL_LIB_DIR/crt1.o")B) & $MUSL_LIB_DIR/libc.a ($(stat -c%s "$MUSL_LIB_DIR/libc.a")B, ${#LIBC_OBJS[@]} members)"
 
 # -----------------------------------------------------------------------
