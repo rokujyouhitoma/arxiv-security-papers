@@ -8,12 +8,12 @@
 | :---: | --- | :--- | :---: | :---: |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | In Progress | [930-implement-c99-bounds-checking-sanitizer-mode.md](930-implement-c99-bounds-checking-sanitizer-mode.md) |
 | **932** | C99 コンパイラドライバ (`ulisp-cc`) のネイティブ AOT バイナリ化と高速セルフホスト実行基盤の構築 | Feature | In Progress | [932-build-native-aot-ulisp-cc-compiler-driver-binary.md](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) |
-| **941** | ILISP Phase 3: --backend=py_ast の R7RS 完全対応および CPython バイトコード直接実行の高速化 | Feature | In Progress | [941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md](941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **941** | ILISP Phase 3: `--backend=py_ast` R7RS 完全対応 & CPython バイトコード高速実行 | Feature | 2026-11-24 | [941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md](closed/941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md) |
 | **940** | ILISP Phase 2: 事前コンパイルドクロージャ・静的マクロ展開およびレキシカルスロット配列 VM の実装 | Feature | 2026-11-24 | [940-implement-ilisp-precompiled-closure-and-lexical-slot-vm.md](closed/940-implement-ilisp-precompiled-closure-and-lexical-slot-vm.md) |
 | **939** | ILISP Phase 1: 評価器ホットパス最適化・特殊形式ネイティブ化・基本リスト手続高速化および高速リーダー実装 | Feature | 2026-11-24 | [939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md](closed/939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md) |
 | **929** | DDC (Diverse Double-Compiling) による C コンパイル出力の決定論性・ビット一致検証ハーネスの実装 | Feature | 2026-11-24 | [929-implement-ddc-diverse-double-compiling-determinism-verification.md](closed/929-implement-ddc-diverse-double-compiling-determinism-verification.md) |

@@ -2233,7 +2233,9 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         os._exit(code)
 
     def prim_procedure_p(x: Any) -> bool:
-        return isinstance(x, (Procedure, Primitive, Continuation))
+        return isinstance(x, (Procedure, Primitive, Continuation)) or bool(
+            getattr(x, "__ilisp_proc__", False)
+        )
 
     def prim_string_to_symbol(s: Any) -> Symbol:
         if not isinstance(s, (str, MutableString)):

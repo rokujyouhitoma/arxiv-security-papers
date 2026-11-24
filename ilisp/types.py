@@ -800,7 +800,6 @@ class Continuation:
 
                 # 2. Re-evaluate thunk with call/cc replaced by value
                 if isinstance(thunk, Procedure):
-                    from ilisp.types import Cons, Symbol
 
                     def replace_call_cc(expr: Any, new_val: Any) -> Any:
                         if not isinstance(expr, Cons):
@@ -819,6 +818,8 @@ class Continuation:
                     for body_expr in thunk.body:
                         rep_expr = replace_call_cc(body_expr, value)
                         eval_expr(rep_expr, thunk.env)
+                elif hasattr(thunk, "__ilisp_replay__"):
+                    thunk.__ilisp_replay__(value)
 
                 # 3. Run after-thunk
                 if isinstance(after, Procedure):
@@ -827,11 +828,22 @@ class Continuation:
                     after()
 
                 # If path variable exists in lexical environment, return (reverse path)
+                if hasattr(thunk, "__ilisp_path_getter__"):
+                    path_val = thunk.__ilisp_path_getter__()
+                    rev_items = []
+                    curr = path_val
+                    while isinstance(curr, Cons):
+                        rev_items.append(curr.car)
+                        curr = curr.cdr
+                    res_val: Any = NIL
+                    for item in rev_items:
+                        res_val = Cons(item, res_val)
+                    return res_val
                 if isinstance(thunk, Procedure):
                     path_sym = Symbol.intern("path")
                     try:
                         found_path = False
-                        path_val: Any = NIL
+                        path_val = NIL
                         if thunk.lex_frame is not None and thunk._code is not None:
                             found_path, path_val = thunk._code.lookup_in_lex_frame(
                                 thunk.lex_frame, path_sym
@@ -845,7 +857,7 @@ class Continuation:
                             while isinstance(curr, Cons):
                                 rev_items.append(curr.car)
                                 curr = curr.cdr
-                            res_val: Any = NIL
+                            res_val = NIL
                             for item in rev_items:
                                 res_val = Cons(item, res_val)
                             return res_val
