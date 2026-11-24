@@ -1787,6 +1787,8 @@
                 (vm-exec-setjmp! vm))
                ((eq? func-lbl '__ulisp_longjmp)
                 (vm-exec-longjmp! vm))
+               ((eq? func-lbl '__ulisp_san_trap)
+                (vm-exec-san-trap! vm))
                (else
                 (let ((fn-entry (assq func-lbl (vm-functions-table vm))))
                   (if (not fn-entry)
@@ -1817,6 +1819,8 @@
                    (vm-exec-setjmp! vm))
                   ((eq? (cdr entry) '__ulisp_longjmp)
                    (vm-exec-longjmp! vm))
+                  ((eq? (cdr entry) '__ulisp_san_trap)
+                   (vm-exec-san-trap! vm))
                   (else
                    (let ((cur-rsp (vm-get-reg vm '%rsp)))
                      (vm-set-call-stack! vm (cons (list (vm-current-fn vm) (vm-pc vm) cur-rsp)
@@ -2728,6 +2732,22 @@
                 (vm-set-pc! vm caller-pc)
                 (vm-set-reg! vm '%rax norm-val)))))))
 
+(define (vm-exec-san-trap! vm)
+  (let* ((addr (lir-vm-u64 (vm-get-reg vm '%rdi)))
+         (raw-len (lir-vm-u64 (vm-get-reg vm '%rsi)))
+         (len (if (> raw-len 4096) 4096 raw-len))
+         (mem-len (bytevector-length (vm-memory-bytes vm)))
+         (msg
+          (if (or (< addr *lir-vm-null-page-limit*)
+                  (> (+ addr len) mem-len))
+              "[ulisp-sanitizer] error: invalid trap message pointer"
+              (let loop ((i 0) (acc '()))
+                (if (>= i len)
+                    (list->string (reverse acc))
+                    (loop (+ i 1)
+                          (cons (integer->char (vm-mem-read-u8 vm (+ addr i))) acc)))))))
+    (vm-trigger-trap! vm 'sanitizer-trap msg 134)))
+
 ;;; C Foreign Call Dispatcher & Built-in IEEE 754 libm Oracle Helpers (#924)
 (define *vm-libm-pi* 3.14159265358979323846)
 (define *vm-libm-pi-2* 1.57079632679489661923)
@@ -3055,6 +3075,9 @@
 
           ((__ulisp_longjmp longjmp _longjmp siglongjmp)
            (vm-exec-longjmp! vm))
+
+          ((__ulisp_san_trap)
+           (vm-exec-san-trap! vm))
 
           ((ulisp_alloc malloc)
            (let* ((bytes (vm-get-reg vm '%rdi))

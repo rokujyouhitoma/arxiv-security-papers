@@ -2415,7 +2415,7 @@
                                        (list '%p2align 4)))))
            (base-acc (if is-exported?
                          (if c-tu?
-                             (if (or (memq label '(__ulisp_setjmp __ulisp_longjmp))
+                             (if (or (memq label '(__ulisp_setjmp __ulisp_longjmp __ulisp_san_trap))
                                      (memq label (car *c-tu-weak-fns*)))
                                  (append init-acc
                                          (list (list '%raw-asm (string-append "    .type " label-str ", @function"))

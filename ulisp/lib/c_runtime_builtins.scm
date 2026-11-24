@@ -15,7 +15,7 @@
   '(longjmp _longjmp siglongjmp __ulisp_longjmp))
 
 (define *c99-builtin-weak-fn-names*
-  '(__ulisp_setjmp __ulisp_longjmp))
+  '(__ulisp_setjmp __ulisp_longjmp __ulisp_san_trap))
 
 (define (c99-setjmp-fn-sym? sym)
   (and (symbol? sym) (memq sym *c99-setjmp-fn-names*) #t))
@@ -58,5 +58,20 @@
             (:inputs  (((%reg %rdi) "D")
                        ((%reg %rsi) "S")))
             (:clobbers ("%rax" "%rcx" "%rdx" "cc" "memory"))
+            (:volatile? #t))
+          (%return %rax))))
+
+;;; Weak libc-independent sanitizer trap: sys_write(2, msg, len) + sys_exit_group(134) + hlt
+(define (make-c99-builtin-san-trap-lir)
+  (list '%lir-function
+        '__ulisp_san_trap
+        '(params (msg len))
+        '(frame-size 0)
+        '(body
+          (%inline-asm
+            "mov rdx, rsi\nmov rsi, rdi\nmov rax, 1\nmov rdi, 2\nsyscall\nmov rax, 231\nmov rdi, 134\nsyscall\nhlt"
+            (:inputs  (((%reg %rdi) "D")
+                       ((%reg %rsi) "S")))
+            (:clobbers ("%rax" "%rcx" "%rdx" "%r11" "cc" "memory"))
             (:volatile? #t))
           (%return %rax))))

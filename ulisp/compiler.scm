@@ -37215,7 +37215,7 @@
                                        (list '%p2align 4)))))
            (base-acc (if is-exported?
                          (if c-tu?
-                             (if (or (memq label '(__ulisp_setjmp __ulisp_longjmp))
+                             (if (or (memq label '(__ulisp_setjmp __ulisp_longjmp __ulisp_san_trap))
                                      (memq label (car *c-tu-weak-fns*)))
                                  (append init-acc
                                          (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
@@ -49260,6 +49260,18 @@
        (emit "    int _val = (int)(int32_t)reg_rsi;")
        (emit "    if (_val == 0) _val = 1;")
        (emit "    longjmp(ulisp_c99_jmp_pool[_jb[1]].host_jb, _val);")
+       (emit "}")
+       (emit ""))
+      ((and (car *c-backend-c-tu*) (eq? label '__ulisp_san_trap))
+       (emit (string-append "static void " label-str "(void) ULISP_UNUSED;"))
+       (emit (string-append "static void " label-str "(void) {"))
+       (emit "    const char *_msg = (const char *)(uintptr_t)reg_rdi;")
+       (emit "    size_t _len = (size_t)reg_rsi;")
+       (emit "    if (_msg && _len > 0) {")
+       (emit "        (void)fwrite(_msg, 1, _len, stderr);")
+       (emit "        fflush(stderr);")
+       (emit "    }")
+       (emit "    _Exit(134);")
        (emit "}")
        (emit ""))
       (else

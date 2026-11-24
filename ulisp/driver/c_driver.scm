@@ -530,7 +530,7 @@
                 (let* ((pp-toks (cpp-preprocess-file src-file ctx))
                        (ast (parse-c99-tokens pp-toks src-file)))
                   (c99-analyze-program ast))))
-           (lir (c99-lower-to-lir typed))
+           (lir (c99-lower-to-lir typed (list (cons 'sanitize-bounds? (c-drv-sanitize-bounds? opts)))))
            (opt-lir (%c-drv-optimize-lir lir opts)))
       (if (not (and (L_lir_core? opt-lir) (validate-core-lir opt-lir)))
           (%c-drv-error! "C99-DRV-003"
@@ -749,7 +749,7 @@
                       (reverse acc)
                       (let* ((fn (car xs))
                              (sym (cadr fn)))
-                        (if (memq sym '(__ulisp_setjmp __ulisp_longjmp))
+                        (if (memq sym '(__ulisp_setjmp __ulisp_longjmp __ulisp_san_trap))
                             (if (memq sym seen-builtins)
                                 (dloop (cdr xs) seen-builtins acc)
                                 (dloop (cdr xs) (cons sym seen-builtins) (cons fn acc)))
