@@ -8,6 +8,15 @@
 | :---: | --- | :--- | :---: | :---: |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | In Progress | [930-implement-c99-bounds-checking-sanitizer-mode.md](930-implement-c99-bounds-checking-sanitizer-mode.md) |
 | **932** | C99 コンパイラドライバ (`ulisp-cc`) のネイティブ AOT バイナリ化と高速セルフホスト実行基盤の構築 | Feature | In Progress | [932-build-native-aot-ulisp-cc-compiler-driver-binary.md](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) |
+| **942** | 混合器 (mix) の完成：`specialize-or-widen` の `eval-in-stage-apply` 接続と第1二村射影実証・DSN-33-24 Phase I3 整合化 | Feature | New | [942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md](942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md) |
+| **943** | Case A の C99 拡張：LIR 参照 VM の検査付き C インタプリタ実行可否検証と差分診断ハーネス構築 | Feature | New | [943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md](943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md) |
+| **944** | Host / Guest 値表現の単一情報源化 (`define-value-repr` によるタグ操作・GC・プリンタの統一生成) | Feature | New | [944-unify-host-and-guest-value-representation-via-define-value-repr.md](944-unify-host-and-guest-value-representation-via-define-value-repr.md) |
+| **945** | Lua 5.4.7 ビルド 60 秒のフェーズ別内訳プロファイリングとアセンブラ往復コスト定量化 | Feature | New | [945-profile-lua-547-c99-build-phase-breakdown-on-linux.md](945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) |
+| **946** | SQL 実行器における式文字列のレコード毎再解析の解消と AST 事前コンパイル化 | Feature | New | [946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md](946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md) |
+| **947** | オントロジー推論ルール `master_rules.json` の未使用状態の解消と `EdgeInferenceRuleRegistry` 読み込み整合化 | Feature | New | [947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md](947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md) |
+| **948** | Direct-Style 静的 `.scm` PEG パーサージェネレータバックエンド (`emit_scheme.scm`) の実装と `peg_meta.peg` ソース自己ホスト不動点実証 | Feature | New | [948-implement-direct-style-static-scheme-peg-parser-generator-backend.md](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) |
+| **949** | `tools/grammars/c99.peg` の静的 `.scm` パーサー生成移行 (`generated_c99_parser.scm`) と C99 フック統合・CPS 全廃 | Feature | New | [949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md](949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) |
+| **950** | Direct-Style PEG インタプリタ × `mix`（第1二村射影）による小規模文法自動段階化と `emit_scheme.scm` 生成パーサーとの双対検証 | Feature | New | [950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md](950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
