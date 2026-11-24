@@ -8,7 +8,9 @@ Scheme reader macros (', `, ,, ,@, #;).
 from __future__ import annotations
 
 import contextlib
+import gc
 import os
+import re
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from ilisp.types import (
@@ -24,6 +26,15 @@ from ilisp.types import (
 
 if TYPE_CHECKING:
     from ilisp.port import TextualInputPort
+
+_WS_COMMENT_RE = re.compile(r"(?:[ \t\r\n]+|;[^\n]*)+")
+_SPACES_RE = re.compile(r" +")
+_ATOM_RE = re.compile(r'[^ \t\r\n();"\'`]+')
+_EXP_RE = re.compile(r"^([+-]?(?:\d+\.?\d*|\.\d+))[sfdl]([+-]?\d+)$")
+_DELIM_CHARS = frozenset(" \t\r\n();\"'`")
+_NUM_START_CHARS = frozenset("0123456789+-.nN")
+_SIGN_NEXT_CHARS = frozenset("0123456789.iInN")
+_DIGIT_CHARS = frozenset("0123456789")
 
 
 class LispSyntaxError(Exception):
@@ -64,9 +75,17 @@ class Reader:
 
             self.port: TextualInputPort = StringInputPort(source, name=filename)
             self.filename: str = filename
+            self._src: Optional[str] = source
+            self._pos: int = 0
+            self._len: int = len(source)
+            self._line_start: int = 0
         else:
             self.port = source
             self.filename = source.name
+            self._src = None
+            self._pos = 0
+            self._len = 0
+            self._line_start = 0
         self.line: int = 1
         self.col: int = 1
         self._unread_buf: List[str] = []
@@ -74,19 +93,49 @@ class Reader:
         self.labels: Dict[int, Any] = {}
 
     def _current_loc(self) -> SourceLocation:
+        if self._src is not None and not self._unread_buf:
+            return SourceLocation(
+                self.filename, self.line, self._pos - self._line_start + 1
+            )
         return SourceLocation(self.filename, self.line, self.col)
+
+    def _sync_pos(self, new_pos: int) -> None:
+        src = self._src
+        pos = self._pos
+        if src is not None and new_pos > pos:
+            nl = src.rfind("\n", pos, new_pos)
+            if nl != -1:
+                self.line += src.count("\n", pos, new_pos)
+                self._line_start = nl + 1
+            self._pos = new_pos
 
     def _peek_char(self) -> Optional[str]:
         if self._unread_buf:
             return self._unread_buf[-1]
+        if self._src is not None:
+            return self._src[self._pos] if self._pos < self._len else None
         return self.port.peek_char()
 
     def _next_char(self) -> Optional[str]:
         ch: Optional[str]
         if self._unread_buf:
             ch = self._unread_buf.pop()
-        else:
-            ch = self.port.read_char()
+            if ch == "\n":
+                self.line += 1
+                self.col = 1
+            else:
+                self.col += 1
+            return ch
+        if self._src is not None:
+            if self._pos >= self._len:
+                return None
+            ch = self._src[self._pos]
+            self._pos += 1
+            if ch == "\n":
+                self.line += 1
+                self._line_start = self._pos
+            return ch
+        ch = self.port.read_char()
         if ch is not None:
             if ch == "\n":
                 self.line += 1
@@ -96,6 +145,15 @@ class Reader:
         return ch
 
     def _unread_char(self, ch: str) -> None:
+        if (
+            self._src is not None
+            and not self._unread_buf
+            and self._pos > 0
+            and self._src[self._pos - 1] == ch
+            and ch != "\n"
+        ):
+            self._pos -= 1
+            return
         self._unread_buf.append(ch)
         if ch == "\n":
             self.line = max(1, self.line - 1)
@@ -104,19 +162,97 @@ class Reader:
             self.col = max(1, self.col - 1)
 
     def _skip_whitespace_and_comments(self) -> None:
-        while True:
-            ch = self._peek_char()
-            if ch is None:
+        src = self._src
+        if src is not None and not self._unread_buf:
+            slen = self._len
+            pos = self._pos
+            while pos < slen:
+                ch = src[pos]
+                if ch in " \t\r\n;":
+                    m = _WS_COMMENT_RE.match(src, pos)
+                    if m is not None:
+                        end_p = m.end()
+                        nl = src.rfind("\n", pos, end_p)
+                        if nl != -1:
+                            self.line += src.count("\n", pos, end_p)
+                            self._line_start = nl + 1
+                        pos = end_p
+                        self._pos = pos
+                        continue
+                if ch == "#" and pos + 1 < slen:
+                    nxt = src[pos + 1]
+                    if nxt == ";":
+                        self._sync_pos(pos + 2)
+                        self.read()
+                        pos = self._pos
+                        continue
+                    elif nxt == "|":
+                        p = pos + 2
+                        depth = 1
+                        while depth > 0:
+                            idx_open = src.find("#|", p)
+                            idx_close = src.find("|#", p)
+                            if idx_close == -1:
+                                self._sync_pos(slen)
+                                raise LispSyntaxError(
+                                    "Unterminated block comment '#|'",
+                                    self._current_loc(),
+                                )
+                            if idx_open != -1 and idx_open < idx_close:
+                                depth += 1
+                                p = idx_open + 2
+                            else:
+                                depth -= 1
+                                p = idx_close + 2
+                        self._sync_pos(p)
+                        pos = p
+                        continue
+                    elif nxt == "!":
+                        p = pos + 2
+                        m_dir = _ATOM_RE.match(src, p)
+                        if m_dir is not None:
+                            dir_name = m_dir.group(0).lower()
+                            p_end = m_dir.end()
+                        else:
+                            dir_name = ""
+                            p_end = p
+                        if dir_name == "fold-case":
+                            self.fold_case = True
+                            self._sync_pos(p_end)
+                            pos = p_end
+                            continue
+                        elif dir_name == "no-fold-case":
+                            self.fold_case = False
+                            self._sync_pos(p_end)
+                            pos = p_end
+                            continue
+                        elif dir_name.startswith("/"):
+                            nl_p = src.find("\n", p_end)
+                            p_end = slen if nl_p == -1 else nl_p + 1
+                            self._sync_pos(p_end)
+                            pos = p_end
+                            continue
+                        else:
+                            self._sync_pos(p_end)
+                            pos = p_end
+                            continue
                 break
-            if ch in " \t\r\n":
+            self._pos = pos
+            return
+
+        while True:
+            ch_slow = self._peek_char()
+            if ch_slow is None:
+                break
+            if ch_slow in " \t\r\n":
                 self._next_char()
-            elif ch == ";":
+            elif ch_slow == ";":
                 # Line comment
                 while True:
                     c = self._next_char()
                     if c is None or c == "\n":
                         break
-            elif ch == "#":
+            elif ch_slow == "#":
                 hash_ch = self._next_char()  # consume '#'
                 next_ch = self._peek_char()
                 if next_ch == ";":
@@ -178,32 +314,83 @@ class Reader:
     def read(self) -> Any:
         """Read and return the next single S-expression, or EOF marker if end reached."""
         self._skip_whitespace_and_comments()
+        src = self._src
+        if src is not None and not self._unread_buf:
+            pos = self._pos
+            if pos >= self._len:
+                return EOF
+            ch = src[pos]
+            if ch == "(":
+                loc = SourceLocation(
+                    self.filename, self.line, pos - self._line_start + 1
+                )
+                self._pos = pos + 1
+                return self._read_list_fast(loc, pos)
+            if ch == ")":
+                loc = self._current_loc()
+                self._pos = pos + 1
+                raise LispSyntaxError("Unexpected closing parenthesis ')'", loc)
+            if ch == "'":
+                loc = self._current_loc()
+                self._pos = pos + 1
+                datum = self.read()
+                return Cons(Symbol.intern("quote"), Cons(datum, NIL, loc=loc), loc=loc)
+            if ch == "`":
+                loc = self._current_loc()
+                self._pos = pos + 1
+                datum = self.read()
+                return Cons(
+                    Symbol.intern("quasiquote"), Cons(datum, NIL, loc=loc), loc=loc
+                )
+            if ch == ",":
+                loc = self._current_loc()
+                if pos + 1 < self._len and src[pos + 1] == "@":
+                    self._pos = pos + 2
+                    datum = self.read()
+                    return Cons(
+                        Symbol.intern("unquote-splicing"),
+                        Cons(datum, NIL, loc=loc),
+                        loc=loc,
+                    )
+                self._pos = pos + 1
+                datum = self.read()
+                return Cons(
+                    Symbol.intern("unquote"), Cons(datum, NIL, loc=loc), loc=loc
+                )
+            if ch == '"':
+                return self._read_string_fast()
+            if ch == "|":
+                return self._read_vertical_bar_symbol(self._current_loc())
+            if ch == "#":
+                return self._read_hash_literal(self._current_loc())
+            return self._read_atom_fast()
+
         loc = self._current_loc()
-        ch = self._peek_char()
-        if ch is None:
+        ch_slow = self._peek_char()
+        if ch_slow is None:
             return EOF
 
         # Parenthesized list
-        if ch == "(":
+        if ch_slow == "(":
             self._next_char()
             return self._read_list(loc)
 
-        if ch == ")":
+        if ch_slow == ")":
             self._next_char()
             raise LispSyntaxError("Unexpected closing parenthesis ')'", loc)
 
         # Reader macros
-        if ch == "'":
+        if ch_slow == "'":
             self._next_char()
             datum = self.read()
             return Cons(Symbol.intern("quote"), Cons(datum, NIL, loc=loc), loc=loc)
 
-        if ch == "`":
+        if ch_slow == "`":
             self._next_char()
             datum = self.read()
             return Cons(Symbol.intern("quasiquote"), Cons(datum, NIL, loc=loc), loc=loc)
 
-        if ch == ",":
+        if ch_slow == ",":
             self._next_char()
             if self._peek_char() == "@":
                 self._next_char()
@@ -217,19 +404,166 @@ class Reader:
             return Cons(Symbol.intern("unquote"), Cons(datum, NIL, loc=loc), loc=loc)
 
         # String literal
-        if ch == '"':
+        if ch_slow == '"':
             return self._read_string(loc)
 
         # Vertical bar escaped symbol (R7RS 2.1: |...|)
-        if ch == "|":
+        if ch_slow == "|":
             return self._read_vertical_bar_symbol(loc)
 
         # Hash literals: #t, #f, #\char
-        if ch == "#":
+        if ch_slow == "#":
             return self._read_hash_literal(loc)
 
         # Atom (Number or Symbol)
         return self._read_atom(loc)
+
+    def _read_string_fast(self) -> str:
+        src = self._src
+        assert src is not None
+        pos = self._pos
+        p = pos + 1
+        q_idx = src.find('"', p)
+        if q_idx == -1:
+            raise LispSyntaxError("Unterminated string literal", self._current_loc())
+        b_idx = src.find("\\", p, q_idx)
+        if b_idx == -1:
+            s = src[p:q_idx]
+            self._sync_pos(q_idx + 1)
+            return s
+        return self._read_string(self._current_loc())
+
+    def _parse_atom_token(self, token: str, loc: Optional[SourceLocation]) -> Any:
+        if token == ".":
+            raise LispSyntaxError(
+                "Unexpected standalone '.' token",
+                loc if loc is not None else self._current_loc(),
+            )
+        tlen = len(token)
+        c0 = token[0]
+        if c0 not in _NUM_START_CHARS:
+            sym_name = token.lower() if self.fold_case else token
+            return Symbol.intern(sym_name)
+        if tlen == 1 and c0 in "+-":
+            return Symbol.intern(token)
+        if c0 in "+-" and tlen > 1 and token[1] not in _SIGN_NEXT_CHARS:
+            sym_name = token.lower() if self.fold_case else token
+            return Symbol.intern(sym_name)
+        if c0 == "." and tlen > 1 and token[1] not in _DIGIT_CHARS:
+            sym_name = token.lower() if self.fold_case else token
+            return Symbol.intern(sym_name)
+
+        # Number parsing
+        try:
+            if token.startswith("0x") or token.startswith("0X"):
+                return int(token, 16)
+            return int(token)
+        except ValueError:
+            pass
+
+        low_tok = token.lower()
+        if low_tok in ("+inf.0", "+inf"):
+            return float("inf")
+        if low_tok in ("-inf.0", "-inf"):
+            return float("-inf")
+        if low_tok in ("+nan.0", "-nan.0", "nan.0", "+nan", "-nan"):
+            return float("nan")
+
+        if "/" in token:
+            parts = token.split("/")
+            if len(parts) == 2:
+                try:
+                    num = int(parts[0])
+                    den = int(parts[1])
+                    if den != 0:
+                        from fractions import Fraction
+
+                        frac = Fraction(num, den)
+                        return frac.numerator if frac.denominator == 1 else frac
+                except ValueError:
+                    pass
+
+        m_exp = _EXP_RE.match(low_tok)
+        if m_exp:
+            try:
+                return float(f"{m_exp.group(1)}e{m_exp.group(2)}")
+            except ValueError:
+                pass
+
+        c_val = self._parse_complex(low_tok, 10)
+        if c_val is not None:
+            return c_val
+
+        try:
+            return float(token)
+        except ValueError:
+            pass
+
+        sym_name = low_tok if self.fold_case else token
+        return Symbol.intern(sym_name)
+
+    def _read_atom_fast(self) -> Any:
+        src = self._src
+        assert src is not None
+        m = _ATOM_RE.match(src, self._pos)
+        if m is None:
+            raise LispSyntaxError("Unexpected empty token", self._current_loc())
+        self._pos = m.end()
+        return self._parse_atom_token(m.group(0), None)
+
+    def _read_list_fast(self, loc: SourceLocation, open_pos: int) -> Any:
+        src = self._src
+        assert src is not None
+        slen = self._len
+        elements: List[Any] = []
+        is_dotted = False
+        dotted_cdr: Any = NIL
+
+        while True:
+            self._skip_whitespace_and_comments()
+            pos = self._pos
+            if pos >= slen:
+                raise LispSyntaxError("Unclosed parenthesis '('", loc)
+            ch = src[pos]
+            if ch == ")":
+                self._pos = pos + 1
+                break
+            if ch == ".":
+                next_p = pos + 1
+                if next_p < slen and src[next_p] in _DELIM_CHARS:
+                    self._pos = next_p
+                    if is_dotted:
+                        raise LispSyntaxError(
+                            "Multiple '.' in pair expression", self._current_loc()
+                        )
+                    if not elements:
+                        if pos == open_pos + 1:
+                            elements.append(Symbol.intern("."))
+                            continue
+                        raise LispSyntaxError(
+                            "Unexpected '.' at start of list", self._current_loc()
+                        )
+                    is_dotted = True
+                    dotted_cdr = self.read()
+                    if dotted_cdr is EOF:
+                        raise LispSyntaxError(
+                            "Expected cdr expression after '.' in pair",
+                            self._current_loc(),
+                        )
+                    self._skip_whitespace_and_comments()
+                    if self._pos >= slen or src[self._pos] != ")":
+                        raise LispSyntaxError(
+                            "Expected ')' after dotted pair cdr", self._current_loc()
+                        )
+                    self._pos += 1
+                    break
+
+            elements.append(self.read())
+
+        result: Any = dotted_cdr if is_dotted else NIL
+        for item in reversed(elements):
+            result = Cons(item, result, loc=loc)
+        return result
 
     def _read_vertical_bar_symbol(self, loc: SourceLocation) -> Symbol:
         self._next_char()  # consume opening '|'
@@ -700,70 +1034,7 @@ class Reader:
         token = "".join(token_chars)
         if not token:
             raise LispSyntaxError("Unexpected empty token", loc)
-
-        # Check standalone '.' token (not a valid identifier or datum in R7RS)
-        if token == ".":
-            raise LispSyntaxError("Unexpected standalone '.' token", loc)
-
-        # Number parsing
-        # Try integer
-        try:
-            if token.startswith("0x") or token.startswith("0X"):
-                return int(token, 16)
-            return int(token)
-        except ValueError:
-            pass
-
-        # Try special float literals (R7RS 6.2.4: +inf.0, -inf.0, +nan.0)
-        low_tok = token.lower()
-        if low_tok in ("+inf.0", "+inf"):
-            return float("inf")
-        if low_tok in ("-inf.0", "-inf"):
-            return float("-inf")
-        if low_tok in ("+nan.0", "-nan.0", "nan.0", "+nan", "-nan"):
-            return float("nan")
-
-        # Try fraction (rational)
-        if "/" in token:
-            parts = token.split("/")
-            if len(parts) == 2:
-                try:
-                    num = int(parts[0])
-                    den = int(parts[1])
-                    if den != 0:
-                        from fractions import Fraction
-
-                        frac = Fraction(num, den)
-                        return frac.numerator if frac.denominator == 1 else frac
-                except ValueError:
-                    pass
-
-        # Try Scheme exponent markers (s, f, d, l)
-        import re
-
-        m_exp = re.match(r"^([+-]?(?:\d+\.?\d*|\.\d+))[sfdl]([+-]?\d+)$", low_tok)
-        if m_exp:
-            try:
-                return float(f"{m_exp.group(1)}e{m_exp.group(2)}")
-            except ValueError:
-                pass
-
-        # Try complex number
-        c_val = self._parse_complex(low_tok, 10)
-        if c_val is not None:
-            return c_val
-
-        # Try float
-        try:
-            return float(token)
-        except ValueError:
-            pass
-
-        # Otherwise intern as Symbol
-        sym_name = token
-        if self.fold_case:
-            sym_name = sym_name.lower()
-        return Symbol.intern(sym_name)
+        return self._parse_atom_token(token, loc)
 
     def _read_list(self, loc: SourceLocation) -> Any:
         elements: List[Any] = []
@@ -826,6 +1097,427 @@ class Reader:
             result = Cons(item, result, loc=loc)
         return result
 
+    def read_all_fast(self) -> List[Any]:
+        """Flat single-pass stack reader for string sources."""
+        src = self._src
+        if src is None:
+            out: List[Any] = []
+            while True:
+                d = self.read()
+                if d is EOF:
+                    break
+                out.append(d)
+            return out
+
+        slen = self._len
+        pos = self._pos
+        line = self.line
+        line_start = self._line_start
+        fname = self.filename
+        fold_case = self.fold_case
+        sym_table = Symbol._table
+        sym_new = Symbol
+        sym_quote = sym_new("quote")
+        sym_qquote = sym_new("quasiquote")
+        sym_unq = sym_new("unquote")
+        sym_unqs = sym_new("unquote-splicing")
+        sym_dot = sym_new(".")
+        atom_match = _ATOM_RE.match
+        spaces_match = _SPACES_RE.match
+        num_starts = _NUM_START_CHARS
+        sign_nexts = _SIGN_NEXT_CHARS
+        digit_chars = _DIGIT_CHARS
+        delims = _DELIM_CHARS
+
+        results: List[Any] = []
+        stack: List[Tuple[List[Any], SourceLocation, int, int]] = []
+        wraps: List[Tuple[Symbol, SourceLocation]] = []
+
+        was_gc = slen > 4096 and gc.isenabled()
+        if was_gc:
+            gc.disable()
+        try:
+            return self._read_all_fast_loop(
+                src,
+                slen,
+                pos,
+                line,
+                line_start,
+                fname,
+                fold_case,
+                sym_table,
+                sym_new,
+                sym_quote,
+                sym_qquote,
+                sym_unq,
+                sym_unqs,
+                sym_dot,
+                atom_match,
+                spaces_match,
+                num_starts,
+                sign_nexts,
+                digit_chars,
+                delims,
+                results,
+                stack,
+                wraps,
+            )
+        finally:
+            if was_gc:
+                gc.enable()
+
+    def _read_all_fast_loop(
+        self,
+        src: str,
+        slen: int,
+        pos: int,
+        line: int,
+        line_start: int,
+        fname: str,
+        fold_case: bool,
+        sym_table: Dict[str, Symbol],
+        sym_new: Any,
+        sym_quote: Symbol,
+        sym_qquote: Symbol,
+        sym_unq: Symbol,
+        sym_unqs: Symbol,
+        sym_dot: Symbol,
+        atom_match: Any,
+        spaces_match: Any,
+        num_starts: frozenset[str],
+        sign_nexts: frozenset[str],
+        digit_chars: frozenset[str],
+        delims: frozenset[str],
+        results: List[Any],
+        stack: List[Tuple[List[Any], SourceLocation, int, int]],
+        wraps: List[Tuple[Symbol, SourceLocation]],
+    ) -> List[Any]:
+        while pos < slen:
+            ch = src[pos]
+            if ch == " ":
+                if pos + 1 < slen and src[pos + 1] == " ":
+                    ms = spaces_match(src, pos)
+                    assert ms is not None
+                    pos = ms.end()
+                else:
+                    pos += 1
+                continue
+            if ch == "\n":
+                line += 1
+                pos += 1
+                line_start = pos
+                continue
+            if ch in "\t\r":
+                pos += 1
+                continue
+            if ch == ";":
+                nl = src.find("\n", pos + 1)
+                if nl == -1:
+                    pos = slen
+                    break
+                line += 1
+                pos = nl + 1
+                line_start = pos
+                continue
+
+            if ch == "(":
+                stack.append(
+                    (
+                        [],
+                        SourceLocation(fname, line, pos - line_start + 1),
+                        pos,
+                        len(wraps),
+                    )
+                )
+                pos += 1
+                continue
+
+            if ch == ")":
+                if not stack:
+                    raise LispSyntaxError(
+                        "Unexpected closing parenthesis ')'",
+                        SourceLocation(fname, line, pos - line_start + 1),
+                    )
+                elems, fl, _, fwrap = stack[-1]
+                if len(wraps) > fwrap:
+                    raise LispSyntaxError(
+                        "Unexpected closing parenthesis ')'",
+                        SourceLocation(fname, line, pos - line_start + 1),
+                    )
+                stack.pop()
+                n_e = len(elems)
+                if n_e == 0:
+                    val: Any = NIL
+                elif n_e == 1:
+                    val = Cons(elems[0], NIL, fl)
+                elif n_e == 2:
+                    val = Cons(elems[0], Cons(elems[1], NIL, fl), fl)
+                elif n_e == 3:
+                    val = Cons(
+                        elems[0], Cons(elems[1], Cons(elems[2], NIL, fl), fl), fl
+                    )
+                else:
+                    val = NIL
+                    for item in reversed(elems):
+                        val = Cons(item, val, fl)
+                pos += 1
+                if wraps:
+                    while wraps and (not stack or len(wraps) > stack[-1][3]):
+                        wsym, wloc = wraps.pop()
+                        val = Cons(wsym, Cons(val, NIL, wloc), wloc)
+                if stack:
+                    stack[-1][0].append(val)
+                else:
+                    results.append(val)
+                continue
+
+            if ch == '"':
+                p = pos + 1
+                q_idx = src.find('"', p)
+                if q_idx == -1:
+                    raise LispSyntaxError(
+                        "Unterminated string literal",
+                        SourceLocation(fname, line, pos - line_start + 1),
+                    )
+                b_idx = src.find("\\", p, q_idx)
+                if b_idx == -1:
+                    val = src[p:q_idx]
+                    nl = src.rfind("\n", p, q_idx)
+                    if nl != -1:
+                        line += src.count("\n", p, q_idx)
+                        line_start = nl + 1
+                    pos = q_idx + 1
+                else:
+                    self.line = line
+                    self._line_start = line_start
+                    self._pos = pos
+                    val = self._read_string(
+                        SourceLocation(fname, line, pos - line_start + 1)
+                    )
+                    pos = self._pos
+                    line = self.line
+                    line_start = self._line_start
+                if wraps:
+                    while wraps and (not stack or len(wraps) > stack[-1][3]):
+                        wsym, wloc = wraps.pop()
+                        val = Cons(wsym, Cons(val, NIL, wloc), wloc)
+                if stack:
+                    stack[-1][0].append(val)
+                else:
+                    results.append(val)
+                continue
+
+            if ch == "'":
+                wraps.append(
+                    (sym_quote, SourceLocation(fname, line, pos - line_start + 1))
+                )
+                pos += 1
+                continue
+
+            if ch == "`":
+                wraps.append(
+                    (sym_qquote, SourceLocation(fname, line, pos - line_start + 1))
+                )
+                pos += 1
+                continue
+
+            if ch == ",":
+                wloc = SourceLocation(fname, line, pos - line_start + 1)
+                if pos + 1 < slen and src[pos + 1] == "@":
+                    wraps.append((sym_unqs, wloc))
+                    pos += 2
+                else:
+                    wraps.append((sym_unq, wloc))
+                    pos += 1
+                continue
+
+            if ch == "#":
+                if pos + 1 < slen:
+                    nxt = src[pos + 1]
+                    if nxt in (";", "|", "!"):
+                        self.line = line
+                        self._line_start = line_start
+                        self._pos = pos
+                        self.fold_case = fold_case
+                        self._skip_whitespace_and_comments()
+                        pos = self._pos
+                        line = self.line
+                        line_start = self._line_start
+                        fold_case = self.fold_case
+                        continue
+                    if nxt in ("t", "T") and (
+                        pos + 2 >= slen or src[pos + 2] in delims
+                    ):
+                        pos += 2
+                        val = True
+                        if wraps:
+                            while wraps and (not stack or len(wraps) > stack[-1][3]):
+                                wsym, wloc = wraps.pop()
+                                val = Cons(wsym, Cons(val, NIL, wloc), wloc)
+                        if stack:
+                            stack[-1][0].append(val)
+                        else:
+                            results.append(val)
+                        continue
+                    if nxt in ("f", "F") and (
+                        pos + 2 >= slen or src[pos + 2] in delims
+                    ):
+                        pos += 2
+                        val = False
+                        if wraps:
+                            while wraps and (not stack or len(wraps) > stack[-1][3]):
+                                wsym, wloc = wraps.pop()
+                                val = Cons(wsym, Cons(val, NIL, wloc), wloc)
+                        if stack:
+                            stack[-1][0].append(val)
+                        else:
+                            results.append(val)
+                        continue
+                self.line = line
+                self._line_start = line_start
+                self._pos = pos
+                self.fold_case = fold_case
+                val = self._read_hash_literal(
+                    SourceLocation(fname, line, pos - line_start + 1)
+                )
+                pos = self._pos
+                line = self.line
+                line_start = self._line_start
+                if wraps:
+                    while wraps and (not stack or len(wraps) > stack[-1][3]):
+                        wsym, wloc = wraps.pop()
+                        val = Cons(wsym, Cons(val, NIL, wloc), wloc)
+                if stack:
+                    stack[-1][0].append(val)
+                else:
+                    results.append(val)
+                continue
+
+            if ch == "|":
+                self.line = line
+                self._line_start = line_start
+                self._pos = pos
+                self.fold_case = fold_case
+                val = self._read_vertical_bar_symbol(
+                    SourceLocation(fname, line, pos - line_start + 1)
+                )
+                pos = self._pos
+                line = self.line
+                line_start = self._line_start
+                if wraps:
+                    while wraps and (not stack or len(wraps) > stack[-1][3]):
+                        wsym, wloc = wraps.pop()
+                        val = Cons(wsym, Cons(val, NIL, wloc), wloc)
+                if stack:
+                    stack[-1][0].append(val)
+                else:
+                    results.append(val)
+                continue
+
+            # Atom
+            m = atom_match(src, pos)
+            assert m is not None
+            end_p = m.end()
+            tok = m.group(0)
+            if tok == ".":
+                if not stack:
+                    raise LispSyntaxError(
+                        "Unexpected standalone '.' token",
+                        SourceLocation(fname, line, pos - line_start + 1),
+                    )
+                elems, fl, fop, fwrap = stack[-1]
+                if not elems and pos == fop + 1 and len(wraps) == fwrap:
+                    elems.append(sym_dot)
+                    pos = end_p
+                    continue
+                if not elems:
+                    raise LispSyntaxError(
+                        "Unexpected '.' at start of list",
+                        SourceLocation(fname, line, end_p - line_start + 1),
+                    )
+                if len(wraps) > fwrap:
+                    raise LispSyntaxError(
+                        "Unexpected '.' after reader prefix",
+                        SourceLocation(fname, line, pos - line_start + 1),
+                    )
+                self.line = line
+                self._line_start = line_start
+                self._pos = end_p
+                self.fold_case = fold_case
+                dotted_cdr = self.read()
+                if dotted_cdr is EOF:
+                    raise LispSyntaxError(
+                        "Expected cdr expression after '.' in pair",
+                        self._current_loc(),
+                    )
+                self._skip_whitespace_and_comments()
+                if self._pos >= slen or src[self._pos] != ")":
+                    raise LispSyntaxError(
+                        "Expected ')' after dotted pair cdr", self._current_loc()
+                    )
+                self._pos += 1
+                pos = self._pos
+                line = self.line
+                line_start = self._line_start
+                val = dotted_cdr
+                for item in reversed(elems):
+                    val = Cons(item, val, fl)
+                stack.pop()
+                if wraps:
+                    while wraps and (not stack or len(wraps) > stack[-1][3]):
+                        wsym, wloc = wraps.pop()
+                        val = Cons(wsym, Cons(val, NIL, wloc), wloc)
+                if stack:
+                    stack[-1][0].append(val)
+                else:
+                    results.append(val)
+                continue
+
+            pos = end_p
+            c0 = tok[0]
+            tlen = len(tok)
+            if c0 not in num_starts:
+                sym_key = tok.lower() if fold_case else tok
+                val = sym_table.get(sym_key)
+                if val is None:
+                    val = sym_new(sym_key)
+            elif (
+                (tlen == 1 and c0 in "+-")
+                or (c0 in "+-" and tlen > 1 and tok[1] not in sign_nexts)
+                or (c0 == "." and tlen > 1 and tok[1] not in digit_chars)
+            ):
+                sym_key = tok.lower() if fold_case else tok
+                val = sym_table.get(sym_key)
+                if val is None:
+                    val = sym_new(sym_key)
+            elif tok.isdigit():
+                val = int(tok)
+            else:
+                self.line = line
+                self._line_start = line_start
+                self._pos = pos
+                self.fold_case = fold_case
+                val = self._parse_atom_token(tok, None)
+
+            if wraps:
+                while wraps and (not stack or len(wraps) > stack[-1][3]):
+                    wsym, wloc = wraps.pop()
+                    val = Cons(wsym, Cons(val, NIL, wloc), wloc)
+            if stack:
+                stack[-1][0].append(val)
+            else:
+                results.append(val)
+
+        self.line = line
+        self._line_start = line_start
+        self._pos = pos
+        self.fold_case = fold_case
+        if stack:
+            raise LispSyntaxError("Unclosed parenthesis '('", stack[-1][1])
+        if wraps:
+            raise LispSyntaxError("Unexpected EOF after reader macro", wraps[-1][1])
+        return results
+
 
 def read_one(text: str, filename: str = "<stdin>", fold_case: bool = False) -> Any:
     """Read a single S-expression from string."""
@@ -838,13 +1530,7 @@ def read_all(
 ) -> List[Any]:
     """Read all S-expressions from string until EOF."""
     reader = Reader(text, filename=filename, fold_case=fold_case)
-    results: List[Any] = []
-    while True:
-        datum = reader.read()
-        if datum is EOF:
-            break
-        results.append(datum)
-    return results
+    return reader.read_all_fast()
 
 
 def read_all_from_file(filepath: str, fold_case: bool = False) -> List[Any]:

@@ -9,7 +9,7 @@ ID: 940
 
 ## 1. 概要 / Summary & 実測プロファイリング監査結果
 
-Phase 1 ([Issue #939](939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md)) により即時ボトルネックを除去した後のさらなる抜本的高速化（通算 20×〜40×）を実現するため、デフォルトの `ilisp` 実行系（`--backend=interp`）において **関数定義・ロード時の 1 回限りの事前コンパイル（マクロ事前展開・AST 正規化・レキシカルスロット解決）＋配列ベース `Frame` ＆ `GlobalCell` 直接参照 VM** を導入する。
+Phase 1 ([Issue #939](closed/939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md)) により即時ボトルネックを除去した後のさらなる抜本的高速化（通算 20×〜40×）を実現するため、デフォルトの `ilisp` 実行系（`--backend=interp`）において **関数定義・ロード時の 1 回限りの事前コンパイル（マクロ事前展開・AST 正規化・レキシカルスロット解決）＋配列ベース `Frame` ＆ `GlobalCell` 直接参照 VM** を導入する。
 
 ### 実測ベースライン (`cProfile` 監査結果 — 辞書・シンボル探索オーバーヘッド)
 
@@ -31,7 +31,7 @@ Phase 1 ([Issue #939](939-optimize-ilisp-evaluator-hotpath-native-primitives-and
 ## 2. トレーサビリティ / Traceability
 
 - **依存関係・関連 Issue**:
-  - 前提 Phase 1: [#939](939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md)（特殊形式・ネイティブ手続・高速リーダー最適化）
+  - 前提 Phase 1: [#939](closed/939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md)（特殊形式・ネイティブ手続・高速リーダー最適化）
   - 関連 Phase 3: [#941](941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md)（`--backend=py_ast` CPython バイトコード生成）
   - 動機検証: [#929](closed/929-implement-ddc-diverse-double-compiling-determinism-verification.md)（DDC Tier 1 `ilisp` バッチ ~22 分の大幅短縮）
 - **関連コンポーネント**:
