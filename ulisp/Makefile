@@ -1879,13 +1879,16 @@ test_split_link: build/ulisp-fast build/ulisp_stdlib.o
 	@echo "SUCCESS: 2-split static linking verification PASSED!"
 
 # --- Modular Separate Compilation & Incremental Build (Issue #608 & Issue #778) ---
+# Issue #951: The compiler itself is single-threaded (no task spawning / scheduler use),
+# so safepoint injection is disabled for every compiler module (mfence-only polls are pure overhead).
+# Revisit this if the compiler is ever parallelized with synapse tasks.
 build/meta/compiler_env.sbi: compiler/module_header.scm
 	@mkdir -p build/meta
 	cp $< $@
 
 build/compiler_base_in.scm: $(COMPILER_BASE) build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo '(!gc none) (!module-name compiler_base) (!import-sbi "build/meta/compiler_env.sbi")' > $@
+	@echo '(!gc none) (!module-name compiler_base) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat $(COMPILER_BASE) >> $@
 
 build/compiler_base.s: build/compiler_base_in.scm build/meta/compiler_env.sbi
@@ -1898,7 +1901,7 @@ build/compiler_base.o: build/compiler_base.s
 
 build/frontend_passes_in.scm: $(FRONTEND_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo '(!gc none) (!module-name frontend_passes) (!import-sbi "build/meta/compiler_env.sbi")' > $@
+	@echo '(!gc none) (!module-name frontend_passes) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat $(FRONTEND_PASSES) >> $@
 
 build/frontend_passes.s: build/frontend_passes_in.scm build/meta/compiler_env.sbi
@@ -1911,7 +1914,7 @@ build/frontend_passes.o: build/frontend_passes.s
 
 build/lir_passes_in.scm: $(LIR_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo '(!gc none) (!module-name lir_passes) (!import-sbi "build/meta/compiler_env.sbi")' > $@
+	@echo '(!gc none) (!module-name lir_passes) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat $(LIR_PASSES) >> $@
 
 build/lir_passes.s: build/lir_passes_in.scm build/meta/compiler_env.sbi
@@ -1924,7 +1927,7 @@ build/lir_passes.o: build/lir_passes.s
 
 build/backend_passes_in.scm: $(BACKEND_PASSES) build/meta/compiler_env.sbi
 	@mkdir -p build
-	@echo '(!gc none) (!module-name backend_passes) (!import-sbi "build/meta/compiler_env.sbi")' > $@
+	@echo '(!gc none) (!module-name backend_passes) (!disable-pass pass-synapse-inject-safepoints) (!import-sbi "build/meta/compiler_env.sbi")' > $@
 	@cat $(BACKEND_PASSES) >> $@
 
 build/backend_passes.s: build/backend_passes_in.scm build/meta/compiler_env.sbi

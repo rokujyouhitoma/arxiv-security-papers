@@ -15,11 +15,22 @@
 | **948** | Direct-Style 静的 `.scm` PEG パーサージェネレータバックエンド (`emit_scheme.scm`) の実装と `peg_meta.peg` ソース自己ホスト不動点実証 | Feature | New | [948-implement-direct-style-static-scheme-peg-parser-generator-backend.md](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) |
 | **949** | `tools/grammars/c99.peg` の静的 `.scm` パーサー生成移行 (`generated_c99_parser.scm`) と C99 フック統合・CPS 全廃 | Feature | New | [949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md](949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) |
 | **950** | Direct-Style PEG インタプリタ × `mix`（第1二村射影）による小規模文法自動段階化と `emit_scheme.scm` 生成パーサーとの双対検証 | Feature | New | [950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md](950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md) |
+| **952** | 配布用 `ulisp-boot` / `ulisp-cc` の strip と `.debug` 分離ファイル化 | Feature | New | [952-strip-release-binaries-and-split-debug-symbols.md](952-strip-release-binaries-and-split-debug-symbols.md) |
+| **953** | x86-64 即値 `mov` の短縮符号化（`mov r32, imm32` / `xor r32, r32`）を `140` と `144a` の双方に適用 | Feature | New | [953-shorten-immediate-mov-encoding-in-x86-backend-and-assembler.md](953-shorten-immediate-mov-encoding-in-x86-backend-and-assembler.md) |
+| **954** | Scheme コード生成における内部ラベル `.p2align` の削減（ループ先頭・関数入口限定） | Feature | New | [954-restrict-p2align-to-loop-headers-and-function-entries-in-scheme-codegen.md](954-restrict-p2align-to-loop-headers-and-function-entries-in-scheme-codegen.md) |
+| **955** | 算術 fast path の短縮：オーバーフロー分岐の `jo` 融合と定数オペランドのタグ検査畳み込み | Feature | New | [955-fuse-overflow-branch-to-jo-and-fold-constant-tag-checks.md](955-fuse-overflow-branch-to-jo-and-fold-constant-tag-checks.md) |
+| **956** | 並行処理ビルド向け safepoint の `mfence` 単体展開を実フラグ poll（`cmp` + `jne slow`）へ置換 | Feature | New | [956-replace-safepoint-mfence-with-real-flag-poll-for-concurrent-builds.md](956-replace-safepoint-mfence-with-real-flag-poll-for-concurrent-builds.md) |
+| **957** | 算術・比較 slow path のインライン展開廃止と共有スタブ化 | Feature | New | [957-share-arithmetic-and-compare-slow-path-stubs.md](957-share-arithmetic-and-compare-slow-path-stubs.md) |
+| **958** | 関数入口の未使用 `r10` / `argc` スピル削除と小さなアクセサのインライン化（Scheme モード） | Feature | New | [958-eliminate-unused-prologue-spills-and-inline-small-accessors.md](958-eliminate-unused-prologue-spills-and-inline-small-accessors.md) |
+| **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` / `.data` 配置） | Feature | New | [959-emit-quoted-constants-as-static-rodata-data.md](959-emit-quoted-constants-as-static-rodata-data.md) |
+| **960** | 未参照関数の削除（到達可能性解析または関数毎セクション + `--gc-sections`） | Feature | New | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
+| **961** | Scheme 経路の LIR への linear scan レジスタ割り付け導入（スタック退避中心コード生成の解消） | Feature | New | [961-introduce-linear-scan-register-allocation-for-scheme-lir.md](961-introduce-linear-scan-register-allocation-for-scheme-lir.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **951** | シングルスレッドのコンパイラ 4 モジュールにおける safepoint 注入無効化 | Feature | 2026-11-25 | [951-disable-safepoint-injection-in-single-threaded-compiler-modules.md](closed/951-disable-safepoint-injection-in-single-threaded-compiler-modules.md) |
 | **932** | C99 コンパイラドライバ (`ulisp-cc`) のネイティブ AOT バイナリ化と高速セルフホスト実行基盤の構築 | Feature | 2026-11-25 | [932-build-native-aot-ulisp-cc-compiler-driver-binary.md](closed/932-build-native-aot-ulisp-cc-compiler-driver-binary.md) |
 | **930** | C99 配列境界検査・NULL ポインタ参照トラップ自動注入モード (`--sanitize-bounds`) の実装 | Feature | 2026-11-25 | [930-implement-c99-bounds-checking-sanitizer-mode.md](closed/930-implement-c99-bounds-checking-sanitizer-mode.md) |
 | **941** | ILISP Phase 3: `--backend=py_ast` R7RS 完全対応 & CPython バイトコード高速実行 | Feature | 2026-11-24 | [941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md](closed/941-complete-ilisp-py-ast-backend-r7rs-compilation-for-ulisp.md) |
