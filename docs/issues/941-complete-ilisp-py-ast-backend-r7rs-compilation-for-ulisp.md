@@ -20,7 +20,7 @@ ID: 941
    - 実測エラー: `TypeError: to_py_list expected proper list, got improper: 'include'` (`compiler.py:160` -> `compiler.py:433`)。
    - 原因: `_expand_macros` ([compiler.py:216-439](../../ilisp/backend/py_codegen/compiler.py#L216-L439)) が `(quote ...)` 内部データ、`(define (name . rest) ...)`・`(lambda (a . b) ...)` のドット対仮引数リスト（improper list）の区別なく全 `Cons` を再帰走査してしまい、結果再構成または `to_py_list` 呼び出しで破綻している。さらにローカル変数シャドウ時のマクロ誤展開も防げていない。
 2. **Gap 2 — R7RS 主要特殊形式の直接 AST ローワリング未対応**
-   - `_compile_expr` ([compiler.py:441-621](../../ilisp/backend/py_codegen/compiler.py#L441-L621)) が直接扱うのは `define`, `set!`, `quote`, `quasiquote`, `if`, `begin`, `lambda` のみで、`let` / Named `let` / `let*` / `letrec` / `letrec*` / `cond` / `case` / `and` / `or` / `when` / `unless` / `do` / `guard` / `define-record-type` / `define-values` / `let-values` / `let*-values` / `case-lambda` / `parameterize` / `delay` / `delay-force` / `cond-expand` の AST 生成や、関数本体内の内部 `define` 処理が未実装である（現状は [base.ilisp](../../ilisp/stdlib/base.ilisp) のマクロ展開に依存しており、Phase 1 [#939](939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md) でこれらをネイティブ特殊形式化する際に必ず `py_ast` 側にも直接ローワリングが必須となる）。
+   - `_compile_expr` ([compiler.py:441-621](../../ilisp/backend/py_codegen/compiler.py#L441-L621)) が直接扱うのは `define`, `set!`, `quote`, `quasiquote`, `if`, `begin`, `lambda` のみで、`let` / Named `let` / `let*` / `letrec` / `letrec*` / `cond` / `case` / `and` / `or` / `when` / `unless` / `do` / `guard` / `define-record-type` / `define-values` / `let-values` / `let*-values` / `case-lambda` / `parameterize` / `delay` / `delay-force` / `cond-expand` の AST 生成や、関数本体内の内部 `define` 処理が未実装である（現状は [base.ilisp](../../ilisp/stdlib/base.ilisp) のマクロ展開に依存しており、Phase 1 [#939](closed/939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md) でこれらをネイティブ特殊形式化する際に必ず `py_ast` 側にも直接ローワリングが必須となる）。
 3. **Gap 3 — `analyze_mutated_vars` のグローバルシンボル名衝突による過剰 `Cell` ボクシング**
    - `analyze_mutated_vars` ([compiler.py:111-133](../../ilisp/backend/py_codegen/compiler.py#L111-L133)) が関数スコープを無視してファイル全体で `set!` 対象のシンボル名（例: `x`, `i`, `res`, `acc`）を 1 つの `Set[str]` に収集しているため、どこか 1 箇所で `(set! i ...)` があると 70,000 行中の無関係な全関数の引数・ローカル変数 `i` まで強制的に `Cell` ボックス化（`.get()` / `Cell(...)` 確保）される重大な性能・正当性リスクがある。
 4. **Gap 4 — 自己再帰以外の相互末尾再帰と定数アロケーションの未最適化**
@@ -32,7 +32,7 @@ ID: 941
 ## 2. トレーサビリティ / Traceability
 
 - **関連 Issue**:
-  - [#939](939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md)（Phase 1: 特殊形式ネイティブ化および高速リーダー）
+  - [#939](closed/939-optimize-ilisp-evaluator-hotpath-native-primitives-and-fast-reader.md)（Phase 1: 特殊形式ネイティブ化および高速リーダー）
   - [#940](940-implement-ilisp-precompiled-closure-and-lexical-slot-vm.md)（Phase 2: 事前コンパイルドクロージャ＋レキシカルスロット VM）
   - [#929](closed/929-implement-ddc-diverse-double-compiling-determinism-verification.md)（DDC 検証での `ilisp` 高速実行基盤）
 - **対象コンポーネント**:

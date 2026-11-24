@@ -174,21 +174,91 @@ _current_exception_handler: ContextVar[Optional[Any]] = ContextVar(
 )
 _SENTINEL = object()
 
+_SPECIAL_FORM_NAMES: frozenset[str] = frozenset(
+    {
+        "syntax-error",
+        "quote",
+        "quasiquote",
+        "if",
+        "cond",
+        "case",
+        "and",
+        "or",
+        "when",
+        "unless",
+        "do",
+        "guard",
+        "let",
+        "let*",
+        "letrec",
+        "letrec*",
+        "begin",
+        "include",
+        "include-ci",
+        "define",
+        "define-values",
+        "set!",
+        "lambda",
+        "define-macro",
+        "define-syntax",
+        "let-syntax",
+        "letrec-syntax",
+        "define-library",
+        "import",
+        "case-lambda",
+        "delay",
+        "delay-force",
+        "parameterize",
+        "define-record-type",
+        "let-values",
+        "let*-values",
+        "raise",
+        "raise-continuable",
+        "with-exception-handler",
+        "macroexpand-1",
+        "macroexpand",
+        "cond-expand",
+        ".",
+    }
+)
+_SPECIAL_FORM_SYMBOLS: frozenset[Symbol] = frozenset(
+    Symbol.intern(s) for s in _SPECIAL_FORM_NAMES
+)
+_SHADOW_TRACKED_SYMBOLS: frozenset[Symbol] = _SPECIAL_FORM_SYMBOLS | frozenset(
+    {Symbol.intern("=>"), Symbol.intern("else")}
+)
+
 
 class Environment:
     """Lexical Environment frame with parent scoping chain."""
 
+    __slots__ = ("parent", "bindings", "_has_shadowed_sf")
+
     _mutation_hook: Optional[Any] = None
     parent: Optional[Environment]
     bindings: Dict[Symbol, Any]
+    _has_shadowed_sf: bool
 
     def __init__(
         self,
         parent: Optional[Environment] = None,
         bindings: Optional[Dict[Symbol, Any]] = None,
+        has_shadowed_sf: Optional[bool] = None,
     ) -> None:
         self.parent = parent
         self.bindings = bindings if bindings is not None else {}
+        if parent is None:
+            self._has_shadowed_sf = False
+        elif has_shadowed_sf is not None:
+            self._has_shadowed_sf = has_shadowed_sf
+        elif parent._has_shadowed_sf:
+            self._has_shadowed_sf = True
+        elif self.bindings:
+            self._has_shadowed_sf = any(
+                k in _SHADOW_TRACKED_SYMBOLS for k in self.bindings
+            )
+        else:
+            self._has_shadowed_sf = False
 
     @property
     def root(self) -> Environment:
@@ -201,6 +271,12 @@ class Environment:
     def define(self, sym: Symbol, val: Any) -> None:
         """Bind variable in the current local environment frame."""
         self.bindings[sym] = val
+        if (
+            self.parent is not None
+            and not self._has_shadowed_sf
+            and sym in _SHADOW_TRACKED_SYMBOLS
+        ):
+            self._has_shadowed_sf = True
 
     def lookup(self, sym: Symbol) -> Any:
         """Lookup variable recursively through lexical chain; unwrap Cell if boxed."""
@@ -448,21 +524,494 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_list_copy(obj: Any) -> Any:
         if not is_pair(obj):
             return obj
-        head: Optional[Cons] = None
-        tail: Optional[Cons] = None
+        res = []
         curr = obj
-        while isinstance(curr, Cons):
-            new_cell = Cons(curr.car, NIL)
-            if head is None:
-                head = new_cell
-            else:
-                assert tail is not None
-                tail.cdr = new_cell
-            tail = new_cell
+        while type(curr) is Cons:
+            res.append(curr.car)
             curr = curr.cdr
-        if tail is not None:
-            tail.cdr = curr
-        return head if head is not None else obj
+        if type(curr) is SequenceView:
+            while len(curr) > 0:
+                res.append(curr.car)
+                curr = curr.cdr
+        head: Any = curr
+        for item in reversed(res):
+            head = Cons(item, head)
+        return head
+
+    def _call_proc(proc: Any, args: List[Any]) -> Any:
+        tp = type(proc)
+        if tp is Primitive:
+            return proc.fn(*args)
+        if tp is Procedure:
+            from ilisp.evaluator import _apply_procedure
+
+            return _apply_procedure(proc, args)
+        if callable(proc):
+            return proc(*args)
+        raise TypeError(f"Expected procedure, got {proc!r}")
+
+    def _call_proc1(proc: Any, arg: Any) -> Any:
+        tp = type(proc)
+        if tp is Primitive:
+            return proc.fn(arg)
+        if tp is Procedure:
+            from ilisp.evaluator import _apply_procedure
+
+            return _apply_procedure(proc, [arg])
+        if callable(proc):
+            return proc(arg)
+        raise TypeError(f"Expected procedure, got {proc!r}")
+
+    def _call_proc2(proc: Any, arg1: Any, arg2: Any) -> Any:
+        tp = type(proc)
+        if tp is Primitive:
+            return proc.fn(arg1, arg2)
+        if tp is Procedure:
+            from ilisp.evaluator import _apply_procedure
+
+            return _apply_procedure(proc, [arg1, arg2])
+        if callable(proc):
+            return proc(arg1, arg2)
+        raise TypeError(f"Expected procedure, got {proc!r}")
+
+    def prim_length(lst: Any) -> int:
+        n = 0
+        curr = lst
+        while type(curr) is Cons:
+            n += 1
+            curr = curr.cdr
+        if curr is NIL:
+            return n
+        if type(curr) is SequenceView:
+            return n + len(curr)
+        raise TypeError(f"length: expected proper list, got {lst!r}")
+
+    def prim_reverse(lst: Any) -> Any:
+        res: Any = NIL
+        curr = lst
+        while type(curr) is Cons:
+            res = Cons(curr.car, res)
+            curr = curr.cdr
+        if curr is NIL:
+            return res
+        if type(curr) is SequenceView:
+            for i in range(curr.offset, len(curr.seq)):
+                res = Cons(curr.seq[i], res)
+            return res
+        raise TypeError(f"reverse: expected proper list, got {lst!r}")
+
+    def prim_append(*lists: Any) -> Any:
+        n_lists = len(lists)
+        if n_lists == 0:
+            return NIL
+        if n_lists == 1:
+            return lists[0]
+        if n_lists == 2:
+            l1, l2 = lists[0], lists[1]
+            if l1 is NIL:
+                return l2
+            elems: List[Any] = []
+            curr = l1
+            while type(curr) is Cons:
+                elems.append(curr.car)
+                curr = curr.cdr
+            if curr is NIL:
+                pass
+            elif type(curr) is SequenceView:
+                for i in range(curr.offset, len(curr.seq)):
+                    elems.append(curr.seq[i])
+            else:
+                raise TypeError(f"append: expected proper list, got {l1!r}")
+            res: Any = l2
+            for item in reversed(elems):
+                res = Cons(item, res)
+            return res
+
+        elems_all: List[Any] = []
+        for idx in range(n_lists - 1):
+            curr = lists[idx]
+            while type(curr) is Cons:
+                elems_all.append(curr.car)
+                curr = curr.cdr
+            if curr is NIL:
+                continue
+            if type(curr) is SequenceView:
+                for i in range(curr.offset, len(curr.seq)):
+                    elems_all.append(curr.seq[i])
+            else:
+                raise TypeError(f"append: expected proper list, got {lists[idx]!r}")
+        res_all: Any = lists[-1]
+        for item in reversed(elems_all):
+            res_all = Cons(item, res_all)
+        return res_all
+
+    def prim_memq(item: Any, lst: Any) -> Any:
+        curr = lst
+        while type(curr) is Cons:
+            if item is curr.car:
+                return curr
+            curr = curr.cdr
+        if curr is NIL:
+            return False
+        while is_pair(curr):
+            if item is car(curr):
+                return curr
+            curr = cdr(curr)
+        if is_null(curr):
+            return False
+        raise TypeError(f"memq: expected proper list, got {lst!r}")
+
+    def prim_memv(item: Any, lst: Any) -> Any:
+        curr = lst
+        while type(curr) is Cons:
+            if prim_eqv_p(item, curr.car):
+                return curr
+            curr = curr.cdr
+        if curr is NIL:
+            return False
+        while is_pair(curr):
+            if prim_eqv_p(item, car(curr)):
+                return curr
+            curr = cdr(curr)
+        if is_null(curr):
+            return False
+        raise TypeError(f"memv: expected proper list, got {lst!r}")
+
+    def prim_member(item: Any, lst: Any, *cmp_args: Any) -> Any:
+        if not cmp_args:
+            curr = lst
+            while type(curr) is Cons:
+                if prim_equal_p(item, curr.car):
+                    return curr
+                curr = curr.cdr
+            if curr is NIL:
+                return False
+            while is_pair(curr):
+                if prim_equal_p(item, car(curr)):
+                    return curr
+                curr = cdr(curr)
+            if is_null(curr):
+                return False
+            raise TypeError(f"member: expected proper list, got {lst!r}")
+        if len(cmp_args) > 1:
+            raise TypeError(
+                f"member: expected 2 or 3 arguments, got {2 + len(cmp_args)}"
+            )
+        cmp_proc = cmp_args[0]
+        curr = lst
+        while type(curr) is Cons:
+            if _call_proc2(cmp_proc, item, curr.car) is not False:
+                return curr
+            curr = curr.cdr
+        if curr is NIL:
+            return False
+        while is_pair(curr):
+            if _call_proc2(cmp_proc, item, car(curr)) is not False:
+                return curr
+            curr = cdr(curr)
+        if is_null(curr):
+            return False
+        raise TypeError(f"member: expected proper list, got {lst!r}")
+
+    def prim_assq(key: Any, alist: Any) -> Any:
+        curr = alist
+        while type(curr) is Cons:
+            entry = curr.car
+            if type(entry) is Cons:
+                if key is entry.car:
+                    return entry
+            elif is_pair(entry):
+                if key is car(entry):
+                    return entry
+            else:
+                raise TypeError(f"assq: non-pair element in alist: {entry!r}")
+            curr = curr.cdr
+        if curr is NIL:
+            return False
+        while is_pair(curr):
+            entry = car(curr)
+            if not is_pair(entry):
+                raise TypeError(f"assq: non-pair element in alist: {entry!r}")
+            if key is car(entry):
+                return entry
+            curr = cdr(curr)
+        if is_null(curr):
+            return False
+        raise TypeError(f"assq: expected proper alist, got {alist!r}")
+
+    def prim_assv(key: Any, alist: Any) -> Any:
+        curr = alist
+        while type(curr) is Cons:
+            entry = curr.car
+            if type(entry) is Cons:
+                if prim_eqv_p(key, entry.car):
+                    return entry
+            elif is_pair(entry):
+                if prim_eqv_p(key, car(entry)):
+                    return entry
+            else:
+                raise TypeError(f"assv: non-pair element in alist: {entry!r}")
+            curr = curr.cdr
+        if curr is NIL:
+            return False
+        while is_pair(curr):
+            entry = car(curr)
+            if not is_pair(entry):
+                raise TypeError(f"assv: non-pair element in alist: {entry!r}")
+            if prim_eqv_p(key, car(entry)):
+                return entry
+            curr = cdr(curr)
+        if is_null(curr):
+            return False
+        raise TypeError(f"assv: expected proper alist, got {alist!r}")
+
+    def prim_assoc(key: Any, alist: Any, *cmp_args: Any) -> Any:
+        if not cmp_args:
+            curr = alist
+            while type(curr) is Cons:
+                entry = curr.car
+                if type(entry) is Cons:
+                    if prim_equal_p(key, entry.car):
+                        return entry
+                elif is_pair(entry):
+                    if prim_equal_p(key, car(entry)):
+                        return entry
+                else:
+                    raise TypeError(f"assoc: non-pair element in alist: {entry!r}")
+                curr = curr.cdr
+            if curr is NIL:
+                return False
+            while is_pair(curr):
+                entry = car(curr)
+                if not is_pair(entry):
+                    raise TypeError(f"assoc: non-pair element in alist: {entry!r}")
+                if prim_equal_p(key, car(entry)):
+                    return entry
+                curr = cdr(curr)
+            if is_null(curr):
+                return False
+            raise TypeError(f"assoc: expected proper alist, got {alist!r}")
+        if len(cmp_args) > 1:
+            raise TypeError(
+                f"assoc: expected 2 or 3 arguments, got {2 + len(cmp_args)}"
+            )
+        cmp_proc = cmp_args[0]
+        curr = alist
+        while type(curr) is Cons:
+            entry = curr.car
+            if type(entry) is Cons:
+                e_car = entry.car
+            elif is_pair(entry):
+                e_car = car(entry)
+            else:
+                raise TypeError(f"assoc: non-pair element in alist: {entry!r}")
+            if _call_proc2(cmp_proc, key, e_car) is not False:
+                return entry
+            curr = curr.cdr
+        if curr is NIL:
+            return False
+        while is_pair(curr):
+            entry = car(curr)
+            if not is_pair(entry):
+                raise TypeError(f"assoc: non-pair element in alist: {entry!r}")
+            if _call_proc2(cmp_proc, key, car(entry)) is not False:
+                return entry
+            curr = cdr(curr)
+        if is_null(curr):
+            return False
+        raise TypeError(f"assoc: expected proper alist, got {alist!r}")
+
+    def prim_map(proc: Any, lst1: Any, *rest_lists: Any) -> Any:
+        if not rest_lists:
+            out: List[Any] = []
+            curr = lst1
+            tp = type(proc)
+            if tp is Primitive:
+                fn = proc.fn
+                while type(curr) is Cons:
+                    out.append(fn(curr.car))
+                    curr = curr.cdr
+                while is_pair(curr):
+                    out.append(fn(car(curr)))
+                    curr = cdr(curr)
+            elif tp is Procedure:
+                from ilisp.evaluator import _apply_procedure
+
+                while type(curr) is Cons:
+                    out.append(_apply_procedure(proc, [curr.car]))
+                    curr = curr.cdr
+                while is_pair(curr):
+                    out.append(_apply_procedure(proc, [car(curr)]))
+                    curr = cdr(curr)
+            elif callable(proc):
+                while type(curr) is Cons:
+                    out.append(proc(curr.car))
+                    curr = curr.cdr
+                while is_pair(curr):
+                    out.append(proc(car(curr)))
+                    curr = cdr(curr)
+            else:
+                raise TypeError(f"map: expected procedure, got {proc!r}")
+            if not is_null(curr):
+                raise TypeError(f"map: expected proper list, got {lst1!r}")
+            return to_lisp_list(out)
+
+        cursors = [lst1, *rest_lists]
+        out_multi: List[Any] = []
+        while True:
+            step_args: List[Any] = []
+            done = False
+            for idx, cur in enumerate(cursors):
+                if type(cur) is Cons:
+                    step_args.append(cur.car)
+                    cursors[idx] = cur.cdr
+                elif is_null(cur):
+                    done = True
+                    break
+                elif is_pair(cur):
+                    step_args.append(car(cur))
+                    cursors[idx] = cdr(cur)
+                else:
+                    raise TypeError(f"map: expected proper list, got {cur!r}")
+            if done:
+                break
+            out_multi.append(_call_proc(proc, step_args))
+        return to_lisp_list(out_multi)
+
+    def prim_for_each(proc: Any, lst1: Any, *rest_lists: Any) -> Any:
+        if not rest_lists:
+            curr = lst1
+            tp = type(proc)
+            if tp is Primitive:
+                fn = proc.fn
+                while type(curr) is Cons:
+                    fn(curr.car)
+                    curr = curr.cdr
+                while is_pair(curr):
+                    fn(car(curr))
+                    curr = cdr(curr)
+            elif tp is Procedure:
+                from ilisp.evaluator import _apply_procedure
+
+                while type(curr) is Cons:
+                    _apply_procedure(proc, [curr.car])
+                    curr = curr.cdr
+                while is_pair(curr):
+                    _apply_procedure(proc, [car(curr)])
+                    curr = cdr(curr)
+            elif callable(proc):
+                while type(curr) is Cons:
+                    proc(curr.car)
+                    curr = curr.cdr
+                while is_pair(curr):
+                    proc(car(curr))
+                    curr = cdr(curr)
+            else:
+                raise TypeError(f"for-each: expected procedure, got {proc!r}")
+            if not is_null(curr):
+                raise TypeError(f"for-each: expected proper list, got {lst1!r}")
+            return NIL
+
+        cursors = [lst1, *rest_lists]
+        while True:
+            step_args: List[Any] = []
+            done = False
+            for idx, cur in enumerate(cursors):
+                if type(cur) is Cons:
+                    step_args.append(cur.car)
+                    cursors[idx] = cur.cdr
+                elif is_null(cur):
+                    done = True
+                    break
+                elif is_pair(cur):
+                    step_args.append(car(cur))
+                    cursors[idx] = cdr(cur)
+                else:
+                    raise TypeError(f"for-each: expected proper list, got {cur!r}")
+            if done:
+                break
+            _call_proc(proc, step_args)
+        return NIL
+
+    def prim_filter(pred: Any, lst: Any) -> Any:
+        out: List[Any] = []
+        curr = lst
+        tp = type(pred)
+        if tp is Primitive:
+            fn = pred.fn
+            while type(curr) is Cons:
+                val = curr.car
+                if fn(val) is not False:
+                    out.append(val)
+                curr = curr.cdr
+            while is_pair(curr):
+                val = car(curr)
+                if fn(val) is not False:
+                    out.append(val)
+                curr = cdr(curr)
+        elif tp is Procedure:
+            from ilisp.evaluator import _apply_procedure
+
+            while type(curr) is Cons:
+                val = curr.car
+                if _apply_procedure(pred, [val]) is not False:
+                    out.append(val)
+                curr = curr.cdr
+            while is_pair(curr):
+                val = car(curr)
+                if _apply_procedure(pred, [val]) is not False:
+                    out.append(val)
+                curr = cdr(curr)
+        elif callable(pred):
+            while type(curr) is Cons:
+                val = curr.car
+                if pred(val) is not False:
+                    out.append(val)
+                curr = curr.cdr
+            while is_pair(curr):
+                val = car(curr)
+                if pred(val) is not False:
+                    out.append(val)
+                curr = cdr(curr)
+        else:
+            raise TypeError(f"filter: expected procedure, got {pred!r}")
+        if not is_null(curr):
+            raise TypeError(f"filter: expected proper list, got {lst!r}")
+        return to_lisp_list(out)
+
+    def prim_fold_left(proc: Any, init: Any, lst: Any) -> Any:
+        acc = init
+        curr = lst
+        tp = type(proc)
+        if tp is Primitive:
+            fn = proc.fn
+            while type(curr) is Cons:
+                acc = fn(acc, curr.car)
+                curr = curr.cdr
+            while is_pair(curr):
+                acc = fn(acc, car(curr))
+                curr = cdr(curr)
+        elif tp is Procedure:
+            from ilisp.evaluator import _apply_procedure
+
+            while type(curr) is Cons:
+                acc = _apply_procedure(proc, [acc, curr.car])
+                curr = curr.cdr
+            while is_pair(curr):
+                acc = _apply_procedure(proc, [acc, car(curr)])
+                curr = cdr(curr)
+        elif callable(proc):
+            while type(curr) is Cons:
+                acc = proc(acc, curr.car)
+                curr = curr.cdr
+            while is_pair(curr):
+                acc = proc(acc, car(curr))
+                curr = cdr(curr)
+        else:
+            raise TypeError(f"fold-left: expected procedure, got {proc!r}")
+        if not is_null(curr):
+            raise TypeError(f"fold-left: expected proper list, got {lst!r}")
+        return acc
 
     # --- 2. Symbol & String Primitives ---
     def prim_symbol_p(x: Any) -> bool:
@@ -474,7 +1023,7 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         return s.name
 
     def prim_integer_to_symbol(n: int) -> Symbol:
-        return Symbol(f"sym_{n}")
+        return Symbol.intern(f"sym_{n}")
 
     def prim_symbol_to_integer(s: Any) -> int:
         return 0
@@ -552,6 +1101,8 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
 
     # --- 4. Arithmetic & Comparison Primitives ---
     def prim_add(*nums: Union[int, float, complex]) -> Union[int, float, complex]:
+        if len(nums) == 2:
+            return nums[0] + nums[1]
         total: Union[int, float, complex] = 0
         for n in nums:
             total += n
@@ -560,6 +1111,8 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
     def prim_sub(
         first: Union[int, float, complex], *rest: Union[int, float, complex]
     ) -> Union[int, float, complex]:
+        if len(rest) == 1:
+            return first - rest[0]
         if not rest:
             return -first
         total = first
@@ -568,6 +1121,8 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         return total
 
     def prim_mul(*nums: Union[int, float, complex]) -> Union[int, float, complex]:
+        if len(nums) == 2:
+            return nums[0] * nums[1]
         prod: Union[int, float, complex] = 1
         for n in nums:
             prod *= n
@@ -1756,6 +2311,19 @@ def make_initial_env(preload_stdlib: bool = True) -> Environment:
         "list-ref": prim_list_ref,
         "list-set!": prim_list_set_bang,
         "list-copy": prim_list_copy,
+        "length": prim_length,
+        "reverse": prim_reverse,
+        "append": prim_append,
+        "memq": prim_memq,
+        "memv": prim_memv,
+        "member": prim_member,
+        "assq": prim_assq,
+        "assv": prim_assv,
+        "assoc": prim_assoc,
+        "map": prim_map,
+        "for-each": prim_for_each,
+        "filter": prim_filter,
+        "fold-left": prim_fold_left,
         # Symbols
         "symbol?": prim_symbol_p,
         "symbol=?": prim_symbol_eq,

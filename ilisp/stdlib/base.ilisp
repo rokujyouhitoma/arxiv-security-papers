@@ -4,6 +4,9 @@
 ;;; -------------------------------------------------------------
 ;;; 1. Core Control Syntax Macros
 ;;; -------------------------------------------------------------
+;;; Note: evaluator.py implements special-form fast paths for let, let*,
+;;; letrec, letrec*, cond, and, or, when, unless, case, do when unshadowed;
+;;; these macro definitions remain loaded for py_ast backend and macroexpand.
 
 ;; when: (when test expr ...)
 (define-macro (when test . body)
@@ -301,44 +304,8 @@
 
 
 ;;; -------------------------------------------------------------
-;;; 2. Pair and List Accessors & Utilities
-;;; -------------------------------------------------------------
-
-(define (caar p) (car (car p)))
-(define (cadr p) (car (cdr p)))
-(define (cdar p) (cdr (car p)))
-(define (cddr p) (cdr (cdr p)))
-
-(define (length lst)
-  (define (loop l acc)
-    (if (null? l)
-        acc
-        (loop (cdr l) (+ acc 1))))
-  (loop lst 0))
-
-(define (reverse lst)
-  (define (loop l acc)
-    (if (null? l)
-        acc
-        (loop (cdr l) (cons (car l) acc))))
-  (loop lst '()))
-
-(define (_append2 l1 l2)
-  (if (null? l1)
-      l2
-      (cons (car l1) (_append2 (cdr l1) l2))))
-
-(define (append . lists)
-  (define (loop ls)
-    (if (null? ls)
-        '()
-        (if (null? (cdr ls))
-            (car ls)
-            (_append2 (car ls) (loop (cdr ls))))))
-  (loop lists))
-
-;;; -------------------------------------------------------------
-;;; 3. Delayed Evaluation & Case-Lambda (R7RS 4.2.5 & 4.2.9)
+;;; 2. Delayed Evaluation & Case-Lambda (R7RS 4.2.5 & 4.2.9)
+;;;    (Note: caar..cddr, length, reverse, append are native primitives in env.py)
 ;;; -------------------------------------------------------------
 
 ;; delay: (delay expr)
@@ -392,122 +359,9 @@
                 (cons 'cond (_ilisp_expand_case_lambda_clauses clauses args-var n-var))))))
 
 ;;; -------------------------------------------------------------
-;;; 4. Higher-Order Functions
-;;; -------------------------------------------------------------
-
-(define (_ilisp_any_null? lists)
-  (if (null? lists)
-      #f
-      (if (null? (car lists))
-          #t
-          (_ilisp_any_null? (cdr lists)))))
-
-(define (_ilisp_cars lists)
-  (if (null? lists)
-      '()
-      (cons (car (car lists))
-            (_ilisp_cars (cdr lists)))))
-
-(define (_ilisp_cdrs lists)
-  (if (null? lists)
-      '()
-      (cons (cdr (car lists))
-            (_ilisp_cdrs (cdr lists)))))
-
-(define map
-  (case-lambda
-    ((proc lst)
-     (if (null? lst)
-         '()
-         (cons (proc (car lst))
-               (map proc (cdr lst)))))
-    ((proc lst1 . rest)
-     (let ((lists (cons lst1 rest)))
-       (if (_ilisp_any_null? lists)
-           '()
-           (cons (apply proc (_ilisp_cars lists))
-                 (apply map proc (_ilisp_cdrs lists))))))))
-
-(define (filter pred lst)
-  (if (null? lst)
-      '()
-      (if (pred (car lst))
-          (cons (car lst) (filter pred (cdr lst)))
-          (filter pred (cdr lst)))))
-
-(define (fold-left proc init lst)
-  (if (null? lst)
-      init
-      (fold-left proc (proc init (car lst)) (cdr lst))))
-
-(define for-each
-  (case-lambda
-    ((proc lst)
-     (if (null? lst)
-         '()
-         (begin
-           (proc (car lst))
-           (for-each proc (cdr lst)))))
-    ((proc lst1 . rest)
-     (let ((lists (cons lst1 rest)))
-       (if (_ilisp_any_null? lists)
-           '()
-           (begin
-             (apply proc (_ilisp_cars lists))
-             (apply for-each proc (_ilisp_cdrs lists))))))))
-
-;;; -------------------------------------------------------------
-;;; 5. Searching and Association Lists (Alist)
-;;; -------------------------------------------------------------
-
-(define (memq item lst)
-  (if (null? lst)
-      #f
-      (if (eq? item (car lst))
-          lst
-          (memq item (cdr lst)))))
-
-(define (member item lst . compare-arg)
-  (let ((cmp (if (null? compare-arg) equal? (car compare-arg))))
-    (let loop ((rest lst))
-      (if (null? rest)
-          #f
-          (if (cmp item (car rest))
-              rest
-              (loop (cdr rest)))))))
-
-(define (memv item lst)
-  (if (null? lst)
-      #f
-      (if (eqv? item (car lst))
-          lst
-          (memv item (cdr lst)))))
-
-(define (assq key alist)
-  (if (null? alist)
-      #f
-      (if (eq? key (car (car alist)))
-          (car alist)
-          (assq key (cdr alist)))))
-
-(define (assv key alist)
-  (if (null? alist)
-      #f
-      (if (eqv? key (car (car alist)))
-          (car alist)
-          (assv key (cdr alist)))))
-
-(define (assoc key alist . rest)
-  (let ((cmp (if (null? rest) equal? (car rest))))
-    (let loop ((ls alist))
-      (if (null? ls)
-          #f
-          (if (cmp key (car (car ls)))
-              (car ls)
-              (loop (cdr ls)))))))
-
-;;; -------------------------------------------------------------
-;;; 6. Record-Type Definitions (R7RS 5.5)
+;;; 4. Record-Type Definitions (R7RS 5.5)
+;;;    (Note: map, filter, fold-left, for-each, memq/memv/member,
+;;;     and assq/assv/assoc are native primitives in env.py)
 ;;; -------------------------------------------------------------
 
 (define (_ilisp_extract_all_fields field-specs)

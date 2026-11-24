@@ -159,7 +159,10 @@ def even_p(n: Any) -> bool:
 
 def num_eq(*nums: Any) -> bool:
     """Return True if all arguments are numerically equal (= z1 z2 ...)."""
-    if not nums:
+    n_len = len(nums)
+    if n_len == 2:
+        return bool(nums[0] == nums[1])
+    if n_len <= 1:
         return True
     first = nums[0]
     for n in nums[1:]:
@@ -170,9 +173,12 @@ def num_eq(*nums: Any) -> bool:
 
 def num_lt(*nums: Any) -> bool:
     """Return True if arguments are monotonically increasing (< x1 x2 ...)."""
-    if len(nums) <= 1:
+    n_len = len(nums)
+    if n_len == 2:
+        return bool(nums[0] < nums[1])
+    if n_len <= 1:
         return True
-    for i in range(len(nums) - 1):
+    for i in range(n_len - 1):
         if not (nums[i] < nums[i + 1]):
             return False
     return True
@@ -180,9 +186,12 @@ def num_lt(*nums: Any) -> bool:
 
 def num_gt(*nums: Any) -> bool:
     """Return True if arguments are monotonically decreasing (> x1 x2 ...)."""
-    if len(nums) <= 1:
+    n_len = len(nums)
+    if n_len == 2:
+        return bool(nums[0] > nums[1])
+    if n_len <= 1:
         return True
-    for i in range(len(nums) - 1):
+    for i in range(n_len - 1):
         if not (nums[i] > nums[i + 1]):
             return False
     return True
@@ -190,9 +199,12 @@ def num_gt(*nums: Any) -> bool:
 
 def num_le(*nums: Any) -> bool:
     """Return True if arguments are monotonically non-decreasing (<= x1 x2 ...)."""
-    if len(nums) <= 1:
+    n_len = len(nums)
+    if n_len == 2:
+        return bool(nums[0] <= nums[1])
+    if n_len <= 1:
         return True
-    for i in range(len(nums) - 1):
+    for i in range(n_len - 1):
         if not (nums[i] <= nums[i + 1]):
             return False
     return True
@@ -200,9 +212,12 @@ def num_le(*nums: Any) -> bool:
 
 def num_ge(*nums: Any) -> bool:
     """Return True if arguments are monotonically non-increasing (>= x1 x2 ...)."""
-    if len(nums) <= 1:
+    n_len = len(nums)
+    if n_len == 2:
+        return bool(nums[0] >= nums[1])
+    if n_len <= 1:
         return True
-    for i in range(len(nums) - 1):
+    for i in range(n_len - 1):
         if not (nums[i] >= nums[i + 1]):
             return False
     return True

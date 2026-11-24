@@ -7,17 +7,45 @@ adhering to R7RS-small Scheme semantics and Python zero-copy interop.
 from __future__ import annotations
 
 from contextvars import ContextVar
-from dataclasses import dataclass
-from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 
-@dataclass(frozen=True)
 class SourceLocation:
     """Source map location recording line, column, and file origin."""
 
-    file: str
-    line: int
-    col: int
+    __slots__ = ("file", "line", "col")
+
+    def __init__(self, file: str, line: int, col: int) -> None:
+        self.file = file
+        self.line = line
+        self.col = col
+
+    def __eq__(self, other: object) -> bool:
+        if type(other) is SourceLocation:
+            return (
+                self.file == other.file
+                and self.line == other.line
+                and self.col == other.col
+            )
+        return False
+
+    def __hash__(self) -> int:
+        return hash((self.file, self.line, self.col))
+
+    def __repr__(self) -> str:
+        return (
+            f"SourceLocation(file={self.file!r}, line={self.line!r}, col={self.col!r})"
+        )
 
     def __str__(self) -> str:
         return f"{self.file}:{self.line}:{self.col}"
@@ -26,19 +54,25 @@ class SourceLocation:
 class Symbol:
     """Interned Symbol for Lisp identifiers."""
 
-    __slots__ = ("name", "_hash")
+    __slots__ = ("name",)
+    name: str
     _table: dict[str, Symbol] = {}
 
-    def __init__(self, name: str) -> None:
-        self.name: str = name
-        self._hash: int = hash(name)
+    def __new__(cls, name: str) -> Symbol:
+        sym = cls._table.get(name)
+        if sym is None:
+            sym = super().__new__(cls)
+            sym.name = name
+            cls._table[name] = sym
+        return sym
 
     @classmethod
     def intern(cls, name: str) -> Symbol:
         """Retrieve or create a globally unique interned Symbol."""
         sym = cls._table.get(name)
         if sym is None:
-            sym = cls(name)
+            sym = super().__new__(cls)
+            sym.name = name
             cls._table[name] = sym
         return sym
 
@@ -48,15 +82,9 @@ class Symbol:
     def __str__(self) -> str:
         return self.name
 
-    def __eq__(self, other: object) -> bool:
-        if self is other:
-            return True
-        if isinstance(other, Symbol):
-            return self.name == other.name
-        return False
+    if TYPE_CHECKING:
 
-    def __hash__(self) -> int:
-        return self._hash
+        def __eq__(self, other: object) -> bool: ...
 
 
 class NilType:
@@ -824,6 +852,16 @@ LispVal = Union[
 class Procedure:
     """User-defined Scheme closure."""
 
+    __slots__ = (
+        "params",
+        "body",
+        "env",
+        "is_macro",
+        "rest_param",
+        "name",
+        "shadows_sf",
+    )
+
     def __init__(
         self,
         params: Union[Symbol, List[Symbol]],
@@ -832,6 +870,7 @@ class Procedure:
         is_macro: bool = False,
         rest_param: Optional[Symbol] = None,
         name: Optional[str] = None,
+        shadows_sf: bool = False,
     ) -> None:
         self.params: Union[Symbol, List[Symbol]] = params
         self.body: List[Any] = body
@@ -839,6 +878,7 @@ class Procedure:
         self.is_macro: bool = is_macro
         self.rest_param: Optional[Symbol] = rest_param
         self.name: Optional[str] = name
+        self.shadows_sf: bool = shadows_sf
 
     def __call__(self, *args: Any) -> Any:
         from ilisp.evaluator import _apply_procedure
@@ -853,6 +893,8 @@ class Procedure:
 
 class Primitive:
     """Built-in primitive procedure wrapper."""
+
+    __slots__ = ("name", "fn")
 
     def __init__(self, name: str, fn: Callable[..., Any]) -> None:
         self.name: str = name
