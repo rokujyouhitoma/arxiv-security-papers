@@ -26,7 +26,7 @@ ID: 963
 
 ### 関連ドキュメント（すべて相対リンク）
 - [Issue #962](962-implement-lir-vm-shadow-memory-for-heap-oob-uaf-and-double-free.md)（LIR VM シャドウメモリ・オブジェクト単位検査オラクル）
-- [Issue #964](../964-unify-vm-and-sanitizer-checks-via-define-mem-check.md)（`define-mem-check` SSOT によるギャップ解消）
+- [Issue #964](964-unify-vm-and-sanitizer-checks-via-define-mem-check.md)（`define-mem-check` SSOT によるギャップ解消）
 - [Issue #930](930-implement-c99-bounds-checking-sanitizer-mode.md)（C99 `--sanitize-bounds` 実装）
 - [Issue #943](943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md)（LIR VM 検査付きインタプリタ＆差分診断ハーネス）
 

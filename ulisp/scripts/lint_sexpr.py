@@ -433,7 +433,7 @@ def check_ulisp_compat(filepath: str, content: str) -> List[LintError]:
 
         if isinstance(head_node, _Sym):
             head = head_node.name
-            if head in ("quote", "define-syntax", "syntax-rules", "define-language", "define-value-repr", "define-record-type", "%declare-extern-identifiers", "declare", "import", "export"):
+            if head in ("quote", "define-syntax", "syntax-rules", "define-language", "define-value-repr", "define-mem-check", "define-record-type", "%declare-extern-identifiers", "declare", "import", "export"):
                 return
             if head == "quasiquote":
                 if args:

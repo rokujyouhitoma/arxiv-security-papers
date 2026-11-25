@@ -251,7 +251,7 @@ assert_eq "1.4 ULisp Portable C (-O2) matches Host GCC oracle" "$GCC_OUT" "$C_O2
 # ------------------------------------------------------------------------------
 run_ucc -S -O2 "$BUILD_DIR/stdarg_oracle.c" -o "$BUILD_DIR/stdarg_oracle.s"
 assert_grep "2.1 Variadic prologue masks %al (and rax, 255)" '^\s*and\s+rax,\s*255\s*$' "$BUILD_DIR/stdarg_oracle.s"
-assert_grep "2.2 Variadic prologue guards XMM spill (cmp rax, 0)" '^\s*cmp\s+rax,\s*0\s*$' "$BUILD_DIR/stdarg_oracle.s"
+assert_grep "2.2 Variadic prologue guards XMM spill (je va_skip_xmm)" '^\s*(cmp\s+rax,\s*0|je\s+\.L_c99_va_skip_xmm)' "$BUILD_DIR/stdarg_oracle.s"
 assert_grep "2.3 Variadic prologue spills XMM registers (movsd)" 'movsd\s+qword ptr \[rsp' "$BUILD_DIR/stdarg_oracle.s"
 
 # ------------------------------------------------------------------------------

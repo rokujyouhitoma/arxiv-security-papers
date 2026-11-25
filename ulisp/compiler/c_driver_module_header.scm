@@ -28,6 +28,34 @@
   *lir-vm-shadow-redzone*
   *lir-vm-shadow-freed*
   *lir-vm-redzone-bytes*
+  %make-mem-check-spec
+  mem-check-spec?
+  mem-check-name
+  mem-check-cwe
+  mem-check-diag-code
+  mem-check-vm-trap-kind
+  mem-check-category
+  mem-check-san-cc
+  mem-check-default-msg
+  *mem-check-registry*
+  mem-check-error!
+  make-mem-check-from-clauses
+  register-mem-check!
+  get-mem-check
+  all-mem-checks
+  expand-define-mem-check
+  mem-check:static-array-bounds
+  mem-check:null-pointer
+  mem-check:heap-bounds
+  mem-check:use-after-free
+  mem-check:double-free
+  mem-check:invalid-free
+  vm-trigger-mem-check!
+  mem-check-format-san-msg
+  mem-check-emit-null-lir
+  mem-check-emit-bounds-lir
+  mem-check-emit-flag-nz-lir
+  mem-check-emit-unconditional-trap-lir
   lir-vm-u64
   lir-vm-s64
   lir-vm-u32
@@ -1100,6 +1128,10 @@
   lower-ctx-needs-san-trap?-set!
   lower-ctx-cold-insts
   lower-ctx-cold-insts-set!
+  lower-ctx-san-ptr-meta
+  lower-ctx-san-ptr-meta-set!
+  lower-ctx-san-last-cap-si
+  lower-ctx-san-last-cap-si-set!
   lower-ctx-gpr-temps
   lower-ctx-gpr-temps-set!
   lower-ctx-xmm-temps
@@ -1152,9 +1184,28 @@
   %c99-san-sanitize-filename
   %c99-san-format-loc
   %c99-san-emit-cold!
+  %c99-san-emit-insts!
   %c99-san-emit-trap-block!
   %c99-san-emit-null-check!
   %c99-san-emit-bounds-check!
+  %c99-san-store-i64-slot!
+  %c99-san-alloc-ptr-meta!
+  %c99-san-init-ptr-meta-unknown!
+  %c99-san-unwrap-casts
+  %c99-san-unwrap-ptr-var
+  %c99-san-lookup-ptr-meta
+  %c99-san-tracked-ptr-expr?
+  %c99-san-static-str-len
+  %c99-san-classify-ptr-provenance
+  %c99-san-update-ptr-var!
+  %c99-san-mark-ptr-mutated!
+  %c99-san-check-ptr-var-uaf!
+  %c99-san-check-heap-min-bytes!
+  %c99-san-check-heap-index!
+  %c99-san-emit-index-checks!
+  %c99-san-validate-free-ptr!
+  %c99-san-check-heap-write-bytes!
+  %c99-san-check-call!
   %c99-san-last-elem
   %c99-san-is-flexible-array-member?
   %c99-lower-emit-var-addr!

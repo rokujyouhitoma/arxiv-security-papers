@@ -73,6 +73,212 @@
         u)))
 
 ;;; -----------------------------------------------------------------------
+;;; §1b. Memory Safety Check Specification Registry & Projections (Issue #964)
+;;; -----------------------------------------------------------------------
+;;; Single source of truth (SSOT) unifying LIR VM shadow checks and the C99
+;;; `--sanitize-bounds` LIR lowering (Futamura first-projection parity).
+
+(define-record-type <mem-check-spec>
+  (%make-mem-check-spec name cwe diag-code vm-trap-kind category san-cc default-msg)
+  mem-check-spec?
+  (name         mem-check-name)
+  (cwe          mem-check-cwe)
+  (diag-code    mem-check-diag-code)
+  (vm-trap-kind mem-check-vm-trap-kind)
+  (category     mem-check-category)
+  (san-cc       mem-check-san-cc)
+  (default-msg  mem-check-default-msg))
+
+(define *mem-check-registry* (cons '() '()))
+
+(define (mem-check-error! msg irrit)
+  (error msg irrit))
+
+(define (make-mem-check-from-clauses name clauses)
+  (if (not (symbol? name))
+      (mem-check-error! "define-mem-check: check name must be a symbol" name))
+  (let loop ((cs clauses)
+             (cwe #f)
+             (diag #f)
+             (trap #f)
+             (cat #f)
+             (cc #f)
+             (msg #f))
+    (if (null? cs)
+        (begin
+          (if (not (string? cwe))
+              (mem-check-error! "define-mem-check: missing string :cwe clause" name))
+          (if (not (string? diag))
+              (mem-check-error! "define-mem-check: missing string :diag clause" name))
+          (if (not (symbol? trap))
+              (mem-check-error! "define-mem-check: missing symbol :trap clause" name))
+          (if (not (symbol? cat))
+              (mem-check-error! "define-mem-check: missing symbol :category clause" name))
+          (if (not (symbol? cc))
+              (mem-check-error! "define-mem-check: missing symbol :cc clause" name))
+          (if (not (string? msg))
+              (mem-check-error! "define-mem-check: missing string :msg clause" name))
+          (%make-mem-check-spec name cwe diag trap cat cc msg))
+        (let ((cl (car cs)))
+          (if (not (and (pair? cl) (= (length cl) 2)))
+              (mem-check-error! "define-mem-check: invalid clause shape" cl))
+          (let ((key (car cl))
+                (val (cadr cl)))
+            (cond
+              ((eq? key ':cwe)      (loop (cdr cs) val diag trap cat cc msg))
+              ((eq? key ':diag)     (loop (cdr cs) cwe val trap cat cc msg))
+              ((eq? key ':trap)     (loop (cdr cs) cwe diag val cat cc msg))
+              ((eq? key ':category) (loop (cdr cs) cwe diag trap val cc msg))
+              ((eq? key ':cc)       (loop (cdr cs) cwe diag trap cat val msg))
+              ((eq? key ':msg)      (loop (cdr cs) cwe diag trap cat cc val))
+              (else
+               (mem-check-error! "define-mem-check: unknown clause key" key))))))))
+
+(define (register-mem-check! spec)
+  (if (not (mem-check-spec? spec))
+      (mem-check-error! "register-mem-check!: expected mem-check-spec" spec))
+  (let* ((name (mem-check-name spec))
+         (cur (car *mem-check-registry*))
+         (filtered (let f ((xs cur))
+                     (cond
+                       ((null? xs) '())
+                       ((eq? (caar xs) name) (f (cdr xs)))
+                       (else (cons (car xs) (f (cdr xs))))))))
+    (set-car! *mem-check-registry* (cons (cons name spec) filtered))
+    spec))
+
+(define (get-mem-check name-or-spec)
+  (cond
+    ((mem-check-spec? name-or-spec) name-or-spec)
+    ((symbol? name-or-spec)
+     (let ((entry (assq name-or-spec (car *mem-check-registry*))))
+       (if entry
+           (cdr entry)
+           (mem-check-error! "get-mem-check: unknown memory check specification" name-or-spec))))
+    (else
+     (mem-check-error! "get-mem-check: expected symbol or mem-check-spec" name-or-spec))))
+
+(define (all-mem-checks)
+  (map (lambda (e) (cdr e)) (car *mem-check-registry*)))
+
+(define (expand-define-mem-check form)
+  (if (or (not (pair? form))
+          (not (pair? (cdr form))))
+      (mem-check-error! "define-mem-check: malformed form" form))
+  (let ((name (cadr form))
+        (clauses (cddr form)))
+    (list 'define name
+          (list 'register-mem-check!
+                (list 'make-mem-check-from-clauses
+                      (list 'quote name)
+                      (list 'quote clauses))))))
+
+(define-macro (define-mem-check . args)
+  (expand-define-mem-check (cons 'define-mem-check args)))
+
+;; Canonical CWE / Sanitizer Memory Safety Specifications
+(define mem-check:static-array-bounds
+  (register-mem-check!
+    (make-mem-check-from-clauses
+      'mem-check:static-array-bounds
+      '((:cwe "CWE-121")
+        (:diag "C99-SAN-001")
+        (:trap out-of-bounds)
+        (:category bounds)
+        (:cc jae)
+        (:msg "array index out of bounds")))))
+
+(define mem-check:null-pointer
+  (register-mem-check!
+    (make-mem-check-from-clauses
+      'mem-check:null-pointer
+      '((:cwe "CWE-476")
+        (:diag "C99-SAN-002")
+        (:trap out-of-bounds)
+        (:category null)
+        (:cc je)
+        (:msg "NULL pointer dereference")))))
+
+(define mem-check:heap-bounds
+  (register-mem-check!
+    (make-mem-check-from-clauses
+      'mem-check:heap-bounds
+      '((:cwe "CWE-122")
+        (:diag "C99-SAN-003")
+        (:trap heap-out-of-bounds)
+        (:category heap-bounds)
+        (:cc jae)
+        (:msg "heap buffer out-of-bounds access")))))
+
+(define mem-check:use-after-free
+  (register-mem-check!
+    (make-mem-check-from-clauses
+      'mem-check:use-after-free
+      '((:cwe "CWE-416")
+        (:diag "C99-SAN-004")
+        (:trap use-after-free)
+        (:category uaf)
+        (:cc jne)
+        (:msg "heap use-after-free")))))
+
+(define mem-check:double-free
+  (register-mem-check!
+    (make-mem-check-from-clauses
+      'mem-check:double-free
+      '((:cwe "CWE-415")
+        (:diag "C99-SAN-005")
+        (:trap double-free)
+        (:category double-free)
+        (:cc jne)
+        (:msg "double free of heap pointer")))))
+
+(define mem-check:invalid-free
+  (register-mem-check!
+    (make-mem-check-from-clauses
+      'mem-check:invalid-free
+      '((:cwe "CWE-590")
+        (:diag "C99-SAN-006")
+        (:trap invalid-free)
+        (:category invalid-free)
+        (:cc always)
+        (:msg "free of non-heap or interior pointer")))))
+
+;; Projection 1: LIR VM Runtime Trap Trigger
+(define (vm-trigger-mem-check! vm check-id detail addr)
+  (let* ((spec (get-mem-check check-id))
+         (msg (if detail detail (mem-check-default-msg spec))))
+    (vm-trigger-trap! vm (mem-check-vm-trap-kind spec) msg addr)))
+
+;; Projection 2: C99 `--sanitize-bounds` LIR Emitters
+(define (mem-check-format-san-msg check-id detail loc-str)
+  (let* ((spec (get-mem-check check-id))
+         (msg (if detail detail (mem-check-default-msg spec))))
+    (string-append "[ulisp-sanitizer] error[" (mem-check-diag-code spec) "]: "
+                   msg " at " loc-str "\n")))
+
+(define (mem-check-emit-null-lir check-id ptr-reg trap-lbl)
+  (let ((spec (get-mem-check check-id)))
+    (list (list '%cmp ptr-reg 0)
+          (list '%jump-cond (mem-check-san-cc spec) trap-lbl))))
+
+(define (mem-check-emit-bounds-lir check-id idx-reg limit one-past-end? trap-lbl)
+  (let* ((spec (get-mem-check check-id))
+         (cc (if one-past-end? 'ja (mem-check-san-cc spec))))
+    (list (list '%cmp idx-reg limit)
+          (list '%jump-cond cc trap-lbl))))
+
+(define (mem-check-emit-flag-nz-lir check-id reg trap-lbl)
+  (let ((spec (get-mem-check check-id)))
+    (list (list '%cmp reg 0)
+          (list '%jump-cond (mem-check-san-cc spec) trap-lbl))))
+
+(define (mem-check-emit-unconditional-trap-lir check-id trap-lbl)
+  (let ((spec (get-mem-check check-id)))
+    (if spec
+        (list (list '%direct-jump trap-lbl))
+        '())))
+
+;;; -----------------------------------------------------------------------
 ;;; §2. Virtual Machine Data Structures (<lir-vm> & <vm-trap>)
 ;;; -----------------------------------------------------------------------
 
@@ -623,37 +829,43 @@
 
 (define (vm-mem-read-u8 vm addr)
   (let ((mem (vm-memory-bytes vm)))
-    (if (or (< addr *lir-vm-null-page-limit*)
-            (>= addr (bytevector-length mem)))
-        (begin
-          (vm-trigger-trap! vm 'out-of-bounds "Memory read out of bounds" addr)
-          0)
-        (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) addr)))
-          (cond
-            ((or (= st *lir-vm-shadow-redzone*)
-                 (= st *lir-vm-shadow-heap-zero*))
-             (vm-trigger-trap! vm 'heap-out-of-bounds "Heap buffer out-of-bounds read" addr)
-             0)
-            ((= st *lir-vm-shadow-freed*)
-             (vm-trigger-trap! vm 'use-after-free "Heap use-after-free read" addr)
-             0)
-            (else
-             (bytevector-u8-ref mem addr)))))))
+    (cond
+      ((< addr *lir-vm-null-page-limit*)
+       (vm-trigger-mem-check! vm 'mem-check:null-pointer "Memory read out of bounds" addr)
+       0)
+      ((>= addr (bytevector-length mem))
+       (vm-trigger-mem-check! vm 'mem-check:static-array-bounds "Memory read out of bounds" addr)
+       0)
+      (else
+       (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) addr)))
+         (cond
+           ((or (= st *lir-vm-shadow-redzone*)
+                (= st *lir-vm-shadow-heap-zero*))
+            (vm-trigger-mem-check! vm 'mem-check:heap-bounds "Heap buffer out-of-bounds read" addr)
+            0)
+           ((= st *lir-vm-shadow-freed*)
+            (vm-trigger-mem-check! vm 'mem-check:use-after-free "Heap use-after-free read" addr)
+            0)
+           (else
+            (bytevector-u8-ref mem addr))))))))
 
 (define (vm-mem-write-u8! vm addr val)
   (let ((mem (vm-memory-bytes vm)))
-    (if (or (< addr *lir-vm-null-page-limit*)
-            (>= addr (bytevector-length mem)))
-        (vm-trigger-trap! vm 'out-of-bounds "Memory write out of bounds" addr)
-        (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) addr)))
-          (cond
-            ((or (= st *lir-vm-shadow-redzone*)
-                 (= st *lir-vm-shadow-heap-zero*))
-             (vm-trigger-trap! vm 'heap-out-of-bounds "Heap buffer out-of-bounds write" addr))
-            ((= st *lir-vm-shadow-freed*)
-             (vm-trigger-trap! vm 'use-after-free "Heap use-after-free write" addr))
-            (else
-             (bytevector-u8-set! mem addr (lir-vm-u8 val))))))))
+    (cond
+      ((< addr *lir-vm-null-page-limit*)
+       (vm-trigger-mem-check! vm 'mem-check:null-pointer "Memory write out of bounds" addr))
+      ((>= addr (bytevector-length mem))
+       (vm-trigger-mem-check! vm 'mem-check:static-array-bounds "Memory write out of bounds" addr))
+      (else
+       (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) addr)))
+         (cond
+           ((or (= st *lir-vm-shadow-redzone*)
+                (= st *lir-vm-shadow-heap-zero*))
+            (vm-trigger-mem-check! vm 'mem-check:heap-bounds "Heap buffer out-of-bounds write" addr))
+           ((= st *lir-vm-shadow-freed*)
+            (vm-trigger-mem-check! vm 'mem-check:use-after-free "Heap use-after-free write" addr))
+           (else
+            (bytevector-u8-set! mem addr (lir-vm-u8 val)))))))))
 
 (define (vm-mem-read-i8 vm addr)
   (lir-vm-s8 (vm-mem-read-u8 vm addr)))
@@ -3258,16 +3470,16 @@
   (let ((mem-len (bytevector-length (vm-memory-bytes vm))))
     (if (or (< ptr *lir-vm-null-page-limit*) (>= ptr mem-len))
         (begin
-          (vm-trigger-trap! vm 'invalid-free (string-append "Invalid pointer passed to " caller-name) ptr)
+          (vm-trigger-mem-check! vm 'mem-check:invalid-free (string-append "Invalid pointer passed to " caller-name) ptr)
           #f)
         (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) ptr)))
           (cond
             ((= st *lir-vm-shadow-freed*)
-             (vm-trigger-trap! vm 'double-free (string-append "Double free / freed pointer in " caller-name) ptr)
+             (vm-trigger-mem-check! vm 'mem-check:double-free (string-append "Double free / freed pointer in " caller-name) ptr)
              #f)
             ((not (or (= st *lir-vm-shadow-heap-head*)
                       (= st *lir-vm-shadow-heap-zero*)))
-             (vm-trigger-trap! vm 'invalid-free (string-append "Non-heap or interior pointer passed to " caller-name) ptr)
+             (vm-trigger-mem-check! vm 'mem-check:invalid-free (string-append "Non-heap or interior pointer passed to " caller-name) ptr)
              #f)
             (else
              (let ((req-sz (vm-raw-read-u64 vm (- ptr 8))))
