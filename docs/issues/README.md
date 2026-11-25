@@ -17,11 +17,15 @@
 | **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` / `.data` 配置） | Feature | New | [959-emit-quoted-constants-as-static-rodata-data.md](959-emit-quoted-constants-as-static-rodata-data.md) |
 | **960** | 未参照関数の削除（到達可能性解析または関数毎セクション + `--gc-sections`） | Feature | New | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
 | **961** | Scheme 経路の LIR への linear scan レジスタ割り付け導入（スタック退避中心コード生成の解消） | Feature | New | [961-introduce-linear-scan-register-allocation-for-scheme-lir.md](961-introduce-linear-scan-register-allocation-for-scheme-lir.md) |
+| **963** | シャドウメモリ付き LIR VM を判定基準（オラクル）とした `--sanitize-bounds` 検出範囲・CWE カバレッジ計測ハーネス | Feature | New | [963-measure-sanitizer-detection-coverage-against-lir-vm-shadow-oracle.md](963-measure-sanitizer-detection-coverage-against-lir-vm-shadow-oracle.md) |
+| **964** | `define-mem-check` によるメモリ安全性検査仕様の単一情報源化と LIR VM・`--sanitize-bounds` 双方への統一射影 | Feature | New | [964-unify-vm-and-sanitizer-checks-via-define-mem-check.md](964-unify-vm-and-sanitizer-checks-via-define-mem-check.md) |
+| **965** | `mix`（`eval-in-stage`）における後方ジャンプループの残余再帰関数生成と `case`・名前付き `let`・`letrec` 対応 | Feature | New | [965-support-backward-jump-loops-and-case-letrec-named-let-in-futamura-mix.md](965-support-backward-jump-loops-and-case-letrec-named-let-in-futamura-mix.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **962** | LIR 参照 VM へのシャドウメモリ導入によるヒープ範囲外アクセス・UAF・二重解放・不正解放のオブジェクト単位検査 | Feature | 2026-11-25 | [962-implement-lir-vm-shadow-memory-for-heap-oob-uaf-and-double-free.md](closed/962-implement-lir-vm-shadow-memory-for-heap-oob-uaf-and-double-free.md) |
 | **944** | Host / Guest 値表現の単一情報源化 (`define-value-repr` によるタグ操作・GC・プリンタの統一生成) | Feature | 2026-11-25 | [944-unify-host-and-guest-value-representation-via-define-value-repr.md](closed/944-unify-host-and-guest-value-representation-via-define-value-repr.md) |
 | **943** | Case A の C99 拡張：LIR 参照 VM の検査付き C インタプリタ実行可否検証と差分診断ハーネス構築 | Feature | 2026-11-25 | [943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md](closed/943-verify-and-extend-lir-vm-as-checked-c99-interpreter.md) |
 | **942** | 混合器 (mix) の完成：`specialize-or-widen` の `eval-in-stage-apply` 接続と第1二村射影実証・DSN-33-24 Phase I3 整合化 | Feature | 2026-11-25 | [942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md](closed/942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md) |

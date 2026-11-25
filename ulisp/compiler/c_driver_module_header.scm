@@ -21,6 +21,13 @@
   *lir-vm-heap-limit*
   *lir-vm-stack-limit*
   *lir-vm-default-fuel*
+  *lir-vm-shadow-ok*
+  *lir-vm-shadow-heap-head*
+  *lir-vm-shadow-heap-live*
+  *lir-vm-shadow-heap-zero*
+  *lir-vm-shadow-redzone*
+  *lir-vm-shadow-freed*
+  *lir-vm-redzone-bytes*
   lir-vm-u64
   lir-vm-s64
   lir-vm-u32
@@ -87,6 +94,13 @@
   vm-set-code-addr-table!
   vm-jmp-table
   vm-set-jmp-table!
+  vm-shadow-bytes
+  vm-set-shadow-bytes!
+  vm-shadow-fill!
+  vm-raw-write-u64!
+  vm-raw-read-u64
+  vm-heap-alloc-chunk!
+  vm-heap-validate-and-free!
   make-lir-vm-with-size
   vm-reset-jmp-table!
   vm-reset-code-addr-table!
