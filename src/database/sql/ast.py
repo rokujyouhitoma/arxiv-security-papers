@@ -9,6 +9,18 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 
+class SQLExecutionError(Exception):
+    """Raised when SQL execution fails."""
+
+
+class SQLIntegrityError(SQLExecutionError):
+    """Raised when a relational constraint (UNIQUE, PRIMARY KEY, NOT NULL, CHECK, FK) is violated."""
+
+
+class SQLOperationalError(SQLExecutionError):
+    """Raised when an operational database error occurs (e.g. invalid transaction operation)."""
+
+
 class SQLCommandType(str, Enum):
     # DDL
     CREATE_TABLE = "CREATE_TABLE"

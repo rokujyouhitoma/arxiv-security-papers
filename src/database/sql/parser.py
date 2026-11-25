@@ -265,9 +265,12 @@ def parse_sql(sql_query: str) -> SQLStatement:
 
 def clear_sql_parser_caches() -> None:
     """Clears all SQL subsystem LRU caches (dispatcher, DQL, DML, DDL, Admin, expressions)."""
+    from .expr_compiler import clear_sql_expr_compiler_cache
+
     parse_sql.cache_clear()
     clear_dql_cache()
     clear_dml_cache()
     clear_ddl_cache()
     clear_admin_cache()
     clear_sql_expr_cache()
+    clear_sql_expr_compiler_cache()

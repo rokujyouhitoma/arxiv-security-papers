@@ -79,7 +79,13 @@ class TestAOTSQLExprParity:
     def test_column_references_parity(
         self, aot_parser: SQLExprParser, dynamic_parser: SQLExpressionParser
     ) -> None:
-        for q in ["user_id", "papers.arxiv_id", "metadata->>'title'"]:
+        for q in [
+            "user_id",
+            "papers.arxiv_id",
+            "aux.ext_items.id",
+            "metadata->>'title'",
+            "metadata->'count'",
+        ]:
             aot_ast = aot_parser.parse(q)
             dyn_ast = dynamic_parser.parse(q)
             assert isinstance(aot_ast, ColumnRefExpr)
@@ -87,6 +93,17 @@ class TestAOTSQLExprParity:
             assert aot_ast.column_name == dyn_ast.column_name
             assert aot_ast.table_name == dyn_ast.table_name
             assert aot_ast.json_path == dyn_ast.json_path
+            assert aot_ast.json_unquote == dyn_ast.json_unquote
+            assert aot_ast.to_sql() == dyn_ast.to_sql()
+
+    def test_concat_operator_parity(
+        self, aot_parser: SQLExprParser, dynamic_parser: SQLExpressionParser
+    ) -> None:
+        for q in ["first || '_' || last", "a + 1 || '_items'"]:
+            aot_ast = aot_parser.parse(q)
+            dyn_ast = dynamic_parser.parse(q)
+            assert isinstance(aot_ast, BinaryOpExpr)
+            assert isinstance(dyn_ast, BinaryOpExpr)
             assert aot_ast.to_sql() == dyn_ast.to_sql()
 
     def test_unary_operators_parity(

@@ -71,10 +71,12 @@ class ColumnRefExpr(SQLExpr):
         column: str,
         table: Optional[str] = None,
         json_path: Optional[str] = None,
+        json_unquote: bool = True,
     ) -> None:
         self.column = column
         self.table = table
         self.json_path = json_path
+        self.json_unquote = json_unquote
 
     @property
     def column_name(self) -> str:
@@ -93,7 +95,8 @@ class ColumnRefExpr(SQLExpr):
     def to_sql(self) -> str:
         base = self.full_name
         if self.json_path is not None:
-            return f"{base}->>'{self.json_path}'"
+            op = "->>" if self.json_unquote else "->"
+            return f"{base}{op}'{self.json_path}'"
         return base
 
     def to_legacy_dict(self) -> Optional[Dict[str, Any]]:

@@ -89,6 +89,7 @@ class SQLExprParser(Parser[Any]):
         self._r_in_val_list = RuleRef("in_val_list")
         self._r_cmp_suffix = RuleRef("cmp_suffix")
         self._r_cmp_op = RuleRef("cmp_op")
+        self._r_concat_expr = RuleRef("concat_expr")
         self._r_add_expr = RuleRef("add_expr")
         self._r_add_op = RuleRef("add_op")
         self._r_mult_expr = RuleRef("mult_expr")
@@ -128,6 +129,7 @@ class SQLExprParser(Parser[Any]):
         self._r_single_string_lit = RuleRef("single_string_lit")
         self._r_double_string_lit = RuleRef("double_string_lit")
         self._r_column_ref_expr = RuleRef("column_ref_expr")
+        self._r_json_arrow_op = RuleRef("json_arrow_op")
         self._r_json_path_lit = RuleRef("json_path_lit")
         self._r_ident = RuleRef("ident")
         self._r_ws = RuleRef("ws")
@@ -162,7 +164,7 @@ class SQLExprParser(Parser[Any]):
         self._r_and_kw.define(Reg("(?i)\\bAND\\b"))
         self._r_pred_expr.define(
             Seq(
-                self._r_add_expr,
+                self._r_concat_expr,
                 Opt(Seq(self._r_ws, self._r_pred_suffix).map(self._action_pred_expr_5)),
                 Opt(
                     Seq(self._r_ws, self._r_collate_kw, self._r_ws, self._r_ident).map(
@@ -196,11 +198,11 @@ class SQLExprParser(Parser[Any]):
                 Opt(Seq(self._r_not_kw, self._r_ws)),
                 self._r_between_kw,
                 self._r_ws,
-                self._r_add_expr,
+                self._r_concat_expr,
                 self._r_ws,
                 self._r_and_kw,
                 self._r_ws,
-                self._r_add_expr,
+                self._r_concat_expr,
             ).map(self._action_between_suffix_9)
         )
         self._r_between_kw.define(Reg("(?i)\\bBETWEEN\\b"))
@@ -209,7 +211,7 @@ class SQLExprParser(Parser[Any]):
                 Opt(Seq(self._r_not_kw, self._r_ws)),
                 self._r_like_op,
                 self._r_ws,
-                self._r_add_expr,
+                self._r_concat_expr,
                 Opt(
                     Seq(
                         self._r_ws,
@@ -246,18 +248,18 @@ class SQLExprParser(Parser[Any]):
             Seq(
                 Lit("("),
                 self._r_opt_ws,
-                self._r_add_expr,
+                self._r_concat_expr,
                 ZeroOrMore(
-                    Seq(self._r_opt_ws, Lit(","), self._r_opt_ws, self._r_add_expr).map(
-                        self._action_in_val_list_14
-                    )
+                    Seq(
+                        self._r_opt_ws, Lit(","), self._r_opt_ws, self._r_concat_expr
+                    ).map(self._action_in_val_list_14)
                 ),
                 self._r_opt_ws,
                 Lit(")"),
             ).map(self._action_in_val_list_15)
         )
         self._r_cmp_suffix.define(
-            Seq(self._r_cmp_op, self._r_opt_ws, self._r_add_expr).map(
+            Seq(self._r_cmp_op, self._r_opt_ws, self._r_concat_expr).map(
                 self._action_cmp_suffix_16
             )
         )
@@ -265,6 +267,16 @@ class SQLExprParser(Parser[Any]):
             Choice(
                 Lit(">="), Lit("<="), Lit("<>"), Lit("!="), Lit("="), Lit(">"), Lit("<")
             )
+        )
+        self._r_concat_expr.define(
+            Seq(
+                self._r_add_expr,
+                ZeroOrMore(
+                    Seq(
+                        self._r_opt_ws, Lit("||"), self._r_opt_ws, self._r_add_expr
+                    ).map(self._action_concat_expr_17)
+                ),
+            ).map(self._action_concat_expr_18)
         )
         self._r_add_expr.define(
             Seq(
@@ -275,9 +287,9 @@ class SQLExprParser(Parser[Any]):
                         self._r_add_op,
                         self._r_opt_ws,
                         self._r_mult_expr,
-                    ).map(self._action_add_expr_17)
+                    ).map(self._action_add_expr_19)
                 ),
-            ).map(self._action_add_expr_18)
+            ).map(self._action_add_expr_20)
         )
         self._r_add_op.define(Choice(Lit("+"), Lit("-")))
         self._r_mult_expr.define(
@@ -289,9 +301,9 @@ class SQLExprParser(Parser[Any]):
                         self._r_mult_op,
                         self._r_opt_ws,
                         self._r_unary_expr,
-                    ).map(self._action_mult_expr_19)
+                    ).map(self._action_mult_expr_21)
                 ),
-            ).map(self._action_mult_expr_20)
+            ).map(self._action_mult_expr_22)
         )
         self._r_mult_op.define(Choice(Lit("*"), Lit("/"), Lit("%")))
         self._r_unary_expr.define(
@@ -307,12 +319,12 @@ class SQLExprParser(Parser[Any]):
                 self._r_subquery_text,
                 self._r_opt_ws,
                 Lit(")"),
-            ).map(self._action_exists_expr_21)
+            ).map(self._action_exists_expr_23)
         )
         self._r_exists_kw.define(Reg("(?i)\\bEXISTS\\b"))
         self._r_prefix_unary_expr.define(
             Seq(self._r_prefix_unary_op, self._r_opt_ws, self._r_primary_expr).map(
-                self._action_prefix_unary_expr_22
+                self._action_prefix_unary_expr_24
             )
         )
         self._r_prefix_unary_op.define(Choice(Lit("+"), Lit("-"), self._r_not_kw))
@@ -329,7 +341,7 @@ class SQLExprParser(Parser[Any]):
         self._r_paren_expr.define(
             Seq(
                 Lit("("), self._r_opt_ws, self._r_or_expr, self._r_opt_ws, Lit(")")
-            ).map(self._action_paren_expr_23)
+            ).map(self._action_paren_expr_25)
         )
         self._r_case_expr.define(Choice(self._r_searched_case, self._r_simple_case))
         self._r_searched_case.define(
@@ -338,16 +350,16 @@ class SQLExprParser(Parser[Any]):
                 self._r_ws,
                 OneOrMore(
                     Seq(self._r_when_branch, self._r_ws).map(
-                        self._action_searched_case_24
+                        self._action_searched_case_26
                     )
                 ),
                 Opt(
                     Seq(self._r_else_branch, self._r_ws).map(
-                        self._action_searched_case_25
+                        self._action_searched_case_27
                     )
                 ),
                 self._r_end_kw,
-            ).map(self._action_searched_case_26)
+            ).map(self._action_searched_case_28)
         )
         self._r_simple_case.define(
             Seq(
@@ -357,16 +369,16 @@ class SQLExprParser(Parser[Any]):
                 self._r_ws,
                 OneOrMore(
                     Seq(self._r_when_branch, self._r_ws).map(
-                        self._action_simple_case_27
+                        self._action_simple_case_29
                     )
                 ),
                 Opt(
                     Seq(self._r_else_branch, self._r_ws).map(
-                        self._action_simple_case_28
+                        self._action_simple_case_30
                     )
                 ),
                 self._r_end_kw,
-            ).map(self._action_simple_case_29)
+            ).map(self._action_simple_case_31)
         )
         self._r_case_kw.define(Reg("(?i)\\bCASE\\b"))
         self._r_when_kw.define(Reg("(?i)\\bWHEN\\b"))
@@ -382,11 +394,11 @@ class SQLExprParser(Parser[Any]):
                 self._r_then_kw,
                 self._r_ws,
                 self._r_or_expr,
-            ).map(self._action_when_branch_30)
+            ).map(self._action_when_branch_32)
         )
         self._r_else_branch.define(
             Seq(self._r_else_kw, self._r_ws, self._r_or_expr).map(
-                self._action_else_branch_31
+                self._action_else_branch_33
             )
         )
         self._r_atom_expr.define(
@@ -399,13 +411,13 @@ class SQLExprParser(Parser[Any]):
         )
         self._r_func_call_expr.define(
             Seq(self._r_ident, self._r_opt_ws, self._r_func_args).map(
-                self._action_func_call_expr_32
+                self._action_func_call_expr_34
             )
         )
         self._r_func_args.define(Choice(self._r_func_star_args, self._r_func_list_args))
         self._r_func_star_args.define(
             Seq(Lit("("), self._r_opt_ws, Lit("*"), self._r_opt_ws, Lit(")")).map(
-                self._action_func_star_args_33
+                self._action_func_star_args_35
             )
         )
         self._r_func_list_args.define(
@@ -416,12 +428,12 @@ class SQLExprParser(Parser[Any]):
                 Opt(self._r_or_expr),
                 ZeroOrMore(
                     Seq(self._r_opt_ws, Lit(","), self._r_opt_ws, self._r_or_expr).map(
-                        self._action_func_list_args_34
+                        self._action_func_list_args_36
                     )
                 ),
                 self._r_opt_ws,
                 Lit(")"),
-            ).map(self._action_func_list_args_35)
+            ).map(self._action_func_list_args_37)
         )
         self._r_distinct_kw.define(Reg("(?i)\\bDISTINCT\\b"))
         self._r_literal_expr.define(
@@ -433,53 +445,54 @@ class SQLExprParser(Parser[Any]):
                 self._r_placeholder_lit,
             )
         )
-        self._r_placeholder_lit.define(Lit("?").map(self._action_placeholder_lit_36))
+        self._r_placeholder_lit.define(Lit("?").map(self._action_placeholder_lit_38))
         self._r_bool_lit.define(
             Choice(
-                Reg("(?i)\\bTRUE\\b").map(self._action_bool_lit_37),
-                Reg("(?i)\\bFALSE\\b").map(self._action_bool_lit_38),
+                Reg("(?i)\\bTRUE\\b").map(self._action_bool_lit_39),
+                Reg("(?i)\\bFALSE\\b").map(self._action_bool_lit_40),
             )
         )
-        self._r_null_lit.define(Reg("(?i)\\bNULL\\b").map(self._action_null_lit_39))
+        self._r_null_lit.define(Reg("(?i)\\bNULL\\b").map(self._action_null_lit_41))
         self._r_number_lit.define(
             Choice(
-                self._r_float_val.map(self._action_number_lit_40),
-                self._r_int_val.map(self._action_number_lit_41),
+                self._r_float_val.map(self._action_number_lit_42),
+                self._r_int_val.map(self._action_number_lit_43),
             )
         )
-        self._r_float_val.define(Reg("[0-9]+\\.[0-9]+").map(self._action_float_val_42))
-        self._r_int_val.define(Reg("[0-9]+").map(self._action_int_val_43))
+        self._r_float_val.define(Reg("[0-9]+\\.[0-9]+").map(self._action_float_val_44))
+        self._r_int_val.define(Reg("[0-9]+").map(self._action_int_val_45))
         self._r_string_lit.define(
             Choice(self._r_single_string_lit, self._r_double_string_lit)
         )
         self._r_single_string_lit.define(
-            Reg("'(''|[^'])*'").map(self._action_single_string_lit_44)
+            Reg("'(''|[^'])*'").map(self._action_single_string_lit_46)
         )
         self._r_double_string_lit.define(
-            Reg('"(""|[^"])*"').map(self._action_double_string_lit_45)
+            Reg('"(""|[^"])*"').map(self._action_double_string_lit_47)
         )
         self._r_column_ref_expr.define(
             Seq(
-                Opt(
+                ZeroOrMore(
                     Seq(self._r_ident, self._r_opt_ws, Lit("."), self._r_opt_ws).map(
-                        self._action_column_ref_expr_46
+                        self._action_column_ref_expr_48
                     )
                 ),
                 self._r_ident,
                 Opt(
                     Seq(
                         self._r_opt_ws,
-                        Lit("->>"),
+                        self._r_json_arrow_op,
                         self._r_opt_ws,
                         self._r_json_path_lit,
-                    ).map(self._action_column_ref_expr_47)
+                    ).map(self._action_column_ref_expr_49)
                 ),
-            ).map(self._action_column_ref_expr_48)
+            ).map(self._action_column_ref_expr_50)
         )
+        self._r_json_arrow_op.define(Choice(Lit("->>"), Lit("->")))
         self._r_json_path_lit.define(
             Choice(
-                Reg("'[^']*'").map(self._action_json_path_lit_49),
-                Reg('"[^"]*"').map(self._action_json_path_lit_50),
+                Reg("'[^']*'").map(self._action_json_path_lit_51),
+                Reg('"[^"]*"').map(self._action_json_path_lit_52),
             )
         )
         self._r_ident.define(Reg("[a-zA-Z_][a-zA-Z0-9_]*"))
@@ -605,13 +618,27 @@ class SQLExprParser(Parser[Any]):
         return ("CMP", op, right)
 
     @staticmethod
-    def _action_add_expr_17(val: Any) -> Any:
+    def _action_concat_expr_17(val: Any) -> Any:
+        next_e = val[3]
+        return next_e
+
+    @staticmethod
+    def _action_concat_expr_18(val: Any) -> Any:
+        first = val[0]
+        rest = val[1]
+        res = first
+        for r in rest:
+            res = BinaryOpExpr("||", res, r)
+        return res
+
+    @staticmethod
+    def _action_add_expr_19(val: Any) -> Any:
         op = val[1]
         next_e = val[3]
         return (op, next_e)
 
     @staticmethod
-    def _action_add_expr_18(val: Any) -> Any:
+    def _action_add_expr_20(val: Any) -> Any:
         first = val[0]
         rest = val[1]
         res = first
@@ -620,13 +647,13 @@ class SQLExprParser(Parser[Any]):
         return res
 
     @staticmethod
-    def _action_mult_expr_19(val: Any) -> Any:
+    def _action_mult_expr_21(val: Any) -> Any:
         op = val[1]
         next_e = val[3]
         return (op, next_e)
 
     @staticmethod
-    def _action_mult_expr_20(val: Any) -> Any:
+    def _action_mult_expr_22(val: Any) -> Any:
         first = val[0]
         rest = val[1]
         res = first
@@ -635,84 +662,84 @@ class SQLExprParser(Parser[Any]):
         return res
 
     @staticmethod
-    def _action_exists_expr_21(val: Any) -> Any:
+    def _action_exists_expr_23(val: Any) -> Any:
         is_not = val[0]
         subq = val[5]
         return ExistsExpr(subq, is_not=bool(is_not))
 
     @staticmethod
-    def _action_prefix_unary_expr_22(val: Any) -> Any:
+    def _action_prefix_unary_expr_24(val: Any) -> Any:
         op = val[0]
         e = val[2]
         return UnaryOpExpr(op, e)
 
     @staticmethod
-    def _action_paren_expr_23(val: Any) -> Any:
+    def _action_paren_expr_25(val: Any) -> Any:
         e = val[2]
         return e
 
     @staticmethod
-    def _action_searched_case_24(val: Any) -> Any:
+    def _action_searched_case_26(val: Any) -> Any:
         b = val[0]
         return b
 
     @staticmethod
-    def _action_searched_case_25(val: Any) -> Any:
+    def _action_searched_case_27(val: Any) -> Any:
         eb = val[0]
         return eb
 
     @staticmethod
-    def _action_searched_case_26(val: Any) -> Any:
+    def _action_searched_case_28(val: Any) -> Any:
         branches = val[2]
         else_b = val[3]
         return CaseExpr(base_expr=None, when_then_list=branches, else_expr=else_b)
 
     @staticmethod
-    def _action_simple_case_27(val: Any) -> Any:
+    def _action_simple_case_29(val: Any) -> Any:
         b = val[0]
         return b
 
     @staticmethod
-    def _action_simple_case_28(val: Any) -> Any:
+    def _action_simple_case_30(val: Any) -> Any:
         eb = val[0]
         return eb
 
     @staticmethod
-    def _action_simple_case_29(val: Any) -> Any:
+    def _action_simple_case_31(val: Any) -> Any:
         base = val[2]
         branches = val[4]
         else_b = val[5]
         return CaseExpr(base_expr=base, when_then_list=branches, else_expr=else_b)
 
     @staticmethod
-    def _action_when_branch_30(val: Any) -> Any:
+    def _action_when_branch_32(val: Any) -> Any:
         cond = val[2]
         res = val[6]
         return (cond, res)
 
     @staticmethod
-    def _action_else_branch_31(val: Any) -> Any:
+    def _action_else_branch_33(val: Any) -> Any:
         e = val[2]
         return e
 
     @staticmethod
-    def _action_func_call_expr_32(val: Any) -> Any:
+    def _action_func_call_expr_34(val: Any) -> Any:
         name = val[0]
         args = val[2]
         is_star, is_dist, arg_list = args
         return FunctionCallExpr(name, arg_list, is_star=is_star, is_distinct=is_dist)
 
     @staticmethod
-    def _action_func_star_args_33(val: Any) -> Any:
+    def _action_func_star_args_35(val: Any) -> Any:
         return (True, False, [])
 
     @staticmethod
-    def _action_func_list_args_34(val: Any) -> Any:
+    def _action_func_list_args_36(val: Any) -> Any:
         next_a = val[3]
         return next_a
 
     @staticmethod
-    def _action_func_list_args_35(val: Any) -> Any:
+    def _action_func_list_args_37(val: Any) -> Any:
         dist = val[2]
         first = val[3]
         rest = val[4]
@@ -723,76 +750,85 @@ class SQLExprParser(Parser[Any]):
         return (False, bool(dist), args)
 
     @staticmethod
-    def _action_placeholder_lit_36(val: Any) -> Any:
+    def _action_placeholder_lit_38(val: Any) -> Any:
         return LiteralExpr("?")
 
     @staticmethod
-    def _action_bool_lit_37(val: Any) -> Any:
+    def _action_bool_lit_39(val: Any) -> Any:
         return LiteralExpr(True)
 
     @staticmethod
-    def _action_bool_lit_38(val: Any) -> Any:
+    def _action_bool_lit_40(val: Any) -> Any:
         return LiteralExpr(False)
 
     @staticmethod
-    def _action_null_lit_39(val: Any) -> Any:
+    def _action_null_lit_41(val: Any) -> Any:
         return LiteralExpr(None)
 
     @staticmethod
-    def _action_number_lit_40(val: Any) -> Any:
+    def _action_number_lit_42(val: Any) -> Any:
         f = val
         return LiteralExpr(f)
 
     @staticmethod
-    def _action_number_lit_41(val: Any) -> Any:
+    def _action_number_lit_43(val: Any) -> Any:
         i = val
         return LiteralExpr(i)
 
     @staticmethod
-    def _action_float_val_42(val: Any) -> Any:
+    def _action_float_val_44(val: Any) -> Any:
         raw = val
         return float(raw)
 
     @staticmethod
-    def _action_int_val_43(val: Any) -> Any:
+    def _action_int_val_45(val: Any) -> Any:
         raw = val
         return int(raw)
 
     @staticmethod
-    def _action_single_string_lit_44(val: Any) -> Any:
+    def _action_single_string_lit_46(val: Any) -> Any:
         raw = val
         s = raw[1:-1].replace("''", "'")
         return LiteralExpr(s)
 
     @staticmethod
-    def _action_double_string_lit_45(val: Any) -> Any:
+    def _action_double_string_lit_47(val: Any) -> Any:
         raw = val
         s = raw[1:-1].replace('""', '"')
         return LiteralExpr(s)
 
     @staticmethod
-    def _action_column_ref_expr_46(val: Any) -> Any:
-        id1 = val[0]
-        return id1
-
-    @staticmethod
-    def _action_column_ref_expr_47(val: Any) -> Any:
-        p = val[3]
-        return p
-
-    @staticmethod
     def _action_column_ref_expr_48(val: Any) -> Any:
-        tbl = val[0]
+        q = val[0]
+        return q
+
+    @staticmethod
+    def _action_column_ref_expr_49(val: Any) -> Any:
+        op = val[1]
+        p = val[3]
+        return (op, p)
+
+    @staticmethod
+    def _action_column_ref_expr_50(val: Any) -> Any:
+        quals = val[0]
         col = val[1]
         json_p = val[2]
-        return ColumnRefExpr(column=col, table=tbl, json_path=json_p)
+        tbl = ".".join(quals) if quals else None
+        if json_p is not None:
+            return ColumnRefExpr(
+                column=col,
+                table=tbl,
+                json_path=json_p[1],
+                json_unquote=(json_p[0] == "->>"),
+            )
+        return ColumnRefExpr(column=col, table=tbl)
 
     @staticmethod
-    def _action_json_path_lit_49(val: Any) -> Any:
+    def _action_json_path_lit_51(val: Any) -> Any:
         raw = val
         return raw.strip("'")
 
     @staticmethod
-    def _action_json_path_lit_50(val: Any) -> Any:
+    def _action_json_path_lit_52(val: Any) -> Any:
         raw = val
         return raw.strip('"')

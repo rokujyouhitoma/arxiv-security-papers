@@ -6,11 +6,9 @@ Evaluates DDL, DQL, DML, DCL, and TCL AST nodes against underlying vector storag
 
 import collections
 import copy
-import fnmatch
 import functools
 import json
 import logging
-import math
 import os
 import re
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
@@ -50,12 +48,19 @@ from .ast import (
     SelectStatement,
     ShowStatement,
     SQLCommandType,
-    SQLStatement,
-    TableRef,
-    UpdateStatement,
-    VacuumStatement,
 )
-from .functions import BUILTIN_FUNCTIONS
+from .ast import SQLExecutionError as SQLExecutionError
+from .ast import SQLIntegrityError as SQLIntegrityError
+from .ast import SQLOperationalError as SQLOperationalError
+from .ast import SQLStatement, TableRef, UpdateStatement, VacuumStatement
+from .expr_compiler import RowEvaluator, RowPredicate
+from .expr_compiler import collate_transform as _collate_transform
+from .expr_compiler import (
+    compile_having_expr,
+    compile_projection,
+    compile_sql_expr,
+    compile_where_clauses,
+)
 from .json_tree import iter_json_each, iter_json_tree
 from .parser import SQLParser, _split_comma_expressions, parse_sql
 from .security import AccessController
@@ -207,22 +212,7 @@ def _rebuild_named_btree_index(table: Any, index_name: str) -> int:
     return cnt
 
 
-class SQLExecutionError(Exception):
-    """Raised when SQL execution fails."""
-
-    pass
-
-
-class SQLIntegrityError(SQLExecutionError):
-    """Raised when a relational constraint (UNIQUE, PRIMARY KEY, NOT NULL, CHECK, FK) is violated."""
-
-    pass
-
-
-class SQLOperationalError(SQLExecutionError):
-    """Raised when an operational database error occurs (e.g. invalid transaction operation)."""
-
-    pass
+# SQLExecutionError, SQLIntegrityError, SQLOperationalError are imported from .ast above.
 
 
 class LazyRow(Dict[str, Any]):
@@ -528,132 +518,6 @@ class TableCatalog:
         return ddls
 
 
-def _extract_quoted_str(expr: str) -> Optional[str]:
-    if (expr.startswith("'") and expr.endswith("'")) or (
-        expr.startswith('"') and expr.endswith('"')
-    ):
-        return expr[1:-1]
-    return None
-
-
-def _extract_numeric_literal(expr: str) -> Optional[Any]:
-    try:
-        return int(expr)
-    except ValueError:
-        pass
-    try:
-        if "." in expr:
-            return float(expr)
-    except ValueError:
-        pass
-    return None
-
-
-def _extract_literal(expr: str) -> Optional[Any]:
-    quoted = _extract_quoted_str(expr)
-    if quoted is not None:
-        return quoted
-    return _extract_numeric_literal(expr)
-
-
-def _eval_binary_arith_op(op: str, v1: float, v2: float) -> Optional[float]:
-    ops: Dict[str, Callable[[float, float], Optional[float]]] = {
-        "+": lambda a, b: a + b,
-        "-": lambda a, b: a - b,
-        "*": lambda a, b: a * b,
-        "/": lambda a, b: a / b if b != 0 else None,
-        "%": lambda a, b: math.fmod(a, b) if b != 0 else None,
-    }
-    fn = ops.get(op)
-    return fn(v1, v2) if fn is not None else None
-
-
-def _cast_arith_result(
-    res: Optional[float], v1: Any, v2: Any, op: str
-) -> Optional[Any]:
-    if res is None:
-        return None
-    if isinstance(v1, int) and isinstance(v2, int) and op != "/":
-        return int(res)
-    return res
-
-
-def _resolve_arith_operand(record: Dict[str, Any], r_str: str) -> Any:
-    lit = _extract_literal(r_str)
-    return lit if lit is not None else _extract_field_value(record, r_str)
-
-
-def _safe_eval_arith(op: str, v1: Any, v2: Any) -> Optional[Any]:
-    try:
-        res = _eval_binary_arith_op(op, float(v1), float(v2))
-        return _cast_arith_result(res, v1, v2, op)
-    except (ValueError, TypeError):
-        return None
-
-
-def _extract_arithmetic(record: Dict[str, Any], expr: str) -> Optional[Any]:
-    arith_m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*([\+\-\*\/\%])\s*([a-zA-Z0-9_\.\->>\'\"0-9\.]+)$",
-        expr.strip(),
-    )
-    if not arith_m:
-        return None
-    l_str, op, r_str = (
-        arith_m.group(1).strip(),
-        arith_m.group(2),
-        arith_m.group(3).strip(),
-    )
-    v1 = _extract_field_value(record, l_str)
-    v2 = _resolve_arith_operand(record, r_str)
-    if None in (v1, v2):
-        return None
-    return _safe_eval_arith(op, v1, v2)
-
-
-def _parse_json_field(raw_obj: Any) -> Optional[Dict[str, Any]]:
-    if isinstance(raw_obj, str):
-        try:
-            raw_obj = json.loads(raw_obj)
-        except Exception:
-            return None
-    return raw_obj if isinstance(raw_obj, dict) else None
-
-
-def _get_raw_json_col(record: Dict[str, Any], col_part: str) -> Any:
-    raw_obj = record.get(col_part)
-    if raw_obj is None and "." in col_part:
-        return record.get(col_part.split(".", 1)[1])
-    return raw_obj
-
-
-def _extract_json_val(
-    dict_obj: Dict[str, Any], path_part: str, json_unquote: bool
-) -> Optional[Any]:
-    # Normalize JSONPath: '$.key' or "$.key" → key; also plain 'key'
-    key = path_part.strip().strip("'\"")
-    # Strip leading $. or $ so that "$.user" becomes "user"
-    if key.startswith("$."):
-        key = key[2:]
-    elif key.startswith("$"):
-        key = key[1:]
-    val = dict_obj.get(key)
-    if val is None:
-        return None
-    return str(val) if json_unquote else val
-
-
-def _extract_json_op(record: Dict[str, Any], expr: str) -> Optional[Any]:
-    if "->" not in expr:
-        return None
-    json_unquote = "->>" in expr
-    col_part, path_part = expr.split("->>" if json_unquote else "->", 1)
-    raw_obj = _get_raw_json_col(record, col_part.strip())
-    dict_obj = _parse_json_field(raw_obj)
-    if not dict_obj:
-        return None
-    return _extract_json_val(dict_obj, path_part, json_unquote)
-
-
 def _lookup_dot_parts(record: Dict[str, Any], expr: str) -> Any:
     if "." not in expr:
         return None
@@ -672,372 +536,9 @@ def _lookup_record_col(record: Dict[str, Any], expr: str) -> Any:
     return _lookup_dot_parts(record, expr)
 
 
-def _dispatch_builtin_func(func_name: str, args: List[Any]) -> Any:
-    try:
-        return BUILTIN_FUNCTIONS[func_name](*args)
-    except Exception:
-        return None
-
-
-def _extract_function_call(record: Dict[str, Any], expr: str) -> Any:
-    """Evaluates built-in SQL function call if expression matches FUNC(...)."""
-    m = re.match(r"^([a-zA-Z0-9_]+)\s*\((.*)\)$", expr, re.DOTALL)
-    if not m or m.group(1).upper() not in BUILTIN_FUNCTIONS:
-        return None
-    raw_args = m.group(2).strip()
-    args_strs = _split_comma_expressions(raw_args) if raw_args else []
-    args = [_extract_field_value(record, a) for a in args_strs]
-    return _dispatch_builtin_func(m.group(1).upper(), args)
-
-
-def _eval_raw_condition_truth(record: Dict[str, Any], cond_str: str) -> bool:
-    val = _extract_field_value(record, cond_str)
-    return bool(val and val != 0 and val != "0" and val is not False)
-
-
-def _eval_binary_condition(record: Dict[str, Any], m: Any) -> bool:
-    op = re.sub(r"\s+", " ", m.group(2).strip().upper())
-    act = _extract_field_value(record, m.group(1).strip())
-    exp = _extract_field_value(record, m.group(3).strip()) if m.group(3) else None
-    return _eval_comparison(op, act, exp)
-
-
-def _eval_case_condition_match(
-    record: Dict[str, Any], cond_str: str, base_val: Any = None
-) -> bool:
-    """Matches single condition in CASE WHEN branch."""
-    cond_str = cond_str.strip()
-    if base_val is not None:
-        return str(base_val) == str(_extract_field_value(record, cond_str))
-    m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE|IS\s+NULL|IS\s+NOT\s+NULL)\s*(.*)$",
-        cond_str,
-        re.IGNORECASE,
-    )
-    if not m:
-        return _eval_raw_condition_truth(record, cond_str)
-    return _eval_binary_condition(record, m)
-
-
-def _eval_when_branches(
-    record: Dict[str, Any], rest_body: str, base_val: Any
-) -> Tuple[bool, Any]:
-    """Iterates through WHEN ... THEN branches."""
-    branch_pat = re.compile(
-        r"\bWHEN\b(.*?)\bTHEN\b(.*?)(?=\bWHEN\b|\bELSE\b|$)",
-        re.IGNORECASE | re.DOTALL,
-    )
-    for m in branch_pat.finditer(rest_body):
-        cond_str = m.group(1).strip()
-        then_str = m.group(2).strip()
-        if _eval_case_condition_match(record, cond_str, base_val):
-            return True, _extract_field_value(record, then_str)
-    return False, None
-
-
-def _extract_case_else_val(record: Dict[str, Any], body: str) -> Any:
-    else_m = re.search(r"\bELSE\b(.*)$", body, re.IGNORECASE | re.DOTALL)
-    return _extract_field_value(record, else_m.group(1).strip()) if else_m else None
-
-
-def _is_valid_case_syntax(expr: str) -> bool:
-    return bool(
-        re.match(r"^CASE\b", expr, re.IGNORECASE)
-        and re.search(r"\bEND$", expr, re.IGNORECASE)
-    )
-
-
-def _extract_case_base_val(record: Dict[str, Any], body: str, when_start: int) -> Any:
-    base_part = body[:when_start].strip()
-    return _extract_field_value(record, base_part) if base_part else None
-
-
-def _extract_case_when(record: Dict[str, Any], expr: str) -> Any:
-    """Evaluates CASE [base] WHEN ... THEN ... [ELSE ...] END expression."""
-    if not _is_valid_case_syntax(expr):
-        return None
-    body = expr[4:-3].strip()
-    when_pos = re.search(r"\bWHEN\b", body, re.IGNORECASE)
-    if not when_pos:
-        return None
-    base_val = _extract_case_base_val(record, body, when_pos.start())
-    matched, res = _eval_when_branches(record, body[when_pos.start() :], base_val)
-    return res if matched else _extract_case_else_val(record, body)
-
-
-def _extract_comparison_expr(record: Dict[str, Any], expr: str) -> Optional[bool]:
-    """Evaluates comparison expressions like 'score > 90' to boolean."""
-    m = re.match(
-        r"^([a-zA-Z0-9_\.\->>\'\"]+)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE)\s+(.+)$",
-        expr.strip(),
-        re.IGNORECASE,
-    )
-    if not m:
-        return None
-    return _eval_case_condition_match(record, expr)
-
-
-def _eval_core_expr_features(record: Dict[str, Any], expr: str) -> Any:
-    case_res = _extract_case_when(record, expr)
-    if case_res is not None:
-        return case_res
-    func_res = _extract_function_call(record, expr)
-    if func_res is not None:
-        return func_res
-    return _extract_comparison_expr(record, expr)
-
-
-def _extract_concat_expr(record: Dict[str, Any], expr: str) -> Optional[str]:
-    if "||" not in expr:
-        return None
-    parts = expr.split("||")
-    out: List[str] = []
-    for p in parts:
-        v = _extract_field_value(record, p.strip())
-        if v is None:
-            return None
-        out.append(str(v))
-    return "".join(out)
-
-
-def _eval_extended_ops(record: Dict[str, Any], expr: str) -> Any:
-    arith = _extract_arithmetic(record, expr)
-    if arith is not None:
-        return arith
-    if "->" in expr:
-        return _extract_json_op(record, expr)
-    return None
-
-
-def _extract_complex_expr(record: Dict[str, Any], expr: str) -> Any:
-    """Evaluates CASE, function call, comparison, arithmetic, concat, or JSON operators."""
-    concat_res = _extract_concat_expr(record, expr)
-    if concat_res is not None:
-        return concat_res
-    core_res = _eval_core_expr_features(record, expr)
-    if core_res is not None:
-        return core_res
-    return _eval_extended_ops(record, expr)
-
-
-def _extract_direct_or_literal(record: Dict[str, Any], expr: str) -> Tuple[bool, Any]:
-    if not expr:
-        return True, None
-    s = expr.strip()
-    if s in record:
-        return True, record[s]
-    if s.upper() == "NULL":
-        return True, None
-    lit = _extract_literal(s)
-    if lit is not None:
-        return True, lit
-    return False, s
-
-
 def _extract_field_value(record: Dict[str, Any], expr: str) -> Any:
-    """Extracts value from record supporting literals, functions, CASE, arithmetic, and JSON."""
-    found, val = _extract_direct_or_literal(record, expr)
-    if found:
-        return val
-    c_val = _extract_complex_expr(record, val)
-    if c_val is not None:
-        return c_val
-    return _lookup_record_col(record, val)
-
-
-def _eval_numeric_rel(op: str, act_f: float, exp_f: float) -> bool:
-    if op == ">=":
-        return act_f >= exp_f
-    if op == "<=":
-        return act_f <= exp_f
-    if op == ">":
-        return act_f > exp_f
-    if op == "<":
-        return act_f < exp_f
-    return False
-
-
-def _eval_string_rel(op: str, act_s: str, exp_s: str) -> bool:
-    if op == ">=":
-        return act_s >= exp_s
-    if op == "<=":
-        return act_s <= exp_s
-    if op == ">":
-        return act_s > exp_s
-    if op == "<":
-        return act_s < exp_s
-    return False
-
-
-def _eval_numeric_fast(op: str, actual: Any, expected: Any) -> Optional[bool]:
-    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
-        if not isinstance(actual, bool) and not isinstance(expected, bool):
-            return _eval_numeric_rel(op, float(actual), float(expected))
-    return None
-
-
-def _eval_relational_fallback(op: str, actual: Any, expected: Any) -> bool:
-    try:
-        return _eval_numeric_rel(op, float(str(actual)), float(str(expected)))
-    except (ValueError, TypeError):
-        return _eval_string_rel(op, str(actual), str(expected))
-
-
-def _eval_relational(op: str, actual: Any, expected: Any) -> bool:
-    num_res = _eval_numeric_fast(op, actual, expected)
-    if num_res is not None:
-        return num_res
-    if isinstance(actual, str) and isinstance(expected, str):
-        return _eval_string_rel(op, actual, expected)
-    return _eval_relational_fallback(op, actual, expected)
-
-
-def _collate_transform(val: Any, collation: Optional[str]) -> Any:
-    """Applies collation transformation to string values."""
-    if not isinstance(val, str) or not collation:
-        return val
-    col = collation.upper()
-    if col == "NOCASE":
-        return val.lower()
-    if col == "RTRIM":
-        return val.rstrip(" ")
-    return val
-
-
-def _eval_is_null(op: str, actual: Any) -> bool:
-    is_n = actual is None or actual == ""
-    return is_n if op == "IS NULL" else not is_n
-
-
-def _eval_between(
-    op: str, actual: Any, expected: Any, collate: Optional[str] = None
-) -> bool:
-    if not isinstance(expected, (list, tuple)) or len(expected) != 2:
-        return False
-    v1, v2 = expected
-    try:
-        act_f, v1_f, v2_f = float(str(actual)), float(str(v1)), float(str(v2))
-        res = v1_f <= act_f <= v2_f
-    except (ValueError, TypeError):
-        act_s = str(_collate_transform(actual, collate))
-        v1_s = str(_collate_transform(v1, collate))
-        v2_s = str(_collate_transform(v2, collate))
-        res = v1_s <= act_s <= v2_s
-    return res if op == "BETWEEN" else not res
-
-
-def _eval_glob(op: str, actual: Any, expected: Any) -> bool:
-    matched = fnmatch.fnmatchcase(str(actual or ""), str(expected or ""))
-    return matched if op == "GLOB" else not matched
-
-
-def _build_like_regex(expected: Any, escape: Optional[str] = None) -> str:
-    exp_str = str(expected or "")
-    if escape:
-        parts = re.split(re.escape(escape) + "(.)", exp_str)
-        escaped_pattern = ""
-        for i, p in enumerate(parts):
-            if i % 2 == 1:
-                escaped_pattern += re.escape(p)
-            else:
-                escaped_pattern += re.escape(p).replace("%", ".*").replace("_", ".")
-        return f"^{escaped_pattern}$"
-    escaped_pattern = re.escape(exp_str).replace("%", ".*").replace("_", ".")
-    return f"^{escaped_pattern}$"
-
-
-def _eval_like(
-    op: str, actual: Any, expected: Any, escape: Optional[str] = None
-) -> bool:
-    pattern = _build_like_regex(expected, escape)
-    matched = bool(re.search(pattern, str(actual or ""), re.IGNORECASE))
-    return matched if "NOT" not in op else not matched
-
-
-def _normalize_in_list(expected: Any, collate: Optional[str]) -> List[Any]:
-    in_list = expected if isinstance(expected, (list, tuple, set)) else [expected]
-    return [_collate_transform(x, collate) for x in in_list]
-
-
-def _check_membership_raw(norm_actual: Any, norm_list: List[Any]) -> bool:
-    if norm_actual in norm_list:
-        return True
-    return str(norm_actual) in [str(x) for x in norm_list]
-
-
-def _eval_membership(
-    op: str, actual: Any, expected: Any, collate: Optional[str] = None
-) -> bool:
-    norm_actual = _collate_transform(actual, collate)
-    norm_list = _normalize_in_list(expected, collate)
-    is_member = _check_membership_raw(norm_actual, norm_list)
-    return is_member if op == "IN" else not is_member
-
-
-def _eval_null_or_between(
-    op: str, actual: Any, expected: Any, collate: Optional[str] = None
-) -> Optional[bool]:
-    if op in ("IS NULL", "IS NOT NULL"):
-        return _eval_is_null(op, actual)
-    if op in ("BETWEEN", "NOT BETWEEN"):
-        return _eval_between(op, actual, expected, collate)
-    return None
-
-
-def _eval_pattern_match(
-    op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
-) -> Optional[bool]:
-    if op in ("GLOB", "NOT GLOB"):
-        return _eval_glob(op, actual, expected)
-    if op in ("LIKE", "NOT LIKE"):
-        return _eval_like(op, actual, expected, (c_dict or {}).get("escape"))
-    return None
-
-
-def _eval_pattern_or_null(
-    op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
-) -> Optional[bool]:
-    collate = (c_dict or {}).get("collate")
-    res = _eval_null_or_between(op, actual, expected, collate)
-    return res if res is not None else _eval_pattern_match(op, actual, expected, c_dict)
-
-
-def _eval_comparison_branches(
-    op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
-) -> bool:
-    pat_res = _eval_pattern_or_null(op, actual, expected, c_dict)
-    if pat_res is not None:
-        return pat_res
-    if op in (">=", "<=", ">", "<"):
-        return _eval_relational(op, actual, expected)
-    collate = (c_dict or {}).get("collate")
-    if op in ("IN", "NOT IN"):
-        return _eval_membership(op, actual, expected, collate)
-    return True
-
-
-def _eval_equality(op: str, norm_actual: Any, norm_expected: Any) -> Optional[bool]:
-    if op == "=":
-        return str(norm_actual) == str(norm_expected)
-    if op in ("!=", "<>"):
-        return str(norm_actual) != str(norm_expected)
-    return None
-
-
-def _eval_comparison(
-    op: str, actual: Any, expected: Any, c_dict: Optional[Dict[str, Any]] = None
-) -> bool:
-    if op in ("IS NULL", "IS NOT NULL"):
-        return _eval_is_null(op, actual)
-    collate = (c_dict or {}).get("collate")
-    norm_act = _collate_transform(actual, collate)
-    norm_exp = _collate_transform(expected, collate)
-    eq_res = _eval_equality(op, norm_act, norm_exp)
-    if eq_res is not None:
-        return eq_res
-    if actual is None:
-        return False
-    return _eval_comparison_branches(op, norm_act, norm_exp, c_dict)
+    """Extracts value from record using the precompiled SQL expression cache."""
+    return compile_sql_expr(expr)(record)
 
 
 def _inject_collate_into_dict(d: Dict[str, Any], collations: Dict[str, str]) -> None:
@@ -1066,17 +567,12 @@ def _enrich_where_clauses_with_collations(
     return [_enrich_where_clause_item(c, collations) for c in clauses]
 
 
-def _is_column_reference(expected_val: str, record: Dict[str, Any]) -> bool:
-    return expected_val in record or "." in expected_val or "->" in expected_val
+def _get_cond_field(c: Dict[str, Any]) -> str:
+    return str(c.get("field") or c.get("column") or "")
 
 
-def _resolve_condition_expected_val(record: Dict[str, Any], expected_val: Any) -> Any:
-    """Resolves column reference in expected value if present."""
-    if isinstance(expected_val, str) and _is_column_reference(expected_val, record):
-        col_val = _extract_field_value(record, expected_val)
-        if col_val is not None:
-            return col_val
-    return expected_val
+def _get_cond_op(c: Dict[str, Any]) -> str:
+    return str(c.get("op") or c.get("operator") or "=")
 
 
 def _substitute_correlated_vars(sql: str, record: Dict[str, Any]) -> str:
@@ -1090,26 +586,6 @@ def _substitute_correlated_vars(sql: str, record: Dict[str, Any]) -> str:
     return sql
 
 
-def _val_in_inner_rows(actual: Any, inner_rows: List[Dict[str, Any]]) -> bool:
-    flat_vals = [v for r in inner_rows for v in r.values()]
-    if actual in flat_vals:
-        return True
-    str_actual = str(actual)
-    return any(str(x) == str_actual for x in flat_vals)
-
-
-def _eval_subquery_membership(
-    actual: Any, inner_rows: List[Dict[str, Any]], op: str
-) -> bool:
-    is_in = _val_in_inner_rows(actual, inner_rows)
-    return is_in if op == "IN" else not is_in
-
-
-def _eval_exists_op(op: str, inner_rows: List[Dict[str, Any]]) -> bool:
-    has_rows = len(inner_rows) > 0
-    return has_rows if op == "EXISTS" else not has_rows
-
-
 def _exec_subquery(
     executor: Any, subquery_sql: str, record: Dict[str, Any], role: str
 ) -> List[Dict[str, Any]]:
@@ -1118,30 +594,32 @@ def _exec_subquery(
     return list(res.get("rows", []))
 
 
-def _eval_subquery_predicate(
+def _build_where_predicate(
+    clauses: List[Dict[str, Any]],
+    executor: Any = None,
+    role: str = "admin",
+) -> RowPredicate:
+    sub_runner = (
+        (lambda sql, r: _exec_subquery(executor, sql, r, role)) if executor else None
+    )
+    match_runner = (
+        (lambda r, fld, q: _eval_match_predicate(r, fld, q, executor))
+        if executor is not None
+        else (lambda r, fld, q: _eval_match_predicate(r, fld, q, None))
+    )
+    return compile_where_clauses(
+        clauses, subquery_runner=sub_runner, match_runner=match_runner
+    )
+
+
+def _matches_where_clause(
     record: Dict[str, Any],
-    c: Dict[str, Any],
-    executor: Any,
-    role: str,
-    temp_tables: Any,
+    clauses: List[Dict[str, Any]],
+    executor: Any = None,
+    role: str = "admin",
+    temp_tables: Any = None,
 ) -> bool:
-    subquery_sql = str(c.get("subquery") or "")
-    if not executor or not subquery_sql:
-        return False
-    op = _get_cond_op(c).upper()
-    inner_rows = _exec_subquery(executor, subquery_sql, record, role)
-    if "EXISTS" in op:
-        return _eval_exists_op(op, inner_rows)
-    actual = _extract_field_value(record, _get_cond_field(c))
-    return _eval_subquery_membership(actual, inner_rows, op)
-
-
-def _get_cond_field(c: Dict[str, Any]) -> str:
-    return str(c.get("field") or c.get("column") or "")
-
-
-def _get_cond_op(c: Dict[str, Any]) -> str:
-    return str(c.get("op") or c.get("operator") or "=")
+    return _build_where_predicate(clauses, executor=executor, role=role)(record)
 
 
 def _collect_match_target_texts(record: Dict[str, Any], field: str) -> List[str]:
@@ -1221,58 +699,6 @@ def _eval_match_predicate(
     record["score"] = score
     record[f"bm25({field})"] = score
     return True
-
-
-def _evaluate_single_condition(
-    record: Dict[str, Any],
-    c: Dict[str, Any],
-    executor: Any = None,
-    role: str = "admin",
-    temp_tables: Any = None,
-) -> bool:
-    if "subquery" in c:
-        return _eval_subquery_predicate(record, c, executor, role, temp_tables)
-    field = _get_cond_field(c)
-    op = _get_cond_op(c)
-    expected_val = _resolve_condition_expected_val(record, c.get("value"))
-    if op == "MATCH":
-        return _eval_match_predicate(record, field, str(expected_val), executor)
-    actual = _extract_field_value(record, field)
-    return _eval_comparison(op, actual, expected_val, c)
-
-
-def _matches_or_branches(
-    record: Dict[str, Any],
-    branches: List[Dict[str, Any]],
-    executor: Any = None,
-    role: str = "admin",
-    temp_tables: Any = None,
-) -> bool:
-    for branch in branches:
-        sub_clauses = branch.get("clauses", [])
-        if all(
-            _evaluate_single_condition(record, c, executor, role, temp_tables)
-            for c in sub_clauses
-        ):
-            return True
-    return False
-
-
-def _matches_where_clause(
-    record: Dict[str, Any],
-    clauses: List[Dict[str, Any]],
-    executor: Any = None,
-    role: str = "admin",
-    temp_tables: Any = None,
-) -> bool:
-    if not clauses:
-        return True
-    if any(c.get("logic") == "OR_BRANCH" for c in clauses):
-        return _matches_or_branches(record, clauses, executor, role, temp_tables)
-    return all(
-        _evaluate_single_condition(record, c, executor, role, temp_tables)
-        for c in clauses
-    )
 
 
 def _check_strict_int(table_name: str, col: str, dt: str, val: Any) -> None:
@@ -1478,13 +904,13 @@ def _resolve_default_table_name(
 def _agg_count(inner: str, group_rows: List[Dict[str, Any]]) -> int:
     if inner in ("*", "1"):
         return len(group_rows)
-    return sum(
-        1 for r in group_rows if _extract_field_value(r, inner) not in (None, "")
-    )
+    eval_fn = compile_sql_expr(inner)
+    return sum(1 for r in group_rows if eval_fn(r) not in (None, ""))
 
 
 def _agg_numeric_list(inner: str, group_rows: List[Dict[str, Any]]) -> List[float]:
-    return [float(_extract_field_value(r, inner) or 0) for r in group_rows]
+    eval_fn = compile_sql_expr(inner)
+    return [float(eval_fn(r) or 0) for r in group_rows]
 
 
 def _agg_sum_avg(op: str, inner: str, group_rows: List[Dict[str, Any]]) -> float:
@@ -1496,11 +922,8 @@ def _agg_sum_avg(op: str, inner: str, group_rows: List[Dict[str, Any]]) -> float
 
 
 def _agg_min_max(op: str, inner: str, group_rows: List[Dict[str, Any]]) -> Any:
-    vals = [
-        _extract_field_value(r, inner)
-        for r in group_rows
-        if _extract_field_value(r, inner) is not None
-    ]
+    eval_fn = compile_sql_expr(inner)
+    vals = [v for r in group_rows if (v := eval_fn(r)) is not None]
     if not vals:
         return None
     return min(vals) if op == "MIN" else max(vals)
@@ -1553,9 +976,8 @@ def _compute_agg_group_concat(
     ):
         return None
     col, sep = _parse_group_concat_args(norm)
-    values = [
-        str(v) for r in group_rows if (v := _extract_field_value(r, col)) is not None
-    ]
+    eval_fn = compile_sql_expr(col)
+    values = [str(v) for r in group_rows if (v := eval_fn(r)) is not None]
     return sep.join(values)
 
 
@@ -1612,16 +1034,13 @@ def _compute_agg_col(col_expr: str, group_rows: List[Dict[str, Any]]) -> Any:
     return _extract_field_value(first_row, norm)
 
 
-def _build_group_key(row: Dict[str, Any], group_cols: List[str]) -> Tuple[Any, ...]:
-    return tuple(_extract_field_value(row, col) for col in group_cols)
-
-
 def _cluster_rows(
     rows: List[Dict[str, Any]], group_cols: List[str]
 ) -> Dict[Tuple[Any, ...], List[Dict[str, Any]]]:
+    key_fns = tuple(compile_sql_expr(col) for col in group_cols)
     groups: Dict[Tuple[Any, ...], List[Dict[str, Any]]] = {}
     for r in rows:
-        k = _build_group_key(r, group_cols)
+        k = tuple(fn(r) for fn in key_fns)
         if k not in groups:
             groups[k] = []
         groups[k].append(r)
@@ -1662,78 +1081,13 @@ def _group_and_aggregate_rows(
     return result
 
 
-def _parse_having_expression(expr: str) -> Optional[Tuple[str, str, str]]:
-    m = re.match(r"^(.+?)\s*(=|!=|<>|>=|<=|>|<)\s*(.+)$", expr.strip())
-    if not m:
-        return None
-    return m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
-
-
-def _coerce_having_vals(val_str: str, act_val: Any) -> Tuple[Any, Any]:
-    cleaned = val_str.strip("'\"")
-    if isinstance(act_val, (int, float)):
-        try:
-            return act_val, float(cleaned)
-        except ValueError:
-            return act_val, cleaned
-    return str(act_val), cleaned
-
-
-def _eval_having_eq_neq(act: Any, op: str, exp: Any) -> Optional[bool]:
-    if op in ("=", "=="):
-        return bool(act == exp)
-    if op in ("!=", "<>"):
-        return bool(act != exp)
-    return None
-
-
-def _eval_having_rel(act: Any, op: str, exp: Any) -> bool:
-    if op == ">":
-        return bool(act > exp)
-    if op == ">=":
-        return bool(act >= exp)
-    if op == "<":
-        return bool(act < exp)
-    if op == "<=":
-        return bool(act <= exp)
-    return False
-
-
-def _eval_having_comparison(act: Any, op: str, exp: Any) -> bool:
-    eq_res = _eval_having_eq_neq(act, op, exp)
-    if eq_res is not None:
-        return eq_res
-    return _eval_having_rel(act, op, exp)
-
-
-def _resolve_having_actual_val(row: Dict[str, Any], left_expr: str) -> Any:
-    if left_expr in row:
-        return row[left_expr]
-    for k, v in row.items():
-        if k.upper() == left_expr.upper():
-            return v
-    return _extract_field_value(row, left_expr)
-
-
-def _matches_having(row: Dict[str, Any], having_expr: str) -> bool:
-    parsed = _parse_having_expression(having_expr)
-    if not parsed:
-        return True
-    left_expr, op, right_expr = parsed
-    act_val = _resolve_having_actual_val(row, left_expr)
-    act, exp = _coerce_having_vals(right_expr, act_val)
-    try:
-        return _eval_having_comparison(act, op, exp)
-    except TypeError:
-        return False
-
-
 def _filter_having_rows(
     rows: List[Dict[str, Any]], having_expr: Optional[str]
 ) -> List[Dict[str, Any]]:
     if not having_expr:
         return rows
-    return [r for r in rows if _matches_having(r, having_expr)]
+    pred = compile_having_expr(having_expr)
+    return [r for r in rows if pred(r)]
 
 
 def _bind_list_val(val: List[Any], param_iter: Any) -> List[Any]:
@@ -1978,9 +1332,10 @@ def _find_equi_join_keys(
 def _build_hash_bucket(
     rows: List[Dict[str, Any]], key_expr: str
 ) -> Dict[str, List[Dict[str, Any]]]:
+    key_fn = compile_sql_expr(key_expr)
     bucket: Dict[str, List[Dict[str, Any]]] = collections.defaultdict(list)
     for r in rows:
-        v = _extract_field_value(r, key_expr)
+        v = key_fn(r)
         if v is not None:
             bucket[str(v)].append(r)
     return bucket
@@ -1989,12 +1344,12 @@ def _build_hash_bucket(
 def _probe_hash_bucket_row(
     left_row: Dict[str, Any],
     candidates: List[Dict[str, Any]],
-    rem_conds: List[Dict[str, Any]],
+    rem_pred: Optional[RowPredicate],
 ) -> List[Dict[str, Any]]:
     row_matches: List[Dict[str, Any]] = []
     for right_row in candidates:
         combined = CombinedRow(left_row, right_row)
-        if not rem_conds or _matches_where_clause(combined, rem_conds):
+        if rem_pred is None or rem_pred(combined):
             row_matches.append(combined)
     return row_matches
 
@@ -3292,12 +2647,12 @@ class SQLExecutor:
         self,
         left_row: Dict[str, Any],
         j_prefixed_rows: List[Dict[str, Any]],
-        conditions: List[Dict[str, Any]],
+        on_pred: RowPredicate,
     ) -> List[Dict[str, Any]]:
         matched: List[Dict[str, Any]] = []
         for right_row in j_prefixed_rows:
             combined = CombinedRow(left_row, right_row)
-            if _matches_where_clause(combined, conditions):
+            if on_pred(combined):
                 matched.append(combined)
         return matched
 
@@ -3313,10 +2668,14 @@ class SQLExecutor:
         left_row: Dict[str, Any],
         j_prefixed_rows: List[Dict[str, Any]],
         join: Any,
+        on_pred: Optional[RowPredicate] = None,
     ) -> List[Dict[str, Any]]:
-        matched = self._find_matching_join_rows(
-            left_row, j_prefixed_rows, join.on_conditions
+        pred = (
+            on_pred
+            if on_pred is not None
+            else compile_where_clauses(join.on_conditions)
         )
+        matched = self._find_matching_join_rows(left_row, j_prefixed_rows, pred)
         if not matched and join.join_type == JoinType.LEFT:
             return self._left_join_fallback(left_row, j_prefixed_rows)
         return matched
@@ -3352,12 +2711,29 @@ class SQLExecutor:
         current_rows: List[Dict[str, Any]],
         join: Any,
     ) -> List[Dict[str, Any]]:
+        on_pred = compile_where_clauses(join.on_conditions)
         next_rows: List[Dict[str, Any]] = []
         for left_row in current_rows:
             right_rows = self._generate_table_func_rows(join.table, left_row)
-            matched = self._match_join_row(left_row, right_rows, join)
+            matched = self._match_join_row(left_row, right_rows, join, on_pred)
             next_rows.extend(matched)
         return next_rows
+
+    def _probe_single_left_row(
+        self,
+        left_row: Dict[str, Any],
+        left_key_fn: RowEvaluator,
+        bucket: Dict[str, List[Dict[str, Any]]],
+        rem_pred: Optional[RowPredicate],
+        is_left_join: bool,
+        j_prefixed_rows: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        lv = left_key_fn(left_row)
+        candidates = bucket.get(str(lv), []) if lv is not None else []
+        matched = _probe_hash_bucket_row(left_row, candidates, rem_pred)
+        if not matched and is_left_join:
+            return self._left_join_fallback(left_row, j_prefixed_rows)
+        return matched
 
     def _execute_hash_join(
         self,
@@ -3369,17 +2745,21 @@ class SQLExecutor:
         rem_conds: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         bucket = _build_hash_bucket(j_prefixed_rows, right_key)
+        left_key_fn = compile_sql_expr(left_key)
+        rem_pred = compile_where_clauses(rem_conds) if rem_conds else None
         is_left_join = join.join_type == JoinType.LEFT
         next_rows: List[Dict[str, Any]] = []
-
         for left_row in current_rows:
-            lv = _extract_field_value(left_row, left_key)
-            candidates = bucket.get(str(lv), []) if lv is not None else []
-            matched = _probe_hash_bucket_row(left_row, candidates, rem_conds)
-            if not matched and is_left_join:
-                next_rows.extend(self._left_join_fallback(left_row, j_prefixed_rows))
-            else:
-                next_rows.extend(matched)
+            next_rows.extend(
+                self._probe_single_left_row(
+                    left_row,
+                    left_key_fn,
+                    bucket,
+                    rem_pred,
+                    is_left_join,
+                    j_prefixed_rows,
+                )
+            )
         return next_rows
 
     def _try_hash_join(
@@ -3407,9 +2787,12 @@ class SQLExecutor:
         j_prefixed_rows: List[Dict[str, Any]],
         join: Any,
     ) -> List[Dict[str, Any]]:
+        on_pred = compile_where_clauses(join.on_conditions)
         next_rows: List[Dict[str, Any]] = []
         for left_row in current_rows:
-            next_rows.extend(self._match_join_row(left_row, j_prefixed_rows, join))
+            next_rows.extend(
+                self._match_join_row(left_row, j_prefixed_rows, join, on_pred)
+            )
         return next_rows
 
     def _join_table_rows(
@@ -3437,46 +2820,6 @@ class SQLExecutor:
             return hash_res
         return self._nested_loop_join(current_rows, j_pref, join)
 
-    def _project_column_item(self, r: Dict[str, Any], col_expr: str) -> Tuple[str, Any]:
-        as_m = re.search(r"\s+AS\s+([a-zA-Z0-9_]+)$", col_expr, re.IGNORECASE)
-        if as_m:
-            out_key = as_m.group(1).strip()
-            raw_col = col_expr[: as_m.start()].strip()
-            return out_key, _extract_field_value(r, raw_col)
-
-        out_key = col_expr
-        if "." in out_key and "->" not in out_key:
-            out_key = out_key.split(".")[-1]
-        return out_key, _extract_field_value(r, col_expr)
-
-    def _project_wildcard(self, r: Dict[str, Any], table_name: str) -> Dict[str, Any]:
-        return {
-            k: v
-            for k, v in r.items()
-            if not k.startswith("_")
-            and ("." not in k or k.startswith(f"{table_name}."))
-        }
-
-    def _project_row(
-        self, r: Dict[str, Any], columns: List[str], table_name: str
-    ) -> Dict[str, Any]:
-        if "*" in columns and len(columns) == 1:
-            return self._project_wildcard(r, table_name)
-        # Use an ordered list of (key, value) pairs to preserve column order and
-        # handle duplicate short names (e.g. e.name vs d.name both → "name").
-        # When a short name collides, fall back to the original qualified expression
-        # as the output key so that both values are preserved in the result tuple.
-        pairs: List[Tuple[str, Any]] = []
-        used_keys: set[str] = set()
-        for col_expr in columns:
-            k, v = self._project_column_item(r, col_expr.strip())
-            if k in used_keys:
-                # Collision: use original expression as key to keep both values
-                k = col_expr.strip()
-            used_keys.add(k)
-            pairs.append((k, v))
-        return dict(pairs)
-
     @staticmethod
     def _deduplicate_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen: set[Tuple[Any, ...]] = set()
@@ -3499,15 +2842,19 @@ class SQLExecutor:
         return rows[start:end]
 
     @staticmethod
-    def _sort_key(
-        row: Dict[str, Any],
+    def _build_sort_key_fn(
         order_by: str,
         order_collate: Optional[str] = None,
-    ) -> Any:
-        val = _extract_field_value(row, order_by)
-        if val is None:
-            return 0
-        return _collate_transform(val, order_collate)
+    ) -> Callable[[Dict[str, Any]], Any]:
+        eval_fn = compile_sql_expr(order_by)
+
+        def _key(row: Dict[str, Any]) -> Any:
+            val = eval_fn(row)
+            if val is None:
+                return 0
+            return _collate_transform(val, order_collate)
+
+        return _key
 
     def _sort_custom_collate(
         self,
@@ -3516,9 +2863,11 @@ class SQLExecutor:
         order_desc: bool,
         cmp_fn: Callable[[str, str], int],
     ) -> None:
+        eval_fn = compile_sql_expr(order_by)
+
         def custom_cmp(r1: Dict[str, Any], r2: Dict[str, Any]) -> int:
-            v1 = _extract_field_value(r1, order_by)
-            v2 = _extract_field_value(r2, order_by)
+            v1 = eval_fn(r1)
+            v2 = eval_fn(r2)
             if v1 is None and v2 is None:
                 return 0
             if v1 is None:
@@ -3546,7 +2895,7 @@ class SQLExecutor:
                 )
             else:
                 rows.sort(
-                    key=lambda x: self._sort_key(x, order_by, order_collate),
+                    key=self._build_sort_key_fn(order_by, order_collate),
                     reverse=order_desc,
                 )
         return self._slice_rows(rows, limit, offset)
@@ -3716,9 +3065,8 @@ class SQLExecutor:
             return cnt_res
 
         table_ref = stmt.table_ref or TableRef(name=stmt.table_name)
-        final_rows = [
-            self._project_row(r, stmt.columns, table_ref.name) for r in paged_rows
-        ]
+        project_fn = compile_projection(stmt.columns, table_ref.name)
+        final_rows = [project_fn(r) for r in paged_rows]
         final_rows = self._apply_distinct_and_slice(final_rows, stmt)
         final_rows = self._apply_compound_operations(
             final_rows, stmt, effective_role, temp_tables
@@ -3868,13 +3216,8 @@ class SQLExecutor:
         role: str = "admin",
         temp_tables: Any = None,
     ) -> List[Dict[str, Any]]:
-        return [
-            r
-            for r in rows
-            if _matches_where_clause(
-                r, where_clauses, executor=self, role=role, temp_tables=temp_tables
-            )
-        ]
+        pred = _build_where_predicate(where_clauses, executor=self, role=role)
+        return [r for r in rows if pred(r)]
 
     @staticmethod
     def _apply_group_and_having(
@@ -4398,8 +3741,9 @@ class SQLExecutor:
         order_collate: Optional[str] = None,
     ) -> List[int]:
         if order_by:
+            key_fn = self._build_sort_key_fn(order_by, order_collate)
             indices.sort(
-                key=lambda i: self._sort_key(metadata[i], order_by, order_collate),
+                key=lambda i: key_fn(metadata[i]),
                 reverse=order_desc,
             )
         if limit is not None:
@@ -4412,10 +3756,9 @@ class SQLExecutor:
         where_conds = _enrich_where_clauses_with_collations(
             stmt.where_clauses, table.column_collations
         )
+        pred = compile_where_clauses(where_conds)
         matching = [
-            idx
-            for idx, meta in enumerate(table.storage.metadata)
-            if _matches_where_clause(meta, where_conds)
+            idx for idx, meta in enumerate(table.storage.metadata) if pred(meta)
         ]
         return self._sort_and_limit_indices(
             table.storage.metadata,
@@ -4453,27 +3796,49 @@ class SQLExecutor:
         base_meta: Dict[str, Any],
         table_ref: TableRef,
         joined_rows: List[Dict[str, Any]],
-        where_clauses: List[Dict[str, Any]],
+        where_pred: RowPredicate,
     ) -> Optional[Dict[str, Any]]:
         prefixed_base = self._prefix_record(base_meta, table_ref)
         for j_row in joined_rows:
             combined = {**j_row, **prefixed_base}
-            if _matches_where_clause(combined, where_clauses):
+            if where_pred(combined):
                 return combined
         return None
+
+    @staticmethod
+    def _precompile_update_assignments(
+        stmt: UpdateStatement,
+    ) -> Dict[str, RowEvaluator]:
+        return {
+            col: compile_sql_expr(expr)
+            for col, expr in stmt.raw_assignments.items()
+            if expr != "?"
+        }
+
+    @staticmethod
+    def _eval_single_assignment(
+        col: str,
+        expr: str,
+        stmt: UpdateStatement,
+        eval_ctx: Dict[str, Any],
+        compiled_raw: Optional[Dict[str, RowEvaluator]],
+    ) -> Any:
+        if expr == "?" and col in stmt.assignments:
+            return stmt.assignments[col]
+        if compiled_raw is not None and col in compiled_raw:
+            return compiled_raw[col](eval_ctx)
+        return _extract_field_value(eval_ctx, expr)
 
     def _compute_update_assignments(
         self,
         stmt: UpdateStatement,
         eval_ctx: Dict[str, Any],
+        compiled_raw: Optional[Dict[str, RowEvaluator]] = None,
     ) -> Dict[str, Any]:
-        applied: Dict[str, Any] = {}
-        for col, expr in stmt.raw_assignments.items():
-            if expr == "?" and col in stmt.assignments:
-                applied[col] = stmt.assignments[col]
-            else:
-                applied[col] = _extract_field_value(eval_ctx, expr)
-        return applied
+        return {
+            col: self._eval_single_assignment(col, expr, stmt, eval_ctx, compiled_raw)
+            for col, expr in stmt.raw_assignments.items()
+        }
 
     def _apply_single_update(
         self,
@@ -4482,6 +3847,7 @@ class SQLExecutor:
         stmt: UpdateStatement,
         eval_ctx: Dict[str, Any],
         effective_role: str,
+        compiled_raw: Optional[Dict[str, RowEvaluator]] = None,
     ) -> Dict[str, Any]:
         meta = table.storage.metadata[idx]
         old_rec = dict(meta)
@@ -4493,7 +3859,7 @@ class SQLExecutor:
             "BEFORE", "UPDATE", stmt.table_name, old_rec, effective_role
         )
         assignments = (
-            self._compute_update_assignments(stmt, eval_ctx)
+            self._compute_update_assignments(stmt, eval_ctx, compiled_raw)
             if stmt.raw_assignments
             else stmt.assignments
         )
@@ -4515,12 +3881,15 @@ class SQLExecutor:
         self, table: TableCatalog, stmt: UpdateStatement, effective_role: str
     ) -> List[Dict[str, Any]]:
         indices = self._find_update_indices(table, stmt)
+        compiled_raw = self._precompile_update_assignments(stmt)
         updated: List[Dict[str, Any]] = []
         for i in indices:
             meta = table.storage.metadata[i]
             ctx = dict(meta)
             updated.append(
-                self._apply_single_update(table, i, stmt, ctx, effective_role)
+                self._apply_single_update(
+                    table, i, stmt, ctx, effective_role, compiled_raw
+                )
             )
         return updated
 
@@ -4532,14 +3901,18 @@ class SQLExecutor:
         joined_rows: List[Dict[str, Any]],
         role: str,
     ) -> List[Dict[str, Any]]:
+        where_pred = compile_where_clauses(stmt.where_clauses)
+        compiled_raw = self._precompile_update_assignments(stmt)
         updated: List[Dict[str, Any]] = []
         for i, meta in enumerate(table.storage.metadata):
             match_ctx = self._match_update_from_row(
-                meta, t_ref, joined_rows, stmt.where_clauses
+                meta, t_ref, joined_rows, where_pred
             )
             if match_ctx is not None:
                 updated.append(
-                    self._apply_single_update(table, i, stmt, match_ctx, role)
+                    self._apply_single_update(
+                        table, i, stmt, match_ctx, role, compiled_raw
+                    )
                 )
                 if stmt.limit is not None and len(updated) >= stmt.limit:
                     break
@@ -4575,7 +3948,8 @@ class SQLExecutor:
     ) -> List[Dict[str, Any]]:
         if not where_clauses:
             return rows
-        return [r for r in rows if _matches_where_clause(r, where_clauses)]
+        pred = compile_where_clauses(where_clauses)
+        return [r for r in rows if pred(r)]
 
     def _exec_update_view(
         self, stmt: UpdateStatement, vstmt: CreateViewStatement, effective_role: str
@@ -4655,10 +4029,11 @@ class SQLExecutor:
         where_conds = _enrich_where_clauses_with_collations(
             stmt.where_clauses, table.column_collations
         )
+        pred = compile_where_clauses(where_conds) if where_conds else None
         matching = [
             idx
             for idx, meta in enumerate(table.storage.metadata)
-            if not where_conds or _matches_where_clause(meta, where_conds)
+            if pred is None or pred(meta)
         ]
         limited = self._sort_and_limit_indices(
             table.storage.metadata,

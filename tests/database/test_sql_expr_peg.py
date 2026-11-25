@@ -92,7 +92,31 @@ class TestSQLExprLiteralsAndColumns:
         assert isinstance(json_col, ColumnRefExpr)
         assert json_col.column_name == "metadata"
         assert json_col.json_path == "title"
+        assert json_col.json_unquote is True
         assert json_col.to_sql() == "metadata->>'title'"
+
+        json_raw = parser.parse("metadata->'count'")
+        assert isinstance(json_raw, ColumnRefExpr)
+        assert json_raw.column_name == "metadata"
+        assert json_raw.json_path == "count"
+        assert json_raw.json_unquote is False
+        assert json_raw.to_sql() == "metadata->'count'"
+
+        schema_col = parser.parse("aux.ext_items.id")
+        assert isinstance(schema_col, ColumnRefExpr)
+        assert schema_col.table_name == "aux.ext_items"
+        assert schema_col.column_name == "id"
+        assert schema_col.to_sql() == "aux.ext_items.id"
+
+    def test_string_concat_operator(self) -> None:
+        expr = parse_sql_expr("a + 1 || '_tag' || suffix")
+        assert isinstance(expr, BinaryOpExpr)
+        assert expr.operator == "||"
+        assert isinstance(expr.left, BinaryOpExpr)
+        assert expr.left.operator == "||"
+        assert isinstance(expr.left.left, BinaryOpExpr)
+        assert expr.left.left.operator == "+"
+        assert expr.to_sql() == "(((a + 1) || '_tag') || suffix)"
 
 
 class TestSQLExprArithmeticAndPrecedence:
