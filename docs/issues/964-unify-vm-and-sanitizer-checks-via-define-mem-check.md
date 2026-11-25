@@ -22,7 +22,7 @@ ID: 964
 ## 2. トレーサビリティ / Traceability
 
 - 関連資料:
-  - [Issue #963](963-measure-sanitizer-detection-coverage-against-lir-vm-shadow-oracle.md)（VM オラクル比較による検出ギャップ計測）
+  - [Issue #963](closed/963-measure-sanitizer-detection-coverage-against-lir-vm-shadow-oracle.md)（VM オラクル比較による検出ギャップ計測）
   - [Issue #962](closed/962-implement-lir-vm-shadow-memory-for-heap-oob-uaf-and-double-free.md)（VM シャドウメモリ検査）
   - [Issue #944](closed/944-unify-host-and-guest-value-representation-via-define-value-repr.md)（`define-value-repr` による SSOT 設計パターン）
   - [Issue #930](closed/930-implement-c99-bounds-checking-sanitizer-mode.md)（C99 `--sanitize-bounds`）

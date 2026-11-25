@@ -1826,7 +1826,7 @@
     (emit "static uint64_t ulisp_environ[3] ULISP_UNUSED = {0, 0, 0};")
     (emit "static uint64_t ulisp_symtab_bounds[2] ULISP_UNUSED = {0, 0};")
     (emit "static volatile uint8_t ulisp_safepoint_flag ULISP_UNUSED = 0;")
-    (emit "static void ulisp_safepoint_slow_path(void) ULISP_UNUSED {}")
+    (emit "static ULISP_UNUSED void ulisp_safepoint_slow_path(void) {}")
     (emit "uint64_t __ulisp_stackmap_table[1] = {0};")
     (emit "")
     (if (eq? gc-mode 'stress)
