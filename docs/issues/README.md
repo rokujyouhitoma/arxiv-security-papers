@@ -13,6 +13,19 @@
 | **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` / `.data` 配置） | Feature | New | [959-emit-quoted-constants-as-static-rodata-data.md](959-emit-quoted-constants-as-static-rodata-data.md) |
 | **960** | 未参照関数の削除（到達可能性解析または関数毎セクション + `--gc-sections`） | Feature | New | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
 | **961** | Scheme 経路の LIR への linear scan レジスタ割り付け導入（スタック退避中心コード生成の解消） | Feature | New | [961-introduce-linear-scan-register-allocation-for-scheme-lir.md](961-introduce-linear-scan-register-allocation-for-scheme-lir.md) |
+| **966** | L_mir_ssa（仮想レジスタ SSA）と L_lir_mach（物理レジスタ機械 LIR）の 2 層分離と Scheme/C99 共通ミドルエンド統合 | Feature | New | [966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md](966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md) |
+| **967** | C99 フロントエンド lower_to_lir.scm（5,009行）の責務別パス分割（MIR 生成・SysV ABI 展開・Inline Asm 正規化） | Feature | New | [967-split-c99-lower-to-lir-into-modular-nanopasses.md](967-split-c99-lower-to-lir-into-modular-nanopasses.md) |
+| **968** | x86-64 バックエンド 140_backend_x86_64.scm（4,145行）のモジュール分割と 143 ピープホールの %raw-asm 文字列依存解消 | Feature | New | [968-split-x86-64-backend-and-eliminate-raw-asm-peephole-matching.md](968-split-x86-64-backend-and-eliminate-raw-asm-peephole-matching.md) |
+| **969** | 汎用 Parallel Move Resolver（並列コピー解析・トポロジカルシャッフル）の実装と SSA 解除・継続化ループ更新の統合 | Feature | New | [969-implement-general-parallel-move-resolver-for-ssa-destruction-and-loops.md](969-implement-general-parallel-move-resolver-for-ssa-destruction-and-loops.md) |
+| **970** | Hot/Cold 基本ブロック分離パス（Slow Path の関数末尾・Cold 領域隔離）の導入 | Feature | New | [970-implement-hot-cold-basic-block-splitting-pass.md](970-implement-hot-cold-basic-block-splitting-pass.md) |
+| **971** | 汎用インライン展開 ＆ β-簡約パスの導入およびフロントエンド最適化（CP0/LVN/DCE）の Fixpoint 反復化 | Feature | New | [971-implement-general-inliner-and-frontend-fixpoint-optimization.md](971-implement-general-inliner-and-frontend-fixpoint-optimization.md) |
+| **972** | 全プログラム 0-CFA（制御フロー解析）による間接呼び出し脱仮想化と高階関数単相化・特化パスの導入 | Feature | New | [972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md](972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md) |
+| **973** | L_mir_ssa 上の共通 SSA データフロー最適化群（SCCP・SSA-GVN・ADCE）の実装と 133_lir_peephole.scm のパス分解 | Feature | New | [973-implement-ssa-sccp-gvn-adce-and-decompose-lir-peephole.md](973-implement-ssa-sccp-gvn-adce-and-decompose-lir-peephole.md) |
+| **974** | エスケープ解析の関数間要約・TBAA 責務分離および構造体・非エスケープオブジェクトのスカラー置換（SRA）実装 | Feature | New | [974-refactor-alias-escape-and-implement-scalar-replacement-of-aggregates.md](974-refactor-alias-escape-and-implement-scalar-replacement-of-aggregates.md) |
+| **975** | 継続化（Contification）の相互再帰・複数束縛 letrec 拡張および Flonum 関数間アンボックス化強化 | Feature | New | [975-extend-contification-for-mutual-recursion-and-interprocedural-flonum-unboxing.md](975-extend-contification-for-mutual-recursion-and-interprocedural-flonum-unboxing.md) |
+| **976** | SSA ループ解析基盤（自然ループ検出）と LICM（ループ不変コード移動）パスの実装 | Feature | New | [976-implement-ssa-loop-analysis-and-licm-pass.md](976-implement-ssa-loop-analysis-and-licm-pass.md) |
+| **977** | 投機的ループ・アンチェック化（Loop Unswitching / 型タグ検査・配列境界チェックのループ外巻き上げ）の実装 | Feature | New | [977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md](977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md) |
+| **978** | 高水準リスト・ストリーム融合（Loop Fusion / Deforestation）パスの導入 | Feature | New | [978-implement-list-and-stream-loop-fusion-deforestation-pass.md](978-implement-list-and-stream-loop-fusion-deforestation-pass.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
