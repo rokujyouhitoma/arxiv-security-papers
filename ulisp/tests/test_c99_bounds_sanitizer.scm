@@ -219,6 +219,184 @@ int main(void) { int *p = 0; return p[0]; }
                     (eq? (cadr null-sub) 'sanitizer-trap)
                     (san-str-contains? (caddr null-sub) "C99-SAN-002"))))
 
+;;; -----------------------------------------------------------------------
+;;; Group 5: CWE Differential Coverage Matrix against LIR VM Shadow Oracle (#963)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 5: Sanitizer vs LIR VM Shadow Oracle CWE Coverage Matrix ---\n")
+
+(define (san-classify-cwe-case entry)
+  (let* ((case-id (list-ref entry 0))
+         (cwe-id  (list-ref entry 1))
+         (desc    (list-ref entry 2))
+         (unsafe? (list-ref entry 3))
+         (src     (list-ref entry 6))
+         (oracle-res (san-eval-vm-outcome src #f))
+         (san-res    (san-eval-vm-outcome src #t))
+         (oracle-trapped? (eq? (car oracle-res) 'trap))
+         (san-trap? (and (eq? (car san-res) 'trap)
+                         (eq? (cadr san-res) 'sanitizer-trap)))
+         (cls
+          (if (not unsafe?)
+              (if (and (eq? (car oracle-res) 'ok)
+                       (eq? (car san-res) 'ok)
+                       (= (cadr oracle-res) 0)
+                       (= (cadr san-res) 0))
+                  'clean-pass
+                  'false-positive)
+              (cond
+                ((and san-trap? oracle-trapped?) 'caught-both)
+                (san-trap? 'sanitizer-only)
+                ((eq? (car san-res) 'trap) 'gap-vm-only)
+                (else 'missed-by-both)))))
+    (list case-id
+          cwe-id
+          desc
+          cls
+          (if oracle-trapped? (cadr oracle-res) 'ok)
+          (if (eq? (car san-res) 'trap) (cadr san-res) 'ok)
+          (if (and (eq? (car san-res) 'trap) (pair? (cddr san-res)))
+              (caddr san-res)
+              ""))))
+
+(define *san-cwe-coverage-suite*
+  (list
+    ;; CWE-121 / CWE-125 / CWE-787: Static / Stack Array Bounds (Sanitizer-Only vs VM)
+    (list "CWE121_01_stack_pos_oob" "CWE-121" "Stack array positive OOB a[4]"
+          #t 'sanitizer-only 'ok
+          "int get(int i) { int a[4] = {1,2,3,4}; return a[i]; }\nint main(void) { return get(4); }\n")
+    (list "CWE121_02_stack_neg_oob" "CWE-121" "Stack array negative index a[-1]"
+          #t 'sanitizer-only 'ok
+          "int get(int i) { int a[4] = {1,2,3,4}; return a[i]; }\nint main(void) { return get(-1); }\n")
+    (list "CWE121_03_static_addr_oob" "CWE-121" "Static array address &a[5] OOB"
+          #t 'sanitizer-only 'ok
+          "int *addr(int i) { static int a[4]; return &a[i]; }\nint main(void) { return addr(5) != 0 ? 1 : 0; }\n")
+
+    ;; CWE-476: NULL Pointer Dereference
+    (list "CWE476_01_null_deref" "CWE-476" "Direct NULL *p dereference"
+          #t 'caught-both 'out-of-bounds
+          "int main(void) { int *p = 0; return *p; }\n")
+    (list "CWE476_02_null_member" "CWE-476" "NULL struct member s->y"
+          #t 'caught-both 'out-of-bounds
+          "struct S { int x; int y; };\nint main(void) { struct S *s = 0; return s->y; }\n")
+    (list "CWE476_03_null_subscript" "CWE-476" "NULL subscript p[0]"
+          #t 'caught-both 'out-of-bounds
+          "int main(void) { int *p = 0; return p[0]; }\n")
+    (list "CWE476_04_libc_strlen_null" "CWE-476" "Libc strlen(NULL)"
+          #t 'gap-vm-only 'out-of-bounds
+          "#include <string.h>\nint main(void) { return (int)strlen((const char *)0); }\n")
+
+    ;; CWE-122: Heap-based Buffer Overflow / Underflow (First-Projection Gap)
+    (list "CWE122_01_heap_1byte_tail_oob" "CWE-122" "malloc(5) 1-byte tail read p[5]"
+          #t 'gap-vm-only 'heap-out-of-bounds
+          "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(5); p[4] = 'a'; return (unsigned char)p[5]; }\n")
+    (list "CWE122_02_heap_neg_underflow" "CWE-122" "malloc(16) underflow p[-1] = 1"
+          #t 'gap-vm-only 'heap-out-of-bounds
+          "#include <stdlib.h>\nint main(void) { int *p = (int *)malloc(16); p[-1] = 1; return 0; }\n")
+    (list "CWE122_03_calloc_elem_oob" "CWE-122" "calloc(4, int) element OOB p[4]"
+          #t 'gap-vm-only 'heap-out-of-bounds
+          "#include <stdlib.h>\nint main(void) { int *p = (int *)calloc(4, sizeof(int)); return p[4]; }\n")
+    (list "CWE122_04_strcpy_heap_overflow" "CWE-122" "strcpy into malloc(4)"
+          #t 'gap-vm-only 'heap-out-of-bounds
+          "#include <stdlib.h>\n#include <string.h>\nint main(void) { char *p = (char *)malloc(4); strcpy(p, \"hello\"); return 0; }\n")
+
+    ;; CWE-416: Use After Free (First-Projection Gap)
+    (list "CWE416_01_uaf_after_free" "CWE-416" "Read *p after free(p)"
+          #t 'gap-vm-only 'use-after-free
+          "#include <stdlib.h>\nint main(void) { int *p = (int *)malloc(8); *p = 7; free(p); return *p; }\n")
+    (list "CWE416_02_uaf_after_realloc" "CWE-416" "Read old ptr after realloc"
+          #t 'gap-vm-only 'use-after-free
+          "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(8); p[0] = 3; char *q = (char *)realloc(p, 32); (void)q; return p[0]; }\n")
+
+    ;; CWE-415: Double Free (First-Projection Gap)
+    (list "CWE415_01_double_free" "CWE-415" "Duplicate free(p)"
+          #t 'gap-vm-only 'double-free
+          "#include <stdlib.h>\nint main(void) { void *p = malloc(16); free(p); free(p); return 0; }\n")
+
+    ;; CWE-590: Invalid Free (First-Projection Gap)
+    (list "CWE590_01_free_stack_ptr" "CWE-590" "free(&stack_var)"
+          #t 'gap-vm-only 'invalid-free
+          "#include <stdlib.h>\nint main(void) { int x = 1; free(&x); return 0; }\n")
+    (list "CWE590_02_free_interior_ptr" "CWE-590" "free(p + 4) interior pointer"
+          #t 'gap-vm-only 'invalid-free
+          "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(16); free(p + 4); return 0; }\n")
+
+    ;; Negative Controls (Valid Programs -> Zero False Positives)
+    (list "NEG_01_sentinel_loop" "Negative" "Valid array + &arr[N] sentinel loop"
+          #f 'clean-pass 'ok
+          "int main(void) { int a[4] = {1,2,3,4}; int *p = &a[0]; int *e = &a[4]; int s = 0; while (p < e) s += *p++; return s == 10 ? 0 : 1; }\n")
+    (list "NEG_02_lua_trailing_fam_heap" "Negative" "Heap-allocated Lua trailing [1] FAM"
+          #f 'clean-pass 'ok
+          "#include <stdlib.h>\nstruct TString { int len; char s[1]; };\nint main(void) { struct TString *ts = (struct TString *)malloc(sizeof(struct TString) + 8); ts->len = 6; ts->s[5] = 42; int ok = (ts->s[5] == 42) ? 0 : 1; free(ts); return ok; }\n")
+    (list "NEG_03_valid_heap_lifecycle" "Negative" "Valid calloc/realloc/free(NULL) lifecycle"
+          #f 'clean-pass 'ok
+          "#include <stdlib.h>\nint main(void) { free((void *)0); char *p = (char *)calloc(2, 4); p[0] = 5; char *q = (char *)realloc(p, 16); q[15] = 9; int ok = (q[0] == 5 && q[15] == 9) ? 0 : 1; free(q); return ok; }\n")))
+
+(let ((unsafe-cnt-box   (cons 0 '()))
+      (san-cnt-box      (cons 0 '()))
+      (both-cnt-box     (cons 0 '()))
+      (san-only-cnt-box (cons 0 '()))
+      (gap-cnt-box      (cons 0 '()))
+      (neg-cnt-box      (cons 0 '()))
+      (fp-cnt-box       (cons 0 '())))
+  (for-each
+    (lambda (entry)
+      (let* ((case-id        (list-ref entry 0))
+             (cwe-id         (list-ref entry 1))
+             (desc           (list-ref entry 2))
+             (unsafe?        (list-ref entry 3))
+             (exp-class      (list-ref entry 4))
+             (exp-oracle     (list-ref entry 5))
+             (res            (san-classify-cwe-case entry))
+             (actual-class   (list-ref res 3))
+             (oracle-detail  (list-ref res 4))
+             (san-detail     (list-ref res 5))
+             (diag-msg       (list-ref res 6)))
+        (display "  [") (display cwe-id) (display "] ")
+        (display case-id) (display " => ")
+        (display actual-class)
+        (display " (oracle=") (display oracle-detail)
+        (display ", san=") (display san-detail) (display ")\n")
+        (if unsafe?
+            (begin
+              (set-car! unsafe-cnt-box (+ (car unsafe-cnt-box) 1))
+              (if (or (eq? actual-class 'caught-both) (eq? actual-class 'sanitizer-only))
+                  (set-car! san-cnt-box (+ (car san-cnt-box) 1)))
+              (if (eq? actual-class 'caught-both)
+                  (set-car! both-cnt-box (+ (car both-cnt-box) 1)))
+              (if (eq? actual-class 'sanitizer-only)
+                  (set-car! san-only-cnt-box (+ (car san-only-cnt-box) 1)))
+              (if (eq? actual-class 'gap-vm-only)
+                  (set-car! gap-cnt-box (+ (car gap-cnt-box) 1))))
+            (begin
+              (set-car! neg-cnt-box (+ (car neg-cnt-box) 1))
+              (if (not (eq? actual-class 'clean-pass))
+                  (set-car! fp-cnt-box (+ (car fp-cnt-box) 1)))))
+        (assert-equal (string-append "5.x " case-id " class matches baseline")
+                      exp-class actual-class)
+        (assert-equal (string-append "5.x " case-id " oracle outcome matches")
+                      exp-oracle oracle-detail)
+        (if (or (eq? actual-class 'caught-both) (eq? actual-class 'sanitizer-only))
+            (assert-true (string-append "5.x " case-id " includes source-span diagnostics")
+                         (and (san-str-contains? diag-msg "san_vm_test.c:")
+                              (or (san-str-contains? diag-msg "C99-SAN-001")
+                                  (san-str-contains? diag-msg "C99-SAN-002")))))))
+    *san-cwe-coverage-suite*)
+  (display "\n=== [Sanitizer vs LIR VM Oracle Summary (#963)] ===\n")
+  (display "  Unsafe Total               : ") (display (car unsafe-cnt-box)) (newline)
+  (display "  Sanitizer Caught (Total)   : ") (display (car san-cnt-box)) (newline)
+  (display "    - Caught by Both         : ") (display (car both-cnt-box)) (newline)
+  (display "    - Sanitizer-Only (Stack) : ") (display (car san-only-cnt-box)) (newline)
+  (display "  VM-Only Oracle (Gap)       : ") (display (car gap-cnt-box)) (newline)
+  (display "  Negative Controls          : ") (display (car neg-cnt-box)) (newline)
+  (display "  False Positives            : ") (display (car fp-cnt-box)) (newline)
+  (assert-equal "5.S1 Unsafe benchmark total is 16" 16 (car unsafe-cnt-box))
+  (assert-equal "5.S2 Sanitizer baseline catches 6/16" 6 (car san-cnt-box))
+  (assert-equal "5.S3 Caught by Both (NULL direct) = 3" 3 (car both-cnt-box))
+  (assert-equal "5.S4 Sanitizer-Only (CWE-121 stack/static) = 3" 3 (car san-only-cnt-box))
+  (assert-equal "5.S5 VM-only First-Projection gaps = 10/16" 10 (car gap-cnt-box))
+  (assert-equal "5.S6 Negative controls total is 3" 3 (car neg-cnt-box))
+  (assert-equal "5.S7 Zero false positives on negative controls" 0 (car fp-cnt-box)))
+
 (display "\n=== [Results: ")
 (display (car *san-tests-passed*)) (display " passed, ")
 (display (car *san-tests-failed*)) (display " failed] ===\n")
