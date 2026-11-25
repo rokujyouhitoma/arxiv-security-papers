@@ -20,6 +20,7 @@
                    break-lbl continue-lbl user-labels
                    needs-setjmp? needs-longjmp?
                    sanitize-bounds? needs-san-trap? cold-insts
+                   san-ptr-meta san-last-cap-si
                    gpr-temps xmm-temps)
   c99-lower-ctx?
   (vars             lower-ctx-vars             lower-ctx-vars-set!)
@@ -44,6 +45,8 @@
   (sanitize-bounds? lower-ctx-sanitize-bounds? lower-ctx-sanitize-bounds?-set!)
   (needs-san-trap?  lower-ctx-needs-san-trap?  lower-ctx-needs-san-trap?-set!)
   (cold-insts       lower-ctx-cold-insts       lower-ctx-cold-insts-set!)
+  (san-ptr-meta     lower-ctx-san-ptr-meta     lower-ctx-san-ptr-meta-set!)
+  (san-last-cap-si  lower-ctx-san-last-cap-si  lower-ctx-san-last-cap-si-set!)
   (gpr-temps        lower-ctx-gpr-temps        lower-ctx-gpr-temps-set!)
   (xmm-temps        lower-ctx-xmm-temps        lower-ctx-xmm-temps-set!))
 
@@ -52,7 +55,7 @@
     (%make-lower-ctx '() '() '() 0 0 '() -16 -16 internal-fns
                      (or layout-env (make-c99-layout-env))
                      #f '(void) #f #f #f #f '() #f #f
-                     san? #f '()
+                     san? #f '() '() #f
                      *c99-gpr-temp-pool* *c99-xmm-temp-pool*)))
 
 (define (%c99-lower-alloc-gpr-temp! ctx)
@@ -1003,10 +1006,12 @@
 (define (%c99-san-emit-cold! ctx inst)
   (lower-ctx-cold-insts-set! ctx (cons inst (lower-ctx-cold-insts ctx))))
 
-(define (%c99-san-emit-trap-block! ctx code detail sp)
+(define (%c99-san-emit-insts! ctx insts)
+  (for-each (lambda (inst) (%c99-lower-emit! ctx inst)) insts))
+
+(define (%c99-san-emit-trap-block! ctx check-id detail sp)
   (lower-ctx-needs-san-trap?-set! ctx #t)
-  (let* ((msg (string-append "[ulisp-sanitizer] error[" code "]: " detail
-                             " at " (%c99-san-format-loc sp) "\n"))
+  (let* ((msg (mem-check-format-san-msg check-id detail (%c99-san-format-loc sp)))
          (msg-len (string-length msg))
          (msg-lbl (%c99-lower-intern-str! ctx msg))
          (trap-lbl (%c99-lower-new-label ctx "san_trap")))
@@ -1020,9 +1025,8 @@
 
 (define (%c99-san-emit-null-check! ctx ptr-reg sp detail)
   (if (lower-ctx-sanitize-bounds? ctx)
-      (let ((trap-lbl (%c99-san-emit-trap-block! ctx "C99-SAN-002" detail sp)))
-        (%c99-lower-emit! ctx (list '%cmp ptr-reg 0))
-        (%c99-lower-emit! ctx (list '%jump-cond 'je trap-lbl)))))
+      (let ((trap-lbl (%c99-san-emit-trap-block! ctx 'mem-check:null-pointer detail sp)))
+        (%c99-san-emit-insts! ctx (mem-check-emit-null-lir 'mem-check:null-pointer ptr-reg trap-lbl)))))
 
 (define (%c99-san-emit-bounds-check! ctx idx-reg arr-len one-past-end? sp)
   (if (and (lower-ctx-sanitize-bounds? ctx)
@@ -1030,10 +1034,387 @@
            (> arr-len 0))
       (let* ((detail (string-append "array index out of bounds (length "
                                     (number->string arr-len) ")"))
-             (trap-lbl (%c99-san-emit-trap-block! ctx "C99-SAN-001" detail sp))
-             (cc (if one-past-end? 'ja 'jae)))
-        (%c99-lower-emit! ctx (list '%cmp idx-reg arr-len))
-        (%c99-lower-emit! ctx (list '%jump-cond cc trap-lbl)))))
+             (trap-lbl (%c99-san-emit-trap-block! ctx 'mem-check:static-array-bounds detail sp)))
+        (%c99-san-emit-insts! ctx
+          (mem-check-emit-bounds-lir 'mem-check:static-array-bounds idx-reg arr-len one-past-end? trap-lbl)))))
+
+(define (%c99-san-store-i64-slot! ctx si val)
+  (%c99-lower-emit! ctx (list '%mov '%r10 val))
+  (%c99-lower-emit! ctx (list '%store '%rsp si '%r10)))
+
+(define (%c99-san-alloc-ptr-meta! ctx u-sym)
+  (let ((existing (assq u-sym (lower-ctx-san-ptr-meta ctx))))
+    (if existing
+        (cdr existing)
+        (let* ((prov-si (%c99-lower-alloc-slot! ctx))
+               (cap-si (%c99-lower-alloc-slot! ctx))
+               (freed-si (%c99-lower-alloc-slot! ctx))
+               (meta (list prov-si cap-si freed-si)))
+          (lower-ctx-san-ptr-meta-set! ctx (cons (cons u-sym meta) (lower-ctx-san-ptr-meta ctx)))
+          meta))))
+
+(define (%c99-san-init-ptr-meta-unknown! ctx u-sym)
+  (let* ((meta (%c99-san-alloc-ptr-meta! ctx u-sym))
+         (prov-si (list-ref meta 0))
+         (cap-si (list-ref meta 1))
+         (freed-si (list-ref meta 2)))
+    (%c99-san-store-i64-slot! ctx prov-si 0)
+    (%c99-san-store-i64-slot! ctx cap-si -1)
+    (%c99-san-store-i64-slot! ctx freed-si 0)))
+
+(define (%c99-san-unwrap-casts node)
+  (let loop ((cur node))
+    (if (not (c-typed? cur))
+        cur
+        (let ((in (c-typed-inner cur)))
+          (if (and (pair? in) (memq (car in) '(c-cast c-implicit-cast)))
+              (loop (caddr in))
+              cur)))))
+
+(define (%c99-san-unwrap-ptr-var node)
+  (let ((cur (%c99-san-unwrap-casts node)))
+    (if (c-typed? cur)
+        (let ((in (c-typed-inner cur)))
+          (if (and (pair? in) (eq? (car in) 'c-var-ref))
+              (cadr in)
+              #f))
+        #f)))
+
+(define (%c99-san-lookup-ptr-meta ctx node)
+  (let ((u-sym (%c99-san-unwrap-ptr-var node)))
+    (if u-sym
+        (let ((ent (assq u-sym (lower-ctx-san-ptr-meta ctx))))
+          (if ent (cdr ent) #f))
+        #f)))
+
+(define (%c99-san-tracked-ptr-expr? ctx node)
+  (and (lower-ctx-sanitize-bounds? ctx)
+       (%c99-san-lookup-ptr-meta ctx node)
+       #t))
+
+(define (%c99-san-static-str-len node)
+  (let ((cur (%c99-san-unwrap-casts node)))
+    (if (c-typed? cur)
+        (let ((in (c-typed-inner cur)))
+          (if (and (pair? in) (eq? (car in) 'c-str-val) (string? (cadr in)))
+              (+ (string-length (cadr in)) 1)
+              #f))
+        #f)))
+
+(define (%c99-san-classify-ptr-provenance ctx expr)
+  (let ((imm0 (%c99-lower-extract-imm32 expr)))
+    (if (and imm0 (= imm0 0))
+        'null
+        (let ((cur (%c99-san-unwrap-casts expr)))
+          (if (not (c-typed? cur))
+              'unknown
+              (let ((in (c-typed-inner cur))
+                    (cty (c-typed-type cur)))
+                (case (car in)
+                  ((c-call)
+                   (let ((fsym (%c99-extract-direct-fn-sym (cadr in))))
+                     (if (memq fsym '(malloc calloc realloc))
+                         (list 'heap-alloc fsym)
+                         'unknown)))
+                  ((c-var-ref)
+                   (cond
+                     ((c-array-type? cty) 'stack)
+                     ((assq (cadr in) (lower-ctx-san-ptr-meta ctx))
+                      (list 'var-alias (cadr in)))
+                     (else 'unknown)))
+                  ((c-unop)
+                   (if (eq? (cadr in) 'addr)
+                       (let* ((tgt (%c99-san-unwrap-casts (caddr in)))
+                              (tin (if (c-typed? tgt) (c-typed-inner tgt) '())))
+                         (if (and (pair? tin) (eq? (car tin) 'c-index))
+                             (let* ((base (cadr tin))
+                                    (idx (caddr tin))
+                                    (k (%c99-lower-extract-imm32 idx)))
+                               (cond
+                                 ((c-array-type? (c-typed-type base)) 'stack)
+                                 ((and k (= k 0)) (%c99-san-classify-ptr-provenance ctx base))
+                                 (else 'interior)))
+                             'stack))
+                       'unknown))
+                  ((c-binop)
+                   (let ((op (cadr in))
+                         (lhs (caddr in))
+                         (rhs (cadddr in)))
+                     (if (memq op '(+ -))
+                         (let ((lptr? (or (c-pointer-type? (c-typed-type lhs))
+                                          (c-array-type? (c-typed-type lhs))))
+                               (rptr? (and (eq? op '+)
+                                           (or (c-pointer-type? (c-typed-type rhs))
+                                               (c-array-type? (c-typed-type rhs))))))
+                           (cond
+                             (lptr?
+                              (let ((k (%c99-lower-extract-imm32 rhs)))
+                                (if (and k (= k 0))
+                                    (%c99-san-classify-ptr-provenance ctx lhs)
+                                    'interior)))
+                             (rptr?
+                              (let ((k (%c99-lower-extract-imm32 lhs)))
+                                (if (and k (= k 0))
+                                    (%c99-san-classify-ptr-provenance ctx rhs)
+                                    'interior)))
+                             (else 'unknown)))
+                         'unknown)))
+                  ((c-member)
+                   (if (c-array-type? cty) 'interior 'unknown))
+                  (else 'unknown))))))))
+
+(define (%c99-san-update-ptr-var! ctx u-sym ty rhs-expr ptr-reg)
+  (if (and (lower-ctx-sanitize-bounds? ctx)
+           (c-pointer-type? ty))
+      (let* ((meta (%c99-san-alloc-ptr-meta! ctx u-sym))
+             (prov-si (list-ref meta 0))
+             (cap-si (list-ref meta 1))
+             (freed-si (list-ref meta 2))
+             (cls (%c99-san-classify-ptr-provenance ctx rhs-expr)))
+        (cond
+          ((eq? cls 'null)
+           (%c99-san-store-i64-slot! ctx prov-si 0)
+           (%c99-san-store-i64-slot! ctx cap-si 0)
+           (%c99-san-store-i64-slot! ctx freed-si 0))
+          ((eq? cls 'stack)
+           (%c99-san-store-i64-slot! ctx prov-si 2)
+           (%c99-san-store-i64-slot! ctx cap-si -1)
+           (%c99-san-store-i64-slot! ctx freed-si 0))
+          ((eq? cls 'interior)
+           (%c99-san-store-i64-slot! ctx prov-si 3)
+           (%c99-san-store-i64-slot! ctx cap-si -1)
+           (%c99-san-store-i64-slot! ctx freed-si 0))
+          ((and (pair? cls) (eq? (car cls) 'var-alias))
+           (let ((src-sym (cadr cls)))
+             (if (not (eq? src-sym u-sym))
+                 (let ((src-ent (assq src-sym (lower-ctx-san-ptr-meta ctx))))
+                   (if src-ent
+                       (let ((smeta (cdr src-ent)))
+                         (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref smeta 0)))
+                         (%c99-lower-emit! ctx (list '%store '%rsp prov-si '%r10))
+                         (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref smeta 1)))
+                         (%c99-lower-emit! ctx (list '%store '%rsp cap-si '%r10))
+                         (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref smeta 2)))
+                         (%c99-lower-emit! ctx (list '%store '%rsp freed-si '%r10)))
+                       (begin
+                         (%c99-san-store-i64-slot! ctx prov-si 0)
+                         (%c99-san-store-i64-slot! ctx cap-si -1)
+                         (%c99-san-store-i64-slot! ctx freed-si 0)))))))
+          ((and (pair? cls) (eq? (car cls) 'heap-alloc))
+           (let ((last-cap-si (lower-ctx-san-last-cap-si ctx))
+                 (null-lbl (%c99-lower-new-label ctx "san_alloc_null"))
+                 (done-lbl (%c99-lower-new-label ctx "san_alloc_done")))
+             (%c99-lower-emit! ctx (list '%cmp ptr-reg 0))
+             (%c99-lower-emit! ctx (list '%jump-cond 'je null-lbl))
+             (%c99-san-store-i64-slot! ctx prov-si 1)
+             (if last-cap-si
+                 (begin
+                   (%c99-lower-emit! ctx (list '%load '%r10 '%rsp last-cap-si))
+                   (%c99-lower-emit! ctx (list '%store '%rsp cap-si '%r10)))
+                 (%c99-san-store-i64-slot! ctx cap-si -1))
+             (%c99-san-store-i64-slot! ctx freed-si 0)
+             (%c99-lower-emit! ctx (list '%direct-jump done-lbl))
+             (%c99-lower-emit! ctx (list '%label null-lbl))
+             (%c99-san-store-i64-slot! ctx prov-si 0)
+             (%c99-san-store-i64-slot! ctx cap-si 0)
+             (%c99-san-store-i64-slot! ctx freed-si 0)
+             (%c99-lower-emit! ctx (list '%label done-lbl))))
+          (else
+           (%c99-san-store-i64-slot! ctx prov-si 0)
+           (%c99-san-store-i64-slot! ctx cap-si -1)
+           (%c99-san-store-i64-slot! ctx freed-si 0))))))
+
+(define (%c99-san-mark-ptr-mutated! ctx node)
+  (if (lower-ctx-sanitize-bounds? ctx)
+      (let ((meta (%c99-san-lookup-ptr-meta ctx node)))
+        (if meta
+            (begin
+              (%c99-san-store-i64-slot! ctx (list-ref meta 0) 3)
+              (%c99-san-store-i64-slot! ctx (list-ref meta 1) -1))))))
+
+(define (%c99-san-check-ptr-var-uaf! ctx ptr-expr sp)
+  (if (lower-ctx-sanitize-bounds? ctx)
+      (let ((meta (%c99-san-lookup-ptr-meta ctx ptr-expr)))
+        (if meta
+            (let ((trap-lbl (%c99-san-emit-trap-block! ctx 'mem-check:use-after-free
+                                                        "use of pointer after free" sp)))
+              (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 2)))
+              (%c99-san-emit-insts! ctx
+                (mem-check-emit-flag-nz-lir 'mem-check:use-after-free '%r10 trap-lbl)))))))
+
+(define (%c99-san-check-heap-min-bytes! ctx ptr-expr min-bytes sp)
+  (if (and (lower-ctx-sanitize-bounds? ctx) (> min-bytes 0))
+      (let ((meta (%c99-san-lookup-ptr-meta ctx ptr-expr)))
+        (if meta
+            (let ((skip-lbl (%c99-lower-new-label ctx "san_hb_skip"))
+                  (trap-lbl (%c99-san-emit-trap-block! ctx 'mem-check:heap-bounds
+                              "heap buffer dereference out of bounds" sp)))
+              (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 0)))
+              (%c99-lower-emit! ctx '(%cmp %r10 1))
+              (%c99-lower-emit! ctx (list '%jump-cond 'jne skip-lbl))
+              (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 1)))
+              (%c99-lower-emit! ctx '(%cmp %r10 0))
+              (%c99-lower-emit! ctx (list '%jump-cond 'jl skip-lbl))
+              (%c99-lower-emit! ctx (list '%cmp '%r10 min-bytes))
+              (%c99-lower-emit! ctx (list '%jump-cond 'jb trap-lbl))
+              (%c99-lower-emit! ctx (list '%label skip-lbl)))))))
+
+(define (%c99-san-check-heap-index! ctx arr-node idx-reg elem-sz one-past-end? sp)
+  (if (and (lower-ctx-sanitize-bounds? ctx) (> elem-sz 0))
+      (let ((meta (%c99-san-lookup-ptr-meta ctx arr-node)))
+        (if meta
+            (let ((skip-lbl (%c99-lower-new-label ctx "san_hi_skip"))
+                  (trap-lbl (%c99-san-emit-trap-block! ctx 'mem-check:heap-bounds
+                              (string-append "heap array index out of bounds (elem size "
+                                             (number->string elem-sz) ")")
+                              sp)))
+              (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 0)))
+              (%c99-lower-emit! ctx '(%cmp %r10 1))
+              (%c99-lower-emit! ctx (list '%jump-cond 'jne skip-lbl))
+              (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 1)))
+              (%c99-lower-emit! ctx '(%cmp %r10 0))
+              (%c99-lower-emit! ctx (list '%jump-cond 'jl skip-lbl))
+              (if (not one-past-end?)
+                  (begin
+                    (%c99-lower-emit! ctx (list '%cmp '%r10 elem-sz))
+                    (%c99-lower-emit! ctx (list '%jump-cond 'jb trap-lbl))))
+              (%c99-san-emit-insts! ctx
+                (mem-check-emit-bounds-lir 'mem-check:heap-bounds idx-reg '%r10 one-past-end? trap-lbl))
+              (if (> elem-sz 1)
+                  (begin
+                    (%c99-lower-emit! ctx (list '%mov '%r11 idx-reg))
+                    (%c99-lower-emit! ctx (list '%imul '%r11 elem-sz))
+                    (if (not one-past-end?)
+                        (%c99-lower-emit! ctx (list '%sub '%r10 elem-sz)))
+                    (%c99-san-emit-insts! ctx
+                      (mem-check-emit-bounds-lir 'mem-check:heap-bounds '%r11 '%r10 #t trap-lbl))))
+              (%c99-lower-emit! ctx (list '%label skip-lbl)))))))
+
+(define (%c99-san-emit-index-checks! ctx arr is-arr? check-bounds? idx-reg arr-len elem-sz one-past-end? sp)
+  (if check-bounds?
+      (%c99-san-emit-bounds-check! ctx idx-reg arr-len one-past-end? sp))
+  (if (and (lower-ctx-sanitize-bounds? ctx) (not is-arr?))
+      (%c99-san-check-heap-index! ctx arr idx-reg elem-sz one-past-end? sp)))
+
+(define (%c99-san-validate-free-ptr! ctx ptr-arg sp caller-name)
+  (let ((prov (%c99-san-classify-ptr-provenance ctx ptr-arg))
+        (meta (%c99-san-lookup-ptr-meta ctx ptr-arg))
+        (skip-lbl (%c99-lower-new-label ctx "san_free_null")))
+    (%c99-lower-emit! ctx '(%cmp %rdi 0))
+    (%c99-lower-emit! ctx (list '%jump-cond 'je skip-lbl))
+    (cond
+      ((memq prov '(stack interior))
+       (let ((trap-lbl (%c99-san-emit-trap-block! ctx 'mem-check:invalid-free
+                                                   (string-append "free of " (symbol->string prov)
+                                                                  " pointer in " caller-name)
+                                                   sp)))
+         (%c99-san-emit-insts! ctx
+           (mem-check-emit-unconditional-trap-lir 'mem-check:invalid-free trap-lbl))))
+      (meta
+       (let ((df-lbl (%c99-san-emit-trap-block! ctx 'mem-check:double-free
+                                                 (string-append "double free in " caller-name)
+                                                 sp))
+             (inv-lbl (%c99-san-emit-trap-block! ctx 'mem-check:invalid-free
+                                                  (string-append "non-heap pointer in " caller-name)
+                                                  sp)))
+         (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 2)))
+         (%c99-san-emit-insts! ctx
+           (mem-check-emit-flag-nz-lir 'mem-check:double-free '%r10 df-lbl))
+         (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 0)))
+         (%c99-lower-emit! ctx '(%cmp %r10 2))
+         (%c99-lower-emit! ctx (list '%jump-cond 'jge inv-lbl))
+         (%c99-san-store-i64-slot! ctx (list-ref meta 2) 1))))
+    (%c99-lower-emit! ctx (list '%label skip-lbl))))
+
+(define (%c99-san-check-heap-write-bytes! ctx dst-arg need-bytes-op sp detail)
+  (let ((meta (%c99-san-lookup-ptr-meta ctx dst-arg)))
+    (if meta
+        (let ((skip-lbl (%c99-lower-new-label ctx "san_hw_skip"))
+              (trap-lbl (%c99-san-emit-trap-block! ctx 'mem-check:heap-bounds detail sp)))
+          (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 0)))
+          (%c99-lower-emit! ctx '(%cmp %r10 1))
+          (%c99-lower-emit! ctx (list '%jump-cond 'jne skip-lbl))
+          (%c99-lower-emit! ctx (list '%load '%r10 '%rsp (list-ref meta 1)))
+          (%c99-lower-emit! ctx '(%cmp %r10 0))
+          (%c99-lower-emit! ctx (list '%jump-cond 'jl skip-lbl))
+          (if (integer? need-bytes-op)
+              (begin
+                (%c99-lower-emit! ctx (list '%mov '%r11 need-bytes-op))
+                (%c99-san-emit-insts! ctx
+                  (mem-check-emit-bounds-lir 'mem-check:heap-bounds '%r11 '%r10 #t trap-lbl)))
+              (%c99-san-emit-insts! ctx
+                (mem-check-emit-bounds-lir 'mem-check:heap-bounds need-bytes-op '%r10 #t trap-lbl)))
+          (%c99-lower-emit! ctx (list '%label skip-lbl))))))
+
+(define (%c99-san-check-call! ctx fn-sym arg-nodes sp)
+  (if (and fn-sym (lower-ctx-sanitize-bounds? ctx))
+      (let ((last-cap-si (lower-ctx-san-last-cap-si ctx))
+            (nargs (length arg-nodes)))
+        (case fn-sym
+          ((malloc)
+           (if (and last-cap-si (>= nargs 1))
+               (%c99-lower-emit! ctx (list '%store '%rsp last-cap-si '%rdi))))
+          ((calloc)
+           (if (and last-cap-si (>= nargs 2))
+               (begin
+                 (%c99-lower-emit! ctx '(%mov %r10 %rdi))
+                 (%c99-lower-emit! ctx '(%imul %r10 %rsi))
+                 (%c99-lower-emit! ctx (list '%store '%rsp last-cap-si '%r10)))))
+          ((realloc)
+           (if (>= nargs 2)
+               (begin
+                 (if last-cap-si
+                     (%c99-lower-emit! ctx (list '%store '%rsp last-cap-si '%rsi)))
+                 (%c99-san-validate-free-ptr! ctx (car arg-nodes) sp "realloc"))))
+          ((free)
+           (if (>= nargs 1)
+               (%c99-san-validate-free-ptr! ctx (car arg-nodes) sp "free")))
+          ((strlen)
+           (if (>= nargs 1)
+               (begin
+                 (%c99-san-emit-null-check! ctx '%rdi sp "NULL pointer passed to strlen")
+                 (%c99-san-check-ptr-var-uaf! ctx (car arg-nodes) sp))))
+          ((strcmp)
+           (if (>= nargs 2)
+               (begin
+                 (%c99-san-emit-null-check! ctx '%rdi sp "NULL pointer passed to strcmp")
+                 (%c99-san-emit-null-check! ctx '%rsi sp "NULL pointer passed to strcmp")
+                 (%c99-san-check-ptr-var-uaf! ctx (car arg-nodes) sp)
+                 (%c99-san-check-ptr-var-uaf! ctx (cadr arg-nodes) sp))))
+          ((strcpy)
+           (if (>= nargs 2)
+               (let* ((dst (car arg-nodes))
+                      (src (cadr arg-nodes))
+                      (needed (%c99-san-static-str-len src))
+                      (dst-ty (c-typed-type dst)))
+                 (%c99-san-emit-null-check! ctx '%rdi sp "NULL destination passed to strcpy")
+                 (%c99-san-emit-null-check! ctx '%rsi sp "NULL source passed to strcpy")
+                 (%c99-san-check-ptr-var-uaf! ctx dst sp)
+                 (%c99-san-check-ptr-var-uaf! ctx src sp)
+                 (if needed
+                     (cond
+                       ((and (c-array-type? dst-ty)
+                             (integer? (c-array-length dst-ty))
+                             (> (c-array-length dst-ty) 0))
+                        (if (> needed (c-array-length dst-ty))
+                            (let ((trap-lbl (%c99-san-emit-trap-block! ctx 'mem-check:static-array-bounds
+                                                                        "strcpy stack buffer overflow" sp)))
+                              (%c99-san-emit-insts! ctx
+                                (mem-check-emit-unconditional-trap-lir 'mem-check:static-array-bounds trap-lbl)))))
+                       (else
+                        (%c99-san-check-heap-write-bytes! ctx dst needed sp "strcpy heap buffer overflow")))))))
+          ((memcpy memmove)
+           (if (>= nargs 3)
+               (let ((skip-lbl (%c99-lower-new-label ctx "san_mem_zero")))
+                 (%c99-lower-emit! ctx '(%cmp %rdx 0))
+                 (%c99-lower-emit! ctx (list '%jump-cond 'je skip-lbl))
+                 (%c99-san-emit-null-check! ctx '%rdi sp "NULL destination passed to memcpy/memmove")
+                 (%c99-san-emit-null-check! ctx '%rsi sp "NULL source passed to memcpy/memmove")
+                 (%c99-san-check-ptr-var-uaf! ctx (car arg-nodes) sp)
+                 (%c99-san-check-ptr-var-uaf! ctx (cadr arg-nodes) sp)
+                 (%c99-san-check-heap-write-bytes! ctx (car arg-nodes) '%rdx sp
+                                                   "memcpy/memmove heap buffer overflow")
+                 (%c99-lower-emit! ctx (list '%label skip-lbl)))))))))
 
 (define (%c99-san-last-elem xs)
   (if (null? xs)
@@ -1092,7 +1473,11 @@
        (if (and (eq? (cadr inner) 'deref)
                 (not one-past-end?)
                 (not (c-function-type? (c-typed-type lval-typed))))
-           (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer dereference")))
+           (begin
+             (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer dereference")
+             (%c99-san-check-ptr-var-uaf! ctx (caddr inner) sp)
+             (%c99-san-check-heap-min-bytes! ctx (caddr inner)
+               (max 1 (%c99-lower-type-size ctx (c-typed-type lval-typed))) sp))))
       ((c-index)
        (let* ((arr (cadr inner))
               (idx (caddr inner))
@@ -1114,11 +1499,14 @@
                        (begin
                          (%c99-lower-expr! ctx arr)
                          (if check-ptr-null?
-                             (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer subscript"))))
-                   (if check-bounds?
+                             (begin
+                               (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer subscript")
+                               (%c99-san-check-ptr-var-uaf! ctx arr sp)))))
+                   (if (or check-bounds?
+                           (and (not is-arr?) (%c99-san-tracked-ptr-expr? ctx arr)))
                        (begin
                          (%c99-lower-emit! ctx (list '%mov '%rcx k))
-                         (%c99-san-emit-bounds-check! ctx '%rcx arr-len one-past-end? sp)))
+                         (%c99-san-emit-index-checks! ctx arr is-arr? check-bounds? '%rcx arr-len elem-sz one-past-end? sp)))
                    (if (not (= byte-off 0))
                        (if (and (>= byte-off -2147483648) (<= byte-off 2147483647))
                            (%c99-lower-emit! ctx (list '%add '%rax byte-off))
@@ -1131,10 +1519,11 @@
                 (begin
                   (%c99-lower-expr! ctx arr)
                   (if check-ptr-null?
-                      (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer subscript"))))
+                      (begin
+                        (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer subscript")
+                        (%c99-san-check-ptr-var-uaf! ctx arr sp)))))
             (%c99-lower-direct-scalar-to-reg! ctx idx '%rcx '%rdx #t)
-            (if check-bounds?
-                (%c99-san-emit-bounds-check! ctx '%rcx arr-len one-past-end? sp))
+            (%c99-san-emit-index-checks! ctx arr is-arr? check-bounds? '%rcx arr-len elem-sz one-past-end? sp)
             (if (> elem-sz 1)
                 (if (and (>= elem-sz -2147483648) (<= elem-sz 2147483647))
                     (%c99-lower-emit! ctx (list '%imul '%rcx elem-sz))
@@ -1151,11 +1540,12 @@
                   (begin
                     (%c99-lower-expr! ctx arr)
                     (if check-ptr-null?
-                        (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer subscript"))))
+                        (begin
+                          (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer subscript")
+                          (%c99-san-check-ptr-var-uaf! ctx arr sp)))))
               (%c99-lower-emit! ctx (list '%mov base-reg '%rax))
               (%c99-lower-expr! ctx idx)
-              (if check-bounds?
-                  (%c99-san-emit-bounds-check! ctx '%rax arr-len one-past-end? sp))
+              (%c99-san-emit-index-checks! ctx arr is-arr? check-bounds? '%rax arr-len elem-sz one-past-end? sp)
               (if (> elem-sz 1)
                   (%c99-lower-emit! ctx (list '%imul '%rax elem-sz)))
               (%c99-lower-emit! ctx (list '%add '%rax base-reg))
@@ -1167,11 +1557,12 @@
                   (begin
                     (%c99-lower-expr! ctx arr)
                     (if check-ptr-null?
-                        (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer subscript"))))
+                        (begin
+                          (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer subscript")
+                          (%c99-san-check-ptr-var-uaf! ctx arr sp)))))
               (%c99-lower-emit! ctx (list '%store '%rsp base-si '%rax))
               (%c99-lower-expr! ctx idx)
-              (if check-bounds?
-                  (%c99-san-emit-bounds-check! ctx '%rax arr-len one-past-end? sp))
+              (%c99-san-emit-index-checks! ctx arr is-arr? check-bounds? '%rax arr-len elem-sz one-past-end? sp)
               (if (> elem-sz 1)
                   (%c99-lower-emit! ctx (list '%imul '%rax elem-sz)))
               (%c99-lower-emit! ctx (list '%load '%rcx '%rsp base-si))
@@ -1185,7 +1576,14 @@
              (begin
                (%c99-lower-expr! ctx base)
                (if (not one-past-end?)
-                   (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer member access")))
+                   (begin
+                     (%c99-san-emit-null-check! ctx '%rax sp "NULL pointer member access")
+                     (%c99-san-check-ptr-var-uaf! ctx base sp)
+                     (if (and (lower-ctx-sanitize-bounds? ctx)
+                              (not (c-array-type? (c-typed-type lval-typed)))
+                              (not (%c99-san-is-flexible-array-member? ctx lval-typed)))
+                         (%c99-san-check-heap-min-bytes! ctx base
+                           (+ off (max 1 (%c99-lower-type-size ctx (c-typed-type lval-typed)))) sp)))))
              (if (%c99-lower-lvalue-has-addr? base)
                  (%c99-lower-lvalue-addr! ctx base)
                  ;; Rvalue aggregate expression (e.g. make_pt().x): materialize into scratch slot
@@ -1233,7 +1631,8 @@
                (if deref?
                    (begin
                      (%c99-lower-expr! ctx base)
-                     (%c99-san-emit-null-check! ctx '%rax (c-typed-span lval-typed) "NULL pointer bitfield access"))
+                     (%c99-san-emit-null-check! ctx '%rax (c-typed-span lval-typed) "NULL pointer bitfield access")
+                     (%c99-san-check-ptr-var-uaf! ctx base (c-typed-span lval-typed)))
                    (%c99-lower-lvalue-addr! ctx base))
                (%c99-lower-emit! ctx (list '%store '%rsp ptr-si '%rax))
                (list 'bf ptr-si fl))
@@ -1378,7 +1777,7 @@
       ((eq? tag 'c-compound-lit)
        (%c99-lower-expr-to-ptr-slot! ctx (caddr inner) dst-ptr-si))
       ((eq? tag 'c-call)
-       (%c99-lower-call! ctx inner ty dst-ptr-si))
+       (%c99-lower-call! ctx inner ty dst-ptr-si (c-typed-span node)))
       ((eq? tag 'c-va-arg)
        (%c99-lower-va-arg! ctx inner ty dst-ptr-si))
       ((eq? tag 'c-assign)
@@ -1785,6 +2184,11 @@
              (if (eq? (car r) 'imm)
                  (%c99-lower-emit! ctx (list '%mov (cadr r) (caddr r)))))
            arg-records)
+          (if (and direct-fn-sym (lower-ctx-sanitize-bounds? ctx))
+              (%c99-san-check-call! ctx direct-fn-sym arg-nodes
+                (or (and (pair? maybe-dst-ptr-si) (pair? (cdr maybe-dst-ptr-si)) (cadr maybe-dst-ptr-si))
+                    (c-typed-span fn-node)
+                    (and (pair? arg-nodes) (c-typed-span (car arg-nodes))))))
           (if direct-fn-sym
               (let* ((resolved-fn-sym (%c99-lower-resolve-runtime-fn! ctx direct-fn-sym))
                      (internal? (or (memq resolved-fn-sym (lower-ctx-internal-fns ctx))
@@ -1877,6 +2281,11 @@
           ;; Hidden sret argument passed in %rdi
           (if (eq? (car ret-plan) 'sret)
               (%c99-lower-emit! ctx (list '%load '%rdi '%rsp sret-ptr-si)))
+          (if (and direct-fn-sym (lower-ctx-sanitize-bounds? ctx))
+              (%c99-san-check-call! ctx direct-fn-sym arg-nodes
+                (or (and (pair? maybe-dst-ptr-si) (pair? (cdr maybe-dst-ptr-si)) (cadr maybe-dst-ptr-si))
+                    (c-typed-span fn-node)
+                    (and (pair? arg-nodes) (c-typed-span (car arg-nodes))))))
           (if direct-fn-sym
               (let* ((resolved-fn-sym (%c99-lower-resolve-runtime-fn! ctx direct-fn-sym))
                      (internal? (or (memq resolved-fn-sym (lower-ctx-internal-fns ctx))
@@ -2156,7 +2565,8 @@
             (if deref?
                 (begin
                   (%c99-lower-expr! ctx base)
-                  (%c99-san-emit-null-check! ctx '%rax (c-typed-span node) "NULL pointer bitfield access"))
+                  (%c99-san-emit-null-check! ctx '%rax (c-typed-span node) "NULL pointer bitfield access")
+                  (%c99-san-check-ptr-var-uaf! ctx base (c-typed-span node)))
                 (%c99-lower-lvalue-addr! ctx base))
             (%c99-lower-emit! ctx '(%mov %rdx %rax))
             (%c99-lower-load-bitfield! ctx '%rdx 0 fl))
@@ -2323,7 +2733,10 @@
            ((deref)
             (%c99-lower-expr! ctx sub)
             (if (not (c-function-type? ty))
-                (%c99-san-emit-null-check! ctx '%rax (c-typed-span node) "NULL pointer dereference"))
+                (begin
+                  (%c99-san-emit-null-check! ctx '%rax (c-typed-span node) "NULL pointer dereference")
+                  (%c99-san-check-ptr-var-uaf! ctx sub (c-typed-span node))
+                  (%c99-san-check-heap-min-bytes! ctx sub (max 1 (%c99-lower-type-size ctx ty)) (c-typed-span node))))
             (if (not (or (%c99-lower-aggregate-like? ty)
                          (c-function-type? ty)))
                 (begin
@@ -2347,7 +2760,9 @@
                   (let ((delta (if (c-pointer-type? ty) (max 1 (%c99-lower-type-size ctx (c-ptr-target ty))) 1)))
                     (%c99-lower-emit! ctx (list (if (eq? op 'pre++) '%add '%sub) '%rax delta))
                     (%c99-lower-emit-cast! ctx ty)
-                    (%c99-lower-store-to-target! ctx tgt ty)))
+                    (%c99-lower-store-to-target! ctx tgt ty)
+                    (if (and (lower-ctx-sanitize-bounds? ctx) (c-pointer-type? ty) (eq? (car tgt) 'var))
+                        (%c99-san-mark-ptr-mutated! ctx sub))))
               (lower-ctx-gpr-temps-set! ctx saved-gpr)
               (lower-ctx-next-si-set! ctx saved-si)))
            ((post++ post--)
@@ -2709,7 +3124,17 @@
                           (%c99-lower-store-to-target! ctx tgt ty))))))
                (lower-ctx-xmm-temps-set! ctx saved-xmm)
                (lower-ctx-gpr-temps-set! ctx saved-gpr)
-               (lower-ctx-next-si-set! ctx saved-si)))))
+               (lower-ctx-next-si-set! ctx saved-si)
+               (if (and (lower-ctx-sanitize-bounds? ctx)
+                        (eq? (car tgt) 'var)
+                        (c-pointer-type? ty))
+                   (if (eq? op '=)
+                       (let ((lhs-sym (%c99-san-unwrap-ptr-var lhs)))
+                         (if (and lhs-sym
+                                  (let ((vent (%c99-lower-lookup-var ctx lhs-sym)))
+                                    (and vent (eq? (car vent) 'local))))
+                             (%c99-san-update-ptr-var! ctx lhs-sym ty rhs '%rax)))
+                       (%c99-san-mark-ptr-mutated! ctx lhs)))))))
 
       ((c-ternary)
        (let ((e-lbl (%c99-lower-new-label ctx "tern_e"))
@@ -2731,7 +3156,7 @@
              (%c99-lower-load-from-mem! ctx (if (c-float-type? ty) '%xmm0 '%rax) '%rdx 0 ty))))
 
       ((c-call)
-       (%c99-lower-call! ctx inner ty))
+       (%c99-lower-call! ctx inner ty #f (c-typed-span node)))
 
       ((c-va-start)
        (%c99-lower-va-start! ctx inner))
@@ -2830,7 +3255,11 @@
                          (%c99-lower-emit! ctx (list '%store-typed ty '%rsp si '%xmm0)))
                         (else
                          (%c99-lower-expr! ctx init)
-                         (%c99-lower-store-var! ctx (cdr (assq u-sym (lower-ctx-vars ctx)))))))))))
+                         (%c99-lower-store-var! ctx (cdr (assq u-sym (lower-ctx-vars ctx))))
+                         (if (and (lower-ctx-sanitize-bounds? ctx) (c-pointer-type? ty))
+                             (%c99-san-update-ptr-var! ctx u-sym ty init '%rax))))
+                      (if (and (lower-ctx-sanitize-bounds? ctx) (c-pointer-type? ty))
+                          (%c99-san-init-ptr-meta-unknown! ctx u-sym)))))))
         (cdr stmt)))
 
       ((c-block)
@@ -3919,6 +4348,9 @@
     (lower-ctx-va-meta-set! ctx #f)
     (lower-ctx-gpr-temps-set! ctx *c99-gpr-temp-pool*)
     (lower-ctx-xmm-temps-set! ctx *c99-xmm-temp-pool*)
+    (lower-ctx-san-ptr-meta-set! ctx '())
+    (lower-ctx-san-last-cap-si-set! ctx
+      (if (lower-ctx-sanitize-bounds? ctx) (%c99-lower-alloc-slot! ctx) #f))
     (for-each
      (lambda (g)
        (%c99-lower-bind-data-global! ctx (list-ref g 1) (list-ref g 3)))
@@ -3962,6 +4394,8 @@
               (let* ((u-sym (list-ref p 0))
                      (pty (list-ref p 2))
                      (si (%c99-lower-bind-local! ctx u-sym pty)))
+                (if (and (lower-ctx-sanitize-bounds? ctx) (c-pointer-type? pty))
+                    (%c99-san-alloc-ptr-meta! ctx u-sym))
                 (if (eq? (car plan) 'regs)
                     (for-each
                      (lambda (pc)
@@ -3992,10 +4426,32 @@
     (let* ((used (- 0 (lower-ctx-min-si ctx)))
            (frame-sz (c-type-align-up (max 16 used) 16))
            (param-names (map cadr params))
+           (meta-inits
+            (if (lower-ctx-sanitize-bounds? ctx)
+                (let mloop ((ms (lower-ctx-san-ptr-meta ctx)) (acc '()))
+                  (if (null? ms)
+                      (reverse acc)
+                      (let* ((m (cdr (car ms)))
+                             (prov-si (list-ref m 0))
+                             (cap-si (list-ref m 1))
+                             (freed-si (list-ref m 2)))
+                        (mloop (cdr ms)
+                               (append
+                                (list (list '%store '%rsp freed-si '%r10)
+                                      '(%mov %r10 0)
+                                      (list '%store '%rsp cap-si '%r10)
+                                      '(%mov %r10 -1)
+                                      (list '%store '%rsp prov-si '%r10)
+                                      '(%mov %r10 0))
+                                acc)))))
+                '()))
            (cold (lower-ctx-cold-insts ctx))
-           (full-body (if (null? cold)
+           (body-core (if (null? meta-inits)
                           (reverse (lower-ctx-insts ctx))
-                          (append (reverse (lower-ctx-insts ctx)) (reverse cold)))))
+                          (append meta-inits (reverse (lower-ctx-insts ctx)))))
+           (full-body (if (null? cold)
+                          body-core
+                          (append body-core (reverse cold)))))
       (list '%lir-function
             fn-sym
             (list 'params param-names)
@@ -4458,6 +4914,9 @@
         (lower-ctx-ret-plan-set! ctx '(gpr %rax 0 8))
         (lower-ctx-gpr-temps-set! ctx *c99-gpr-temp-pool*)
         (lower-ctx-xmm-temps-set! ctx *c99-xmm-temp-pool*)
+        (lower-ctx-san-ptr-meta-set! ctx '())
+        (lower-ctx-san-last-cap-si-set! ctx
+          (if (lower-ctx-sanitize-bounds? ctx) (%c99-lower-alloc-slot! ctx) #f))
         (for-each
          (lambda (g)
            (%c99-lower-bind-data-global! ctx (list-ref g 1) (list-ref g 3)))

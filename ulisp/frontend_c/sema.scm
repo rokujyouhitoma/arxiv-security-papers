@@ -1756,7 +1756,7 @@
                                                    (else at))))
                                       (aloop (cdr as) '()
                                              (cons (c99-apply-implicit-cast (c99-apply-implicit-cast ta at) prom) acc)))))))))
-                   (make-c-typed ret-ty (cons 'c-call (cons fn-expr typed-args))))))))))
+                   (make-c-typed ret-ty (cons 'c-call (cons fn-expr typed-args)) sp))))))))
 
       ((c-index)
        (let* ((arr-t (c99-analyze-expr env (cadr raw)))

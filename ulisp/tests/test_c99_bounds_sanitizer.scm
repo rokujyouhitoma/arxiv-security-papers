@@ -282,42 +282,42 @@ int main(void) { int *p = 0; return p[0]; }
           #t 'caught-both 'out-of-bounds
           "int main(void) { int *p = 0; return p[0]; }\n")
     (list "CWE476_04_libc_strlen_null" "CWE-476" "Libc strlen(NULL)"
-          #t 'gap-vm-only 'out-of-bounds
+          #t 'caught-both 'out-of-bounds
           "#include <string.h>\nint main(void) { return (int)strlen((const char *)0); }\n")
 
-    ;; CWE-122: Heap-based Buffer Overflow / Underflow (First-Projection Gap)
+    ;; CWE-122: Heap-based Buffer Overflow / Underflow (Projected via define-mem-check #964)
     (list "CWE122_01_heap_1byte_tail_oob" "CWE-122" "malloc(5) 1-byte tail read p[5]"
-          #t 'gap-vm-only 'heap-out-of-bounds
+          #t 'caught-both 'heap-out-of-bounds
           "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(5); p[4] = 'a'; return (unsigned char)p[5]; }\n")
     (list "CWE122_02_heap_neg_underflow" "CWE-122" "malloc(16) underflow p[-1] = 1"
-          #t 'gap-vm-only 'heap-out-of-bounds
+          #t 'caught-both 'heap-out-of-bounds
           "#include <stdlib.h>\nint main(void) { int *p = (int *)malloc(16); p[-1] = 1; return 0; }\n")
     (list "CWE122_03_calloc_elem_oob" "CWE-122" "calloc(4, int) element OOB p[4]"
-          #t 'gap-vm-only 'heap-out-of-bounds
+          #t 'caught-both 'heap-out-of-bounds
           "#include <stdlib.h>\nint main(void) { int *p = (int *)calloc(4, sizeof(int)); return p[4]; }\n")
     (list "CWE122_04_strcpy_heap_overflow" "CWE-122" "strcpy into malloc(4)"
-          #t 'gap-vm-only 'heap-out-of-bounds
+          #t 'caught-both 'heap-out-of-bounds
           "#include <stdlib.h>\n#include <string.h>\nint main(void) { char *p = (char *)malloc(4); strcpy(p, \"hello\"); return 0; }\n")
 
-    ;; CWE-416: Use After Free (First-Projection Gap)
+    ;; CWE-416: Use After Free (Projected via define-mem-check #964)
     (list "CWE416_01_uaf_after_free" "CWE-416" "Read *p after free(p)"
-          #t 'gap-vm-only 'use-after-free
+          #t 'caught-both 'use-after-free
           "#include <stdlib.h>\nint main(void) { int *p = (int *)malloc(8); *p = 7; free(p); return *p; }\n")
     (list "CWE416_02_uaf_after_realloc" "CWE-416" "Read old ptr after realloc"
-          #t 'gap-vm-only 'use-after-free
+          #t 'caught-both 'use-after-free
           "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(8); p[0] = 3; char *q = (char *)realloc(p, 32); (void)q; return p[0]; }\n")
 
-    ;; CWE-415: Double Free (First-Projection Gap)
+    ;; CWE-415: Double Free (Projected via define-mem-check #964)
     (list "CWE415_01_double_free" "CWE-415" "Duplicate free(p)"
-          #t 'gap-vm-only 'double-free
+          #t 'caught-both 'double-free
           "#include <stdlib.h>\nint main(void) { void *p = malloc(16); free(p); free(p); return 0; }\n")
 
-    ;; CWE-590: Invalid Free (First-Projection Gap)
+    ;; CWE-590: Invalid Free (Projected via define-mem-check #964)
     (list "CWE590_01_free_stack_ptr" "CWE-590" "free(&stack_var)"
-          #t 'gap-vm-only 'invalid-free
+          #t 'caught-both 'invalid-free
           "#include <stdlib.h>\nint main(void) { int x = 1; free(&x); return 0; }\n")
     (list "CWE590_02_free_interior_ptr" "CWE-590" "free(p + 4) interior pointer"
-          #t 'gap-vm-only 'invalid-free
+          #t 'caught-both 'invalid-free
           "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(16); free(p + 4); return 0; }\n")
 
     ;; Negative Controls (Valid Programs -> Zero False Positives)
@@ -376,12 +376,20 @@ int main(void) { int *p = 0; return p[0]; }
         (assert-equal (string-append "5.x " case-id " oracle outcome matches")
                       exp-oracle oracle-detail)
         (if (or (eq? actual-class 'caught-both) (eq? actual-class 'sanitizer-only))
-            (assert-true (string-append "5.x " case-id " includes source-span diagnostics")
-                         (and (san-str-contains? diag-msg "san_vm_test.c:")
-                              (or (san-str-contains? diag-msg "C99-SAN-001")
-                                  (san-str-contains? diag-msg "C99-SAN-002")))))))
+            (let ((exp-diag
+                   (cond
+                     ((string=? cwe-id "CWE-121") "C99-SAN-001")
+                     ((string=? cwe-id "CWE-476") "C99-SAN-002")
+                     ((string=? cwe-id "CWE-122") "C99-SAN-003")
+                     ((string=? cwe-id "CWE-416") "C99-SAN-004")
+                     ((string=? cwe-id "CWE-415") "C99-SAN-005")
+                     ((string=? cwe-id "CWE-590") "C99-SAN-006")
+                     (else "C99-SAN-"))))
+              (assert-true (string-append "5.x " case-id " includes source-span & expected diag " exp-diag)
+                           (and (san-str-contains? diag-msg "san_vm_test.c:")
+                                (san-str-contains? diag-msg exp-diag)))))))
     *san-cwe-coverage-suite*)
-  (display "\n=== [Sanitizer vs LIR VM Oracle Summary (#963)] ===\n")
+  (display "\n=== [Sanitizer vs LIR VM Oracle Summary (#964)] ===\n")
   (display "  Unsafe Total               : ") (display (car unsafe-cnt-box)) (newline)
   (display "  Sanitizer Caught (Total)   : ") (display (car san-cnt-box)) (newline)
   (display "    - Caught by Both         : ") (display (car both-cnt-box)) (newline)
@@ -390,12 +398,78 @@ int main(void) { int *p = 0; return p[0]; }
   (display "  Negative Controls          : ") (display (car neg-cnt-box)) (newline)
   (display "  False Positives            : ") (display (car fp-cnt-box)) (newline)
   (assert-equal "5.S1 Unsafe benchmark total is 16" 16 (car unsafe-cnt-box))
-  (assert-equal "5.S2 Sanitizer baseline catches 6/16" 6 (car san-cnt-box))
-  (assert-equal "5.S3 Caught by Both (NULL direct) = 3" 3 (car both-cnt-box))
+  (assert-equal "5.S2 Sanitizer catches 16/16 after #964 projection" 16 (car san-cnt-box))
+  (assert-equal "5.S3 Caught by Both = 13" 13 (car both-cnt-box))
   (assert-equal "5.S4 Sanitizer-Only (CWE-121 stack/static) = 3" 3 (car san-only-cnt-box))
-  (assert-equal "5.S5 VM-only First-Projection gaps = 10/16" 10 (car gap-cnt-box))
+  (assert-equal "5.S5 VM-only First-Projection gaps eliminated (0/16)" 0 (car gap-cnt-box))
   (assert-equal "5.S6 Negative controls total is 3" 3 (car neg-cnt-box))
   (assert-equal "5.S7 Zero false positives on negative controls" 0 (car fp-cnt-box)))
+
+(display "\n--- Group 6: define-mem-check SSOT Registry & Dual-Projection Parity (#964) ---\n")
+
+(assert-true "6.1 All 6 canonical mem-check specs registered"
+             (>= (length (all-mem-checks)) 6))
+
+(for-each
+  (lambda (pair)
+    (let* ((sym (car pair))
+           (exp-cwe (cadr pair))
+           (exp-diag (caddr pair))
+           (exp-trap (cadddr pair))
+           (spec (get-mem-check sym)))
+      (assert-equal (string-append "6.2 " (symbol->string sym) " CWE matches")
+                    exp-cwe (mem-check-cwe spec))
+      (assert-equal (string-append "6.2 " (symbol->string sym) " diag code matches")
+                    exp-diag (mem-check-diag-code spec))
+      (assert-equal (string-append "6.2 " (symbol->string sym) " VM trap matches")
+                    exp-trap (mem-check-vm-trap-kind spec))))
+  '((mem-check:static-array-bounds "CWE-121" "C99-SAN-001" out-of-bounds)
+    (mem-check:null-pointer        "CWE-476" "C99-SAN-002" out-of-bounds)
+    (mem-check:heap-bounds         "CWE-122" "C99-SAN-003" heap-out-of-bounds)
+    (mem-check:use-after-free      "CWE-416" "C99-SAN-004" use-after-free)
+    (mem-check:double-free         "CWE-415" "C99-SAN-005" double-free)
+    (mem-check:invalid-free        "CWE-590" "C99-SAN-006" invalid-free)))
+
+(define-mem-check mem-check:custom-test-check
+  (:cwe "CWE-122")
+  (:diag "C99-SAN-999")
+  (:trap heap-out-of-bounds)
+  (:category heap-bounds)
+  (:cc jae)
+  (:msg "custom heap guard"))
+
+(assert-equal "6.3 define-mem-check macro registers custom spec"
+              "C99-SAN-999" (mem-check-diag-code (get-mem-check 'mem-check:custom-test-check)))
+
+(assert-true "6.4 mem-check-format-san-msg uses spec diag code"
+             (san-str-contains? (mem-check-format-san-msg 'mem-check:custom-test-check #f "test.c:1:1")
+                                "[ulisp-sanitizer] error[C99-SAN-999]: custom heap guard at test.c:1:1"))
+
+(assert-equal "6.5 mem-check-emit-bounds-lir projects ja for one-past-end"
+              '((%cmp %rcx 8) (%jump-cond ja L_t))
+              (mem-check-emit-bounds-lir 'mem-check:heap-bounds '%rcx 8 #t 'L_t))
+
+(let ((vm (make-lir-vm)))
+  (vm-trigger-mem-check! vm 'mem-check:custom-test-check #f 12345)
+  (assert-equal "6.6 vm-trigger-mem-check! projects spec VM trap kind"
+                'heap-out-of-bounds (vm-trap-type (vm-last-trap vm)))
+  (assert-equal "6.6 vm-trigger-mem-check! projects spec default msg"
+                "custom heap guard" (vm-trap-message (vm-last-trap vm))))
+
+(let ((m0-deref (san-eval-vm-outcome
+                  "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(0); return *p; }\n" #t))
+      (m0-free  (san-eval-vm-outcome
+                  "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(0); free(p); return 0; }\n" #t))
+      (self-re  (san-eval-vm-outcome
+                  "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(4); p[0] = 1; p = (char *)realloc(p, 16); p[15] = 7; int r = (p[0] == 1 && p[15] == 7) ? 0 : 1; free(p); return r; }\n" #t)))
+  (assert-true "6.7 malloc(0) deref traps with C99-SAN-003"
+               (and (eq? (car m0-deref) 'trap)
+                    (eq? (cadr m0-deref) 'sanitizer-trap)
+                    (san-str-contains? (caddr m0-deref) "C99-SAN-003")))
+  (assert-equal "6.8 malloc(0) free without deref passes cleanly"
+                '(ok 0) m0-free)
+  (assert-equal "6.9 p = realloc(p, 16) self-reassignment passes cleanly"
+                '(ok 0) self-re))
 
 (display "\n=== [Results: ")
 (display (car *san-tests-passed*)) (display " passed, ")
