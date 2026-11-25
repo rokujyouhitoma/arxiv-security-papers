@@ -56,26 +56,54 @@ term: [0-9]+
 (display "--- Group 3: Fixed-Point Verification P1(peg_meta.peg) ---\n")
 
 (let* ((ctx (make-parse-context meta-grammar-text))
-       (matched #f)
-       (result-val #f)
-       (result-pos 0))
+       (res (vector #f #f 0)))
   (stage1-parser
    ctx 0
    (lambda (val next-pos fk)
-     (set! matched #t)
-     (set! result-val val)
-     (set! result-pos next-pos))
+     (vector-set! res 0 #t)
+     (vector-set! res 1 val)
+     (vector-set! res 2 next-pos))
    (lambda ()
-     (set! matched #f)))
-  (display (string-append "Matched: " (if matched "#t" "#f")
-                          ", result-pos: " (number->string result-pos)
-                          ", max-pos: " (number->string (parse-ctx-max-pos ctx))
-                          " / " (number->string (string-length meta-grammar-text)) "\n"))
-  (let ((max-p (parse-ctx-max-pos ctx)))
-    (let ((snippet (substring meta-grammar-text
-                              (max 0 (- max-p 40))
-                              (min (string-length meta-grammar-text) (+ max-p 40)))))
-      (display (string-append "Snippet around max-pos:\n" snippet "\n"))))
-  (assert-true "stage1-parser parses peg_meta.peg itself (Fixed-Point)" matched))
+     (vector-set! res 0 #f)))
+  (let ((matched (vector-ref res 0))
+        (result-pos (vector-ref res 2)))
+    (display (string-append "Matched: " (if matched "#t" "#f")
+                            ", result-pos: " (number->string result-pos)
+                            ", max-pos: " (number->string (parse-ctx-max-pos ctx))
+                            " / " (number->string (string-length meta-grammar-text)) "\n"))
+    (assert-true "stage1-parser parses peg_meta.peg itself (Fixed-Point)" matched)
+    (assert-equal "stage1-parser consumes full peg_meta.peg to EOF"
+                  (string-length meta-grammar-text)
+                  result-pos)))
+
+;;; -----------------------------------------------------------------------
+;;; Group 4: Direct-Style Source Self-Hosting Fixed-Point (Stage 1 == Stage 2)
+;;; -----------------------------------------------------------------------
+
+(display "--- Group 4: Direct-Style Source Self-Hosting Fixed-Point (Issue #948) ---\n")
+
+(let* ((opts '((prefix . "peg-meta-")))
+       (stage1-scm (emit-peg-grammar->scheme stage0-ast opts))
+       (stage1-path "build/peg_meta_stage1.scm")
+       (stage2-path "build/peg_meta_stage2.scm"))
+  (call-with-output-file stage1-path
+    (lambda (port)
+      (display stage1-scm port)))
+  (load stage1-path)
+  (let* ((parse-fn (eval 'peg-meta-parse (interaction-environment)))
+         (cst1 (parse-fn meta-grammar-text))
+         (stage1-ast (optimize-grammar (peg-meta-cst->ast cst1)))
+         (stage2-scm (emit-peg-grammar->scheme stage1-ast opts)))
+    (call-with-output-file stage2-path
+      (lambda (port)
+        (display stage2-scm port)))
+    (assert-equal "Stage 1 CST->AST matches Stage 0 optimized AST"
+                  (ast->sexpr (optimize-grammar stage0-ast))
+                  (ast->sexpr stage1-ast))
+    (assert-true "Direct-Style Stage 1 .scm == Stage 2 .scm (byte-identical fixed point)"
+                 (string=? stage1-scm stage2-scm))
+    (display (string-append "[PASS] Stage 1 == Stage 2 fixed-point verified ("
+                            (number->string (string-length stage1-scm))
+                            " bytes).\n"))))
 
 (display "\n[PASS] All PEG Self-Hosting tests passed successfully.\n\n")

@@ -312,6 +312,10 @@
   parse-ctx-depth
   parse-ctx-depth-set!
   parse-ctx-max-depth
+  parse-ctx-res-val
+  parse-ctx-res-val-set!
+  parse-ctx-cut?
+  parse-ctx-cut?-set!
   make-parse-context
   %make-memo-entry
   memo-entry?
@@ -367,6 +371,29 @@
   calc-line-col
   peg-parse-partial
   peg-parse
+  peg-ds:lit
+  peg-ds:lit1
+  peg-ds:char-class
+  %peg-ds-chars->string-list
+  peg-ds:scan-char-class-plus
+  peg-ds:scan-char-class-star
+  peg-ds:any-char
+  peg-ds:line-start
+  peg-ds:cut
+  peg-ds:escape-pair
+  %peg-ds-skip-ws
+  peg-ds:meta-ws
+  peg-ds:meta-ident
+  peg-ds:meta-string-lit
+  peg-ds:meta-action-block
+  peg-ds:meta-regex-lit
+  peg-ds:meta-char-class
+  peg-ds:meta-new-rule-head
+  peg-ds:meta-opt-lead-pipe
+  peg-ds:rule-memo
+  peg-ds:rule-lr
+  peg-ds:parse-partial
+  peg-ds:parse
   make-peg-grammar-def
   peg-grammar-def?
   peg-grammar-def-name
@@ -453,6 +480,53 @@
   compile-peg-grammar
   compile-peg-string
   compile-peg-file
+  %emit-ident-start-char?
+  %emit-ident-cont-char?
+  %emit-valid-ident?
+  %emit-assert-valid-ident!
+  %emit-escape-scheme-char
+  %emit-escape-scheme-string
+  %emit-quote-string
+  %emit-char-literal
+  %emit-strings-join
+  %emit-regex-nullable?
+  peg-expr-nullable?
+  peg-compute-nullable-rules
+  %emit-union-syms
+  peg-expr-left-corners
+  peg-compute-left-corner-graph
+  peg-expr-has-rule-ref?
+  %tarjan-assoc-set!
+  %tarjan-pop-scc!
+  peg-compute-tarjan-scc
+  peg-classify-rules
+  %emit-parse-char-class-regex
+  %emit-regex-kind
+  %emit-collect-char-classes
+  %emit-lookup-cc-var
+  %emit-fresh-var!
+  %emit-expr-has-direct-cut?
+  %emit-lit-call
+  %emit-regex-call
+  %emit-indent-str
+  %emit-expr
+  %emit-rule-definition
+  %emit-peg-grammar->scheme
+  %peg-cst-ident-sym
+  %peg-cst-primary->ast
+  %peg-cst-suffixed->ast
+  %peg-cst-prefix-item->ast
+  %peg-cst-seq->ast
+  %peg-cst-alt->ast
+  %peg-cst-choice->ast
+  %peg-cst-rule->ast
+  peg-meta-cst->ast
+  %peg-string-contains-dotdot?
+  %peg-validate-output-path!
+  emit-peg-grammar->scheme
+  emit-peg-string->scheme
+  emit-peg-file->scheme
+  write-peg-file->scheme!
   *c99-jmp-buf-slots*
   *c99-jmp-buf-size*
   *c99-jmp-buf-align*

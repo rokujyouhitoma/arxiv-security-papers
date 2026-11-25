@@ -1,7 +1,7 @@
 # Lua 5.4.7 C99 ビルド フェーズ別プロファイリング ＆ アセンブラ往復コスト定量レポート (Issue #945)
 
 - **計測日時 (UTC)**: `2026-11-25T13:00:34Z`
-- **関連 Issue**: [Issue #945](../issues/closed/945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) / [Issue #932](../issues/closed/932-build-native-aot-ulisp-cc-compiler-driver-binary.md) / [Issue #948](../issues/948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) / [Issue #949](../issues/949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md)
+- **関連 Issue**: [Issue #945](../issues/closed/945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) / [Issue #932](../issues/closed/932-build-native-aot-ulisp-cc-compiler-driver-binary.md) / [Issue #948](../issues/closed/948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) / [Issue #949](../issues/949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md)
 - **関連設計書**: [DSN-33-32](../designs/DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md) / [DSN-33-41](../designs/DSN-33-41-ulisp_ilisp_aot_jit_continuous_benchmarking_framework.md)
 
 ---
@@ -90,7 +90,7 @@
 
 | 最適化候補 | 対象フェーズ | 対象時間 (`ulisp-cc JOBS=1`) | 33 TU 占有率 | 全体占有率 |
 | :--- | :--- | ---: | ---: | ---: |
-| **Direct-Style 静的 PEG パーサ移行 ([#948](../issues/948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)/[#949](../issues/949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md))** | `parse` | 4,740.77 ms | 53.64% | 49.45% |
+| **Direct-Style 静的 PEG パーサ移行 ([#948](../issues/closed/948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)/[#949](../issues/949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md))** | `parse` | 4,740.77 ms | 53.64% | 49.45% |
 | **アセンブラテキスト往復廃止 (Pass 140→144a 直接符号化)** | `asm_emit`+`parse_only` (全往復) | 300.56 ms (全 385.73 ms) | 3.40% (全 4.36%) | 3.13% (全 4.02%) |
 | **C99 意味解析・型チェック最適化** | `sema` | 144.40 ms | 1.63% | 1.51% |
 | **LIR 最適化パス (`-O2`) チューニング** | `opt` | 1,664.56 ms | 18.83% | 17.36% |

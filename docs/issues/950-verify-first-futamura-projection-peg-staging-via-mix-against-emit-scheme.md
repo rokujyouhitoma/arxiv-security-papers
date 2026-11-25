@@ -11,7 +11,7 @@ ID: 950
 
 現行の [runtime.scm](../../ulisp/peg/runtime.scm) は二重 CPS クロージャと破壊的循環ボックス `rule-cells` を前提とするため、そのままでは [#942](942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md) の部分評価器 `mix`（`eval-in-stage` + `specialize-or-widen`）に投入できない。
 
-[#942](942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md)（`mix` 接続）および [#948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)（Direct-Style 静的 `.scm` 生成バックエンド `emit_scheme.scm`）の完了後に、純粋・第一階に近い小さな Direct-Style PEG インタプリタを用意し、小規模文法（[calc.peg](../../tools/grammars/calc.peg) や [cti_ql.peg](../../ulisp/workbench/examples/cti_ql.peg)）に対して `mix(peg-interp, grammar-ast)` による第1二村射影を実行する。機械的に射影された残余パーサーから文法 AST 解釈ディスパッチが蒸発することを確認し、`#948` の手書きコード生成器 `emit_scheme.scm` の出力と動作・残余構造を双対検証（Dual Verification）する。
+[#942](942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md)（`mix` 接続）および [#948](closed/948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)（Direct-Style 静的 `.scm` 生成バックエンド `emit_scheme.scm`）の完了後に、純粋・第一階に近い小さな Direct-Style PEG インタプリタを用意し、小規模文法（[calc.peg](../../tools/grammars/calc.peg) や [cti_ql.peg](../../ulisp/workbench/examples/cti_ql.peg)）に対して `mix(peg-interp, grammar-ast)` による第1二村射影を実行する。機械的に射影された残余パーサーから文法 AST 解釈ディスパッチが蒸発することを確認し、`#948` の手書きコード生成器 `emit_scheme.scm` の出力と動作・残余構造を双対検証（Dual Verification）する。
 
 ---
 
@@ -21,7 +21,7 @@ ID: 950
   - [DSN-33-21](../designs/DSN-33-21-ulisp_stage_polymorphic_metacompiler_and_futamura_projection_architecture.md)
   - [DSN-33-24](../designs/DSN-33-24-ulisp_futamura_projection_scheme_interpreter_synthesis_architecture.md)
   - [Issue #942](942-connect-specialize-or-widen-in-eval-in-stage-apply-for-futamura-mix.md)
-  - [Issue #948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)
+  - [Issue #948](closed/948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)
 
 ---
 

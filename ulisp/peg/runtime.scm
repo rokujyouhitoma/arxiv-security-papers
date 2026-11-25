@@ -9,7 +9,7 @@
 ;;; -----------------------------------------------------------------------
 
 (define-record-type <parse-context>
-  (%make-parse-context text length max-pos expected memo lr-detected in-progress touched-lr depth max-depth)
+  (%make-parse-context text length max-pos expected memo lr-detected in-progress touched-lr depth max-depth res-val cut?)
   parse-context?
   (text         parse-ctx-text)
   (length       parse-ctx-length)
@@ -20,12 +20,14 @@
   (in-progress  parse-ctx-in-progress  parse-ctx-in-progress-set!)
   (touched-lr   parse-ctx-touched-lr   parse-ctx-touched-lr-set!)
   (depth        parse-ctx-depth        parse-ctx-depth-set!)
-  (max-depth    parse-ctx-max-depth))
+  (max-depth    parse-ctx-max-depth)
+  (res-val      parse-ctx-res-val      parse-ctx-res-val-set!)
+  (cut?         parse-ctx-cut?         parse-ctx-cut?-set!))
 
 (define (make-parse-context text . maybe-max-depth)
   (let ((len (string-length text))
         (max-d (if (pair? maybe-max-depth) (car maybe-max-depth) 10000)))
-    (%make-parse-context text len 0 '() (make-vector (+ len 1) '()) '() '() '() 0 max-d)))
+    (%make-parse-context text len 0 '() (make-vector (+ len 1) '()) '() '() '() 0 max-d #f #f)))
 
 (define-record-type <memo-entry>
   (%make-memo-entry status val end-pos growing? lr-deps)
@@ -598,6 +600,474 @@
        (vector-set! res 0 #f)))
     (if (vector-ref res 0)
         (vector-ref res 1)
+        (let* ((err-pos (parse-ctx-max-pos ctx))
+               (lc (calc-line-col text err-pos))
+               (exp (parse-ctx-expected ctx)))
+          (error "PEGSyntaxError"
+                 (list 'line (car lc)
+                       'col (cdr lc)
+                       'pos err-pos
+                       'expected (if (null? exp) '("valid token") exp)))))))
+
+;;; -----------------------------------------------------------------------
+;;; 7. Direct-Style Non-CPS Runtime Primitives & Scanners (Issue #948)
+;;; Calling convention:
+;;;   (fn ctx [extra...] pos) -> next-pos (integer) on success with value in (parse-ctx-res-val ctx),
+;;;                              or #f on failure.
+;;; Zero closure allocations, zero local set!.
+;;; -----------------------------------------------------------------------
+
+(define (peg-ds:lit ctx pos str lit-len first-ch err-label)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (and (<= (+ pos lit-len) total-len)
+             (or (= lit-len 0)
+                 (and (char=? (string-ref txt pos) first-ch)
+                      (or (= lit-len 1)
+                          (string=? (substring txt pos (+ pos lit-len)) str)))))
+        (begin
+          (parse-ctx-res-val-set! ctx str)
+          (+ pos lit-len))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos err-label)
+          #f))))
+
+(define (peg-ds:lit1 ctx pos ch str err-label)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (and (< pos total-len)
+             (char=? (string-ref txt pos) ch))
+        (begin
+          (parse-ctx-res-val-set! ctx str)
+          (+ pos 1))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos err-label)
+          #f))))
+
+(define (peg-ds:char-class ctx pos pred err-label)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (and (< pos total-len)
+             (pred (string-ref txt pos)))
+        (begin
+          (parse-ctx-res-val-set! ctx (string (string-ref txt pos)))
+          (+ pos 1))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos err-label)
+          #f))))
+
+(define (%peg-ds-chars->string-list txt start-pos end-pos)
+  (let loop ((k (- end-pos 1)) (acc '()))
+    (if (< k start-pos)
+        acc
+        (loop (- k 1) (cons (string (string-ref txt k)) acc)))))
+
+(define (peg-ds:scan-char-class-plus ctx pos pred err-label)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (and (< pos total-len) (pred (string-ref txt pos)))
+        (let loop ((i (+ pos 1)))
+          (if (and (< i total-len) (pred (string-ref txt i)))
+              (loop (+ i 1))
+              (begin
+                (parse-ctx-res-val-set! ctx (%peg-ds-chars->string-list txt pos i))
+                i)))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos err-label)
+          #f))))
+
+(define (peg-ds:scan-char-class-star ctx pos pred)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (let loop ((i pos))
+      (if (and (< i total-len) (pred (string-ref txt i)))
+          (loop (+ i 1))
+          (begin
+            (parse-ctx-res-val-set! ctx (%peg-ds-chars->string-list txt pos i))
+            i)))))
+
+(define (peg-ds:any-char ctx pos)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (< pos total-len)
+        (begin
+          (parse-ctx-res-val-set! ctx (string (string-ref txt pos)))
+          (+ pos 1))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos "any-char")
+          #f))))
+
+(define (peg-ds:line-start ctx pos)
+  (if (= pos 0)
+      (begin
+        (parse-ctx-res-val-set! ctx "")
+        pos)
+      (let ((prev-ch (string-ref (parse-ctx-text ctx) (- pos 1))))
+        (if (or (char=? prev-ch #\newline) (char=? prev-ch #\return))
+            (begin
+              (parse-ctx-res-val-set! ctx "")
+              pos)
+            #f))))
+
+(define (peg-ds:cut ctx pos)
+  (parse-ctx-cut?-set! ctx #t)
+  (parse-ctx-res-val-set! ctx 'cut)
+  pos)
+
+(define (peg-ds:escape-pair ctx pos)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (and (<= (+ pos 2) total-len)
+             (char=? (string-ref txt pos) #\\))
+        (begin
+          (parse-ctx-res-val-set! ctx (list "\\" (string (string-ref txt (+ pos 1)))))
+          (+ pos 2))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos "'\\'")
+          #f))))
+
+;;; Meta-grammar Direct-Style scanners (shared with self-hosting stage1/stage2)
+
+(define (%peg-ds-skip-ws txt total-len pos)
+  (let loop ((i pos))
+    (if (>= i total-len)
+        i
+        (let ((ch (string-ref txt i)))
+          (cond
+            ((or (char=? ch #\space)
+                 (char=? ch #\tab)
+                 (char=? ch #\newline)
+                 (char=? ch #\return))
+             (loop (+ i 1)))
+            ((char=? ch #\#)
+             (let scan-comment ((j (+ i 1)))
+               (if (>= j total-len)
+                   j
+                   (let ((c (string-ref txt j)))
+                     (if (or (char=? c #\newline) (char=? c #\return))
+                         (loop (+ j 1))
+                         (scan-comment (+ j 1)))))))
+            (else i))))))
+
+(define (peg-ds:meta-ws ctx pos)
+  (let ((next-pos (%peg-ds-skip-ws (parse-ctx-text ctx) (parse-ctx-length ctx) pos)))
+    (parse-ctx-res-val-set! ctx "")
+    next-pos))
+
+(define (peg-ds:meta-ident ctx pos)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (>= pos total-len)
+        #f
+        (let ((c0 (string-ref txt pos)))
+          (if (or (and (char>=? c0 #\a) (char<=? c0 #\z))
+                  (and (char>=? c0 #\A) (char<=? c0 #\Z))
+                  (char=? c0 #\_))
+              (let loop ((i (+ pos 1)))
+                (if (and (< i total-len)
+                         (let ((ci (string-ref txt i)))
+                           (or (and (char>=? ci #\a) (char<=? ci #\z))
+                               (and (char>=? ci #\A) (char<=? ci #\Z))
+                               (and (char>=? ci #\0) (char<=? ci #\9))
+                               (char=? ci #\_))))
+                    (loop (+ i 1))
+                    (let ((sym (string->symbol (substring txt pos i)))
+                          (ws-end (%peg-ds-skip-ws txt total-len i)))
+                      (parse-ctx-res-val-set! ctx sym)
+                      ws-end)))
+              #f)))))
+
+(define (peg-ds:meta-string-lit ctx pos)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (>= pos total-len)
+        #f
+        (let ((c0 (string-ref txt pos)))
+          (if (and (not (char=? c0 #\')) (not (char=? c0 #\")))
+              #f
+              (let* ((is-triple (and (<= (+ pos 3) total-len)
+                                     (char=? (string-ref txt (+ pos 1)) c0)
+                                     (char=? (string-ref txt (+ pos 2)) c0)))
+                     (quote-len (if is-triple 3 1)))
+                (let loop ((i (+ pos quote-len)) (chars '()))
+                  (cond
+                    ((> (+ i quote-len) total-len) #f)
+                    ((and is-triple
+                          (char=? (string-ref txt i) c0)
+                          (char=? (string-ref txt (+ i 1)) c0)
+                          (char=? (string-ref txt (+ i 2)) c0))
+                     (let ((ws-end (%peg-ds-skip-ws txt total-len (+ i 3))))
+                       (parse-ctx-res-val-set! ctx (list->string (reverse chars)))
+                       ws-end))
+                    ((and (not is-triple) (char=? (string-ref txt i) c0))
+                     (let ((ws-end (%peg-ds-skip-ws txt total-len (+ i 1))))
+                       (parse-ctx-res-val-set! ctx (list->string (reverse chars)))
+                       ws-end))
+                    (else
+                     (let ((ci (string-ref txt i)))
+                       (if (char=? ci #\\)
+                           (if (< (+ i 1) total-len)
+                               (let ((esc (string-ref txt (+ i 1))))
+                                 (loop (+ i 2)
+                                       (cons (case esc
+                                               ((#\n) #\newline)
+                                               ((#\t) #\tab)
+                                               ((#\r) #\return)
+                                               (else esc))
+                                             chars)))
+                               #f)
+                           (loop (+ i 1) (cons ci chars)))))))))))))
+
+(define (peg-ds:meta-action-block ctx pos)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (or (>= pos total-len) (not (char=? (string-ref txt pos) #\{)))
+        #f
+        (let loop ((i (+ pos 1)) (depth 1) (in-quote #f))
+          (cond
+            ((>= i total-len) #f)
+            (in-quote
+             (let ((ch (string-ref txt i)))
+               (cond
+                 ((char=? ch #\\) (loop (+ i 2) depth in-quote))
+                 ((char=? ch in-quote) (loop (+ i 1) depth #f))
+                 (else (loop (+ i 1) depth in-quote)))))
+            (else
+             (let ((ch (string-ref txt i)))
+               (cond
+                 ((or (char=? ch #\') (char=? ch #\"))
+                  (loop (+ i 1) depth ch))
+                 ((char=? ch #\{)
+                  (loop (+ i 1) (+ depth 1) #f))
+                 ((char=? ch #\})
+                  (if (= depth 1)
+                      (let ((body (substring txt (+ pos 1) i))
+                            (ws-end (%peg-ds-skip-ws txt total-len (+ i 1))))
+                        (parse-ctx-res-val-set! ctx body)
+                        ws-end)
+                      (loop (+ i 1) (- depth 1) #f)))
+                 (else (loop (+ i 1) depth #f))))))))))
+
+(define (peg-ds:meta-regex-lit ctx pos)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (or (>= (+ pos 1) total-len)
+            (not (char=? (string-ref txt pos) #\/))
+            (let ((c1 (string-ref txt (+ pos 1))))
+              (or (char=? c1 #\space) (char=? c1 #\tab)
+                  (char=? c1 #\newline) (char=? c1 #\return))))
+        #f
+        (let loop ((i (+ pos 1)) (chars '()))
+          (cond
+            ((>= i total-len) #f)
+            ((char=? (string-ref txt i) #\\)
+             (if (< (+ i 1) total-len)
+                 (loop (+ i 2) (cons (string-ref txt (+ i 1)) (cons #\\ chars)))
+                 #f))
+            ((char=? (string-ref txt i) #\/)
+             (let ((pat (list->string (reverse chars)))
+                   (ws-end (%peg-ds-skip-ws txt total-len (+ i 1))))
+               (parse-ctx-res-val-set! ctx pat)
+               ws-end))
+            (else (loop (+ i 1) (cons (string-ref txt i) chars))))))))
+
+(define (peg-ds:meta-char-class ctx pos)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (or (>= pos total-len) (not (char=? (string-ref txt pos) #\[)))
+        #f
+        (let* ((is-inv (and (< (+ pos 1) total-len)
+                            (char=? (string-ref txt (+ pos 1)) #\^)))
+               (start-inner (if is-inv (+ pos 2) (+ pos 1))))
+          (let loop ((i start-inner) (chars '()))
+            (cond
+              ((>= i total-len) #f)
+              ((char=? (string-ref txt i) #\\)
+               (if (< (+ i 1) total-len)
+                   (loop (+ i 2) (cons (string-ref txt (+ i 1)) (cons #\\ chars)))
+                   #f))
+              ((char=? (string-ref txt i) #\])
+               (let ((spec (list->string (reverse chars)))
+                     (ws-end (%peg-ds-skip-ws txt total-len (+ i 1))))
+                 (parse-ctx-res-val-set! ctx (cons spec is-inv))
+                 ws-end))
+              (else (loop (+ i 1) (cons (string-ref txt i) chars)))))))))
+
+(define (peg-ds:meta-new-rule-head ctx pos)
+  (let ((p1 (peg-ds:meta-ident ctx pos)))
+    (if (not p1)
+        #f
+        (let ((p2 (peg-ds:lit ctx p1 "<-" 2 #\< "'<-'")))
+          (if p2
+              (let ((p3 (peg-ds:meta-ws ctx p2)))
+                (parse-ctx-res-val-set! ctx #t)
+                p3)
+              (if (peg-ds:line-start ctx pos)
+                  (let ((p1b (peg-ds:meta-ident ctx pos)))
+                    (if (not p1b)
+                        #f
+                        (let ((p2b (or (peg-ds:lit1 ctx p1b #\: ":" "':'")
+                                       (peg-ds:lit1 ctx p1b #\= "=" "'='"))))
+                          (if p2b
+                              (let ((p3b (peg-ds:meta-ws ctx p2b)))
+                                (parse-ctx-res-val-set! ctx #t)
+                                p3b)
+                              #f))))
+                  #f))))))
+
+(define (peg-ds:meta-opt-lead-pipe ctx pos)
+  (let ((txt (parse-ctx-text ctx))
+        (total-len (parse-ctx-length ctx)))
+    (if (and (< pos total-len)
+             (let ((ch (string-ref txt pos)))
+               (or (char=? ch #\|) (char=? ch #\/))))
+        (%peg-ds-skip-ws txt total-len (+ pos 1))
+        pos)))
+
+;;; -----------------------------------------------------------------------
+;;; 8. Direct-Style Packrat Memoization, Warth LR & Top-Level Drivers
+;;; -----------------------------------------------------------------------
+
+(define (peg-ds:rule-memo ctx rule-name pos body-thunk)
+  (let ((depth (parse-ctx-depth ctx)))
+    (if (> depth (parse-ctx-max-depth ctx))
+        (error "Maximum parsing recursion depth exceeded" (list rule-name pos depth)))
+    (let ((entry (parse-ctx-memo-ref-rp ctx rule-name pos)))
+      (if entry
+          (begin
+            (if (and (pair? (memo-entry-lr-deps entry))
+                     (pair? (parse-ctx-in-progress ctx)))
+                (parse-ctx-touched-lr-merge! ctx (memo-entry-lr-deps entry)))
+            (if (eq? (memo-entry-status entry) 'done)
+                (begin
+                  (parse-ctx-res-val-set! ctx (memo-entry-val entry))
+                  (memo-entry-end-pos entry))
+                #f))
+          (if (null? (parse-ctx-in-progress ctx))
+              ;; Fast path: no active LR seed growth
+              (begin
+                (parse-ctx-depth-set! ctx (+ depth 1))
+                (let ((next-pos (body-thunk)))
+                  (parse-ctx-depth-set! ctx depth)
+                  (if next-pos
+                      (let ((v (parse-ctx-res-val ctx)))
+                        (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done v next-pos #f '()))
+                        next-pos)
+                      (begin
+                        (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'fail #f pos #f '()))
+                        #f))))
+              ;; Active LR seed path: propagate lr-deps so grow clears dependent memos
+              (let ((outer-touched (parse-ctx-touched-lr ctx)))
+                (parse-ctx-touched-lr-set! ctx '())
+                (parse-ctx-depth-set! ctx (+ depth 1))
+                (let ((next-pos (body-thunk))
+                      (cur-touched (parse-ctx-touched-lr ctx)))
+                  (parse-ctx-depth-set! ctx depth)
+                  (if next-pos
+                      (let ((v (parse-ctx-res-val ctx)))
+                        (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done v next-pos #f cur-touched))
+                        (parse-ctx-touched-lr-set! ctx outer-touched)
+                        (if (pair? cur-touched)
+                            (parse-ctx-touched-lr-merge! ctx cur-touched))
+                        (parse-ctx-res-val-set! ctx v)
+                        next-pos)
+                      (begin
+                        (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'fail #f pos #f cur-touched))
+                        (parse-ctx-touched-lr-set! ctx outer-touched)
+                        (if (pair? cur-touched)
+                            (parse-ctx-touched-lr-merge! ctx cur-touched))
+                        #f)))))))))
+
+(define (peg-ds:rule-lr ctx rule-name pos body-thunk)
+  (let ((depth (parse-ctx-depth ctx)))
+    (if (> depth (parse-ctx-max-depth ctx))
+        (error "Maximum parsing recursion depth exceeded" (list rule-name pos depth)))
+    (cond
+      ((parse-ctx-in-progress-rp? ctx rule-name pos)
+       (let ((key (cons rule-name pos)))
+         (parse-ctx-lr-detected-add! ctx key)
+         (parse-ctx-touched-lr-add! ctx key)
+         #f))
+      ((parse-ctx-memo-ref-rp ctx rule-name pos)
+       => (lambda (entry)
+            (if (memo-entry-growing? entry)
+                (parse-ctx-touched-lr-add! ctx (cons rule-name pos)))
+            (if (pair? (memo-entry-lr-deps entry))
+                (parse-ctx-touched-lr-merge! ctx (memo-entry-lr-deps entry)))
+            (if (eq? (memo-entry-status entry) 'done)
+                (begin
+                  (parse-ctx-res-val-set! ctx (memo-entry-val entry))
+                  (memo-entry-end-pos entry))
+                #f)))
+      (else
+       (let ((key (cons rule-name pos))
+             (outer-touched (parse-ctx-touched-lr ctx)))
+         (if (pair? outer-touched)
+             (parse-ctx-touched-lr-set! ctx '()))
+         (parse-ctx-depth-set! ctx (+ depth 1))
+         (parse-ctx-in-progress-add! ctx key)
+         (let* ((res-pos (body-thunk))
+                (res-val (if res-pos (parse-ctx-res-val ctx) #f)))
+           (parse-ctx-depth-set! ctx depth)
+           (parse-ctx-in-progress-delete! ctx key)
+           (if (and (pair? (parse-ctx-lr-detected ctx))
+                    (parse-ctx-lr-detected? ctx key))
+               (begin
+                 (parse-ctx-lr-detected-delete! ctx key)
+                 (if res-pos
+                     (let grow ((curr-val res-val) (curr-pos res-pos))
+                       (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done curr-val curr-pos #t '()))
+                       (parse-ctx-clear-lr-dependent-memo! ctx pos key)
+                       (parse-ctx-depth-set! ctx (+ depth 1))
+                       (let ((step-pos (body-thunk)))
+                         (parse-ctx-depth-set! ctx depth)
+                         (if (and step-pos (> step-pos curr-pos))
+                             (grow (parse-ctx-res-val ctx) step-pos)
+                             (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
+                               (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done curr-val curr-pos #f ext-deps))
+                               (parse-ctx-touched-lr-set! ctx outer-touched)
+                               (if (pair? ext-deps)
+                                   (parse-ctx-touched-lr-merge! ctx ext-deps))
+                               (parse-ctx-res-val-set! ctx curr-val)
+                               curr-pos))))
+                     (let ((ext-deps (%filter-out-key (parse-ctx-touched-lr ctx) key)))
+                       (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'fail #f pos #f ext-deps))
+                       (parse-ctx-touched-lr-set! ctx outer-touched)
+                       (if (pair? ext-deps)
+                           (parse-ctx-touched-lr-merge! ctx ext-deps))
+                       #f)))
+               (let* ((cur-touched (parse-ctx-touched-lr ctx))
+                      (ext-deps (if (null? cur-touched) '() (%filter-out-key cur-touched key))))
+                 (if res-pos
+                     (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'done res-val res-pos #f ext-deps))
+                     (parse-ctx-memo-set-rp! ctx rule-name pos (make-memo-entry 'fail #f pos #f ext-deps)))
+                 (if (or (pair? outer-touched) (pair? cur-touched))
+                     (parse-ctx-touched-lr-set! ctx outer-touched))
+                 (if (pair? ext-deps)
+                     (parse-ctx-touched-lr-merge! ctx ext-deps))
+                 (if res-pos
+                     (begin
+                       (parse-ctx-res-val-set! ctx res-val)
+                       res-pos)
+                     #f)))))))))
+
+(define peg-ds:parse-partial
+  (case-lambda
+    ((entry-fn text)
+     (peg-ds:parse-partial entry-fn text 0))
+    ((entry-fn text start-pos)
+     (let* ((ctx (make-parse-context text))
+            (end-pos (entry-fn ctx start-pos)))
+       (if end-pos
+           (cons (parse-ctx-res-val ctx) end-pos)
+           #f)))))
+
+(define (peg-ds:parse entry-fn text)
+  (let* ((ctx (make-parse-context text))
+         (txt-len (string-length text))
+         (end-pos (entry-fn ctx 0)))
+    (if (and end-pos (= end-pos txt-len))
+        (parse-ctx-res-val ctx)
         (let* ((err-pos (parse-ctx-max-pos ctx))
                (lc (calc-line-col text err-pos))
                (exp (parse-ctx-expected ctx)))

@@ -62,3 +62,74 @@
                       (rules
                        (rule rule-name rule-body) ...)))))
          (compile-peg-grammar ast))))))
+
+;;; -----------------------------------------------------------------------
+;;; Direct-Style Static Scheme Code Emission API (Issue #948)
+;;; -----------------------------------------------------------------------
+
+(define (%peg-string-contains-dotdot? path)
+  (let ((len (string-length path)))
+    (let loop ((i 0))
+      (cond
+        ((> (+ i 2) len) #f)
+        ((and (char=? (string-ref path i) #\.)
+              (char=? (string-ref path (+ i 1)) #\.)
+              (or (= (+ i 2) len)
+                  (char=? (string-ref path (+ i 2)) #\/)
+                  (char=? (string-ref path (+ i 2)) #\\))
+              (or (= i 0)
+                  (char=? (string-ref path (- i 1)) #\/)
+                  (char=? (string-ref path (- i 1)) #\\)))
+         #t)
+        (else (loop (+ i 1)))))))
+
+(define (%peg-validate-output-path! out-path)
+  (if (or (not (string? out-path))
+          (= (string-length out-path) 0)
+          (%peg-string-contains-dotdot? out-path)
+          (let check-nul ((i 0))
+            (and (< i (string-length out-path))
+                 (or (= (char->integer (string-ref out-path i)) 0)
+                     (check-nul (+ i 1))))))
+      (error "Invalid output path (CWE-22 guard)" out-path)
+      #t))
+
+;;; Emit Direct-Style static Scheme source code string from a <peg-grammar-def> AST
+(define emit-peg-grammar->scheme
+  (case-lambda
+    ((grammar-ast)
+     (emit-peg-grammar->scheme grammar-ast '()))
+    ((grammar-ast opts)
+     (let ((opt-ast (optimize-grammar grammar-ast)))
+       (%emit-peg-grammar->scheme opt-ast opts)))))
+
+;;; Emit Direct-Style static Scheme source code string from PEG specification text
+(define emit-peg-string->scheme
+  (case-lambda
+    ((text)
+     (emit-peg-string->scheme text '()))
+    ((text opts)
+     (let ((ast (parse-peg-grammar text)))
+       (emit-peg-grammar->scheme ast opts)))))
+
+;;; Emit Direct-Style static Scheme source code string from a .peg file
+(define emit-peg-file->scheme
+  (case-lambda
+    ((path)
+     (emit-peg-file->scheme path '()))
+    ((path opts)
+     (let ((text (read-all-file-text path)))
+       (emit-peg-string->scheme text opts)))))
+
+;;; Compile a .peg file to Direct-Style static Scheme source and write it to out-path
+(define write-peg-file->scheme!
+  (case-lambda
+    ((in-path out-path)
+     (write-peg-file->scheme! in-path out-path '()))
+    ((in-path out-path opts)
+     (%peg-validate-output-path! out-path)
+     (let ((code (emit-peg-file->scheme in-path opts)))
+       (call-with-output-file out-path
+         (lambda (port)
+           (display code port)))
+       out-path))))

@@ -12,7 +12,7 @@ ID: 945
 
 ULisp による無改変 Lua 5.4.7（33 TU）の一括コンパイルについて、[Issue #932](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) 完了により `ulisp/bin/ulisp-boot` で構築されたネイティブ AOT C99 コンパイラドライバ `ulisp/bin/ulisp-cc` が導入され、並列ビルド総所要時間はホスト Gauche 版（`gosh`: `47.482s` / 過去約 60 秒）から `ulisp-cc`（`7.697s`、6.17x 高速化）へ短縮された。しかし、両実行系（ネイティブ AOT `bin/ulisp-cc` および `gosh` + `build/c_driver_runner.scm`）において **各コンパイルフェーズ別の時間内訳は未だ実測・記録されていない**。
 
-C99 字句解析を生成する PEG は `ulisp/peg/compiler/codegen.scm` によりクロージャ合成へ段階化済みである一方、バックエンドでは Pass 140（`emit-x86-asm-program`）が x86-64 アセンブリ文字列を出力し、Pass 144a（`assemble-x86-relocatable`）がそれを再パースして機械語へエンコードする **アセンブラテキスト往復** が残存している。さらに、C99 PEG パース自体の CPS クロージャ確保コスト（[#948](../948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) / [#949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) 対象）とアセンブラテキスト往復のどちらが支配的ボトルネックであるかを定量比較した実測データが存在しない。
+C99 字句解析を生成する PEG は `ulisp/peg/compiler/codegen.scm` によりクロージャ合成へ段階化済みである一方、バックエンドでは Pass 140（`emit-x86-asm-program`）が x86-64 アセンブリ文字列を出力し、Pass 144a（`assemble-x86-relocatable`）がそれを再パースして機械語へエンコードする **アセンブラテキスト往復** が残存している。さらに、C99 PEG パース自体の CPS クロージャ確保コスト（[#948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) / [#949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) 対象）とアセンブラテキスト往復のどちらが支配的ボトルネックであるかを定量比較した実測データが存在しない。
 
 本 Issue では、Linux x86-64 実機上で `ulisp/bin/ulisp-cc`（および比較基準としての `gosh` + `build/c_driver_runner.scm`）の C99 パイプライン全体（`-emit-pch`, `-c`, `--linker=ulisp`）に非干渉な単調クロック計測（`CLOCK_MONOTONIC`）を導入し、**アセンブラテキスト往復コスト（`asm_emit` + `asm_pass1`）** を含む全フェーズ別時間内訳を再現可能に計測・定量化し、次期最適化の優先順位をデータに基づき決定する。
 
@@ -44,7 +44,7 @@ C99 字句解析を生成する PEG は `ulisp/peg/compiler/codegen.scm` によ�
   - [Issue #925](925-build-lua-5x-c-codebase-compilation-pipeline-with-ulisp.md) (Lua 5.4.7 33 TU ビルドパイプライン)
   - [Issue #932](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) (`ulisp-cc` ネイティブ AOT ドライババイナリ)
 - **下流判断対象 Issue（本計測結果を優先度判断根拠として参照）**:
-  - [Issue #948](../948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) (Direct-Style 静的 `.scm` PEG パーサージェネレータ)
+  - [Issue #948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) (Direct-Style 静的 `.scm` PEG パーサージェネレータ)
   - [Issue #949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) (`c99.peg` の静的 `.scm` パーサー生成移行)
 
 ---
@@ -96,7 +96,7 @@ flowchart TD
 | **PLC / SWD Specialist** | Scheme 変更箇所すべてでローカル `(set! ...)` を禁止し `vector` / `cons` ボックスのみを使用する。`module_header.scm` と `c_driver_module_header.scm` のシンボル整合および `ulisp-boot` への非混入を維持する。 |
 | **Information Security Specialist** | `--profile-phases` はパスやシェル引数を取らない純粋 boolean フラグとし、`profile_lua_build.py` は `subprocess.run(..., shell=False)` と安全な出力パス検証のみを用いて CWE-78 / CWE-22 を完全に防止する。 |
 | **Software Quality Assurance Specialist (SQA)** | `--profile-phases` 有無で `.o` / `.sbi` / `lua_ulisp` の SHA-256 100% 一致、計測オーバーヘッド < 2%、および `|total_us - sum(phases)| / total_us < 2%` を必須合格ゲートとする。 |
-| **IT Strategist (Performance)** | `JOBS=1`（3 回中央値）により並列スケジューリング・DVFS ノイズを排除して正確なフェーズ構成比を求め、`USE_PCH=0` vs `1` 比較および大型 TU マイクロ計測と合わせて [#948](../948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)/[#949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) 対アセンブラ往復解消の投資対効果（ROI）を定量判断する。 |
+| **IT Strategist (Performance)** | `JOBS=1`（3 回中央値）により並列スケジューリング・DVFS ノイズを排除して正確なフェーズ構成比を求め、`USE_PCH=0` vs `1` 比較および大型 TU マイクロ計測と合わせて [#948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)/[#949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) 対アセンブラ往復解消の投資対効果（ROI）を定量判断する。 |
 | **Systems Auditor** | 計測環境メタデータ（CPU / Kernel / `nproc` / バイナリ種別）、`verify_zero_gauche`・`lint_sexpr`・`black --check`・`mypy --strict` 全 PASS、および関連ドキュメントの相対リンク規約遵守を監査する。 |
 
 ---
@@ -167,7 +167,7 @@ flowchart TD
 - [x] **フェーズ計測基盤実装 ＆ ビルド整合**: `c_driver.scm` の `--profile-phases`、Pass 140/144/144a 区間フック、および `build/c_driver_runner.scm` の Gauche 単調クロックシムが実装され、`make -C ulisp bin/ulisp-cc` と `make -C ulisp bootstrap` がローカル `set!` 0 件・`verify_zero_gauche` PASS・`ulisp-boot` への `c_driver` シンボル混入 0 件で完了すること。
 - [x] **非干渉性・ビット一致 ＆ 低オーバーヘッド実証**: `--profile-phases` 有無で生成される全 33 `.o` および `lua_ulisp` 静的 ELF64 バイナリの SHA-256 が **100% 一致**し、計測オーバーヘッドが総実行時間の **2% 未満**、かつ各 TU で `|total_us - sum(phases)| / total_us < 2%` を満たすこと。
 - [x] **Linux x86-64 実機 33 TU 再現可能プロファイル完遂**: `make -C ulisp profile_lua` により Lua 5.4.7 全 33 TU（+ PCH + Pass 144 リンク）のフェーズ別時間内訳が `ulisp-cc`（`JOBS=1` 3 回中央値 / `USE_PCH=0,1` / `JOBS=$(nproc)`）および `gosh` 基準について再現可能に計測され、`docs/benchmarks/lua_547_build_phase_profile.json` および `docs/benchmarks/lua_547_build_phase_profile.md` が生成されていること。
-- [x] **アセンブラ往復コスト定量化 ＆ 次期最適化判断エビデンス**: レポート内でアセンブラテキスト往復（`asm_emit` + `asm_pass1`、および大型 TU における純粋テキスト再パース比率）と PEG パース（`parse`）・CPP・Sema・LIR Opt・Pass 144 リンクの占有率・Top-10 TU 内訳が定量化され、[#948](../948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)/[#949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) とアセンブラ往復解消の次期優先度を根拠とともに結論づけていること。
+- [x] **アセンブラ往復コスト定量化 ＆ 次期最適化判断エビデンス**: レポート内でアセンブラテキスト往復（`asm_emit` + `asm_pass1`、および大型 TU における純粋テキスト再パース比率）と PEG パース（`parse`）・CPP・Sema・LIR Opt・Pass 144 リンクの占有率・Top-10 TU 内訳が定量化され、[#948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)/[#949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) とアセンブラ往復解消の次期優先度を根拠とともに結論づけていること。
 - [x] **回帰なし ＆ 全品質ゲート PASS**: `make -C ulisp verify_zero_gauche lint_sexpr test_lint_sexpr test_c99_e2e test_ulisp_cc_native compile_lua`、およびルート `make py_compile && make static_analysis`（`ulisp/scripts/profile_lua_build.py` の `black --check` / `mypy --strict` 含む）が全て PASS し、関連 Markdown ファイルに絶対パスリンクが存在しないこと。
 
 ---
@@ -188,7 +188,7 @@ flowchart TD
   4. **アセンブラ往復区間 (`asm_emit` `47.10 ms` [0.53%] + `asm_pass1` `338.63 ms` [3.83%])**: `385.73 ms` (**4.36%** of 33 TU / **4.02%** of total)
      - 大型 3 TU (`lvm.c` 77.13%, `lparser.c` 67.52%, `lcode.c` 79.90%) の純粋テキスト再パース (`parse_only`) 平均 `74.8%` から算出した純粋往復コストは約 `300.56 ms`（**3.40%**）。
   5. その他 (`pch_load` 2.89%, `sema` 1.63%, `lir_verify` 1.44%, `lower` 0.63%, `x86_peephole` 0.54%, `isel` 0.41%, `asm_pass2` 0.35%, `elf_build` 0.20%, `obj_write` 0.05%)
-- **次期高速化判断結論**: `parse`（**53.64%**）がアセンブラ往復全体（**4.36%**、純往復 **3.40%**）の 12 倍以上を占める最大単独ボトルネックであり、**[#948](../948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)/[#949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md)（Direct-Style 静的 PEG パーサ移行）を最優先**とし、次いで Pass 140→144a 直接構造化エンコードを進めるべきであるとの定量的根拠を得た。
+- **次期高速化判断結論**: `parse`（**53.64%**）がアセンブラ往復全体（**4.36%**、純往復 **3.40%**）の 12 倍以上を占める最大単独ボトルネックであり、**[#948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)/[#949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md)（Direct-Style 静的 PEG パーサ移行）を最優先**とし、次いで Pass 140→144a 直接構造化エンコードを進めるべきであるとの定量的根拠を得た。
 - **品質ゲート全 PASS**:
   - `make -C ulisp verify_zero_gauche lint_sexpr test_lint_sexpr`: PASS (254 files balanced, 23 tests OK)
   - `make -C ulisp test_c99_e2e`: PASS (`test_c99_e2e_hello.scm` 47/47, E2E 14/14)

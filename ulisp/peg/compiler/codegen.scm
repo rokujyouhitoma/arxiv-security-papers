@@ -26,6 +26,18 @@
       ((string=? pat "'(?:[^'\\\\]|\\\\.)*'")
        (peg:meta-string-lit))
 
+      ;; Meta-grammar regex literal token: \/(?![ \t\r\n])((?:[^\r\n\/]|\\.)+)\/
+      ((string=? pat "\\/(?![ \\t\\r\\n])((?:[^\\r\\n\\/]|\\\\.)+)\\/")
+       (peg:meta-regex-lit))
+
+      ;; Meta-grammar character class token: \[\^?(?:\\\]|[^\]])+\]
+      ((string=? pat "\\[\\^?(?:\\\\\\]|[^\\]])+\\]")
+       (peg:meta-char-class))
+
+      ;; Escape pair pattern: \.
+      ((string=? pat "\\\\.")
+       (peg:seq (peg:lit "\\") (peg:any-char)))
+
       ;; Character class with suffix: [spec]+ or [spec]* or [spec]
       ((and (> len 2) (char=? (string-ref pat 0) #\[))
        (let loop ((i 1))
@@ -242,6 +254,10 @@
                (cond
                  ((eq? name 'action_block)
                   (peg:meta-action-block))
+                 ((eq? name 'new_rule_head)
+                  (peg:alt
+                   (peg:seq (peg:meta-ident) (tok "<-"))
+                   (peg:seq (peg:line-start) (peg:meta-ident) (peg:alt (tok ":") (tok "=")))))
                  ((eq? name 'choice_expr)
                   (peg:map (lambda (pair) (cadr pair))
                            (peg:seq (peg:opt (peg:lex (peg:alt (peg:lit "|") (peg:lit "/"))))
