@@ -223,6 +223,10 @@
   assemble-and-build-elf-obj
   emit-x86-64-elf-obj
   build-x86-64-elf-obj
+  emit-x86-64-profiled
+  build-x86-64-elf-obj-profiled
+  assemble-x86-relocatable-profiled
+  profile-x86-asm-parse-only
   assemble-stream-to-elf-obj
   record-picopass-firing!
   picopass-enabled?

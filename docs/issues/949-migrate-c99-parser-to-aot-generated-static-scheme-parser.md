@@ -11,7 +11,7 @@ ID: 949
 
 現行の [parser.scm](../../ulisp/frontend_c/parser.scm)（`compile-c99-rule-getter`）は起動時に [c99.peg](../../tools/grammars/c99.peg)（またはキャッシュ AST）を読み込み、`fast-leaf`・10 段 Pratt 式・`decorate-c99-rule`（約 900 行の AST 構築・`typedef_name` スコープ判定）と組み合わせて二重 CPS クロージャ網を動的構築している。
 
-[#948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) の Direct-Style `.scm` 生成バックエンドに外部フック仕様（`#:overrides`, `#:decorators`, `#:extra-params '(env)`, ルール別メモ化制御）を導入し、`tools/grammars/c99.peg` から `ulisp/frontend_c/generated_c99_parser.scm` をビルド時 AOT 生成へ移行する。これにより C99 パース時の CPS クロージャ大量確保と `c99.peg` 実行時読込・構築コスト（[#932](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) Gap 4）を根本解消し、`ulisp-cc` ネイティブ AOT の高速化・省ヒープ化を実現する（優先度・効果見込みは [#945](945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) の計測結果も踏まえて最終判断する）。
+[#948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) の Direct-Style `.scm` 生成バックエンドに外部フック仕様（`#:overrides`, `#:decorators`, `#:extra-params '(env)`, ルール別メモ化制御）を導入し、`tools/grammars/c99.peg` から `ulisp/frontend_c/generated_c99_parser.scm` をビルド時 AOT 生成へ移行する。これにより C99 パース時の CPS クロージャ大量確保と `c99.peg` 実行時読込・構築コスト（[#932](932-build-native-aot-ulisp-cc-compiler-driver-binary.md) Gap 4）を根本解消し、`ulisp-cc` ネイティブ AOT の高速化・省ヒープ化を実現する（優先度・効果見込みは [#945](closed/945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) の計測結果も踏まえて最終判断する）。
 
 ---
 
@@ -22,7 +22,7 @@ ID: 949
   - [DSN-33-32](../designs/DSN-33-32-ulisp_lua_c_codebase_compilation_and_self_hosting_architecture.md)
   - [Issue #931](closed/931-implement-c99-peg-grammar-specification-and-parser-synthesis.md)
   - [Issue #932](932-build-native-aot-ulisp-cc-compiler-driver-binary.md)
-  - [Issue #945](945-profile-lua-547-c99-build-phase-breakdown-on-linux.md)
+  - [Issue #945](closed/945-profile-lua-547-c99-build-phase-breakdown-on-linux.md)
   - [Issue #948](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md)
 
 ---

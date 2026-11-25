@@ -1332,6 +1332,15 @@
   c-drv-entry-sym-set!
   c-drv-file-prefix-maps
   c-drv-file-prefix-maps-set!
+  c-drv-profile-phases?
+  c-drv-profile-phases-set!
+  c-drv-profile-asm-parse?
+  c-drv-profile-asm-parse-set!
+  %c-drv-now-us
+  %c-drv-elapsed-us
+  %c-drv-emit-profile-record!
+  %c99-compile-file-to-lir-impl
+  c99-compile-file-to-lir-profiled
   make-default-c-driver-options
   %c-drv-error!
   c99-safe-cli-arg?

@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **945** | Lua 5.4.7 ビルド 60 秒のフェーズ別内訳プロファイリングとアセンブラ往復コスト定量化 | Feature | New | [945-profile-lua-547-c99-build-phase-breakdown-on-linux.md](945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) |
 | **946** | SQL 実行器における式文字列のレコード毎再解析の解消と AST 事前コンパイル化 | Feature | New | [946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md](946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md) |
 | **947** | オントロジー推論ルール `master_rules.json` の未使用状態の解消と `EdgeInferenceRuleRegistry` 読み込み整合化 | Feature | New | [947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md](947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md) |
 | **948** | Direct-Style 静的 `.scm` PEG パーサージェネレータバックエンド (`emit_scheme.scm`) の実装と `peg_meta.peg` ソース自己ホスト不動点実証 | Feature | New | [948-implement-direct-style-static-scheme-peg-parser-generator-backend.md](948-implement-direct-style-static-scheme-peg-parser-generator-backend.md) |
@@ -22,6 +21,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **945** | Lua 5.4.7 ビルド 60 秒のフェーズ別内訳プロファイリングとアセンブラ往復コスト定量化 | Feature | 2026-11-25 | [945-profile-lua-547-c99-build-phase-breakdown-on-linux.md](closed/945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) |
 | **965** | `mix`（`eval-in-stage`）における後方ジャンプループの残余再帰関数生成と `case`・名前付き `let`・`letrec` 対応 | Feature | 2026-11-25 | [965-support-backward-jump-loops-and-case-letrec-named-let-in-futamura-mix.md](closed/965-support-backward-jump-loops-and-case-letrec-named-let-in-futamura-mix.md) |
 | **964** | `define-mem-check` によるメモリ安全性検査仕様の単一情報源化と LIR VM・`--sanitize-bounds` 双方への統一射影 | Feature | 2026-11-25 | [964-unify-vm-and-sanitizer-checks-via-define-mem-check.md](closed/964-unify-vm-and-sanitizer-checks-via-define-mem-check.md) |
 | **963** | シャドウメモリ付き LIR VM を判定基準（オラクル）とした `--sanitize-bounds` 検出範囲・CWE カバレッジ計測ハーネス | Feature | 2026-11-25 | [963-measure-sanitizer-detection-coverage-against-lir-vm-shadow-oracle.md](closed/963-measure-sanitizer-detection-coverage-against-lir-vm-shadow-oracle.md) |

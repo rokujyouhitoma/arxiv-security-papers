@@ -21,7 +21,7 @@ ID: 948
   - [DSN-25](../designs/DSN-25-pure_python_packrat_peg_parser_engine.md)
   - [DSN-33-22](../designs/DSN-33-22-ulisp_language_workbench_interpreter_generator_and_guest_runtime_architecture.md)
   - [Issue #894](closed/894-implement-pure-scheme-compile-time-peg-parser-generator.md)
-  - [Issue #945](945-profile-lua-547-c99-build-phase-breakdown-on-linux.md)
+  - [Issue #945](closed/945-profile-lua-547-c99-build-phase-breakdown-on-linux.md)
 
 ---
 

@@ -40401,6 +40401,24 @@
          (asm-opt (optimize-x86-peephole asm-ast)))
     (emit-x86-asm-program asm-opt gc-mode)
     asm-opt))
+
+(define (emit-x86-64-profiled prog gc-mode)
+  (set-car! *backend-gc-mode* gc-mode)
+  (set-car! *alloc-counter* 0)
+  (let* ((t0 (current-time-monotonic-us))
+         (asm-ast (select-instructions-x86 prog))
+         (t1 (current-time-monotonic-us))
+         (asm-opt (optimize-x86-peephole asm-ast))
+         (t2 (current-time-monotonic-us)))
+    (emit-x86-asm-program asm-opt gc-mode)
+    (let* ((t3 (current-time-monotonic-us))
+           (d-isel (- t1 t0))
+           (d-peep (- t2 t1))
+           (d-emit (- t3 t2)))
+      (list asm-opt
+            (if (< d-isel 0) 0 d-isel)
+            (if (< d-peep 0) 0 d-peep)
+            (if (< d-emit 0) 0 d-emit)))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 141: Native x86-64 Garbage Collector Code Generator
 ;;; Conforms to DSN-33 Architecture Specification & Issue #569
@@ -47015,8 +47033,9 @@
                (loop (cdr rest) (+ off n))))))
         #t)))
 
-(define (assemble-x86-relocatable lines)
-  (let ((sym-table-box (vector '()))
+(define (%assemble-x86-relocatable-impl lines profile?)
+  (let ((t0 (if profile? (current-time-monotonic-us) 0))
+        (sym-table-box (vector '()))
         (sym-map (make-symbol-map 8192))
         (globl-map (make-symbol-map 2048))
         (weak-map (make-symbol-map 512))
@@ -47323,7 +47342,7 @@
                                          (vector-set! relocs-box 0 (cons (cons (car reloc) (cons 'text (cdr reloc))) (vector-ref relocs-box 0))))
                                      (add-sec-op! 'text bytes blen)))
                                (pass1-loop (cdr lines-rest) cur-sec)))))))))
-            (begin
+            (let ((t1 (if profile? (current-time-monotonic-us) 0)))
               ;; Resolve .set/.equiv aliases before Pass 2 materialization
               (asm-resolve-aliases! (reverse (vector-ref aliases-box 0))
                                     sym-map
@@ -47416,8 +47435,113 @@
                                      ;; Exported or undefined symbol: relocate against named symbol
                                      (reloc-loop (cdr rels)
                                                  (cons (list sec patch-off sym r-type base-addend) rela-acc)))))))))
-                    (list text-bv rodata-bv data-bv bss-len init-bv globals-bv
-                          sym-table globl-syms weak-syms sym-types (reverse rela-acc)))))))))))
+                    (let ((assembled (list text-bv rodata-bv data-bv bss-len init-bv globals-bv
+                                           sym-table globl-syms weak-syms sym-types (reverse rela-acc))))
+                      (if profile?
+                          (let* ((t2 (current-time-monotonic-us))
+                                 (d1 (- t1 t0))
+                                 (d2 (- t2 t1)))
+                            (list assembled
+                                  (if (< d1 0) 0 d1)
+                                  (if (< d2 0) 0 d2)))
+                          assembled)))))))))))
+
+(define (assemble-x86-relocatable lines)
+  (%assemble-x86-relocatable-impl lines #f))
+
+(define (assemble-x86-relocatable-profiled lines)
+  (%assemble-x86-relocatable-impl lines #t))
+
+;; Issue #945: Pure text-cleanup / tokenize / directive & operand parse micro-probe
+;; Isolates Pass 1 text re-parsing cost from instruction encoding & symbol resolution.
+(define (profile-x86-asm-parse-only lines)
+  (let loop ((lines-rest lines) (inst-cnt 0) (dir-cnt 0))
+    (if (null? lines-rest)
+        (cons inst-cnt dir-cnt)
+        (let* ((line (car lines-rest))
+               (clean (asm-trim-string (asm-strip-comment line))))
+          (if (= (string-length clean) 0)
+              (loop (cdr lines-rest) inst-cnt dir-cnt)
+              (let ((tokens (asm-tokenize-line clean)))
+                (if (null? tokens)
+                    (loop (cdr lines-rest) inst-cnt dir-cnt)
+                    (let ((first (car tokens)))
+                      (cond
+                        ((or (and (pair? (cdr tokens)) (string=? (cadr tokens) ":"))
+                             (char=? (string-ref first (- (string-length first) 1)) #\:))
+                         (let* ((colon-pos (let cloop ((i 0))
+                                             (if (or (>= i (string-length clean)) (char=? (string-ref clean i) #\:))
+                                                 i
+                                                 (cloop (+ i 1)))))
+                                (rem-line (if (< (+ colon-pos 1) (string-length clean))
+                                              (asm-trim-string (substring clean (+ colon-pos 1) (string-length clean)))
+                                              "")))
+                           (if (> (string-length rem-line) 0)
+                               (loop (cons rem-line (cdr lines-rest)) inst-cnt (+ dir-cnt 1))
+                               (loop (cdr lines-rest) inst-cnt (+ dir-cnt 1)))))
+                        ((or (string=? first ".text") (string-starts-with? clean ".section .text")
+                             (string=? first ".data") (string-starts-with? clean ".section .data")
+                             (string=? first ".rodata") (string-starts-with? clean ".section .rodata")
+                             (string=? first ".bss") (string-starts-with? clean ".section .bss")
+                             (string-starts-with? clean ".section ulisp_globals_sec")
+                             (string-starts-with? clean ".section .init_array")
+                             (string=? first ".section") (string=? first ".pushsection")
+                             (string-starts-with? clean ".section .note")
+                             (string=? first ".intel_syntax")
+                             (string=? first ".file") (string=? first ".loc")
+                             (string=? first ".hidden") (string=? first ".protected")
+                             (string=? first ".internal") (string=? first ".size"))
+                         (loop (cdr lines-rest) inst-cnt (+ dir-cnt 1)))
+                        ((or (string=? first ".globl") (string=? first ".global") (string=? first ".weak")
+                             (string=? first ".set") (string=? first ".equiv"))
+                         (let ((groups (asm-split-by-comma (cdr tokens))))
+                           (for-each (lambda (g) (asm-tokens->string g)) groups)
+                           (loop (cdr lines-rest) inst-cnt (+ dir-cnt 1))))
+                        ((string=? first ".type")
+                         (loop (cdr lines-rest) inst-cnt (+ dir-cnt 1)))
+                        ((or (string=? first ".align") (string=? first ".p2align"))
+                         (if (pair? (cdr tokens)) (safe-string->number (cadr tokens)))
+                         (loop (cdr lines-rest) inst-cnt (+ dir-cnt 1)))
+                        ((or (string=? first ".byte") (string=? first ".short") (string=? first ".2byte")
+                             (string=? first ".long") (string=? first ".4byte")
+                             (string=? first ".quad") (string=? first ".8byte")
+                             (string=? first ".string") (string=? first ".asciz") (string=? first ".ascii")
+                             (string=? first ".space") (string=? first ".zero"))
+                         (let ((groups (asm-split-by-comma (cdr tokens))))
+                           (for-each (lambda (g) (asm-parse-data-expr (asm-tokens->string g))) groups)
+                           (loop (cdr lines-rest) inst-cnt (+ dir-cnt 1))))
+                        ((string=? first ".fill")
+                         (let ((groups (asm-split-by-comma (cdr tokens))))
+                           (asm-parse-fill-args groups)
+                           (loop (cdr lines-rest) inst-cnt (+ dir-cnt 1))))
+                        (else
+                         (let* ((has-lock? (and (or (string=? first "lock")
+                                                    (string=? (safe-string-downcase first) "lock"))
+                                                (pair? (cdr tokens))))
+                                (raw-opnd-tokens (if has-lock? (cddr tokens) (cdr tokens)))
+                                (opnd-strs (let ((join-cur
+                                                  (lambda (rev-cur)
+                                                    (if (null? rev-cur)
+                                                        ""
+                                                        (if (null? (cdr rev-cur))
+                                                            (car rev-cur)
+                                                            (let l ((cs (reverse rev-cur)) (s ""))
+                                                              (if (null? cs)
+                                                                  s
+                                                                  (l (cdr cs) (string-append s (car cs) " ")))))))))
+                                             (let oloop ((ts raw-opnd-tokens) (cur '()) (acc '()))
+                                               (cond
+                                                 ((null? ts)
+                                                  (if (null? cur)
+                                                      (reverse acc)
+                                                      (reverse (cons (join-cur cur) acc))))
+                                                 ((string=? (car ts) ",")
+                                                  (oloop (cdr ts) '() (cons (join-cur cur) acc)))
+                                                 (else
+                                                  (oloop (cdr ts) (cons (car ts) cur) acc))))))
+                                (opnds (map parse-operand-str opnd-strs)))
+                           (if (pair? opnds) #t #t)
+                           (loop (cdr lines-rest) (+ inst-cnt 1) dir-cnt))))))))))))
 
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 144: Direct ELF64 Static Executable Generator
@@ -47536,6 +47660,45 @@
         (emit-x86-64 prog gc-mode)))
     (let* ((asm-lines (reverse (vector-ref lines-box 0))))
       (assemble-and-build-elf-obj asm-lines))))
+
+(define (build-x86-64-elf-obj-profiled prog gc-mode)
+  (let ((lines-box (vector '()))
+        (count-box (vector 0 0))
+        (emit-prof-box (vector #f))
+        (nonneg (lambda (d) (if (< d 0) 0 d))))
+    (with-emit-line-sink
+      (lambda (line)
+        (vector-set! lines-box 0 (cons line (vector-ref lines-box 0)))
+        (vector-set! count-box 0 (+ (vector-ref count-box 0) 1))
+        (vector-set! count-box 1 (+ (vector-ref count-box 1) (+ (string-length line) 1))))
+      (lambda ()
+        (vector-set! emit-prof-box 0 (emit-x86-64-profiled prog gc-mode))))
+    (let* ((ep (vector-ref emit-prof-box 0))
+           (isel-us (cadr ep))
+           (peephole-us (caddr ep))
+           (emit-core-us (cadddr ep))
+           (t-rev0 (current-time-monotonic-us))
+           (asm-lines (reverse (vector-ref lines-box 0)))
+           (t-rev1 (current-time-monotonic-us))
+           (asm-emit-us (+ emit-core-us (nonneg (- t-rev1 t-rev0))))
+           (asm-res (assemble-x86-relocatable-profiled asm-lines))
+           (assembled (car asm-res))
+           (asm-pass1-us (cadr asm-res))
+           (asm-pass2-us (caddr asm-res))
+           (t-elf0 (current-time-monotonic-us))
+           (elf-bv (build-elf64-relocatable assembled))
+           (t-elf1 (current-time-monotonic-us))
+           (elf-build-us (nonneg (- t-elf1 t-elf0))))
+      (list elf-bv
+            isel-us
+            peephole-us
+            asm-emit-us
+            asm-pass1-us
+            asm-pass2-us
+            elf-build-us
+            (vector-ref count-box 0)
+            (vector-ref count-box 1)
+            asm-lines))))
 
 (define (read-asm-lines-from-stdin)
   (cond-expand

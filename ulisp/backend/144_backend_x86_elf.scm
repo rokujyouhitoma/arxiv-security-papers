@@ -116,6 +116,45 @@
     (let* ((asm-lines (reverse (vector-ref lines-box 0))))
       (assemble-and-build-elf-obj asm-lines))))
 
+(define (build-x86-64-elf-obj-profiled prog gc-mode)
+  (let ((lines-box (vector '()))
+        (count-box (vector 0 0))
+        (emit-prof-box (vector #f))
+        (nonneg (lambda (d) (if (< d 0) 0 d))))
+    (with-emit-line-sink
+      (lambda (line)
+        (vector-set! lines-box 0 (cons line (vector-ref lines-box 0)))
+        (vector-set! count-box 0 (+ (vector-ref count-box 0) 1))
+        (vector-set! count-box 1 (+ (vector-ref count-box 1) (+ (string-length line) 1))))
+      (lambda ()
+        (vector-set! emit-prof-box 0 (emit-x86-64-profiled prog gc-mode))))
+    (let* ((ep (vector-ref emit-prof-box 0))
+           (isel-us (cadr ep))
+           (peephole-us (caddr ep))
+           (emit-core-us (cadddr ep))
+           (t-rev0 (current-time-monotonic-us))
+           (asm-lines (reverse (vector-ref lines-box 0)))
+           (t-rev1 (current-time-monotonic-us))
+           (asm-emit-us (+ emit-core-us (nonneg (- t-rev1 t-rev0))))
+           (asm-res (assemble-x86-relocatable-profiled asm-lines))
+           (assembled (car asm-res))
+           (asm-pass1-us (cadr asm-res))
+           (asm-pass2-us (caddr asm-res))
+           (t-elf0 (current-time-monotonic-us))
+           (elf-bv (build-elf64-relocatable assembled))
+           (t-elf1 (current-time-monotonic-us))
+           (elf-build-us (nonneg (- t-elf1 t-elf0))))
+      (list elf-bv
+            isel-us
+            peephole-us
+            asm-emit-us
+            asm-pass1-us
+            asm-pass2-us
+            elf-build-us
+            (vector-ref count-box 0)
+            (vector-ref count-box 1)
+            asm-lines))))
+
 (define (read-asm-lines-from-stdin)
   (cond-expand
     (ulisp

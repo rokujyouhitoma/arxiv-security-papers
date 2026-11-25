@@ -171,6 +171,12 @@ if [ "${BUILD_LUAC:-0}" = "1" ]; then
 fi
 
 USE_PCH="${USE_PCH:-1}"
+PROFILE_PHASES="${PROFILE_PHASES:-0}"
+SKIP_SMOKE="${SKIP_SMOKE:-0}"
+PROFILE_FLAG=()
+if [ "$PROFILE_PHASES" = "1" ]; then
+  PROFILE_FLAG=(--profile-phases)
+fi
 T0="$(date +%s)"
 
 if [ "$USE_PCH" = "1" ]; then
@@ -248,9 +254,9 @@ EOF
 #include "lualib.h"
 EOF
 
-  "${RUN_CC[@]}" -emit-pch -DLUA_USE_POSIX -I "$SRC_DIR" "$CORE_PCH_HDR" -o "$CORE_PCH_SBI" > "$OBJ_DIR/pch_core.log" 2>&1 &
+  "${RUN_CC[@]}" "${PROFILE_FLAG[@]}" -emit-pch -DLUA_USE_POSIX -I "$SRC_DIR" "$CORE_PCH_HDR" -o "$CORE_PCH_SBI" > "$OBJ_DIR/pch_core.log" 2>&1 &
   PCH_PID1="$!"
-  "${RUN_CC[@]}" -emit-pch -DLUA_USE_POSIX -I "$SRC_DIR" "$LIB_PCH_HDR" -o "$LIB_PCH_SBI" > "$OBJ_DIR/pch_lib.log" 2>&1 &
+  "${RUN_CC[@]}" "${PROFILE_FLAG[@]}" -emit-pch -DLUA_USE_POSIX -I "$SRC_DIR" "$LIB_PCH_HDR" -o "$LIB_PCH_SBI" > "$OBJ_DIR/pch_lib.log" 2>&1 &
   PCH_PID2="$!"
   PCH_RC=0
   if ! wait "$PCH_PID1"; then
@@ -301,9 +307,9 @@ EOF
 
     if [ -n "${ULISP_CC_BIN:-}" ] && [ -x "${ULISP_CC_BIN}" ]; then
       (
-        if [ "${#SHARD_CORE[@]}" -gt 0 ]; then "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$CORE_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_CORE[@]}"; fi
-        if [ "${#SHARD_LIB[@]}" -gt 0 ]; then "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$LIB_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_LIB[@]}"; fi
-        if [ "${#SHARD_CLI[@]}" -gt 0 ]; then "$ULISP_CC_BIN" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_CLI[@]}"; fi
+        if [ "${#SHARD_CORE[@]}" -gt 0 ]; then "$ULISP_CC_BIN" "${PROFILE_FLAG[@]}" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$CORE_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_CORE[@]}"; fi
+        if [ "${#SHARD_LIB[@]}" -gt 0 ]; then "$ULISP_CC_BIN" "${PROFILE_FLAG[@]}" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -include-pch "$LIB_PCH_SBI" -c -o "$OBJ_DIR/" "${SHARD_LIB[@]}"; fi
+        if [ "${#SHARD_CLI[@]}" -gt 0 ]; then "$ULISP_CC_BIN" "${PROFILE_FLAG[@]}" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_CLI[@]}"; fi
       ) > "$OBJ_DIR/shard_${s}.log" 2>&1 &
       PIDS+=("$!")
     else
@@ -311,17 +317,23 @@ EOF
       sed '$d' "$ULISP_DIR/build/c_driver_runner.scm" > "$SHARD_SCM"
       echo "(begin" >> "$SHARD_SCM"
       if [ "${#SHARD_CORE[@]}" -gt 0 ]; then
-        printf '  (c-driver-main '\''("-DLUA_USE_POSIX" "-O2" "-I" "%s" "-include-pch" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$CORE_PCH_SBI" "$OBJ_DIR/" >> "$SHARD_SCM"
+        printf '  (c-driver-main '\''(' >> "$SHARD_SCM"
+        if [ "$PROFILE_PHASES" = "1" ]; then printf '"--profile-phases" ' >> "$SHARD_SCM"; fi
+        printf '"-DLUA_USE_POSIX" "-O2" "-I" "%s" "-include-pch" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$CORE_PCH_SBI" "$OBJ_DIR/" >> "$SHARD_SCM"
         for src in "${SHARD_CORE[@]}"; do printf ' "%s"' "$src" >> "$SHARD_SCM"; done
         echo '))' >> "$SHARD_SCM"
       fi
       if [ "${#SHARD_LIB[@]}" -gt 0 ]; then
-        printf '  (c-driver-main '\''("-DLUA_USE_POSIX" "-O2" "-I" "%s" "-include-pch" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$LIB_PCH_SBI" "$OBJ_DIR/" >> "$SHARD_SCM"
+        printf '  (c-driver-main '\''(' >> "$SHARD_SCM"
+        if [ "$PROFILE_PHASES" = "1" ]; then printf '"--profile-phases" ' >> "$SHARD_SCM"; fi
+        printf '"-DLUA_USE_POSIX" "-O2" "-I" "%s" "-include-pch" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$LIB_PCH_SBI" "$OBJ_DIR/" >> "$SHARD_SCM"
         for src in "${SHARD_LIB[@]}"; do printf ' "%s"' "$src" >> "$SHARD_SCM"; done
         echo '))' >> "$SHARD_SCM"
       fi
       if [ "${#SHARD_CLI[@]}" -gt 0 ]; then
-        printf '  (c-driver-main '\''("-DLUA_USE_POSIX" "-O2" "-I" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$OBJ_DIR/" >> "$SHARD_SCM"
+        printf '  (c-driver-main '\''(' >> "$SHARD_SCM"
+        if [ "$PROFILE_PHASES" = "1" ]; then printf '"--profile-phases" ' >> "$SHARD_SCM"; fi
+        printf '"-DLUA_USE_POSIX" "-O2" "-I" "%s" "-c" "-o" "%s"' "$SRC_DIR" "$OBJ_DIR/" >> "$SHARD_SCM"
         for src in "${SHARD_CLI[@]}"; do printf ' "%s"' "$src" >> "$SHARD_SCM"; done
         echo '))' >> "$SHARD_SCM"
       fi
@@ -347,7 +359,7 @@ else
     done
     if [ "${#SHARD_SRCS[@]}" -gt 0 ]; then
       (
-        "${RUN_CC[@]}" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_SRCS[@]}" > "$OBJ_DIR/shard_${s}.log" 2>&1
+        "${RUN_CC[@]}" "${PROFILE_FLAG[@]}" -DLUA_USE_POSIX -O2 -I "$SRC_DIR" -c -o "$OBJ_DIR/" "${SHARD_SRCS[@]}" > "$OBJ_DIR/shard_${s}.log" 2>&1
       ) &
       PIDS+=("$!")
     fi
@@ -421,9 +433,13 @@ for tool in uname env sh bash cat rm mkdir chmod; do
   fi
 done
 
-PATH="$NOHOST_LINK_DIR" "${RUN_CC[@]}" --linker=ulisp -static -nostdlib \
+if ! PATH="$NOHOST_LINK_DIR" "${RUN_CC[@]}" "${PROFILE_FLAG[@]}" --linker=ulisp -static -nostdlib \
   "$MUSL_LIB_DIR/crt1.o" "${LUA_OBJS[@]}" "$MUSL_LIB_DIR/libc.a" \
-  -o "$LUA_ULISP_STATIC_BIN"
+  -o "$LUA_ULISP_STATIC_BIN" > "$OBJ_DIR/link.log" 2>&1; then
+  cat "$OBJ_DIR/link.log" >&2 || true
+  rm -rf "$NOHOST_LINK_DIR"
+  exit 1
+fi
 rm -rf "$NOHOST_LINK_DIR"
 cp -f "$LUA_ULISP_STATIC_BIN" "$LUA_ULISP_BIN"
 echo "  [PASS] Linked standalone static ELF64 executable via Pass 144 linker: $LUA_ULISP_BIN ($(stat -c%s "$LUA_ULISP_BIN") bytes)"
@@ -464,6 +480,13 @@ fi
 # -----------------------------------------------------------------------
 # 6. Differential Smoke & REPL Verification Suite (lua_ulisp vs lua_gcc)
 # -----------------------------------------------------------------------
+if [ "$SKIP_SMOKE" = "1" ]; then
+  echo "========================================================================"
+  echo " Lua ${LUA_VER} ULisp Build Verification (Smoke Skipped via SKIP_SMOKE=1): PASS"
+  echo "========================================================================"
+  exit 0
+fi
+
 SMOKE_TMP="$ULISP_DIR/build/lua_smoke_tmp_$$"
 mkdir -p "$SMOKE_TMP"
 trap 'rm -rf "$SMOKE_TMP"' EXIT

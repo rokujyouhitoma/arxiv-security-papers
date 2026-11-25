@@ -132,6 +132,51 @@
                 (c-driver-main (list "--target=vm" "-DFACTOR=10" vm-src-path)))
   (if (file-exists? vm-src-path) (delete-file vm-src-path)))
 
+;;; -----------------------------------------------------------------------
+;;; Group 5: Phase Profiling Options & Backend/Assembler Hooks (Issue #945)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 5: Phase Profiling Hooks (#945) ---\n")
+
+(let ((opts-def (parse-c-driver-args '("-c" "main.c")))
+      (opts-prof (parse-c-driver-args '("--profile-phases" "-c" "main.c")))
+      (opts-probe (parse-c-driver-args '("--profile-asm-parse" "-c" "main.c"))))
+  (assert-equal "default profile-phases? is #f" #f (c-drv-profile-phases? opts-def))
+  (assert-equal "default profile-asm-parse? is #f" #f (c-drv-profile-asm-parse? opts-def))
+  (assert-equal "--profile-phases enables profile-phases?" #t (c-drv-profile-phases? opts-prof))
+  (assert-equal "--profile-phases keeps profile-asm-parse? #f" #f (c-drv-profile-asm-parse? opts-prof))
+  (assert-equal "--profile-asm-parse enables profile-phases?" #t (c-drv-profile-phases? opts-probe))
+  (assert-equal "--profile-asm-parse enables profile-asm-parse?" #t (c-drv-profile-asm-parse? opts-probe)))
+
+(let ((prof-src "build/tmp_drv_prof_test.c")
+      (prof-obj "build/tmp_drv_prof_test.o"))
+  (%c-drv-write-text-file!
+   prof-src
+   "int add_one(int x) { return x + 1; }\nint main(void) { return add_one(41); }\n")
+  (let* ((opts (parse-c-driver-args (list "-O1" "-c" prof-src)))
+         (lir (c99-compile-file-to-lir prof-src opts))
+         (bv-norm (build-x86-64-elf-obj lir 'c-tu))
+         (prof-res (build-x86-64-elf-obj-profiled lir 'c-tu))
+         (bv-prof (car prof-res))
+         (asm-lines (list-ref prof-res 9))
+         (counts (profile-x86-asm-parse-only asm-lines)))
+    (assert-true "profiled ELF object bytes match normal build identically" (sbi-bytevector=? bv-norm bv-prof))
+    (assert-true "isel_us >= 0" (>= (list-ref prof-res 1) 0))
+    (assert-true "x86_peephole_us >= 0" (>= (list-ref prof-res 2) 0))
+    (assert-true "asm_emit_us >= 0" (>= (list-ref prof-res 3) 0))
+    (assert-true "asm_pass1_us >= 0" (>= (list-ref prof-res 4) 0))
+    (assert-true "asm_pass2_us >= 0" (>= (list-ref prof-res 5) 0))
+    (assert-true "elf_build_us >= 0" (>= (list-ref prof-res 6) 0))
+    (assert-true "asm_lines > 0" (> (list-ref prof-res 7) 0))
+    (assert-true "asm_bytes > 0" (> (list-ref prof-res 8) 0))
+    (assert-true "parsed_insts > 0" (> (car counts) 0))
+    (assert-true "parsed_dirs > 0" (> (cdr counts) 0)))
+  (assert-equal "c-driver-main --profile-phases -c exits 0"
+                0
+                (c-driver-main (list "--profile-phases" "--profile-asm-parse" "-O1" "-c" prof-src "-o" prof-obj)))
+  (assert-true "profiled .o output exists" (file-exists? prof-obj))
+  (if (file-exists? prof-src) (delete-file prof-src))
+  (if (file-exists? prof-obj) (delete-file prof-obj)))
+
 (test-end)
 (display "-------------------------------------------------------\n")
 (display " [RESULT] C Compiler Driver & Pass 144a Suite (#917): ALL PASSED\n")
