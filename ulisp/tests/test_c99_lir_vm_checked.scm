@@ -349,4 +349,82 @@
                   '(match trap sanitizer-trap 134)
                   d)))
 
+;;; -----------------------------------------------------------------------
+;;; Group 5: Object-Level Shadow Memory Heap Checks (Issue #962)
+;;; CWE-122 (Heap OOB), CWE-415 (Double Free), CWE-416 (UAF), CWE-590 (Invalid Free)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 5: Shadow Memory Heap Checks (CWE-122/415/416/590) ---\n")
+
+;; 5.1 CWE-122 Heap OOB 1-byte alignment tail overrun on malloc(5)
+(let* ((chk-r (vm-chk-compile-eval-str
+               "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(5); p[4] = 'a'; return (unsigned char)p[5]; }\n"))
+       (chk-w (vm-chk-compile-eval-str
+               "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(5); p[5] = 'x'; return 0; }\n")))
+  (assert-equal "5.1a CWE-122 heap 1-byte tail read OOB traps" '(trap heap-out-of-bounds) (list (car chk-r) (cadr chk-r)))
+  (assert-equal "5.1b CWE-122 heap 1-byte tail write OOB traps" '(trap heap-out-of-bounds) (list (car chk-w) (cadr chk-w))))
+
+;; 5.2 CWE-122 Heap underflow into leading redzone (p[-1])
+(let ((chk (vm-chk-compile-eval-str
+            "#include <stdlib.h>\nint main(void) { int *p = (int *)malloc(16); p[-1] = 42; return p[0]; }\n")))
+  (assert-equal "5.2 CWE-122 heap underflow into pre-redzone traps" '(trap heap-out-of-bounds) (list (car chk) (cadr chk))))
+
+;; 5.3 CWE-122 Heap overflow via memcpy / strcpy into malloc(4)
+(let ((chk-mc (vm-chk-compile-eval-str
+               "#include <stdlib.h>\n#include <string.h>\nint main(void) { char src[8] = \"abcdefg\"; char *dst = (char *)malloc(4); memcpy(dst, src, 5); return 0; }\n"))
+      (chk-sc (vm-chk-compile-eval-str
+               "#include <stdlib.h>\n#include <string.h>\nint main(void) { char *dst = (char *)malloc(4); strcpy(dst, \"hello\"); return 0; }\n")))
+  (assert-equal "5.3a CWE-122 memcpy heap overflow traps" '(trap heap-out-of-bounds) (list (car chk-mc) (cadr chk-mc)))
+  (assert-equal "5.3b CWE-122 strcpy heap overflow traps" '(trap heap-out-of-bounds) (list (car chk-sc) (cadr chk-sc))))
+
+;; 5.4 CWE-122 Dereferencing 0-byte allocation malloc(0)
+(let ((chk (vm-chk-compile-eval-str
+            "#include <stdlib.h>\nint main(void) { volatile char *p = (char *)malloc(0); return *p; }\n")))
+  (assert-equal "5.4 CWE-122 dereferencing malloc(0) traps heap-out-of-bounds" '(trap heap-out-of-bounds) (list (car chk) (cadr chk))))
+
+;; 5.5 CWE-416 Use-After-Free after free(p)
+(let* ((f-uaf (vm-chk-write-c "g5_uaf.c" "#include <stdlib.h>\nint main(void) { int *p = (int *)malloc(8); *p = 7; free(p); return *p; }\n"))
+       (chk-r (vm-chk-compile-eval-str "#include <stdlib.h>\nint main(void) { int *p = (int *)malloc(8); *p = 7; free(p); return *p; }\n"))
+       (chk-w (vm-chk-compile-eval-str "#include <stdlib.h>\nint main(void) { int *p = (int *)malloc(8); free(p); *p = 9; return 0; }\n")))
+  (assert-equal "5.5a CWE-416 use-after-free read traps" '(trap use-after-free) (list (car chk-r) (cadr chk-r)))
+  (assert-equal "5.5b CWE-416 use-after-free write traps" '(trap use-after-free) (list (car chk-w) (cadr chk-w)))
+  (assert-equal "5.5c CLI --target=vm use-after-free exits 134" 134 (c-driver-cli-main (list "--target=vm" f-uaf))))
+
+;; 5.6 CWE-416 Use-After-Free of old pointer after realloc(p, 32)
+(let ((chk (vm-chk-compile-eval-str
+            "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(8); p[0] = 11; char *q = (char *)realloc(p, 32); (void)q; return p[0]; }\n")))
+  (assert-equal "5.6 CWE-416 realloc old pointer UAF traps" '(trap use-after-free) (list (car chk) (cadr chk))))
+
+;; 5.7 CWE-415 Double Free
+(let ((chk (vm-chk-compile-eval-str
+            "#include <stdlib.h>\nint main(void) { void *p = malloc(16); free(p); free(p); return 0; }\n")))
+  (assert-equal "5.7 CWE-415 double free traps" '(trap double-free) (list (car chk) (cadr chk))))
+
+;; 5.8 CWE-590 Invalid Free (stack pointer & mid-chunk interior pointer)
+(let ((chk-stack (vm-chk-compile-eval-str
+                  "#include <stdlib.h>\nint main(void) { int x = 1; free(&x); return 0; }\n"))
+      (chk-mid   (vm-chk-compile-eval-str
+                  "#include <stdlib.h>\nint main(void) { char *p = (char *)malloc(16); free(p + 4); return 0; }\n")))
+  (assert-equal "5.8a CWE-590 free of stack pointer traps invalid-free" '(trap invalid-free) (list (car chk-stack) (cadr chk-stack)))
+  (assert-equal "5.8b CWE-590 free of interior pointer traps invalid-free" '(trap invalid-free) (list (car chk-mid) (cadr chk-mid))))
+
+;; 5.9 Valid heap lifecycle (exact boundaries, calloc, realloc preserve, free(NULL), free(malloc(0)))
+(let ((chk (vm-chk-compile-eval-str
+            (string-append
+             "#include <stdlib.h>\n"
+             "int main(void) {\n"
+             "  free((void *)0);\n"
+             "  void *z = malloc(0); free(z);\n"
+             "  unsigned char *c = (unsigned char *)calloc(3, 5);\n"
+             "  int sum = c[0] + c[14];\n"
+             "  for (int i = 0; i < 5; i++) c[i] = (unsigned char)(i + 1);\n"
+             "  unsigned char *r = (unsigned char *)realloc(c, 24);\n"
+             "  r[23] = 10;\n"
+             "  int ans = sum + r[0] + r[4] + r[23];\n"
+             "  free(r);\n"
+             "  void *r2 = realloc((void *)0, 8);\n"
+             "  void *r3 = realloc(r2, 0);\n"
+             "  return ans + (r3 == (void *)0 ? 0 : 100);\n"
+             "}\n"))))
+  (assert-equal "5.9 valid heap lifecycle (exact bounds/calloc/realloc/free) returns 16" '(ok 16) (list (car chk) (cadr chk))))
+
 (test-end)

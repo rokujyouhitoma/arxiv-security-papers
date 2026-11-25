@@ -27,6 +27,15 @@
 (define *lir-vm-default-fuel*     10000000) ; 10M instructions limit
 (define *lir-vm-errno-addr*       4096)     ; Reserved 16-byte thread-local errno slot at heap-pre start
 
+;; Shadow Memory State Codes (1 byte per guest byte, Issue #962)
+(define *lir-vm-shadow-ok*        0)   ; 0x00: Accessible stack/data/global memory
+(define *lir-vm-shadow-heap-head* 1)   ; 0x01: First byte of live heap allocation (size > 0)
+(define *lir-vm-shadow-heap-live* 2)   ; 0x02: Subsequent live bytes of heap allocation
+(define *lir-vm-shadow-heap-zero* 129) ; 0x81: 0-byte allocation marker (freeable, not dereferenceable)
+(define *lir-vm-shadow-redzone*   250) ; 0xFA: Heap redzone / alignment padding
+(define *lir-vm-shadow-freed*     253) ; 0xFD: Freed heap allocation (UAF / double-free trap)
+(define *lir-vm-redzone-bytes*    16)  ; 16-byte pre/post redzone around each heap chunk
+
 (define (lir-vm-u64 n)
   (bitwise-and n *lir-vm-mask-64*))
 
@@ -79,7 +88,8 @@
   (make-lir-vm-raw registers xmm-registers xmm-bits vregs flags memory heap-ptr
                    strings data-table functions main-func current-fn current-block
                    pc call-stack status fuel step-count tracer last-trap
-                   globals foreign-handlers f64-cells code-addr-table jmp-table)
+                   globals foreign-handlers f64-cells code-addr-table jmp-table
+                   shadow-memory)
   lir-vm?
   (registers vm-registers-vector vm-set-registers-vector!)
   (xmm-registers vm-xmm-vector vm-set-xmm-vector!)
@@ -105,12 +115,14 @@
   (foreign-handlers vm-foreign-handlers vm-set-foreign-handlers!)
   (f64-cells vm-f64-cells vm-set-f64-cells!)
   (code-addr-table vm-code-addr-table vm-set-code-addr-table!)
-  (jmp-table vm-jmp-table vm-set-jmp-table!))
+  (jmp-table vm-jmp-table vm-set-jmp-table!)
+  (shadow-memory vm-shadow-bytes vm-set-shadow-bytes!))
 
 ;;; Constructor
 (define (make-lir-vm-with-size mem-size)
   (let* ((actual-size (if (> mem-size 65536) mem-size *lir-vm-default-mem-size*))
          (mem (make-bytevector actual-size 0))
+         (shadow (make-bytevector actual-size 0))
          (regs (make-vector 16 0))
          (xmms (make-vector 16 0.0))
          (xmm-bs (make-vector 16 0))
@@ -120,7 +132,8 @@
                      '%main '%entry 0 '() 'ready
                      *lir-vm-default-fuel* 0 #f #f '() '() '()
                      (vector '() '() 65536)
-                     (vector '() 1))))
+                     (vector '() 1)
+                     shadow)))
 
 (define (vm-reset-jmp-table! vm)
   (vm-set-jmp-table! vm (vector '() 1)))
@@ -583,6 +596,31 @@
 ;;; §4. Memory Accessors & Little-Endian Integer Encoding (THREAT-834-1)
 ;;; -----------------------------------------------------------------------
 
+(define (vm-shadow-fill! vm start-addr count byte-val)
+  (let ((shadow (vm-shadow-bytes vm))
+        (end-addr (+ start-addr count)))
+    (let loop ((i start-addr))
+      (if (< i end-addr)
+          (begin
+            (bytevector-u8-set! shadow i byte-val)
+            (loop (+ i 1)))))))
+
+(define (vm-raw-write-u64! vm addr val)
+  (let ((mem (vm-memory-bytes vm))
+        (u (lir-vm-u64 val)))
+    (let loop ((i 0) (v u))
+      (if (< i 8)
+          (begin
+            (bytevector-u8-set! mem (+ addr i) (bitwise-and v #xff))
+            (loop (+ i 1) (quotient v 256)))))))
+
+(define (vm-raw-read-u64 vm addr)
+  (let ((mem (vm-memory-bytes vm)))
+    (let loop ((i 7) (acc 0))
+      (if (< i 0)
+          acc
+          (loop (- i 1) (+ (* acc 256) (bytevector-u8-ref mem (+ addr i))))))))
+
 (define (vm-mem-read-u8 vm addr)
   (let ((mem (vm-memory-bytes vm)))
     (if (or (< addr *lir-vm-null-page-limit*)
@@ -590,14 +628,32 @@
         (begin
           (vm-trigger-trap! vm 'out-of-bounds "Memory read out of bounds" addr)
           0)
-        (bytevector-u8-ref mem addr))))
+        (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) addr)))
+          (cond
+            ((or (= st *lir-vm-shadow-redzone*)
+                 (= st *lir-vm-shadow-heap-zero*))
+             (vm-trigger-trap! vm 'heap-out-of-bounds "Heap buffer out-of-bounds read" addr)
+             0)
+            ((= st *lir-vm-shadow-freed*)
+             (vm-trigger-trap! vm 'use-after-free "Heap use-after-free read" addr)
+             0)
+            (else
+             (bytevector-u8-ref mem addr)))))))
 
 (define (vm-mem-write-u8! vm addr val)
   (let ((mem (vm-memory-bytes vm)))
     (if (or (< addr *lir-vm-null-page-limit*)
             (>= addr (bytevector-length mem)))
         (vm-trigger-trap! vm 'out-of-bounds "Memory write out of bounds" addr)
-        (bytevector-u8-set! mem addr (lir-vm-u8 val)))))
+        (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) addr)))
+          (cond
+            ((or (= st *lir-vm-shadow-redzone*)
+                 (= st *lir-vm-shadow-heap-zero*))
+             (vm-trigger-trap! vm 'heap-out-of-bounds "Heap buffer out-of-bounds write" addr))
+            ((= st *lir-vm-shadow-freed*)
+             (vm-trigger-trap! vm 'use-after-free "Heap use-after-free write" addr))
+            (else
+             (bytevector-u8-set! mem addr (lir-vm-u8 val))))))))
 
 (define (vm-mem-read-i8 vm addr)
   (lir-vm-s8 (vm-mem-read-u8 vm addr)))
@@ -1132,7 +1188,10 @@
 
       ;; Initial Register & PC Setup
       (let ((top (- (bytevector-length (vm-memory-bytes vm)) 16))
-            (heap-start (max *lir-vm-heap-base* (vm-align-up (car cur-addr-box) 4096))))
+            (heap-start (max *lir-vm-heap-base* (vm-align-up (car cur-addr-box) 4096)))
+            (old-hp (vm-heap-ptr vm)))
+        (if (> old-hp *lir-vm-heap-base*)
+            (vm-shadow-fill! vm *lir-vm-heap-base* (- old-hp *lir-vm-heap-base*) *lir-vm-shadow-ok*))
         (vm-set-heap-ptr! vm heap-start)
         (vm-set-reg! vm '%rsp top)
         (vm-set-reg! vm '%rbp top)
@@ -3159,13 +3218,75 @@
           i
           (loop (+ i 1))))))
 
+(define (vm-heap-alloc-chunk! vm req-bytes zero-fill?)
+  (let* ((eff-bytes (max 1 req-bytes))
+         (aligned (bitwise-and (+ eff-bytes 7) -8))
+         (rz *lir-vm-redzone-bytes*)
+         (base (vm-heap-ptr vm))
+         (ptr (+ base rz))
+         (new-ptr (+ ptr aligned rz)))
+    (if (or (< req-bytes 0)
+            (> req-bytes *lir-vm-heap-limit*)
+            (> new-ptr *lir-vm-heap-limit*))
+        (begin
+          (vm-trigger-trap! vm 'out-of-bounds "Heap out of memory" new-ptr)
+          #f)
+        (begin
+          (vm-set-heap-ptr! vm new-ptr)
+          ;; Leading 16-byte redzone + O(1) requested byte count in [ptr - 8]
+          (vm-shadow-fill! vm base rz *lir-vm-shadow-redzone*)
+          (vm-raw-write-u64! vm (- ptr 8) req-bytes)
+          (if (= req-bytes 0)
+              (begin
+                (vm-shadow-fill! vm ptr 1 *lir-vm-shadow-heap-zero*)
+                (vm-shadow-fill! vm (+ ptr 1) (+ (- aligned 1) rz) *lir-vm-shadow-redzone*))
+              (begin
+                (vm-shadow-fill! vm ptr 1 *lir-vm-shadow-heap-head*)
+                (if (> req-bytes 1)
+                    (vm-shadow-fill! vm (+ ptr 1) (- req-bytes 1) *lir-vm-shadow-heap-live*))
+                (vm-shadow-fill! vm (+ ptr req-bytes) (+ (- aligned req-bytes) rz) *lir-vm-shadow-redzone*)
+                (if zero-fill?
+                    (let ((mem (vm-memory-bytes vm)))
+                      (let zloop ((i 0))
+                        (if (< i req-bytes)
+                            (begin
+                              (bytevector-u8-set! mem (+ ptr i) 0)
+                              (zloop (+ i 1)))))))))
+          ptr))))
+
+(define (vm-heap-validate-and-free! vm ptr caller-name)
+  (let ((mem-len (bytevector-length (vm-memory-bytes vm))))
+    (if (or (< ptr *lir-vm-null-page-limit*) (>= ptr mem-len))
+        (begin
+          (vm-trigger-trap! vm 'invalid-free (string-append "Invalid pointer passed to " caller-name) ptr)
+          #f)
+        (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) ptr)))
+          (cond
+            ((= st *lir-vm-shadow-freed*)
+             (vm-trigger-trap! vm 'double-free (string-append "Double free / freed pointer in " caller-name) ptr)
+             #f)
+            ((not (or (= st *lir-vm-shadow-heap-head*)
+                      (= st *lir-vm-shadow-heap-zero*)))
+             (vm-trigger-trap! vm 'invalid-free (string-append "Non-heap or interior pointer passed to " caller-name) ptr)
+             #f)
+            (else
+             (let ((req-sz (vm-raw-read-u64 vm (- ptr 8))))
+               (vm-shadow-fill! vm ptr (max 1 req-sz) *lir-vm-shadow-freed*)
+               req-sz)))))))
+
 (define (vm-libc-record-alloc! vm ptr sz)
-  (let ((cur (or (vm-lookup-global vm '__vm_alloc_sizes) '())))
-    (vm-set-global! vm '__vm_alloc_sizes (cons (cons ptr sz) cur))))
+  (if (>= ptr (+ *lir-vm-heap-base* 8))
+      (vm-raw-write-u64! vm (- ptr 8) sz)))
 
 (define (vm-libc-lookup-alloc vm ptr)
-  (let ((hit (assv ptr (or (vm-lookup-global vm '__vm_alloc_sizes) '()))))
-    (if hit (cdr hit) #f)))
+  (let ((mem-len (bytevector-length (vm-memory-bytes vm))))
+    (if (and (>= ptr *lir-vm-heap-base*) (< ptr mem-len))
+        (let ((st (bytevector-u8-ref (vm-shadow-bytes vm) ptr)))
+          (if (or (= st *lir-vm-shadow-heap-head*)
+                  (= st *lir-vm-shadow-heap-zero*))
+              (vm-raw-read-u64 vm (- ptr 8))
+              #f))
+        #f)))
 
 (define (vm-libc-isspace? b)
   (or (= b 32) (= b 9) (= b 10) (= b 11) (= b 12) (= b 13)))
@@ -3554,9 +3675,9 @@
                        (let ((v (lir-vm-s64 (vm-get-reg vm '%rdi))))
                          (vm-set-reg! vm '%rax (lir-vm-s64 (if (< v 0) (- 0 v) v)))))
 
-                      ((ulisp_alloc malloc)
+                      ((ulisp_alloc)
                        (let* ((bytes (lir-vm-u64 (vm-get-reg vm '%rdi)))
-                              (tag (if (eq? fn-sym 'ulisp_alloc) (vm-get-reg vm '%rsi) 0))
+                              (tag (vm-get-reg vm '%rsi))
                               (aligned (bitwise-and (+ (max 1 bytes) 7) -8))
                               (raw-ptr (vm-heap-ptr vm))
                               (new-ptr (+ raw-ptr aligned)))
@@ -3564,64 +3685,54 @@
                              (vm-trigger-trap! vm 'out-of-bounds "Heap out of memory" new-ptr)
                              (begin
                                (vm-set-heap-ptr! vm new-ptr)
-                               (vm-libc-record-alloc! vm raw-ptr aligned)
                                (vm-set-reg! vm '%rax (+ raw-ptr tag))))))
 
+                      ((malloc)
+                       (let* ((bytes (lir-vm-u64 (vm-get-reg vm '%rdi)))
+                              (ptr (vm-heap-alloc-chunk! vm bytes #f)))
+                         (if ptr
+                             (vm-set-reg! vm '%rax ptr))))
+
                       ((calloc)
-                       (let* ((nmemb (lir-vm-u64 (vm-get-reg vm '%rdi)))
-                              (sz (lir-vm-u64 (vm-get-reg vm '%rsi)))
-                              (bytes (* nmemb sz))
-                              (aligned (bitwise-and (+ (max 1 bytes) 7) -8))
-                              (raw-ptr (vm-heap-ptr vm))
-                              (new-ptr (+ raw-ptr aligned)))
-                         (if (> new-ptr *lir-vm-heap-limit*)
-                             (vm-trigger-trap! vm 'out-of-bounds "Heap out of memory" new-ptr)
-                             (begin
-                               (let zloop ((i 0))
-                                 (if (< i aligned)
-                                     (begin
-                                       (vm-mem-write-u8! vm (+ raw-ptr i) 0)
-                                       (zloop (+ i 1)))))
-                               (vm-set-heap-ptr! vm new-ptr)
-                               (vm-libc-record-alloc! vm raw-ptr aligned)
-                               (vm-set-reg! vm '%rax raw-ptr)))))
+                       (let ((nmemb (lir-vm-u64 (vm-get-reg vm '%rdi)))
+                             (sz (lir-vm-u64 (vm-get-reg vm '%rsi))))
+                         (if (and (> nmemb 0) (> sz 0) (> nmemb (quotient *lir-vm-heap-limit* sz)))
+                             (vm-trigger-trap! vm 'out-of-bounds "Heap allocation overflow in calloc" (* nmemb sz))
+                             (let ((ptr (vm-heap-alloc-chunk! vm (* nmemb sz) #t)))
+                               (if ptr
+                                   (vm-set-reg! vm '%rax ptr))))))
 
                       ((realloc)
                        (let ((ptr (lir-vm-u64 (vm-get-reg vm '%rdi)))
-                             (new-bytes (lir-vm-u64 (vm-get-reg vm '%rsi)))
-                             (mem-len (bytevector-length (vm-memory-bytes vm))))
+                             (new-bytes (lir-vm-u64 (vm-get-reg vm '%rsi))))
                          (cond
-                           ((and (not (= ptr 0))
-                                 (or (< ptr *lir-vm-null-page-limit*) (>= ptr mem-len)))
-                            (vm-trigger-trap! vm 'out-of-bounds "Invalid pointer passed to realloc" ptr))
+                           ((= ptr 0)
+                            (let ((new-ptr (vm-heap-alloc-chunk! vm new-bytes #f)))
+                              (if new-ptr
+                                  (vm-set-reg! vm '%rax new-ptr))))
                            ((= new-bytes 0)
-                            (vm-set-reg! vm '%rax 0))
+                            (if (vm-heap-validate-and-free! vm ptr "realloc")
+                                (vm-set-reg! vm '%rax 0)))
                            (else
-                            (let* ((aligned (bitwise-and (+ new-bytes 7) -8))
-                                   (raw-ptr (vm-heap-ptr vm))
-                                   (new-ptr (+ raw-ptr aligned)))
-                              (if (> new-ptr *lir-vm-heap-limit*)
-                                  (vm-trigger-trap! vm 'out-of-bounds "Heap out of memory in realloc" new-ptr)
-                                  (begin
-                                    (if (not (= ptr 0))
-                                        (let* ((old-sz (or (vm-libc-lookup-alloc vm ptr) new-bytes))
-                                               (copy-n (min old-sz new-bytes)))
+                            (let ((old-sz (vm-heap-validate-and-free! vm ptr "realloc")))
+                              (if old-sz
+                                  (let ((new-ptr (vm-heap-alloc-chunk! vm new-bytes #f)))
+                                    (if new-ptr
+                                        (let ((mem (vm-memory-bytes vm))
+                                              (copy-n (min old-sz new-bytes)))
                                           (let cloop ((i 0))
                                             (if (< i copy-n)
                                                 (begin
-                                                  (vm-mem-write-u8! vm (+ raw-ptr i) (vm-mem-read-u8 vm (+ ptr i)))
-                                                  (cloop (+ i 1)))))))
-                                    (vm-set-heap-ptr! vm new-ptr)
-                                    (vm-libc-record-alloc! vm raw-ptr aligned)
-                                    (vm-set-reg! vm '%rax raw-ptr))))))))
+                                                  (bytevector-u8-set! mem (+ new-ptr i) (bytevector-u8-ref mem (+ ptr i)))
+                                                  (cloop (+ i 1)))))
+                                          (vm-set-reg! vm '%rax new-ptr))))))))))
 
                       ((free)
-                       (let ((ptr (lir-vm-u64 (vm-get-reg vm '%rdi)))
-                             (mem-len (bytevector-length (vm-memory-bytes vm))))
-                         (if (and (not (= ptr 0))
-                                  (or (< ptr *lir-vm-null-page-limit*) (>= ptr mem-len)))
-                             (vm-trigger-trap! vm 'out-of-bounds "Invalid pointer passed to free" ptr)
-                             (vm-set-reg! vm '%rax 0))))
+                       (let ((ptr (lir-vm-u64 (vm-get-reg vm '%rdi))))
+                         (if (= ptr 0)
+                             (vm-set-reg! vm '%rax 0)
+                             (if (vm-heap-validate-and-free! vm ptr "free")
+                                 (vm-set-reg! vm '%rax 0)))))
 
                       ((memcpy memmove)
                        (let ((dst (lir-vm-u64 (vm-get-reg vm '%rdi)))
