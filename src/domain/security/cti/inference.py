@@ -14,9 +14,17 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ontology.rule_registry import EdgeInferenceRuleRegistry
+from ontology.rule_schema import EdgeInferenceRule
 
 # Regex pattern for direct ATT&CK Technique ID detection
 TECHNIQUE_ID_REGEX = re.compile(r"\b(T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
+
+# Canonical EIROM rule identifiers used by TechniqueInferenceEngine
+RULE_DIRECT_REGEX = "RULE-EDGE-PAPER-TECH-REGEX-01"
+RULE_TITLE_NAME = "RULE-EDGE-PAPER-TECH-TITLE-02"
+RULE_TITLE_KEYWORD = "RULE-EDGE-PAPER-TECH-KEYWORD-03"
+RULE_ABSTRACT_SCORING = "RULE-EDGE-PAPER-TECH-ABSTRACT-04"
+RULE_FOCUS_OFFENSIVE = "RULE-EDGE-FOCUS-OFFENSIVE-01"
 
 # Keywords indicating research focus
 OFFENSIVE_KEYWORDS: Set[str] = {
@@ -255,16 +263,97 @@ def _determine_mechanism(rule_id: Optional[str]) -> str:
 def _select_primary_rule(applied_rules: List[str]) -> Optional[str]:
     """Selects primary rule by predefined priority hierarchy."""
     priority_order = [
-        "RULE-EDGE-PAPER-TECH-REGEX-01",
-        "RULE-EDGE-PAPER-TECH-TITLE-02",
-        "RULE-EDGE-PAPER-TECH-KEYWORD-03",
-        "RULE-EDGE-PAPER-TECH-ABSTRACT-04",
-        "RULE-EDGE-FOCUS-OFFENSIVE-01",
+        RULE_DIRECT_REGEX,
+        RULE_TITLE_NAME,
+        RULE_TITLE_KEYWORD,
+        RULE_ABSTRACT_SCORING,
+        RULE_FOCUS_OFFENSIVE,
     ]
     for rule_id in priority_order:
         if rule_id in applied_rules:
             return rule_id
     return applied_rules[0] if applied_rules else None
+
+
+def _spec_float(spec: Dict[str, Any], key: str, default: float) -> float:
+    """Safely extracts float parameter from condition_spec."""
+    raw = spec.get(key)
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return float(raw)
+    return default
+
+
+def _spec_int(spec: Dict[str, Any], key: str, default: int) -> int:
+    """Safely extracts positive integer parameter from condition_spec."""
+    raw = spec.get(key)
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    return default
+
+
+def _compile_rule_regex(rule: EdgeInferenceRule) -> re.Pattern[str]:
+    """Compiles regex pattern from a validated EdgeInferenceRule."""
+    pattern = str(rule.condition_spec.get("pattern", ""))
+    flags = 0 if rule.evidence_spec.case_sensitive else re.IGNORECASE
+    return re.compile(pattern, flags)
+
+
+def _extract_regex_matches(pattern: re.Pattern[str], text: str) -> Set[str]:
+    """Extracts upper-cased matched technique identifiers from text."""
+    return {match.group(0).upper() for match in pattern.finditer(text)}
+
+
+def _build_rule_evidence(
+    rule: EdgeInferenceRule,
+    matched_terms: List[str],
+    score: float,
+    text: str,
+    term: str,
+    category_override: Optional[str] = None,
+) -> InferenceEvidence:
+    """Constructs audit evidence using metadata from an active EIROM rule."""
+    category = category_override or rule.condition_type.value
+    snippet = _extract_snippet(
+        text, term, max_len=rule.evidence_spec.max_snippet_length
+    )
+    return InferenceEvidence(
+        rule_id=rule.rule_id,
+        rule_name=rule.name,
+        rule_category=category,
+        matched_terms=matched_terms,
+        target_field=rule.evidence_spec.target_field,
+        score_contribution=score,
+        snippet=snippet,
+    )
+
+
+def _merge_direct_candidate(
+    candidate_map: Dict[str, _TechCandidate],
+    tech_id: str,
+    rule_id: str,
+    score: float,
+    direct_ev: InferenceEvidence,
+) -> None:
+    """Inserts or promotes a candidate with direct regex match evidence."""
+    cand = candidate_map.get(tech_id)
+    if cand is None:
+        candidate_map[tech_id] = _TechCandidate(
+            score=score,
+            matched_keywords=[tech_id],
+            applied_rules=[rule_id],
+            primary_rule_id=rule_id,
+            inference_mechanism="regex_direct_id",
+            evidences=[direct_ev],
+        )
+        return
+    cand.score = max(cand.score, score)
+    if tech_id not in cand.matched_keywords:
+        cand.matched_keywords.append(tech_id)
+    if rule_id not in cand.applied_rules:
+        cand.applied_rules.insert(0, rule_id)
+    cand.primary_rule_id = rule_id
+    cand.inference_mechanism = "regex_direct_id"
+    cand.evidences.insert(0, direct_ev)
 
 
 @dataclass(frozen=True)
@@ -355,7 +444,7 @@ class InferredTechnique:
 
 
 class TechniqueInferenceEngine:
-    """Infers MITRE ATT&CK Techniques using vocabulary matching and heuristics."""
+    """Infers MITRE ATT&CK Techniques using vocabulary matching and EIROM rules."""
 
     def __init__(
         self,
@@ -368,6 +457,34 @@ class TechniqueInferenceEngine:
             self.catalog.update(custom_catalog)
         self.min_confidence = min_confidence
         self.rule_registry = rule_registry or EdgeInferenceRuleRegistry()
+        self._regex_cache_key: Optional[Tuple[str, bool]] = None
+        self._compiled_direct_regex: Optional[re.Pattern[str]] = None
+
+    def _get_active_rule(self, rule_id: str) -> Optional[EdgeInferenceRule]:
+        """Returns registered rule only when present and active."""
+        rule = self.rule_registry.get_rule(rule_id)
+        if rule is None or not rule.is_active:
+            return None
+        return rule
+
+    def _get_direct_regex(self) -> Optional[Tuple[EdgeInferenceRule, re.Pattern[str]]]:
+        """Returns active direct regex rule and its cached compiled pattern."""
+        rule = self._get_active_rule(RULE_DIRECT_REGEX)
+        if rule is None:
+            return None
+        pattern_str = str(rule.condition_spec.get("pattern", ""))
+        cache_key = (pattern_str, rule.evidence_spec.case_sensitive)
+        if self._compiled_direct_regex is None or self._regex_cache_key != cache_key:
+            self._compiled_direct_regex = _compile_rule_regex(rule)
+            self._regex_cache_key = cache_key
+        return rule, self._compiled_direct_regex
+
+    def _get_dominant_factor(self) -> int:
+        """Reads dominant threshold factor from active offensive context rule."""
+        rule = self._get_active_rule(RULE_FOCUS_OFFENSIVE)
+        if rule is None:
+            return 2
+        return max(1, _spec_int(rule.condition_spec, "dominant_factor", 2))
 
     def infer(
         self,
@@ -383,13 +500,13 @@ class TechniqueInferenceEngine:
         research_focus = self._classify_research_focus(combined_text.lower())
         text_hash = _compute_text_hash(title, text)
 
-        # 1. Direct Regex ID detection
+        # 1. Direct Regex ID detection driven by EIROM registry
         direct_matches = self._find_direct_technique_ids(title, text)
 
-        # 2. Vocabulary & keyword score map
+        # 2. Vocabulary & keyword score map driven by EIROM registry
         candidate_map = self._evaluate_catalog_scores(title, combined_text)
 
-        # Merge direct matches into score map with max confidence
+        # Merge direct matches into score map
         for tech_id in direct_matches:
             self._apply_direct_match(candidate_map, tech_id, combined_text)
 
@@ -407,28 +524,31 @@ class TechniqueInferenceEngine:
         return count
 
     @staticmethod
-    def _is_dominant(count_a: int, count_b: int) -> bool:
-        """Checks if count_a is significantly higher than count_b."""
-        return count_a > count_b and count_a >= 2
+    def _is_dominant(count_a: int, count_b: int, dominant_factor: int = 2) -> bool:
+        """Checks if count_a exceeds count_b and meets minimum threshold."""
+        return count_a > count_b and count_a >= dominant_factor
 
-    @classmethod
-    def _classify_research_focus(cls, text: str) -> str:
+    def _classify_research_focus(self, text: str) -> str:
         """Determines if the research is offensive, defensive, or general analysis."""
-        off_count = cls._count_keywords(text, OFFENSIVE_KEYWORDS)
-        def_count = cls._count_keywords(text, DEFENSIVE_KEYWORDS)
+        factor = self._get_dominant_factor()
+        off_count = self._count_keywords(text, OFFENSIVE_KEYWORDS)
+        def_count = self._count_keywords(text, DEFENSIVE_KEYWORDS)
 
-        if cls._is_dominant(off_count, def_count):
+        if self._is_dominant(off_count, def_count, factor):
             return "offensive"
-        if cls._is_dominant(def_count, off_count):
+        if self._is_dominant(def_count, off_count, factor):
             return "defensive"
         return "analysis"
 
-    @staticmethod
-    def _find_direct_technique_ids(title: str, text: str) -> Set[str]:
-        """Finds explicit technique IDs (e.g. T1190) via regex."""
-        matches = set(TECHNIQUE_ID_REGEX.findall(title))
-        matches.update(TECHNIQUE_ID_REGEX.findall(text))
-        return {m.upper() for m in matches}
+    def _find_direct_technique_ids(self, title: str, text: str) -> Set[str]:
+        """Finds explicit technique IDs via active EIROM regex rule."""
+        active = self._get_direct_regex()
+        if active is None:
+            return set()
+        _, pattern = active
+        matches = _extract_regex_matches(pattern, title)
+        matches.update(_extract_regex_matches(pattern, text))
+        return matches
 
     def _evaluate_catalog_scores(
         self,
@@ -443,79 +563,105 @@ class TechniqueInferenceEngine:
                 candidates[tech_id] = cand
         return candidates
 
-    @staticmethod
+    def _match_title_name(
+        self,
+        name_lower: str,
+        title: str,
+    ) -> Optional[Tuple[float, List[str], List[str], List[InferenceEvidence]]]:
+        """Applies RULE-EDGE-PAPER-TECH-TITLE-02 when active and matched."""
+        if name_lower not in title.lower():
+            return None
+        rule = self._get_active_rule(RULE_TITLE_NAME)
+        if rule is None:
+            return None
+        score = rule.base_confidence
+        ev = _build_rule_evidence(rule, [name_lower], score, title, name_lower)
+        return score, [name_lower], [rule.rule_id], [ev]
+
+    def _match_abstract_name(
+        self,
+        name_lower: str,
+        combined_text: str,
+    ) -> Optional[Tuple[float, List[str], List[str], List[InferenceEvidence]]]:
+        """Applies RULE-EDGE-PAPER-TECH-ABSTRACT-04 to technique name in body."""
+        if name_lower not in combined_text.lower():
+            return None
+        rule = self._get_active_rule(RULE_ABSTRACT_SCORING)
+        if rule is None:
+            return None
+        score = _spec_float(rule.condition_spec, "min_threshold", 0.4)
+        ev = _build_rule_evidence(rule, [name_lower], score, combined_text, name_lower)
+        return score, [name_lower], [rule.rule_id], [ev]
+
     def _score_name(
+        self,
         name: str,
         title: str,
         combined_text: str,
     ) -> Tuple[float, List[str], List[str], List[InferenceEvidence]]:
-        """Scores technique name against text."""
+        """Scores technique name against text using registered EIROM rules."""
         name_lower = name.lower()
         if not name_lower:
             return 0.0, [], [], []
-        if name_lower in title.lower():
-            rule_id = "RULE-EDGE-PAPER-TECH-TITLE-02"
-            ev = InferenceEvidence(
-                rule_id=rule_id,
-                rule_name="Title Technique Name Affinity",
-                rule_category="lexical",
-                matched_terms=[name_lower],
-                target_field="title",
-                score_contribution=0.8,
-                snippet=_extract_snippet(title, name_lower),
-            )
-            return 0.8, [name_lower], [rule_id], [ev]
-        if name_lower in combined_text.lower():
-            rule_id = "RULE-EDGE-PAPER-TECH-ABSTRACT-04"
-            ev = InferenceEvidence(
-                rule_id=rule_id,
-                rule_name="Abstract Lexical Scoring",
-                rule_category="semantic_threshold",
-                matched_terms=[name_lower],
-                target_field="abstract",
-                score_contribution=0.4,
-                snippet=_extract_snippet(combined_text, name_lower),
-            )
-            return 0.4, [name_lower], [rule_id], [ev]
+        title_hit = self._match_title_name(name_lower, title)
+        if title_hit is not None:
+            return title_hit
+        abstract_hit = self._match_abstract_name(name_lower, combined_text)
+        if abstract_hit is not None:
+            return abstract_hit
         return 0.0, [], [], []
 
-    @staticmethod
+    def _match_title_keyword(
+        self,
+        kw: str,
+        title: str,
+    ) -> Optional[Tuple[float, List[str], List[str], List[InferenceEvidence]]]:
+        """Applies RULE-EDGE-PAPER-TECH-KEYWORD-03 for a single title keyword."""
+        kw_lower = kw.lower()
+        if kw_lower not in title.lower():
+            return None
+        rule = self._get_active_rule(RULE_TITLE_KEYWORD)
+        if rule is None:
+            return None
+        weight = _spec_float(
+            rule.condition_spec, "weight_per_keyword", rule.base_confidence
+        )
+        ev = _build_rule_evidence(rule, [kw], weight, title, kw_lower)
+        return weight, [kw], [rule.rule_id], [ev]
+
+    def _match_abstract_keyword(
+        self,
+        kw: str,
+        combined_text: str,
+    ) -> Optional[Tuple[float, List[str], List[str], List[InferenceEvidence]]]:
+        """Applies RULE-EDGE-PAPER-TECH-ABSTRACT-04 for a single body keyword."""
+        kw_lower = kw.lower()
+        if kw_lower not in combined_text.lower():
+            return None
+        rule = self._get_active_rule(RULE_ABSTRACT_SCORING)
+        if rule is None:
+            return None
+        weight = _spec_float(rule.condition_spec, "abstract_weight", 0.25)
+        ev = _build_rule_evidence(rule, [kw], weight, combined_text, kw_lower)
+        return weight, [kw], [rule.rule_id], [ev]
+
     def _score_single_keyword(
+        self,
         kw: str,
         title: str,
         combined_text: str,
     ) -> Tuple[float, List[str], List[str], List[InferenceEvidence]]:
         """Scores a single keyword against title and combined text."""
-        kw_lower = kw.lower()
-        if kw_lower in title.lower():
-            rule_id = "RULE-EDGE-PAPER-TECH-KEYWORD-03"
-            ev = InferenceEvidence(
-                rule_id=rule_id,
-                rule_name="Title Important Keyphrase Match",
-                rule_category="lexical",
-                matched_terms=[kw],
-                target_field="title",
-                score_contribution=0.5,
-                snippet=_extract_snippet(title, kw_lower),
-            )
-            return 0.5, [kw], [rule_id], [ev]
-        if kw_lower in combined_text.lower():
-            rule_id = "RULE-EDGE-PAPER-TECH-ABSTRACT-04"
-            ev = InferenceEvidence(
-                rule_id=rule_id,
-                rule_name="Abstract Lexical Scoring",
-                rule_category="semantic_threshold",
-                matched_terms=[kw],
-                target_field="abstract",
-                score_contribution=0.25,
-                snippet=_extract_snippet(combined_text, kw_lower),
-            )
-            return 0.25, [kw], [rule_id], [ev]
+        title_hit = self._match_title_keyword(kw, title)
+        if title_hit is not None:
+            return title_hit
+        abstract_hit = self._match_abstract_keyword(kw, combined_text)
+        if abstract_hit is not None:
+            return abstract_hit
         return 0.0, [], [], []
 
-    @classmethod
     def _score_keywords(
-        cls,
+        self,
         keywords: List[str],
         title: str,
         combined_text: str,
@@ -526,16 +672,15 @@ class TechniqueInferenceEngine:
         rules: List[str] = []
         evidences: List[InferenceEvidence] = []
         for kw in keywords:
-            s, k, r, ev = cls._score_single_keyword(kw, title, combined_text)
+            s, k, r, ev = self._score_single_keyword(kw, title, combined_text)
             score += s
             matched.extend(k)
             rules.extend(r)
             evidences.extend(ev)
         return score, matched, rules, evidences
 
-    @classmethod
     def _score_single_technique(
-        cls,
+        self,
         title: str,
         combined_text: str,
         meta: Dict[str, Any],
@@ -544,10 +689,10 @@ class TechniqueInferenceEngine:
         name = str(meta.get("name", ""))
         keywords = list(meta.get("keywords", []))
 
-        name_score, name_kws, name_rules, name_evs = cls._score_name(
+        name_score, name_kws, name_rules, name_evs = self._score_name(
             name, title, combined_text
         )
-        kw_score, kw_kws, kw_rules, kw_evs = cls._score_keywords(
+        kw_score, kw_kws, kw_rules, kw_evs = self._score_keywords(
             keywords, title, combined_text
         )
 
@@ -570,42 +715,57 @@ class TechniqueInferenceEngine:
             evidences=all_evidences,
         )
 
-    @staticmethod
     def _apply_direct_match(
+        self,
         candidate_map: Dict[str, _TechCandidate],
         tech_id: str,
         combined_text: str,
     ) -> None:
-        """Applies maximum confidence for directly mentioned technique ID."""
-        direct_rule = "RULE-EDGE-PAPER-TECH-REGEX-01"
-        direct_ev = InferenceEvidence(
-            rule_id=direct_rule,
-            rule_name="Direct Technique ID Match",
-            rule_category="pattern",
-            matched_terms=[tech_id],
-            target_field="combined",
-            score_contribution=1.0,
-            snippet=_extract_snippet(combined_text, tech_id),
-        )
-        cand = candidate_map.get(tech_id)
-        if cand is None:
-            candidate_map[tech_id] = _TechCandidate(
-                score=1.0,
-                matched_keywords=[tech_id],
-                applied_rules=[direct_rule],
-                primary_rule_id=direct_rule,
-                inference_mechanism="regex_direct_id",
-                evidences=[direct_ev],
-            )
+        """Applies confidence from active direct regex rule for explicit technique ID."""
+        rule = self._get_active_rule(RULE_DIRECT_REGEX)
+        if rule is None:
             return
-        cand.score = 1.0
-        if tech_id not in cand.matched_keywords:
-            cand.matched_keywords.append(tech_id)
-        if direct_rule not in cand.applied_rules:
-            cand.applied_rules.insert(0, direct_rule)
-        cand.primary_rule_id = direct_rule
-        cand.inference_mechanism = "regex_direct_id"
-        cand.evidences.insert(0, direct_ev)
+        direct_ev = _build_rule_evidence(
+            rule,
+            [tech_id],
+            rule.base_confidence,
+            combined_text,
+            tech_id,
+            category_override="pattern",
+        )
+        _merge_direct_candidate(
+            candidate_map,
+            tech_id,
+            rule.rule_id,
+            rule.base_confidence,
+            direct_ev,
+        )
+
+    def _append_offensive_modifier(
+        self,
+        research_focus: str,
+        score: float,
+        rules: List[str],
+        evidences: List[InferenceEvidence],
+    ) -> None:
+        """Appends offensive context modifier rule and evidence when active."""
+        if research_focus != "offensive" or score < self.min_confidence:
+            return
+        rule = self._get_active_rule(RULE_FOCUS_OFFENSIVE)
+        if rule is None:
+            return
+        rules.append(rule.rule_id)
+        evidences.append(
+            InferenceEvidence(
+                rule_id=rule.rule_id,
+                rule_name=rule.name,
+                rule_category=rule.condition_type.value,
+                matched_terms=[research_focus],
+                target_field=rule.evidence_spec.target_field,
+                score_contribution=0.0,
+                snippet="Research focus classified as offensive",
+            )
+        )
 
     def _create_inferred_technique(
         self,
@@ -618,20 +778,7 @@ class TechniqueInferenceEngine:
         meta = self.catalog.get(tech_id, {})
         rules = list(dict.fromkeys(cand.applied_rules))
         evidences = list(cand.evidences)
-        if research_focus == "offensive" and cand.score >= self.min_confidence:
-            off_rule = "RULE-EDGE-FOCUS-OFFENSIVE-01"
-            rules.append(off_rule)
-            evidences.append(
-                InferenceEvidence(
-                    rule_id=off_rule,
-                    rule_name="Offensive Context Modifier",
-                    rule_category="context_ratio",
-                    matched_terms=[research_focus],
-                    target_field="combined",
-                    score_contribution=0.0,
-                    snippet="Research focus classified as offensive",
-                )
-            )
+        self._append_offensive_modifier(research_focus, cand.score, rules, evidences)
         primary = cand.primary_rule_id or _select_primary_rule(rules)
         tier = _determine_confidence_tier(cand.score)
         quote = evidences[0].snippet if evidences else ""

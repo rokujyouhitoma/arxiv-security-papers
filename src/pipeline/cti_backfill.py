@@ -39,12 +39,13 @@ class CTIBackfillEnricher:
         workspace_dir: Optional[str] = None,
         graph_db_path: Optional[str] = None,
         sync_graph: bool = True,
+        rules_path: Optional[str] = None,
     ) -> None:
         self.workspace_dir = os.path.abspath(
             workspace_dir or get_default_workspace_dir()
         )
         self.registry = MITRECTIRegistry.get_instance()
-        self.rule_registry = EdgeInferenceRuleRegistry()
+        self.rule_registry = EdgeInferenceRuleRegistry(custom_path=rules_path)
         self.inference_engine = TechniqueInferenceEngine(
             rule_registry=self.rule_registry
         )
@@ -541,8 +542,9 @@ class CTIBackfillEnricher:
             return all_files[:max_papers]
         return all_files
 
-    @staticmethod
-    def _init_backfill_stats(total: int, dry_run: bool, force: bool) -> Dict[str, Any]:
+    def _init_backfill_stats(
+        self, total: int, dry_run: bool, force: bool
+    ) -> Dict[str, Any]:
         """Initializes empty stats dictionary for backfill scan."""
         return {
             "total_scanned": total,
@@ -556,6 +558,9 @@ class CTIBackfillEnricher:
             "top_techniques": [],
             "dry_run": dry_run,
             "force": force,
+            "ruleset_hash": self.rule_registry.compute_ruleset_hash(),
+            "ruleset_source": self.rule_registry.loaded_source,
+            "ruleset_is_fallback": self.rule_registry.is_fallback,
         }
 
     def _save_graph_if_active(self, dry_run: bool) -> None:
@@ -595,11 +600,13 @@ class CTIBackfillEnricher:
         all_files = self._limit_files(self.find_all_okf_files(), max_papers)
         total = len(all_files)
         logger.info(
-            "Starting CTI backfill: total=%d files (dry_run=%s, force=%s, sync_graph=%s)",
+            "Starting CTI backfill: total=%d files (dry_run=%s, force=%s, sync_graph=%s, ruleset=%s, source=%s)",
             total,
             dry_run,
             force,
             self.sync_graph,
+            self.rule_registry.compute_ruleset_hash()[:16],
+            self.rule_registry.loaded_source,
         )
         stats = self._init_backfill_stats(total, dry_run, force)
         tech_counter: Dict[str, int] = {}

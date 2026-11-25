@@ -10,6 +10,8 @@ import os
 import tempfile
 from typing import Any, Dict
 
+import pytest
+
 from pipeline.cti_backfill import CTIBackfillEnricher
 
 SAMPLE_OKF_CONTENT = """---
@@ -195,6 +197,10 @@ def test_run_backfill_batch_and_report() -> None:
         assert stats["error_count"] == 0
         assert "tier_breakdown" in stats
         assert isinstance(stats["top_techniques"], list)
+        assert len(stats["ruleset_hash"]) == 64
+        assert stats["ruleset_hash"] == enricher.rule_registry.compute_ruleset_hash()
+        assert str(stats["ruleset_source"]).startswith("json:")
+        assert stats["ruleset_is_fallback"] is False
 
         # Check written report file
         assert os.path.exists(report_file)
@@ -202,8 +208,19 @@ def test_run_backfill_batch_and_report() -> None:
             saved_report: Dict[str, Any] = json.load(f)
         assert saved_report["total_scanned"] == 2
         assert saved_report["updated_count"] == 2
+        assert saved_report["ruleset_hash"] == stats["ruleset_hash"]
 
         # Second batch run should skip unchanged files
         stats2 = enricher.run_backfill(dry_run=False)
         assert stats2["updated_count"] == 0
         assert stats2["skipped_count"] == 2
+
+
+def test_backfill_custom_rules_path_fail_closed(tmp_path: Any) -> None:
+    """Tests that invalid explicit rules_path fails closed on initialization."""
+    with pytest.raises(FileNotFoundError):
+        CTIBackfillEnricher(
+            workspace_dir=str(tmp_path),
+            sync_graph=False,
+            rules_path=str(tmp_path / "missing_rules.json"),
+        )

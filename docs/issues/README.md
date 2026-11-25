@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **947** | オントロジー推論ルール `master_rules.json` の未使用状態の解消と `EdgeInferenceRuleRegistry` 読み込み整合化 | Feature | New | [947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md](947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md) |
 | **957** | 算術・比較 slow path のインライン展開廃止と共有スタブ化 | Feature | New | [957-share-arithmetic-and-compare-slow-path-stubs.md](957-share-arithmetic-and-compare-slow-path-stubs.md) |
 | **958** | 関数入口の未使用 `r10` / `argc` スピル削除と小さなアクセサのインライン化（Scheme モード） | Feature | New | [958-eliminate-unused-prologue-spills-and-inline-small-accessors.md](958-eliminate-unused-prologue-spills-and-inline-small-accessors.md) |
 | **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` / `.data` 配置） | Feature | New | [959-emit-quoted-constants-as-static-rodata-data.md](959-emit-quoted-constants-as-static-rodata-data.md) |
@@ -30,6 +29,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **947** | オントロジー推論ルール `master_rules.json` の未使用状態の解消と `EdgeInferenceRuleRegistry` 読み込み整合化 | Feature | 2026-11-26 | [947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md](closed/947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md) |
 | **946** | SQL 実行器における式文字列のレコード毎再解析の解消と AST 事前コンパイル化 | Feature | 2026-11-26 | [946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md](closed/946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md) |
 | **950** | Direct-Style PEG インタプリタ × `mix`（第1二村射影）による小規模文法自動段階化と `emit_scheme.scm` 生成パーサーとの双対検証 | Feature | 2026-11-26 | [950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md](closed/950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md) |
 | **949** | `tools/grammars/c99.peg` の静的 `.scm` パーサー生成移行 (`generated_c99_parser.scm`) と C99 フック統合・CPS 全廃 | Feature | 2026-11-25 | [949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md](closed/949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) |
