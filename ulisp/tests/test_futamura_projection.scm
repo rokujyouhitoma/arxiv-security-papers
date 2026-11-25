@@ -286,4 +286,201 @@
                   (micro-interp-eval prog-branch '() '((x . 7)))
                   (lir-eval lir-b frame-b7))))
 
+;;; -----------------------------------------------------------------------
+;;; Group 4: case / Named let / letrec Compilation & BTA Consistency (Issue #965)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 4: case / Named let / letrec Compilation & BTA Consistency ---\n")
+
+(define (tree-contains-symbol? expr target)
+  (cond
+    ((symbol? expr) (eq? expr target))
+    ((not (pair? expr)) #f)
+    (else
+     (or (tree-contains-symbol? (car expr) target)
+         (tree-contains-symbol? (cdr expr) target)))))
+
+(let* ((expr-case '(case op
+                     ((add plus) (+ x 10))
+                     ((sub) (- x 99))
+                     (else 0)))
+       (res-plus (stage-poly-lower expr-case '((op . plus))))
+       (now-case-val (stage-val-payload
+                      (eval-in-stage (make-now-dict) '((op . plus) (x . 5)) expr-case
+                                     *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
+       (expr-named-let '(let loop ((i n) (acc 0))
+                          (if (= i 0)
+                              acc
+                              (loop (- i 1) (+ acc i)))))
+       (res-nl-static (stage-poly-lower expr-named-let '((n . 5))))
+       (res-nl-dyn (stage-poly-lower expr-named-let '()))
+       (expr-mutual '(letrec ((even-p (lambda (n) (if (= n 0) #t (odd-p (- n 1)))))
+                              (odd-p  (lambda (n) (if (= n 0) #f (even-p (- n 1))))))
+                       (even-p k)))
+       (res-mut-static (stage-poly-lower expr-mutual '((k . 6))))
+       (res-mut-dyn (stage-poly-lower expr-mutual '()))
+       (bta-static-case (bta-infer-expr expr-case '((op . static) (x . static))))
+       (bta-dyn-case (bta-infer-expr expr-case '((op . dynamic) (x . static))))
+       (bta-hybrid-nl (stage-poly-lower expr-named-let '((n . 5)) '((n . static)))))
+  ;; 4.1: static case folds dead branches
+  (assert-true "4.1a case conformance" (verify-residual-anf-conformance res-plus))
+  (assert-false "4.1b static case eliminates unused sub branch"
+                (tree-contains-symbol? res-plus '99))
+  (assert-equal "4.1c case Now vs residual equivalence (x=5 -> 15)"
+                now-case-val
+                (eval-residual-anf-expr res-plus '((x . 5))))
+  ;; 4.2: named let static fold & dynamic letrec residualization
+  (assert-equal "4.2a named let static fold (n=5 -> 15)" 15
+                (eval-residual-anf-expr res-nl-static '()))
+  (assert-true "4.2b named let dynamic emits letrec"
+               (and (pair? res-nl-dyn) (eq? (car res-nl-dyn) 'letrec)))
+  (assert-true "4.2b2 named let dynamic passes verify-letrec-contifiable-guarantees"
+               (verify-letrec-contifiable-guarantees res-nl-dyn))
+  (assert-true "4.2c named let dynamic ANF conformance"
+               (verify-residual-anf-conformance res-nl-dyn))
+  (assert-equal "4.2d named let dynamic eval (n=0 -> 0)" 0
+                (eval-residual-anf-expr res-nl-dyn '((n . 0))))
+  (assert-equal "4.2e named let dynamic eval (n=5 -> 15)" 15
+                (eval-residual-anf-expr res-nl-dyn '((n . 5))))
+  (assert-equal "4.2f named let dynamic eval (n=10 -> 55)" 55
+                (eval-residual-anf-expr res-nl-dyn '((n . 10))))
+  ;; 4.3: mutual letrec static & dynamic
+  (assert-equal "4.3a mutual letrec static fold (6 -> #t)" #t
+                (eval-residual-anf-expr res-mut-static '()))
+  (assert-true "4.3b mutual letrec dynamic emits letrec"
+               (and (pair? res-mut-dyn) (eq? (car res-mut-dyn) 'letrec)))
+  (assert-true "4.3b2 mutual letrec passes verify-letrec-contifiable-guarantees"
+               (verify-letrec-contifiable-guarantees res-mut-dyn))
+  (assert-equal "4.3c mutual letrec dynamic eval (7 -> #f)" #f
+                (eval-residual-anf-expr res-mut-dyn '((k . 7))))
+  (assert-equal "4.3d mutual letrec dynamic eval (8 -> #t)" #t
+                (eval-residual-anf-expr res-mut-dyn '((k . 8))))
+  ;; 4.4: BTA consistency on case & named let
+  (assert-equal "4.4a BTA infers static for static case" 'static bta-static-case)
+  (assert-equal "4.4b BTA infers dynamic for dynamic case" 'dynamic bta-dyn-case)
+  (assert-equal "4.4c Hybrid BTA lower matches static sum (n=5 -> 15)" 15
+                (eval-residual-anf-expr bta-hybrid-nl '())))
+
+;;; -----------------------------------------------------------------------
+;;; Group 5: First Futamura Projection on Backward-Jump Loop Bytecode Interpreter (Issue #965)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 5: Backward-Jump Loop Bytecode Projection ---\n")
+
+(define loop-bc-interp-src
+  '(letrec ((step
+             (lambda (pc st prog)
+               (let ((instr (list-ref prog pc)))
+                 (case (car instr)
+                   ((HALT) (cadr st))
+                   ((JZ-TOP)
+                    (if (= (car st) 0)
+                        (step (cadr instr) st prog)
+                        (step (+ pc 1) st prog)))
+                   ((ADD-SECOND-FROM-TOP)
+                    (step (+ pc 1)
+                          (cons (car st) (cons (+ (cadr st) (car st)) '()))
+                          prog))
+                   ((DEC-TOP)
+                    (step (+ pc 1)
+                          (cons (- (car st) 1) (cdr st))
+                          prog))
+                   ((JUMP)
+                    (step (cadr instr) st prog)))))))
+     (step 0 (cons n (cons acc '())) prog)))
+
+(let* ((sum-loop-prog
+        '((JZ-TOP 4)
+          (ADD-SECOND-FROM-TOP)
+          (DEC-TOP)
+          (JUMP 0)
+          (HALT)))
+       ;; 1. Unprojected ground truth evaluation under Now dictionary
+       (now-0 (stage-val-payload
+               (eval-in-stage (make-now-dict)
+                              (list (cons 'n 0) (cons 'acc 0) (cons 'prog sum-loop-prog))
+                              loop-bc-interp-src
+                              *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
+       (now-1 (stage-val-payload
+               (eval-in-stage (make-now-dict)
+                              (list (cons 'n 1) (cons 'acc 0) (cons 'prog sum-loop-prog))
+                              loop-bc-interp-src
+                              *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
+       (now-5 (stage-val-payload
+               (eval-in-stage (make-now-dict)
+                              (list (cons 'n 5) (cons 'acc 0) (cons 'prog sum-loop-prog))
+                              loop-bc-interp-src
+                              *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
+       (now-10 (stage-val-payload
+                (eval-in-stage (make-now-dict)
+                               (list (cons 'n 10) (cons 'acc 0) (cons 'prog sum-loop-prog))
+                               loop-bc-interp-src
+                               *ctfe-default-step-limit* *ctfe-default-depth-limit*)))
+       ;; 2. First Futamura projection (mix): prog static, (n acc) dynamic
+       (residual-loop (stage-poly-lower loop-bc-interp-src (list (cons 'prog sum-loop-prog))))
+       (memo-loop (get-last-spec-memo-table)))
+  (assert-true "5.1 Mix emits cyclic letrec for backward-jump bytecode loop"
+               (and (pair? residual-loop) (eq? (car residual-loop) 'letrec)))
+  (assert-true "5.2 Specialized residual loop conforms to L-Residual-ANF"
+               (verify-residual-anf-conformance residual-loop))
+  (assert-true "5.2b Specialized residual loop passes verify-letrec-contifiable-guarantees"
+               (verify-letrec-contifiable-guarantees residual-loop))
+  (assert-false "5.3 Mix eliminates interpreter opcode dispatch & instruction fetch (no list-ref)"
+                (tree-contains-symbol? residual-loop 'list-ref))
+  (assert-false "5.4 Mix eliminates interpreter symbol HALT"
+                (tree-contains-symbol? residual-loop 'HALT))
+  (assert-false "5.5 Mix eliminates interpreter symbol JUMP"
+                (tree-contains-symbol? residual-loop 'JUMP))
+  (assert-true "5.6 Specialization instance count fits <= *max-spec-instances*"
+               (and memo-loop
+                    (> (spec-memo-instance-count memo-loop 'step) 0)
+                    (<= (spec-memo-instance-count memo-loop 'step) *max-spec-instances*)))
+  (assert-equal "5.7 Semantic equivalence (n=0, acc=0 -> 0)"
+                now-0
+                (eval-residual-anf-expr residual-loop '((n . 0) (acc . 0))))
+  (assert-equal "5.7b Semantic equivalence (n=1, acc=0 -> 1)"
+                now-1
+                (eval-residual-anf-expr residual-loop '((n . 1) (acc . 0))))
+  (assert-equal "5.8 Semantic equivalence (n=5, acc=0 -> 15)"
+                now-5
+                (eval-residual-anf-expr residual-loop '((n . 5) (acc . 0))))
+  (assert-equal "5.9 Semantic equivalence (n=10, acc=0 -> 55)"
+                now-10
+                (eval-residual-anf-expr residual-loop '((n . 10) (acc . 0))))
+  (assert-equal "5.10 Semantic equivalence with non-zero initial acc (n=4, acc=100 -> 110)"
+                110
+                (eval-residual-anf-expr residual-loop '((n . 4) (acc . 100)))))
+
+;;; -----------------------------------------------------------------------
+;;; Group 6: Widening Termination Beyond *max-spec-instances* (8) (Issue #965)
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 6: Widening Termination Beyond *max-spec-instances* (8) ---\n")
+
+(let* ((long-linear-prog
+        '((DEC-TOP) (DEC-TOP) (DEC-TOP) (DEC-TOP) (DEC-TOP)
+          (DEC-TOP) (DEC-TOP) (DEC-TOP) (DEC-TOP) (DEC-TOP)
+          (HALT)))
+       (res-wide (stage-poly-lower loop-bc-interp-src (list (cons 'prog long-linear-prog))))
+       (memo-wide (get-last-spec-memo-table))
+       (inc-counter-prog
+        '(letrec ((up (lambda (k v)
+                        (if (= v 0)
+                            k
+                            (up (+ k 1) (- v 1))))))
+           (up 0 n)))
+       (res-up (stage-poly-lower inc-counter-prog '()))
+       (memo-up (get-last-spec-memo-table)))
+  (assert-false "6.1 11-PC linear bytecode program terminates without CSP error"
+                (stage-csp-error? res-wide))
+  (assert-true "6.2 Long bytecode residual satisfies L-Residual-ANF conformance"
+               (verify-residual-anf-conformance res-wide))
+  (assert-equal "6.3 *max-spec-instances* strictly caps step specializations at 8"
+                *max-spec-instances*
+                (spec-memo-instance-count memo-wide 'step))
+  (assert-false "6.4 Increasing static counter widens & terminates without CSP error"
+                (stage-csp-error? res-up))
+  (assert-true "6.5 Increasing counter specializes at most <= *max-spec-instances*"
+               (and memo-up
+                    (<= (spec-memo-instance-count memo-up 'up) *max-spec-instances*)))
+  (assert-true "6.6 Increasing counter residual satisfies L-Residual-ANF conformance"
+               (verify-residual-anf-conformance res-up)))
+
 (display "\n[RESULT] All First Futamura Projection (Tower Collapse) tests PASSED!\n")
