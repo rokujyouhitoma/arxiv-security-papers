@@ -426,6 +426,9 @@
   contains-stage-meta-syntax?
   eval-in-stage
   make-later-dict
+  with-spec-limits
+  current-max-spec-instances
+  current-max-spec-depth
   run-triple-differential-oracle
   verify-residual-anf-conformance
   %number?

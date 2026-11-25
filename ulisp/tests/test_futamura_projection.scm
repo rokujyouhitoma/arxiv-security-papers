@@ -483,4 +483,400 @@
   (assert-true "6.6 Increasing counter residual satisfies L-Residual-ANF conformance"
                (verify-residual-anf-conformance res-up)))
 
-(display "\n[RESULT] All First Futamura Projection (Tower Collapse) tests PASSED!\n")
+;;; -----------------------------------------------------------------------
+;;; Group 7 & Group 8: First Futamura Projection on Direct-Style PEG Interpreter
+;;; vs emit_scheme.scm (Issue #950)
+;;; -----------------------------------------------------------------------
+
+(define (%peg950-cc-spec->items spec)
+  (let* ((tokens (%tokenize-char-class-spec spec))
+         (ranges
+          (let loop ((ts tokens) (acc '()))
+            (cond
+              ((null? ts) (reverse acc))
+              ((and (pair? (cdr ts))
+                    (pair? (cddr ts))
+                    (eq? (caadr ts) 'raw)
+                    (char=? (cdadr ts) #\-))
+               (loop (cdddr ts)
+                     (cons (list 'range (cdar ts) (cdaddr ts)) acc)))
+              (else
+               (loop (cdr ts)
+                     (cons (list 'single (cdar ts)) acc)))))))
+    ranges))
+
+(define (%peg950-fold-right-bin tag items empty-val)
+  (cond
+    ((null? items) empty-val)
+    ((null? (cdr items)) (car items))
+    (else (list tag (car items) (%peg950-fold-right-bin tag (cdr items) empty-val)))))
+
+(define (%peg950-string->seq str)
+  (let ((len (string-length str)))
+    (if (= len 0)
+        'eps
+        (let loop ((i (- len 1)) (acc #f))
+          (if (< i 0)
+              acc
+              (let ((cnode (list 'char (string-ref str i))))
+                (loop (- i 1) (if acc (list 'seq cnode acc) cnode))))))))
+
+(define (%peg950-ast-expr->stage-expr expr)
+  (cond
+    ((peg-lit-expr? expr)
+     (%peg950-string->seq (peg-lit-expr-val expr)))
+    ((peg-char-class-expr? expr)
+     (cons 'char-class
+           (cons (peg-char-class-expr-inverted? expr)
+                 (%peg950-cc-spec->items (peg-char-class-expr-spec expr)))))
+    ((peg-any-char-expr? expr)
+     'any-char)
+    ((peg-regex-expr? expr)
+     (let* ((pat (peg-regex-expr-pattern expr))
+            (rk (%emit-regex-kind pat)))
+       (cond
+         ((eq? rk 'any-char) 'any-char)
+         ((and (pair? rk) (eq? (car rk) 'cc))
+          (let* ((kind (cadr rk))
+                 (spec (caddr rk))
+                 (inv? (cadddr rk))
+                 (cc-node (cons 'char-class (cons inv? (%peg950-cc-spec->items spec)))))
+            (cond
+              ((eq? kind 'plus) (list 'plus cc-node))
+              ((eq? kind 'star) (list 'star cc-node))
+              (else cc-node))))
+         (else
+          (%peg950-string->seq pat)))))
+    ((peg-seq-expr? expr)
+     (%peg950-fold-right-bin
+      'seq
+      (map %peg950-ast-expr->stage-expr (peg-seq-expr-elements expr))
+      'eps))
+    ((peg-choice-expr? expr)
+     (%peg950-fold-right-bin
+      'choice
+      (map %peg950-ast-expr->stage-expr (peg-choice-expr-alternatives expr))
+      '(pred-not eps)))
+    ((peg-repeat-expr? expr)
+     (let ((inner (%peg950-ast-expr->stage-expr (peg-repeat-expr-expr expr))))
+       (if (= (peg-repeat-expr-min-count expr) 1)
+           (list 'plus inner)
+           (list 'star inner))))
+    ((peg-opt-expr? expr)
+     (list 'opt (%peg950-ast-expr->stage-expr (peg-opt-expr-expr expr))))
+    ((peg-pred-expr? expr)
+     (let ((inner (%peg950-ast-expr->stage-expr (peg-pred-expr-expr expr))))
+       (if (peg-pred-expr-positive? expr)
+           (list 'pred-and inner)
+           (list 'pred-not inner))))
+    ((peg-rule-ref-expr? expr)
+     (list 'rule-ref (peg-rule-ref-expr-name expr)))
+    ((peg-named-expr? expr)
+     (%peg950-ast-expr->stage-expr (peg-named-expr-expr expr)))
+    ((peg-action-expr? expr)
+     (%peg950-ast-expr->stage-expr (peg-action-expr-expr expr)))
+    (else
+     (error "Unsupported PEG AST node for futamura staging" expr))))
+
+(define (peg950-grammar-ast->stage-rules grammar)
+  (map (lambda (r)
+         (cons (peg-rule-def-name r)
+               (%peg950-ast-expr->stage-expr (peg-rule-def-expr r))))
+       (peg-grammar-def-rules grammar)))
+
+;; Unmodified Direct-Style PEG Interpreter passed directly to mix (stage-poly-lower)
+(define *peg950-match-cc-def*
+  '(define (peg-match-cc items inv? ch)
+     (if (null? items)
+         inv?
+         (let ((item (car items)))
+           (if (eq? (car item) 'range)
+               (if (and (char>=? ch (cadr item))
+                        (char<=? ch (caddr item)))
+                   (not inv?)
+                   (peg-match-cc (cdr items) inv? ch))
+               (if (char=? ch (cadr item))
+                   (not inv?)
+                   (peg-match-cc (cdr items) inv? ch)))))))
+
+(define *peg950-interp-expr-def*
+  '(define (peg-interp-expr expr rules text len pos)
+     (if (symbol? expr)
+         (if (eq? expr 'eps)
+             pos
+             (if (< pos len) (+ pos 1) -1))
+         (case (car expr)
+           ((char)
+            (if (< pos len)
+                (if (char=? (string-ref text pos) (cadr expr))
+                    (+ pos 1)
+                    -1)
+                -1))
+           ((char-class)
+            (if (< pos len)
+                (if (peg-match-cc (cddr expr) (cadr expr) (string-ref text pos))
+                    (+ pos 1)
+                    -1)
+                -1))
+           ((seq)
+            (let ((p1 (peg-interp-expr (cadr expr) rules text len pos)))
+              (if (< p1 0)
+                  -1
+                  (peg-interp-expr (caddr expr) rules text len p1))))
+           ((choice)
+            (let ((p1 (peg-interp-expr (cadr expr) rules text len pos)))
+              (if (< p1 0)
+                  (peg-interp-expr (caddr expr) rules text len pos)
+                  p1)))
+           ((opt)
+            (let ((p1 (peg-interp-expr (cadr expr) rules text len pos)))
+              (if (< p1 0) pos p1)))
+           ((star)
+            (let loop ((cur pos))
+              (let ((nxt (peg-interp-expr (cadr expr) rules text len cur)))
+                (if (> nxt cur)
+                    (loop nxt)
+                    cur))))
+           ((plus)
+            (let ((first-p (peg-interp-expr (cadr expr) rules text len pos)))
+              (if (< first-p 0)
+                  -1
+                  (if (<= first-p pos)
+                      first-p
+                      (let loop ((cur first-p))
+                        (let ((nxt (peg-interp-expr (cadr expr) rules text len cur)))
+                          (if (> nxt cur)
+                              (loop nxt)
+                              cur)))))))
+           ((pred-and)
+            (let ((p1 (peg-interp-expr (cadr expr) rules text len pos)))
+              (if (< p1 0) -1 pos)))
+           ((pred-not)
+            (let ((p1 (peg-interp-expr (cadr expr) rules text len pos)))
+              (if (< p1 0) pos -1)))
+           ((rule-ref)
+            (let ((entry (assq (cadr expr) rules)))
+              (if entry
+                  (peg-interp-expr (cdr entry) rules text len pos)
+                  -1)))
+           (else -1)))))
+
+(define (peg950-mix-stage-grammar rules start-rule)
+  (let* ((start-entry (assq start-rule rules))
+         (start-expr (if start-entry (cdr start-entry) (error "Unknown start rule" start-rule)))
+         (call-expr (list 'peg-interp-expr
+                          (list 'quote start-expr)
+                          (list 'quote rules)
+                          'text 'len 'pos)))
+    (with-spec-limits
+     256 64 500000 1024
+     (lambda ()
+       (stage-poly-lower
+        (list 'begin *peg950-match-cc-def* *peg950-interp-expr-def* call-expr)
+        '())))))
+
+(define (peg950-eval-now rules start-rule inp)
+  (let* ((start-entry (assq start-rule rules))
+         (start-expr (cdr start-entry))
+         (call-expr (list 'peg-interp-expr
+                          (list 'quote start-expr)
+                          (list 'quote rules)
+                          'text 'len 'pos))
+         (sv (eval-in-stage
+              (make-now-dict)
+              (list (cons 'text inp) (cons 'len (string-length inp)) (cons 'pos 0))
+              (list 'begin *peg950-match-cc-def* *peg950-interp-expr-def* call-expr)
+              500000 1024)))
+    (if (stage-csp-error? sv)
+        (error "Now PEG evaluation hit CSP error" sv)
+        (stage-val-payload sv))))
+
+(define (peg950-eval-residual residual-parser inp)
+  (eval-residual-anf-expr
+   residual-parser
+   (list (cons 'text inp) (cons 'len (string-length inp)) (cons 'pos 0))))
+
+(define (peg950-assert-evaporation label residual-ast)
+  (assert-false (string-append label " has no CSP error")
+                (stage-csp-error? residual-ast))
+  (assert-true (string-append label " conforms to L-Residual-ANF")
+               (verify-residual-anf-conformance residual-ast))
+  (assert-true (string-append label " passes verify-letrec-contifiable-guarantees")
+               (verify-letrec-contifiable-guarantees residual-ast))
+  (for-each
+   (lambda (sym)
+     (assert-false (string-append label " evaporates PEG AST/dispatch symbol: " (symbol->string sym))
+                   (tree-contains-symbol? residual-ast sym)))
+   '(eps any-char char char-class range single seq choice star plus opt
+     pred-and pred-not rule-ref assq peg-match-cc peg-interp-expr)))
+
+(define (peg950-assert-dual-verification label rules start-rule residual-parser ds-parse-partial ds-parse inputs)
+  (for-each
+   (lambda (inp)
+     (let* ((now-pos (peg950-eval-now rules start-rule inp))
+            (mix-pos (peg950-eval-residual residual-parser inp))
+            (ds-part (ds-parse-partial inp))
+            (ds-pos  (if ds-part (cdr ds-part) -1))
+            (len     (string-length inp))
+            (now-full? (and (>= now-pos 0) (= now-pos len)))
+            (mix-full? (and (>= mix-pos 0) (= mix-pos len)))
+            (ds-full?  (and ds-part (= ds-pos len))))
+       (assert-equal (string-append label " Now == mix [pos: " inp "]") now-pos mix-pos)
+       (assert-equal (string-append label " mix == emit_scheme [pos: " inp "]") ds-pos mix-pos)
+       (assert-equal (string-append label " Now == emit_scheme [full?: " inp "]") now-full? ds-full?)
+       (assert-equal (string-append label " mix == emit_scheme [full?: " inp "]") mix-full? ds-full?)
+       (if ds-full?
+           (assert-true (string-append label " emit_scheme full parse succeeds: " inp)
+                        (begin (ds-parse inp) #t)))))
+   inputs))
+
+(define (%peg950-write-and-load! path code-str)
+  (call-with-output-file path
+    (lambda (port)
+      (display code-str port)))
+  (load path))
+
+(display "\n--- Group 7: calc.peg First Futamura Projection (mix) vs emit_scheme.scm ---\n")
+
+(let* ((calc-ast (parse-peg-grammar (read-all-file-text "../tools/grammars/calc.peg")))
+       (calc-rules (peg950-grammar-ast->stage-rules calc-ast))
+       (calc-residual (peg950-mix-stage-grammar calc-rules 'expr))
+       (calc-scm (emit-peg-grammar->scheme calc-ast '((prefix . "fcalc950-") (entry . expr)))))
+  (%peg950-write-and-load! "build/test_emit_scm/_futamura950_calc.scm" calc-scm)
+  (peg950-assert-evaporation "calc.peg" calc-residual)
+  (peg950-assert-dual-verification
+   "calc.peg"
+   calc-rules
+   'expr
+   calc-residual
+   (eval 'fcalc950-parse-partial (interaction-environment))
+   (eval 'fcalc950-parse (interaction-environment))
+   '("42"
+     "0"
+     "1 + 2"
+     "10 + 20 * 3"
+     "(10 + 20) * 3"
+     "((7 - 2) / 5) + 9 * 10"
+     "  123 + 456  "
+     "10 + 20 abc"
+     "1 +"
+     "(10 + 20"
+     "bad"
+     "")))
+
+(display "\n--- Group 8: cti_ql.peg First Futamura Projection (mix) vs emit_scheme.scm ---\n")
+
+(define (%peg950-cti-attach-ws expr)
+  (cond
+    ((peg-lit-expr? expr)
+     (make-peg-seq-expr (list expr (make-peg-rule-ref-expr 'ws))))
+    ((peg-seq-expr? expr)
+     (make-peg-seq-expr (map %peg950-cti-attach-ws (peg-seq-expr-elements expr))))
+    ((peg-choice-expr? expr)
+     (make-peg-choice-expr (map %peg950-cti-attach-ws (peg-choice-expr-alternatives expr))))
+    ((peg-repeat-expr? expr)
+     (make-peg-repeat-expr (%peg950-cti-attach-ws (peg-repeat-expr-expr expr))
+                           (peg-repeat-expr-min-count expr)
+                           (peg-repeat-expr-max-count expr)))
+    ((peg-opt-expr? expr)
+     (make-peg-opt-expr (%peg950-cti-attach-ws (peg-opt-expr-expr expr))))
+    ((peg-pred-expr? expr)
+     (make-peg-pred-expr (%peg950-cti-attach-ws (peg-pred-expr-expr expr))
+                         (peg-pred-expr-positive? expr)))
+    (else expr)))
+
+(define (%peg950-build-cti-ql-ast raw-ast)
+  (let* ((raw-rules (peg-grammar-def-rules raw-ast))
+         (_ (for-each
+             (lambda (req)
+               (assert-true (string-append "cti_ql.peg defines rule " (symbol->string req))
+                            (let loop ((rs raw-rules))
+                              (cond ((null? rs) #f)
+                                    ((eq? (peg-rule-def-name (car rs)) req) #t)
+                                    (else (loop (cdr rs)))))))
+             '(query expr term factor predicate field_name op_cmp literal_val)))
+         (updated-rules
+          (map (lambda (r)
+                 (let ((rname (peg-rule-def-name r))
+                       (rexpr (peg-rule-def-expr r)))
+                   (if (eq? rname 'query)
+                       (make-peg-rule-def
+                        rname
+                        (make-peg-seq-expr
+                         (list (make-peg-rule-ref-expr 'ws) rexpr))
+                        (peg-rule-def-memoize? r)
+                        (peg-rule-def-return-type r))
+                       (make-peg-rule-def
+                        rname
+                        (%peg950-cti-attach-ws rexpr)
+                        (peg-rule-def-memoize? r)
+                        (peg-rule-def-return-type r)))))
+               raw-rules))
+         (token-rules
+          (list
+           (make-peg-rule-def
+            'ws
+            (make-peg-repeat-expr (make-peg-char-class-expr " \\t" #f) 0 #f)
+            #f #f)
+           (make-peg-rule-def
+            'NEWLINE
+            (make-peg-choice-expr
+             (list (make-peg-seq-expr (list (make-peg-lit-expr "\r") (make-peg-lit-expr "\n")))
+                   (make-peg-lit-expr "\n")
+                   (make-peg-lit-expr "\r")))
+            #f #f)
+           (make-peg-rule-def
+            'ENDMARKER
+            (make-peg-pred-expr (make-peg-any-char-expr) #f)
+            #f #f)
+           (make-peg-rule-def
+            'STRING
+            (make-peg-seq-expr
+             (list (make-peg-lit-expr "\"")
+                   (make-peg-repeat-expr (make-peg-char-class-expr "\"\\r\\n" #t) 0 #f)
+                   (make-peg-lit-expr "\"")
+                   (make-peg-rule-ref-expr 'ws)))
+            #t #f)
+           (make-peg-rule-def
+            'NUMBER
+            (make-peg-seq-expr
+             (list (make-peg-repeat-expr (make-peg-char-class-expr "0-9" #f) 1 #f)
+                   (make-peg-opt-expr
+                    (make-peg-seq-expr
+                     (list (make-peg-lit-expr ".")
+                           (make-peg-repeat-expr (make-peg-char-class-expr "0-9" #f) 1 #f))))
+                   (make-peg-rule-ref-expr 'ws)))
+            #t #f))))
+    (make-peg-grammar-def
+     (peg-grammar-def-name raw-ast)
+     (append updated-rules token-rules)
+     (peg-grammar-def-directives raw-ast))))
+
+(let* ((cti-raw-ast (parse-peg-grammar (read-all-file-text "workbench/examples/cti_ql.peg")))
+       (cti-ast (%peg950-build-cti-ql-ast cti-raw-ast))
+       (cti-rules (peg950-grammar-ast->stage-rules cti-ast))
+       (cti-residual (peg950-mix-stage-grammar cti-rules 'query))
+       (cti-scm (emit-peg-grammar->scheme cti-ast '((prefix . "fcti950-") (entry . query)))))
+  (%peg950-write-and-load! "build/test_emit_scm/_futamura950_cti_ql.scm" cti-scm)
+  (peg950-assert-evaporation "cti_ql.peg" cti-residual)
+  (peg950-assert-dual-verification
+   "cti_ql.peg"
+   cti-rules
+   'query
+   cti-residual
+   (eval 'fcti950-parse-partial (interaction-environment))
+   (eval 'fcti950-parse (interaction-environment))
+   '("threat == \"ransomware\""
+     "cve-score >= 8"
+     "cve-score >= 8.5\n"
+     "port == 443 AND threat != \"benign\""
+     "ip-addr == \"10.0.0.1\" OR ip == \"192.168.1.1\""
+     "(threat == \"ransomware\" OR cve > 7) AND port <= 1024"
+     "threat == \"unclosed"
+     "threat == 123 AND"
+     "unknown_field == 1"
+     "port == 80 GARBAGE"
+     "(port == 80"
+     "")))
+
+(display "\n[RESULT] All First Futamura Projection (Tower Collapse + PEG Staging) tests PASSED!\n")

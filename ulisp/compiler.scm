@@ -12550,7 +12550,9 @@
   (or (pure-prim? op)
       (memq op '(min max abs remainder
                  bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
-                 reverse append string-length char=? boolean=? symbol=?
+                 reverse append string-length string-ref substring string=?
+                 char=? char<? char<=? char>? char>=? char->integer integer->char
+                 boolean=? symbol=?
                  fx+ fx- fx*))))
 
 (define (ctfe-valid-fixnum? v)
@@ -12668,6 +12670,19 @@
            ((eq? eqv?) (eq? v1 v2))
            ((equal?) (equal? v1 v2))
            ((char=?) (if (and (char? v1) (char? v2)) (char=? v1 v2) *ctfe-failure*))
+           ((char<?) (if (and (char? v1) (char? v2)) (char<? v1 v2) *ctfe-failure*))
+           ((char<=?) (if (and (char? v1) (char? v2)) (char<=? v1 v2) *ctfe-failure*))
+           ((char>?) (if (and (char? v1) (char? v2)) (char>? v1 v2) *ctfe-failure*))
+           ((char>=?) (if (and (char? v1) (char? v2)) (char>=? v1 v2) *ctfe-failure*))
+           ((string=?) (if (and (string? v1) (string? v2)) (string=? v1 v2) *ctfe-failure*))
+           ((string-ref)
+            (if (and (string? v1) (number? v2) (>= v2 0) (< v2 (string-length v1)))
+                (string-ref v1 v2)
+                *ctfe-failure*))
+           ((vector-ref)
+            (if (and (vector? v1) (number? v2) (>= v2 0) (< v2 (vector-length v1)))
+                (vector-ref v1 v2)
+                *ctfe-failure*))
            ((boolean=?) (if (and (boolean? v1) (boolean? v2)) (eq? v1 v2) *ctfe-failure*))
            ((symbol=?) (if (and (symbol? v1) (symbol? v2)) (eq? v1 v2) *ctfe-failure*))
            ((cons) (cons v1 v2))
@@ -12721,6 +12736,16 @@
               ((number? (car rest)) (loop (cdr rest) (max acc (car rest))))
               (else *ctfe-failure*))))
          ((list) args)
+         ((substring)
+          (if (and (= nargs 3)
+                   (string? (car args))
+                   (number? (cadr args))
+                   (number? (caddr args))
+                   (>= (cadr args) 0)
+                   (<= (cadr args) (caddr args))
+                   (<= (caddr args) (string-length (car args))))
+              (substring (car args) (cadr args) (caddr args))
+              *ctfe-failure*))
          (else *ctfe-failure*)))
 
       (else *ctfe-failure*))))
@@ -13084,6 +13109,8 @@
     ((eq? op 'reverse) (if (list? a) (reverse a) *ctfe-failure*))
     ((eq? op '-) (if (number? a) (%ctfe-num-guard (- 0 a)) *ctfe-failure*))
     ((eq? op 'string-length) (if (string? a) (string-length a) *ctfe-failure*))
+    ((eq? op 'char->integer) (if (char? a) (char->integer a) *ctfe-failure*))
+    ((eq? op 'integer->char) (if (and (number? a) (>= a 0) (<= a #x10ffff)) (integer->char a) *ctfe-failure*))
     ((eq? op 'vector-length) (if (vector? a) (vector-length a) *ctfe-failure*))
     ((eq? op 'bitwise-not) (if (number? a) (ctfe-bitwise-not a) *ctfe-failure*))
     (else *ctfe-failure*)))
@@ -13109,7 +13136,19 @@
     ((eq? op 'eq?) (eq? a b))
     ((eq? op 'equal?) (equal? a b))
     ((eq? op 'char=?) (if (and (char? a) (char? b)) (char=? a b) *ctfe-failure*))
+    ((eq? op 'char<?) (if (and (char? a) (char? b)) (char<? a b) *ctfe-failure*))
+    ((eq? op 'char<=?) (if (and (char? a) (char? b)) (char<=? a b) *ctfe-failure*))
+    ((eq? op 'char>?) (if (and (char? a) (char? b)) (char>? a b) *ctfe-failure*))
+    ((eq? op 'char>=?) (if (and (char? a) (char? b)) (char>=? a b) *ctfe-failure*))
+    ((eq? op 'string=?) (if (and (string? a) (string? b)) (string=? a b) *ctfe-failure*))
     ((eq? op 'boolean=?) (if (and (boolean? a) (boolean? b)) (eq? a b) *ctfe-failure*))
+    ((eq? op 'symbol=?) (if (and (symbol? a) (symbol? b)) (eq? a b) *ctfe-failure*))
+    ((eq? op 'string-ref) (if (and (string? a) (number? b) (>= b 0) (< b (string-length a)))
+                              (string-ref a b)
+                              *ctfe-failure*))
+    ((eq? op 'vector-ref) (if (and (vector? a) (number? b) (>= b 0) (< b (vector-length a)))
+                              (vector-ref a b)
+                              *ctfe-failure*))
     ((eq? op 'cons) (cons a b))
     ((eq? op 'list-ref)
      (if (and (list? a) (number? b) (>= b 0))
@@ -13135,6 +13174,10 @@
     ((eq? op 'string-ref) (if (and (string? a) (number? b) (>= b 0) (< b (string-length a)))
                               (string-ref a b)
                               *ctfe-failure*))
+    ((eq? op 'substring) (if (and (string? a) (number? b) (number? c)
+                                  (>= b 0) (<= b c) (<= c (string-length a)))
+                             (substring a b c)
+                             *ctfe-failure*))
     (else *ctfe-failure*)))
 
 (define (now-dict-apply-prim-4 dict op a b c d)
@@ -13402,9 +13445,10 @@
                   zero? list?
                   car cdr caar cadr cdar cddr caddr cdddr cadddr length reverse cons list append list-ref
                   assq memq
-                  eq? eqv? equal? char=? boolean=? symbol=? = < <= > >=
+                  eq? eqv? equal? char=? char<? char<=? char>? char>=?
+                  boolean=? symbol=? string=? = < <= > >=
                   bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
-                  char->integer integer->char string-length vector-length
+                  char->integer integer->char string-length substring vector-length
                   vector-ref vector-set! make-vector string-ref
                   local-slot-ref local-slot-set!
                   guest-pack-fixnum guest-unpack-fixnum guest-fixnum?
@@ -13425,9 +13469,10 @@
   (if (memq sym '(+ - * abs not null? pair? boolean? number? symbol? string? char?
                   zero? list? caddr cdddr cadddr length reverse cons list append list-ref
                   assq memq
-                  eq? eqv? equal? char=? boolean=? symbol=? = < <= > >=
+                  eq? eqv? equal? char=? char<? char<=? char>? char>=?
+                  boolean=? symbol=? string=? = < <= > >=
                   bitwise-and bitwise-ior bitwise-xor bitwise-not arithmetic-shift
-                  char->integer integer->char string-length vector-length
+                  char->integer integer->char string-length string-ref substring vector-length
                   vector-ref make-vector local-slot-ref
                   guest-pack-fixnum guest-unpack-fixnum guest-fixnum?
                   guest-pack-pointer guest-unpack-pointer guest-tag-of
@@ -13833,6 +13878,52 @@
 (define *active-spec-body-cache-cell* (cons '() '()))
 (define *active-spec-arg-sizes-cell* (cons '() '()))
 (define *active-spec-cyclic-fns-cell* (cons '() '()))
+(define *active-max-spec-instances-cell* (cons #f '()))
+(define *active-max-spec-depth-cell* (cons #f '()))
+(define *active-stage-step-limit-cell* (cons #f '()))
+(define *active-stage-depth-limit-cell* (cons #f '()))
+(define *stage-poly-lower-counter* (cons 0 '()))
+
+(define (stage-poly-lower-gensym prefix)
+  (let ((id (car *stage-poly-lower-counter*)))
+    (set-car! *stage-poly-lower-counter* (+ id 1))
+    (string->symbol (string-append prefix (number->string id)))))
+
+(define (current-max-spec-instances)
+  (let ((v (car *active-max-spec-instances-cell*)))
+    (if v v *max-spec-instances*)))
+
+(define (current-max-spec-depth)
+  (let ((v (car *active-max-spec-depth-cell*)))
+    (if v v *max-spec-depth*)))
+
+(define (current-stage-step-limit)
+  (let ((v (car *active-stage-step-limit-cell*)))
+    (if v v *ctfe-default-step-limit*)))
+
+(define (current-stage-depth-limit)
+  (let ((v (car *active-stage-depth-limit-cell*)))
+    (if v v *ctfe-default-depth-limit*)))
+
+(define with-spec-limits
+  (case-lambda
+    ((max-instances max-depth thunk)
+     (with-spec-limits max-instances max-depth *ctfe-default-step-limit* *ctfe-default-depth-limit* thunk))
+    ((max-instances max-depth step-limit depth-limit thunk)
+     (let ((prev-inst (car *active-max-spec-instances-cell*))
+           (prev-depth (car *active-max-spec-depth-cell*))
+           (prev-step (car *active-stage-step-limit-cell*))
+           (prev-sdepth (car *active-stage-depth-limit-cell*)))
+       (set-car! *active-max-spec-instances-cell* max-instances)
+       (set-car! *active-max-spec-depth-cell* max-depth)
+       (set-car! *active-stage-step-limit-cell* step-limit)
+       (set-car! *active-stage-depth-limit-cell* depth-limit)
+       (let ((res (thunk)))
+         (set-car! *active-max-spec-instances-cell* prev-inst)
+         (set-car! *active-max-spec-depth-cell* prev-depth)
+         (set-car! *active-stage-step-limit-cell* prev-step)
+         (set-car! *active-stage-depth-limit-cell* prev-sdepth)
+         res)))))
 
 (define (get-last-spec-memo-table)
   (car *last-spec-memo-cell*))
@@ -14009,15 +14100,73 @@
 
 (define (stage-subst-params expr subst-alist)
   (cond
-    ((null? subst-alist) expr)
     ((symbol? expr)
      (let ((hit (assq expr subst-alist)))
        (if hit (cdr hit) expr)))
     ((not (pair? expr)) expr)
     ((eq? (car expr) 'quote) expr)
+    ((and (eq? (car expr) 'let-anf)
+          (pair? (cdr expr))
+          (pair? (cadr expr))
+          (pair? (cddr expr)))
+     (let* ((binding (caadr expr))
+            (var (car binding))
+            (rhs (cadr binding))
+            (body (caddr expr))
+            (new-rhs (stage-subst-params rhs subst-alist))
+            (fresh-var (stage-poly-lower-gensym "let$"))
+            (body-subst (cons (cons var fresh-var) subst-alist)))
+       (list 'let-anf (list (list fresh-var new-rhs))
+             (stage-subst-params body body-subst))))
+    ((and (memq (car expr) '(letrec))
+          (pair? (cdr expr))
+          (pair? (cddr expr)))
+     ;; Preserve lambda parameter scopes inside residual letrec if encountered
+     (let* ((bs (cadr expr))
+            (shadowed (map (lambda (b) (cons (car b) (car b))) bs))
+            (inner-subst (append shadowed subst-alist)))
+       (cons 'letrec
+             (cons (map (lambda (b)
+                          (let ((r (cadr b)))
+                            (if (and (pair? r) (eq? (car r) 'lambda) (pair? (cdr r)))
+                                (let* ((ps (cadr r))
+                                       (lam-subst (append (map (lambda (p) (cons p p)) ps) inner-subst)))
+                                  (list (car b) (cons 'lambda (cons ps (map (lambda (e) (stage-subst-params e lam-subst)) (cddr r))))))
+                                (list (car b) (stage-subst-params r inner-subst)))))
+                        bs)
+                   (map (lambda (e) (stage-subst-params e inner-subst)) (cddr expr))))))
     (else
      (cons (stage-subst-params (car expr) subst-alist)
            (stage-subst-params (cdr expr) subst-alist)))))
+
+(define (stage-inline-specialized-body dict body-sv dyn-params dyn-args)
+  (let* ((payload (stage-sv->residual-expr dict body-sv))
+         (tag (stage-val-tag body-sv))
+         (let-binds-and-subst
+          (let mk ((ps dyn-params) (vs dyn-args) (sa '()) (lbs '()))
+            (cond
+              ((or (null? ps) (null? vs))
+               (cons sa (reverse lbs)))
+              (else
+               (let ((p (car ps))
+                     (v (car vs)))
+                 (if (pair? v)
+                     (let ((tmp (stage-poly-lower-gensym "arg$")))
+                       (mk (cdr ps) (cdr vs)
+                           (cons (cons p tmp) sa)
+                           (cons (list tmp v) lbs)))
+                     (mk (cdr ps) (cdr vs)
+                         (if (eq? p v) sa (cons (cons p v) sa))
+                         lbs)))))))
+         (subst (car let-binds-and-subst))
+         (lbs (cdr let-binds-and-subst))
+         (inlined-body (stage-subst-params payload subst))
+         (wrapped (let wrap ((rem (reverse lbs)) (cur inlined-body))
+                    (if (null? rem)
+                        cur
+                        (wrap (cdr rem)
+                              (stage-bind-let dict (caar rem) (cadar rem) (lambda () cur)))))))
+    (make-dynamic-val tag wrapped #f #f)))
 
 (define (stage-cache-body-sv! spec-fn body-sv)
   (set-car! *active-spec-body-cache-cell*
@@ -14125,18 +14274,14 @@
                                      (stage-cache-body-sv! target-fn body-sv)
                                      (cond
                                        ((stage-csp-error? body-sv) body-sv)
-                                       ((equal? dyn-arg-payloads dyn-params-only)
-                                        body-sv)
                                        ((stage-val-pure-static? body-sv)
                                         body-sv)
+                                       ((equal? dyn-arg-payloads dyn-params-only)
+                                        (if (stage-val-pure-dynamic? body-sv)
+                                            (stage-inline-specialized-body dict body-sv dyn-params-only dyn-arg-payloads)
+                                            body-sv))
                                        (else
-                                        (let ((subst (let mk ((ps dyn-params-only) (vs dyn-arg-payloads) (sa '()))
-                                                       (if (or (null? ps) (null? vs))
-                                                           sa
-                                                           (mk (cdr ps) (cdr vs) (cons (cons (car ps) (car vs)) sa))))))
-                                          (make-dynamic-val (stage-val-tag body-sv)
-                                                            (stage-subst-params (stage-val-payload body-sv) subst)
-                                                            #f #f))))))))
+                                        (stage-inline-specialized-body dict body-sv dyn-params-only dyn-arg-payloads)))))))
                             ((eq? status 'cached)
                              (let ((cached-sv (stage-lookup-cached-body-sv target-fn)))
                                (cond
@@ -14144,18 +14289,10 @@
                                   ;; Cyclic specialization call: mark target-fn cyclic and emit direct residual call
                                   (stage-mark-cyclic-spec-fn! target-fn)
                                   (make-dynamic-val 'any (stage-emit-call dict target-fn dyn-arg-payloads) #f #f))
-                                 ((equal? dyn-arg-payloads dyn-params-only)
-                                  cached-sv)
                                  ((stage-val-pure-static? cached-sv)
                                   cached-sv)
                                  (else
-                                  (let ((subst (let mk ((ps dyn-params-only) (vs dyn-arg-payloads) (sa '()))
-                                                 (if (or (null? ps) (null? vs))
-                                                     sa
-                                                     (mk (cdr ps) (cdr vs) (cons (cons (car ps) (car vs)) sa))))))
-                                    (make-dynamic-val (stage-val-tag cached-sv)
-                                                      (stage-subst-params (stage-val-payload cached-sv) subst)
-                                                      #f #f))))))
+                                  (stage-inline-specialized-body dict cached-sv dyn-params-only dyn-arg-payloads)))))
                             (else
                              ;; Widened: emit generic residual call with all evaluated arguments lifted
                              (let* ((arg-exprs (extract-lifted-payloads dict evaled-args))
@@ -14233,10 +14370,13 @@
                       (stage-env-extend curr-env var val-sv)
                       (- curr-fuel 1)
                       acc-dyn)
-                (loop (cdr bs)
-                      (stage-env-extend curr-env var (make-dynamic-val (stage-val-tag val-sv) var #f #f))
-                      (- curr-fuel 1)
-                      (cons (list var (stage-val-payload val-sv)) acc-dyn))))))))))
+                (let ((res-var (if (pair? (car *active-spec-arg-sizes-cell*))
+                                   (stage-poly-lower-gensym (string-append (symbol->string var) "$"))
+                                   var)))
+                  (loop (cdr bs)
+                        (stage-env-extend curr-env var (make-dynamic-val (stage-val-tag val-sv) res-var #f #f))
+                        (- curr-fuel 1)
+                        (cons (list res-var (stage-val-payload val-sv)) acc-dyn)))))))))))
 
 (define (eval-in-stage-let* dict env bindings body fuel depth)
   (let loop ((bs bindings)
@@ -14284,10 +14424,13 @@
                       (stage-env-extend curr-env var val-sv)
                       (- curr-fuel 1)
                       acc-dyn)
-                (loop (cdr bs)
-                      (stage-env-extend curr-env var (make-dynamic-val (stage-val-tag val-sv) var #f #f))
-                      (- curr-fuel 1)
-                      (cons (list var (stage-val-payload val-sv)) acc-dyn))))))))))
+                (let ((res-var (if (pair? (car *active-spec-arg-sizes-cell*))
+                                   (stage-poly-lower-gensym (string-append (symbol->string var) "$"))
+                                   var)))
+                  (loop (cdr bs)
+                        (stage-env-extend curr-env var (make-dynamic-val (stage-val-tag val-sv) res-var #f #f))
+                        (- curr-fuel 1)
+                        (cons (list res-var (stage-val-payload val-sv)) acc-dyn)))))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 12. Main eval-in-stage Core Loop
@@ -15162,8 +15305,8 @@
 
 (define (spec-memo-can-specialize? memo fn-name key depth)
   (cond
-    ((> depth *max-spec-depth*) #f)
-    ((>= (spec-memo-instance-count memo fn-name) *max-spec-instances*) #f)
+    ((> depth (current-max-spec-depth)) #f)
+    ((>= (spec-memo-instance-count memo fn-name) (current-max-spec-instances)) #f)
     (else #t)))
 
 (define (spec-memo-register! memo fn-name key)
@@ -15251,13 +15394,6 @@
 ;;; Conforms to DSN-33-03 §2.1, §3.3, §6.2 & Issue #879
 ;;; -----------------------------------------------------------------------
 
-(define *stage-poly-lower-counter* (cons 0 '()))
-
-(define (stage-poly-lower-gensym prefix)
-  (let ((id (car *stage-poly-lower-counter*)))
-    (set-car! *stage-poly-lower-counter* (+ id 1))
-    (string->symbol (string-append prefix (number->string id)))))
-
 (define (stage-atomic-value? x)
   (or (number? x) (boolean? x) (char? x) (string? x) (symbol? x) (null? x)))
 
@@ -15279,7 +15415,10 @@
      (let ((test (cadr expr))
            (then (caddr expr))
            (else-e (cadddr expr)))
-       (list 'if test
+       (list 'if
+             (if (and (pair? test) (memq (car test) '(if-anf let-anf letrec call-anf)))
+                 (stage-normalize-to-residual-anf test)
+                 test)
              (stage-normalize-to-residual-anf then)
              (stage-normalize-to-residual-anf else-e))))
 
@@ -15367,12 +15506,14 @@
      (let* ((later-d (make-later-dict))
             (existing-memo (car *active-spec-memo-cell*))
             (memo (if existing-memo existing-memo (make-spec-memo-table)))
+            (step-limit (current-stage-step-limit))
+            (depth-limit (current-stage-depth-limit))
             (res-sv (if existing-memo
-                        (eval-in-stage later-d env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*)
+                        (eval-in-stage later-d env expr step-limit depth-limit)
                         (with-spec-memo-table
                          memo
                          (lambda ()
-                           (eval-in-stage later-d env expr *ctfe-default-step-limit* *ctfe-default-depth-limit*))))))
+                           (eval-in-stage later-d env expr step-limit depth-limit))))))
        (cond
          ((stage-csp-error? res-sv)
           res-sv)
@@ -15474,7 +15615,7 @@
                                   (bind-r (cdr rs)
                                           (cons (cons (car r) (list '%res-closure (cadr r) (caddr r) env rec-specs)) ce)))))))
             (eval-residual-anf-expr body rec-env)))
-         ((eq? head 'if)
+         ((or (eq? head 'if) (eq? head 'if-anf))
           (let ((test-val (eval-residual-anf-expr (cadr expr) env)))
             (if test-val
                 (eval-residual-anf-expr (caddr expr) env)
@@ -15511,6 +15652,40 @@
          ((eq? head 'equal?)
           (equal? (eval-residual-anf-expr (cadr expr) env)
                   (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'string-length)
+          (string-length (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'string-ref)
+          (string-ref (eval-residual-anf-expr (cadr expr) env)
+                      (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'substring)
+          (substring (eval-residual-anf-expr (cadr expr) env)
+                     (eval-residual-anf-expr (caddr expr) env)
+                     (eval-residual-anf-expr (cadddr expr) env)))
+         ((eq? head 'string=?)
+          (string=? (eval-residual-anf-expr (cadr expr) env)
+                    (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'char=?)
+          (char=? (eval-residual-anf-expr (cadr expr) env)
+                  (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'char<?)
+          (char<? (eval-residual-anf-expr (cadr expr) env)
+                  (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'char<=?)
+          (char<=? (eval-residual-anf-expr (cadr expr) env)
+                   (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'char>?)
+          (char>? (eval-residual-anf-expr (cadr expr) env)
+                  (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'char>=?)
+          (char>=? (eval-residual-anf-expr (cadr expr) env)
+                   (eval-residual-anf-expr (caddr expr) env)))
+         ((eq? head 'char->integer)
+          (char->integer (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'integer->char)
+          (integer->char (eval-residual-anf-expr (cadr expr) env)))
+         ((eq? head 'memq)
+          (memq (eval-residual-anf-expr (cadr expr) env)
+                (eval-residual-anf-expr (caddr expr) env)))
          ((eq? head 'cons)
           (cons (eval-residual-anf-expr (cadr expr) env)
                 (eval-residual-anf-expr (caddr expr) env)))
