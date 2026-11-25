@@ -21,7 +21,7 @@ ID: 948
 2. **Gap 2 — 静的文法解析（Nullability 固定点・Left-Corner 依存グラフ・Tarjan SCC・ルール分類）の欠如**
    - 現行 [codegen.scm](../../../ulisp/peg/compiler/codegen.scm)（lines 237–256）は全ルールを一律にフル Warth `peg:rule` で包んでおり、非左再帰ルールや字句葉ルールにも毎呼び出し `in-progress` / `lr-detected` / `touched-lr` / `make-memo-entry` のオーバーヘッドを課している。Nullable 集合 → Left-Corner 有向グラフ → Tarjan SCC により `lr` / `memo` / `bare` を静的決定し、間接左再帰依存（`in-progress` 非空時の `lr-deps` 伝播）も健全に扱う必要がある。
 3. **Gap 3 — Direct-Style 静的 `.scm` コード生成器 ([emit_scheme.scm](../../../ulisp/peg/compiler/emit_scheme.scm)) の不在**
-   - [ast.scm](../../../ulisp/peg/compiler/ast.scm) の全 16 種ノードを CPS クロージャ・コンビネータ・ローカル `(set! ...)` ゼロの直接 `let` / `let loop` / 直接関数呼び出し `.scm` へ展開する決定論的エミッタ、文字クラステーブルのトップレベルホイスト、および後続 [Issue #949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) 向けフックオプション（`prefix`, `entry`, `extra-params`, `memo-mode`, `no-memo`, `overrides`, `decorators`）が未実装である。
+   - [ast.scm](../../../ulisp/peg/compiler/ast.scm) の全 16 種ノードを CPS クロージャ・コンビネータ・ローカル `(set! ...)` ゼロの直接 `let` / `let loop` / 直接関数呼び出し `.scm` へ展開する決定論的エミッタ、文字クラステーブルのトップレベルホイスト、および後続 [Issue #949](949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) 向けフックオプション（`prefix`, `entry`, `extra-params`, `memo-mode`, `no-memo`, `overrides`, `decorators`）が未実装である。
 4. **Gap 4 — [peg_meta.peg](../../../tools/grammars/peg_meta.peg) ソースレベル自己ホスト不動点基盤の欠如**
    - 現行 [test_peg_self_hosting.scm](../../../ulisp/tests/test_peg_self_hosting.scm) はインメモリ CPS クロージャによる受理確認のみで、ローカル `set!`（lines 65–69）も残存している。さらに `peg_meta.peg` の正規表現トークン（`regex_tok`, `char_class_tok`, `action_piece`, `raw_str_dq/sq`）、先頭 `|` 許容（[codegen.scm](../../../ulisp/peg/compiler/codegen.scm) lines 243–248）、および生成 Direct-Style パーサ出力から正規化 `<peg-grammar-def>` を再構成する `peg-meta-cst->ast` 変換器を整備し、`Stage 1 .scm == Stage 2 .scm` を実証する必要がある。
 5. **Gap 5 — [peg.scm](../../../ulisp/peg.scm) 公開 API・[c_driver_module_header.scm](../../../ulisp/compiler/c_driver_module_header.scm) extern 登録・[Makefile](../../../ulisp/Makefile) 統合の欠如**
@@ -40,7 +40,7 @@ ID: 948
   - [Issue #894](894-implement-pure-scheme-compile-time-peg-parser-generator.md) (Pure Scheme Compile-Time PEG 基盤)
   - [Issue #945](945-profile-lua-547-c99-build-phase-breakdown-on-linux.md) / [Lua 5.4.7 ビルドプロファイル](../../benchmarks/lua_547_build_phase_profile.md) (`parse` = 53.64% 実証)
 - **後続連携 Issue**:
-  - [Issue #949](../949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) (`c99.peg` の静的 `.scm` パーサ生成移行・CPS 全廃)
+  - [Issue #949](949-migrate-c99-parser-to-aot-generated-static-scheme-parser.md) (`c99.peg` の静的 `.scm` パーサ生成移行・CPS 全廃)
   - [Issue #950](../950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md) (`mix` 射影パーサとの双対検証オラクル)
 
 ---

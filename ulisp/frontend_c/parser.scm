@@ -888,849 +888,653 @@
         (parse-prec ctx pos base-min-prec sk fk)))))
 
 ;;; -----------------------------------------------------------------------
-;;; 5. Environment-Aware C99 PEG Compiler (Produces L_c_ast with Span & Binding ID)
+;;; 5. Direct-Style C99 Hooks & AST Decorators (Issue #949 — Zero CPS)
 ;;; -----------------------------------------------------------------------
 
-(define (compile-c99-rule-getter env)
-  (let* ((grammar (c99-peg-grammar-ast))
-         (rules (peg-grammar-def-rules grammar))
-         (rule-cells
-          (map (lambda (r) (cons (peg-rule-def-name r) (cons #f '())))
-               rules)))
-    (define (lookup-cell name)
-      (let ((slot (assq name rule-cells)))
-        (if slot (cdr slot) #f)))
-    (define (lookup name)
-      (let ((cell (lookup-cell name)))
-        (if cell (car cell) #f)))
+(define (%c99ds-ret ctx end-pos val)
+  (parse-ctx-res-val-set! ctx val)
+  end-pos)
 
-    ;; Compile each rule with C99 semantic hooks, fast lexical leaves, Pratt expressions,
-    ;; and lean non-LR Packrat memoization
-    (for-each
-     (lambda (r)
-       (let* ((name (peg-rule-def-name r))
-              (pratt-level
-               (case name
-                 ((logical_or_expr) 1)
-                 ((logical_and_expr) 2)
-                 ((inclusive_or_expr) 3)
-                 ((exclusive_or_expr) 4)
-                 ((and_expr) 5)
-                 ((equality_expr) 6)
-                 ((relational_expr) 7)
-                 ((shift_expr) 8)
-                 ((additive_expr) 9)
-                 ((multiplicative_expr) 10)
-                 (else #f)))
-              (fast-leaf
-               (case name
-                 ((ws)
-                  (lambda (ctx pos sk fk)
-                    (let ((np (%c-scan-ws-end (parse-ctx-text ctx) (parse-ctx-length ctx) pos)))
-                      (sk "" np fk))))
-                 ((ident_cont)
-                  (lambda (ctx pos sk fk)
-                    (let ((txt (parse-ctx-text ctx))
-                          (len (parse-ctx-length ctx)))
-                      (if (and (< pos len) (%c-ident-cont-char? (string-ref txt pos)))
-                          (sk (string (string-ref txt pos)) (+ pos 1) fk)
-                          (fk)))))
-                 ((c99_keyword)
-                  (lambda (ctx pos sk fk)
-                    (let* ((txt (parse-ctx-text ctx))
-                           (len (parse-ctx-length ctx))
-                           (end (%c-scan-ident-end txt len pos)))
-                      (if (and end (memq (string->symbol (substring txt pos end)) *c99-keyword-symbols*))
-                          (sk (substring txt pos end) end fk)
-                          (fk)))))
-                 ((identifier)
-                  (lambda (ctx pos sk fk)
-                    (let* ((txt (parse-ctx-text ctx))
-                           (len (parse-ctx-length ctx))
-                           (end (%c-scan-ident-end txt len pos)))
-                      (if end
-                          (let ((sym (string->symbol (substring txt pos end))))
-                            (if (memq sym *c99-keyword-symbols*)
-                                (begin
-                                  (parse-ctx-update-max-pos! ctx pos "identifier")
-                                  (fk))
-                                (sk sym end fk)))
-                          (begin
-                            (parse-ctx-update-max-pos! ctx pos "identifier")
-                            (fk))))))
-                 ((constant)
-                  (lambda (ctx pos sk fk)
-                    (let* ((txt (parse-ctx-text ctx))
-                           (len (parse-ctx-length ctx))
-                           (end (or (%c-scan-float-end txt len pos)
-                                    (%c-scan-int-end txt len pos)
-                                    (%c-scan-char-lit-end txt len pos))))
-                      (if end
-                          (let ((sp (%c99-make-span-from-pos env ctx pos end)))
-                            (sk (ast-with-span (list 'c-const (substring txt pos end)) sp) end fk))
-                          (begin
-                            (parse-ctx-update-max-pos! ctx pos "constant")
-                            (fk))))))
-                 ((string_literal)
-                  (lambda (ctx pos sk fk)
-                    (let* ((txt (parse-ctx-text ctx))
-                           (len (parse-ctx-length ctx))
-                           (end (%c-scan-string-lit-end txt len pos)))
-                      (if end
-                          (let ((sp (%c99-make-span-from-pos env ctx pos end)))
-                            (sk (ast-with-span (list 'c-str (substring txt pos end)) sp) end fk))
-                          (begin
-                            (parse-ctx-update-max-pos! ctx pos "string_literal")
-                            (fk))))))
-                 (else #f)))
-              (wrapped
-               (cond
-                 (pratt-level
-                  (let ((p (%c99-make-pratt-binop-parser env lookup-cell pratt-level)))
-                    (if (peg-rule-def-memoize? r)
-                        (peg:rule-simple name p)
-                        p)))
-                 (fast-leaf fast-leaf)
-                 (else
-                  (let* ((raw-body
-                          (cond
-                            ;; Because typedef_name is strictly enforced by scope predicate,
-                            ;; typedef_init_declarator can match full init_declarator (including "T *p;")
-                            ((eq? name 'typedef_init_declarator)
-                             (let ((init-cell (lookup-cell 'init_declarator)))
-                               (lambda (ctx pos sk fk)
-                                 ((car init-cell) ctx pos sk fk))))
-                            (else
-                             (compile-expr->parser-with-cells (peg-rule-def-expr r) lookup-cell))))
-                         (decorated (decorate-c99-rule name raw-body env lookup)))
-                    (if (peg-rule-def-memoize? r)
-                        (cond
-                          ;; Do not memoize context-sensitive typedef_name predicate globally across scope mutations
-                          ((eq? name 'typedef_name) decorated)
-                          ((memq name '(direct_declarator direct_abstract_declarator postfix_expr
-                                        declarator abstract_declarator unary_expr cast_expr primary_expr))
-                           (peg:rule name decorated))
-                          (else
-                           (peg:rule-simple name decorated)))
-                        decorated))))))
-         (let ((cell (lookup-cell name)))
-           (set-car! cell wrapped))))
-     rules)
+(define (%c99ds-ret-span env ctx start-pos end-pos val)
+  (let ((sp (%c99-make-span-from-pos env ctx start-pos end-pos)))
+    (parse-ctx-res-val-set! ctx (ast-with-span val sp))
+    end-pos))
 
-    lookup))
+;;; Direct-Style fast lexical leaf scanners: (ctx env pos) -> next-pos | #f
 
-(define (compile-c99-parser-with-env env . maybe-entry)
-  (let ((entry-name (if (pair? maybe-entry) (car maybe-entry) 'translation_unit))
-        (getter (compile-c99-rule-getter env)))
-    (or (getter entry-name)
-        (error "Unknown C99 grammar entry rule" entry-name))))
+(define (c99ds-leaf-ws ctx env pos)
+  (let ((np (%c-scan-ws-end (parse-ctx-text ctx) (parse-ctx-length ctx) pos)))
+    (%c99ds-ret ctx np "")))
 
-(define (decorate-c99-rule name base-parser env lookup)
+(define (c99ds-leaf-ident-cont ctx env pos)
+  (let ((txt (parse-ctx-text ctx))
+        (len (parse-ctx-length ctx)))
+    (if (and (< pos len) (%c-ident-cont-char? (string-ref txt pos)))
+        (%c99ds-ret ctx (+ pos 1) (string (string-ref txt pos)))
+        #f)))
+
+(define (c99ds-leaf-keyword ctx env pos)
+  (let* ((txt (parse-ctx-text ctx))
+         (len (parse-ctx-length ctx))
+         (end (%c-scan-ident-end txt len pos)))
+    (if (and end (memq (string->symbol (substring txt pos end)) *c99-keyword-symbols*))
+        (%c99ds-ret ctx end (substring txt pos end))
+        #f)))
+
+(define (c99ds-leaf-identifier ctx env pos)
+  (let* ((txt (parse-ctx-text ctx))
+         (len (parse-ctx-length ctx))
+         (end (%c-scan-ident-end txt len pos)))
+    (if end
+        (let ((sym (string->symbol (substring txt pos end))))
+          (if (memq sym *c99-keyword-symbols*)
+              (begin
+                (parse-ctx-update-max-pos! ctx pos "identifier")
+                #f)
+              (%c99ds-ret ctx end sym)))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos "identifier")
+          #f))))
+
+(define (c99ds-leaf-constant ctx env pos)
+  (let* ((txt (parse-ctx-text ctx))
+         (len (parse-ctx-length ctx))
+         (end (or (%c-scan-float-end txt len pos)
+                  (%c-scan-int-end txt len pos)
+                  (%c-scan-char-lit-end txt len pos))))
+    (if end
+        (%c99ds-ret-span env ctx pos end (list 'c-const (substring txt pos end)))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos "constant")
+          #f))))
+
+(define (c99ds-leaf-string-literal ctx env pos)
+  (let* ((txt (parse-ctx-text ctx))
+         (len (parse-ctx-length ctx))
+         (end (%c-scan-string-lit-end txt len pos)))
+    (if end
+        (%c99ds-ret-span env ctx pos end (list 'c-str (substring txt pos end)))
+        (begin
+          (parse-ctx-update-max-pos! ctx pos "string_literal")
+          #f))))
+
+;;; Direct-Style 10-level Pratt Precedence Climber (zero closures, zero local set!)
+
+(define (c99ds-pratt-binop ctx env start-pos min-prec)
+  (let ((first-pos (c99ds-cast_expr ctx env start-pos)))
+    (if (not first-pos)
+        #f
+        (let ((txt (parse-ctx-text ctx))
+              (len (parse-ctx-length ctx)))
+          (let climb ((acc (parse-ctx-res-val ctx)) (cur-pos first-pos))
+            (let ((hit (%c99-scan-binop txt len cur-pos)))
+              (if (and hit (>= (cadr hit) min-prec))
+                  (let* ((op-sym (car hit))
+                         (prec   (cadr hit))
+                         (op-end (caddr hit))
+                         (rhs-pos (%c-scan-ws-end txt len op-end))
+                         (rhs-end (c99ds-pratt-binop ctx env rhs-pos (+ prec 1))))
+                    (if rhs-end
+                        (let ((sp (%c99-make-span-from-pos env ctx start-pos rhs-end)))
+                          (climb (ast-with-span (list 'c-binop op-sym acc (parse-ctx-res-val ctx)) sp)
+                                 rhs-end))
+                        (%c99ds-ret ctx cur-pos acc)))
+                  (%c99ds-ret ctx cur-pos acc))))))))
+
+;;; Direct-Style Scoped & Delegated Rule Overrides
+
+(define (c99ds-override-typedef-init-declarator ctx env pos)
+  (c99ds-init_declarator ctx env pos))
+
+(define (c99ds-override-compound-stmt ctx env pos)
+  (let ((p0 (peg-ds:lit1 ctx pos #\{ "{" "'{'")))
+    (if (not p0)
+        #f
+        (let ((p1 (c99ds-ws ctx env p0)))
+          (c99-push-scope! env 'block)
+          (let loop ((cur-pos p1) (items '()))
+            (let ((next-pos (c99ds-block_item ctx env cur-pos)))
+              (if (and next-pos (> next-pos cur-pos))
+                  (loop next-pos (cons (parse-ctx-res-val ctx) items))
+                  (let ((p-rb (peg-ds:lit1 ctx cur-pos #\} "}" "'}'")))
+                    (if (not p-rb)
+                        (begin
+                          (c99-pop-scope! env)
+                          #f)
+                        (let ((end-pos (c99ds-ws ctx env p-rb)))
+                          (c99-pop-scope! env)
+                          (%c99ds-ret-span env ctx pos end-pos
+                                           (cons 'c-block (reverse items)))))))))))))
+
+(define (c99ds-override-function-definition ctx env pos)
+  (let ((pos1 (c99ds-declaration_specifiers ctx env pos)))
+    (if (not pos1)
+        #f
+        (let ((specs (parse-ctx-res-val ctx))
+              (pos2 (c99ds-declarator ctx env pos1)))
+          (if (not pos2)
+              #f
+              (let ((decl (parse-ctx-res-val ctx)))
+                (let attr-loop ((cur-p pos2) (attrs '()))
+                  (let ((ap (c99ds-gnu_attribute ctx env cur-p)))
+                    (if (and ap (> ap cur-p))
+                        (attr-loop ap (cons (parse-ctx-res-val ctx) attrs))
+                        (let* ((fn-attrs (reverse attrs))
+                               (fn-names (%c99-extract-declarator-names decl))
+                               (fn-sym (if (pair? fn-names) (car fn-names) 'anon_fn))
+                               (param-syms (%c99-extract-fn-param-names decl))
+                               (full-specs (if (pair? fn-attrs) (append specs fn-attrs) specs))
+                               (fn-sp (%c99-make-span-from-pos env ctx pos cur-p)))
+                          (c99-register-var! env fn-sym 'function fn-sp)
+                          (c99-push-scope! env 'function)
+                          (let ((param-bindings
+                                 (map (lambda (psym)
+                                        (let ((b (c99-register-var! env psym 'parameter fn-sp)))
+                                          (list psym (binding-id b))))
+                                      param-syms))
+                                (dlist-pos (c99ds-declaration_list ctx env cur-p)))
+                            (let ((body-start (or dlist-pos cur-p)))
+                              (let ((end-pos (c99ds-compound_stmt ctx env body-start)))
+                                (c99-pop-scope! env)
+                                (if (not end-pos)
+                                    #f
+                                    (let ((body (parse-ctx-res-val ctx)))
+                                      (%c99ds-ret-span
+                                       env ctx pos end-pos
+                                       (list 'c-fn-def fn-sym full-specs decl param-bindings body)))))))))))))))))
+
+;;; Direct-Style AST Builder & Scope Decorator
+
+(define (c99ds-decorate-rule name ctx env pos next-pos res)
   (case name
-    ((identifier)
-     (peg:map (lambda (res)
-                (string->symbol (%c99-cst->string res)))
-              base-parser))
-
     ((typedef_name)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (sym next-pos inner-fk)
-                      (if (c99-typedef-bound? env sym)
-                          (sk (list 'c-typedef-name sym (c99-lookup-binding-id env sym))
-                              next-pos inner-fk)
-                          (fk)))
-                    fk)))
+     (if (c99-typedef-bound? env res)
+         (%c99ds-ret ctx next-pos (list 'c-typedef-name res (c99-lookup-binding-id env res)))
+         #f))
 
     ((storage_class_specifier builtin_type_specifier type_qualifier function_specifier struct_or_union)
-     (peg:map (lambda (res)
-                (string->symbol (%c99-string-trim-right-ws (%c99-cst->string res))))
-              base-parser))
+     (%c99ds-ret ctx next-pos (string->symbol (%c99-string-trim-right-ws (%c99-cst->string res)))))
 
     ((explicit_declaration_specifiers typedef_declaration_specifiers specifier_qualifier_list)
-     (peg:map %c99-flatten-decl-specs base-parser))
-
-    ((constant)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (list 'c-const (%c99-cst->string res)))
-               base-parser)))
-
-    ((string_literal)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (list 'c-str (%c99-cst->string res)))
-               base-parser)))
+     (%c99ds-ret ctx next-pos (%c99-flatten-decl-specs res)))
 
     ((pointer)
-     (peg:map (lambda (res)
-                (map (lambda (level)
-                       (let ((q (if (>= (length level) 3) (list-ref level 2) #f)))
-                         (if q (%c99-flatten-decl-specs q) '())))
-                     res))
-              base-parser))
+     (%c99ds-ret
+      ctx next-pos
+      (map (lambda (level)
+             (let ((q (if (>= (length level) 3) (list-ref level 2) #f)))
+               (if q (%c99-flatten-decl-specs q) '())))
+           res)))
 
     ((direct_declarator)
-     (peg:map (lambda (res)
-                (cond
-                  ;; Base: identifier ws
-                  ((and (pair? res) (symbol? (car res)))
-                   (list 'c-decl-id (car res)))
-                  ;; Parenthesized declarator: '(' ws decl ')' ws
-                  ((and (pair? res) (string? (car res)) (string=? (car res) "("))
-                   (list-ref res 2))
-                  ;; Left-recursive array
-                  ((and (pair? res) (pair? (car res)) (string? (cadr res)) (string=? (cadr res) "["))
-                   (let ((nlen (length res)))
-                     (cond
-                       ((= nlen 7)
-                        (list 'c-arr-declarator (car res) (list-ref res 4)))
-                       ((= nlen 10)
-                        (list 'c-arr-declarator (car res) (list-ref res 7)))
-                       (else
-                        (list 'c-arr-declarator (car res) #f)))))
-                  ;; Left-recursive fn
-                  ((and (pair? res) (pair? (car res)) (string? (cadr res)) (string=? (cadr res) "("))
-                   (list 'c-fn-declarator (car res)
-                         (let ((p (list-ref res 3)))
-                           (if p p '(c-param-list () #f)))))
-                  (else res)))
-              base-parser))
+     (%c99ds-ret
+      ctx next-pos
+      (cond
+        ((and (pair? res) (symbol? (car res)))
+         (list 'c-decl-id (car res)))
+        ((and (pair? res) (string? (car res)) (string=? (car res) "("))
+         (list-ref res 2))
+        ((and (pair? res) (pair? (car res)) (string? (cadr res)) (string=? (cadr res) "["))
+         (let ((nlen (length res)))
+           (cond
+             ((= nlen 7) (list 'c-arr-declarator (car res) (list-ref res 4)))
+             ((= nlen 10) (list 'c-arr-declarator (car res) (list-ref res 7)))
+             (else (list 'c-arr-declarator (car res) #f)))))
+        ((and (pair? res) (pair? (car res)) (string? (cadr res)) (string=? (cadr res) "("))
+         (list 'c-fn-declarator (car res)
+               (let ((p (list-ref res 3)))
+                 (if p p '(c-param-list () #f)))))
+        (else res))))
 
     ((declarator)
-     (peg:map (lambda (res)
-                (let ((ptr (car res))
-                      (dd (cadr res)))
-                  (if (pair? ptr)
-                      (list 'c-ptr-declarator ptr dd)
-                      dd)))
-              base-parser))
+     (let ((ptr (car res))
+           (dd (cadr res)))
+       (%c99ds-ret ctx next-pos
+                   (if (pair? ptr) (list 'c-ptr-declarator ptr dd) dd))))
 
     ((direct_abstract_declarator)
-     (peg:map (lambda (res)
-                (cond
-                  ((not (pair? res)) res)
-                  ((string? (car res))
-                   (cond
-                     ((string=? (car res) "(")
-                      (let ((inner (list-ref res 2)))
-                        (if (or (not inner) (and (pair? inner) (eq? (car inner) 'c-param-list)))
-                            (list 'c-fn-declarator #f (or inner '(c-param-list () #f)))
-                            inner)))
-                     ((string=? (car res) "[")
-                      (let ((nlen (length res)))
-                        (cond
-                          ((= nlen 6)
-                           (list 'c-arr-declarator #f (list-ref res 3)))
-                          ((= nlen 9)
-                           (list 'c-arr-declarator #f (list-ref res 6)))
-                          (else
-                           (list 'c-arr-declarator #f #f)))))
-                     (else res)))
-                  ((and (pair? (car res)) (string? (cadr res)) (string=? (cadr res) "["))
-                   (let ((nlen (length res)))
-                     (cond
-                       ((= nlen 7)
-                        (list 'c-arr-declarator (car res) (list-ref res 4)))
-                       ((= nlen 10)
-                        (list 'c-arr-declarator (car res) (list-ref res 7)))
-                       (else
-                        (list 'c-arr-declarator (car res) #f)))))
-                  ((and (pair? (car res)) (string? (cadr res)) (string=? (cadr res) "("))
-                   (list 'c-fn-declarator (car res) (or (list-ref res 3) '(c-param-list () #f))))
-                  (else res)))
-              base-parser))
+     (%c99ds-ret
+      ctx next-pos
+      (cond
+        ((not (pair? res)) res)
+        ((string? (car res))
+         (cond
+           ((string=? (car res) "(")
+            (let ((inner (list-ref res 2)))
+              (if (or (not inner) (and (pair? inner) (eq? (car inner) 'c-param-list)))
+                  (list 'c-fn-declarator #f (or inner '(c-param-list () #f)))
+                  inner)))
+           ((string=? (car res) "[")
+            (let ((nlen (length res)))
+              (cond
+                ((= nlen 6) (list 'c-arr-declarator #f (list-ref res 3)))
+                ((= nlen 9) (list 'c-arr-declarator #f (list-ref res 6)))
+                (else (list 'c-arr-declarator #f #f)))))
+           (else res)))
+        ((and (pair? (car res)) (string? (cadr res)) (string=? (cadr res) "["))
+         (let ((nlen (length res)))
+           (cond
+             ((= nlen 7) (list 'c-arr-declarator (car res) (list-ref res 4)))
+             ((= nlen 10) (list 'c-arr-declarator (car res) (list-ref res 7)))
+             (else (list 'c-arr-declarator (car res) #f)))))
+        ((and (pair? (car res)) (string? (cadr res)) (string=? (cadr res) "("))
+         (list 'c-fn-declarator (car res) (or (list-ref res 3) '(c-param-list () #f))))
+        (else res))))
 
     ((abstract_declarator)
-     (peg:map (lambda (res)
-                (if (and (pair? res) (pair? (car res))
-                         (or (null? (caar res)) (list? (caar res)))
-                         (not (memq (caar res) '(c-arr-declarator c-fn-declarator c-ptr-declarator))))
-                    (list 'c-ptr-declarator (car res) (cadr res))
-                    res))
-              base-parser))
+     (%c99ds-ret
+      ctx next-pos
+      (if (and (pair? res) (pair? (car res))
+               (or (null? (caar res)) (list? (caar res)))
+               (not (memq (caar res) '(c-arr-declarator c-fn-declarator c-ptr-declarator))))
+          (list 'c-ptr-declarator (car res) (cadr res))
+          res)))
 
     ((type_name)
-     (peg:map (lambda (res)
-                (list 'c-type-name (car res) (cadr res)))
-              base-parser))
+     (%c99ds-ret ctx next-pos (list 'c-type-name (car res) (cadr res))))
 
     ((parameter_list)
-     (peg:map (lambda (res)
-                (cons (cdr (car res))
-                      (map cadddr (cdr (cadr res)))))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (cons (cdr (car res))
+                       (map cadddr (cdr (cadr res))))))
 
     ((parameter_type_list)
-     (peg:map (lambda (res)
-                (list 'c-param-list (car res) (if (cadr res) #t #f)))
-              base-parser))
+     (%c99ds-ret ctx next-pos (list 'c-param-list (car res) (if (cadr res) #t #f))))
 
     ((parameter_declaration)
-     (peg:map (lambda (res)
-                (let ((opt-d (cadr res)))
-                  (list 'c-param (car res) (if (pair? opt-d) (car opt-d) opt-d))))
-              base-parser))
+     (let ((opt-d (cadr res)))
+       (%c99ds-ret ctx next-pos (list 'c-param (car res) (if (pair? opt-d) (car opt-d) opt-d)))))
 
     ((typeof_specifier)
-     (peg:map (lambda (res)
-                (list 'c-typeof (list-ref res 5)))
-              base-parser))
+     (%c99ds-ret ctx next-pos (list 'c-typeof (list-ref res 5))))
 
     ((attr_arg)
-     (peg:map %c99-collect-attr-tokens base-parser))
+     (%c99ds-ret ctx next-pos (%c99-collect-attr-tokens res)))
 
     ((gnu_attribute)
-     (peg:map (lambda (res)
-                (let ((args (list-ref res 7)))
-                  (list 'c-attr (if (pair? args) args '()))))
-              base-parser))
+     (let ((args (list-ref res 7)))
+       (%c99ds-ret ctx next-pos (list 'c-attr (if (pair? args) args '())))))
 
     ((decl_asm_label)
-     (peg:map (lambda (res)
-                (list 'c-reg-decl (%c99-unquote-simple-c-str (list-ref res 5))))
-              base-parser))
+     (%c99ds-ret ctx next-pos (list 'c-reg-decl (%c99-unquote-simple-c-str (list-ref res 5)))))
 
     ((init_declarator)
-     (peg:map (lambda (res)
-                (let* ((decl (car res))
-                       (opt-asm (list-ref res 1))
-                       (attrs (list-ref res 2))
-                       (opt-init (list-ref res 3))
-                       (wrapped (if (or opt-asm (pair? attrs))
-                                    (list 'c-attr-decl decl attrs (if opt-asm (cadr opt-asm) #f))
-                                    decl)))
-                  (list 'c-init-decl wrapped
-                        (if (pair? opt-init) (list-ref opt-init 2) #f))))
-              base-parser))
+     (let* ((decl (car res))
+            (opt-asm (list-ref res 1))
+            (attrs (list-ref res 2))
+            (opt-init (list-ref res 3))
+            (wrapped (if (or opt-asm (pair? attrs))
+                         (list 'c-attr-decl decl attrs (if opt-asm (cadr opt-asm) #f))
+                         decl)))
+       (%c99ds-ret ctx next-pos
+                   (list 'c-init-decl wrapped (if (pair? opt-init) (list-ref opt-init 2) #f)))))
 
     ((init_declarator_list typedef_init_declarator_list struct_declarator_list argument_expr_list
       attr_arg_list asm_operand_list asm_clobber_list)
-     (peg:map (lambda (res)
-                (cons (cdr (car res))
-                      (map caddr (cdr (cadr res)))))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (cons (cdr (car res))
+                       (map caddr (cdr (cadr res))))))
 
     ((struct_declarator)
-     (peg:map (lambda (res)
-                (if (and (pair? res) (>= (length res) 4)
-                         (string? (cadr res)) (string=? (cadr res) ":"))
-                    (list 'c-struct-decl (car res) (list-ref res 3))
-                    (list 'c-struct-decl (car res) #f)))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (if (and (pair? res) (>= (length res) 4)
+                          (string? (cadr res)) (string=? (cadr res) ":"))
+                     (list 'c-struct-decl (car res) (list-ref res 3))
+                     (list 'c-struct-decl (car res) #f))))
 
     ((struct_declaration)
-     (peg:map (lambda (res)
-                (list 'c-field-decl (car res) (or (cadr res) '())))
-              base-parser))
+     (%c99ds-ret ctx next-pos (list 'c-field-decl (car res) (or (cadr res) '()))))
 
     ((designator)
-     (peg:map (lambda (res)
-                (if (string=? (car res) "[")
-                    (list 'c-desig-index (list-ref res 2))
-                    (list 'c-desig-field (list-ref res 2))))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (if (string=? (car res) "[")
+                     (list 'c-desig-index (list-ref res 2))
+                     (list 'c-desig-field (list-ref res 2)))))
 
     ((designation)
-     (peg:map (lambda (x) (car x)) base-parser))
+     (%c99ds-ret ctx next-pos (car res)))
 
     ((initializer_item)
-     (peg:map (lambda (res)
-                (list 'c-init-item (car res) (cadr res)))
-              base-parser))
+     (%c99ds-ret ctx next-pos (list 'c-init-item (car res) (cadr res))))
 
     ((initializer_list enumerator_list)
-     (peg:map (lambda (res)
-                (cons (cdr (car res))
-                      (map cadddr (cdr (cadr res)))))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (cons (cdr (car res))
+                       (map cadddr (cdr (cadr res))))))
 
     ((initializer)
-     (peg:map (lambda (res)
-                (if (and (pair? res) (string? (car res)) (string=? (car res) "{"))
-                    (let ((inner (list-ref res 2)))
-                      (list 'c-init-list (if (pair? inner) (car inner) '())))
-                    res))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (if (and (pair? res) (string? (car res)) (string=? (car res) "{"))
+                     (let ((inner (list-ref res 2)))
+                       (list 'c-init-list (if (pair? inner) (car inner) '())))
+                     res)))
 
     ((offsetof_designator_suffix)
-     (peg:map (lambda (res)
-                (if (and (pair? res) (string? (car res)) (string=? (car res) "."))
-                    (list 'c-desig-field (list-ref res 2))
-                    (list 'c-desig-index (list-ref res 2))))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (if (and (pair? res) (string? (car res)) (string=? (car res) "."))
+                     (list 'c-desig-field (list-ref res 2))
+                     (list 'c-desig-index (list-ref res 2)))))
 
     ((offsetof_member_designator)
-     (peg:map (lambda (res)
-                (cons (list 'c-desig-field (car res))
-                      (or (list-ref res 2) '())))
-              base-parser))
+     (%c99ds-ret ctx next-pos (cons (list 'c-desig-field (car res)) (or (list-ref res 2) '()))))
 
     ((struct_or_union_specifier)
-     (%c99-wrap-span env
-      (lambda (ctx pos sk fk)
-        (base-parser ctx pos
-                     (lambda (res next-pos inner-fk)
-                       (let* ((is-union? (eq? (car res) 'union))
-                              (tag-sym (list-ref res 2))
-                              (fields (if (>= (length res) 7)
-                                          (or (list-ref res 6) '())
-                                          #f))
-                              (sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                         (if (symbol? tag-sym)
-                             (c99-register-var! env tag-sym (if is-union? 'tag-union 'tag-struct) sp))
-                         (sk (list (if is-union? 'c-union 'c-struct)
-                                   tag-sym
-                                   fields)
-                             next-pos inner-fk)))
-                     fk))))
+     (let* ((is-union? (eq? (car res) 'union))
+            (tag-sym (list-ref res 2))
+            (fields (if (>= (length res) 7) (or (list-ref res 6) '()) #f))
+            (sp (%c99-make-span-from-pos env ctx pos next-pos)))
+       (if (symbol? tag-sym)
+           (c99-register-var! env tag-sym (if is-union? 'tag-union 'tag-struct) sp))
+       (%c99ds-ret ctx next-pos
+                   (ast-with-span (list (if is-union? 'c-union 'c-struct) tag-sym fields) sp))))
 
     ((enum_specifier)
-     (%c99-wrap-span env
-      (lambda (ctx pos sk fk)
-        (base-parser ctx pos
-                     (lambda (res next-pos inner-fk)
-                       (let* ((tag-sym (list-ref res 3))
-                              (enums (if (>= (length res) 8)
-                                         (or (list-ref res 7) '())
-                                         #f))
-                              (sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                         (if (symbol? tag-sym)
-                             (c99-register-var! env tag-sym 'tag-enum sp))
-                         (sk (list 'c-enum tag-sym enums)
-                             next-pos inner-fk)))
-                     fk))))
+     (let* ((tag-sym (list-ref res 3))
+            (enums (if (>= (length res) 8) (or (list-ref res 7) '()) #f))
+            (sp (%c99-make-span-from-pos env ctx pos next-pos)))
+       (if (symbol? tag-sym)
+           (c99-register-var! env tag-sym 'tag-enum sp))
+       (%c99ds-ret ctx next-pos
+                   (ast-with-span (list 'c-enum tag-sym enums) sp))))
 
     ((enumerator)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (let* ((ec-sym (let ((syms (%c99-flatten-tag-syms (car res))))
-                                       (if (pair? syms) (car syms) #f)))
-                             (opt-eq (cadr res))
-                             (val-expr (if (pair? opt-eq) (list-ref opt-eq 2) #f))
-                             (sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                        (if ec-sym
-                            (c99-register-var! env ec-sym 'enum-const sp))
-                        (sk (list 'c-enumerator ec-sym val-expr)
-                            next-pos inner-fk)))
-                    fk)))
+     (let* ((ec-sym (let ((syms (%c99-flatten-tag-syms (car res))))
+                      (if (pair? syms) (car syms) #f)))
+            (opt-eq (cadr res))
+            (val-expr (if (pair? opt-eq) (list-ref opt-eq 2) #f))
+            (sp (%c99-make-span-from-pos env ctx pos next-pos)))
+       (if ec-sym
+           (c99-register-var! env ec-sym 'enum-const sp))
+       (%c99ds-ret ctx next-pos (list 'c-enumerator ec-sym val-expr))))
 
     ((explicit_declaration typedef_declaration)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (let* ((specs (car res))
-                             (inits (or (cadr res) '()))
-                             (sp (%c99-make-span-from-pos env ctx pos next-pos))
-                             (is-td? (%c99-has-typedef-spec? specs))
-                             (decl-names (if (pair? inits) (%c99-extract-declarator-names inits) '())))
-                        (for-each
-                         (lambda (sym)
-                           (if is-td?
-                               (c99-register-typedef! env sym sp)
-                               (c99-register-var! env sym 'variable sp)))
-                         decl-names)
-                        (let ((node (ast-with-span
-                                     (list (if is-td? 'c-typedef 'c-decl)
-                                           specs
-                                           inits)
-                                     sp)))
-                          (sk node next-pos inner-fk))))
-                    fk)))
-
-    ((compound_stmt)
-     (let ((st (vector #f #f #f #f)))
-       (lambda (ctx pos sk fk)
-         (if (not (vector-ref st 0))
-             (begin
-               (vector-set! st 1 (peg:seq (peg:lit "{") (lookup 'ws)))
-               (vector-set! st 2 (peg:star (lookup 'block_item)))
-               (vector-set! st 3 (peg:seq (peg:lit "}") (lookup 'ws)))
-               (vector-set! st 0 #t)))
-         ((vector-ref st 1) ctx pos
-                   (lambda (_lb pos1 fk1)
-                     (c99-push-scope! env 'block)
-                     ((vector-ref st 2) ctx pos1
-                              (lambda (items pos2 fk2)
-                                ((vector-ref st 3) ctx pos2
-                                          (lambda (_rb end-pos fk3)
-                                            (c99-pop-scope! env)
-                                            (let ((sp (%c99-make-span-from-pos env ctx pos end-pos)))
-                                              (sk (ast-with-span (cons 'c-block items) sp)
-                                                  end-pos fk3)))
-                                          (lambda ()
-                                            (c99-pop-scope! env)
-                                            (fk2))))
-                              (lambda ()
-                                (c99-pop-scope! env)
-                                (fk1))))
-                   fk))))
-
-    ((function_definition)
-     (let ((st (vector #f #f #f #f #f #f)))
-       (lambda (ctx pos sk fk)
-         (if (not (vector-ref st 0))
-             (begin
-               (vector-set! st 1 (lookup 'declaration_specifiers))
-               (vector-set! st 2 (lookup 'declarator))
-               (vector-set! st 3 (peg:star (lookup 'gnu_attribute)))
-               (vector-set! st 4 (peg:opt (lookup 'declaration_list)))
-               (vector-set! st 5 (lookup 'compound_stmt))
-               (vector-set! st 0 #t)))
-         ((vector-ref st 1) ctx pos
-                  (lambda (specs pos1 fk1)
-                    ((vector-ref st 2) ctx pos1
-                            (lambda (decl pos2 fk2)
-                              ((vector-ref st 3) ctx pos2
-                                       (lambda (fn-attrs pos2b fk2b)
-                                         (let* ((fn-names (%c99-extract-declarator-names decl))
-                                                (fn-sym (if (pair? fn-names) (car fn-names) 'anon_fn))
-                                                (param-syms (%c99-extract-fn-param-names decl))
-                                                (full-specs (if (pair? fn-attrs) (append specs fn-attrs) specs))
-                                                (fn-sp (%c99-make-span-from-pos env ctx pos pos2b)))
-                                           (c99-register-var! env fn-sym 'function fn-sp)
-                                           (c99-push-scope! env 'function)
-                                           (let ((param-bindings
-                                                  (map (lambda (psym)
-                                                         (let ((b (c99-register-var! env psym 'parameter fn-sp)))
-                                                           (list psym (binding-id b))))
-                                                       param-syms)))
-                                             ((vector-ref st 4) ctx pos2b
-                                                      (lambda (dlist pos3 fk3)
-                                                        ((vector-ref st 5) ctx pos3
-                                                                (lambda (body end-pos fk4)
-                                                                  (c99-pop-scope! env)
-                                                                  (let ((sp (%c99-make-span-from-pos env ctx pos end-pos)))
-                                                                    (sk (ast-with-span
-                                                                         (list 'c-fn-def fn-sym full-specs decl param-bindings body)
-                                                                         sp)
-                                                                        end-pos fk4)))
-                                                                (lambda ()
-                                                                  (c99-pop-scope! env)
-                                                                  (fk3))))
-                                                      (lambda ()
-                                                        (c99-pop-scope! env)
-                                                        (fk2b))))))
-                                       fk2))
-                            fk1))
-                  fk))))
+     (let* ((specs (car res))
+            (inits (or (cadr res) '()))
+            (sp (%c99-make-span-from-pos env ctx pos next-pos))
+            (is-td? (%c99-has-typedef-spec? specs))
+            (decl-names (if (pair? inits) (%c99-extract-declarator-names inits) '())))
+       (for-each
+        (lambda (sym)
+          (if is-td?
+              (c99-register-typedef! env sym sp)
+              (c99-register-var! env sym 'variable sp)))
+        decl-names)
+       (%c99ds-ret ctx next-pos
+                   (ast-with-span (list (if is-td? 'c-typedef 'c-decl) specs inits) sp))))
 
     ((asm_template)
-     (peg:map %c99-concat-c-str-cst base-parser))
+     (%c99ds-ret ctx next-pos (%c99-concat-c-str-cst res)))
 
     ((asm_operand)
-     (peg:map (lambda (res)
-                (let* ((opt-name (car res))
-                       (name-sym (if (pair? opt-name) (list-ref opt-name 2) #f))
-                       (cstr (list-ref res 1))
-                       (expr-node (list-ref res 4)))
-                  (list name-sym cstr expr-node)))
-              base-parser))
+     (let* ((opt-name (car res))
+            (name-sym (if (pair? opt-name) (list-ref opt-name 2) #f))
+            (cstr (list-ref res 1))
+            (expr-node (list-ref res 4)))
+       (%c99ds-ret ctx next-pos (list name-sym cstr expr-node))))
 
     ((asm_outputs asm_inputs)
-     (peg:map (lambda (res)
-                (cons 'c-asm-ops (or (list-ref res 2) '())))
-              base-parser))
+     (%c99ds-ret ctx next-pos (cons 'c-asm-ops (or (list-ref res 2) '()))))
 
     ((asm_clobbers)
-     (peg:map (lambda (res)
-                (cons 'c-asm-clobs (or (list-ref res 2) '())))
-              base-parser))
+     (%c99ds-ret ctx next-pos (cons 'c-asm-clobs (or (list-ref res 2) '()))))
 
     ((asm_stmt)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (let* ((quals (%c99-collect-attr-tokens (list-ref res 3)))
-                        (tpl (list-ref res 6))
-                        (opt-outs (list-ref res 7))
-                        (opt-ins (list-ref res 8))
-                        (opt-clobs (list-ref res 9))
-                        (outs (if (and (pair? opt-outs) (eq? (car opt-outs) 'c-asm-ops)) (cdr opt-outs) '()))
-                        (ins (if (and (pair? opt-ins) (eq? (car opt-ins) 'c-asm-ops)) (cdr opt-ins) '()))
-                        (clobs (if (and (pair? opt-clobs) (eq? (car opt-clobs) 'c-asm-clobs)) (cdr opt-clobs) '()))
-                        (vol? (if (or (null? outs)
-                                      (memq 'volatile quals)
-                                      (memq '__volatile quals)
-                                      (memq '__volatile__ quals))
-                                  #t #f)))
-                   (list 'c-asm vol? tpl outs ins clobs)))
-               base-parser)))
+     (let* ((quals (%c99-collect-attr-tokens (list-ref res 3)))
+            (tpl (list-ref res 6))
+            (opt-outs (list-ref res 7))
+            (opt-ins (list-ref res 8))
+            (opt-clobs (list-ref res 9))
+            (outs (if (and (pair? opt-outs) (eq? (car opt-outs) 'c-asm-ops)) (cdr opt-outs) '()))
+            (ins (if (and (pair? opt-ins) (eq? (car opt-ins) 'c-asm-ops)) (cdr opt-ins) '()))
+            (clobs (if (and (pair? opt-clobs) (eq? (car opt-clobs) 'c-asm-clobs)) (cdr opt-clobs) '()))
+            (vol? (if (or (null? outs)
+                          (memq 'volatile quals)
+                          (memq '__volatile quals)
+                          (memq '__volatile__ quals))
+                      #t #f)))
+       (%c99ds-ret-span env ctx pos next-pos (list 'c-asm vol? tpl outs ins clobs))))
 
     ((top_asm_decl)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (list 'c-top-asm (list-ref res 5)))
-               base-parser)))
+     (%c99ds-ret-span env ctx pos next-pos (list 'c-top-asm (list-ref res 5))))
 
-    ((expr logical_or_expr logical_and_expr inclusive_or_expr exclusive_or_expr
-      and_expr equality_expr relational_expr shift_expr additive_expr multiplicative_expr)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (sk (%c99-fold-binop-cst res env ctx pos next-pos)
-                          next-pos inner-fk))
-                    fk)))
+    ((expr)
+     (%c99ds-ret ctx next-pos (%c99-fold-binop-cst res env ctx pos next-pos)))
 
     ((assignment_operator)
-     (peg:map (lambda (res)
-                (list 'c-assign-op (%c99-assign-str->sym (%c99-string-trim-right-ws (%c99-cst->string res)))))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (list 'c-assign-op (%c99-assign-str->sym (%c99-string-trim-right-ws (%c99-cst->string res))))))
 
     ((assignment_expr)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (if (and (pair? res) (pair? (cdr res))
-                               (pair? (cadr res)) (eq? (caadr res) 'c-assign-op))
-                          (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                            (sk (ast-with-span
-                                 (list 'c-assign (cadadr res) (car res) (list-ref res 3))
-                                 sp)
-                                next-pos inner-fk))
-                          (sk res next-pos inner-fk)))
-                    fk)))
+     (if (and (pair? res) (pair? (cdr res))
+              (pair? (cadr res)) (eq? (caadr res) 'c-assign-op))
+         (%c99ds-ret-span env ctx pos next-pos
+                          (list 'c-assign (cadadr res) (car res) (list-ref res 3)))
+         (%c99ds-ret ctx next-pos res)))
 
     ((conditional_expr)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (if (and (pair? res) (= (length res) 2))
-                          (let ((opt-tail (cadr res)))
-                            (if (pair? opt-tail)
-                                (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                                  (sk (ast-with-span
-                                       (list 'c-ternary (car res) (list-ref opt-tail 2) (list-ref opt-tail 5))
-                                       sp)
-                                      next-pos inner-fk))
-                                (sk (car res) next-pos inner-fk)))
-                          (sk res next-pos inner-fk)))
-                    fk)))
+     (if (and (pair? res) (= (length res) 2))
+         (let ((opt-tail (cadr res)))
+           (if (pair? opt-tail)
+               (%c99ds-ret-span env ctx pos next-pos
+                                (list 'c-ternary (car res) (list-ref opt-tail 2) (list-ref opt-tail 5)))
+               (%c99ds-ret ctx next-pos (car res))))
+         (%c99ds-ret ctx next-pos res)))
 
     ((cast_expr)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (if (and (pair? res) (string? (car res)) (string=? (car res) "("))
-                          (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                            (sk (ast-with-span
-                                 (list 'c-cast (list-ref res 2) (list-ref res 6))
-                                 sp)
-                                next-pos inner-fk))
-                          (sk res next-pos inner-fk)))
-                    fk)))
+     (if (and (pair? res) (string? (car res)) (string=? (car res) "("))
+         (%c99ds-ret-span env ctx pos next-pos (list 'c-cast (list-ref res 2) (list-ref res 6)))
+         (%c99ds-ret ctx next-pos res)))
 
     ((unary_operator)
-     (peg:map (lambda (res)
-                (list 'c-unop-tag (%c99-unop-str->sym (%c99-string-trim-right-ws (%c99-cst->string res)))))
-              base-parser))
+     (%c99ds-ret ctx next-pos
+                 (list 'c-unop-tag (%c99-unop-str->sym (%c99-string-trim-right-ws (%c99-cst->string res))))))
 
     ((unary_expr)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                        (cond
-                          ((and (pair? res) (string? (car res))
-                                (or (string=? (car res) "++") (string=? (car res) "--")))
-                           (sk (ast-with-span
-                                (list 'c-unop (if (string=? (car res) "++") 'pre++ 'pre--)
-                                      (list-ref res 2))
-                                sp)
-                               next-pos inner-fk))
-                          ((and (pair? res) (pair? (car res)) (eq? (caar res) 'c-unop-tag))
-                           (sk (ast-with-span
-                                (list 'c-unop (cadar res) (list-ref res 2))
-                                sp)
-                               next-pos inner-fk))
-                          ((and (pair? res) (string? (car res)) (string=? (car res) "sizeof"))
-                           (if (= (length res) 9)
-                               (sk (ast-with-span (list 'c-sizeof-type (list-ref res 5)) sp)
-                                   next-pos inner-fk)
-                               (sk (ast-with-span (list 'c-sizeof-expr (list-ref res 3)) sp)
-                                   next-pos inner-fk)))
-                          ((and (pair? res) (string? (car res))
-                                (or (string=? (car res) "_Alignof")
-                                    (string=? (car res) "__alignof__")
-                                    (string=? (car res) "__alignof")))
-                           (if (= (length res) 9)
-                               (sk (ast-with-span (list 'c-alignof-type (list-ref res 5)) sp)
-                                   next-pos inner-fk)
-                               (sk (ast-with-span (list 'c-alignof-expr (list-ref res 3)) sp)
-                                   next-pos inner-fk)))
-                          ((and (pair? res) (string? (car res))
-                                (string=? (car res) "__builtin_offsetof"))
-                           (sk (ast-with-span
-                                (list 'c-offsetof (list-ref res 5) (list-ref res 8))
-                                sp)
-                               next-pos inner-fk))
-                          ((and (pair? res) (string? (car res))
-                                (string=? (car res) "__extension__"))
-                           (sk (list-ref res 3) next-pos inner-fk))
-                          (else
-                           (sk res next-pos inner-fk)))))
-                    fk)))
+     (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
+       (%c99ds-ret
+        ctx next-pos
+        (cond
+          ((and (pair? res) (string? (car res))
+                (or (string=? (car res) "++") (string=? (car res) "--")))
+           (ast-with-span (list 'c-unop (if (string=? (car res) "++") 'pre++ 'pre--) (list-ref res 2)) sp))
+          ((and (pair? res) (pair? (car res)) (eq? (caar res) 'c-unop-tag))
+           (ast-with-span (list 'c-unop (cadar res) (list-ref res 2)) sp))
+          ((and (pair? res) (string? (car res)) (string=? (car res) "sizeof"))
+           (if (= (length res) 9)
+               (ast-with-span (list 'c-sizeof-type (list-ref res 5)) sp)
+               (ast-with-span (list 'c-sizeof-expr (list-ref res 3)) sp)))
+          ((and (pair? res) (string? (car res))
+                (or (string=? (car res) "_Alignof")
+                    (string=? (car res) "__alignof__")
+                    (string=? (car res) "__alignof")))
+           (if (= (length res) 9)
+               (ast-with-span (list 'c-alignof-type (list-ref res 5)) sp)
+               (ast-with-span (list 'c-alignof-expr (list-ref res 3)) sp)))
+          ((and (pair? res) (string? (car res)) (string=? (car res) "__builtin_offsetof"))
+           (ast-with-span (list 'c-offsetof (list-ref res 5) (list-ref res 8)) sp))
+          ((and (pair? res) (string? (car res)) (string=? (car res) "__extension__"))
+           (list-ref res 3))
+          (else res)))))
 
     ((postfix_expr)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                        (cond
-                          ((not (pair? res))
-                           (sk res next-pos inner-fk))
-                          ((and (string? (car res)) (string=? (car res) "("))
-                           (let ((inits (list-ref res 7)))
-                             (sk (ast-with-span
-                                  (list 'c-compound-lit
-                                        (list-ref res 2)
-                                        (if (pair? inits) (car inits) '()))
-                                  sp)
-                                 next-pos inner-fk)))
-                          ((and (pair? (cdr res)) (string? (cadr res)))
-                           (let ((op (cadr res))
-                                 (base (car res)))
-                             (cond
-                               ((string=? op "[")
-                                (sk (ast-with-span (list 'c-index base (list-ref res 3)) sp)
-                                    next-pos inner-fk))
-                               ((string=? op "(")
-                                (let ((args (list-ref res 3)))
-                                  (sk (ast-with-span
-                                       (cons 'c-call (cons base (if (pair? args) args '())))
-                                       sp)
-                                      next-pos inner-fk)))
-                               ((string=? op ".")
-                                (sk (ast-with-span (list 'c-member base (list-ref res 3) #f) sp)
-                                    next-pos inner-fk))
-                               ((string=? op "->")
-                                (sk (ast-with-span (list 'c-member base (list-ref res 3) #t) sp)
-                                    next-pos inner-fk))
-                               ((or (string=? op "++") (string=? op "--"))
-                                (sk (ast-with-span
-                                     (list 'c-unop (if (string=? op "++") 'post++ 'post--) base)
-                                     sp)
-                                    next-pos inner-fk))
-                               (else
-                                (sk res next-pos inner-fk)))))
-                          (else
-                           (sk res next-pos inner-fk)))))
-                    fk)))
+     (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
+       (%c99ds-ret
+        ctx next-pos
+        (cond
+          ((not (pair? res)) res)
+          ((and (string? (car res)) (string=? (car res) "("))
+           (let ((inits (list-ref res 7)))
+             (ast-with-span (list 'c-compound-lit (list-ref res 2) (if (pair? inits) (car inits) '())) sp)))
+          ((and (pair? (cdr res)) (string? (cadr res)))
+           (let ((op (cadr res))
+                 (base (car res)))
+             (cond
+               ((string=? op "[") (ast-with-span (list 'c-index base (list-ref res 3)) sp))
+               ((string=? op "(")
+                (let ((args (list-ref res 3)))
+                  (ast-with-span (cons 'c-call (cons base (if (pair? args) args '()))) sp)))
+               ((string=? op ".") (ast-with-span (list 'c-member base (list-ref res 3) #f) sp))
+               ((string=? op "->") (ast-with-span (list 'c-member base (list-ref res 3) #t) sp))
+               ((or (string=? op "++") (string=? op "--"))
+                (ast-with-span (list 'c-unop (if (string=? op "++") 'post++ 'post--) base) sp))
+               (else res))))
+          (else res)))))
 
     ((primary_expr)
-     (lambda (ctx pos sk fk)
-       (base-parser ctx pos
-                    (lambda (res next-pos inner-fk)
-                      (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
-                        (cond
-                          ((and (pair? res) (string? (car res))
-                                (string=? (car res) "__builtin_va_arg"))
-                           (sk (ast-with-span
-                                (list 'c-va-arg (list-ref res 5) (list-ref res 8))
-                                sp)
-                               next-pos inner-fk))
-                          ((and (pair? res) (symbol? (car res)))
-                           (let* ((sym (car res))
-                                  (bid (c99-lookup-binding-id env sym)))
-                             (sk (ast-with-span (list 'c-var-ref sym bid) sp)
-                                 next-pos inner-fk)))
-                          ((and (pair? res)
-                                (ast-has-span? (car res))
-                                (eq? (car (ast-strip-span (car res))) 'c-const))
-                           (sk (car res) next-pos inner-fk))
-                          ((and (pair? res) (string? (car res)) (string=? (car res) "("))
-                           (sk (list-ref res 2) next-pos inner-fk))
-                          ((and (pair? res)
-                                (pair? (car res))
-                                (ast-has-span? (caar res))
-                                (eq? (car (ast-strip-span (caar res))) 'c-str))
-                           (sk (%c99-merge-c-str-literals res env ctx pos next-pos)
-                               next-pos inner-fk))
-                          (else
-                           (sk (ast-with-span res sp) next-pos inner-fk)))))
-                    fk)))
+     (let ((sp (%c99-make-span-from-pos env ctx pos next-pos)))
+       (%c99ds-ret
+        ctx next-pos
+        (cond
+          ((and (pair? res) (string? (car res)) (string=? (car res) "__builtin_va_arg"))
+           (ast-with-span (list 'c-va-arg (list-ref res 5) (list-ref res 8)) sp))
+          ((and (pair? res) (symbol? (car res)))
+           (let* ((sym (car res))
+                  (bid (c99-lookup-binding-id env sym)))
+             (ast-with-span (list 'c-var-ref sym bid) sp)))
+          ((and (pair? res)
+                (ast-has-span? (car res))
+                (eq? (car (ast-strip-span (car res))) 'c-const))
+           (car res))
+          ((and (pair? res) (string? (car res)) (string=? (car res) "("))
+           (list-ref res 2))
+          ((and (pair? res)
+                (pair? (car res))
+                (ast-has-span? (caar res))
+                (eq? (car (ast-strip-span (caar res))) 'c-str))
+           (%c99-merge-c-str-literals res env ctx pos next-pos))
+          (else (ast-with-span res sp))))))
 
     ((selection_stmt)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (let ((kw (car res)))
-                   (if (string=? kw "if")
-                       (let ((opt-else (list-ref res 9)))
-                         (if (pair? opt-else)
-                             (list 'c-if (list-ref res 5) (list-ref res 8) (list-ref opt-else 3))
-                             (list 'c-if (list-ref res 5) (list-ref res 8))))
-                       (list 'c-switch (list-ref res 5) (list-ref res 8)))))
-               base-parser)))
+     (let ((kw (car res)))
+       (%c99ds-ret-span
+        env ctx pos next-pos
+        (if (string=? kw "if")
+            (let ((opt-else (list-ref res 9)))
+              (if (pair? opt-else)
+                  (list 'c-if (list-ref res 5) (list-ref res 8) (list-ref opt-else 3))
+                  (list 'c-if (list-ref res 5) (list-ref res 8))))
+            (list 'c-switch (list-ref res 5) (list-ref res 8))))))
 
     ((iteration_stmt)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (let ((kw (car res)))
-                   (cond
-                     ((string=? kw "while")
-                      (list 'c-while (list-ref res 5) (list-ref res 8)))
-                     ((string=? kw "do")
-                      (list 'c-do-while (list-ref res 3) (list-ref res 9)))
-                     ((string=? kw "for")
-                      (let* ((c1 (list-ref res 5))
-                             (c1-stripped (ast-strip-span c1))
-                             (init-node (if (and (pair? c1-stripped)
-                                                 (memq (car c1-stripped) '(c-decl c-typedef)))
-                                            c1
-                                            (if (pair? c1) (car c1) #f)))
-                             (cond-node (list-ref res 6))
-                             (step-node (list-ref res 9))
-                             (body-node (list-ref res 12)))
-                        (list 'c-for init-node cond-node step-node body-node)))
-                     (else (list 'c-iter res)))))
-               base-parser)))
+     (let ((kw (car res)))
+       (%c99ds-ret-span
+        env ctx pos next-pos
+        (cond
+          ((string=? kw "while")
+           (list 'c-while (list-ref res 5) (list-ref res 8)))
+          ((string=? kw "do")
+           (list 'c-do-while (list-ref res 3) (list-ref res 9)))
+          ((string=? kw "for")
+           (let* ((c1 (list-ref res 5))
+                  (c1-stripped (ast-strip-span c1))
+                  (init-node (if (and (pair? c1-stripped)
+                                      (memq (car c1-stripped) '(c-decl c-typedef)))
+                                 c1
+                                 (if (pair? c1) (car c1) #f)))
+                  (cond-node (list-ref res 6))
+                  (step-node (list-ref res 9))
+                  (body-node (list-ref res 12)))
+             (list 'c-for init-node cond-node step-node body-node)))
+          (else (list 'c-iter res))))))
 
     ((jump_stmt)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (let ((kw (car res)))
-                   (cond
-                     ((string=? kw "goto") (list 'c-goto (list-ref res 3)))
-                     ((string=? kw "continue") '(c-continue))
-                     ((string=? kw "break") '(c-break))
-                     ((string=? kw "return") (list 'c-return (list-ref res 3)))
-                     (else (list 'c-jump res)))))
-               base-parser)))
+     (let ((kw (car res)))
+       (%c99ds-ret-span
+        env ctx pos next-pos
+        (cond
+          ((string=? kw "goto") (list 'c-goto (list-ref res 3)))
+          ((string=? kw "continue") '(c-continue))
+          ((string=? kw "break") '(c-break))
+          ((string=? kw "return") (list 'c-return (list-ref res 3)))
+          (else (list 'c-jump res))))))
 
     ((labeled_stmt)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (let ((head (car res)))
-                   (cond
-                     ((and (string? head) (string=? head "case"))
-                      (list 'c-case (list-ref res 3) (list-ref res 6)))
-                     ((and (string? head) (string=? head "default"))
-                      (list 'c-default (list-ref res 5)))
-                     ((symbol? head)
-                      (c99-register-var! env head 'label)
-                      (list 'c-label head (list-ref res 4)))
-                     (else (list 'c-labeled res)))))
-               base-parser)))
+     (let ((head (car res)))
+       (%c99ds-ret-span
+        env ctx pos next-pos
+        (cond
+          ((and (string? head) (string=? head "case"))
+           (list 'c-case (list-ref res 3) (list-ref res 6)))
+          ((and (string? head) (string=? head "default"))
+           (list 'c-default (list-ref res 5)))
+          ((symbol? head)
+           (c99-register-var! env head 'label)
+           (list 'c-label head (list-ref res 4)))
+          (else (list 'c-labeled res))))))
 
     ((expr_stmt)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (list 'c-expr-stmt (car res)))
-               base-parser)))
+     (%c99ds-ret-span env ctx pos next-pos (list 'c-expr-stmt (car res))))
 
     ((translation_unit)
-     (%c99-wrap-span env
-      (peg:map (lambda (res)
-                 (cons 'c-translation-unit (cadr res)))
-               base-parser)))
+     (%c99ds-ret-span env ctx pos next-pos (cons 'c-translation-unit (cadr res))))
 
-    (else base-parser)))
+    (else
+     (%c99ds-ret ctx next-pos res))))
+
+(define *c99ds-decorated-rules*
+  '(typedef_name
+    storage_class_specifier builtin_type_specifier type_qualifier function_specifier struct_or_union
+    explicit_declaration_specifiers typedef_declaration_specifiers specifier_qualifier_list
+    pointer direct_declarator declarator direct_abstract_declarator abstract_declarator
+    type_name parameter_list parameter_type_list parameter_declaration
+    typeof_specifier attr_arg gnu_attribute decl_asm_label init_declarator
+    init_declarator_list typedef_init_declarator_list struct_declarator_list argument_expr_list
+    attr_arg_list asm_operand_list asm_clobber_list
+    struct_declarator struct_declaration designator designation
+    initializer_item initializer_list enumerator_list initializer
+    offsetof_designator_suffix offsetof_member_designator
+    struct_or_union_specifier enum_specifier enumerator
+    explicit_declaration typedef_declaration
+    asm_template asm_operand asm_outputs asm_inputs asm_clobbers asm_stmt top_asm_decl
+    expr assignment_operator assignment_expr conditional_expr cast_expr
+    unary_operator unary_expr postfix_expr primary_expr
+    selection_stmt iteration_stmt jump_stmt labeled_stmt expr_stmt translation_unit))
+
+(define (c99-emit-scheme-options)
+  (list
+   (cons 'prefix "c99ds-")
+   (cons 'entry 'translation_unit)
+   (cons 'extra-params '(env))
+   (cons 'memo-mode 'all)
+   (cons 'no-memo '(typedef_name ws ident_cont c99_keyword identifier constant string_literal typedef_init_declarator
+                    storage_class_specifier builtin_type_specifier type_qualifier function_specifier
+                    struct_or_union enumeration_constant type_qualifier_list identifier_list
+                    unary_operator assignment_operator c99_punctuator c99_raw_token
+                    float_constant integer_constant char_constant escape_seq
+                    float_suffix integer_suffix decimal_exponent binary_exponent
+                    line_comment block_comment pp_line
+                    compound_stmt function_definition block_item
+                    asm_qual offsetof_designator_suffix decl_asm_label))
+   (cons 'force-lr '(direct_declarator direct_abstract_declarator postfix_expr declarator abstract_declarator unary_expr cast_expr primary_expr))
+   (cons 'force-memo '(logical_or_expr logical_and_expr inclusive_or_expr exclusive_or_expr and_expr equality_expr relational_expr shift_expr additive_expr multiplicative_expr))
+   (cons 'rule-decorator (cons "c99ds-decorate-rule" *c99ds-decorated-rules*))
+   (cons 'overrides
+         (list
+          (cons 'ws "(c99ds-leaf-ws ctx env pos)")
+          (cons 'ident_cont "(c99ds-leaf-ident-cont ctx env pos)")
+          (cons 'c99_keyword "(c99ds-leaf-keyword ctx env pos)")
+          (cons 'identifier "(c99ds-leaf-identifier ctx env pos)")
+          (cons 'constant "(c99ds-leaf-constant ctx env pos)")
+          (cons 'string_literal "(c99ds-leaf-string-literal ctx env pos)")
+          (cons 'typedef_init_declarator "(c99ds-override-typedef-init-declarator ctx env pos)")
+          (cons 'compound_stmt "(c99ds-override-compound-stmt ctx env pos)")
+          (cons 'function_definition "(c99ds-override-function-definition ctx env pos)")
+          (cons 'logical_or_expr "(c99ds-pratt-binop ctx env pos 1)")
+          (cons 'logical_and_expr "(c99ds-pratt-binop ctx env pos 2)")
+          (cons 'inclusive_or_expr "(c99ds-pratt-binop ctx env pos 3)")
+          (cons 'exclusive_or_expr "(c99ds-pratt-binop ctx env pos 4)")
+          (cons 'and_expr "(c99ds-pratt-binop ctx env pos 5)")
+          (cons 'equality_expr "(c99ds-pratt-binop ctx env pos 6)")
+          (cons 'relational_expr "(c99ds-pratt-binop ctx env pos 7)")
+          (cons 'shift_expr "(c99ds-pratt-binop ctx env pos 8)")
+          (cons 'additive_expr "(c99ds-pratt-binop ctx env pos 9)")
+          (cons 'multiplicative_expr "(c99ds-pratt-binop ctx env pos 10)")))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 6. Top-Level Parse API & Pretty Diagnostic Integration
 ;;; -----------------------------------------------------------------------
 
-(define (%c99-get-cached-env-and-getter filename src-text)
+(define (%c99-get-cached-env filename src-text)
   (let ((cached (car *c99-cached-env-parser*)))
     (if cached
         (let ((env (car cached)))
@@ -1738,38 +1542,35 @@
           (c99-parse-env-file-set! env filename)
           (c99-parse-env-text-set! env src-text)
           (c99-parse-env-line-starts-set! env (%c99-build-line-starts src-text))
-          cached)
-        (let* ((env (make-c99-parse-env filename))
-               (getter (compile-c99-rule-getter env))
-               (pair (cons env getter)))
+          env)
+        (let ((env (make-c99-parse-env filename)))
           (c99-parse-env-text-set! env src-text)
           (c99-parse-env-line-starts-set! env (%c99-build-line-starts src-text))
-          (set-car! *c99-cached-env-parser* pair)
-          pair))))
+          (set-car! *c99-cached-env-parser* (cons env #t))
+          env))))
 
-(define (%c99-run-entry-parser src-text filename entry-rule)
-  (reset-alpha-symbol-counter!)
+(define (%c99ds-dispatch-entry entry-rule ctx env)
+  (case entry-rule
+    ((translation_unit) (c99ds-translation_unit ctx env 0))
+    ((expr) (c99ds-expr ctx env 0))
+    (else (error "Unknown C99 grammar entry rule" entry-rule))))
+
+(define (%c99-validate-grammar-env!)
+  (let ((env-path (guard (ex (else #f)) (get-environment-variable "ULISP_C99_GRAMMAR"))))
+    (if (and (string? env-path) (> (string-length env-path) 0))
+        (if (not (%c99-safe-grammar-path? env-path))
+            (error "Unsafe ULISP_C99_GRAMMAR path rejected" env-path)
+            (if (not (file-exists? env-path))
+                (error "ULISP_C99_GRAMMAR file not found" env-path))))))
+
+(define (%c99ds-run-with-env src-text filename entry-rule env)
+  (%c99-validate-grammar-env!)
   (diagnostic-register-source-string! filename src-text)
-  (let* ((cached (%c99-get-cached-env-and-getter filename src-text))
-         (getter (cdr cached))
-         (parser (or (getter entry-rule)
-                     (error "Unknown C99 grammar entry rule" entry-rule)))
-         (ctx (make-parse-context src-text))
+  (let* ((ctx (make-parse-context src-text))
          (txt-len (string-length src-text))
-         (res (vector #f #f 0)))
-    (parser
-     ctx 0
-     (lambda (val next-pos fk)
-       (if (= next-pos txt-len)
-           (begin
-             (vector-set! res 0 #t)
-             (vector-set! res 1 val)
-             (vector-set! res 2 next-pos))
-           (fk)))
-     (lambda ()
-       (vector-set! res 0 #f)))
-    (if (vector-ref res 0)
-        (vector-ref res 1)
+         (end-pos (%c99ds-dispatch-entry entry-rule ctx env)))
+    (if (and end-pos (= end-pos txt-len))
+        (parse-ctx-res-val ctx)
         (let* ((err-pos (parse-ctx-max-pos ctx))
                (lc (calc-line-col src-text err-pos))
                (exp (parse-ctx-expected ctx))
@@ -1780,6 +1581,11 @@
                (diag (make-diagnostic 'error "C99-PARSE-001" sp msg)))
           (report-diagnostic diag)
           (raise (list 'c99-syntax-error msg sp exp "C99-PARSE-001"))))))
+
+(define (%c99-run-entry-parser src-text filename entry-rule)
+  (reset-alpha-symbol-counter!)
+  (let ((env (%c99-get-cached-env filename src-text)))
+    (%c99ds-run-with-env src-text filename entry-rule env)))
 
 (define (parse-c99-string src-text . maybe-filename)
   (let ((fname (if (pair? maybe-filename) (car maybe-filename) "<c99-input>")))
@@ -1837,39 +1643,9 @@
                 (binding-source-span b)))
 
 (define (%c99-run-entry-parser-with-scope src-text filename entry-rule scope-mgr)
-  (diagnostic-register-source-string! filename src-text)
-  (let* ((cached (%c99-get-cached-env-and-getter filename src-text))
-         (env (car cached))
-         (getter (cdr cached)))
+  (let ((env (%c99-get-cached-env filename src-text)))
     (c99-parse-env-scope-mgr-set! env scope-mgr)
-    (let* ((parser (or (getter entry-rule)
-                       (error "Unknown C99 grammar entry rule" entry-rule)))
-           (ctx (make-parse-context src-text))
-           (txt-len (string-length src-text))
-           (matched-box (cons #f '()))
-           (result-val-box (cons #f '())))
-      (parser
-       ctx 0
-       (lambda (val next-pos fk)
-         (if (= next-pos txt-len)
-             (begin
-               (set-car! matched-box #t)
-               (set-car! result-val-box val))
-             (fk)))
-       (lambda ()
-         (set-car! matched-box #f)))
-      (if (car matched-box)
-          (car result-val-box)
-          (let* ((err-pos (parse-ctx-max-pos ctx))
-                 (lc (calc-line-col src-text err-pos))
-                 (exp (parse-ctx-expected ctx))
-                 (sp (make-source-span filename (car lc) (cdr lc) (car lc) (cdr lc)
-                                       #f (next-source-span-id!)))
-                 (msg (string-append "C99 syntax error near "
-                                     (if (pair? exp) (car exp) "unexpected token")))
-                 (diag (make-diagnostic 'error "C99-PARSE-001" sp msg)))
-            (report-diagnostic diag)
-            (raise (list 'c99-syntax-error msg sp exp "C99-PARSE-001")))))))
+    (%c99ds-run-with-env src-text filename entry-rule env)))
 
 (define (c99-capture-parse-pch-state)
   (let* ((cached (car *c99-cached-env-parser*))
@@ -1930,8 +1706,7 @@
           (if (%c99-only-eof-tokens? tokens)
               (begin
                 (reset-alpha-symbol-counter!)
-                (let ((cached (%c99-get-cached-env-and-getter fname "")))
-                  (c99-parse-env-scope-mgr-set! (car cached) (c99-make-init-scope-manager)))
+                (%c99-get-cached-env fname "")
                 '(c-translation-unit))
               (parse-c99-tokens tokens fname))))
     (cons ast (c99-capture-parse-pch-state))))
@@ -1944,8 +1719,8 @@
                         "<c99-tokens>")))
          (fresh-mgr (c99-restore-parse-pch-state! parse-pch-state)))
     (if (%c99-only-eof-tokens? tokens)
-        (let ((cached (%c99-get-cached-env-and-getter fname "")))
-          (c99-parse-env-scope-mgr-set! (car cached) fresh-mgr)
+        (let ((env (%c99-get-cached-env fname "")))
+          (c99-parse-env-scope-mgr-set! env fresh-mgr)
           '(c-translation-unit))
         (let* ((concat (c-concat-adjacent-string-tokens tokens))
                (src-str (c-tokens->source-string concat)))

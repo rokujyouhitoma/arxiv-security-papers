@@ -38,6 +38,35 @@
         (error "Invalid identifier for Scheme emission (CWE-94 guard)"
                (list context-label sym-or-str)))))
 
+(define (%emit-fn-start-char? ch)
+  (or (%emit-ident-start-char? ch)
+      (char=? ch #\%)))
+
+(define (%emit-fn-cont-char? ch)
+  (or (%emit-ident-cont-char? ch)
+      (char=? ch #\?)
+      (char=? ch #\!)))
+
+(define (%emit-valid-fn-ident? str)
+  (and (string? str)
+       (> (string-length str) 0)
+       (%emit-fn-start-char? (string-ref str 0))
+       (let loop ((i 1) (len (string-length str)))
+         (if (>= i len)
+             #t
+             (if (%emit-fn-cont-char? (string-ref str i))
+                 (loop (+ i 1) len)
+                 #f)))))
+
+(define (%emit-assert-valid-fn-ident! sym-or-str context-label)
+  (let ((s (if (symbol? sym-or-str)
+               (symbol->string sym-or-str)
+               sym-or-str)))
+    (if (%emit-valid-fn-ident? s)
+        s
+        (error "Invalid function identifier for Scheme emission (CWE-94 guard)"
+               (list context-label sym-or-str)))))
+
 (define (%emit-escape-scheme-char ch)
   (cond
     ((char=? ch #\\) "\\\\")
@@ -300,6 +329,10 @@
             (memo-mode (if mode-slot (cdr mode-slot) 'auto))
             (no-memo-slot (assq 'no-memo opts))
             (no-memo (if no-memo-slot (cdr no-memo-slot) '()))
+            (force-memo-slot (assq 'force-memo opts))
+            (force-memo (if force-memo-slot (cdr force-memo-slot) '()))
+            (force-lr-slot (assq 'force-lr opts))
+            (force-lr (if force-lr-slot (cdr force-lr-slot) '()))
             (rules (peg-grammar-def-rules grammar))
             (rule-names (map peg-rule-def-name rules))
             (nullable (peg-compute-nullable-rules grammar))
@@ -329,6 +362,10 @@
                              (not memo?)
                              (memq name no-memo))
                          'bare)
+                        ((memq name force-lr)
+                         'lr)
+                        ((memq name force-memo)
+                         'memo)
                         ((memq name lr-rules)
                          'lr)
                         ((eq? memo-mode 'all)
@@ -739,8 +776,16 @@
          (grammar-name (vector-ref ctx-env 4))
          (overrides (let ((s (assq 'overrides opts))) (if s (cdr s) '())))
          (decorators (let ((s (assq 'decorators opts))) (if s (cdr s) '())))
+         (ctx-decorators (let ((s (assq 'ctx-decorators opts))) (if s (cdr s) '())))
+         (rule-dec-slot (assq 'rule-decorator opts))
          (override-slot (assq name overrides))
          (decorator-slot (assq name decorators))
+         (ctx-dec-slot (assq name ctx-decorators))
+         (rule-dec-fn (if (and rule-dec-slot
+                               (pair? (cdr rule-dec-slot))
+                               (memq name (cddr rule-dec-slot)))
+                          (cadr rule-dec-slot)
+                          #f))
          (cls (let ((s (assq name cls-alist))) (if s (cdr s) 'bare)))
          (meta? (eq? grammar-name 'MetaGrammar))
          (raw-body
@@ -757,16 +802,31 @@
             (else
              (%emit-expr ctx-env (peg-rule-def-expr rule) "pos" 4))))
          (decorated-body
-          (if decorator-slot
-              (let ((dvar (%emit-fresh-var! cnt-box "dec_"))
-                    (dfn (cdr decorator-slot)))
-                (string-append "(let ((" dvar " " raw-body "))\n"
-                               "      (if " dvar "\n"
-                               "          (begin\n"
-                               "            (parse-ctx-res-val-set! ctx (" dfn " (parse-ctx-res-val ctx)))\n"
-                               "            " dvar ")\n"
-                               "          #f))"))
-              raw-body))
+          (cond
+            (ctx-dec-slot
+             (let ((dvar (%emit-fresh-var! cnt-box "cdec_"))
+                   (dfn (%emit-assert-valid-fn-ident! (cdr ctx-dec-slot) 'ctx-decorator)))
+               (string-append "(let ((" dvar " " raw-body "))\n"
+                              "      (if " dvar "\n"
+                              "          (" dfn " ctx" extra-call " pos " dvar " (parse-ctx-res-val ctx))\n"
+                              "          #f))")))
+            (rule-dec-fn
+             (let ((dvar (%emit-fresh-var! cnt-box "rdec_"))
+                   (dfn (%emit-assert-valid-fn-ident! rule-dec-fn 'rule-decorator)))
+               (string-append "(let ((" dvar " " raw-body "))\n"
+                              "      (if " dvar "\n"
+                              "          (" dfn " '" name-str " ctx" extra-call " pos " dvar " (parse-ctx-res-val ctx))\n"
+                              "          #f))")))
+            (decorator-slot
+             (let ((dvar (%emit-fresh-var! cnt-box "dec_"))
+                   (dfn (%emit-assert-valid-fn-ident! (cdr decorator-slot) 'decorator)))
+               (string-append "(let ((" dvar " " raw-body "))\n"
+                              "      (if " dvar "\n"
+                              "          (begin\n"
+                              "            (parse-ctx-res-val-set! ctx (" dfn " (parse-ctx-res-val ctx)))\n"
+                              "            " dvar ")\n"
+                              "          #f))")))
+            (else raw-body)))
          (wrapped-body
           (cond
             ((eq? cls 'lr)
