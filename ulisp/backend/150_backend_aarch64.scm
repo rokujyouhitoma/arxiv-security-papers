@@ -1453,20 +1453,28 @@
     (emit (string-append "    .weak " label-str))
     (emit (string-append "    .type " label-str ", %function"))
     (emit (string-append label-str ":"))
-    ;; Callee prologue: self closure pointer was in x10
-    ;; Store self closure pointer at [sp, #-8]
-    (emit "    str x10, [sp, #-8]")
-    ;; Callee prologue: if first instruction is (%store %rsp -16 %rax), store argc (x7)
-    (if (and (pair? body)
-             (pair? (car body))
-             (eq? (caar body) '%store)
-             (eq? (cadar body) '%rsp)
-             (= (caddar body) -16)
-             (eq? (car (cdddar body)) '%rax))
-        (begin
-          (emit "    str x7, [sp, #-16]")
-          (emit-arm-body (cdr body) #f))
-        (emit-arm-body body #f))))
+    ;; Callee prologue: optionally store self closure (x10 -> [sp, #-8]) and argc (x7 -> [sp, #-16])
+    (let* ((rest0 (if (and (pair? body)
+                           (pair? (car body))
+                           (eq? (caar body) '%store)
+                           (eq? (cadar body) '%rsp)
+                           (= (caddar body) -8)
+                           (eq? (car (cdddar body)) '%r10))
+                      (begin
+                        (emit "    str x10, [sp, #-8]")
+                        (cdr body))
+                      body))
+           (rest1 (if (and (pair? rest0)
+                           (pair? (car rest0))
+                           (eq? (caar rest0) '%store)
+                           (eq? (cadar rest0) '%rsp)
+                           (= (caddar rest0) -16)
+                           (eq? (car (cdddar rest0)) '%rax))
+                      (begin
+                        (emit "    str x7, [sp, #-16]")
+                        (cdr rest0))
+                      rest0)))
+      (emit-arm-body rest1 #f))))
 
 ;;; Pass 7 Entrypoint: Takes %lir-program and emits complete GNU AArch64 assembly
 (define (emit-aarch64 prog gc-mode)

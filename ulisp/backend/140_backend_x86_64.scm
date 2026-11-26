@@ -2436,12 +2436,8 @@
                       (list 'cmp 'rax (* expected-args 4)))
                 '()))
            (init-acc (append guard-insts
-                             (if c-tu?
-                                 (list (list '%label label)
-                                       (list '%p2align 4))
-                                 (list (list 'mov (list '%disp -8 'rsp) 'r10)
-                                       (list '%label label)
-                                       (list '%p2align 4)))))
+                             (list (list '%label label)
+                                   (list '%p2align 4))))
            (base-acc (if is-exported?
                          (if c-tu?
                              (if (or (memq label '(__ulisp_setjmp __ulisp_longjmp __ulisp_san_trap))
@@ -2831,7 +2827,6 @@
     (scan-x86-blocks! body)
     (emit "    .p2align 4")
     (emit (string-append label-str ":"))
-    (emit "    mov [rsp - 8], r10")
     (for-each emit-lir-instruction body)))
 
 (define (emit-x86-asm-function fn)

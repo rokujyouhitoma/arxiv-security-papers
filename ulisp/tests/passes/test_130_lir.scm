@@ -245,5 +245,34 @@
   (assert-false "Pass 130 pipeline output avoids heap %alloc"
                 (pair? (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc))) main-body))))
 
+;;; Test Group 9: Selective Prologue Spill Elimination (%self / %num-args, Issue #958)
+(display "--- Group 9: Selective Prologue Spill Elimination (Issue #958) ---")
+(newline)
+
+(let* ((prog-plain '(%program ((%function L_plain (x) (+ x 1))) 0))
+       (lir-plain (generate-lir prog-plain))
+       (plain-fn (assq 'L_plain (map cdr (cdr (assq '%lir-functions (cdr lir-plain))))))
+       (plain-body (cdr (assq 'body (cdr plain-fn))))
+       (prog-self '(%program ((%function L_self (x) (%closure-ref %self 1))) 0))
+       (lir-self (generate-lir prog-self))
+       (self-fn (assq 'L_self (map cdr (cdr (assq '%lir-functions (cdr lir-self))))))
+       (self-body (cdr (assq 'body (cdr self-fn))))
+       (prog-var '(%program ((%function L_var () (%num-args))) 0))
+       (lir-var (generate-lir prog-var))
+       (var-fn (assq 'L_var (map cdr (cdr (assq '%lir-functions (cdr lir-var))))))
+       (var-body (cdr (assq 'body (cdr var-fn)))))
+  (assert-false "plain function omits (%store %rsp -8 %r10)"
+                (pair? (filter (lambda (i) (equal? i '(%store %rsp -8 %r10))) plain-body)))
+  (assert-false "plain function omits (%store %rsp -16 %rax)"
+                (pair? (filter (lambda (i) (equal? i '(%store %rsp -16 %rax))) plain-body)))
+  (assert-true "closure function referencing %self emits (%store %rsp -8 %r10)"
+               (pair? (filter (lambda (i) (equal? i '(%store %rsp -8 %r10))) self-body)))
+  (assert-false "closure function without %num-args omits (%store %rsp -16 %rax)"
+                (pair? (filter (lambda (i) (equal? i '(%store %rsp -16 %rax))) self-body)))
+  (assert-true "variadic function referencing %num-args emits (%store %rsp -16 %rax)"
+               (pair? (filter (lambda (i) (equal? i '(%store %rsp -16 %rax))) var-body)))
+  (assert-false "variadic function without %self omits (%store %rsp -8 %r10)"
+                (pair? (filter (lambda (i) (equal? i '(%store %rsp -8 %r10))) var-body))))
+
 (newline)
 (test-end "Pass 130 (Block Arguments SSA & Braun LIR)")

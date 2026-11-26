@@ -31,26 +31,42 @@
       (assert-true "bitmap is an integer" (integer? (caddr entry)))))
 
   ;; -------------------------------------------------------------------
-  ;; Test 2: %self and Pointer Slots are Marked 1 in Bitmap
+  ;; Test 2: %self and Pointer Slots are Marked 1 in Bitmap Only When Used
   ;; -------------------------------------------------------------------
   (display "--- Test 2: %self and Pointer Slot Bit Allocation ---")
   (newline)
-  (let* ((ast '(let ((p (cons 10 20))
-                     (f (lambda (dummy) dummy)))
-                 (f p)))
+  (let* ((ast '(let ((p (cons 10 20)))
+                 (let ((f (lambda (dummy) (cons dummy p))))
+                   (f 1))))
          (anf (anf-all (cp0-optimize (desugar-all ast))))
          (cc (closure-convert anf))
          (lir (generate-lir cc))
          (safepoints (cadr (assq 'stackmaps (cdr lir)))))
-    (assert-true "has safepoints for f call" (pair? safepoints))
+    (assert-true "has safepoints for closure allocation" (pair? safepoints))
     (let* ((sp (car safepoints))
            (frame-size (cadr sp))
            (bitmap (caddr sp))
            (slot-count (quotient frame-size 8))
            (self-bit-idx (- slot-count 1)))
-      ;; Slot [rsp - 8] is %self and must always have bit 1
+      ;; Slot [rsp - 8] is %self inside closure f and has bit 1
       (assert-true "self slot bit is 1"
                    (= (modulo (quotient bitmap (power-of-2 self-bit-idx)) 2) 1))))
+
+  (let* ((ast-no-self '(let ((f (lambda (x) (cons x 1))))
+                         (f 1)))
+         (anf (anf-all (cp0-optimize (desugar-all ast-no-self))))
+         (cc (closure-convert anf))
+         (lir (generate-lir cc))
+         (safepoints (cadr (assq 'stackmaps (cdr lir)))))
+    (assert-true "has safepoints for non-closure f" (pair? safepoints))
+    (let* ((sp (car safepoints))
+           (frame-size (cadr sp))
+           (bitmap (caddr sp))
+           (slot-count (quotient frame-size 8))
+           (self-bit-idx (- slot-count 1)))
+      ;; Slot [rsp - 8] is NOT %self when function does not reference %self
+      (assert-true "unused self slot bit is 0"
+                   (= (modulo (quotient bitmap (power-of-2 self-bit-idx)) 2) 0))))
 
   ;; -------------------------------------------------------------------
   ;; Test 3: Unboxed Raw Integer Variable has Bit 0 in Bitmap

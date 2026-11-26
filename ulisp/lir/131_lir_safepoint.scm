@@ -34,37 +34,35 @@
           bitmap
           (let* ((slot-offset (- (* k 8) frame-shift))
                  (is-ptr
-                  (if (= slot-offset -8)
-                      #t
-                      (let ((arg-res
-                             (let check-arg ((cur-args args) (i 0))
-                               (if (null? cur-args)
-                                   #f
-                                   (let ((arg-si (- aligned-si (* i 8))))
-                                     (if (= slot-offset arg-si)
-                                         (cons #t (not (raw-expr? (car cur-args) rvars)))
-                                         (check-arg (cdr cur-args) (+ i 1))))))))
-                        (if arg-res
-                            (cdr arg-res)
-                            (let ((var-res
-                                   (let check-var ((e env))
-                                     (if (null? e)
-                                         #f
-                                         (let ((entry (car e)))
-                                           (if (and (pair? entry)
-                                                    (not (eq? (car entry) '%num-params))
-                                                    (not (eq? (car entry) '%raw-vars)))
-                                               (let ((v (car entry))
-                                                     (info (cdr entry)))
-                                                 (if (and (number? info) (= info slot-offset))
+                  (let ((arg-res
+                         (let check-arg ((cur-args args) (i 0))
+                           (if (null? cur-args)
+                               #f
+                               (let ((arg-si (- aligned-si (* i 8))))
+                                 (if (= slot-offset arg-si)
+                                     (cons #t (not (raw-expr? (car cur-args) rvars)))
+                                     (check-arg (cdr cur-args) (+ i 1))))))))
+                    (if arg-res
+                        (cdr arg-res)
+                        (let ((var-res
+                               (let check-var ((e env))
+                                 (if (null? e)
+                                     #f
+                                     (let ((entry (car e)))
+                                       (if (and (pair? entry)
+                                                (not (eq? (car entry) '%num-params))
+                                                (not (eq? (car entry) '%raw-vars)))
+                                           (let ((v (car entry))
+                                                 (info (cdr entry)))
+                                             (if (and (number? info) (= info slot-offset))
+                                                 (cons #t (not (memq v rvars)))
+                                                 (if (and (pair? info) (memq (car info) '(param self)) (= (cdr info) slot-offset))
                                                      (cons #t (not (memq v rvars)))
-                                                     (if (and (pair? info) (eq? (car info) 'param) (= (cdr info) slot-offset))
-                                                         (cons #t (not (memq v rvars)))
-                                                         (check-var (cdr e)))))
-                                               (check-var (cdr e))))))))
-                              (if var-res
-                                  (cdr var-res)
-                                  #f)))))))
+                                                     (check-var (cdr e)))))
+                                           (check-var (cdr e))))))))
+                          (if var-res
+                              (cdr var-res)
+                              #f))))))
             (loop (+ k 1)
                   (if is-ptr (+ bitmap (power-of-2 k)) bitmap)))))))
 

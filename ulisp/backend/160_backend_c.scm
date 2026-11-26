@@ -1543,8 +1543,6 @@
        (scan-c-blocks! body)
        (emit (string-append "static void " label-str "(void) ULISP_UNUSED;"))
        (emit (string-append "static void " label-str "(void) {"))
-       (if (not (car *c-backend-c-tu*))
-           (emit "    *(uint64_t *)(reg_rsp - 8) = reg_r10;"))
        (for-each emit-c-instruction body)
        (emit "}")
        (emit "")))))

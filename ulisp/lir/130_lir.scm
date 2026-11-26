@@ -431,6 +431,15 @@
                     (and nr (not (eq? nr '%rax)))))
              (emit-lir! (list '%mov '%rax dst0))))))))
 
+(define (lir-body-uses-symbol? target expr)
+  (cond
+    ((eq? expr target) #t)
+    ((not (pair? expr)) #f)
+    ((eq? (car expr) 'quote) #f)
+    (else
+     (or (lir-body-uses-symbol? target (car expr))
+         (lir-body-uses-symbol? target (cdr expr))))))
+
 ;;; Compile a single lifted %function to LIR representation
 (define (lir-compile-function fn-raw)
   (let* ((fn (if (ast-has-span? fn-raw) (ast-strip-span fn-raw) fn-raw))
@@ -439,7 +448,9 @@
          (body (cadddr fn))
          (num-params (length params))
          (num-reg-params (if (< num-params 6) num-params 6))
-         (initial-raw-vars (if (unboxed-fn? label) params '())))
+         (initial-raw-vars (if (unboxed-fn? label) params '()))
+         (uses-self? (lir-body-uses-symbol? '%self body))
+         (uses-num-args? (lir-body-uses-symbol? '%num-args body)))
     (set-current-toplevel-name! label)
     (with-call-frame label fn
       (lambda ()
@@ -452,10 +463,13 @@
                      (fid (register-source-file! file)))
                 (emit-lir! (list '%loc fid line col)))))
         ;; Build callee env:
-        ;; %self at [rsp - 8]
+        ;; %self at [rsp - 8] (only spilled & rooted when body references %self)
+        ;; %num-args at [rsp - 16] (only spilled when body references %num-args)
         ;; params 0..5 in registers spilled to [rsp - 24 - 8*i]
         ;; params 6+ at [rsp + 8 * (num-params - i)]
-        (let* ((self-env (list (cons '%self (cons 'self -8))))
+        (let* ((self-env (if uses-self?
+                             (list (cons '%self (cons 'self -8)))
+                             '()))
                (param-env
                 (let loop ((ps params) (i 0) (acc '()))
                   (if (null? ps) acc
@@ -480,7 +494,10 @@
                   (track-lir-si! (- -24 (* 8 i)))
                   (loop (+ i 1)))))
           (track-lir-si! callee-si)
-          (emit-lir! '(%store %rsp -16 %rax))
+          (if uses-self?
+              (emit-lir! '(%store %rsp -8 %r10)))
+          (if uses-num-args?
+              (emit-lir! '(%store %rsp -16 %rax)))
           (let ((loop-head-lbl (unique-label-sym (string-append "L_loop_head_" (if (symbol? label) (symbol->string label) "fn") "_"))))
             (emit-lir! (list '%label loop-head-lbl))
             ;; Store incoming argument registers into their callee stack slots

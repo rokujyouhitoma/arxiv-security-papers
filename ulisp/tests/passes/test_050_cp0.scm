@@ -162,4 +162,48 @@
                   10
                   opt-const)))
 
+;; 12. Small accessor & 1-2 primitive leaf function inlining (Issue #958)
+(let* ((prog-rec '(%program
+                   ((define scope-node-children-cell
+                      (lambda (rec_)
+                        (declare (no-safepoints))
+                        (vector-ref rec_ 3)))
+                    (define scope-node-children
+                      (lambda (node)
+                        (car (scope-node-children-cell node)))))
+                   (scope-node-children node)))
+       (opt-rec (cp0-optimize prog-rec))
+       (opt-local (cp0-optimize
+                   '(letrec ((get-tag (lambda (p) (car p)))
+                             (is-foo? (lambda (p) (eq? (get-tag p) 'foo))))
+                      (is-foo? obj))))
+       (opt-nonatom (cp0-optimize
+                     '(%program
+                       ((define get-f1 (lambda (r) (vector-ref r 1))))
+                       (get-f1 (make-rec 1 2)))))
+       (opt-mutated (cp0-optimize
+                     '(%program
+                       ((define f (lambda (x) (car x))))
+                       (begin (set! f (lambda (x) (cdr x))) (f pair)))))
+       (opt-shadowed (cp0-optimize
+                      '(%program
+                        ((define get-car (lambda (p) (car p))))
+                        (let ((car (lambda (x) 99)))
+                          (cons (get-car p) (list car)))))))
+  (assert-equal "composed record accessor inlines directly to (car (vector-ref node 3))"
+                '(car (vector-ref node 3))
+                (caddr opt-rec))
+  (assert-equal "letrec local accessors inline and dead bindings are eliminated"
+                '(eq? (car obj) 'foo)
+                opt-local)
+  (assert-equal "non-atomic arg inlines via hygienic temporary let binding"
+                'let
+                (car (caddr opt-nonatom)))
+  (assert-equal "mutated binding via set! is not inlined"
+                '(f pair)
+                (caddr (caddr opt-mutated)))
+  (assert-equal "shadowed primitive car prevents unsafe inlining"
+                '(cons (get-car p) (list car))
+                (caddr (caddr opt-shadowed))))
+
 (test-end "Pass 050 (CP0 Optimization)")

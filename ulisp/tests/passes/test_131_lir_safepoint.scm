@@ -23,9 +23,18 @@
   (record-safepoint! lbl1 32 3)
   (assert-true "safepoints recorded" (pair? (car *lir-safepoints*))))
 
-;; 3. compute-stackmap-bitmap for empty env
+;; 3. compute-stackmap-bitmap for empty env (slot -8 is NOT marked live without %self)
 (let ((bm (compute-stackmap-bitmap 32 -16 '() '())))
   (assert-true "bitmap is an integer" (integer? bm))
-  (assert-true "bitmap is non-negative" (>= bm 0)))
+  (assert-equal "empty env marks no pointer roots (including -8)" 0 bm))
+
+;; 4. compute-stackmap-bitmap marks [rsp - 8] only when %self is present in env
+(let* ((env-with-self (list (cons '%self (cons 'self -8))))
+       ;; frame-shift 32: k=3 -> slot-offset = 24 - 32 = -8 -> bit 3 = 8
+       (bm-self (compute-stackmap-bitmap 32 -24 '() env-with-self))
+       ;; frame-shift 32: %self in raw-vars must not be marked live
+       (bm-raw (compute-stackmap-bitmap 32 -24 '() (cons '(%raw-vars %self) env-with-self))))
+  (assert-equal "env with %self marks [rsp - 8] root bit" 8 bm-self)
+  (assert-equal "raw-vars %self clears [rsp - 8] root bit" 0 bm-raw))
 
 (test-end "Pass 131 (LIR Safepoint & Stackmap)")

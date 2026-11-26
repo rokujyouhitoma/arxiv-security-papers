@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
 | **957** | 算術・比較 slow path のインライン展開廃止と共有スタブ化 | Feature | In Progress | [957-share-arithmetic-and-compare-slow-path-stubs.md](957-share-arithmetic-and-compare-slow-path-stubs.md) |
-| **958** | 関数入口の未使用 `r10` / `argc` スピル削除と小さなアクセサのインライン化（Scheme モード） | Feature | In Progress | [958-eliminate-unused-prologue-spills-and-inline-small-accessors.md](958-eliminate-unused-prologue-spills-and-inline-small-accessors.md) |
 | **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` / `.data` 配置） | Feature | New | [959-emit-quoted-constants-as-static-rodata-data.md](959-emit-quoted-constants-as-static-rodata-data.md) |
 | **960** | 未参照関数の削除（到達可能性解析または関数毎セクション + `--gc-sections`） | Feature | New | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
 | **961** | Scheme 経路の LIR への linear scan レジスタ割り付け導入（スタック退避中心コード生成の解消） | Feature | New | [961-introduce-linear-scan-register-allocation-for-scheme-lir.md](961-introduce-linear-scan-register-allocation-for-scheme-lir.md) |
@@ -30,6 +29,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **958** | 関数入口の未使用 `r10` / `argc` スピル削除と小さなアクセサのインライン化（Scheme モード） | Feature | 2026-11-26 | [958-eliminate-unused-prologue-spills-and-inline-small-accessors.md](closed/958-eliminate-unused-prologue-spills-and-inline-small-accessors.md) |
 | **980** | Nanopass 言語仕様書自動生成（spec_nanopass.md）の更新と spec_pipeline.md（Scheme/C99 の L_lir_core 合流・部分評価経路）の実態同期 | Feature | 2026-11-26 | [980-sync-nanopass-and-pipeline-specs-with-core-lir-and-stagepoly.md](closed/980-sync-nanopass-and-pipeline-specs-with-core-lir-and-stagepoly.md) |
 | **979** | LIR パス言語契約の是正（pass-130 -> L_lir_managed）と nanopass-language-compatible? 厳格化・旧 LIR 言語階層の整理 | Feature | 2026-11-26 | [979-tighten-lir-language-compatibility-and-reconcile-lir-dialects.md](closed/979-tighten-lir-language-compatibility-and-reconcile-lir-dialects.md) |
 | **947** | オントロジー推論ルール `master_rules.json` の未使用状態の解消と `EdgeInferenceRuleRegistry` 読み込み整合化 | Feature | 2026-11-26 | [947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md](closed/947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md) |
