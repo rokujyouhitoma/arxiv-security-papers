@@ -6,7 +6,7 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` / `.data` 配置） | Feature | New | [959-emit-quoted-constants-as-static-rodata-data.md](959-emit-quoted-constants-as-static-rodata-data.md) |
+| **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` / `.data` 配置） | Feature | In Progress | [959-emit-quoted-constants-as-static-rodata-data.md](959-emit-quoted-constants-as-static-rodata-data.md) |
 | **960** | 未参照関数の削除（到達可能性解析または関数毎セクション + `--gc-sections`） | Feature | New | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
 | **961** | Scheme 経路の LIR への linear scan レジスタ割り付け導入（スタック退避中心コード生成の解消） | Feature | New | [961-introduce-linear-scan-register-allocation-for-scheme-lir.md](961-introduce-linear-scan-register-allocation-for-scheme-lir.md) |
 | **966** | L_mir_ssa（仮想レジスタ SSA）と L_lir_mach（物理レジスタ機械 LIR）の 2 層分離と Scheme/C99 共通ミドルエンド統合 | Feature | New | [966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md](966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md) |
