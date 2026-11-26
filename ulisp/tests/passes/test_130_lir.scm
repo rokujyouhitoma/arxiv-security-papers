@@ -275,4 +275,71 @@
                 (pair? (filter (lambda (i) (equal? i '(%store %rsp -8 %r10))) var-body))))
 
 (newline)
+;;; Test Group 10: Static Quoted Constants in .rodata (Issue #959)
+(display "--- Group 10: Static Quoted Constants in .rodata (Issue #959) ---")
+(newline)
+
+(let* ((prog-pair '(%program () (quote (1 (a "hello") #t))))
+       (lir-pair (generate-lir prog-pair))
+       (main-pair (cdr (assq 'body (cdr (assq '%lir-main (cdr lir-pair))))))
+       (code-refs (filter (lambda (i) (and (pair? i) (eq? (car i) '%code-ref))) main-pair))
+       (allocs (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc))) main-pair)))
+  (assert-equal "static quoted nested list emits 1 %code-ref" 1 (length code-refs))
+  (assert-true "static quoted nested list uses .L_qpair_ label"
+               (and (pair? code-refs)
+                    (string? (caddar code-refs))
+                    (string-starts-with? (caddar code-refs) ".L_qpair_")))
+  (assert-equal "static quoted nested list emits zero %alloc" 0 (length allocs)))
+
+(let* ((prog-vec '(%program () (quote #(10 20 (x y)))))
+       (lir-vec (generate-lir prog-vec))
+       (main-vec (cdr (assq 'body (cdr (assq '%lir-main (cdr lir-vec))))))
+       (code-refs (filter (lambda (i) (and (pair? i) (eq? (car i) '%code-ref))) main-vec))
+       (allocs (filter (lambda (i) (and (pair? i) (eq? (car i) '%alloc))) main-vec)))
+  (assert-equal "static quoted vector emits 1 %code-ref" 1 (length code-refs))
+  (assert-true "static quoted vector uses .L_qvec_ label"
+               (and (pair? code-refs)
+                    (string? (caddar code-refs))
+                    (string-starts-with? (caddar code-refs) ".L_qvec_")))
+  (assert-equal "static quoted vector emits zero %alloc" 0 (length allocs)))
+
+(let* ((lbl-p1 (intern-static-constant! '(dedup alpha 42)))
+       (lbl-p2 (intern-static-constant! '(dedup alpha 42)))
+       (lbl-v1 (intern-static-constant! '#(7 8 (dedup alpha 42))))
+       (lbl-v2 (intern-static-constant! '#(7 8 (dedup alpha 42))))
+       (lbl-s1 (intern-string "dedup-test-959"))
+       (lbl-s2 (intern-string "dedup-test-959")))
+  (assert-equal "identical static pairs share the same .L_qpair_ label" lbl-p1 lbl-p2)
+  (assert-equal "identical static vectors share the same .L_qvec_ label" lbl-v1 lbl-v2)
+  (assert-equal "identical interned strings share the same .L_str_ label" lbl-s1 lbl-s2))
+
+(let* ((prog-cg '(%program () (quote (10 (a "cg-959") #(20 30)))))
+       (lir-cg (generate-lir prog-cg))
+       (has-prefix? (lambda (lines prefix)
+                      (let loop ((xs lines))
+                        (cond
+                          ((null? xs) #f)
+                          ((string-starts-with? (car xs) prefix) #t)
+                          (else (loop (cdr xs)))))))
+       (x86-lines '())
+       (c-lines '()))
+  (set-emit-line-sink! (lambda (line) (set! x86-lines (cons line x86-lines))))
+  (emit-x86-64 lir-cg 'hybrid)
+  (set-emit-line-sink! #f)
+  (set-emit-line-sink! (lambda (line) (set! c-lines (cons line c-lines))))
+  (emit-c lir-cg 'hybrid)
+  (set-emit-line-sink! #f)
+  (assert-true "x86-64 backend emits tagged [rip + .L_qpair_ + 9] lea"
+               (let loop ((xs x86-lines))
+                 (cond
+                   ((null? xs) #f)
+                   ((and (string-starts-with? (car xs) "    lea rax, [rip + .L_qpair_")
+                         (string-ends-with? (car xs) " + 9]")) #t)
+                   (else (loop (cdr xs))))))
+  (assert-true "C backend emits static uint64_t ulisp_L_qpair_ array"
+               (has-prefix? c-lines "static uint64_t ulisp_L_qpair_"))
+  (assert-true "C backend emits static uint64_t ulisp_L_qvec_ array"
+               (has-prefix? c-lines "static uint64_t ulisp_L_qvec_")))
+
+(newline)
 (test-end "Pass 130 (Block Arguments SSA & Braun LIR)")

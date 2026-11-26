@@ -1063,7 +1063,12 @@
          (let ((lbl-str (if (symbol? lbl) (symbol->string lbl) lbl))
                (dst-str (arm-reg->str dst)))
            (emit (string-append "    adrp " dst-str ", " lbl-str))
-           (emit (string-append "    add " dst-str ", " dst-str ", :lo12:" lbl-str)))))
+           (emit (string-append "    add " dst-str ", " dst-str ", :lo12:" lbl-str))
+           (cond
+             ((and (string? lbl-str) (string-starts-with? lbl-str ".L_qpair_"))
+              (emit (string-append "    add " dst-str ", " dst-str ", #9")))
+             ((and (string? lbl-str) (string-starts-with? lbl-str ".L_qvec_"))
+              (emit (string-append "    add " dst-str ", " dst-str ", #13")))))))
 
       ((%str-ref)
        (let ((dst (cadr inst))
@@ -1611,6 +1616,21 @@
                 (emit (string-append (car entry) ":"))
                 (emit (string-append "    .asciz \"" (escape-gas-string (cdr entry)) "\""))
                 (loop (cdr ss))))))
+    ;; Emit all static quoted constants (.L_qpair_* / .L_qvec_*) in .rodata section
+    (if (not (null? (car *static-constants*)))
+        (for-each
+          (lambda (entry)
+            (let ((lbl (car entry))
+                  (words (cddr entry)))
+              (emit "    .p2align 3")
+              (emit (string-append lbl ":"))
+              (for-each
+                (lambda (w)
+                  (if (pair? w)
+                      (emit (string-append "    .xword " (car w) " + " (number->string (cdr w))))
+                      (emit (string-append "    .xword " (number->string w)))))
+                words)))
+          (reverse (car *static-constants*))))
     (emit "    .p2align 2")
     (emit ".L_arm_unhandled_exn:")
     (emit "    mov x0, #1")

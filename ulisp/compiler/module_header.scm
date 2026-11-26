@@ -263,7 +263,12 @@
   guest-3bit-tagged
   guest-tagged
   current-value-repr
+  value-repr-name
   with-value-repr
+  *static-const-counter*
+  *static-constants*
+  can-emit-static-quoted-datum?
+  intern-static-constant!
   repr-encode-immediate
   repr-emit-box-fixnum
   repr-emit-unbox-fixnum

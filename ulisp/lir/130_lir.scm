@@ -309,6 +309,10 @@
                  (emit-lir! (list '%mov '%rax id))))
               ((immediate? datum)
                (lir-compile-immediate datum))
+              ((and (or (pair? datum) (vector? datum))
+                    (can-emit-static-quoted-datum? datum))
+               (let ((lbl (intern-static-constant! datum)))
+                 (emit-lir! (list '%code-ref '%rax lbl))))
               ((pair? datum)
                (lir-compile-expr (list 'cons
                                        (list 'quote (car datum))

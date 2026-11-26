@@ -539,14 +539,14 @@
           ((%code-ref)
            (if (and (= (length inst) 3)
                     (lir-valid-register? (cadr inst))
-                    (symbol? (caddr inst)))
+                    (or (symbol? (caddr inst)) (string? (caddr inst))))
                #t
                (lir-report-error "%code-ref format must be (%code-ref <dst> <lbl>)" inst)))
 
           ((%str-ref)
            (if (and (= (length inst) 3)
                     (lir-valid-register? (cadr inst))
-                    (symbol? (caddr inst)))
+                    (or (symbol? (caddr inst)) (string? (caddr inst))))
                #t
                (lir-report-error "%str-ref format must be (%str-ref <dst> <lbl>)" inst)))
 

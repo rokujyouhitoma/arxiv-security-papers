@@ -349,7 +349,9 @@
 
 (define (vm-lookup-code-addr vm sym)
   (let* ((tbl (vm-code-addr-table vm))
-         (hit (assq sym (vector-ref tbl 0))))
+         (hit (if (string? sym)
+                  (assoc sym (vector-ref tbl 0))
+                  (assq sym (vector-ref tbl 0)))))
     (if hit (cdr hit) #f)))
 
 (define (vm-lookup-code-target vm addr)
@@ -948,7 +950,9 @@
 ;;; -----------------------------------------------------------------------
 
 (define (vm-lookup-string vm key)
-  (let ((entry (assq key (vm-strings-table vm))))
+  (let ((entry (if (string? key)
+                   (assoc key (vm-strings-table vm))
+                   (assq key (vm-strings-table vm)))))
     (if entry (cdr entry) #f)))
 
 (define (vm-lookup-data vm key)
@@ -1383,7 +1387,44 @@
                               (cloop (cdr cs) (+ p 8))))
                            (else
                             (cloop (cdr cs) p)))))))))
-         data-entries))
+         data-entries)
+
+        ;; 2-pass Static Quoted Constants Loading (.L_qpair_* / .L_qvec_*)
+        (if (and (pair? *static-constants*) (pair? (car *static-constants*)))
+            (let ((sc-entries (reverse (car *static-constants*)))
+                  (sc-table-box (cons '() '())))
+              (for-each
+               (lambda (entry)
+                 (let* ((lbl (car entry))
+                        (kind (cadr entry))
+                        (words (cddr entry))
+                        (base-addr (vm-align-up (car cur-addr-box) 8))
+                        (tag-off (if (eq? kind 'pair) 9 13)))
+                   (set-car! sc-table-box (cons (cons lbl base-addr) (car sc-table-box)))
+                   (set-car! cur-addr-box (+ base-addr (* 8 (length words))))
+                   (vector-set! ca-tbl 0 (cons (cons lbl (+ base-addr tag-off)) (vector-ref ca-tbl 0)))
+                   (vector-set! ca-tbl 0 (cons (cons (string->symbol lbl) (+ base-addr tag-off)) (vector-ref ca-tbl 0)))))
+               sc-entries)
+              (for-each
+               (lambda (entry)
+                 (let* ((lbl (car entry))
+                        (words (cddr entry))
+                        (base-addr (cdr (assoc lbl (car sc-table-box)))))
+                   (let wloop ((ws words) (p base-addr))
+                     (if (pair? ws)
+                         (let ((w (car ws)))
+                           (if (integer? w)
+                               (vm-mem-write-i64! vm p w)
+                               (if (pair? w)
+                                   (let* ((tgt (car w))
+                                          (off (cdr w))
+                                          (t-base (cond
+                                                    ((assoc tgt (car sc-table-box)) => cdr)
+                                                    ((assoc tgt str-table) => cdr)
+                                                    (else 0))))
+                                     (vm-mem-write-u64! vm p (if (= t-base 0) 0 (+ t-base off))))))
+                           (wloop (cdr ws) (+ p 8)))))))
+               sc-entries))))
 
       ;; Main loading
       (if (and (pair? main-decl) (eq? (car main-decl) '%lir-main))

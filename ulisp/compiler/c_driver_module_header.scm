@@ -1796,6 +1796,11 @@
   *string-counter*
   *strings*
   intern-string
+  *static-const-counter*
+  *static-constants*
+  can-emit-static-quoted-datum?
+  intern-static-constant!
+  value-repr-name
   *offset-str-cache*
   offset->string
   align-frame-shift
