@@ -55,4 +55,29 @@
                   "    reg_rax = (uint64_t)(((int64_t)reg_rax) >> ((uint64_t)reg_rcx & 63));")
                 (reverse captured)))
 
+;; 8. Issue #957: Shared arithmetic slow-path stub definition & call site name parity
+(let* ((core-ast (desugar-all '((lambda (x) (* x x)) 10)))
+       (opt-ast (cp0-optimize core-ast))
+       (anf-ast (anf-all opt-ast))
+       (clos-ast (closure-convert anf-ast))
+       (lir (generate-lir clos-ast))
+       (captured '())
+       (has-line-prefix?
+         (lambda (lines prefix)
+           (let loop ((xs lines))
+             (cond
+               ((null? xs) #f)
+               ((string-starts-with? (car xs) prefix) #t)
+               (else (loop (cdr xs))))))))
+  (set-emit-line-sink! (lambda (line) (set! captured (cons line captured))))
+  (emit-c lir 'hybrid)
+  (set-emit-line-sink! #f)
+  (let ((lines (reverse captured)))
+    (assert-true "emit-c defines __ulisp_slow_ulisp_fn_num_star_a16"
+                 (has-line-prefix? lines "static void __ulisp_slow_ulisp_fn_num_star_a16(void) {"))
+    (assert-true "emit-c calls matching __ulisp_slow_ulisp_fn_num_star_a16();"
+                 (has-line-prefix? lines "    __ulisp_slow_ulisp_fn_num_star_a16();"))
+    (assert-true "emit-c does not emit mismatched ulisp_fn___ulisp_slow_ stub name"
+                 (not (has-line-prefix? lines "static void ulisp_fn___ulisp_slow_")))))
+
 (test-end "Pass 160 (Portable C Backend)")
