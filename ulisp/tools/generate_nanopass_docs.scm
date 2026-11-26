@@ -1,8 +1,10 @@
 ;;; =======================================================================
 ;;; ULisp Tool: generate_nanopass_docs.scm
 ;;; Automatically generates Markdown specifications and Mermaid transition
-;;; diagrams from all registered Nanopass intermediate languages.
-;;; Conforms to Issue #586
+;;; diagrams from all registered Nanopass intermediate languages
+;;; (frontend/frontend_lang.scm, frontend_c/c_lang.scm,
+;;;  lir/lir_lang.scm, backend/backend_lang.scm).
+;;; Conforms to Issues #586, #835, #878, #915, #980
 ;;; =======================================================================
 
 (define (generate-mermaid-diagram langs)
@@ -98,11 +100,11 @@
           (newline)))
     (display "---\n\n")))
 
-(define (main)
+(define (generate-nanopass-docs-main)
   (let ((all-langs (nanopass-get-all-languages)))
     (display "[ULisp トップ](../README.md) > [ドキュメント一覧](README.md) > **Nanopass Framework 言語仕様書**\n\n---\n\n")
     (display "# ULisp Nanopass Framework 言語仕様書 (Language Specifications)\n\n")
-    (display "本書は `ulisp/tools/generate_nanopass_docs.scm` により、登録済みの中間言語メタ情報から完全自動生成された仕様ドキュメントです。\n\n")
+    (display "本書は `ulisp/tools/generate_nanopass_docs.scm` (`make -C ulisp docs_nanopass`) により、登録済みの中間言語メタ情報（Scheme Frontend / StagePoly / C99 AST / Core & Managed LIR / Backend ISA）から自動生成された仕様ドキュメントです。\n\n")
     (display "- **関連仕様書**:\n")
     (display "  - [パイプライン・Nanopass 詳細仕様書](spec_pipeline.md)\n")
     (display "  - [低レベル IR (LIR) 正典仕様書](spec_lir.md)\n")
@@ -113,4 +115,4 @@
     (display "## 2. 各言語の詳細定義 (Language Definitions)\n\n")
     (for-each generate-language-docs all-langs)))
 
-(main)
+(generate-nanopass-docs-main)

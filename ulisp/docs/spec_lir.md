@@ -25,9 +25,9 @@ LIR は、高水準 Scheme の意味論（ラムダ式、レキシカルスコ�
 2. **ターゲット非依存性とバックエンド中立性**:
    - 抽象レジスタセット、スタックスロット、ラベル、3番地命令列で構成され、特定 CPU アーキテクチャのマイクロアーキテクチャ依存を排除する。
 3. **厳格な境界契約 (Contract) と多層検証 (Two-Tier Verification)**:
-   - メタコンパイラ層は、形式文法 DSL `define-language L_lir_canonical`（`ulisp/lir/lir_lang.scm`）および本仕様で定義された BNF 文法・不変条件を 100% 満たす `%lir-program` を出力することを保証する。
+   - メタコンパイラ層（Scheme フロントエンドの `Pass 130` → `Pass 131 (lower-managed-dialect)` 経由、および C99 フロントエンドの `lower_to_lir` 経由）は、`L_lir_core` / `define-language L_lir_canonical`（`ulisp/lir/lir_lang.scm`）および本仕様で定義された BNF 文法・不変条件を満たす `%lir-program` を出力する契約となっている（現役 Pass Manager の遷移契約は `L_lir_managed` → `L_lir_core`、`L_lir_raw` / `L_lir_canonical` は汎用スキーマ検証・内部 `define-pass` 用レガシー階層）。
    - バックエンド層（`140_backend_x86_64.scm`, `150_backend_aarch64.scm`, `160_backend_c.scm`）は、本仕様を満たす LIR 入力に対してのみ正当なマシン語／ソースコードを生成する責務を負う。
-   - 両層の物理的分離点において、独立バリデータ `validate-lir` / `verify-lir`（`ulisp/lir/lir_verifier.scm`）が常時境界検証を行い、Tier 1 構文スキーマ検査（`L_lir_canonical?`）と Tier 2 意味論的 CFG/アライメント検査の多層防護を提供する。
+   - 両層の物理的分離点において、独立バリデータ `validate-lir` / `validate-core-lir` / `verify-lir`（`ulisp/lir/lir_verifier.scm`）が常時境界検証を行い、Tier 1 構文スキーマ検査（`L_lir_core?` / `L_lir_canonical?`）と Tier 2 意味論的 CFG/アライメント検査の多層防護を提供する。
 
 ---
 
@@ -184,10 +184,10 @@ LIR は、高水準 Scheme の意味論（ラムダ式、レキシカルスコ�
 
 ## 5. 境界バリデータ (`validate-lir` / `verify-lir`) 仕様
  
-バリデータは `ulisp/lir/lir_verifier.scm` に実装され、`ulisp/lir/lir_lang.scm`（`define-language L_lir_canonical`）と宣言的に統合された以下の多層防護（Two-Tier Verification）API を提供する：
+バリデータは `ulisp/lir/lir_verifier.scm` に実装され、`ulisp/lir/lir_lang.scm`（`L_lir_core` / `L_lir_managed` および汎用スキーマ `define-language L_lir_canonical`）と宣言的に統合された以下の多層防護（Two-Tier Verification）API を提供する：
 
-- `(validate-lir prog)` / `(verify-lir prog)`:
-  - **Tier 1 (構文スキーマ検証)**: `(L_lir_canonical? prog)` による形式文法適合性・未定義オペコード排除・オペランド型整合性検証。
+- `(validate-core-lir prog)` / `(validate-lir prog ['core])` / `(verify-lir prog)`:
+  - **Tier 1 (構文スキーマ検証)**: `(L_lir_core? prog)`（Core LIR 純粋性検査）および `(L_lir_canonical? prog)` による形式文法適合性・未定義オペコード排除・オペランド型整合性検証。
   - **Tier 2 (コンテキスト意味論検証)**: CFG ラベル重複排除・未定義ラベルジャンプ検査・SSA ブロック引数 arity 整合・スタックフレーム 8 バイトアライメント・セーフポイントスタックマップ正当性検査。
   - 不変条件違反を検出した場合、詳細な診断メッセージ（関数名、命令、違反理由）を出力し、非 strict モードでは `#f` を返却、strict モードでは例外を raise する。
 - 統合コンパイラドライバ（`compiler/driver.scm`）において、Pass 130 完了直後かつバックエンド呼出直前に自動実行される。

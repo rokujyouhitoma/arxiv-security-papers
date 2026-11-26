@@ -24,13 +24,13 @@
 | **976** | SSA ループ解析基盤（自然ループ検出）と LICM（ループ不変コード移動）パスの実装 | Feature | New | [976-implement-ssa-loop-analysis-and-licm-pass.md](976-implement-ssa-loop-analysis-and-licm-pass.md) |
 | **977** | 投機的ループ・アンチェック化（Loop Unswitching / 型タグ検査・配列境界チェックのループ外巻き上げ）の実装 | Feature | New | [977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md](977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md) |
 | **978** | 高水準リスト・ストリーム融合（Loop Fusion / Deforestation）パスの導入 | Feature | New | [978-implement-list-and-stream-loop-fusion-deforestation-pass.md](978-implement-list-and-stream-loop-fusion-deforestation-pass.md) |
-| **980** | Nanopass 言語仕様書自動生成（spec_nanopass.md）の更新と spec_pipeline.md（Scheme/C99 の L_lir_core 合流・部分評価経路）の実態同期 | Feature | In Progress | [980-sync-nanopass-and-pipeline-specs-with-core-lir-and-stagepoly.md](980-sync-nanopass-and-pipeline-specs-with-core-lir-and-stagepoly.md) |
 | **981** | L_lir_core 不動点最適化ループ（mem2reg・branch-fusion・peephole）の Scheme / C99 共通化 | Feature | New | [981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md](981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **980** | Nanopass 言語仕様書自動生成（spec_nanopass.md）の更新と spec_pipeline.md（Scheme/C99 の L_lir_core 合流・部分評価経路）の実態同期 | Feature | 2026-11-26 | [980-sync-nanopass-and-pipeline-specs-with-core-lir-and-stagepoly.md](closed/980-sync-nanopass-and-pipeline-specs-with-core-lir-and-stagepoly.md) |
 | **979** | LIR パス言語契約の是正（pass-130 -> L_lir_managed）と nanopass-language-compatible? 厳格化・旧 LIR 言語階層の整理 | Feature | 2026-11-26 | [979-tighten-lir-language-compatibility-and-reconcile-lir-dialects.md](closed/979-tighten-lir-language-compatibility-and-reconcile-lir-dialects.md) |
 | **947** | オントロジー推論ルール `master_rules.json` の未使用状態の解消と `EdgeInferenceRuleRegistry` 読み込み整合化 | Feature | 2026-11-26 | [947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md](closed/947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md) |
 | **946** | SQL 実行器における式文字列のレコード毎再解析の解消と AST 事前コンパイル化 | Feature | 2026-11-26 | [946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md](closed/946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md) |

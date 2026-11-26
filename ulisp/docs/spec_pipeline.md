@@ -25,35 +25,42 @@ ULisp コンパイラは、Issue 589（Canonical LIR 境界の確立）および
 graph TD
     subgraph Input ["入力 (Input Source)"]
         SRC["Scheme ソースコード (forms) / ディレクティブ (!target, !gc)"]
-        DRIVER["compiler/driver.scm (compile-to-lir / compile-backend)"]
+        CSRC["C99 ソースコード (翻訳単位 / TU)"]
+        DRIVER["compiler/driver.scm / c_driver_entry.scm"]
     end
 
-    subgraph Frontend ["1. Frontend メタコンパイラ層 (ulisp/frontend/)"]
+    subgraph Frontend ["1. Scheme Frontend メタコンパイラ層 (ulisp/frontend/)"]
         P010["Pass 010: desugar-libraries-and-imports<br/>(frontend/010_library.scm)"]
         P015["Pass 015: expand-dsl-forms<br/>(frontend/015_dsl_expander.scm)"]
         P020["Pass 020: expand-macros-in-forms<br/>(frontend/020_macro_expander.scm)"]
         P025["Pass 025: rewrite-top-level<br/>(frontend/025_top_level.scm)"]
         P026_029["Pass 026-029: 構文別脱糖<br/>(Constructors, Conditionals, Bindings, Dynamic)"]
         P030["Pass 030: desugar-all<br/>(frontend/030_desugar.scm)"]
+        P035["Pass 035: scope-resolve-all<br/>(compiler/scope.scm)"]
         P040["Pass 040: static analysis & free-vars<br/>(frontend/040_analysis.scm)"]
         P050["Pass 050: cp0-optimize<br/>(frontend/050_cp0.scm)"]
         P060["Pass 060: lvn-all (CSE & Memoization)<br/>(frontend/060_lvn.scm)"]
-        P070["Pass 070: anf-all (3-Address Normalization)<br/>(frontend/070_anf.scm)"]
+        P070["Pass 070: anf-all (L_core -> L_anf)<br/>(frontend/070_anf.scm)"]
+        P075["Pass 075: stage-poly-lower<br/>(L-StagePoly -> L-Residual-ANF / ステージ構文時)"]
         P080["Pass 080: annotate-all (Abstract Interpretation)<br/>(frontend/080_annotator.scm)"]
         P090["Pass 090: rtyper-all (Unboxing Inference)<br/>(frontend/090_rtyper.scm)"]
         P100["Pass 100: contify-all (Closure Elimination)<br/>(frontend/100_contify.scm)"]
-        P110["Pass 110: closure-convert<br/>(frontend/110_closure_convert.scm)"]
+        P110["Pass 110: closure-convert (L_anf -> L_lifted)<br/>(frontend/110_closure_convert.scm)"]
         P120["Pass 120: alias-escape-all (TBAA & Stack Allocation)<br/>(frontend/120_alias_escape.scm)"]
     end
 
+    subgraph CFrontend ["1b. C99 Frontend 層 (ulisp/frontend_c/)"]
+        CAST["C99 Parser & Elaborator<br/>(L_c_ast -> L_c_typed)"]
+        CLOWER["C99 Lowering<br/>(frontend_c/lower_to_lir.scm -> L_lir_core)"]
+    end
+
     subgraph MiddleEnd ["2. LIR / Middle-End 層 (ulisp/lir/)"]
-        P123_127["Pass 123-127: LIR Lowering<br/>(Closures, Call ABI, Continuation, Control, Runtime)"]
-        P128["Pass 128: lir-branch-fusion<br/>(lir/128_lir_branch_fusion.scm)"]
-        P129["Pass 129: lir-primitives<br/>(lir/129_lir_primitives.scm)"]
-        P130["Pass 130: generate-lir (LIR Driver)<br/>(lir/130_lir.scm)"]
-        P131["Pass 131: lir-safepoint (Stackmaps)<br/>(lir/131_lir_safepoint.scm)"]
-        P132["Pass 132: lir-braun-ssa (SSA Engine)<br/>(lir/132_lir_braun_ssa.scm)"]
-        VERIFY_LIR["validate-lir (Canonical LIR Verifier)<br/>(lir/lir_verifier.scm)"]
+        P130["Pass 130: generate-lir (L_lifted / L-Residual-ANF -> L_lir_managed)<br/>(lir/130_lir.scm & Pass 123-129)"]
+        P131["Pass 131: lower-managed-dialect (L_lir_managed -> L_lir_core)<br/>(lir/131_lower_managed_dialect.scm)"]
+        P128["Pass 128: lir-fuse-branches (L_lir_core)<br/>(lir/128_lir_branch_fusion.scm)"]
+        P132["Pass 132: c99-lir-mem2reg / braun-ssa (L_lir_core)<br/>(lir/132_lir_braun_ssa.scm)"]
+        P133["Pass 133: lir-peephole-optimize (L_lir_core)<br/>(lir/133_lir_peephole.scm)"]
+        VERIFY_LIR["validate-lir / validate-core-lir<br/>(lir/lir_verifier.scm)"]
     end
 
     subgraph Backend ["3. Backend コード生成層 (ulisp/backend/)"]
@@ -64,14 +71,14 @@ graph TD
         P160["Pass 160: emit-c<br/>(backend/160_backend_c.scm)"]
     end
 
-    SRC --> DRIVER
-    DRIVER --> P010
-    P010 --> P015 --> P020 --> P025 --> P026_029 --> P030
-    P030 --> P040 --> P050 --> P060 --> P070 --> P080 --> P090 --> P100 --> P110 --> P120
-    P120 --> P123_127 --> P128 --> P129 --> P130
-    P130 --> P131
-    P130 --> P132
-    P132 --> VERIFY_LIR
+    SRC --> DRIVER --> P010
+    P010 --> P015 --> P020 --> P025 --> P026_029 --> P030 --> P035
+    P035 --> P040 --> P050 --> P060 --> P070 --> P075
+    P075 --> P080 --> P090 --> P100 --> P110 --> P120 --> P130
+    P075 -.->|二村射影・残余プログラム直接 Lowering| P130
+    P130 -->|L_lir_managed| P131 -->|L_lir_core| P128 --> P133
+    CSRC --> CAST --> CLOWER -->|L_lir_core 合流| P132 --> P128
+    P133 --> VERIFY_LIR
     VERIFY_LIR --> P140
     VERIFY_LIR --> P150
     VERIFY_LIR --> P160
@@ -135,6 +142,9 @@ graph TD
   - `desugar-all`: 構文別ナノパスを束ね、高水準構文から Core 構文（`if`, `let`, `letrec`, `lambda`, 基本プリミティブ）への完全展開を統制。
   - `%raw-call/cc`: ファーストクラス継続プリミティブの透過的パイプライン伝搬。
 
+#### Pass 035: レキシカルスコープ解決 & α変換 (`compiler/scope.scm`)
+- **責務**: `scope-resolve-all`: レキシカル束縛の一意化（α変換）とシャドウイング解決。`L_core -> L_core`。
+
 #### Pass 040: 静的スコープ・高速自由変数解析 (`frontend/040_analysis.scm`)
 - **責務**: 式内の自由変数集合（`free-vars`）の正確な算出。ビットセットおよび順序付きリストによる高速集合演算（Issue #529）。
 - **エスケープ解析**: 関数が外部へエスケープするか、直接呼び出し（Contification）可能かを判定。
@@ -150,8 +160,14 @@ graph TD
 - **責務**: 基本ブロック内における共通部分式除去（CSE）およびペア・クロージャアクセサ（`car`, `cdr`, `%closure-ref`）のメモ化・冗長ロード削除。
 
 #### Pass 070: ANF 正規化 (`frontend/070_anf.scm`)
-- **責務**: 式を 3 番地コード形式（A-Normal Form）へ平坦化。
+- **責務**: 式を 3 番地コード形式（A-Normal Form）へ平坦化（`L_core -> L_anf`）。
 - **Scoped Temporary Variable Pool (`%t0`〜`%t8`)**: セルフホスティング時のシンボルアロケーションを抑制。
+
+#### Pass 075: ステージ多相部分評価 & 残余 ANF 生成 (`compiler/eval_in_language.scm` - Issues #878, #887)
+- **入力 / 出力宣言**: `L-StagePoly -> L-Residual-ANF`（`-O1` 以降で `pass-070-anf` 直後に実行）。
+- **パイプライン接続関係**:
+  1. **通常パイプライン（条件付き実行）**: 入力 AST にステージメタ構文（`stage-now`, `stage-later`, `stage-lift`, `stage-quasiquote`）が含まれる場合（`(contains-stage-meta-syntax? forms)`）のみ `stage-poly-lower-all` を実行し、非含有時は入力 `L_anf` をそのまま後続の `Pass 080`〜`110` へ素通しする（`pass_manager.scm` で `{L_anf, L-StagePoly, L-Residual-ANF}` が互換）。実行直後は `verify-residual-anf-conformance` でメタ構文残存ゼロを検証する。
+  2. **二村射影・残余プログラム直接 Lowering 経路 (`lir/130_lir.scm:539`)**: 混合器（`mix`）が生成した残余 AST（`L-Residual-ANF`: `let-anf`, `let-call`, `atom-value`）を直接 `Pass 130 (generate-lir)` で LIR へ変換するブリッジに接続している。
 
 #### Pass 080: 抽象解釈型アノテータ (`frontend/080_annotator.scm` - Issue #517)
 - **責務**: 式ごとの型・値域制約（Fixnum, Boolean, Pair, Non-Null）を抽象解釈により推論し、型アノテーションタグを付与。
@@ -193,14 +209,20 @@ graph TD
 #### Pass 129: LIR プリミティブ命令選択 (`lir/129_lir_primitives.scm` - Issue #573)
 - **責務**: 単項演算子・二項演算子・型検査述語（70種以上）の Canonical LIR 命令選択。
 
-#### Pass 130: LIR プログラム生成コア (`lir/130_lir.scm`)
-- **責務**: `%program` AST から `%lir-program` ルート構造への変換統御、関数リストおよびメインボディの生成。
+#### Pass 130: LIR プログラム生成コア (`lir/130_lir.scm` - Issues #835, #979)
+- **責務**: `generate-lir`: `%program` AST（`L_lifted`）または残余プログラム（`L-Residual-ANF`）から `%lir-program`（`L_lir_managed`）を生成。
 
-#### Pass 131: GC Safepoint & スタックマップ生成 (`lir/131_lir_safepoint.scm` - Issue #519)
+#### Pass 131 (Pipeline): Managed Runtime Dialect Lowering (`lir/131_lower_managed_dialect.scm` - Issues #835, #979)
+- **責務**: `lower-managed-dialect`: `L_lir_managed` に含まれる高水準ランタイム擬似命令（`%alloc`, `%managed-alloc`, `%alloc-stack`, `%box-*`, `%unbox-*`, `%managed-safepoint-poll`, `%managed-write-barrier` 等）を展開し、純粋なマシン LIR（`L_lir_core`）へ変換する。`nanopass-language-compatible?` により本パスを経由しない `L_lir_managed -> L_lir_core` 遷移は静的に拒否される。
+
+#### Pass 131 (Safepoint Helper): GC Safepoint & スタックマップ生成 (`lir/131_lir_safepoint.scm` - Issue #519)
 - **責務**: 関数呼び出し地点における GC Safepoint の自動追跡および正確なスタックマップ（Exact GC Stackmap Bitmap）の生成。
 
-#### Pass 132: Braun SSA 構築エンジン (`lir/132_lir_braun_ssa.scm` - Issue #523)
-- **責務**: Braun et al. (2013) に基づくオンザフライ SSA 構築、基本ブロック引数（Block Arguments）の生成、および不要引数の静的剪定。
+#### Pass 132: Braun SSA & C99 スカラ昇格エンジン (`lir/132_lir_braun_ssa.scm` - Issues #523, #827)
+- **責務**: Braun et al. (2013) に基づくオンザフライ SSA 構築・基本ブロック引数生成、および C99 `-O2` における `pass-132-c99-mem2reg`（`L_lir_core -> L_lir_core`）。
+
+#### Pass 133: LIR データ依存 DAG ピープホール最適化 (`lir/133_lir_peephole.scm` - Issues #577, #979)
+- **責務**: `lir-peephole-optimize`（`L_lir_core -> L_lir_core`）：不要 `move` 除去、Store-Load Forwarding、DCE、ジャンプ連鎖短縮の不動点反復最適化。
 
 ---
 
@@ -227,24 +249,62 @@ graph TD
 
 Frontend, LIR (Middle-End), Backend の3層物理分離に伴い、各層の抽象度（式木 vs CFG/線形命令 vs ターゲット機械語）に特化した `define-language` および `define-pass` を定義・運用する。
 
-### 3.1 層別中間言語（Languages）の推移
-- **Frontend 層 (式木・高水準 AST)**:
-  - `L_src` (全 Scheme / R7RS 構文) $\to$ `L_core` (コア構文脱糖) $\to$ `L_anf` (3番地・引数アトミック化) $\to$ `L_lifted` (クロージャ変換後)
-- **LIR 層 (中水準・CFG・線形命令)**:
-  - `L_lir_raw` (Lowering直後) $\to$ `L_lir_ssa` (Braun SSA形式) $\to$ `L_lir_canonical` (Safepoint確定・正典形式)
+### 3.1 層別中間言語（Languages）の推移と `L_lir_core` 合流構造
+
+Scheme フロントエンドと C99 フロントエンドはそれぞれの高水準・型付き AST を経た後、**共通の中水準機械抽象 IR である `L_lir_core` で合流**し、共通の LIR 最適化およびバックエンド（x86-64 / AArch64 / C99）へ接続される（Issues #835, #915, #979, #980 準拠）。
+
+```mermaid
+flowchart LR
+    subgraph SchemeFE ["Scheme Frontend 層"]
+        L_cst --> L_src --> L_core --> L_anf
+        L_anf -.->|"ステージメタ構文含有時<br/>(Pass 075)"| L_StagePoly["L-StagePoly"]
+        L_StagePoly --> L_Residual["L-Residual-ANF"]
+        L_Residual -.->|"Pass 080-110 継続"| L_anf
+        L_anf --> L_lifted
+    end
+
+    subgraph C99FE ["C99 Frontend 層"]
+        L_c_ast --> L_c_typed
+    end
+
+    subgraph LIRLayer ["LIR / Middle-End 層 (L_lir_core 合流)"]
+        L_lifted -->|"Pass 130"| L_lir_managed
+        L_Residual -.->|"Pass 130 直接ブリッジ"| L_lir_managed
+        L_lir_managed -->|"Pass 131<br/>(Managed Lowering)"| L_lir_core
+        L_c_typed -->|"lower_to_lir"| L_lir_core
+        L_lir_core <-->|"Pass 132 (mem2reg)<br/>Pass 128 / Pass 133"| L_lir_core
+    end
+
+    subgraph BackendLayer ["Backend コード生成層"]
+        L_lir_core --> L_asm_x86["L_asm_x86 (Pass 140/143/144)"]
+        L_lir_core --> L_asm_aarch64["L_asm_aarch64 (Pass 150)"]
+        L_lir_core --> L_c_out["Portable C99 (Pass 160)"]
+    end
+```
+
+- **Scheme Frontend 層 (式木・高水準 AST)**:
+  - `L_cst` (R7RS ライブラリ・DSL 構文) $\to$ `L_src` (マクロ展開済み Scheme 構文) $\to$ `L_core` (コア構文脱糖済み AST) $\to$ `L_anf` (3 番地 ANF 正規形) $\to$ `L_lifted` (クロージャ変換・ラムダリフティング済み)
+  - 部分評価経路 (`Pass 075`): `L-StagePoly` (ステージメタ構文付き AST) $\to$ `L-Residual-ANF` (メタ構文完全除去・ANF 化された残余プログラム)
+- **C99 Frontend 層 (型付き C AST)**:
+  - `L_c_ast` (C99 構文解析 AST) $\to$ `L_c_typed` (型検査・暗黙型変換・ABI 属性解決済み C AST)
+- **LIR / Middle-End 層 (`L_lir_core` 合流)**:
+  - Scheme 合流: `L_lifted` (または `L-Residual-ANF`) $\xrightarrow{\text{Pass 130}}$ `L_lir_managed` (GC アロケーション・ボックス化等のマネージド命令を含む LIR) $\xrightarrow{\text{Pass 131}}$ **`L_lir_core`**
+  - C99 合流: `L_c_typed` $\xrightarrow{\text{lower\_to\_lir}}$ **`L_lir_core`**
+  - Core LIR 最適化: **`L_lir_core`** $\xrightarrow{\text{Pass 132 / Pass 128 / Pass 133}}$ **`L_lir_core`**（検証には `validate-core-lir` / `L_lir_core?` を使用）
+  - *注（レガシー互換スキーマ階層）*: `L_lir_raw` $\to$ `L_lir_canonical` は旧系統スキーマ定義（`lir/lir_lang.scm`）として `lir_verifier.scm` の汎用 Tier-1 構文検査（`L_lir_canonical?`）および内部 `define-pass` ルール用に残置されている（Pass Manager のパイプライン遷移互換判定からは除外）。
 - **Backend 層 (低水準・ターゲット命令表現)**:
-  - `L_asm_x86_64` / `L_asm_aarch64` / `L_ast_c99` (ターゲット抽象機械命令)
+  - `L_asm_x86` / `L_asm_aarch64` / Portable ANSI C99 (`backend/160_backend_c.scm`)
 
 ### 3.2 3層分離ロードマップ (Issues 593〜601)
 1. **[Issue 593](../../docs/issues/closed/593-define-lir-canonical-language-and-verifier-integration.md)**: LIR層 `define-language L_lir_canonical` の導入と `lir_verifier.scm` の宣言的統合 (完了: `lir/lir_lang.scm`)
-2. **[Issue 594](../../docs/issues/594-define-frontend-anf-and-lifted-languages.md)**: Frontend層 `define-language L_anf` / `L_lifted` の導入と不変条件自動検証
-3. **[Issue 595](../../docs/issues/595-define-pass-lir-optimizations-and-peephole.md)**: LIR層 `define-pass` による分岐融合・DCE・ピープホール最適化の宣言化
-4. **[Issue 596](../../docs/issues/596-backend-instruction-selection-and-emission-separation.md)**: Backend層 `define-language L_asm` 導入による命令選択とコード生成の2段階分離
+2. **[Issue 594](../../docs/issues/closed/594-define-frontend-anf-and-lifted-languages.md)**: Frontend層 `define-language L_anf` / `L_lifted` の導入と不変条件自動検証 (完了)
+3. **[Issue 595](../../docs/issues/closed/595-define-pass-lir-optimizations-and-peephole.md)**: LIR層 `define-pass` による分岐融合・DCE・ピープホール最適化の宣言化 (完了)
+4. **[Issue 596](../../docs/issues/closed/596-backend-instruction-selection-and-emission-separation.md)**: Backend層 `define-language L_asm` 導入による命令選択とコード生成の2段階分離 (完了)
 5. **[Issue 597](../../docs/issues/closed/597-unify-ir-verifier-framework-and-optimize-lir-performance.md)**: IR Verifier 基盤の共通化・階層分離と LIR 検証パフォーマンス最適化 (完了)
 6. **[Issue 598](../../docs/issues/closed/598-implement-unified-compiler-pass-manager.md)**: 統一 Pass Manager の導入によるパイプライン制御・最適化レベルスケジューリング (完了: `compiler/pass_manager.scm`)
-7. **[Issue 599](../../docs/issues/599-implement-generic-dataflow-analysis-framework.md)**: 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復）
-8. **[Issue 600](../../docs/issues/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md)**: 統合シンボル・スコープ解決基盤および α 変換エンジンの導入
-9. **[Issue 601](../../docs/issues/closed/601-reorganize-ulisp-docs-with-role-prefix-naming.md)**: ULisp ドキュメント体系の再構築と役割プレフィックス命名規約の適用 (完了)
+7. **[Issue 599](../../docs/issues/closed/599-implement-generic-dataflow-analysis-framework.md)**: 汎用データフロー解析フレームワーク（半順序束・伝達関数・固定点反復） (完了)
+8. **[Issue 600](../../docs/issues/closed/600-implement-unified-lexical-scope-and-alpha-conversion-engine.md)**: 統合シンボル・スコープ解決基盤および α 変換エンジンの導入 (完了)
+9. **ドキュメント体系再構築 ([ulisp/docs/README.md](README.md))**: ULisp ドキュメント体系の再構築と役割プレフィックス命名規約の適用 (完了)
 10. **[Issue 617](../../docs/issues/closed/617-establish-self-contained-bootstrap-chain-free-from-external-toolchains.md)**: 外部ツール完全非依存な自給自足 3-Stage セルフホスティングブートストラップの確立 (完了)
 
 ---
