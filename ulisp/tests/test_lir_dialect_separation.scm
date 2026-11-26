@@ -387,6 +387,17 @@
 (assert-true "5.6 aot-native-pipeline passes language continuity check with pass-131"
              (validate-pipeline-continuity-by-ids aot-pipeline-passes))
 
+;; 5.6b Issue #979: Strict LIR dialect compatibility & pass-130 -> L_lir_managed contract
+(define p130-desc (lookup-pass 'pass-130-lir))
+(assert-equal "5.6b pass-130-lir output language is L_lir_managed"
+              'L_lir_managed
+              (pass-out-lang p130-desc))
+(assert-false "5.6c nanopass-language-compatible? rejects L_lir_managed -> L_lir_core"
+              (nanopass-language-compatible? 'L_lir_managed 'L_lir_core))
+(assert-false "5.6d check-pipeline-continuity-by-ids rejects skipping pass-131"
+              (check-pipeline-continuity-by-ids
+               '(pass-110-closure-convert pass-130-lir pass-128-lir-branch-fusion)))
+
 ;; 5.7 C Frontend Direct Core Machine LIR Bypass (DSN-38 §2 B5 / E8)
 ;; C code emits Core Machine LIR directly, completely bypassing Managed Dialect & Pass 131.
 (define c-frontend-direct-core-lir

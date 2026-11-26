@@ -907,9 +907,6 @@
     ((and (or (eq? out-lang 'L_anf) (eq? out-lang 'L-StagePoly) (eq? out-lang 'L-Residual-ANF))
           (or (eq? in-lang 'L_anf) (eq? in-lang 'L-StagePoly) (eq? in-lang 'L-Residual-ANF)))
      #t)
-    ((and (or (eq? out-lang 'L_lir_core) (eq? out-lang 'L_lir_managed) (eq? out-lang 'L_lir_raw) (eq? out-lang 'L_lir_canonical))
-          (or (eq? in-lang 'L_lir_core) (eq? in-lang 'L_lir_managed) (eq? in-lang 'L_lir_raw) (eq? in-lang 'L_lir_canonical)))
-     #t)
     (else #f)))
 
 (define (check-pipeline-continuity-by-ids pass-ids)
@@ -1572,7 +1569,7 @@
   ;; Middle-End / LIR Passes
   (register-pass!
     (make-pass-descriptor 'pass-130-lir "LIR Lowering and Generation" 'middle 0
-      (lambda (forms) (generate-lir forms)) #f 'L_lifted 'L_lir_raw '(pass-110-closure-convert) #t))
+      (lambda (forms) (generate-lir forms)) #f 'L_lifted 'L_lir_managed '(pass-110-closure-convert) #t))
   (register-pass!
     (make-pass-descriptor 'pass-131-lower-managed-dialect "Lower Managed Runtime Dialect" 'middle 0
       (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
@@ -1589,7 +1586,7 @@
             ':invalidates '(cfg-dominators variable-liveness))))
   (register-pass!
     (make-pass-descriptor-with-opts 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
-      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_canonical '(pass-130-lir) #f
+      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_core '(pass-130-lir) #f
       (list ':preserves '(cfg-dominators)
             ':invalidates '(variable-liveness alias-sets))))
   ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)

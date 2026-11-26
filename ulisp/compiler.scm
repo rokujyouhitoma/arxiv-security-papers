@@ -9827,9 +9827,6 @@
     ((and (or (eq? out-lang 'L_anf) (eq? out-lang 'L-StagePoly) (eq? out-lang 'L-Residual-ANF))
           (or (eq? in-lang 'L_anf) (eq? in-lang 'L-StagePoly) (eq? in-lang 'L-Residual-ANF)))
      #t)
-    ((and (or (eq? out-lang 'L_lir_core) (eq? out-lang 'L_lir_managed) (eq? out-lang 'L_lir_raw) (eq? out-lang 'L_lir_canonical))
-          (or (eq? in-lang 'L_lir_core) (eq? in-lang 'L_lir_managed) (eq? in-lang 'L_lir_raw) (eq? in-lang 'L_lir_canonical)))
-     #t)
     (else #f)))
 
 (define (check-pipeline-continuity-by-ids pass-ids)
@@ -10492,7 +10489,7 @@
   ;; Middle-End / LIR Passes
   (register-pass!
     (make-pass-descriptor 'pass-130-lir "LIR Lowering and Generation" 'middle 0
-      (lambda (forms) (generate-lir forms)) #f 'L_lifted 'L_lir_raw '(pass-110-closure-convert) #t))
+      (lambda (forms) (generate-lir forms)) #f 'L_lifted 'L_lir_managed '(pass-110-closure-convert) #t))
   (register-pass!
     (make-pass-descriptor 'pass-131-lower-managed-dialect "Lower Managed Runtime Dialect" 'middle 0
       (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
@@ -10509,7 +10506,7 @@
             ':invalidates '(cfg-dominators variable-liveness))))
   (register-pass!
     (make-pass-descriptor-with-opts 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
-      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_canonical '(pass-130-lir) #f
+      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_core '(pass-130-lir) #f
       (list ':preserves '(cfg-dominators)
             ':invalidates '(variable-liveness alias-sets))))
   ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)
@@ -27900,20 +27897,23 @@
         (alias-escape-transform-expr program esc '()))))
 ;;; =======================================================================
 ;;; ULisp Compiler: Low-Level IR (LIR) Language Specifications
-;;; (L_lir_core -> L_lir_managed, L_lir_raw -> L_lir_canonical)
-;;; Conforms to DSN-33, DSN-38 Architecture Specifications & Issues #593, #753, #826, #835
+;;; Active Pipeline Dialects: L_lir_managed -> L_lir_core (Issues #835, #979)
+;;; Legacy Schema Dialects:   L_lir_raw -> L_lir_canonical (Issue #593)
+;;; Conforms to DSN-33, DSN-38 Architecture Specifications & Issues #593, #753, #826, #835, #979
 ;;; =======================================================================
 ;;; Formal intermediate language definitions using Nanopass DSL (define-language):
-;;; - L_lir_core:      Pure Core Machine LIR without GC, tagging or managed runtime
-;;;                    opcodes, serving as the target for unmanaged/C frontends and
-;;;                    the lowered output of Pass 131.
-;;; - L_lir_managed:   Managed Runtime Dialect LIR extending L_lir_core with high-level
-;;;                    GC, allocation (%alloc), tagging (%box-*), and safepoint opcodes.
-;;; - L_lir_raw:       Initial LIR emitted by Pass 130 before branch fusion and
-;;;                    peephole normalization.
-;;; - L_lir_canonical: Canonical LIR after Pass 128 (branch fusion) and Pass 133
-;;;                    (peephole optimization / dead code elimination), serving
-;;;                    as the contract for low-level code generation backends.
+;;; - L_lir_core:      Active Pure Core Machine LIR without GC, tagging, or managed
+;;;                    runtime opcodes. Target for C frontends and Pass 131 output,
+;;;                    and the common IR for Pass 132 / Pass 128 / Pass 133.
+;;; - L_lir_managed:   Active Managed Runtime Dialect LIR extending L_lir_core with
+;;;                    GC allocation (%alloc / %managed-alloc), boxing (%box-*),
+;;;                    write barriers, and continuation opcodes (Pass 130 output -> Pass 131 input).
+;;; - L_lir_raw:       [Legacy / Deprecated] Pre-Issue #835 unseparated LIR grammar
+;;;                    retained only for legacy unit tests and as parent of L_lir_canonical;
+;;;                    excluded from Pass Manager pipeline compatibility (Issue #979).
+;;; - L_lir_canonical: [Legacy Schema Dialect] L_lir_raw minus (%nop), retained for
+;;;                    Tier-1 general LIR schema checks (L_lir_canonical? in lir_verifier.scm),
+;;;                    internal define-pass catamorphisms, and serialization tests.
 ;;; =======================================================================
 
 ;;; -----------------------------------------------------------------------
@@ -28145,7 +28145,8 @@
        (%store-values-buf si cnt))))
 
 ;;; -----------------------------------------------------------------------
-;;; 3. L_lir_raw: Raw Low-Level Intermediate Representation
+;;; 3. L_lir_raw: [Legacy / Deprecated] Unseparated Low-Level IR Schema
+;;;    Not used in active Pass Manager transitions (see L_lir_managed/L_lir_core).
 ;;; -----------------------------------------------------------------------
 (define-language L_lir_raw
   (entry Program)
@@ -28363,7 +28364,8 @@
     (%lir-program (strings (se ...)) (data (de ...)) (stackmaps (sm ...)) (%lir-functions f ...) m mc ...)))
 
 ;;; -----------------------------------------------------------------------
-;;; 4. L_lir_canonical: Canonical LIR (Post-Branch Fusion & Peephole)
+;;; 4. L_lir_canonical: [Legacy Schema Dialect] Post-Peephole Schema (L_lir_raw - %nop)
+;;;    Retained for Tier-1 schema checks (L_lir_canonical?) and internal define-pass rules.
 ;;; -----------------------------------------------------------------------
 (define-language L_lir_canonical
   (extends L_lir_raw)

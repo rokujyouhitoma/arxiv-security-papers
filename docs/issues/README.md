@@ -6,8 +6,8 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **957** | 算術・比較 slow path のインライン展開廃止と共有スタブ化 | Feature | New | [957-share-arithmetic-and-compare-slow-path-stubs.md](957-share-arithmetic-and-compare-slow-path-stubs.md) |
-| **958** | 関数入口の未使用 `r10` / `argc` スピル削除と小さなアクセサのインライン化（Scheme モード） | Feature | New | [958-eliminate-unused-prologue-spills-and-inline-small-accessors.md](958-eliminate-unused-prologue-spills-and-inline-small-accessors.md) |
+| **957** | 算術・比較 slow path のインライン展開廃止と共有スタブ化 | Feature | In Progress | [957-share-arithmetic-and-compare-slow-path-stubs.md](957-share-arithmetic-and-compare-slow-path-stubs.md) |
+| **958** | 関数入口の未使用 `r10` / `argc` スピル削除と小さなアクセサのインライン化（Scheme モード） | Feature | In Progress | [958-eliminate-unused-prologue-spills-and-inline-small-accessors.md](958-eliminate-unused-prologue-spills-and-inline-small-accessors.md) |
 | **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` / `.data` 配置） | Feature | New | [959-emit-quoted-constants-as-static-rodata-data.md](959-emit-quoted-constants-as-static-rodata-data.md) |
 | **960** | 未参照関数の削除（到達可能性解析または関数毎セクション + `--gc-sections`） | Feature | New | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
 | **961** | Scheme 経路の LIR への linear scan レジスタ割り付け導入（スタック退避中心コード生成の解消） | Feature | New | [961-introduce-linear-scan-register-allocation-for-scheme-lir.md](961-introduce-linear-scan-register-allocation-for-scheme-lir.md) |
@@ -24,11 +24,14 @@
 | **976** | SSA ループ解析基盤（自然ループ検出）と LICM（ループ不変コード移動）パスの実装 | Feature | New | [976-implement-ssa-loop-analysis-and-licm-pass.md](976-implement-ssa-loop-analysis-and-licm-pass.md) |
 | **977** | 投機的ループ・アンチェック化（Loop Unswitching / 型タグ検査・配列境界チェックのループ外巻き上げ）の実装 | Feature | New | [977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md](977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md) |
 | **978** | 高水準リスト・ストリーム融合（Loop Fusion / Deforestation）パスの導入 | Feature | New | [978-implement-list-and-stream-loop-fusion-deforestation-pass.md](978-implement-list-and-stream-loop-fusion-deforestation-pass.md) |
+| **980** | Nanopass 言語仕様書自動生成（spec_nanopass.md）の更新と spec_pipeline.md（Scheme/C99 の L_lir_core 合流・部分評価経路）の実態同期 | Feature | In Progress | [980-sync-nanopass-and-pipeline-specs-with-core-lir-and-stagepoly.md](980-sync-nanopass-and-pipeline-specs-with-core-lir-and-stagepoly.md) |
+| **981** | L_lir_core 不動点最適化ループ（mem2reg・branch-fusion・peephole）の Scheme / C99 共通化 | Feature | New | [981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md](981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **979** | LIR パス言語契約の是正（pass-130 -> L_lir_managed）と nanopass-language-compatible? 厳格化・旧 LIR 言語階層の整理 | Feature | 2026-11-26 | [979-tighten-lir-language-compatibility-and-reconcile-lir-dialects.md](closed/979-tighten-lir-language-compatibility-and-reconcile-lir-dialects.md) |
 | **947** | オントロジー推論ルール `master_rules.json` の未使用状態の解消と `EdgeInferenceRuleRegistry` 読み込み整合化 | Feature | 2026-11-26 | [947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md](closed/947-reconcile-ontology-master-rules-json-loading-in-rule-registry.md) |
 | **946** | SQL 実行器における式文字列のレコード毎再解析の解消と AST 事前コンパイル化 | Feature | 2026-11-26 | [946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md](closed/946-precompile-sql-expressions-to-eliminate-per-record-reparsing.md) |
 | **950** | Direct-Style PEG インタプリタ × `mix`（第1二村射影）による小規模文法自動段階化と `emit_scheme.scm` 生成パーサーとの双対検証 | Feature | 2026-11-26 | [950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md](closed/950-verify-first-futamura-projection-peg-staging-via-mix-against-emit-scheme.md) |

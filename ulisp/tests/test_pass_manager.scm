@@ -677,4 +677,37 @@
     (assert-true "11.11 verify-residual-anf-conformance passes"
                  (verify-residual-anf-conformance lowered))))
 
+;; -----------------------------------------------------------------------
+;; 12. Issue #979: Strict LIR Dialect Compatibility & Pass Contracts
+;; -----------------------------------------------------------------------
+(display "\n--- Group 12: Strict LIR Dialect Compatibility (Issue #979) ---\n")
+(init-default-pass-registry!)
+
+(let ((p130 (lookup-pass 'pass-130-lir))
+      (p131 (lookup-pass 'pass-131-lower-managed-dialect))
+      (p133 (lookup-pass 'pass-133-lir-peephole)))
+  (assert-equal "12.1 pass-130-lir out-lang is L_lir_managed" 'L_lir_managed (pass-out-lang p130))
+  (assert-equal "12.2 pass-131-lower-managed-dialect in-lang is L_lir_managed" 'L_lir_managed (pass-in-lang p131))
+  (assert-equal "12.3 pass-131-lower-managed-dialect out-lang is L_lir_core" 'L_lir_core (pass-out-lang p131))
+  (assert-equal "12.4 pass-133-lir-peephole out-lang is L_lir_core" 'L_lir_core (pass-out-lang p133)))
+
+(assert-true "12.5 L_lir_managed -> L_lir_managed is compatible"
+             (nanopass-language-compatible? 'L_lir_managed 'L_lir_managed))
+(assert-true "12.6 L_lir_core -> L_lir_core is compatible"
+             (nanopass-language-compatible? 'L_lir_core 'L_lir_core))
+(assert-false "12.7 L_lir_managed -> L_lir_core is incompatible"
+              (nanopass-language-compatible? 'L_lir_managed 'L_lir_core))
+(assert-false "12.8 L_lir_core -> L_lir_managed is incompatible"
+              (nanopass-language-compatible? 'L_lir_core 'L_lir_managed))
+(assert-false "12.9 L_lir_raw -> L_lir_core is incompatible"
+              (nanopass-language-compatible? 'L_lir_raw 'L_lir_core))
+(assert-false "12.10 L_lir_managed -> L_lir_canonical is incompatible"
+              (nanopass-language-compatible? 'L_lir_managed 'L_lir_canonical))
+(assert-false "12.11 check-pipeline-continuity-by-ids rejects LIR pipeline skipping pass-131"
+              (check-pipeline-continuity-by-ids
+               '(pass-110-closure-convert pass-130-lir pass-128-lir-branch-fusion)))
+(assert-true "12.12 check-pipeline-continuity-by-ids accepts valid pass-130 -> pass-131 -> core LIR pipeline"
+             (check-pipeline-continuity-by-ids
+              '(pass-110-closure-convert pass-130-lir pass-131-lower-managed-dialect pass-128-lir-branch-fusion pass-133-lir-peephole)))
+
 (test-end "Unified Pass Manager")
