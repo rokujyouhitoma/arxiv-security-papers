@@ -2456,11 +2456,13 @@
                              (append init-acc
                                      (list (list '%raw-asm (string-append "    .type " label-str ", @function"))
                                            (list '%raw-asm (string-append "    .weak " label-str))
-                                           (list '%raw-asm (string-append "    .globl " label-str)))))
+                                           (list '%raw-asm (string-append "    .globl " label-str))
+                                           (list '%raw-asm (string-append "    .section .text." label-str ",\"ax\",@progbits")))))
                          (if c-tu?
                              (append init-acc
                                      (list (list '%raw-asm (string-append "    .type " label-str ", @function"))))
-                             init-acc)))
+                             (append init-acc
+                                     (list (list '%raw-asm (string-append "    .section .text." label-str ",\"ax\",@progbits")))))))
            (hoist-base-acc (if (> hoist-f 0)
                                (cons (list 'sub 'rsp (list '%imm hoist-f)) base-acc)
                                base-acc)))
@@ -3586,6 +3588,8 @@
     (for-each emit-x86-asm-inst main-body)
     ;; Emit all lifted procedure definitions in sequence
     (for-each emit-x86-asm-function funcs)
+    ;; Restore default .text section after per-function .text.<fn> sections
+    (emit "    .text")
     ;; Emit freestanding zero-libc runtime routines
     (emit-freestanding-runtime funcs)
     (emit-oom-panic)
@@ -3595,34 +3599,37 @@
       ((eq? gc-mode 'none) #f)
       (else
        (emit-gc-collector)))
-    ;; Emit stackmap metadata table in .rodata section
+    ;; Emit stackmap metadata table in its own .rodata section
     (let* ((stackmaps-clause (assq 'stackmaps (cdr asm-prog)))
            (safepoints (if stackmaps-clause (cadr stackmaps-clause) '())))
-      (emit "    .section .rodata")
+      (emit "    .section .rodata.__ulisp_stackmap_table,\"a\",@progbits")
       (emit "    .p2align 3")
       (emit "    .globl __ulisp_stackmap_table")
       (emit "    .weak __ulisp_stackmap_table")
       (emit "__ulisp_stackmap_table:")
-      (emit (string-append "    .quad " (number->string (length safepoints))))
-      (for-each (lambda (sp)
-                  (let ((lbl (car sp))
-                        (frame-size (cadr sp))
-                        (bitmap (caddr sp)))
-                    (emit (string-append "    .quad " (if (symbol? lbl) (symbol->string lbl) lbl)))
-                    (emit (string-append "    .quad " (number->string frame-size)))
-                    (emit (string-append "    .quad " (number->string bitmap)))))
-                safepoints))
-    ;; Emit globals metadata table in ulisp_globals_sec section (automatically concatenated by linker across split modules)
+      (if (eq? gc-mode 'none)
+          (emit "    .quad 0")
+          (begin
+            (emit (string-append "    .quad " (number->string (length safepoints))))
+            (for-each (lambda (sp)
+                        (let ((lbl (car sp))
+                              (frame-size (cadr sp))
+                              (bitmap (caddr sp)))
+                          (emit (string-append "    .quad " (if (symbol? lbl) (symbol->string lbl) lbl)))
+                          (emit (string-append "    .quad " (number->string frame-size)))
+                          (emit (string-append "    .quad " (number->string bitmap)))))
+                      safepoints))))
+    ;; Emit globals metadata table in ulisp_globals_sec section (SHF_GNU_RETAIN preserves against --gc-sections)
     (let ((gvs (car *top-level-vars*)))
-      (emit "    .section ulisp_globals_sec, \"a\"")
+      (emit "    .section ulisp_globals_sec, \"aR\", @progbits")
       (emit "    .p2align 3")
       (for-each (lambda (v)
                   (let ((g-lbl (mangle-gvar-label v)))
                     (emit (string-append "    .quad " g-lbl))))
                 gvs))
-    ;; Emit symbols metadata table in modular section + legacy .rodata table
+    ;; Emit symbols metadata table in modular section (SHF_GNU_RETAIN) + legacy .rodata table
     (let ((syms (get-all-symbols)))
-      (emit "    .section ulisp_symtab_sec, \"a\"")
+      (emit "    .section ulisp_symtab_sec, \"aR\", @progbits")
       (emit "    .p2align 3")
       (let loop ((ss syms) (idx 0))
         (if (not (null? ss))
@@ -3812,6 +3819,7 @@
                  (fn-lbl-str (if (symbol? fn-lbl) (symbol->raw-name fn-lbl) fn-lbl))
                  (g-lbl (mangle-gvar-label fn-name))
                  (sc-lbl (string-append ".L_static_closure_" (sanitize-label-str (symbol->raw-name fn-name)))))
+            (emit (string-append "    .section .data." sc-lbl ",\"aw\",@progbits"))
             (emit "    .align 16")
             (emit (string-append sc-lbl ":"))
             (emit "    .quad 4195336")
@@ -3823,6 +3831,7 @@
             (emit (string-append g-lbl ":"))
             (emit (string-append "    .quad " sc-lbl " + 9"))
             (loop (cdr gfs)))))
+    (emit "    .data")
     (emit "    .align 8")
     (emit "    .globl ulisp_print_result_mode")
     (emit "    .weak ulisp_print_result_mode")

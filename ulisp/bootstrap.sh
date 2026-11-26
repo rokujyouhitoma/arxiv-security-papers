@@ -385,9 +385,9 @@ compile_asm() {
         fi
     else
         if [ "${BOOTSTRAP_SPLIT_LINK:-1}" = "1" ]; then
-            ld -m elf_x86_64 -static "$BUILD_DIR/ulisp_stdlib.o" "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+            ld -m elf_x86_64 -static --gc-sections "$BUILD_DIR/ulisp_stdlib.o" "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
         else
-            ld -m elf_x86_64 -static "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
+            ld -m elf_x86_64 -static --gc-sections "$obj_file" -o "$bin_file" > "$tool_err" 2>&1 || rc=$?
         fi
     fi
     if [ "$rc" -ne 0 ]; then
@@ -479,7 +479,7 @@ verify_and_promote() {
             rm -f "$BUILD_DIR/smoke_in.scm"
         fi
         as --64 "$BUILD_DIR/smoke_test.s" -o "$BUILD_DIR/smoke_test.o"
-        ld -m elf_x86_64 -static "$BUILD_DIR/smoke_test.o" -o "$BUILD_DIR/smoke_test"
+        ld -m elf_x86_64 -static --gc-sections "$BUILD_DIR/smoke_test.o" -o "$BUILD_DIR/smoke_test"
     fi
     local smoke_out
     smoke_out="$(ULISP_PRINT_RESULT=1 "$BUILD_DIR/smoke_test" 2>/dev/null || true)"

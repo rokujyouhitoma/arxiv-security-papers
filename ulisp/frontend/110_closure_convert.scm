@@ -463,14 +463,113 @@
                 (list 'let let-bindings
                       (cons 'begin (append backpatches (list new-body))))))))))
 
+;;; Intra-unit top-level function reachability pruning (Issue #960)
+(define (cc-mark-reachable-fn! sym fn-buckets visited-buckets worklist-box)
+  (let* ((b-idx (modulo (symbol->hash-idx sym) 256))
+         (fn-entry (assq sym (vector-ref fn-buckets b-idx))))
+    (if (and fn-entry
+             (not (memq sym (vector-ref visited-buckets b-idx))))
+        (begin
+          (vector-set! visited-buckets b-idx (cons sym (vector-ref visited-buckets b-idx)))
+          (set-car! worklist-box (cons (cdr fn-entry) (car worklist-box)))))))
+
+(define (cc-mark-implicit-prim! sym fn-buckets visited-buckets worklist-box)
+  (let ((target (case sym
+                  ((+) 'num+)
+                  ((-) 'num-)
+                  ((*) 'num*)
+                  ((/) 'num/)
+                  ((=) 'num=)
+                  ((<) 'num<)
+                  ((<=) 'num<=)
+                  ((>) 'num>)
+                  ((>=) 'num>=)
+                  ((quotient) 'num-quotient)
+                  ((modulo) 'num-modulo)
+                  ((bitwise-and) 'num-bitwise-and)
+                  ((bitwise-ior) 'num-bitwise-ior)
+                  (else #f))))
+    (if target
+        (cc-mark-reachable-fn! target fn-buckets visited-buckets worklist-box))))
+
+(define (collect-expr-referenced-symbols! expr fn-buckets visited-buckets worklist-box)
+  (cond
+    ((symbol? expr)
+     (cc-mark-reachable-fn! expr fn-buckets visited-buckets worklist-box)
+     (cc-mark-implicit-prim! expr fn-buckets visited-buckets worklist-box))
+    ((not (pair? expr)) #f)
+    ((and (eq? (car expr) 'quote) (pair? (cdr expr))) #f)
+    (else
+     (collect-expr-referenced-symbols! (car expr) fn-buckets visited-buckets worklist-box)
+     (collect-expr-referenced-symbols! (cdr expr) fn-buckets visited-buckets worklist-box))))
+
+(define (prune-unreachable-top-level-defs defs main-expr)
+  (if (or (module-mode?)
+          (allow-extern-symbols?)
+          (not main-expr)
+          (equal? main-expr '(begin)))
+      defs
+      (let ((fn-buckets (make-vector 256 '()))
+            (visited-buckets (make-vector 256 '()))
+            (worklist-box (cons '() '()))
+            (has-fn? (cons #f '())))
+        ;; 1. Index top-level lambda definitions: name -> lambda-body
+        (for-each
+          (lambda (d)
+            (if (and (pair? d) (eq? (car d) 'define))
+                (let ((name (cadr d))
+                      (val (caddr d)))
+                  (if (and (pair? val) (eq? (car val) 'lambda))
+                      (let ((b-idx (modulo (symbol->hash-idx name) 256)))
+                        (set-car! has-fn? #t)
+                        (vector-set! fn-buckets b-idx
+                                     (cons (cons name (caddr val))
+                                           (vector-ref fn-buckets b-idx))))))))
+          defs)
+        (if (not (car has-fn?))
+            defs
+            (begin
+              ;; 2. Seed reachability from main-expr, non-lambda global inits, and runtime hooks
+              (collect-expr-referenced-symbols! main-expr fn-buckets visited-buckets worklist-box)
+              (for-each
+                (lambda (d)
+                  (if (and (pair? d) (eq? (car d) 'define))
+                      (let ((val (caddr d)))
+                        (if (not (and (pair? val) (eq? (car val) 'lambda)))
+                            (collect-expr-referenced-symbols! val fn-buckets visited-buckets worklist-box)))))
+                defs)
+              (cc-mark-reachable-fn! '%synapse-safepoint-poll! fn-buckets visited-buckets worklist-box)
+              ;; 3. Drain worklist for transitive call/reference closure
+              (let loop ()
+                (if (pair? (car worklist-box))
+                    (let ((body (caar worklist-box)))
+                      (set-car! worklist-box (cdar worklist-box))
+                      (collect-expr-referenced-symbols! body fn-buckets visited-buckets worklist-box)
+                      (loop))))
+              ;; 4. Filter defs preserving original order
+              (let loop ((ds defs) (acc '()))
+                (if (null? ds)
+                    (reverse acc)
+                    (let ((d (car ds)))
+                      (if (and (pair? d)
+                               (eq? (car d) 'define)
+                               (pair? (caddr d))
+                               (eq? (caaddr d) 'lambda))
+                          (let* ((name (cadr d))
+                                 (b-idx (modulo (symbol->hash-idx name) 256)))
+                            (if (memq name (vector-ref visited-buckets b-idx))
+                                (loop (cdr ds) (cons d acc))
+                                (loop (cdr ds) acc)))
+                          (loop (cdr ds) (cons d acc)))))))))))
+
 ;;; Pass 5 Entrypoint: Takes Canonical Core AST or (%program defs main-expr), returns (%program functions main-expr)
 (define (closure-convert ast)
   (reset-lifted-functions!)
   (reset-top-level-env!)
   (let ((res
          (if (and (pair? ast) (eq? (car ast) '%program))
-             (let* ((defs (cadr ast))
-                    (main-expr (caddr ast)))
+             (let* ((main-expr (caddr ast))
+                    (defs (prune-unreachable-top-level-defs (cadr ast) main-expr)))
                ;; 1. Scan defs and populate *top-level-fns* and *top-level-vars*
                (let loop ((ds defs))
                  (if (pair? ds)

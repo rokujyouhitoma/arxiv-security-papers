@@ -6,7 +6,6 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **960** | 未参照関数の削除（到達可能性解析または関数毎セクション + `--gc-sections`） | Feature | New | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
 | **961** | Scheme 経路の LIR への linear scan レジスタ割り付け導入（スタック退避中心コード生成の解消） | Feature | New | [961-introduce-linear-scan-register-allocation-for-scheme-lir.md](961-introduce-linear-scan-register-allocation-for-scheme-lir.md) |
 | **966** | L_mir_ssa（仮想レジスタ SSA）と L_lir_mach（物理レジスタ機械 LIR）の 2 層分離と Scheme/C99 共通ミドルエンド統合 | Feature | New | [966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md](966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md) |
 | **967** | C99 フロントエンド lower_to_lir.scm（5,009行）の責務別パス分割（MIR 生成・SysV ABI 展開・Inline Asm 正規化） | Feature | New | [967-split-c99-lower-to-lir-into-modular-nanopasses.md](967-split-c99-lower-to-lir-into-modular-nanopasses.md) |
@@ -27,6 +26,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **960** | 未参照関数の削除（関数・クロージャ毎セクション分割＋`--gc-sections` ＆ 到達可能性解析） | Feature | 2026-11-27 | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](closed/960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
 | **959** | quote 定数の静的データ化（`ulisp_mod_init_*` 実行時構築の廃止と `.rodata` 配置） | Feature | 2026-11-26 | [959-emit-quoted-constants-as-static-rodata-data.md](closed/959-emit-quoted-constants-as-static-rodata-data.md) |
 | **957** | 算術・比較 slow path のインライン展開廃止と共有スタブ化 | Feature | 2026-11-26 | [957-share-arithmetic-and-compare-slow-path-stubs.md](closed/957-share-arithmetic-and-compare-slow-path-stubs.md) |
 | **958** | 関数入口の未使用 `r10` / `argc` スピル削除と小さなアクセサのインライン化（Scheme モード） | Feature | 2026-11-26 | [958-eliminate-unused-prologue-spills-and-inline-small-accessors.md](closed/958-eliminate-unused-prologue-spills-and-inline-small-accessors.md) |

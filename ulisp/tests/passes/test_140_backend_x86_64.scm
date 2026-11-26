@@ -276,4 +276,37 @@
                   "    xor r10d, r10d")
                 (reverse captured)))
 
+;; 12. Issue #960: Per-function .text.<fn> sections, SHF_GNU_RETAIN metadata sections & (!gc none) stackmap separation
+(let* ((saved-mode (car *backend-gc-mode*))
+       (lir-prog (list '%lir-program
+                       '(strings ())
+                       '(stackmaps ((__safepoint_1 16 1)))
+                       '(%lir-functions
+                         (%lir-function ulisp_fn_demo
+                           (params (x))
+                           (frame-size 16)
+                           (body (%mov %rax 42)
+                                 (%return))))
+                       '(%lir-main (frame-size 16) (body (%mov %rax 0) (%return %rax)))))
+       (captured '())
+       (has-exact? (lambda (lines target) (and (member target lines) #t))))
+  (set-car! *backend-gc-mode* 'managed)
+  (set-emit-line-sink! (lambda (line) (set! captured (cons line captured))))
+  (emit-x86-64 lir-prog 'none)
+  (set-emit-line-sink! #f)
+  (set-car! *backend-gc-mode* saved-mode)
+  (let ((lines (reverse captured)))
+    (assert-true "emits per-function .section .text.ulisp_fn_demo"
+                 (has-exact? lines "    .section .text.ulisp_fn_demo,\"ax\",@progbits"))
+    (assert-true "restores .text after function bodies"
+                 (has-exact? lines "    .text"))
+    (assert-true "marks ulisp_globals_sec with SHF_GNU_RETAIN (aR)"
+                 (has-exact? lines "    .section ulisp_globals_sec, \"aR\", @progbits"))
+    (assert-true "marks ulisp_symtab_sec with SHF_GNU_RETAIN (aR)"
+                 (has-exact? lines "    .section ulisp_symtab_sec, \"aR\", @progbits"))
+    (assert-true "emits __ulisp_stackmap_table in its own .rodata section"
+                 (has-exact? lines "    .section .rodata.__ulisp_stackmap_table,\"a\",@progbits"))
+    (assert-false "gc-mode 'none omits __safepoint_1 relocations from stackmap table"
+                  (has-exact? lines "    .quad __safepoint_1"))))
+
 (test-end "Pass 140 (x86-64 Backend)")

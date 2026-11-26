@@ -55,16 +55,19 @@
                                      (%return))))
        (asm-fn (select-instructions-function fn-ast))
        (body (cdr (assq 'body (cddr asm-fn)))))
-  ;; Verify that the first three instructions in the reversed body are .globl, .weak, and .type
-  (assert-equal "asm-fn starts with .globl"
-                '(%raw-asm "    .globl ulisp_fn_test_add")
+  ;; Verify that the reversed body starts with .section, .globl, .weak, and .type
+  (assert-equal "asm-fn starts with per-function .section"
+                '(%raw-asm "    .section .text.ulisp_fn_test_add,\"ax\",@progbits")
                 (car body))
+  (assert-equal "asm-fn has .globl"
+                '(%raw-asm "    .globl ulisp_fn_test_add")
+                (cadr body))
   (assert-equal "asm-fn has .weak"
                 '(%raw-asm "    .weak ulisp_fn_test_add")
-                (cadr body))
+                (caddr body))
   (assert-equal "asm-fn has .type @function"
                 '(%raw-asm "    .type ulisp_fn_test_add, @function")
-                (caddr body)))
+                (cadddr body)))
 
 ;; Reset flags
 (set-allow-extern-symbols! #f)

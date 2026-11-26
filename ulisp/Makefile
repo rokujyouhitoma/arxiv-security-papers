@@ -13,7 +13,7 @@ LD ?= ld
 OBJCOPY ?= objcopy
 STRIP ?= strip
 ASFLAGS ?= --64
-LDFLAGS ?= -m elf_x86_64 -static
+LDFLAGS ?= -m elf_x86_64 -static --gc-sections
 CC ?= gcc
 
 # Issue #952: Split debug symbols (.symtab / .strtab) into <bin>.debug and strip release binary.

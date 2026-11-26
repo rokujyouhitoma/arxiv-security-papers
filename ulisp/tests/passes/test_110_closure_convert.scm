@@ -60,4 +60,20 @@
 (assert-false "L_lifted? rejects unlifted lambda inside %function body"
               (L_lifted? '(%program ((%function L_fn1 (x) (lambda (y) (+ x y)))) 42)))
 
+;; 7. Issue #960: Intra-unit top-level function reachability pruning
+(let* ((prog '(%program ((define dead-fn (lambda (x) (+ x 999)))
+                         (define helper-fn (lambda (x) (* x 2)))
+                         (define used-fn (lambda (x) (+ (helper-fn x) 1))))
+                        (used-fn 5)))
+       (res (closure-convert prog))
+       (funcs (cadr res))
+       (fn-names (map cadr funcs)))
+  (assert-true "reachability keeps directly called used-fn"
+               (and (memq (mangle-fn-label 'used-fn) fn-names) #t))
+  (assert-true "reachability keeps transitively called helper-fn"
+               (and (memq (mangle-fn-label 'helper-fn) fn-names) #t))
+  (assert-false "reachability prunes unreferenced dead-fn"
+                (memq (mangle-fn-label 'dead-fn) fn-names))
+  (assert-true "pruned output satisfies L_lifted?" (L_lifted? res)))
+
 (test-end "Pass 110 (Closure Conversion)")
