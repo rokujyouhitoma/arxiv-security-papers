@@ -65,13 +65,13 @@
 (include "compiler/dataflow.scm")
 (include "compiler/binding.scm")
 (include "compiler/scope.scm")
+(include "compiler/eval_in_language.scm")
+(include "compiler/value_repr.scm")
 (include "workbench/frame.scm")
 (include "workbench/value_tagging.scm")
 (include "workbench/nan_boxing.scm")
 (include "workbench/cogen.scm")
-(include "compiler/eval_in_language.scm")
 (include "compiler/calling_convention.scm")
-(include "compiler/value_repr.scm")
 (include "compiler/sbi.scm")
 
 ;; Frontend Passes
