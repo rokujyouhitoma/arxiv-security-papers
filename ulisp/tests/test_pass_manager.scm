@@ -735,4 +735,28 @@
              (check-pipeline-continuity-by-ids
               '(pass-110-closure-convert pass-130-lir pass-131-lower-managed-dialect pass-132-mir-ssa pass-132b-lower-mir-to-mach pass-128-lir-branch-fusion pass-133-lir-peephole)))
 
+;; Issue #967: C99 Modular Lowering Passes Registry & Scheme Non-Interference
+(assert-true "12.24 pass-c99-lower-mir is registered"
+             (pass-registered? 'pass-c99-lower-mir))
+(assert-true "12.25 pass-c99-lower-abi is registered"
+             (pass-registered? 'pass-c99-lower-abi))
+(assert-true "12.26 pass-c99-lower-inline-asm is registered"
+             (pass-registered? 'pass-c99-lower-inline-asm))
+(let ((pmir (lookup-pass 'pass-c99-lower-mir))
+      (pabi (lookup-pass 'pass-c99-lower-abi))
+      (pasm (lookup-pass 'pass-c99-lower-inline-asm))
+      (s-o0 (map pass-id (build-pipeline 0 '())))
+      (s-o1 (map pass-id (build-pipeline 1 '())))
+      (s-o2 (map pass-id (build-pipeline 2 '()))))
+  (assert-equal "12.27 pass-c99-lower-mir category is c99-fe" 'c99-fe (pass-category pmir))
+  (assert-equal "12.28 pass-c99-lower-abi category is c99-fe" 'c99-fe (pass-category pabi))
+  (assert-equal "12.29 pass-c99-lower-inline-asm category is c99-fe" 'c99-fe (pass-category pasm))
+  (assert-equal "12.30 pass-c99-lower-mir out-lang is L_mir_ssa" 'L_mir_ssa (pass-out-lang pmir))
+  (assert-equal "12.31 pass-c99-lower-abi out-lang is L_lir_core" 'L_lir_core (pass-out-lang pabi))
+  (assert-equal "12.32 pass-c99-lower-inline-asm out-lang is L_lir_core" 'L_lir_core (pass-out-lang pasm))
+  (assert-false "12.33 Scheme -O0/-O1/-O2 pipelines exclude c99-fe passes"
+                (or (memq 'pass-c99-lower-mir s-o0)
+                    (memq 'pass-c99-lower-abi s-o1)
+                    (memq 'pass-c99-lower-inline-asm s-o2))))
+
 (test-end "Unified Pass Manager")

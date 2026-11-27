@@ -1392,7 +1392,8 @@
         ;; 2-pass Static Quoted Constants Loading (.L_qpair_* / .L_qvec_*)
         (if (and (pair? *static-constants*) (pair? (car *static-constants*)))
             (let ((sc-entries (reverse (car *static-constants*)))
-                  (sc-table-box (cons '() '())))
+                  (sc-table-box (cons '() '()))
+                  (ca-tbl (vm-code-addr-table vm)))
               (for-each
                (lambda (entry)
                  (let* ((lbl (car entry))

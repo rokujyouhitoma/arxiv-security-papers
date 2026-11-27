@@ -841,7 +841,7 @@
       (if (null? ps)
           (reverse res)
           (let ((p (car ps)))
-            (if (and (not (eq? (pass-category p) 'c99-opt))
+            (if (and (not (memq (pass-category p) '(c99-opt c99-fe)))
                      (pass-enabled? p opt-level disabled-list))
                 (loop (cdr ps) (cons p res))
                 (loop (cdr ps) res)))))))
@@ -1515,6 +1515,19 @@
   (set-car! *current-pipeline-name* 'aot-native-pipeline)
   #t)
 
+(define *c99-lower-mir-hook* (cons (lambda (ir) (lir-to-mir-ssa ir)) '()))
+(define *c99-lower-abi-hook* (cons (lambda (ir) ir) '()))
+(define *c99-lower-inline-asm-hook* (cons (lambda (ir) ir) '()))
+
+(define (c99-lower-mir-pass-run ir)
+  ((car *c99-lower-mir-hook*) ir))
+
+(define (c99-lower-abi-pass-run ir)
+  ((car *c99-lower-abi-hook*) ir))
+
+(define (c99-lower-inline-asm-pass-run ir)
+  ((car *c99-lower-inline-asm-hook*) ir))
+
 (define (init-default-pass-registry!)
   (reset-pass-registry!)
   (if (null? (car *analysis-property-registry*))
@@ -1592,6 +1605,16 @@
       (list ':requires '(cfg-dominators alias-sets)
             ':preserves '(cfg-dominators)
             ':invalidates '(variable-liveness alias-sets))))
+  ;; C99 Frontend Modular Lowering Passes (Issue #967)
+  (register-pass!
+    (make-pass-descriptor 'pass-c99-lower-mir "C99 MIR Control-Flow & Scalar/Lvalue Lowering" 'c99-fe 0
+      (lambda (ir) (c99-lower-mir-pass-run ir)) 'mir-ssa 'L_lir_core 'L_mir_ssa '() #f))
+  (register-pass!
+    (make-pass-descriptor 'pass-c99-lower-abi "C99 System V AMD64 Aggregate & Variadic ABI Lowering" 'c99-fe 0
+      (lambda (ir) (c99-lower-abi-pass-run ir)) 'core-lir 'L_lir_core 'L_lir_core '(pass-c99-lower-mir) #f))
+  (register-pass!
+    (make-pass-descriptor 'pass-c99-lower-inline-asm "C99 AT&T to Intel Inline Asm Normalization" 'c99-fe 0
+      (lambda (ir) (c99-lower-inline-asm-pass-run ir)) 'core-lir 'L_lir_core 'L_lir_core '(pass-c99-lower-abi) #f))
   (register-pass!
     (make-pass-descriptor-with-opts 'pass-128-lir-branch-fusion "LIR Branch Fusion" 'middle 2
       (lambda (lir) (lir-fuse-branches lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f

@@ -415,4 +415,61 @@ int main(void) {
   (assert-true "6.5j %c99-call-needs-al? returns #t for non-function pointer fallback"
                (%c99-call-needs-al? 'i64 '())))
 
+;; 6.6 Issue #967: Modular C99 Lowering Passes & L_mir_ssa -> L_lir_mach Integration
+(let* ((src "
+int add_loop(int n) {
+  int s = 0;
+  for (int i = 1; i <= n; i++) {
+    s += i;
+  }
+  return s;
+}
+int main(void) {
+  return add_loop(10);
+}")
+       (ast (parse-c99-preprocessed-string src "mir_ssa_967.c"))
+       (typed (c99-analyze-program ast))
+       (mir1 (c99-lower-to-mir-ssa typed))
+       (mir2 (c99-compile-string-to-mir-ssa src "mir_ssa_967.c"))
+       (mir3 (c99-lower-mir-run typed))
+       (abi-core (c99-lower-abi-run typed))
+       (asm-norm (c99-lower-inline-asm-ir abi-core))
+       (mach (lower-mir-ssa-to-mach-lir mir1))
+       (vm (make-lir-vm))
+       (raw-att-lir '(%lir-program
+                       (strings ())
+                       (stackmaps ())
+                       (%lir-functions)
+                       (%lir-main (frame-size 16)
+                                  (body (%inline-asm "movl $42, %0"
+                                                     (:outputs ((%reg %rax) "=r"))
+                                                     (:inputs ())
+                                                     (:clobbers ())
+                                                     (:volatile? #f))
+                                        (%return %rax)))))
+       (norm-att-lir (c99-lower-inline-asm-ir raw-att-lir))
+       (norm-att-again (c99-lower-inline-asm-ir norm-att-lir))
+       (norm-inst (car (cdr (assq 'body (cdr (assq '%lir-main (cdr norm-att-lir))))))))
+  (assert-true "6.6a c99-lower-to-mir-ssa produces L_mir_ssa?" (L_mir_ssa? mir1))
+  (assert-true "6.6b c99-lower-to-mir-ssa passes validate-mir-ssa" (validate-mir-ssa mir1))
+  (assert-true "6.6c c99-compile-string-to-mir-ssa produces L_mir_ssa?" (L_mir_ssa? mir2))
+  (assert-true "6.6d c99-lower-mir-run accepts c-typed-unit and satisfies validate-mir-ssa"
+               (and (L_mir_ssa? mir3) (validate-mir-ssa mir3)))
+  (assert-true "6.6e c99-lower-abi-run produces validate-core-lir" (validate-core-lir abi-core))
+  (assert-true "6.6f c99-lower-inline-asm-ir preserves validate-core-lir idempotently"
+               (and (validate-core-lir asm-norm) (equal? abi-core asm-norm)))
+  (assert-true "6.6g lower-mir-ssa-to-mach-lir produces L_lir_mach?" (L_lir_mach? mach))
+  (assert-true "6.6h lower-mir-ssa-to-mach-lir passes validate-mach-lir" (validate-mach-lir mach))
+  (assert-equal "6.6i c99-lower-inline-asm-ir normalizes raw AT&T %inline-asm to Intel"
+                "mov %0, 42"
+                (cadr norm-inst))
+  (assert-equal "6.6j c99-lower-inline-asm-ir is idempotent on normalized IR"
+                norm-att-lir
+                norm-att-again)
+  (lir-vm-load! vm mach)
+  (lir-vm-run! vm)
+  (assert-equal "6.6k C99 -> L_mir_ssa -> L_lir_mach executes on VM with exact sum 55"
+                55
+                (vm-get-reg vm '%rax)))
+
 (test-end "C99 Sema Core & Integer Subset Core LIR Lowering (Issue #916)")

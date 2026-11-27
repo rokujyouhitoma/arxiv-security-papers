@@ -3183,4 +3183,19 @@
   lir-extract-switch-cases
   lir-extract-switch-case-label
   c99-diff-vm-vs-native
+  *c99-lower-mir-hook*
+  *c99-lower-abi-hook*
+  *c99-lower-inline-asm-hook*
+  c99-lower-mir-pass-run
+  c99-lower-abi-pass-run
+  c99-lower-inline-asm-pass-run
+  c99-lower-mir-unit
+  c99-lower-mir-run
+  c99-lower-abi-fn
+  c99-lower-abi-run
+  %c99-normalize-inline-asm-inst
+  %c99-normalize-inline-asm-body
+  c99-lower-inline-asm-ir
+  c99-lower-to-mir-ssa
+  c99-compile-string-to-mir-ssa
 )

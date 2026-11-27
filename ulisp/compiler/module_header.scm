@@ -243,6 +243,12 @@
   lir-to-mir-ssa
   braun-ssa-transform-program
   lower-mir-ssa-to-mach-lir
+  *c99-lower-mir-hook*
+  *c99-lower-abi-hook*
+  *c99-lower-inline-asm-hook*
+  c99-lower-mir-pass-run
+  c99-lower-abi-pass-run
+  c99-lower-inline-asm-pass-run
   *enable-lir-linear-scan*
   lir-linear-scan-enabled?
   set-lir-linear-scan-enabled!
