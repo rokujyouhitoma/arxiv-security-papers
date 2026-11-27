@@ -710,4 +710,29 @@
              (check-pipeline-continuity-by-ids
               '(pass-110-closure-convert pass-130-lir pass-131-lower-managed-dialect pass-128-lir-branch-fusion pass-133-lir-peephole)))
 
+;; Issue #966: L_mir_ssa -> L_lir_mach 2-Tier Separation Contracts
+(let ((p132m (lookup-pass 'pass-132-mir-ssa))
+      (p132b (lookup-pass 'pass-132b-lower-mir-to-mach)))
+  (assert-equal "12.13 pass-132-mir-ssa in-lang is L_lir_core" 'L_lir_core (pass-in-lang p132m))
+  (assert-equal "12.14 pass-132-mir-ssa out-lang is L_mir_ssa" 'L_mir_ssa (pass-out-lang p132m))
+  (assert-equal "12.15 pass-132b-lower-mir-to-mach in-lang is L_mir_ssa" 'L_mir_ssa (pass-in-lang p132b))
+  (assert-equal "12.16 pass-132b-lower-mir-to-mach out-lang is L_lir_mach" 'L_lir_mach (pass-out-lang p132b)))
+
+(assert-true "12.17 L_mir_ssa -> L_mir_ssa is compatible"
+             (nanopass-language-compatible? 'L_mir_ssa 'L_mir_ssa))
+(assert-true "12.18 L_lir_mach -> L_lir_core is compatible"
+             (nanopass-language-compatible? 'L_lir_mach 'L_lir_core))
+(assert-false "12.19 L_mir_ssa -> L_lir_mach without lowering is incompatible"
+              (nanopass-language-compatible? 'L_mir_ssa 'L_lir_mach))
+(assert-false "12.20 L_mir_ssa -> L_lir_core without lowering is incompatible"
+              (nanopass-language-compatible? 'L_mir_ssa 'L_lir_core))
+(assert-false "12.21 L_lir_managed -> L_mir_ssa without pass-131 is incompatible"
+              (nanopass-language-compatible? 'L_lir_managed 'L_mir_ssa))
+(assert-false "12.22 check-pipeline-continuity-by-ids rejects skipping pass-132b-lower-mir-to-mach"
+              (check-pipeline-continuity-by-ids
+               '(pass-110-closure-convert pass-130-lir pass-131-lower-managed-dialect pass-132-mir-ssa pass-128-lir-branch-fusion)))
+(assert-true "12.23 check-pipeline-continuity-by-ids accepts full Scheme -> L_mir_ssa -> L_lir_mach -> core pipeline"
+             (check-pipeline-continuity-by-ids
+              '(pass-110-closure-convert pass-130-lir pass-131-lower-managed-dialect pass-132-mir-ssa pass-132b-lower-mir-to-mach pass-128-lir-branch-fusion pass-133-lir-peephole)))
+
 (test-end "Unified Pass Manager")

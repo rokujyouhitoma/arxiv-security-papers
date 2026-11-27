@@ -348,6 +348,10 @@
            (verify-residual-anf-conformance data))
           ((core-lir core-machine-lir)
            (verify-core-lir data))
+          ((mir-ssa mir)
+           (verify-mir-ssa data))
+          ((mach-lir mach)
+           (verify-mach-lir data))
           ((lir canonical-lir 130)
            ;; Level 1 (Boundary) or higher performs full LIR validation
            (validate-lir data))

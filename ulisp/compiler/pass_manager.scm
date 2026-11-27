@@ -907,6 +907,9 @@
     ((and (or (eq? out-lang 'L_anf) (eq? out-lang 'L-StagePoly) (eq? out-lang 'L-Residual-ANF))
           (or (eq? in-lang 'L_anf) (eq? in-lang 'L-StagePoly) (eq? in-lang 'L-Residual-ANF)))
      #t)
+    ;; Physical-register Machine LIR (L_lir_mach) is a strict physical-register subset of L_lir_core
+    ((and (eq? out-lang 'L_lir_mach) (eq? in-lang 'L_lir_core))
+     #t)
     (else #f)))
 
 (define (check-pipeline-continuity-by-ids pass-ids)
@@ -1458,6 +1461,8 @@
     pass-120-alias-escape
     pass-130-lir
     pass-131-lower-managed-dialect
+    pass-132-mir-ssa
+    pass-132b-lower-mir-to-mach
     pass-128-lir-branch-fusion
     pass-133-lir-peephole))
 
@@ -1471,7 +1476,9 @@
     pass-070-anf
     pass-110-closure-convert
     pass-130-lir
-    pass-131-lower-managed-dialect))
+    pass-131-lower-managed-dialect
+    pass-132-mir-ssa
+    pass-132b-lower-mir-to-mach))
 
 (define *static-check-pipeline-passes*
   '(pass-010-library
@@ -1573,6 +1580,12 @@
   (register-pass!
     (make-pass-descriptor 'pass-131-lower-managed-dialect "Lower Managed Runtime Dialect" 'middle 0
       (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
+  (register-pass!
+    (make-pass-descriptor 'pass-132-mir-ssa "Construct Virtual-Register Braun MIR SSA" 'middle 0
+      (lambda (lir) (lir-to-mir-ssa lir)) 'mir-ssa 'L_lir_core 'L_mir_ssa '(pass-130-lir pass-131-lower-managed-dialect) #t))
+  (register-pass!
+    (make-pass-descriptor 'pass-132b-lower-mir-to-mach "Lower MIR SSA to Physical Machine LIR" 'middle 0
+      (lambda (mir) (lower-mir-ssa-to-mach-lir mir)) 'mach-lir 'L_mir_ssa 'L_lir_mach '(pass-132-mir-ssa) #t))
   (register-pass!
     (make-pass-descriptor-with-opts 'pass-132-c99-mem2reg "C99 LIR mem2reg Scalar Promotion" 'c99-opt 2
       (lambda (lir) (c99-lir-mem2reg-optimize lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f

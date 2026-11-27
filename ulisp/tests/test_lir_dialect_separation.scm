@@ -445,6 +445,147 @@
               (eval-lir-program-unboxed compiled-lir))
 
 ;;; -----------------------------------------------------------------------
+;;; Group 6: Issue #966 - L_mir_ssa & L_lir_mach 2-Tier Separation
+;;; -----------------------------------------------------------------------
+(display "\n--- Group 6: L_mir_ssa & L_lir_mach 2-Tier Separation (Issue #966) ---\n")
+
+(assert-true "6.1 L_mir_ssa is registered"
+             (nanopass-language? (nanopass-lookup-language 'L_mir_ssa)))
+
+(assert-true "6.2 L_lir_mach is registered"
+             (nanopass-language? (nanopass-lookup-language 'L_lir_mach)))
+
+(assert-equal "6.3 language-parent-chain for L_mir_ssa is (L_lir_core L_mir_ssa)"
+              '(L_lir_core L_mir_ssa)
+              (language-parent-chain 'L_mir_ssa))
+
+(assert-equal "6.4 language-parent-chain for L_lir_mach is (L_lir_core L_mir_ssa L_lir_mach)"
+              '(L_lir_core L_mir_ssa L_lir_mach)
+              (language-parent-chain 'L_lir_mach))
+
+(define mir-ssa-vreg-prog
+  (make-dialect-test-prog
+   '()
+   '((%mov (%reg v1) 20)
+     (%mov (%reg i64 v2) 22)
+     (%add (%reg v1) (%reg i64 v2))
+     (%mov %rax (%reg v1))
+     (%return %rax))))
+
+(assert-true "6.5 L_mir_ssa? accepts virtual registers (%reg v1) and (%reg i64 v2)"
+             (L_mir_ssa? mir-ssa-vreg-prog))
+
+(assert-true "6.6 validate-mir-ssa accepts virtual-register SSA program"
+             (validate-mir-ssa mir-ssa-vreg-prog))
+
+(assert-false "6.7 L_mir_ssa? rejects Managed Dialect instruction %alloc"
+              (L_mir_ssa? managed-alloc-prog))
+
+(assert-false "6.8 validate-mir-ssa rejects Managed Dialect instruction %box-fixnum"
+              (validate-mir-ssa managed-box-prog))
+
+(assert-true "6.9 L_lir_mach? accepts physical-register Core Machine LIR"
+             (L_lir_mach? pure-core-prog))
+
+(assert-true "6.10 validate-mach-lir accepts physical-register Core Machine LIR"
+             (validate-mach-lir pure-core-prog))
+
+(assert-false "6.11 L_lir_mach? rejects unallocated virtual register (%reg v1)"
+              (L_lir_mach? mir-ssa-vreg-prog))
+
+(assert-false "6.12 validate-mach-lir rejects unallocated virtual register (%reg v1)"
+              (validate-mach-lir mir-ssa-vreg-prog))
+
+(define mir-ssa-freg-prog
+  (make-dialect-test-prog
+   '()
+   '((%fmov (%freg f1) %xmm0)
+     (%return 0))))
+
+(assert-true "6.13 L_mir_ssa? accepts (%freg f1)"
+             (L_mir_ssa? mir-ssa-freg-prog))
+
+(assert-false "6.14 L_lir_mach? rejects (%freg f1)"
+              (L_lir_mach? mir-ssa-freg-prog))
+
+(assert-false "6.15 validate-mach-lir rejects (%freg f1)"
+              (validate-mach-lir mir-ssa-freg-prog))
+
+(define mir-ssa-block-param-prog
+  (make-dialect-test-prog
+   '()
+   '((%jump .L_init (10 32))
+     (%block .L_init (x y)
+       (%add (%reg x) (%reg y))
+       (%mov %rax (%reg x))
+       (%return %rax)))))
+
+(assert-true "6.16 validate-lir 'mir-ssa accepts virtual-param %block SSA"
+             (validate-lir mir-ssa-block-param-prog 'mir-ssa))
+
+(assert-false "6.17 validate-lir 'mach rejects virtual %block param SSA"
+              (validate-lir mir-ssa-block-param-prog 'mach))
+
+;; 6.18-6.20 lower-mir-ssa-to-mach-lir lowers virtual regs and swaps parallel %block args cleanly
+(define lowered-vreg-mach (lower-mir-ssa-to-mach-lir mir-ssa-vreg-prog))
+(assert-true "6.18 lowered mir-ssa-vreg-prog satisfies L_lir_mach? and validate-mach-lir"
+             (and (L_lir_mach? lowered-vreg-mach)
+                  (validate-mach-lir lowered-vreg-mach)))
+(assert-equal "6.19 Reference VM evaluates lowered vreg program (20 + 22 = 42)"
+              42
+              (eval-lir-program lowered-vreg-mach))
+
+(define mir-ssa-parallel-swap-prog
+  (make-dialect-test-prog
+   '()
+   '((%jump .L_swap (30 12))
+     (%block .L_swap (a b)
+       (%jump .L_calc ((%reg b) (%reg a))))
+     (%block .L_calc (x y)
+       (%mov (%reg i64 r) (%reg x))
+       (%sub (%reg i64 r) (%reg y))
+       (%mov %rax (%reg i64 r))
+       (%return %rax)))))
+
+(define lowered-swap-mach (lower-mir-ssa-to-mach-lir mir-ssa-parallel-swap-prog))
+(assert-true "6.20 parallel swap %block program lowers to valid L_lir_mach"
+             (and (L_lir_mach? lowered-swap-mach)
+                  (validate-mach-lir lowered-swap-mach)))
+(assert-equal "6.21 Reference VM evaluates lowered parallel swap (12 - 30 = -18)"
+              -18
+              (eval-lir-program lowered-swap-mach))
+
+;; 6.22 Call-containing function forces safe stack slots (%stack) instead of volatile scratch regs
+(define mir-ssa-call-vreg-prog
+  (make-dialect-test-prog
+   (list '(%lir-function .L_id
+                          (params ())
+                          (frame-size 0)
+                          (body
+                           (%mov %rax 21)
+                           (%return %rax))))
+   '((%mov (%reg keep1) 21)
+     (%direct-call .L_id 0)
+     (%add %rax (%reg keep1))
+     (%return %rax))))
+
+(define lowered-call-mach (lower-mir-ssa-to-mach-lir mir-ssa-call-vreg-prog))
+(assert-true "6.22 call-crossing virtual reg program lowers to valid L_lir_mach"
+             (and (L_lir_mach? lowered-call-mach)
+                  (validate-mach-lir lowered-call-mach)))
+(assert-equal "6.23 Reference VM preserves virtual reg across call (21 + 21 = 42)"
+              42
+              (eval-lir-program lowered-call-mach))
+
+;; 6.24 Scheme compiled LIR converges cleanly via lir-to-mir-ssa -> lower-mir-ssa-to-mach-lir
+(define scheme-mir-full (lir-to-mir-ssa compiled-lir))
+(define scheme-mach-full (lower-mir-ssa-to-mach-lir scheme-mir-full))
+(assert-true "6.24 Scheme pipeline converges on L_mir_ssa and lowers to L_lir_mach"
+             (and (validate-mir-ssa scheme-mir-full)
+                  (L_lir_mach? scheme-mach-full)
+                  (validate-mach-lir scheme-mach-full)))
+
+;;; -----------------------------------------------------------------------
 ;;; Test Suite Result Summary
 ;;; -----------------------------------------------------------------------
 (display "\n-------------------------------------------------------\n")

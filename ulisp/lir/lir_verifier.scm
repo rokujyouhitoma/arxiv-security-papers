@@ -1323,6 +1323,82 @@
              (lambda () (lir-check-no-managed-insts body-insts '%lir-main))))
          #t))))
 
+(define (lir-physical-register-sym? sym)
+  (and (symbol? sym)
+       (or (memq sym *canonical-lir-registers*)
+           (memq sym *canonical-lir-float-registers*)
+           (eq? sym '%cl))))
+
+(define (lir-virtual-register? x)
+  (and (pair? x)
+       (or (eq? (car x) '%reg)
+           (eq? (car x) '%freg))))
+
+(define (lir-tree-has-virtual-reg? tree)
+  (cond
+    ((not (pair? tree)) #f)
+    ((lir-virtual-register? tree) #t)
+    (else (or (lir-tree-has-virtual-reg? (car tree))
+              (lir-tree-has-virtual-reg? (cdr tree))))))
+
+(define (lir-block-param-physical? p)
+  (or (lir-physical-register-sym? p)
+      (and (pair? p) (eq? (car p) '%stack) (pair? (cdr p)) (integer? (cadr p)))))
+
+(define (lir-check-no-virtual-regs insts fn-name)
+  (let loop ((is insts))
+    (if (null? is)
+        #t
+        (let ((inst (car is)))
+          (cond
+            ((not (pair? inst))
+             (loop (cdr is)))
+            ((eq? (car inst) '%block)
+             (let ((params (if (and (pair? (cdr inst)) (pair? (cddr inst)) (list? (caddr inst)))
+                               (caddr inst)
+                               '()))
+                   (body (if (and (pair? (cdr inst)) (pair? (cddr inst))) (cdddr inst) '())))
+               (let pchk ((ps params))
+                 (cond
+                   ((null? ps)
+                    (and (lir-check-no-virtual-regs body fn-name)
+                         (loop (cdr is))))
+                   ((lir-block-param-physical? (car ps))
+                    (pchk (cdr ps)))
+                   (else
+                    (lir-report-error
+                     (string-append "Virtual %block parameter forbidden in Machine LIR (L_lir_mach): "
+                                    (if (symbol? (car ps)) (symbol->string (car ps)) "non-symbol"))
+                     inst)
+                    #f)))))
+            ((lir-tree-has-virtual-reg? inst)
+             (lir-report-error "Unallocated virtual register forbidden in Machine LIR (L_lir_mach)" inst)
+             #f)
+            (else
+             (loop (cdr is))))))))
+
+(define (lir-verify-mach-purity prog)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
+         (main-clause (assq '%lir-main (cdr prog)))
+         (funcs (if funcs-clause (cdr funcs-clause) '())))
+    (and
+     (let f-loop ((fs funcs))
+       (if (null? fs)
+           #t
+           (let* ((fn (car fs))
+                  (lbl (if (pair? (cdr fn)) (cadr fn) '%unknown-fn))
+                  (body-clause (assq 'body (cdr fn)))
+                  (body-insts (if body-clause (cdr body-clause) '())))
+             (and (with-verifier-context (list (cons 'phase 'mach-lir) (cons 'function lbl))
+                    (lambda () (lir-check-no-virtual-regs body-insts lbl)))
+                  (f-loop (cdr fs))))))
+     (if main-clause
+         (let* ((body-clause (assq 'body (cdr main-clause)))
+                (body-insts (if body-clause (cdr body-clause) '())))
+           (with-verifier-context (list (cons 'phase 'mach-lir) (cons 'function '%lir-main))
+             (lambda () (lir-check-no-virtual-regs body-insts '%lir-main))))
+         #t))))
+
 (define (validate-core-lir prog)
   (and (validate-lir prog)
        (lir-verify-core-purity prog)
@@ -1340,13 +1416,50 @@
       #t
       (validate-core-lir prog)))
 
+(define (validate-mir-ssa prog)
+  (and (validate-lir-general prog)
+       (lir-verify-core-purity prog)
+       (if (and (>= (verifier-level) 3)
+                (assq 'L_mir_ssa (nanopass-get-languages)))
+           (if (not (nanopass-ast-valid? 'L_mir_ssa prog))
+               (begin
+                 (lir-report-error "Program violates L_mir_ssa schema invariants" prog)
+                 #f)
+               #t)
+           #t)))
+
+(define (verify-mir-ssa prog)
+  (if (not (verifier-enabled?))
+      #t
+      (validate-mir-ssa prog)))
+
+(define (validate-mach-lir prog)
+  (and (validate-lir-general prog)
+       (lir-verify-core-purity prog)
+       (lir-verify-mach-purity prog)
+       (if (and (>= (verifier-level) 3)
+                (assq 'L_lir_mach (nanopass-get-languages)))
+           (if (not (nanopass-ast-valid? 'L_lir_mach prog))
+               (begin
+                 (lir-report-error "Program violates L_lir_mach schema invariants" prog)
+                 #f)
+               #t)
+           #t)))
+
+(define (verify-mach-lir prog)
+  (if (not (verifier-enabled?))
+      #t
+      (validate-mach-lir prog)))
+
 (define validate-lir
   (case-lambda
     ((prog) (validate-lir-general prog))
     ((prog dialect)
-     (if (eq? dialect 'core)
-         (validate-core-lir prog)
-         (validate-lir-general prog)))))
+     (cond
+       ((eq? dialect 'core) (validate-core-lir prog))
+       ((or (eq? dialect 'mir-ssa) (eq? dialect 'mir)) (validate-mir-ssa prog))
+       ((or (eq? dialect 'mach) (eq? dialect 'mach-lir)) (validate-mach-lir prog))
+       (else (validate-lir-general prog))))))
 
 (define (lir-valid-data-chunk? dc)
   (cond

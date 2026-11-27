@@ -124,6 +124,14 @@
   L_lifted
   L_lir_core
   L_lir_managed
+  L_mir_ssa
+  L_lir_mach
+  __lang_L_mir_ssa
+  __lang_L_lir_mach
+  parse-L_mir_ssa
+  unparse-L_mir_ssa
+  parse-L_lir_mach
+  unparse-L_lir_mach
   L_lir_raw
   L_lir_canonical
   L_asm_x86
@@ -138,6 +146,8 @@
   L_lifted?
   L_lir_core?
   L_lir_managed?
+  L_mir_ssa?
+  L_lir_mach?
   L_lir_raw?
   L_lir_canonical?
   L_asm_x86?
@@ -220,6 +230,19 @@
   lir-imm32-constant
   lir-fuse-branches
   lir-peephole-optimize
+  lir-physical-register-sym?
+  lir-virtual-register?
+  lir-tree-has-virtual-reg?
+  lir-block-param-physical?
+  lir-check-no-virtual-regs
+  lir-verify-mach-purity
+  validate-mir-ssa
+  verify-mir-ssa
+  validate-mach-lir
+  verify-mach-lir
+  lir-to-mir-ssa
+  braun-ssa-transform-program
+  lower-mir-ssa-to-mach-lir
   *enable-lir-linear-scan*
   lir-linear-scan-enabled?
   set-lir-linear-scan-enabled!

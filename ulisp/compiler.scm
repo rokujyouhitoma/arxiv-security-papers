@@ -1751,6 +1751,14 @@
     (L_lifted . "L_lifted")
     (L_lir_core . "L_lir_core")
     (L_lir_managed . "L_lir_managed")
+    (L_mir_ssa . "L_mir_ssa")
+    (L_lir_mach . "L_lir_mach")
+    (__lang_L_mir_ssa . "__lang_L_mir_ssa")
+    (__lang_L_lir_mach . "__lang_L_lir_mach")
+    (parse-L_mir_ssa . "parse-L_mir_ssa")
+    (unparse-L_mir_ssa . "unparse-L_mir_ssa")
+    (parse-L_lir_mach . "parse-L_lir_mach")
+    (unparse-L_lir_mach . "unparse-L_lir_mach")
     (L_lir_raw . "L_lir_raw")
     (L_lir_canonical . "L_lir_canonical")
     (L_asm_x86 . "L_asm_x86")
@@ -1818,6 +1826,8 @@
     (L_Residual_ANF? . "L_Residual_ANF?")
     (L_lir_core? . "L_lir_core?")
     (L_lir_managed? . "L_lir_managed?")
+    (L_mir_ssa? . "L_mir_ssa?")
+    (L_lir_mach? . "L_lir_mach?")
     (L_lir_raw? . "L_lir_raw?")
     (L_lir_canonical? . "L_lir_canonical?")
     (L_asm_x86? . "L_asm_x86?")
@@ -8938,6 +8948,10 @@
            (verify-residual-anf-conformance data))
           ((core-lir core-machine-lir)
            (verify-core-lir data))
+          ((mir-ssa mir)
+           (verify-mir-ssa data))
+          ((mach-lir mach)
+           (verify-mach-lir data))
           ((lir canonical-lir 130)
            ;; Level 1 (Boundary) or higher performs full LIR validation
            (validate-lir data))
@@ -9972,6 +9986,9 @@
     ((and (or (eq? out-lang 'L_anf) (eq? out-lang 'L-StagePoly) (eq? out-lang 'L-Residual-ANF))
           (or (eq? in-lang 'L_anf) (eq? in-lang 'L-StagePoly) (eq? in-lang 'L-Residual-ANF)))
      #t)
+    ;; Physical-register Machine LIR (L_lir_mach) is a strict physical-register subset of L_lir_core
+    ((and (eq? out-lang 'L_lir_mach) (eq? in-lang 'L_lir_core))
+     #t)
     (else #f)))
 
 (define (check-pipeline-continuity-by-ids pass-ids)
@@ -10523,6 +10540,8 @@
     pass-120-alias-escape
     pass-130-lir
     pass-131-lower-managed-dialect
+    pass-132-mir-ssa
+    pass-132b-lower-mir-to-mach
     pass-128-lir-branch-fusion
     pass-133-lir-peephole))
 
@@ -10536,7 +10555,9 @@
     pass-070-anf
     pass-110-closure-convert
     pass-130-lir
-    pass-131-lower-managed-dialect))
+    pass-131-lower-managed-dialect
+    pass-132-mir-ssa
+    pass-132b-lower-mir-to-mach))
 
 (define *static-check-pipeline-passes*
   '(pass-010-library
@@ -10638,6 +10659,12 @@
   (register-pass!
     (make-pass-descriptor 'pass-131-lower-managed-dialect "Lower Managed Runtime Dialect" 'middle 0
       (lambda (lir) (lower-managed-dialect lir)) 'core-lir 'L_lir_managed 'L_lir_core '(pass-130-lir) #t))
+  (register-pass!
+    (make-pass-descriptor 'pass-132-mir-ssa "Construct Virtual-Register Braun MIR SSA" 'middle 0
+      (lambda (lir) (lir-to-mir-ssa lir)) 'mir-ssa 'L_lir_core 'L_mir_ssa '(pass-130-lir pass-131-lower-managed-dialect) #t))
+  (register-pass!
+    (make-pass-descriptor 'pass-132b-lower-mir-to-mach "Lower MIR SSA to Physical Machine LIR" 'middle 0
+      (lambda (mir) (lower-mir-ssa-to-mach-lir mir)) 'mach-lir 'L_mir_ssa 'L_lir_mach '(pass-132-mir-ssa) #t))
   (register-pass!
     (make-pass-descriptor-with-opts 'pass-132-c99-mem2reg "C99 LIR mem2reg Scalar Promotion" 'c99-opt 2
       (lambda (lir) (c99-lir-mem2reg-optimize lir)) #f 'L_lir_core 'L_lir_core '(pass-130-lir) #f
@@ -28734,6 +28761,24 @@
        (%store-values-buf si cnt))))
 
 ;;; -----------------------------------------------------------------------
+;;; 2b. L_mir_ssa: Virtual-Register Braun SSA Middle-End IR (Issue #966)
+;;; -----------------------------------------------------------------------
+(define-language L_mir_ssa
+  (extends L_lir_core)
+  (entry Program))
+
+;;; -----------------------------------------------------------------------
+;;; 2c. L_lir_mach: Physical-Register Machine LIR (Issue #966)
+;;; -----------------------------------------------------------------------
+(define-language L_lir_mach
+  (extends L_mir_ssa)
+  (entry Program)
+  (Register (reg)
+    (- (%reg x)
+       (%reg mty x)
+       (%freg x))))
+
+;;; -----------------------------------------------------------------------
 ;;; 3. L_lir_raw: [Legacy / Deprecated] Unseparated Low-Level IR Schema
 ;;;    Not used in active Pass Manager transitions (see L_lir_managed/L_lir_core).
 ;;; -----------------------------------------------------------------------
@@ -30288,6 +30333,82 @@
              (lambda () (lir-check-no-managed-insts body-insts '%lir-main))))
          #t))))
 
+(define (lir-physical-register-sym? sym)
+  (and (symbol? sym)
+       (or (memq sym *canonical-lir-registers*)
+           (memq sym *canonical-lir-float-registers*)
+           (eq? sym '%cl))))
+
+(define (lir-virtual-register? x)
+  (and (pair? x)
+       (or (eq? (car x) '%reg)
+           (eq? (car x) '%freg))))
+
+(define (lir-tree-has-virtual-reg? tree)
+  (cond
+    ((not (pair? tree)) #f)
+    ((lir-virtual-register? tree) #t)
+    (else (or (lir-tree-has-virtual-reg? (car tree))
+              (lir-tree-has-virtual-reg? (cdr tree))))))
+
+(define (lir-block-param-physical? p)
+  (or (lir-physical-register-sym? p)
+      (and (pair? p) (eq? (car p) '%stack) (pair? (cdr p)) (integer? (cadr p)))))
+
+(define (lir-check-no-virtual-regs insts fn-name)
+  (let loop ((is insts))
+    (if (null? is)
+        #t
+        (let ((inst (car is)))
+          (cond
+            ((not (pair? inst))
+             (loop (cdr is)))
+            ((eq? (car inst) '%block)
+             (let ((params (if (and (pair? (cdr inst)) (pair? (cddr inst)) (list? (caddr inst)))
+                               (caddr inst)
+                               '()))
+                   (body (if (and (pair? (cdr inst)) (pair? (cddr inst))) (cdddr inst) '())))
+               (let pchk ((ps params))
+                 (cond
+                   ((null? ps)
+                    (and (lir-check-no-virtual-regs body fn-name)
+                         (loop (cdr is))))
+                   ((lir-block-param-physical? (car ps))
+                    (pchk (cdr ps)))
+                   (else
+                    (lir-report-error
+                     (string-append "Virtual %block parameter forbidden in Machine LIR (L_lir_mach): "
+                                    (if (symbol? (car ps)) (symbol->string (car ps)) "non-symbol"))
+                     inst)
+                    #f)))))
+            ((lir-tree-has-virtual-reg? inst)
+             (lir-report-error "Unallocated virtual register forbidden in Machine LIR (L_lir_mach)" inst)
+             #f)
+            (else
+             (loop (cdr is))))))))
+
+(define (lir-verify-mach-purity prog)
+  (let* ((funcs-clause (assq '%lir-functions (cdr prog)))
+         (main-clause (assq '%lir-main (cdr prog)))
+         (funcs (if funcs-clause (cdr funcs-clause) '())))
+    (and
+     (let f-loop ((fs funcs))
+       (if (null? fs)
+           #t
+           (let* ((fn (car fs))
+                  (lbl (if (pair? (cdr fn)) (cadr fn) '%unknown-fn))
+                  (body-clause (assq 'body (cdr fn)))
+                  (body-insts (if body-clause (cdr body-clause) '())))
+             (and (with-verifier-context (list (cons 'phase 'mach-lir) (cons 'function lbl))
+                    (lambda () (lir-check-no-virtual-regs body-insts lbl)))
+                  (f-loop (cdr fs))))))
+     (if main-clause
+         (let* ((body-clause (assq 'body (cdr main-clause)))
+                (body-insts (if body-clause (cdr body-clause) '())))
+           (with-verifier-context (list (cons 'phase 'mach-lir) (cons 'function '%lir-main))
+             (lambda () (lir-check-no-virtual-regs body-insts '%lir-main))))
+         #t))))
+
 (define (validate-core-lir prog)
   (and (validate-lir prog)
        (lir-verify-core-purity prog)
@@ -30305,13 +30426,50 @@
       #t
       (validate-core-lir prog)))
 
+(define (validate-mir-ssa prog)
+  (and (validate-lir-general prog)
+       (lir-verify-core-purity prog)
+       (if (and (>= (verifier-level) 3)
+                (assq 'L_mir_ssa (nanopass-get-languages)))
+           (if (not (nanopass-ast-valid? 'L_mir_ssa prog))
+               (begin
+                 (lir-report-error "Program violates L_mir_ssa schema invariants" prog)
+                 #f)
+               #t)
+           #t)))
+
+(define (verify-mir-ssa prog)
+  (if (not (verifier-enabled?))
+      #t
+      (validate-mir-ssa prog)))
+
+(define (validate-mach-lir prog)
+  (and (validate-lir-general prog)
+       (lir-verify-core-purity prog)
+       (lir-verify-mach-purity prog)
+       (if (and (>= (verifier-level) 3)
+                (assq 'L_lir_mach (nanopass-get-languages)))
+           (if (not (nanopass-ast-valid? 'L_lir_mach prog))
+               (begin
+                 (lir-report-error "Program violates L_lir_mach schema invariants" prog)
+                 #f)
+               #t)
+           #t)))
+
+(define (verify-mach-lir prog)
+  (if (not (verifier-enabled?))
+      #t
+      (validate-mach-lir prog)))
+
 (define validate-lir
   (case-lambda
     ((prog) (validate-lir-general prog))
     ((prog dialect)
-     (if (eq? dialect 'core)
-         (validate-core-lir prog)
-         (validate-lir-general prog)))))
+     (cond
+       ((eq? dialect 'core) (validate-core-lir prog))
+       ((or (eq? dialect 'mir-ssa) (eq? dialect 'mir)) (validate-mir-ssa prog))
+       ((or (eq? dialect 'mach) (eq? dialect 'mach-lir)) (validate-mach-lir prog))
+       (else (validate-lir-general prog))))))
 
 (define (lir-valid-data-chunk? dc)
   (cond
@@ -36029,6 +36187,584 @@
          (%c99-m2r-transform-clause ir)
          (c99-lir-mem2reg-function-body ir)))
     (else ir)))
+
+;;; -----------------------------------------------------------------------
+;;; Unified L_mir_ssa <-> L_lir_mach Transformations (Issue #966)
+;;; -----------------------------------------------------------------------
+
+(define (%mir-body-has-managed-opcodes? insts)
+  (let loop ((is insts))
+    (if (null? is)
+        #f
+        (let ((inst (car is)))
+          (cond
+            ((not (pair? inst)) (loop (cdr is)))
+            ((eq? (car inst) '%block)
+             (or (%mir-body-has-managed-opcodes? (cdddr inst))
+                 (loop (cdr is))))
+            ((managed-dialect-opcode? (car inst)) #t)
+            (else (loop (cdr is))))))))
+
+(define (%mir-program-has-managed-opcodes? ir)
+  (cond
+    ((not (pair? ir)) #f)
+    ((eq? (car ir) '%lir-program)
+     (let ((fns (assq '%lir-functions (cdr ir)))
+           (main (assq '%lir-main (cdr ir))))
+       (or (and fns
+                (let fl ((fs (cdr fns)))
+                  (and (pair? fs)
+                       (or (%mir-program-has-managed-opcodes? (car fs))
+                           (fl (cdr fs))))))
+           (and main (%mir-program-has-managed-opcodes? main)))))
+    ((memq (car ir) '(%lir-function %lir-main))
+     (let ((b (assq 'body (cdr ir))))
+       (and b (%mir-body-has-managed-opcodes? (cdr b)))))
+    (else (%mir-body-has-managed-opcodes? ir))))
+
+(define (lir-to-mir-ssa ir)
+  (let ((unmanaged (if (%mir-program-has-managed-opcodes? ir)
+                       (lower-managed-dialect ir)
+                       ir)))
+    (c99-lir-mem2reg-optimize unmanaged)))
+
+(define (braun-ssa-transform-program ir)
+  (lir-to-mir-ssa ir))
+
+(define (%mir-body-needs-mach-lowering? insts)
+  (let walk-list ((xs insts))
+    (if (null? xs)
+        #f
+        (let ((inst (car xs)))
+          (if (not (pair? inst))
+              (walk-list (cdr xs))
+              (or (let walk-tree ((t inst))
+                    (cond
+                      ((not (pair? t)) #f)
+                      ((lir-virtual-register? t) #t)
+                      (else (or (walk-tree (car t)) (walk-tree (cdr t))))))
+                  (and (eq? (car inst) '%block)
+                       (pair? (cdr inst))
+                       (pair? (cddr inst))
+                       (list? (caddr inst))
+                       (let pchk ((ps (caddr inst)))
+                         (and (pair? ps)
+                              (or (not (lir-block-param-physical? (car ps)))
+                                  (pchk (cdr ps))))))
+                  (walk-list (cdr xs))))))))
+
+(define (%mir-unwrap-phys-wrapper x)
+  (cond
+    ((and (pair? x) (eq? (car x) '%reg) (pair? (cdr x)))
+     (let ((inner (if (pair? (cddr x)) (caddr x) (cadr x))))
+       (if (lir-physical-register-sym? inner) inner #f)))
+    ((and (pair? x) (eq? (car x) '%freg) (pair? (cdr x)))
+     (let ((inner (cadr x)))
+       (if (memq inner *canonical-lir-float-registers*) inner #f)))
+    (else #f)))
+
+(define (%mir-vreg-kind-and-sym x)
+  (cond
+    ((%mir-unwrap-phys-wrapper x) #f)
+    ((and (pair? x) (eq? (car x) '%reg) (pair? (cdr x)))
+     (if (pair? (cddr x))
+         (let ((mty (cadr x))
+               (sym (caddr x)))
+           (if (symbol? sym)
+               (cons sym (if (memq mty '(f32 f64)) 'fpr 'gpr))
+               #f))
+         (if (symbol? (cadr x))
+             (cons (cadr x) 'gpr)
+             #f)))
+    ((and (pair? x) (eq? (car x) '%freg) (pair? (cdr x)) (symbol? (cadr x)))
+     (cons (cadr x) 'fpr))
+    (else #f)))
+
+(define (%mir-analyze-body insts orig-frame-size)
+  (let ((used-box (cons '() '()))
+        (calls-box (cons #f '()))
+        (min-off-box (cons (if (> orig-frame-size 0) (- 0 orig-frame-size) 0) '()))
+        (vregs-box (cons '() '()))
+        (block-params-box (cons '() '())))
+    (define add-used!
+      (lambda (r)
+        (if (and (symbol? r) (lir-physical-register-sym? r) (not (memq r (car used-box))))
+            (set-car! used-box (cons r (car used-box))))))
+    (define note-off!
+      (lambda (off)
+        (if (and (integer? off) (< off (car min-off-box)))
+            (set-car! min-off-box off))))
+    (define add-vreg!
+      (lambda (sym kind)
+        (if (and (symbol? sym) (not (assq sym (car vregs-box))))
+            (set-car! vregs-box (cons (cons sym kind) (car vregs-box))))))
+    (let walk-insts ((is insts))
+      (if (not (null? is))
+          (let ((inst (car is)))
+            (if (pair? inst)
+                (let ((op (car inst)))
+                  (if (memq op '(%direct-call %c-call %call-foreign %call-indirect %call-closure %syscall %dispatch-consumer))
+                      (set-car! calls-box #t))
+                  (if (and (eq? op '%block) (pair? (cdr inst)) (pair? (cddr inst)) (list? (caddr inst)))
+                      (let ((lbl (cadr inst))
+                            (ps (caddr inst))
+                            (sub (cdddr inst)))
+                        (let ((has-virt?
+                               (let chk ((xs ps))
+                                 (and (pair? xs)
+                                      (or (not (lir-block-param-physical? (car xs)))
+                                          (chk (cdr xs)))))))
+                          (if has-virt?
+                              (begin
+                                (set-car! block-params-box (cons (cons lbl ps) (car block-params-box)))
+                                (for-each (lambda (p)
+                                            (cond
+                                              ((%mir-vreg-kind-and-sym p) => (lambda (kv) (add-vreg! (car kv) (cdr kv))))
+                                              ((%mir-unwrap-phys-wrapper p) => add-used!)
+                                              ((symbol? p)
+                                               (if (lir-physical-register-sym? p)
+                                                   (add-used! p)
+                                                   (add-vreg! p 'gpr)))))
+                                          ps)))
+                          (walk-insts sub))))
+                  (let walk-tree ((t inst))
+                    (cond
+                      ((symbol? t)
+                       (if (lir-physical-register-sym? t) (add-used! t)))
+                      ((pair? t)
+                       (let ((phys (%mir-unwrap-phys-wrapper t))
+                             (vk (%mir-vreg-kind-and-sym t)))
+                         (cond
+                           (phys (add-used! phys))
+                           (vk (add-vreg! (car vk) (cdr vk)))
+                           ((and (eq? (car t) '%stack) (pair? (cdr t)) (integer? (cadr t)))
+                            (note-off! (cadr t)))
+                           ((and (memq (car t) '(%load %load-byte-zx)) (>= (length t) 4)
+                                 (eq? (caddr t) '%rsp) (integer? (cadddr t)))
+                            (add-used! '%rsp)
+                            (note-off! (cadddr t))
+                            (walk-tree (cadr t)))
+                           ((and (memq (car t) '(%store %store-byte)) (>= (length t) 4)
+                                 (eq? (cadr t) '%rsp) (integer? (caddr t)))
+                            (add-used! '%rsp)
+                            (note-off! (caddr t))
+                            (walk-tree (cadddr t)))
+                           ((and (eq? (car t) '%load-typed) (>= (length t) 5)
+                                 (eq? (cadddr t) '%rsp) (integer? (car (cddddr t))))
+                            (add-used! '%rsp)
+                            (note-off! (car (cddddr t)))
+                            (walk-tree (caddr t)))
+                           ((and (eq? (car t) '%store-typed) (>= (length t) 5)
+                                 (eq? (caddr t) '%rsp) (integer? (cadddr t)))
+                            (add-used! '%rsp)
+                            (note-off! (cadddr t))
+                            (walk-tree (car (cddddr t))))
+                           (else
+                            (walk-tree (car t))
+                            (walk-tree (cdr t))))))))))
+            (walk-insts (cdr is)))))
+    (list (car used-box)
+          (car calls-box)
+          (car min-off-box)
+          (reverse (car vregs-box))
+          (reverse (car block-params-box)))))
+
+(define (%mir-assign-vreg-locations analysis)
+  (let* ((used-phys (list-ref analysis 0))
+         (has-calls? (list-ref analysis 1))
+         (start-off (list-ref analysis 2))
+         (vregs (list-ref analysis 3))
+         (free-gprs (if has-calls?
+                        '()
+                        (filter (lambda (r) (not (memq r used-phys)))
+                                '(%r8 %r9 %rsi %rdi %rdx %rcx))))
+         (free-fprs (if has-calls?
+                        '()
+                        (filter (lambda (r) (not (memq r used-phys)))
+                                '(%xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7 %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13)))))
+    (let loop ((vs vregs) (gprs free-gprs) (fprs free-fprs) (cur-off start-off) (acc '()))
+      (if (null? vs)
+          (let* ((raw-fs (if (< cur-off 0) (- 0 cur-off) 0))
+                 (aligned-fs (* (quotient (+ raw-fs 7) 8) 8)))
+            (cons (reverse acc) aligned-fs))
+          (let* ((entry (car vs))
+                 (sym (car entry))
+                 (kind (cdr entry)))
+            (cond
+              ((and (eq? kind 'gpr) (pair? gprs))
+               (loop (cdr vs) (cdr gprs) fprs cur-off (cons (cons sym (car gprs)) acc)))
+              ((and (eq? kind 'fpr) (pair? fprs))
+               (loop (cdr vs) gprs (cdr fprs) cur-off (cons (cons sym (car fprs)) acc)))
+              (else
+               (let ((next-off (- cur-off 8)))
+                 (loop (cdr vs) gprs fprs next-off
+                       (cons (cons sym (list '%stack next-off)) acc))))))))))
+
+(define (%mir-stack-opnd? x)
+  (and (pair? x) (eq? (car x) '%stack) (pair? (cdr x)) (integer? (cadr x))))
+
+(define (%mir-emit-move dst src)
+  (cond
+    ((equal? dst src) '())
+    ((and (%mir-stack-opnd? dst) (%mir-stack-opnd? src))
+     (list (list '%load '%r10 '%rsp (cadr src))
+           (list '%store '%rsp (cadr dst) '%r10)))
+    ((%mir-stack-opnd? dst)
+     (list (list '%store '%rsp (cadr dst) src)))
+    ((%mir-stack-opnd? src)
+     (list (list '%load dst '%rsp (cadr src))))
+    (else
+     (list (list '%mov dst src)))))
+
+(define (%mir-emit-parallel-moves dsts srcs)
+  (let* ((pairs
+          (let collect ((ds dsts) (ss srcs) (acc '()))
+            (if (or (null? ds) (null? ss))
+                (reverse acc)
+                (let ((d (car ds)) (s (car ss)))
+                  (if (equal? d s)
+                      (collect (cdr ds) (cdr ss) acc)
+                      (collect (cdr ds) (cdr ss) (cons (cons d s) acc))))))))
+    (let loop ((rem pairs) (acc '()))
+      (if (null? rem)
+          acc
+          ;; Find a move whose dst does not appear as src in any remaining move
+          (let ((safe
+                 (let find-safe ((ms rem))
+                   (cond
+                     ((null? ms) #f)
+                     ((let is-read? ((d (caar ms)) (all rem))
+                        (and (pair? all)
+                             (or (and (not (eq? (car all) (car ms)))
+                                      (equal? d (cdar all)))
+                                 (is-read? d (cdr all)))))
+                      (find-safe (cdr ms)))
+                     (else (car ms))))))
+            (if safe
+                (let ((rest (let drop-one ((ms rem))
+                              (cond ((null? ms) '())
+                                    ((eq? (car ms) safe) (cdr ms))
+                                    (else (cons (car ms) (drop-one (cdr ms))))))))
+                  (loop rest (append acc (%mir-emit-move (car safe) (cdr safe)))))
+                ;; Cycle remaining: break cycle using %r11 scratch register
+                (let* ((head-dst (caar rem))
+                       (save-insts (%mir-emit-move '%r11 head-dst))
+                       (updated-rem
+                        (map (lambda (m)
+                               (if (equal? (cdr m) head-dst)
+                                   (cons (car m) '%r11)
+                                   m))
+                             rem)))
+                  (loop updated-rem (append acc save-insts)))))))))
+
+(define (%mir-resolve-opnd x vreg-map)
+  (let ((phys (%mir-unwrap-phys-wrapper x))
+        (vk (%mir-vreg-kind-and-sym x)))
+    (cond
+      (phys phys)
+      (vk
+       (let ((hit (assq (car vk) vreg-map)))
+         (if hit (cdr hit) (car vk))))
+      ((symbol? x)
+       (let ((hit (assq x vreg-map)))
+         (if hit (cdr hit) x)))
+      (else x))))
+
+(define (%mir-tree-subst-vregs node vreg-map)
+  (let ((phys (%mir-unwrap-phys-wrapper node))
+        (vk (%mir-vreg-kind-and-sym node)))
+    (cond
+      (phys phys)
+      (vk (let ((hit (assq (car vk) vreg-map)))
+            (if hit (cdr hit) (car vk))))
+      ((pair? node)
+       (cons (%mir-tree-subst-vregs (car node) vreg-map)
+             (%mir-tree-subst-vregs (cdr node) vreg-map)))
+      ((symbol? node)
+       (let ((hit (assq node vreg-map)))
+         (if hit (cdr hit) node)))
+      (else node))))
+
+(define (%mir-spill-write-only-dst-indices op len)
+  (cond
+    ((memq op '(%mov %load %load-byte-zx %code-ref %str-ref %global-ref %global-addr %pop
+                %not %set-boolean %fmov %sitofp %uitofp %fptosi %fptoui %alloc %alloc-stack
+                %managed-alloc %managed-alloc-stack %box-fixnum %unbox-fixnum %box-flonum %unbox-flonum))
+     '(1))
+    ((memq op '(%load-typed %fneg %fpext %fptrunc %trunc %zext %sext %managed-box %managed-unbox))
+     '(2))
+    ((memq op '(%add-overflow %sub-overflow %mul-overflow))
+     '(1 2))
+    ((and (memq op '(%udiv %urem %shr %setb %setbe %seta %setae %fcmp-oeq %fcmp-une %fcmp-olt %fcmp-ole %fcmp-ogt %fcmp-oge))
+          (>= len 4))
+     '(1))
+    (else '())))
+
+(define (%mir-spill-read-write-dst-indices op len)
+  (cond
+    ((and (memq op '(%add %raw-add %sub %raw-sub %imul %raw-mul %bit-and %bit-or %bit-xor
+                     %shl %sar %fadd %fsub %fmul %fdiv %set-boolean))
+          (= len 3))
+     '(1))
+    ((and (memq op '(%shr)) (= len 3)) '(1))
+    ((and (memq op '(%neg %inc)) (= len 2)) '(1))
+    ((and (eq? op '%atomic-cas!) (= len 4)) '(1))
+    (else '())))
+
+(define (%mir-subst-vregs-with-spills inst vreg-map orig-inst)
+  ;; Rewrites inst cleanly into valid L_lir_mach instructions (never leaving %reg/%freg or %stack in Register pos)
+  (let* ((mapped (%mir-tree-subst-vregs inst vreg-map))
+         (op (if (pair? mapped) (car mapped) #f)))
+    (if (not op)
+        (list mapped)
+        (let* ((orig-has-vreg-pos?
+                (let collect ((xs (cdr orig-inst)) (idx 1) (acc '()))
+                  (if (null? xs)
+                      acc
+                      (let ((o (car xs))
+                            (m (list-ref mapped idx)))
+                        (if (and (%mir-stack-opnd? m)
+                                 (or (lir-virtual-register? o)
+                                     (and (symbol? o) (assq o vreg-map))))
+                            (collect (cdr xs) (+ idx 1) (cons (list idx o m) acc))
+                            (collect (cdr xs) (+ idx 1) acc))))))
+               (gpr-scratch '(%r10 %r11))
+               (fpr-scratch '(%xmm14 %xmm15)))
+          (cond
+            ;; Fast path: 0 spilled vregs in top-level operand positions
+            ((null? orig-has-vreg-pos?)
+             (list mapped))
+            ;; Special clean lowering for (%mov dst src)
+            ((and (eq? op '%mov) (= (length mapped) 3))
+             (%mir-emit-move (cadr mapped) (caddr mapped)))
+            (else
+             (let* ((len (length mapped))
+                    (wo-idxs (%mir-spill-write-only-dst-indices op len))
+                    (rw-idxs (%mir-spill-read-write-dst-indices op len))
+                    (slot-scratch-box (cons '() '()))
+                    (pre-box (cons '() '()))
+                    (post-box (cons '() '()))
+                    (new-args
+                     (let build ((xs (cdr mapped)) (idx 1) (gpool gpr-scratch) (fpool fpr-scratch) (acc '()))
+                       (if (null? xs)
+                           (reverse acc)
+                           (let* ((cur (car xs))
+                                  (orig-o (list-ref orig-inst idx))
+                                  (is-spilled-vreg?
+                                   (and (%mir-stack-opnd? cur)
+                                        (or (lir-virtual-register? orig-o)
+                                            (and (symbol? orig-o) (assq orig-o vreg-map))))))
+                             (if (not is-spilled-vreg?)
+                                 (build (cdr xs) (+ idx 1) gpool fpool (cons cur acc))
+                                 (let* ((off (cadr cur))
+                                        (is-fpr? (or (and (pair? orig-o) (eq? (car orig-o) '%freg))
+                                                     (and (pair? orig-o) (eq? (car orig-o) '%reg)
+                                                          (pair? (cddr orig-o)) (memq (cadr orig-o) '(f32 f64)))))
+                                        (existing (assv off (car slot-scratch-box)))
+                                        (scratch (if existing
+                                                     (cdr existing)
+                                                     (if is-fpr?
+                                                         (if (pair? fpool) (car fpool) '%xmm15)
+                                                         (if (pair? gpool) (car gpool) '%r11))))
+                                        (next-g (if (and (not existing) (not is-fpr?) (pair? gpool)) (cdr gpool) gpool))
+                                        (next-f (if (and (not existing) is-fpr? (pair? fpool)) (cdr fpool) fpool))
+                                        (wo? (memv idx wo-idxs))
+                                        (rw? (memv idx rw-idxs)))
+                                   (if (not existing)
+                                       (begin
+                                         (set-car! slot-scratch-box (cons (cons off scratch) (car slot-scratch-box)))
+                                         (if (not wo?)
+                                             (set-car! pre-box
+                                                       (cons (if is-fpr?
+                                                                 (list '%mov scratch cur)
+                                                                 (list '%load scratch '%rsp off))
+                                                             (car pre-box))))))
+                                   (if (or wo? rw?)
+                                       (set-car! post-box
+                                                 (cons (if is-fpr?
+                                                           (list '%mov cur scratch)
+                                                           (list '%store '%rsp off scratch))
+                                                       (car post-box))))
+                                   (build (cdr xs) (+ idx 1) next-g next-f (cons scratch acc)))))))))
+               (append (reverse (car pre-box))
+                       (cons (cons op new-args)
+                             (reverse (car post-box)))))))))))
+
+(define (%mir-lower-edge-args tgt-lbl args block-param-locs vreg-map)
+  (let ((entry (assq tgt-lbl block-param-locs)))
+    (if (not entry)
+        (cons #f (map (lambda (a) (%mir-resolve-opnd a vreg-map)) args))
+        (let* ((param-locs (cdr entry))
+               (resolved-args (map (lambda (a) (%mir-resolve-opnd a vreg-map)) args)))
+          (cons #t (%mir-emit-parallel-moves param-locs resolved-args))))))
+
+(define (%mir-lower-inst inst block-param-locs vreg-map tramps-box)
+  (if (not (pair? inst))
+      (list inst)
+      (let ((op (car inst)))
+        (cond
+          ((eq? op '%block)
+           (let* ((lbl (cadr inst))
+                  (orig-params (caddr inst))
+                  (body (cdddr inst))
+                  (lowered-body
+                   (let bloop ((bs body) (acc '()))
+                     (if (null? bs)
+                         (reverse acc)
+                         (let ((ls (%mir-lower-inst (car bs) block-param-locs vreg-map tramps-box)))
+                           (bloop (cdr bs) (append (reverse ls) acc))))))
+                  (new-params (if (assq lbl block-param-locs)
+                                  '()
+                                  (map (lambda (p) (%mir-resolve-opnd p vreg-map)) orig-params))))
+             (list (cons '%block (cons lbl (cons new-params lowered-body))))))
+          ((eq? op '%jump)
+           (let* ((tgt (cadr inst))
+                  (args (if (pair? (cddr inst)) (caddr inst) '()))
+                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map)))
+             (if (car edge)
+                 (append (cdr edge) (list (list '%jump tgt)))
+                 (if (pair? (cddr inst))
+                     (list (list '%jump tgt (cdr edge)))
+                     (list inst)))))
+          ((eq? op '%jump-if-false)
+           (let* ((raw-cond (cadr inst))
+                  (cond-loc (%mir-resolve-opnd raw-cond vreg-map))
+                  (pre-cond (if (%mir-stack-opnd? cond-loc)
+                                (list (list '%load '%r10 '%rsp (cadr cond-loc)))
+                                '()))
+                  (cond-reg (if (%mir-stack-opnd? cond-loc) '%r10 cond-loc))
+                  (tgt (caddr inst))
+                  (args (if (pair? (cdddr inst)) (cadddr inst) '()))
+                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map)))
+             (cond
+               ((not (car edge))
+                (append pre-cond
+                        (list (if (pair? (cdddr inst))
+                                  (list '%jump-if-false cond-reg tgt (cdr edge))
+                                  (list '%jump-if-false cond-reg tgt)))))
+               ((null? (cdr edge))
+                (append pre-cond (list (list '%jump-if-false cond-reg tgt))))
+               (else
+                (let ((tramp (unique-label-sym "mir_tramp_")))
+                  (set-car! tramps-box
+                            (cons (cons '%block (cons tramp (cons '() (append (cdr edge) (list (list '%jump tgt))))))
+                                  (car tramps-box)))
+                  (append pre-cond (list (list '%jump-if-false cond-reg tramp))))))))
+          ((eq? op '%jump-if)
+           (let* ((raw-cond (cadr inst))
+                  (cond-loc (%mir-resolve-opnd raw-cond vreg-map))
+                  (pre-cond (if (%mir-stack-opnd? cond-loc)
+                                (list (list '%load '%r10 '%rsp (cadr cond-loc)))
+                                '()))
+                  (cond-reg (if (%mir-stack-opnd? cond-loc) '%r10 cond-loc))
+                  (t-lbl (caddr inst))
+                  (t-args (cadddr inst))
+                  (e-lbl (car (cddddr inst)))
+                  (e-args (cadr (cddddr inst)))
+                  (t-edge (%mir-lower-edge-args t-lbl t-args block-param-locs vreg-map))
+                  (e-edge (%mir-lower-edge-args e-lbl e-args block-param-locs vreg-map))
+                  (new-t (cond
+                           ((and (car t-edge) (pair? (cdr t-edge)))
+                            (let ((tr (unique-label-sym "mir_tramp_")))
+                              (set-car! tramps-box
+                                        (cons (cons '%block (cons tr (cons '() (append (cdr t-edge) (list (list '%jump t-lbl))))))
+                                              (car tramps-box)))
+                              (cons tr '())))
+                           ((car t-edge) (cons t-lbl '()))
+                           (else (cons t-lbl (cdr t-edge)))))
+                  (new-e (cond
+                           ((and (car e-edge) (pair? (cdr e-edge)))
+                            (let ((tr (unique-label-sym "mir_tramp_")))
+                              (set-car! tramps-box
+                                        (cons (cons '%block (cons tr (cons '() (append (cdr e-edge) (list (list '%jump e-lbl))))))
+                                              (car tramps-box)))
+                              (cons tr '())))
+                           ((car e-edge) (cons e-lbl '()))
+                           (else (cons e-lbl (cdr e-edge))))))
+             (append pre-cond
+                     (list (list '%jump-if cond-reg (car new-t) (cdr new-t) (car new-e) (cdr new-e))))))
+          (else
+           (%mir-subst-vregs-with-spills inst vreg-map inst))))))
+
+(define (%mir-lower-body-to-mach body orig-frame-size)
+  (if (not (%mir-body-needs-mach-lowering? body))
+      (cons body orig-frame-size)
+      (let* ((analysis (%mir-analyze-body body orig-frame-size))
+             (assigned (%mir-assign-vreg-locations analysis))
+             (vreg-map (car assigned))
+             (new-frame-size (cdr assigned))
+             (raw-block-params (list-ref analysis 4))
+             (block-param-locs
+              (map (lambda (bp)
+                     (cons (car bp)
+                           (map (lambda (p) (%mir-resolve-opnd p vreg-map)) (cdr bp))))
+                   raw-block-params))
+             (tramps-box (cons '() '()))
+             (lowered-insts
+              (let loop ((is body) (acc '()))
+                (if (null? is)
+                    (reverse acc)
+                    (let ((ls (%mir-lower-inst (car is) block-param-locs vreg-map tramps-box)))
+                      (loop (cdr is) (append (reverse ls) acc))))))
+             (all-tramps (reverse (car tramps-box)))
+             (final-body (if (null? all-tramps) lowered-insts (append lowered-insts all-tramps))))
+        (cons final-body new-frame-size))))
+
+(define (%mir-lower-fn-or-main form)
+  (if (not (pair? form))
+      form
+      (case (car form)
+        ((%lir-function)
+         (let* ((lbl (cadr form))
+                (params-clause (assq 'params (cddr form)))
+                (frame-clause (assq 'frame-size (cddr form)))
+                (body-clause (assq 'body (cddr form)))
+                (orig-fs (if (and frame-clause (pair? (cdr frame-clause))) (cadr frame-clause) 0))
+                (orig-body (if body-clause (cdr body-clause) '())))
+           (if (not (%mir-body-needs-mach-lowering? orig-body))
+               form
+               (let ((res (%mir-lower-body-to-mach orig-body orig-fs)))
+                 (list '%lir-function
+                       lbl
+                       (if params-clause params-clause '(params ()))
+                       (list 'frame-size (cdr res))
+                       (cons 'body (car res)))))))
+        ((%lir-main)
+         (let* ((frame-clause (assq 'frame-size (cdr form)))
+                (body-clause (assq 'body (cdr form)))
+                (orig-fs (if (and frame-clause (pair? (cdr frame-clause))) (cadr frame-clause) 0))
+                (orig-body (if body-clause (cdr body-clause) '())))
+           (if (not (%mir-body-needs-mach-lowering? orig-body))
+               form
+               (let ((res (%mir-lower-body-to-mach orig-body orig-fs)))
+                 (list '%lir-main
+                       (list 'frame-size (cdr res))
+                       (cons 'body (car res)))))))
+        (else form))))
+
+(define (lower-mir-ssa-to-mach-lir ir)
+  (cond
+    ((null? ir) '())
+    ((and (pair? ir) (eq? (car ir) '%lir-program))
+     (let ((new-clauses
+            (map (lambda (clause)
+                   (if (not (pair? clause))
+                       clause
+                       (case (car clause)
+                         ((%lir-functions)
+                          (cons '%lir-functions (map %mir-lower-fn-or-main (cdr clause))))
+                         ((%lir-main)
+                          (%mir-lower-fn-or-main clause))
+                         (else clause))))
+                 (cdr ir))))
+       (if (equal? new-clauses (cdr ir))
+           ir
+           (cons '%lir-program new-clauses))))
+    ((and (pair? ir) (memq (car ir) '(%lir-function %lir-main)))
+     (%mir-lower-fn-or-main ir))
+    ((pair? ir)
+     (car (%mir-lower-body-to-mach ir 0)))
+    (else ir)))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 133: LIR Peephole Optimization & Dead Code Elimination
 ;;; Conforms to DSN-33 Architecture Specification & Issues #595, #767
@@ -36832,6 +37568,27 @@
                                (lir-inst-terminates-block? inst))))
                (loop (cdr xs) (cons inst cur) term? blks))))))))
 
+(define (lir-extract-switch-cases inst)
+  (cond
+    ((not (and (pair? inst) (pair? (cdr inst)) (pair? (cddr inst)) (pair? (cdddr inst))))
+     '())
+    ((and (= (length inst) 5) (list? (car (cddddr inst))))
+     (car (cddddr inst)))
+    ((and (= (length inst) 4) (list? (cadddr inst))
+          (or (null? (cadddr inst))
+              (not (pair? (car (cadddr inst))))
+              (not (integer? (caar (cadddr inst))))))
+     (cadddr inst))
+    ((list? (cadddr inst))
+     (cadddr inst))
+    (else
+     (cdddr inst))))
+
+(define (lir-extract-switch-case-label c)
+  (if (pair? c)
+      (if (pair? (cdr c)) (cadr c) (cdr c))
+      #f))
+
 (define (lir-dse-block-succs insts b num-blks lbl-map)
   (if (null? insts)
       (if (< (+ b 1) num-blks) (list (+ b 1)) '())
@@ -36853,13 +37610,25 @@
                        (let* ((lbl (and (pair? (cdr last)) (cadr last)))
                               (hit (and lbl (assq lbl lbl-map))))
                          (if hit (list (cdr hit)) '())))
-                      ((or (eq? op '%jump-cond) (eq? op '%jump-if) (eq? op '%jump-if-false))
+                      ((or (eq? op '%jump-cond) (eq? op '%jump-if-false))
                        (let* ((lbl (and (pair? (cdr last)) (pair? (cddr last)) (caddr last)))
                               (hit (and lbl (assq lbl lbl-map)))
                               (ft (if (< (+ b 1) num-blks) (list (+ b 1)) '())))
                          (if hit
                              (if (memv (cdr hit) ft) ft (cons (cdr hit) ft))
                              ft)))
+                      ((eq? op '%jump-if)
+                       (let* ((then-lbl (and (pair? (cdr last)) (pair? (cddr last)) (caddr last)))
+                              (else-lbl (cond ((= (length last) 4) (cadddr last))
+                                              ((pair? (cddddr last)) (car (cddddr last)))
+                                              (else #f)))
+                              (thit (and then-lbl (assq then-lbl lbl-map)))
+                              (ehit (and else-lbl (assq else-lbl lbl-map)))
+                              (s0 (if (and (not ehit) (< (+ b 1) num-blks)) (list (+ b 1)) '()))
+                              (s1 (if (and thit (not (memv (cdr thit) s0))) (cons (cdr thit) s0) s0)))
+                         (if (and ehit (not (memv (cdr ehit) s1)))
+                             (cons (cdr ehit) s1)
+                             s1)))
                       ((eq? op '%jump-if-zero)
                        (let* ((lbl (and (pair? (cdr last)) (cadr last)))
                               (hit (and lbl (assq lbl lbl-map)))
@@ -36872,16 +37641,14 @@
                            (let* ((def-lbl (caddr last))
                                   (dhit (assq def-lbl lbl-map))
                                   (targets0 (if dhit (list (cdr dhit)) '())))
-                             (let cloop ((cs (cdddr last)) (targets targets0))
+                             (let cloop ((cs (lir-extract-switch-cases last)) (targets targets0))
                                (if (not (pair? cs))
                                    targets
-                                   (let ((targets1
-                                          (if (pair? (car cs))
-                                              (let ((chit (assq (cdar cs) lbl-map)))
-                                                (if (and chit (not (memv (cdr chit) targets)))
-                                                    (cons (cdr chit) targets)
-                                                    targets))
-                                              targets)))
+                                   (let* ((clbl (lir-extract-switch-case-label (car cs)))
+                                          (chit (and clbl (assq clbl lbl-map)))
+                                          (targets1 (if (and chit (not (memv (cdr chit) targets)))
+                                                        (cons (cdr chit) targets)
+                                                        targets)))
                                      (cloop (cdr cs) targets1)))))
                            '()))
                       (else
@@ -38288,10 +39055,19 @@
                             ((eq? op '%direct-jump)
                              (let ((hit (and (pair? (cdr inst)) (assq (cadr inst) (car lbl-live-box)))))
                                (if hit (cdr hit) 0)))
-                            ((or (eq? op '%jump-cond) (eq? op '%jump-if) (eq? op '%jump-if-false))
+                            ((or (eq? op '%jump-cond) (eq? op '%jump-if-false))
                              (let ((hit (and (pair? (cdr inst)) (pair? (cddr inst))
                                              (assq (caddr inst) (car lbl-live-box)))))
                                (if hit (bitwise-ior r-cur (cdr hit)) r-cur)))
+                            ((eq? op '%jump-if)
+                             (let* ((then-lbl (and (pair? (cdr inst)) (pair? (cddr inst)) (caddr inst)))
+                                    (else-lbl (cond ((= (length inst) 4) (cadddr inst))
+                                                    ((pair? (cddddr inst)) (car (cddddr inst)))
+                                                    (else #f)))
+                                    (thit (and then-lbl (assq then-lbl (car lbl-live-box))))
+                                    (ehit (and else-lbl (assq else-lbl (car lbl-live-box))))
+                                    (r1 (if thit (bitwise-ior r-cur (cdr thit)) r-cur)))
+                               (if ehit (bitwise-ior r1 (cdr ehit)) r1)))
                             ((eq? op '%jump-if-zero)
                              (let ((hit (and (pair? (cdr inst)) (assq (cadr inst) (car lbl-live-box)))))
                                (if hit (bitwise-ior r-cur (cdr hit)) r-cur)))
@@ -38299,11 +39075,11 @@
                              (if (and (pair? (cdr inst)) (pair? (cddr inst)))
                                  (let* ((dhit (assq (caddr inst) (car lbl-live-box)))
                                         (r0 (if dhit (bitwise-ior r-cur (cdr dhit)) r-cur)))
-                                   (let sloop ((cs (cdddr inst)) (acc r0))
+                                   (let sloop ((cs (lir-extract-switch-cases inst)) (acc r0))
                                      (if (not (pair? cs))
                                          acc
-                                         (let ((chit (and (pair? (car cs))
-                                                          (assq (cdar cs) (car lbl-live-box)))))
+                                         (let* ((clbl (lir-extract-switch-case-label (car cs)))
+                                                (chit (and clbl (assq clbl (car lbl-live-box)))))
                                            (sloop (cdr cs)
                                                   (if chit (bitwise-ior acc (cdr chit)) acc))))))
                                  r-cur))
@@ -38635,22 +39411,42 @@
                         (let ((inst (vector-ref ivec j)))
                           (if (pair? inst)
                               (let* ((op (car inst))
-                                     (tgt (cond
+                                     (tgts (cond
                                             ((or (eq? op '%jump) (eq? op '%direct-jump) (eq? op '%jump-if-zero))
-                                             (and (pair? (cdr inst)) (cadr inst)))
-                                            ((or (eq? op '%jump-cond) (eq? op '%jump-if) (eq? op '%jump-if-false))
-                                             (and (pair? (cdr inst)) (pair? (cddr inst)) (caddr inst)))
-                                            (else #f)))
-                                     (hit (and tgt (assq tgt lbl-idx))))
-                                (if (and hit (<= (cdr hit) j))
-                                    (let ((hdr (cdr hit)))
-                                      (for-each
-                                       (lambda (s)
-                                         (let ((fst (cadr s))
-                                               (lst (caddr s)))
-                                           (if (and (<= fst j) (>= lst hdr) (< lst j))
-                                               (set-car! (cddr s) j))))
-                                       slots)))))
+                                             (let ((t (and (pair? (cdr inst)) (cadr inst))))
+                                               (if t (list t) '())))
+                                            ((or (eq? op '%jump-cond) (eq? op '%jump-if-false))
+                                             (let ((t (and (pair? (cdr inst)) (pair? (cddr inst)) (caddr inst))))
+                                               (if t (list t) '())))
+                                            ((eq? op '%jump-if)
+                                             (let ((t1 (and (pair? (cdr inst)) (pair? (cddr inst)) (caddr inst)))
+                                                   (t2 (cond ((= (length inst) 4) (cadddr inst))
+                                                             ((pair? (cddddr inst)) (car (cddddr inst)))
+                                                             (else #f))))
+                                               (append (if t1 (list t1) '()) (if t2 (list t2) '()))))
+                                            ((eq? op '%switch)
+                                             (let* ((d (and (pair? (cdr inst)) (pair? (cddr inst)) (caddr inst)))
+                                                    (cs (lir-extract-switch-cases inst))
+                                                    (ctgts (let sl ((xs cs) (acc (if d (list d) '())))
+                                                             (if (not (pair? xs))
+                                                                 acc
+                                                                 (let ((cl (lir-extract-switch-case-label (car xs))))
+                                                                   (sl (cdr xs) (if cl (cons cl acc) acc)))))))
+                                               ctgts))
+                                            (else '()))))
+                                (for-each
+                                 (lambda (tgt)
+                                   (let ((hit (and tgt (assq tgt lbl-idx))))
+                                     (if (and hit (<= (cdr hit) j))
+                                         (let ((hdr (cdr hit)))
+                                           (for-each
+                                            (lambda (s)
+                                              (let ((fst (cadr s))
+                                                    (lst (caddr s)))
+                                                (if (and (<= fst j) (>= lst hdr) (< lst j))
+                                                    (set-car! (cddr s) j))))
+                                            slots)))))
+                                 tgts)))
                           (jloop (+ j 1)))))
                   ;; Filter eligible call-free slots before computing mvec
                   (let ((eligible-slots

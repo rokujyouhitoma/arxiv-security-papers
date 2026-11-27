@@ -250,6 +250,24 @@
        (%store-values-buf si cnt))))
 
 ;;; -----------------------------------------------------------------------
+;;; 2b. L_mir_ssa: Virtual-Register Braun SSA Middle-End IR (Issue #966)
+;;; -----------------------------------------------------------------------
+(define-language L_mir_ssa
+  (extends L_lir_core)
+  (entry Program))
+
+;;; -----------------------------------------------------------------------
+;;; 2c. L_lir_mach: Physical-Register Machine LIR (Issue #966)
+;;; -----------------------------------------------------------------------
+(define-language L_lir_mach
+  (extends L_mir_ssa)
+  (entry Program)
+  (Register (reg)
+    (- (%reg x)
+       (%reg mty x)
+       (%freg x))))
+
+;;; -----------------------------------------------------------------------
 ;;; 3. L_lir_raw: [Legacy / Deprecated] Unseparated Low-Level IR Schema
 ;;;    Not used in active Pass Manager transitions (see L_lir_managed/L_lir_core).
 ;;; -----------------------------------------------------------------------

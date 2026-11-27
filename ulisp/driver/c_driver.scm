@@ -621,14 +621,16 @@
            (lir (c99-lower-to-lir typed (list (cons 'sanitize-bounds? (c-drv-sanitize-bounds? opts)))))
            (t5 (if profile? (%c-drv-now-us) 0))
            (opt-lir (%c-drv-optimize-lir lir opts))
+           (mach-lir (lower-mir-ssa-to-mach-lir opt-lir))
            (t6 (if profile? (%c-drv-now-us) 0)))
-      (if (not (and (L_lir_core? opt-lir) (validate-core-lir opt-lir)))
+      (if (not (and (L_lir_core? mach-lir) (validate-core-lir mach-lir)
+                    (L_lir_mach? mach-lir) (validate-mach-lir mach-lir)))
           (%c-drv-error! "C99-DRV-003"
-                         (string-append "Core LIR verification failed for " src-file)
+                         (string-append "Core/Machine LIR verification failed for " src-file)
                          src-file))
       (if profile?
           (let ((t7 (%c-drv-now-us)))
-            (list opt-lir
+            (list mach-lir
                   t0
                   (%c-drv-elapsed-us t0 t1)
                   (%c-drv-elapsed-us t1 t2)
@@ -637,7 +639,7 @@
                   (%c-drv-elapsed-us t4 t5)
                   (%c-drv-elapsed-us t5 t6)
                   (%c-drv-elapsed-us t6 t7)))
-          opt-lir))))
+          mach-lir))))
 
 (define (c99-compile-file-to-lir src-file opts)
   (%c99-compile-file-to-lir-impl src-file opts #f))

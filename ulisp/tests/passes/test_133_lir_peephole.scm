@@ -448,4 +448,34 @@
                 '((sp_dead 32 0))
                 opt-cfg-sp))
 
+;; 24. %switch CFG successor liveness preserves stores read in switch arms (Issue #966 / Duff's device)
+(let* ((prog-switch-dse
+        '(%lir-program
+          (strings ())
+          (stackmaps ())
+          (%lir-functions)
+          (%lir-main
+           (frame-size 24)
+           (body
+            (%store %rsp -16 %rdi)
+            (%mov %rax %rsi)
+            (%switch %rax .L_sw_def ((0 . .L_sw_0) (1 . .L_sw_1)))
+            (%label .L_sw_0)
+            (%load %rax %rsp -16)
+            (%return %rax)
+            (%label .L_sw_1)
+            (%mov %rax 99)
+            (%return %rax)
+            (%label .L_sw_def)
+            (%mov %rax 0)
+            (%return %rax)))))
+       (opt-sw (lir-peephole-optimize prog-switch-dse))
+       (opt-sw-body (cdr (assq 'body (cdr (assq '%lir-main (cdr opt-sw))))))
+       (kept-store? (let loop ((xs opt-sw-body))
+                      (and (pair? xs)
+                           (or (equal? (car xs) '(%store %rsp -16 %rdi))
+                               (loop (cdr xs)))))))
+  (assert-true "CFG-DSE preserves entry stack store read in %switch case arm"
+               kept-store?))
+
 (test-end "Pass 133 (LIR Peephole & DCE)")
