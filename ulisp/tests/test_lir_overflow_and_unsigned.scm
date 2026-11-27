@@ -223,44 +223,55 @@
 ;;; -----------------------------------------------------------------------
 (display "\n--- Group 4: x86_64 Backend Lowering Verification ---\n")
 
+(define (asm-insts->strs insts)
+  (map (lambda (x)
+         (case (car x)
+           ((%raw-asm) (cadr x))
+           ((set) (string-append "set" (symbol->string (cadr x)) " " (symbol->string (caddr x))))
+           ((movzx) (string-append "movzx " (symbol->string (cadr x)) ", " (symbol->string (caddr x))))
+           (else (symbol->string (car x)))))
+       insts))
+
 (let* ((asm-add-ov (lower-lir-instruction '(%add-overflow %rax %rdx %rbx %rcx)))
-       (asm-strs (map (lambda (x) (if (eq? (car x) '%raw-asm) (cadr x) (symbol->string (car x)))) asm-add-ov)))
+       (asm-strs (asm-insts->strs asm-add-ov)))
+  (assert-true "x86_64 %add-overflow emits structured (set o dl)" (and (member '(set o dl) asm-add-ov) #t))
+  (assert-true "x86_64 %add-overflow emits structured (movzx rdx dl)" (and (member '(movzx rdx dl) asm-add-ov) #t))
   (assert-true "x86_64 %add-overflow contains mov" (member "mov" asm-strs))
   (assert-true "x86_64 %add-overflow contains add" (member "add" asm-strs))
   (assert-true "x86_64 %add-overflow contains seto dl" (test-any (lambda (s) (and (string? s) (test-string-contains? s "seto dl"))) asm-strs))
   (assert-true "x86_64 %add-overflow contains movzx rdx, dl" (test-any (lambda (s) (and (string? s) (test-string-contains? s "movzx rdx, dl"))) asm-strs)))
 
 (let* ((asm-sub-ov (lower-lir-instruction '(%sub-overflow %rax %rdx %rbx %rcx)))
-       (asm-strs (map (lambda (x) (if (eq? (car x) '%raw-asm) (cadr x) (symbol->string (car x)))) asm-sub-ov)))
+       (asm-strs (asm-insts->strs asm-sub-ov)))
   (assert-true "x86_64 %sub-overflow contains sub" (member "sub" asm-strs))
   (assert-true "x86_64 %sub-overflow contains seto dl" (test-any (lambda (s) (and (string? s) (test-string-contains? s "seto dl"))) asm-strs)))
 
 (let* ((asm-mul-ov (lower-lir-instruction '(%mul-overflow %rax %rdx %rbx %rcx)))
-       (asm-strs (map (lambda (x) (if (eq? (car x) '%raw-asm) (cadr x) (symbol->string (car x)))) asm-mul-ov)))
+       (asm-strs (asm-insts->strs asm-mul-ov)))
   (assert-true "x86_64 %mul-overflow contains imul" (member "imul" asm-strs))
   (assert-true "x86_64 %mul-overflow contains seto dl" (test-any (lambda (s) (and (string? s) (test-string-contains? s "seto dl"))) asm-strs)))
 
 (let* ((asm-udiv (lower-lir-instruction '(%udiv %rcx)))
-       (asm-strs (map (lambda (x) (if (eq? (car x) '%raw-asm) (cadr x) (symbol->string (car x)))) asm-udiv)))
+       (asm-strs (asm-insts->strs asm-udiv)))
   (assert-true "x86_64 %udiv clears rdx with xor edx, edx" (test-any (lambda (s) (and (string? s) (test-string-contains? s "xor edx, edx"))) asm-strs))
   (assert-true "x86_64 %udiv contains div" (member "div" asm-strs)))
 
 (let* ((asm-udiv3 (lower-lir-instruction '(%udiv %rsi %rax 10)))
-       (asm-strs (map (lambda (x) (if (eq? (car x) '%raw-asm) (cadr x) (symbol->string (car x)))) asm-udiv3)))
+       (asm-strs (asm-insts->strs asm-udiv3)))
   (assert-true "x86_64 3-operand %udiv loads immediate into r11" (member "mov" asm-strs))
   (assert-true "x86_64 3-operand %udiv contains div" (member "div" asm-strs)))
 
 (let* ((asm-urem (lower-lir-instruction '(%urem %rsi %rax %rcx)))
-       (asm-strs (map (lambda (x) (if (eq? (car x) '%raw-asm) (cadr x) (symbol->string (car x)))) asm-urem)))
+       (asm-strs (asm-insts->strs asm-urem)))
   (assert-true "x86_64 3-operand %urem moves remainder from rdx to rsi" (member "mov" asm-strs)))
 
 (let* ((asm-setb (lower-lir-instruction '(%setb %rax)))
-       (asm-strs (map (lambda (x) (if (eq? (car x) '%raw-asm) (cadr x) (symbol->string (car x)))) asm-setb)))
+       (asm-strs (asm-insts->strs asm-setb)))
   (assert-true "x86_64 %setb contains setb al" (test-any (lambda (s) (and (string? s) (test-string-contains? s "setb al"))) asm-strs))
   (assert-true "x86_64 %setb contains movzx rax, al" (test-any (lambda (s) (and (string? s) (test-string-contains? s "movzx rax, al"))) asm-strs)))
 
 (let* ((asm-seta3 (lower-lir-instruction '(%seta %rax %rbx 10)))
-       (asm-strs (map (lambda (x) (if (eq? (car x) '%raw-asm) (cadr x) (symbol->string (car x)))) asm-seta3)))
+       (asm-strs (asm-insts->strs asm-seta3)))
   (assert-true "x86_64 3-operand %seta contains cmp" (member "cmp" asm-strs))
   (assert-true "x86_64 3-operand %seta contains seta al" (test-any (lambda (s) (and (string? s) (test-string-contains? s "seta al"))) asm-strs)))
 
@@ -286,7 +297,7 @@
     (assert-true "C backend emits ulisp_mul_overflow_i64" (test-string-contains? c-code "ulisp_mul_overflow_i64"))
     (assert-true "C backend emits unsigned division (uint64_t)" (test-string-contains? c-code "(uint64_t)reg_rbx / (uint64_t)reg_rcx"))
     (assert-true "C backend emits unsigned remainder (uint64_t)" (test-string-contains? c-code "(uint64_t)reg_rbx % (uint64_t)reg_rcx"))
-    (assert-true "C backend emits unsigned right shift" (test-string-contains? c-code "(uint64_t)reg_rbx >> 3"))
+    (assert-true "C backend emits unsigned right shift" (test-string-contains? c-code "((uint64_t)reg_rbx) >> 3"))
     (assert-true "C backend emits unsigned comparison %setb" (test-string-contains? c-code "(uint64_t)reg_rbx < (uint64_t)reg_rcx"))
     (assert-true "C backend emits unsigned comparison %seta" (test-string-contains? c-code "(uint64_t)reg_rbx > (uint64_t)reg_rcx"))))
 

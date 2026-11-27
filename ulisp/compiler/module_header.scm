@@ -479,7 +479,12 @@
   %integer?
   %exact?
   %inexact?
-  %exact-integer?)
+  %exact-integer?
+  lower-lir-reg8
+  canonical-x86-set-cc
+  x86-reg8->reg64
+  x86-set-overflow-cc?
+  x86-set-eq-ne-cc?)
 
 (define-syntax number?
   (syntax-rules ()

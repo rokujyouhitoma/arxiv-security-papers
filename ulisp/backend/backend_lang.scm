@@ -16,7 +16,11 @@
     (boolean (bool_val)))
   (Register (reg)
     rax rbx rcx rdx rsi rdi rbp rsp
-    r8  r9  r10 r11 r12 r13 r14 r15 al cl
+    r8  r9  r10 r11 r12 r13 r14 r15
+    eax ebx ecx edx esi edi ebp esp
+    r8d r9d r10d r11d r12d r13d r14d r15d
+    al  bl  cl  dl  sil dil bpl spl
+    r8b r9b r10b r11b r12b r13b r14b r15b
     (%reg var))
   (Memory (mem)
     (%disp disp reg)

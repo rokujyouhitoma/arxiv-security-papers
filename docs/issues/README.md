@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
 | **960** | 未参照関数の削除（関数・クロージャ毎セクション分割＋`--gc-sections` ＆ 到達可能性解析） | Feature | In Progress | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
-| **968** | x86-64 バックエンド 140_backend_x86_64.scm（4,145行）のモジュール分割と 143 ピープホールの %raw-asm 文字列依存解消 | Feature | New | [968-split-x86-64-backend-and-eliminate-raw-asm-peephole-matching.md](968-split-x86-64-backend-and-eliminate-raw-asm-peephole-matching.md) |
 | **969** | 汎用 Parallel Move Resolver（並列コピー解析・トポロジカルシャッフル）の実装と SSA 解除・継続化ループ更新の統合 | Feature | New | [969-implement-general-parallel-move-resolver-for-ssa-destruction-and-loops.md](969-implement-general-parallel-move-resolver-for-ssa-destruction-and-loops.md) |
 | **970** | Hot/Cold 基本ブロック分離パス（Slow Path の関数末尾・Cold 領域隔離）の導入 | Feature | New | [970-implement-hot-cold-basic-block-splitting-pass.md](970-implement-hot-cold-basic-block-splitting-pass.md) |
 | **971** | 汎用インライン展開 ＆ β-簡約パスの導入およびフロントエンド最適化（CP0/LVN/DCE）の Fixpoint 反復化 | Feature | New | [971-implement-general-inliner-and-frontend-fixpoint-optimization.md](971-implement-general-inliner-and-frontend-fixpoint-optimization.md) |
@@ -24,6 +23,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **968** | x86-64 バックエンド 140_backend_x86_64.scm（4,177行）のモジュール分割と 143 ピープホールの %raw-asm 文字列依存解消 | Feature | 2026-11-28 | [968-split-x86-64-backend-and-eliminate-raw-asm-peephole-matching.md](closed/968-split-x86-64-backend-and-eliminate-raw-asm-peephole-matching.md) |
 | **967** | C99 フロントエンド lower_to_lir.scm（5,009行）の責務別パス分割（MIR 生成・SysV ABI 展開・Inline Asm 正規化） | Feature | 2026-11-28 | [967-split-c99-lower-to-lir-into-modular-nanopasses.md](closed/967-split-c99-lower-to-lir-into-modular-nanopasses.md) |
 | **966** | L_mir_ssa（仮想レジスタ SSA）と L_lir_mach（物理レジスタ機械 LIR）の 2 層分離と Scheme/C99 共通ミドルエンド統合 | Feature | 2026-11-28 | [966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md](closed/966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md) |
 | **961** | Scheme 経路の LIR への linear scan レジスタ割り付け導入（スタック退避中心コード生成の解消） | Feature | 2026-11-28 | [961-introduce-linear-scan-register-allocation-for-scheme-lir.md](closed/961-introduce-linear-scan-register-allocation-for-scheme-lir.md) |

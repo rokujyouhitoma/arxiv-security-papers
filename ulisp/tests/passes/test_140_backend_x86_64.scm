@@ -309,4 +309,32 @@
     (assert-false "gc-mode 'none omits __safepoint_1 relocations from stackmap table"
                   (has-exact? lines "    .quad __safepoint_1"))))
 
+;; 13. Issue #968: Structured L_asm_x86 (set ...)/(movzx ...) emission without %raw-asm
+(let ((add-ov (lower-lir-instruction '(%add-overflow %rax %rdx %rbx %rcx)))
+      (sub-ov (lower-lir-instruction '(%sub-overflow %rax %rdx %rbx %rcx)))
+      (mul-ov (lower-lir-instruction '(%mul-overflow %rax %rdx %rbx %rcx)))
+      (sb (lower-lir-instruction '(%setb %rax)))
+      (sbool (lower-lir-instruction '(%set-boolean %rax "sete")))
+      (no-raw? (lambda (insts)
+                 (let loop ((xs insts))
+                   (cond ((null? xs) #t)
+                         ((eq? (caar xs) '%raw-asm) #f)
+                         (else (loop (cdr xs))))))))
+  (assert-true "13.1 %add-overflow emits zero %raw-asm" (no-raw? add-ov))
+  (assert-true "13.2 %sub-overflow emits (set o dl) and (movzx rdx dl)"
+               (and (member '(set o dl) sub-ov) (member '(movzx rdx dl) sub-ov) (no-raw? sub-ov) #t))
+  (assert-true "13.3 %mul-overflow emits (set o dl) and (movzx rdx dl)"
+               (and (member '(set o dl) mul-ov) (member '(movzx rdx dl) mul-ov) (no-raw? mul-ov) #t))
+  (assert-true "13.4 %setb emits (set b al) and (movzx rax al)"
+               (and (member '(set b al) sb) (member '(movzx rax al) sb) (no-raw? sb) #t))
+  (assert-true "13.5 %set-boolean emits structured set/movzx/shl/add with zero %raw-asm"
+               (and (member '(set e al) sbool) (member '(movzx eax al) sbool) (no-raw? sbool) #t))
+  (assert-true "13.6 structured set/movzx program satisfies L_asm_x86?"
+               (L_asm_x86? (list '%asm-program
+                                 '(strings ())
+                                 '(stackmaps ())
+                                 '(%asm-functions)
+                                 (list '%asm-main '(frame-size 0)
+                                       (cons 'body (append add-ov (append sbool '((ret))))))))))
+
 (test-end "Pass 140 (x86-64 Backend)")

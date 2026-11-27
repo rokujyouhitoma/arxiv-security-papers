@@ -2833,8 +2833,13 @@
   select-x86-parallel-copy
   emit-x86-parallel-copy
   lower-lir-reg
+  lower-lir-reg8
   lower-lir-opnd
+  canonical-x86-set-cc
   canonical-x86-cc
+  x86-reg8->reg64
+  x86-set-overflow-cc?
+  x86-set-eq-ne-cc?
   lower-lir-instruction
   *inline-asm-frame-size*
   inline-asm-raw

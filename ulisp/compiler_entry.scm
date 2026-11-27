@@ -114,6 +114,10 @@
 
 ;; Backend Passes
 (include "backend/backend_lang.scm")
+(include "backend/140a_x86_isel.scm")
+(include "backend/140c_x86_layout.scm")
+(include "backend/140d_x86_emit.scm")
+(include "backend/140e_x86_runtime_stubs.scm")
 (include "backend/140_backend_x86_64.scm")
 (include "backend/141_backend_x86_gc.scm")
 (include "backend/142_backend_x86_freestanding.scm")

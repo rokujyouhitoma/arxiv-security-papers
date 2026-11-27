@@ -8,9 +8,27 @@
 (define (x86-asm-reg? opnd)
   (or (and (symbol? opnd)
            (memq opnd '(rax rbx rcx rdx rsi rdi rbp rsp
-                        r8  r9  r10 r11 r12 r13 r14 r15 al)))
+                        r8  r9  r10 r11 r12 r13 r14 r15
+                        eax ebx ecx edx esi edi ebp esp
+                        r8d r9d r10d r11d r12d r13d r14d r15d
+                        al  bl  cl  dl  sil dil bpl spl
+                        r8b r9b r10b r11b r12b r13b r14b r15b)))
       (and (pair? opnd)
            (eq? (car opnd) '%reg))))
+
+(define (x86-reg8->reg64 r8)
+  (case r8
+    ((al) 'rax) ((bl) 'rbx) ((cl) 'rcx) ((dl) 'rdx)
+    ((sil) 'rsi) ((dil) 'rdi) ((bpl) 'rbp) ((spl) 'rsp)
+    ((r8b) 'r8) ((r9b) 'r9) ((r10b) 'r10) ((r11b) 'r11)
+    ((r12b) 'r12) ((r13b) 'r13) ((r14b) 'r14) ((r15b) 'r15)
+    (else #f)))
+
+(define (x86-set-overflow-cc? cc)
+  (memq cc '(o seto)))
+
+(define (x86-set-eq-ne-cc? cc)
+  (memq cc '(e ne z nz sete setne setz setnz)))
 
 (define (x86-asm-zero-imm? opnd)
   (or (eqv? opnd 0)
@@ -80,12 +98,7 @@
 
 (define (x86-asm-reads-flags? inst)
   (and (pair? inst)
-       (or (memq (car inst) '(jcc set))
-           (and (eq? (car inst) '%raw-asm)
-                (string? (cadr inst))
-                (or (string-starts-with? (cadr inst) "    set")
-                    (string-starts-with? (cadr inst) "    cmov")
-                    (string-starts-with? (cadr inst) "    j"))))))
+       (memq (car inst) '(jcc set))))
 
 ;; Rule 3: Zero-idiom XOR Optimization (guard against live RFLAGS, Issue #953)
 ;; (mov reg 0) / (mov reg (%imm 0)) -> (xor reg reg)
@@ -185,24 +198,23 @@
      (guard (x86-asm-jump-targets-ret-across-labels? lbl rest))
      (cons '(ret) rest))))
 
-;; Rule 6: Overflow Flag Branch Fusion (Issue #955)
-;; (%raw-asm "    seto dl") (%raw-asm "    movzx rdx, dl") (cmp rdx 0) (jcc jne/je L)
+;; Rule 6: Overflow Flag Branch Fusion (Issue #955, #968)
+;; (set o r8) (movzx rdst r8) (cmp rdst 0) (jcc jne/je L)
 ;; -> (jcc jo/jno L)
 (define-picopass rule-x86-overflow-branch-fuse
   (InstWindow
-    (((%raw-asm ,s1) (%raw-asm ,s2) (cmp ,reg ,imm) (jcc ,cc ,lbl) . ,rest)
-     (guard (and (string? s1)
-                 (string=? s1 "    seto dl")
-                 (string? s2)
-                 (string=? s2 "    movzx rdx, dl")
-                 (eq? reg 'rdx)
+    (((set ,scc ,r8) (movzx ,rdst ,r8b) (cmp ,reg ,imm) (jcc ,cc ,lbl) . ,rest)
+     (guard (and (x86-set-overflow-cc? scc)
+                 (equal? r8 r8b)
+                 (equal? rdst reg)
+                 (eq? (x86-reg8->reg64 r8) rdst)
                  (x86-asm-zero-imm? imm)
                  (memq cc '(jne jnz je jz))))
      (cons (list 'jcc (if (memq cc '(jne jnz)) 'jo 'jno) lbl) rest))))
 
-;; Rule 7: Redundant Compare-Zero Elimination After Bitwise AND (Issue #955)
+;; Rule 7: Redundant Compare-Zero Elimination After Bitwise AND (Issue #955, #968)
 ;; (and reg imm) (cmp reg 0) (jcc je/jne/jz/jnz L) -> (and reg imm) (jcc je/jne/jz/jnz L)
-;; (and reg imm) (cmp reg 0) (%raw-asm "    sete al" / "    setne al") -> (and reg imm) (%raw-asm ...)
+;; (and reg imm) (cmp reg 0) (set e/ne dst) -> (and reg imm) (set e/ne dst)
 (define-picopass rule-x86-and-cmp-zero-branch-fuse
   (InstWindow
     (((and ,r1 ,mask) (cmp ,r2 ,zero) (jcc ,cc ,lbl) . ,rest)
@@ -212,15 +224,13 @@
                  (memq cc '(je jne jz jnz))))
      (cons (list 'and r1 mask)
            (cons (list 'jcc cc lbl) rest)))
-    (((and ,r1 ,mask) (cmp ,r2 ,zero) (%raw-asm ,s) . ,rest)
+    (((and ,r1 ,mask) (cmp ,r2 ,zero) (set ,scc ,dst) . ,rest)
      (guard (and (x86-asm-reg? r1)
                  (equal? r1 r2)
                  (x86-asm-zero-imm? zero)
-                 (string? s)
-                 (or (string=? s "    sete al")
-                     (string=? s "    setne al"))))
+                 (x86-set-eq-ne-cc? scc)))
      (cons (list 'and r1 mask)
-           (cons (list '%raw-asm s) rest)))))
+           (cons (list 'set scc dst) rest)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; Nanopass DSL Pass: x86-peephole-pass (fuse-window-rules)

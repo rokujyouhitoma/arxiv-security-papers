@@ -139,6 +139,10 @@ LIR_PASSES = lir/lir_lang.scm \
              lir/133_lir_peephole.scm
 
 BACKEND_PASSES = backend/backend_lang.scm \
+                 backend/140a_x86_isel.scm \
+                 backend/140c_x86_layout.scm \
+                 backend/140d_x86_emit.scm \
+                 backend/140e_x86_runtime_stubs.scm \
                  backend/140_backend_x86_64.scm \
                  backend/141_backend_x86_gc.scm \
                  backend/142_backend_x86_freestanding.scm \
@@ -1015,7 +1019,7 @@ test_c99_pointers_and_escape: build/compiler_passes.scm vm/lir_interpreter.scm $
 
 test_c99_funcptr_and_switch_cfg: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm build/c_driver_runner.scm tests/test_c99_funcptr_and_switch_cfg.scm tests/test_c99_funcptr_and_switch_cfg.sh
 	@mkdir -p build
-	@$(PYTHON) scripts/lint_sexpr.py frontend_c/c_lang.scm frontend_c/parser.scm frontend_c/sema.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm lir/lir_lang.scm lir/lir_verifier.scm lir/132_lir_braun_ssa.scm lir/133_lir_peephole.scm backend/140_backend_x86_64.scm backend/144a_x86_assembler.scm backend/150_backend_aarch64.scm backend/160_backend_c.scm vm/lir_interpreter.scm tests/test_c99_funcptr_and_switch_cfg.scm
+	@$(PYTHON) scripts/lint_sexpr.py frontend_c/c_lang.scm frontend_c/parser.scm frontend_c/sema.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm lir/lir_lang.scm lir/lir_verifier.scm lir/132_lir_braun_ssa.scm lir/133_lir_peephole.scm backend/140a_x86_isel.scm backend/140c_x86_layout.scm backend/140d_x86_emit.scm backend/140e_x86_runtime_stubs.scm backend/140_backend_x86_64.scm backend/144a_x86_assembler.scm backend/150_backend_aarch64.scm backend/160_backend_c.scm vm/lir_interpreter.scm tests/test_c99_funcptr_and_switch_cfg.scm
 	cat build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm tests/test_c99_funcptr_and_switch_cfg.scm > build/test_c99_funcptr_and_switch_cfg_runner.scm
 	@$(RUN_SCHEME) build/test_c99_funcptr_and_switch_cfg_runner.scm
 	@USE_GOSH="$(USE_GOSH)" bash tests/test_c99_funcptr_and_switch_cfg.sh
@@ -1029,14 +1033,14 @@ test_c99_stdarg: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON)
 
 test_c99_setjmp_longjmp: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm build/c_driver_runner.scm tests/test_c99_setjmp_longjmp.scm tests/test_c99_setjmp_longjmp.sh
 	@mkdir -p build
-	@$(PYTHON) scripts/lint_sexpr.py lib/c_runtime_builtins.scm frontend_c/preprocessor.scm frontend_c/sema.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm lir/132_lir_braun_ssa.scm backend/140_backend_x86_64.scm backend/160_backend_c.scm vm/lir_interpreter.scm driver/c_driver.scm tests/test_c99_setjmp_longjmp.scm
+	@$(PYTHON) scripts/lint_sexpr.py lib/c_runtime_builtins.scm frontend_c/preprocessor.scm frontend_c/sema.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm lir/132_lir_braun_ssa.scm backend/140a_x86_isel.scm backend/140c_x86_layout.scm backend/140d_x86_emit.scm backend/140e_x86_runtime_stubs.scm backend/140_backend_x86_64.scm backend/160_backend_c.scm vm/lir_interpreter.scm driver/c_driver.scm tests/test_c99_setjmp_longjmp.scm
 	cat build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm tests/test_c99_setjmp_longjmp.scm > build/test_c99_setjmp_longjmp_runner.scm
 	@$(RUN_SCHEME) build/test_c99_setjmp_longjmp_runner.scm
 	@USE_GOSH="$(USE_GOSH)" bash tests/test_c99_setjmp_longjmp.sh
 
 test_c99_bounds_sanitizer: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm build/c_driver_runner.scm tests/test_c99_bounds_sanitizer.scm tests/test_c99_bounds_sanitizer.sh
 	@mkdir -p build
-	@$(PYTHON) scripts/lint_sexpr.py lib/c_runtime_builtins.scm frontend_c/sema.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm backend/140_backend_x86_64.scm backend/160_backend_c.scm vm/lir_interpreter.scm driver/c_driver.scm tests/test_c99_bounds_sanitizer.scm
+	@$(PYTHON) scripts/lint_sexpr.py lib/c_runtime_builtins.scm frontend_c/sema.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm backend/140a_x86_isel.scm backend/140c_x86_layout.scm backend/140d_x86_emit.scm backend/140e_x86_runtime_stubs.scm backend/140_backend_x86_64.scm backend/160_backend_c.scm vm/lir_interpreter.scm driver/c_driver.scm tests/test_c99_bounds_sanitizer.scm
 	cat build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm tests/test_c99_bounds_sanitizer.scm > build/test_c99_bounds_sanitizer_runner.scm
 	@$(RUN_SCHEME) build/test_c99_bounds_sanitizer_runner.scm
 	@USE_GOSH="$(USE_GOSH)" bash tests/test_c99_bounds_sanitizer.sh
@@ -1050,21 +1054,21 @@ test_c99_lir_vm_checked: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS
 
 test_c99_floating_point: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm build/c_driver_runner.scm tests/test_c99_floating_point.scm tests/test_c99_floating_point.sh
 	@mkdir -p build
-	@$(PYTHON) scripts/lint_sexpr.py frontend_c/float_ieee754.scm frontend_c/lexer.scm frontend_c/type_layout.scm frontend_c/sema.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm lir/lir_lang.scm lir/lir_verifier.scm compiler/nanopass_meta.scm backend/140_backend_x86_64.scm backend/144a_x86_assembler.scm backend/150_backend_aarch64.scm backend/160_backend_c.scm vm/lir_interpreter.scm tests/test_c99_floating_point.scm
+	@$(PYTHON) scripts/lint_sexpr.py frontend_c/float_ieee754.scm frontend_c/lexer.scm frontend_c/type_layout.scm frontend_c/sema.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm lir/lir_lang.scm lir/lir_verifier.scm compiler/nanopass_meta.scm backend/140a_x86_isel.scm backend/140c_x86_layout.scm backend/140d_x86_emit.scm backend/140e_x86_runtime_stubs.scm backend/140_backend_x86_64.scm backend/144a_x86_assembler.scm backend/150_backend_aarch64.scm backend/160_backend_c.scm vm/lir_interpreter.scm tests/test_c99_floating_point.scm
 	cat build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm tests/test_c99_floating_point.scm > build/test_c99_floating_point_runner.scm
 	@$(RUN_SCHEME) build/test_c99_floating_point_runner.scm
 	@USE_GOSH="$(USE_GOSH)" bash tests/test_c99_floating_point.sh
 
 test_sse2_xmm_abi: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm build/c_driver_runner.scm tests/test_sse2_xmm_abi.scm tests/test_sse2_xmm_abi.sh
 	@mkdir -p build
-	@$(PYTHON) scripts/lint_sexpr.py frontend_c/preprocessor.scm frontend_c/type_layout.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm backend/140_backend_x86_64.scm backend/144a_x86_assembler.scm backend/160_backend_c.scm vm/lir_interpreter.scm driver/c_driver.scm tests/test_sse2_xmm_abi.scm
+	@$(PYTHON) scripts/lint_sexpr.py frontend_c/preprocessor.scm frontend_c/type_layout.scm frontend_c/c99_lower_mir.scm frontend_c/c99_lower_abi.scm frontend_c/c99_lower_inline_asm.scm frontend_c/lower_to_lir.scm backend/140a_x86_isel.scm backend/140c_x86_layout.scm backend/140d_x86_emit.scm backend/140e_x86_runtime_stubs.scm backend/140_backend_x86_64.scm backend/144a_x86_assembler.scm backend/160_backend_c.scm vm/lir_interpreter.scm driver/c_driver.scm tests/test_sse2_xmm_abi.scm
 	cat build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm tests/test_sse2_xmm_abi.scm > build/test_sse2_xmm_abi_runner.scm
 	@$(RUN_SCHEME) build/test_sse2_xmm_abi_runner.scm
 	@USE_GOSH="$(USE_GOSH)" bash tests/test_sse2_xmm_abi.sh
 
 test_fuzz_xmm_float: build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm build/c_driver_runner.scm tests/fuzz_xmm_float_gen.scm tests/test_fuzz_xmm_float.sh
 	@mkdir -p build
-	@$(PYTHON) scripts/lint_sexpr.py backend/140_backend_x86_64.scm backend/144a_x86_assembler.scm backend/160_backend_c.scm vm/lir_interpreter.scm tests/fuzz_xmm_float_gen.scm
+	@$(PYTHON) scripts/lint_sexpr.py backend/140a_x86_isel.scm backend/140c_x86_layout.scm backend/140d_x86_emit.scm backend/140e_x86_runtime_stubs.scm backend/140_backend_x86_64.scm backend/144a_x86_assembler.scm backend/160_backend_c.scm vm/lir_interpreter.scm tests/fuzz_xmm_float_gen.scm
 	cat build/compiler_passes.scm vm/lir_interpreter.scm $(PASS_COMMON) $(C99_FRONTEND_SOURCES) driver/c_driver.scm tests/fuzz_xmm_float_gen.scm > build/fuzz_xmm_float_runner.scm
 	@USE_GOSH="$(USE_GOSH)" bash tests/test_fuzz_xmm_float.sh
 
