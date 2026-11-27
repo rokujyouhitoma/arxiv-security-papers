@@ -104,6 +104,15 @@
                        (list (list 'let (list (list var else-e)) body))
                        si env tail?)))
 
+    ;; Single-use argument forwarding into unary primitive: (let ((var val)) (prim var))
+    ((and (= (length bindings) 1)
+          (pair? body)
+          (= (length body) 2)
+          (unary-prim? (car body))
+          (eq? (cadr body) (caar bindings))
+          (not (assq (car body) env)))
+     (lir-compile-expr (list (car body) (cadar bindings)) si env tail?))
+
     ;; Single-use argument forwarding into 1-arg %direct-call: (let ((var val)) (%direct-call label var))
     ((and (= (length bindings) 1)
           (pair? body)

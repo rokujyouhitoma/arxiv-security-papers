@@ -214,8 +214,15 @@
   closure-convert
   alias-escape-all
   generate-lir
+  *enable-lir-linear-scan*
+  lir-linear-scan-enabled?
+  set-lir-linear-scan-enabled!
+  lir-imm32-constant
   lir-fuse-branches
   lir-peephole-optimize
+  *enable-lir-linear-scan*
+  lir-linear-scan-enabled?
+  set-lir-linear-scan-enabled!
   port-write-bytevector-range
   port-write-bytevector
   port-read-char

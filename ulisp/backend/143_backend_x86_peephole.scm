@@ -122,10 +122,10 @@
                  (x86-asm-reg? r2)
                  (not (equal? r1 r2))
                  (equal? r3 r1)
-                 (or (integer? imm)
-                     (and (pair? imm) (eq? (car imm) '%imm) (integer? (cadr imm))))))
-     (let ((c (if (integer? imm) imm (cadr imm))))
-       (cons (list 'lea r1 (list '%disp c r2)) rest)))))
+                 (x86-imm-int imm)
+                 (x86-disp32-int? (x86-imm-int imm))
+                 (or (null? rest) (not (x86-asm-reads-flags? (car rest))))))
+     (cons (list 'lea r1 (list '%disp (x86-imm-int imm) r2)) rest))))
 
 (define (x86-imm-int opnd)
   (cond

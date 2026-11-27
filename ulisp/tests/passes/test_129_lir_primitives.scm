@@ -29,11 +29,18 @@
             (cond ((null? xs) #f)
                   ((equal? (car xs) '(%bit-and %rdx 3)) #t)
                   (else (loop (cdr xs))))))))
-  ;; 1. (+ (car p) 1) -> %load %rdx %rsp -8 + %bit-and %rdx 3, no %bit-or %rdx
+  ;; 1. (+ (car p) 1) -> zero-spill %mov %rdx %rax + %bit-and %rdx 3 with linear scan;
+  ;;    falls back to %load %rdx %rsp -8 when linear scan is disabled (Issue #955)
   (let ((insts (capture-binop '+ '(car p) 1)))
     (assert-false "(+ (car p) 1) omits %bit-or %rdx" (has-bit-or-stack? insts))
-    (assert-true "(+ (car p) 1) keeps %load %rdx %rsp -8" (member '(%load %rdx %rsp -8) insts))
+    (assert-true "(+ (car p) 1) checks %rax directly via %mov %rdx %rax" (member '(%mov %rdx %rax) insts))
     (assert-true "(+ (car p) 1) keeps %bit-and %rdx 3" (has-bit-and-rdx? insts)))
+  (set-lir-linear-scan-enabled! #f)
+  (let ((insts-no-ls (capture-binop '+ '(car p) 1)))
+    (assert-false "(+ (car p) 1) [no-ls] omits %bit-or %rdx" (has-bit-or-stack? insts-no-ls))
+    (assert-true "(+ (car p) 1) [no-ls] keeps %load %rdx %rsp -8" (member '(%load %rdx %rsp -8) insts-no-ls))
+    (assert-true "(+ (car p) 1) [no-ls] keeps %bit-and %rdx 3" (has-bit-and-rdx? insts-no-ls)))
+  (set-lir-linear-scan-enabled! #t)
 
   ;; 2. (+ 1 (car p)) -> %mov %rdx %rax + %bit-and %rdx 3, no %bit-or %rdx
   (let ((insts (capture-binop '+ 1 '(car p))))

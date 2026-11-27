@@ -3033,8 +3033,67 @@
   lir-peephole-eval-bin-const
   lir-peephole-fold-int-const-ops
   lir-peephole-fold-consts-in-ir
+  %lir-make-filled-vector
+  lir-has-nested-blocks?
+  lir-peephole-stack-op-subst-safe?
+  lir-peephole-replace-stack-in-opnd
+  lir-peephole-subst-stack-read
+  lir-dse-linear-eliminate-dead-stack-stores
+  lir-dse-cfg-hard-barrier?
+  lir-dse-call-read-ivs
+  lir-dse-live-union
+  lir-dse-split-blocks
+  lir-dse-block-succs
+  lir-dse-build-prev-nonloc-list
+  lir-dse-step-live
+  lir-sp-label-hash
+  lir-dse-inst-cannot-have-stack-opnd?
+  lir-dse-fold-inst-stack-opnds
+  lir-dse-prune-safepoint-bitmap
+  lir-cfg-eliminate-dead-stack-stores
+  lir-eliminate-dead-stack-stores-with-sp
+  lir-fwd-reg-overlaps?
+  lir-fwd-kill-reg
+  lir-fwd-kill-slot-range
+  lir-regalloc-inst-clobbers-rcx?
+  lir-regalloc-inst-mentions-or-writes?
+  lir-fwd-kill-by-inst
+  lir-fwd-subst-inst-stack-reads
+  lir-peephole-has-argc-prologue?
+  lir-peephole-has-self-prologue?
+  lir-forward-stack-slots
+  lir-forward-stack-slots-in-ir
+  lir-regalloc-any-call-or-gc?
+  lir-regalloc-caller-pool
+  lir-regalloc-slot-match
+  lir-regalloc-rewrite-inst
+  lir-regalloc-mark-unsafe-range
+  lir-regalloc-collect-unsafe-ivs-with-mode
+  lir-regalloc-collect-unsafe-ivs
+  lir-regalloc-slot-safe?
+  lir-regalloc-reg-bit
+  lir-regalloc-tree-reg-mask
+  lir-regalloc-inst-reg-mask
+  lir-regalloc-argc->mask
+  lir-regalloc-call-arg-use-mask
+  lir-regalloc-inst-use-def-masks
+  lir-regalloc-compute-global-reg-masks
+  lir-regalloc-pick-free-reg
+  lir-regalloc-local-segments
+  lir-regalloc-global-callfree
+  lir-regalloc-cleanup-movs
+  lir-linear-scan-allocate-body
+  lir-linear-scan-allocate-ir
+  lir-post-window-optimize-program
   %lir-all-eq?
   %lir-program-bodies-unchanged?
+  *enable-lir-linear-scan*
+  lir-linear-scan-enabled?
+  set-lir-linear-scan-enabled!
+  lir-imm32-constant
+  lir-simple-var-loc
+  lir-simple-cons-arg
+  lir-emit-cons-field!
   optimize-peephole-fixpoint
   lir-cmp-false-cc
   lir-cmp-true-cc

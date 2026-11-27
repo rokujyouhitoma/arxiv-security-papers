@@ -20,6 +20,9 @@
 ;;; Boxed accumulators for LIR instructions and stack tracking
 (define *lir-instructions* (cons '() '()))
 (define *lir-min-si* (cons 0 '()))
+(define *enable-lir-linear-scan* (cons #t '()))
+(define (lir-linear-scan-enabled?) (car *enable-lir-linear-scan*))
+(define (set-lir-linear-scan-enabled! v) (set-car! *enable-lir-linear-scan* (if v #t #f)))
 (define *stack-alloc-attr* (string->symbol ":stack-alloc"))
 (define (stack-alloc-attr? attr)
   (or (eq? attr *stack-alloc-attr*)

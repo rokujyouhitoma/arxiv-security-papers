@@ -3522,7 +3522,15 @@
   (and (pair? inst)
        (let ((op (car inst)))
          (case op
-           ((%mov %load %load-byte-zx %pop %code-ref %str-ref %global-addr %not
+           ((%load)
+            (or (and (pair? (cdr inst)) (lir-reg-aliases? (cadr inst) reg))
+                (and (lir-reg-aliases? reg '%rcx)
+                     (= (length inst) 4)
+                     (eq? (cadr inst) '%rax)
+                     (eq? (caddr inst) '%rax)
+                     (or (eqv? (cadddr inst) -1)
+                         (eqv? (cadddr inst) 7)))))
+           ((%mov %load-byte-zx %pop %code-ref %str-ref %global-addr %not
              %add %raw-add %sub %raw-sub %imul %raw-mul
              %bit-and %bit-or %bit-xor %shl %shr %sar
              %box-fixnum %unbox-fixnum %neg %inc

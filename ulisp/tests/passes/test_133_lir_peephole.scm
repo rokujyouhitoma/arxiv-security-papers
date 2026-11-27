@@ -400,4 +400,52 @@
   (assert-true "program with (%shr %rax %rcx) satisfies L_lir_canonical?"
                (L_lir_canonical? (lir-peephole-optimize rcx-prog))))
 
+;; 23. Issue #961: Arbitrary-distance forwarding, CFG-DSE across <=6-arg calls, and call-free linear scan
+(let* ((prog-cons-like
+        (make-test-program
+         '((%store %rsp -8 %rax)
+           (%mov %rax %r12)
+           (%add %rax 9)
+           (%add %r12 24)
+           (%mov %rdx 4196356)
+           (%store %rax -9 %rdx)
+           (%load %rdx %rsp -8)
+           (%store %rax 7 %rdx)
+           (%return %rax))))
+       (opt-cons (lir-peephole-optimize prog-cons-like))
+       (opt-cons-body (cdr (assq 'body (cdr (assq '%lir-main (cdr opt-cons))))))
+       (has-rsp-mem?
+        (let loop ((xs opt-cons-body))
+          (and (pair? xs)
+               (or (and (pair? (car xs))
+                        (memq (caar xs) '(%store %load))
+                        (lir-dse-tree-contains-sym? (car xs) '%rsp))
+                   (loop (cdr xs))))))
+       (prog-cfg-dse
+        '(%lir-program
+          (strings ())
+          (stackmaps ((sp_dead 32 2)))
+          (%lir-functions)
+          (%lir-main
+           (frame-size 32)
+           (body
+            (%store %rsp -24 %rdi)
+            (%mov %rax 0)
+            (%direct-call foo 32 sp_dead)
+            (%mov %rax 4)
+            (%return %rax)))))
+       (opt-cfg (lir-peephole-optimize prog-cfg-dse))
+       (opt-cfg-body (cdr (assq 'body (cdr (assq '%lir-main (cdr opt-cfg))))))
+       (opt-cfg-sp (cadr (assq 'stackmaps (cdr opt-cfg)))))
+  (assert-false "linear scan eliminates [rsp -8] store & reload across lowered alloc"
+                has-rsp-mem?)
+  (assert-true "linear scan output satisfies L_lir_canonical?"
+               (L_lir_canonical? opt-cons))
+  (assert-equal "CFG-DSE drops unread -24 spill before <=6-arg call & prunes dead stackmap bit"
+                '((%mov %rax 0) (%direct-call foo 32 sp_dead) (%mov %rax 4) (%return %rax))
+                opt-cfg-body)
+  (assert-equal "dead stackmap bit cleared when pre-call store eliminated"
+                '((sp_dead 32 0))
+                opt-cfg-sp))
+
 (test-end "Pass 133 (LIR Peephole & DCE)")

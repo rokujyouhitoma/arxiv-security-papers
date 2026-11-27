@@ -242,4 +242,19 @@
                   (jcc jl L_neg)
                   (ret))))
 
+;; 18. LEA optimization guards live RFLAGS (Issue #961)
+(assert-equal "mov + add preserves flags when followed by jo"
+              '((mov rcx rax) (add rcx 4) (jcc jo L_slow) (ret))
+              (optimize-x86-peephole-insts
+                '((mov rcx rax)
+                  (add rcx 4)
+                  (jcc jo L_slow)
+                  (ret))))
+(assert-equal "mov + add folds to lea when RFLAGS not read"
+              '((lea rcx (%disp 4 rax)) (ret))
+              (optimize-x86-peephole-insts
+                '((mov rcx rax)
+                  (add rcx 4)
+                  (ret))))
+
 (test-end "Pass 143 (x86-64 Machine Peephole)")
