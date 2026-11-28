@@ -6,13 +6,18 @@
 
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
-| **960** | 未参照関数の削除（関数・クロージャ毎セクション分割＋`--gc-sections` ＆ 到達可能性解析） | Feature | In Progress | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
-| **973** | L_mir_ssa 上の共通 SSA データフロー最適化群（SCCP・SSA-GVN・ADCE）の実装と 133_lir_peephole.scm のパス分解 | Feature | New | [973-implement-ssa-sccp-gvn-adce-and-decompose-lir-peephole.md](973-implement-ssa-sccp-gvn-adce-and-decompose-lir-peephole.md) |
+| **973** | L_mir_ssa 上の共通 SSA データフロー最適化群（SCCP・SSA-GVN・ADCE）の実装と 133_lir_peephole.scm のパス分解 | Feature | In Progress | [973-implement-ssa-sccp-gvn-adce-and-decompose-lir-peephole.md](973-implement-ssa-sccp-gvn-adce-and-decompose-lir-peephole.md) |
 | **974** | エスケープ解析の関数間要約・TBAA 責務分離および構造体・非エスケープオブジェクトのスカラー置換（SRA）実装 | Feature | New | [974-refactor-alias-escape-and-implement-scalar-replacement-of-aggregates.md](974-refactor-alias-escape-and-implement-scalar-replacement-of-aggregates.md) |
 | **975** | 継続化（Contification）の相互再帰・複数束縛 letrec 拡張および Flonum 関数間アンボックス化強化 | Feature | New | [975-extend-contification-for-mutual-recursion-and-interprocedural-flonum-unboxing.md](975-extend-contification-for-mutual-recursion-and-interprocedural-flonum-unboxing.md) |
-| **976** | SSA ループ解析基盤（自然ループ検出）と LICM（ループ不変コード移動）パスの実装 | Feature | New | [976-implement-ssa-loop-analysis-and-licm-pass.md](976-implement-ssa-loop-analysis-and-licm-pass.md) |
+| **976** | SSA ループ解析基盤（自然ループ検出）と LICM（ループ不変コード移動）パスの実装 | Feature | In Progress | [976-implement-ssa-loop-analysis-and-licm-pass.md](976-implement-ssa-loop-analysis-and-licm-pass.md) |
 | **977** | 投機的ループ・アンチェック化（Loop Unswitching / 型タグ検査・配列境界チェックのループ外巻き上げ）の実装 | Feature | New | [977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md](977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md) |
 | **978** | 高水準リスト・ストリーム融合（Loop Fusion / Deforestation）パスの導入 | Feature | New | [978-implement-list-and-stream-loop-fusion-deforestation-pass.md](978-implement-list-and-stream-loop-fusion-deforestation-pass.md) |
+| **982** | x86-64 アドレッシングモード融合（Base+Disp / SIB Scaled Index）と連続 mov コピー伝播によるポインタ参照高速化 | Feature | In Progress | [982-fuse-x86-64-addressing-modes-and-eliminate-redundant-mov-chains.md](982-fuse-x86-64-addressing-modes-and-eliminate-redundant-mov-chains.md) |
+| **983** | 複雑 CFG（switch/goto/ループ）対応の C99 SSA mem2reg 拡張・ブロック内 Load-Store Forwarding・スタックフレーム圧縮 | Feature | In Progress | [983-extend-c99-ssa-mem2reg-and-register-allocation-for-complex-cfgs.md](983-extend-c99-ssa-mem2reg-and-register-allocation-for-complex-cfgs.md) |
+| **984** | C99 32-bit int 窄め最適化（冗長 movsxd 除去）と x86-64 命令選択の小型化（test 置換・アラインメント最適化） | Feature | In Progress | [984-eliminate-redundant-movsxd-sign-extensions-and-compact-x86-codegen.md](984-eliminate-redundant-movsxd-sign-extensions-and-compact-x86-codegen.md) |
+| **985** | 090_rtyper のセーフポイント透過アンボックス化と非アロケート純粋整数関数の Unboxed Direct Fast-Call ABI 導入 | Feature | In Progress | [985-enable-safepoint-transparent-rtyper-unboxing-and-unboxed-fast-call-abi.md](985-enable-safepoint-transparent-rtyper-unboxing-and-unboxed-fast-call-abi.md) |
+| **986** | Scheme カウントループ（loop_10m / closure_1m）の物理レジスタピン留めと Cold セーフポイント分離・ストリップマイニング | Feature | In Progress | [986-pin-scheme-counted-loop-registers-and-hoist-cold-safepoints.md](986-pin-scheme-counted-loop-registers-and-hoist-cold-safepoints.md) |
+| **987** | Freestanding ランタイムスタブ (140e) の関数別セクション分割と Pass 144 自前 ELF64 静的リンカの到達可能性 Dead Section GC | Feature | In Progress | [987-implement-per-symbol-section-splitting-and-pass-144-dead-section-gc.md](987-implement-per-symbol-section-splitting-and-pass-144-dead-section-gc.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 

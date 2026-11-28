@@ -1,322 +1,289 @@
 {
-  "timestamp": "2026-11-21 19:03:45",
-  "system": {
-    "os": "Linux",
-    "arch": "x86_64",
-    "processor": "x86_64",
-    "python_version": "3.14.7"
-  },
-  "config": {
-    "iterations": 5,
-    "compiler": "ulisp/bin/ulisp-jit",
-    "jit_bin": "ulisp/bin/ulisp-jit",
-    "perf_enabled": false
-  },
+  "timestamp": "2026-11-28T08:35:08.517871+00:00",
+  "os": "Linux",
+  "arch": "x86_64",
+  "kernel": "6.18.58.1-microsoft-standard-WSL2",
+  "cpu_model": "11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz",
+  "cpu_count": 4,
+  "mem_total": "12251696 kB",
+  "gcc": "13",
+  "perf_enabled": false,
   "results": [
     {
-      "workload_id": "fib_loop",
-      "title": "Iterative Fibonacci (fib 20)",
-      "description": "Multi-variable state transition and sequential additions",
-      "iterations": 5,
-      "correctness": {
-        "ilisp_valid": true,
-        "aot_valid": true,
-        "jit_valid": true,
-        "expected": "6765",
-        "actual_ilisp": "6765",
-        "actual_aot": "6765",
-        "actual_jit": "6765"
+      "id": "fib_30",
+      "name": "Fibonacci (fib 30)",
+      "expected": "832040",
+      "x86": {
+        "mean_ms": 5.482302866666666,
+        "median_ms": 5.343472,
+        "min_ms": 5.092917,
+        "max_ms": 7.007058,
+        "std_ms": 0.4450425039356263,
+        "size_bytes": 28128
       },
-      "ilisp": {
-        "mean_ms": 70.63798859744566,
-        "std_ms": 3.52691170553837,
-        "min_ms": 67.13021200266667,
-        "max_ms": 74.35635599540547,
-        "raw_samples_ms": [
-          74.24315599928377,
-          70.02402499347227,
-          67.4361939964001,
-          67.13021200266667,
-          74.35635599540547
-        ]
+      "ulisp_c": {
+        "mean_ms": 7.8574356,
+        "median_ms": 7.7011579999999995,
+        "min_ms": 7.41797,
+        "max_ms": 10.654728,
+        "std_ms": 0.6475563091181045,
+        "size_bytes": 17280
       },
-      "ulisp_aot": {
-        "compile_ms": 80.74062100058654,
-        "mean_ms": 0.6600058011827059,
-        "std_ms": 0.15289078598027903,
-        "min_ms": 0.5589409993262962,
-        "max_ms": 0.9281399979954585,
-        "raw_samples_ms": [
-          0.9281399979954585,
-          0.6097030054661445,
-          0.633597002888564,
-          0.5589409993262962,
-          0.5696480002370663
-        ]
+      "pure_c": {
+        "mean_ms": 1.8625046333333333,
+        "median_ms": 1.786178,
+        "min_ms": 1.658343,
+        "max_ms": 2.487816,
+        "std_ms": 0.19785153665198202,
+        "size_bytes": 16048
       },
-      "ulisp_jit": {
-        "mean_ms": 8.630910998908803,
-        "std_ms": 0.7285928789345111,
-        "min_ms": 7.608166997670196,
-        "max_ms": 9.3685239990009,
-        "raw_samples_ms": [
-          9.05371500266483,
-          9.3685239990009,
-          8.14669999817852,
-          8.977448997029569,
-          7.608166997670196
-        ]
+      "ratio_x86_to_pure_c": 2.943510995113587,
+      "ratio_x86_to_ulisp_c": 0.6977216417359713,
+      "chez": {
+        "mean_ms": 48.5068347,
+        "median_ms": 47.993938,
+        "min_ms": 46.928803,
+        "max_ms": 52.409613,
+        "std_ms": 1.5389094600090494
       },
-      "speedups": {
-        "aot_vs_ilisp": 107.02631472460546,
-        "jit_vs_ilisp": 8.184302746995808,
-        "aot_vs_jit": 13.07702293440835
-      },
-      "perf": {}
+      "ratio_x86_to_chez": 0.11302124536826696,
+      "gauche": {
+        "mean_ms": 81.1515831,
+        "median_ms": 80.16552300000001,
+        "min_ms": 75.901377,
+        "max_ms": 86.801236,
+        "std_ms": 3.7393753642858147
+      }
     },
     {
-      "workload_id": "fact_loop",
-      "title": "Iterative Factorial (fact 12)",
-      "description": "64-bit integer multiplication and accumulator updates",
-      "iterations": 5,
-      "correctness": {
-        "ilisp_valid": true,
-        "aot_valid": true,
-        "jit_valid": true,
-        "expected": "479001600",
-        "actual_ilisp": "479001600",
-        "actual_aot": "479001600",
-        "actual_jit": "479001600"
+      "id": "loop_10m",
+      "name": "Tail-Recursive Loop (10M)",
+      "expected": "49999995000000",
+      "x86": {
+        "mean_ms": 11.523661,
+        "median_ms": 11.437591000000001,
+        "min_ms": 10.875279,
+        "max_ms": 13.141731,
+        "std_ms": 0.4892341215187336,
+        "size_bytes": 27384
       },
-      "ilisp": {
-        "mean_ms": 65.35726539877942,
-        "std_ms": 0.8228513806314292,
-        "min_ms": 64.22520000342047,
-        "max_ms": 66.1663509963546,
-        "raw_samples_ms": [
-          66.1663509963546,
-          64.97929499892052,
-          64.22520000342047,
-          66.14570099918637,
-          65.26977999601513
-        ]
+      "ulisp_c": {
+        "mean_ms": 23.1813087,
+        "median_ms": 22.002200000000002,
+        "min_ms": 20.516125,
+        "max_ms": 33.704607,
+        "std_ms": 3.071812865556128,
+        "size_bytes": 16896
       },
-      "ulisp_aot": {
-        "compile_ms": 81.38818400038872,
-        "mean_ms": 0.43104899814352393,
-        "std_ms": 0.07249397910285597,
-        "min_ms": 0.3443039968260564,
-        "max_ms": 0.5349109997041523,
-        "raw_samples_ms": [
-          0.5349109997041523,
-          0.46639199717901647,
-          0.41131299803964794,
-          0.3983249989687465,
-          0.3443039968260564
-        ]
+      "pure_c": {
+        "mean_ms": 0.5627342666666667,
+        "median_ms": 0.540983,
+        "min_ms": 0.456974,
+        "max_ms": 0.752253,
+        "std_ms": 0.0631462588287253,
+        "size_bytes": 16016
       },
-      "ulisp_jit": {
-        "mean_ms": 8.670941001037136,
-        "std_ms": 0.7066037900705728,
-        "min_ms": 7.618067000294104,
-        "max_ms": 9.186372997646686,
-        "raw_samples_ms": [
-          9.15101600548951,
-          8.257569999841508,
-          9.141679001913872,
-          7.618067000294104,
-          9.186372997646686
-        ]
+      "ratio_x86_to_pure_c": 20.477979896728048,
+      "ratio_x86_to_ulisp_c": 0.4971100272695131,
+      "chez": {
+        "mean_ms": 63.774749299999996,
+        "median_ms": 63.225245,
+        "min_ms": 60.650896,
+        "max_ms": 67.557914,
+        "std_ms": 2.5746060729706057
       },
-      "speedups": {
-        "aot_vs_ilisp": 151.6237496903259,
-        "jit_vs_ilisp": 7.537505489999528,
-        "aot_vs_jit": 20.115905705341696
-      },
-      "perf": {}
+      "ratio_x86_to_chez": 0.18069316032575924,
+      "gauche": {
+        "mean_ms": 201.6591712,
+        "median_ms": 197.37280049999998,
+        "min_ms": 187.445655,
+        "max_ms": 251.866288,
+        "std_ms": 19.070517716076434
+      }
     },
     {
-      "workload_id": "sum_loop",
-      "title": "Hot Loop Accumulation (5,000 iters)",
-      "description": "Named-let hot loop: tests JIT loop trace recording & branch prediction",
-      "iterations": 5,
-      "correctness": {
-        "ilisp_valid": true,
-        "aot_valid": true,
-        "jit_valid": true,
-        "expected": "12497500",
-        "actual_ilisp": "12497500",
-        "actual_aot": "12497500",
-        "actual_jit": "12497500"
+      "id": "ack_3_7",
+      "name": "Ackermann (ack 3 7)",
+      "expected": "1021",
+      "x86": {
+        "mean_ms": 3.6849993666666667,
+        "median_ms": 3.6584465,
+        "min_ms": 3.514159,
+        "max_ms": 4.194172,
+        "std_ms": 0.13814029304958939,
+        "size_bytes": 28368
       },
-      "ilisp": {
-        "mean_ms": 104.32372400246095,
-        "std_ms": 3.3191713308460598,
-        "min_ms": 100.61006300384179,
-        "max_ms": 108.35660200245911,
-        "raw_samples_ms": [
-          102.28923800605116,
-          103.1317239976488,
-          107.23099300230388,
-          108.35660200245911,
-          100.61006300384179
-        ]
+      "ulisp_c": {
+        "mean_ms": 4.5889812333333335,
+        "median_ms": 4.5598790000000005,
+        "min_ms": 4.344457,
+        "max_ms": 4.966734,
+        "std_ms": 0.1615185413022045,
+        "size_bytes": 17312
       },
-      "ulisp_aot": {
-        "compile_ms": 48.89084000024013,
-        "mean_ms": 0.3532051996444352,
-        "std_ms": 0.06325450913878967,
-        "min_ms": 0.30540900479536504,
-        "max_ms": 0.4634930010070093,
-        "raw_samples_ms": [
-          0.4634930010070093,
-          0.3371239945408888,
-          0.3194859964423813,
-          0.30540900479536504,
-          0.34051400143653154
-        ]
+      "pure_c": {
+        "mean_ms": 0.9852065666666666,
+        "median_ms": 0.9760854999999999,
+        "min_ms": 0.845252,
+        "max_ms": 1.285842,
+        "std_ms": 0.087160549296699,
+        "size_bytes": 16048
       },
-      "ulisp_jit": {
-        "mean_ms": 18.813901201065164,
-        "std_ms": 0.318145170322105,
-        "min_ms": 18.402733003313188,
-        "max_ms": 19.183805998181924,
-        "raw_samples_ms": [
-          19.183805998181924,
-          18.59422100096708,
-          19.035673001781106,
-          18.402733003313188,
-          18.85307300108252
-        ]
+      "ratio_x86_to_pure_c": 3.7403317145301207,
+      "ratio_x86_to_ulisp_c": 0.803010337000216,
+      "chez": {
+        "mean_ms": 49.2043564,
+        "median_ms": 48.684451,
+        "min_ms": 47.384019,
+        "max_ms": 51.520222,
+        "std_ms": 1.6791836686071389
       },
-      "speedups": {
-        "aot_vs_ilisp": 295.36293380584885,
-        "jit_vs_ilisp": 5.545034115335664,
-        "aot_vs_jit": 53.26620678292605
-      },
-      "perf": {}
+      "ratio_x86_to_chez": 0.07489172984420271,
+      "gauche": {
+        "mean_ms": 62.7466491,
+        "median_ms": 60.3245965,
+        "min_ms": 59.401226,
+        "max_ms": 79.801871,
+        "std_ms": 6.17232640286019
+      }
     },
     {
-      "workload_id": "poly_loop",
-      "title": "Polynomial Loop 3x^2+5x+7 (1,000 iters)",
-      "description": "Heavy arithmetic instruction pipeline, register allocation, and loop optimization",
-      "iterations": 5,
-      "correctness": {
-        "ilisp_valid": true,
-        "aot_valid": true,
-        "jit_valid": true,
-        "expected": "1001005000",
-        "actual_ilisp": "1001005000",
-        "actual_aot": "1001005000",
-        "actual_jit": "1001005000"
+      "id": "closure_1m",
+      "name": "Higher-Order Closure (1M)",
+      "expected": "1000000",
+      "x86": {
+        "mean_ms": 1.4199636333333334,
+        "median_ms": 1.4086085000000002,
+        "min_ms": 1.297061,
+        "max_ms": 1.746699,
+        "std_ms": 0.10353776503668578,
+        "size_bytes": 27384
       },
-      "ilisp": {
-        "mean_ms": 83.43452460103435,
-        "std_ms": 1.809090388643243,
-        "min_ms": 81.15279999765335,
-        "max_ms": 85.69731400348246,
-        "raw_samples_ms": [
-          85.69731400348246,
-          83.51239400508348,
-          82.2309729992412,
-          84.57914199971128,
-          81.15279999765335
-        ]
+      "ulisp_c": {
+        "mean_ms": 2.6948042666666665,
+        "median_ms": 2.681992,
+        "min_ms": 2.50295,
+        "max_ms": 3.070444,
+        "std_ms": 0.11636598738253649,
+        "size_bytes": 16904
       },
-      "ulisp_aot": {
-        "compile_ms": 81.37912900565425,
-        "mean_ms": 0.519654800882563,
-        "std_ms": 0.08451140017434622,
-        "min_ms": 0.42661400220822543,
-        "max_ms": 0.6581810011994094,
-        "raw_samples_ms": [
-          0.6581810011994094,
-          0.5090620034025051,
-          0.42661400220822543,
-          0.5012990004615858,
-          0.5031179971410893
-        ]
+      "pure_c": {
+        "mean_ms": 0.5535003333333334,
+        "median_ms": 0.534463,
+        "min_ms": 0.485927,
+        "max_ms": 0.699516,
+        "std_ms": 0.05898225208182271,
+        "size_bytes": 16024
       },
-      "ulisp_jit": {
-        "mean_ms": 11.428592399170157,
-        "std_ms": 0.7967594013657049,
-        "min_ms": 10.313366998161655,
-        "max_ms": 12.531690001196694,
-        "raw_samples_ms": [
-          12.531690001196694,
-          11.524859997734893,
-          10.313366998161655,
-          11.568103000172414,
-          11.204941998585127
-        ]
+      "ratio_x86_to_pure_c": 2.565425073516969,
+      "ratio_x86_to_ulisp_c": 0.526926445418522,
+      "chez": {
+        "mean_ms": 49.9652265,
+        "median_ms": 50.0366175,
+        "min_ms": 48.595513,
+        "max_ms": 51.326587,
+        "std_ms": 0.7613013874684529
       },
-      "speedups": {
-        "aot_vs_ilisp": 160.5575941169641,
-        "jit_vs_ilisp": 7.300507506689331,
-        "aot_vs_jit": 21.992662012859782
-      },
-      "perf": {}
+      "ratio_x86_to_chez": 0.02841903725450606,
+      "gauche": {
+        "mean_ms": 62.3953976,
+        "median_ms": 61.983773,
+        "min_ms": 59.344419,
+        "max_ms": 65.29373,
+        "std_ms": 1.832285644968248
+      }
     },
     {
-      "workload_id": "tri_loop",
-      "title": "Triangular Sum (tri 500)",
-      "description": "Linear iteration counter decrement and accumulator addition",
-      "iterations": 5,
-      "correctness": {
-        "ilisp_valid": true,
-        "aot_valid": true,
-        "jit_valid": true,
-        "expected": "125250",
-        "actual_ilisp": "125250",
-        "actual_aot": "125250",
-        "actual_jit": "125250"
+      "id": "list_100k",
+      "name": "List Alloc & Traverse (100k)",
+      "expected": "5000050000",
+      "x86": {
+        "mean_ms": 1.3491178666666668,
+        "median_ms": 1.2827015,
+        "min_ms": 1.162841,
+        "max_ms": 1.690351,
+        "std_ms": 0.15323092961318072,
+        "size_bytes": 27928
       },
-      "ilisp": {
-        "mean_ms": 75.86164020030992,
-        "std_ms": 4.693538527039993,
-        "min_ms": 70.75315099791624,
-        "max_ms": 83.10257000266574,
-        "raw_samples_ms": [
-          75.42634700075723,
-          70.75315099791624,
-          77.0080419970327,
-          83.10257000266574,
-          73.01809100317769
-        ]
+      "ulisp_c": {
+        "mean_ms": 1.6951233333333333,
+        "median_ms": 1.6679985,
+        "min_ms": 1.481117,
+        "max_ms": 2.01839,
+        "std_ms": 0.1610029501540231,
+        "size_bytes": 17208
       },
-      "ulisp_aot": {
-        "compile_ms": 80.8123339957092,
-        "mean_ms": 0.6075272001908161,
-        "std_ms": 0.1707957923555432,
-        "min_ms": 0.46767800085945055,
-        "max_ms": 0.8591750010964461,
-        "raw_samples_ms": [
-          0.8591750010964461,
-          0.7106159973773174,
-          0.5065950026619248,
-          0.49357199895894155,
-          0.46767800085945055
-        ]
+      "pure_c": {
+        "mean_ms": 1.4263136333333333,
+        "median_ms": 1.238887,
+        "min_ms": 1.094629,
+        "max_ms": 2.684179,
+        "std_ms": 0.3759209449356921,
+        "size_bytes": 16104
       },
-      "ulisp_jit": {
-        "mean_ms": 9.446025200304575,
-        "std_ms": 0.8838259035922021,
-        "min_ms": 8.869519995641895,
-        "max_ms": 10.977306999848224,
-        "raw_samples_ms": [
-          10.977306999848224,
-          9.101909003220499,
-          8.873728998878505,
-          8.869519995641895,
-          9.407661003933754
-        ]
+      "ratio_x86_to_pure_c": 0.9458774249487766,
+      "ratio_x86_to_ulisp_c": 0.795881833573565,
+      "chez": {
+        "mean_ms": 48.4358254,
+        "median_ms": 48.3524825,
+        "min_ms": 46.866202,
+        "max_ms": 49.655909,
+        "std_ms": 0.9342676198505201
       },
-      "speedups": {
-        "aot_vs_ilisp": 124.86953699601072,
-        "jit_vs_ilisp": 8.031064769747159,
-        "aot_vs_jit": 15.548316515437838
+      "ratio_x86_to_chez": 0.027853718926542065,
+      "gauche": {
+        "mean_ms": 46.519069,
+        "median_ms": 46.1399075,
+        "min_ms": 45.685914,
+        "max_ms": 48.268339,
+        "std_ms": 0.8269421637090333
+      }
+    },
+    {
+      "id": "vector_100k",
+      "name": "Vector Indexing & Traverse (100k)",
+      "expected": "4200000",
+      "x86": {
+        "mean_ms": 1.4886950666666667,
+        "median_ms": 1.393475,
+        "min_ms": 1.211149,
+        "max_ms": 2.339591,
+        "std_ms": 0.3036457736615926,
+        "size_bytes": 28304
       },
-      "perf": {}
+      "ulisp_c": {
+        "mean_ms": 1.5262629666666667,
+        "median_ms": 1.4901870000000002,
+        "min_ms": 1.323306,
+        "max_ms": 2.052238,
+        "std_ms": 0.1861128091823813,
+        "size_bytes": 17480
+      },
+      "pure_c": {
+        "mean_ms": 0.8441859,
+        "median_ms": 0.832862,
+        "min_ms": 0.728182,
+        "max_ms": 0.991675,
+        "std_ms": 0.07081351557063392,
+        "size_bytes": 16104
+      },
+      "ratio_x86_to_pure_c": 1.763468291364102,
+      "ratio_x86_to_ulisp_c": 0.9753856964229122,
+      "chez": {
+        "mean_ms": 52.1721291,
+        "median_ms": 50.1702005,
+        "min_ms": 48.638716,
+        "max_ms": 71.067702,
+        "std_ms": 6.76228569155309
+      },
+      "ratio_x86_to_chez": 0.028534297762953797,
+      "gauche": {
+        "mean_ms": 45.0037232,
+        "median_ms": 45.100734,
+        "min_ms": 43.273077,
+        "max_ms": 46.536559,
+        "std_ms": 0.9403771480151274
+      }
     }
   ]
 }
