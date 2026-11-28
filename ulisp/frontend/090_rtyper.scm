@@ -193,6 +193,12 @@
            ((eq? (car e) fn-name) #t)
            ((eq? (car e) 'let)
             (loop-chk (caddr e) (+ depth 1)))
+           ((eq? (car e) 'begin)
+            (let bl ((es (cdr e)))
+              (cond
+                ((null? es) #f)
+                ((null? (cdr es)) (loop-chk (car es) (+ depth 1)))
+                (else (and (not (occurs-in? fn-name (car es))) (bl (cdr es)))))))
            ((eq? (car e) 'if)
             (let ((test (cadr e))
                   (then (caddr e))
@@ -465,9 +471,15 @@
              (box-raw-exit then raw-vars fn-name)
              (if (null? else-part) '() (box-raw-exit else-part raw-vars fn-name)))))
     ((eq? (car expr) 'let)
-     (let ((bindings (cadr expr))
-           (body (caddr expr)))
-       (list 'let bindings (box-raw-exit body raw-vars fn-name))))
+     (let* ((bindings (cadr expr))
+            (body (caddr expr))
+            (ext-raw (let loop ((bs bindings) (acc raw-vars))
+                       (if (null? bs) acc
+                           (let ((b (car bs)))
+                             (if (rtyper-raw-value-expr? (cadr b) acc)
+                                 (loop (cdr bs) (cons (car b) acc))
+                                 (loop (cdr bs) acc)))))))
+       (list 'let bindings (box-raw-exit body ext-raw fn-name))))
     ((eq? (car expr) 'begin)
      (let ((stmts (cdr expr)))
        (let loop ((rest stmts) (acc '()))
@@ -477,32 +489,41 @@
     (else
      expr)))
 
+(define (rtyper-box-if-raw expr raw-env)
+  (if (rtyper-raw-value-expr? expr raw-env)
+      (list '%box-fixnum expr)
+      expr))
+
 ;;; Lowers binary arithmetic operators to raw integer primitives when operands are raw
 (define (rtyper-binop op e1 e2 raw-env)
   (cond
     ((memq op '(+ - *))
      (let ((raw1? (or (and (integer? e1) (<= e1 536870911) (>= e1 -536870911))
-                      (and (symbol? e1) (raw-var? e1 raw-env))))
+                      (rtyper-raw-value-expr? e1 raw-env)))
            (raw2? (or (and (integer? e2) (<= e2 536870911) (>= e2 -536870911))
-                      (and (symbol? e2) (raw-var? e2 raw-env)))))
+                      (rtyper-raw-value-expr? e2 raw-env))))
        (if (and raw1? raw2?)
            (case op
              ((+) (list '%raw-add e1 e2))
              ((-) (list '%raw-sub e1 e2))
              ((*) (list '%raw-mul e1 e2)))
-           (list op e1 e2))))
+           (list op (rtyper-box-if-raw e1 raw-env) (rtyper-box-if-raw e2 raw-env)))))
     ((memq op '(= < <= > >=))
-     (let ((raw1? (and (symbol? e1) (raw-var? e1 raw-env)))
-           (raw2? (and (symbol? e2) (raw-var? e2 raw-env))))
+     (let ((raw1? (rtyper-raw-value-expr? e1 raw-env))
+           (raw2? (rtyper-raw-value-expr? e2 raw-env)))
        (cond
+         ((and raw1? raw2?)
+          (list op e1 e2))
          ((and raw1? (integer? e2))
           (list op e1 (list '%unbox-fixnum e2)))
          ((and (integer? e1) raw2?)
           (list op (list '%unbox-fixnum e1) e2))
+         ((or raw1? raw2?)
+          (list op (rtyper-box-if-raw e1 raw-env) (rtyper-box-if-raw e2 raw-env)))
          (else
           (list op e1 e2)))))
     (else
-     (list op e1 e2))))
+     (list op (rtyper-box-if-raw e1 raw-env) (rtyper-box-if-raw e2 raw-env)))))
 
 (define (rtyper-standard-let-bindings op bindings body raw-env unboxed-fns)
   (let* ((new-bindings
@@ -658,7 +679,7 @@
                (rtyper-standard-let-bindings op bindings body raw-env unboxed-fns)))))
          ((eq? op '-)
           (if (null? (cddr expr))
-              (list '- (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns))
+              (list '- (rtyper-box-if-raw (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns) raw-env))
               (rtyper-binop op (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns) (rtyper-expr-scoped (caddr expr) raw-env unboxed-fns) raw-env)))
          ((binop-prim? op)
           (rtyper-binop op (rtyper-expr-scoped (cadr expr) raw-env unboxed-fns) (rtyper-expr-scoped (caddr expr) raw-env unboxed-fns) raw-env))
@@ -668,22 +689,33 @@
             (list '%box-fixnum
                   (cons op
                         (map (lambda (arg)
-                               (if (and (symbol? arg) (raw-var? arg raw-env))
-                                   arg
-                                   (list '%unbox-fixnum (rtyper-expr-scoped arg raw-env unboxed-fns))))
+                               (let ((c-arg (rtyper-expr-scoped arg raw-env unboxed-fns)))
+                                 (if (rtyper-raw-value-expr? c-arg raw-env)
+                                     c-arg
+                                     (list '%unbox-fixnum c-arg))))
                              args)))))
          ((memq op unboxed-fns)
           ;; Boundary call into an unboxed loop: unbox non-raw arguments at entry
           (let ((args (cdr expr)))
             (cons op
                   (map (lambda (arg)
-                         (if (and (symbol? arg) (raw-var? arg raw-env))
-                             arg
-                             (list '%unbox-fixnum (rtyper-expr-scoped arg raw-env unboxed-fns))))
+                         (let ((c-arg (rtyper-expr-scoped arg raw-env unboxed-fns)))
+                           (if (rtyper-raw-value-expr? c-arg raw-env)
+                               c-arg
+                               (list '%unbox-fixnum c-arg))))
                        args))))
          (else
-          ;; General procedure call or syntax
-          (cons op (map (lambda (e) (rtyper-expr-scoped e raw-env unboxed-fns)) (cdr expr)))))))))
+          ;; General procedure call or primitive: ensure any raw values passed to tagged callees are boxed
+          (let ((compiled-args (map (lambda (e) (rtyper-expr-scoped e raw-env unboxed-fns)) (cdr expr))))
+            (cond
+              ((memq op '(%box-fixnum %unbox-fixnum %raw-add %raw-sub %raw-mul %direct-call))
+               (cons op compiled-args))
+              ((and (memq op '(vector-ref string-ref bytevector-u8-ref))
+                    (pair? compiled-args)
+                    (pair? (cdr compiled-args)))
+               (list op (rtyper-box-if-raw (car compiled-args) raw-env) (cadr compiled-args)))
+              (else
+               (cons op (map (lambda (a) (rtyper-box-if-raw a raw-env)) compiled-args)))))))))))
 
 
 (define (rtyper-expr expr raw-env)

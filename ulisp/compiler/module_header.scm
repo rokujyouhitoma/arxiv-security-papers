@@ -230,6 +230,14 @@
   run-frontend-fixpoint
   lvn-all
   anf-all
+  reset-cfa-state!
+  cfa-analyze-program
+  cfa-monomorphize-all
+  get-cfa-closure-set
+  get-cfa-singleton-target
+  get-cfa-lambda-info
+  cfa-lam-owner
+  cfa-lam-arity
   annotate-all
   rtyper-all
   contify-all

@@ -115,4 +115,23 @@
                 (type-fixnum)
                 (narrow-var-in-branch 'x '(fixnum? x) #t env)))
 
+;;; --- Group 5: 0-CFA Closure Set Lattice & Singleton Targets (Issue #972) ---
+(display "--- Group 5: 0-CFA Closure Flow Lattice ---") (newline)
+
+(reset-type-annotations!)
+(let* ((prog '(%program
+                ((define inc (lambda (x) (+ x 1))))
+                (let ((f inc))
+                  (let ((g (if #t f inc)))
+                    (g 41)))))
+       (_ (cfa-analyze-program prog))
+       (inc-set (get-cfa-closure-set 'inc))
+       (f-set (get-cfa-closure-set 'f))
+       (g-set (get-cfa-closure-set 'g)))
+  (assert-true "inc has singleton closure set" (and (pair? inc-set) (null? (cdr inc-set))))
+  (assert-equal "alias f propagates same closure id as inc" inc-set f-set)
+  (assert-equal "alias g merges to same singleton closure id" inc-set g-set)
+  (assert-true "get-cfa-singleton-target returns singleton lam-id for g"
+               (symbol? (get-cfa-singleton-target 'g))))
+
 (test-end "Pass 080 (S-Annotator Narrowing)")

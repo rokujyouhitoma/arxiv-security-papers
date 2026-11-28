@@ -76,4 +76,16 @@
                 (memq (mangle-fn-label 'dead-fn) fn-names))
   (assert-true "pruned output satisfies L_lifted?" (L_lifted? res)))
 
+;; 8. Issue #972: Known-function alias propagation to %direct-call without closure alloc
+(let* ((ast '(let ((f (lambda (x) (+ x 1))))
+               (let ((g f))
+                 (g 41))))
+       (res (closure-convert ast))
+       (main-e (caddr res)))
+  (assert-true "alias call (g 41) devirtualizes to %direct-call"
+               (occurs-in? '%direct-call main-e))
+  (assert-false "alias call avoids %make-closure-env allocation"
+                (occurs-in? '%make-closure-env main-e))
+  (assert-true "alias devirt output satisfies L_lifted?" (L_lifted? res)))
+
 (test-end "Pass 110 (Closure Conversion)")

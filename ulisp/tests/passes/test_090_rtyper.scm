@@ -230,4 +230,22 @@
                          ((eq? (car e) '%raw-add) #t)
                          (else (or (rec (car e)) (rec (cdr e)))))))))
 
+;; Test 14: Higher-Order Closure Loop (closure_1m pattern) Monomorphization -> Unboxing (Issue #972)
+(reset-type-annotations!)
+(init-default-pass-registry!)
+(set-pipeline-opt-level! 2)
+(let* ((orig (desugar-all '(letrec ((iter (lambda (n f acc)
+                                            (if (= n 0)
+                                                acc
+                                                (iter (- n 1) f (f acc))))))
+                             (iter 1000000 (lambda (x) (+ x 1)) 0))))
+       (anf (anf-all (cp0-optimize orig)))
+       (ann (annotate-all anf))
+       (typed (rtyper-all ann)))
+  (assert-true "closure_1m loop specialized and unboxed (uses %raw-add and %raw-sub)"
+               (and (occurs-in? '%raw-add typed)
+                    (occurs-in? '%raw-sub typed)))
+  (assert-false "closure_1m loop removes lambda closure parameter (no remaining lambda in loop args)"
+                (occurs-in? '(lambda (x) (+ x 1)) typed)))
+
 (test-end "Pass 090 (S-RTyper Lowering)")

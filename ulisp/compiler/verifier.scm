@@ -183,7 +183,7 @@
           ((not (atto-anf-invariants expr)) #f)
           ((eq? (car expr) 'lambda)
            (loop (caddr expr)))
-          ((eq? (car expr) 'let)
+          ((memq (car expr) '(let letrec))
            (let ((bindings (cadr expr))
                  (body (caddr expr)))
              (and (let b-loop ((bs bindings))
