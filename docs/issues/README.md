@@ -13,12 +13,12 @@
 | **976** | SSA ループ解析基盤（自然ループ検出）と LICM（ループ不変コード移動）パスの実装 | Feature | New | [976-implement-ssa-loop-analysis-and-licm-pass.md](976-implement-ssa-loop-analysis-and-licm-pass.md) |
 | **977** | 投機的ループ・アンチェック化（Loop Unswitching / 型タグ検査・配列境界チェックのループ外巻き上げ）の実装 | Feature | New | [977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md](977-implement-speculative-loop-unswitching-and-bounds-tag-check-elimination.md) |
 | **978** | 高水準リスト・ストリーム融合（Loop Fusion / Deforestation）パスの導入 | Feature | New | [978-implement-list-and-stream-loop-fusion-deforestation-pass.md](978-implement-list-and-stream-loop-fusion-deforestation-pass.md) |
-| **981** | L_lir_core 不動点最適化ループ（mem2reg・branch-fusion・peephole）の Scheme / C99 共通化 | Feature | New | [981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md](981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **981** | L_lir_core 不動点最適化ループの Scheme / C99 共通化と LIR / StagePoly 言語契約・仕様書統合是正 | Feature | 2026-11-28 | [981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md](closed/981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md) |
 | **972** | 全プログラム 0-CFA（制御フロー解析）による間接呼び出し脱仮想化と高階関数単相化・特化パスの導入 | Feature | 2026-11-28 | [972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md](closed/972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md) |
 | **971** | 汎用インライン展開 ＆ β-簡約パスの導入およびフロントエンド最適化（CP0/LVN/DCE）の Fixpoint 反復化 | Feature | 2026-11-28 | [971-implement-general-inliner-and-frontend-fixpoint-optimization.md](closed/971-implement-general-inliner-and-frontend-fixpoint-optimization.md) |
 | **970** | Hot/Cold 基本ブロック分離パス（Slow Path の関数末尾・Cold 領域隔離）の導入 | Feature | 2026-11-28 | [970-implement-hot-cold-basic-block-splitting-pass.md](closed/970-implement-hot-cold-basic-block-splitting-pass.md) |

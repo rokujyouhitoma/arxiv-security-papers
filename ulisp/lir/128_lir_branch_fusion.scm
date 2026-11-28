@@ -25,12 +25,16 @@
 
 (define (lir-invert-cond-op op)
   (cond
-    ((or (equal? op "je") (eq? op 'je) (eq? op 'equal) (eq? op 'zero)) "jne")
-    ((or (equal? op "jne") (eq? op 'jne) (eq? op 'not-equal) (eq? op 'not-zero)) "je")
-    ((or (equal? op "jl") (eq? op 'jl) (eq? op 'less)) "jge")
-    ((or (equal? op "jle") (eq? op 'jle) (eq? op 'less-equal)) "jg")
-    ((or (equal? op "jg") (eq? op 'jg) (eq? op 'greater)) "jle")
-    ((or (equal? op "jge") (eq? op 'jge) (eq? op 'greater-equal)) "jl")
+    ((or (equal? op "je") (equal? op "sete") (eq? op 'je) (eq? op 'sete) (eq? op 'equal) (eq? op 'zero)) "jne")
+    ((or (equal? op "jne") (equal? op "setne") (eq? op 'jne) (eq? op 'setne) (eq? op 'not-equal) (eq? op 'not-zero)) "je")
+    ((or (equal? op "jl") (equal? op "setl") (eq? op 'jl) (eq? op 'setl) (eq? op 'less)) "jge")
+    ((or (equal? op "jle") (equal? op "setle") (eq? op 'jle) (eq? op 'setle) (eq? op 'less-equal)) "jg")
+    ((or (equal? op "jg") (equal? op "setg") (eq? op 'jg) (eq? op 'setg) (eq? op 'greater)) "jle")
+    ((or (equal? op "jge") (equal? op "setge") (eq? op 'jge) (eq? op 'setge) (eq? op 'greater-equal)) "jl")
+    ((or (equal? op "jb") (equal? op "setb") (eq? op 'jb) (eq? op 'setb)) "jae")
+    ((or (equal? op "jbe") (equal? op "setbe") (eq? op 'jbe) (eq? op 'setbe)) "ja")
+    ((or (equal? op "ja") (equal? op "seta") (eq? op 'ja) (eq? op 'seta)) "jbe")
+    ((or (equal? op "jae") (equal? op "setae") (eq? op 'jae) (eq? op 'setae)) "jb")
     (else "jne")))
 
 (define (extract-fused-cmp-int e)

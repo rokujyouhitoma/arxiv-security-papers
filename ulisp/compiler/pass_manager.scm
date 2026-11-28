@@ -904,9 +904,10 @@
     ((or (not out-lang) (not in-lang)) #t)
     ((or (eq? out-lang 'any) (eq? in-lang 'any)) #t)
     ((eq? out-lang in-lang) #t)
-    ((and (or (eq? out-lang 'L_anf) (eq? out-lang 'L-StagePoly) (eq? out-lang 'L-Residual-ANF))
-          (or (eq? in-lang 'L_anf) (eq? in-lang 'L-StagePoly) (eq? in-lang 'L-Residual-ANF)))
-     #t)
+    ;; Stage-Polymorphic Partial Evaluation directional transitions (Pass 070 -> Pass 075 -> Pass 080/130)
+    ((and (eq? out-lang 'L_anf) (eq? in-lang 'L-StagePoly)) #t)
+    ((and (eq? out-lang 'L-Residual-ANF) (eq? in-lang 'L_anf)) #t)
+    ((and (eq? out-lang 'L-Residual-ANF) (eq? in-lang 'L_lir_managed)) #t)
     ;; Physical-register Machine LIR (L_lir_mach) is a strict physical-register subset of L_lir_core
     ((and (eq? out-lang 'L_lir_mach) (eq? in-lang 'L_lir_core))
      #t)
@@ -1260,7 +1261,14 @@
         (enable-nanopass-trace!))
     (let* ((opt-level (pipeline-opt-level))
            (disabled (pipeline-disabled-passes))
-           (pipeline (build-pipeline opt-level disabled)))
+           (pipeline (build-pipeline opt-level disabled))
+           (final-lir-phase
+            (if (let has-131? ((xs pipeline))
+                  (and (pair? xs)
+                       (or (eq? (pass-id (car xs)) 'pass-131-lower-managed-dialect)
+                           (has-131? (cdr xs)))))
+                'core-lir
+                'lir)))
       (validate-pipeline-prerequisites pipeline)
       (reset-pass-timings!)
       (let loop ((ps pipeline) (current-ast forms))
@@ -1269,25 +1277,41 @@
               (if (not prev-trace)
                   (disable-nanopass-trace!))
               (if verify-mode
-                  (if (not (verify-pass-output 'lir current-ast))
+                  (if (not (verify-pass-output final-lir-phase current-ast))
                       (error "IR Verifier Invariant Violation in final LIR" current-ast)))
               current-ast)
-            (if (frontend-fixpoint-pass-id? (pass-id (car ps)))
-                (let collect ((rem ps) (cluster '()))
-                  (if (and (pair? rem) (frontend-fixpoint-pass-id? (pass-id (car rem))))
-                      (collect (cdr rem) (cons (car rem) cluster))
-                      (let* ((ordered (reverse cluster))
-                             (next-ast
-                              (if (pair? (cdr ordered))
-                                  (run-pass-fixpoint-opts ordered current-ast
-                                                          (list ':max-iterations (frontend-fixpoint-max-iterations)
-                                                                ':equiv? equal?
-                                                                ':verify verify-mode
-                                                                ':trace trace-mode))
-                                  (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
-                        (loop rem next-ast))))
-                (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
-                  (loop (cdr ps) next-ast))))))))
+            (cond
+              ((frontend-fixpoint-pass-id? (pass-id (car ps)))
+               (let collect ((rem ps) (cluster '()))
+                 (if (and (pair? rem) (frontend-fixpoint-pass-id? (pass-id (car rem))))
+                     (collect (cdr rem) (cons (car rem) cluster))
+                     (let* ((ordered (reverse cluster))
+                            (next-ast
+                             (if (pair? (cdr ordered))
+                                 (run-pass-fixpoint-opts ordered current-ast
+                                                         (list ':max-iterations (frontend-fixpoint-max-iterations)
+                                                               ':equiv? equal?
+                                                               ':verify verify-mode
+                                                               ':trace trace-mode))
+                                 (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
+                       (loop rem next-ast)))))
+              ((and (>= opt-level 2) (lir-core-fixpoint-pass-id? (pass-id (car ps))))
+               (let collect ((rem ps) (cluster '()))
+                 (if (and (pair? rem) (lir-core-fixpoint-pass-id? (pass-id (car rem))))
+                     (collect (cdr rem) (cons (car rem) cluster))
+                     (let* ((ordered (reverse cluster))
+                            (next-ast
+                             (if (pair? (cdr ordered))
+                                 (run-pass-fixpoint-opts ordered current-ast
+                                                         (list ':max-iterations (lir-core-fixpoint-max-iterations)
+                                                               ':equiv? equal?
+                                                               ':verify verify-mode
+                                                               ':trace trace-mode))
+                                 (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
+                       (loop rem next-ast)))))
+              (else
+               (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
+                 (loop (cdr ps) next-ast)))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 7.1 Named Pipeline Execution Engine (DSN-33-01 T6.1 / Issue #768)
@@ -1326,7 +1350,9 @@
           (enable-verifier!)
           (if (eq? verify-mode 'strict)
               (set-verifier-strict! #t))))
-    (let ((prev-trace (nanopass-trace-enabled?)))
+    (let ((prev-trace (nanopass-trace-enabled?))
+          (opt-level (pipeline-opt-level))
+          (final-lir-phase (if (memq 'pass-131-lower-managed-dialect pass-ids) 'core-lir 'lir)))
       (if trace-mode
           (enable-nanopass-trace!))
       (reset-pass-timings!)
@@ -1336,26 +1362,42 @@
               (if (not prev-trace)
                   (disable-nanopass-trace!))
               (if (and verify-mode (eq? target-ir 'lir))
-                  (if (not (verify-pass-output 'lir current-ast))
+                  (if (not (verify-pass-output final-lir-phase current-ast))
                       (error "IR Verifier Invariant Violation in final LIR" current-ast)))
               current-ast)
-            (if (and (> (pipeline-opt-level) 0) (frontend-fixpoint-pass-id? (car ids)))
-                (let collect ((rem ids) (cluster '()))
-                  (if (and (pair? rem) (frontend-fixpoint-pass-id? (car rem)))
-                      (collect (cdr rem) (cons (lookup-pass (car rem)) cluster))
-                      (let* ((ordered (reverse cluster))
-                             (next-ast
-                              (if (pair? (cdr ordered))
-                                  (run-pass-fixpoint-opts ordered current-ast
-                                                          (list ':max-iterations (frontend-fixpoint-max-iterations)
-                                                                ':equiv? equal?
-                                                                ':verify verify-mode
-                                                                ':trace trace-mode))
-                                  (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
-                        (loop rem next-ast))))
-                (let* ((desc (lookup-pass (car ids)))
-                       (next-ast (run-single-pass desc current-ast verify-mode trace-mode)))
-                  (loop (cdr ids) next-ast))))))))
+            (cond
+              ((and (> opt-level 0) (frontend-fixpoint-pass-id? (car ids)))
+               (let collect ((rem ids) (cluster '()))
+                 (if (and (pair? rem) (frontend-fixpoint-pass-id? (car rem)))
+                     (collect (cdr rem) (cons (lookup-pass (car rem)) cluster))
+                     (let* ((ordered (reverse cluster))
+                            (next-ast
+                             (if (pair? (cdr ordered))
+                                 (run-pass-fixpoint-opts ordered current-ast
+                                                         (list ':max-iterations (frontend-fixpoint-max-iterations)
+                                                               ':equiv? equal?
+                                                               ':verify verify-mode
+                                                               ':trace trace-mode))
+                                 (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
+                       (loop rem next-ast)))))
+              ((and (>= opt-level 2) (lir-core-fixpoint-pass-id? (car ids)))
+               (let collect ((rem ids) (cluster '()))
+                 (if (and (pair? rem) (lir-core-fixpoint-pass-id? (car rem)))
+                     (collect (cdr rem) (cons (lookup-pass (car rem)) cluster))
+                     (let* ((ordered (reverse cluster))
+                            (next-ast
+                             (if (pair? (cdr ordered))
+                                 (run-pass-fixpoint-opts ordered current-ast
+                                                         (list ':max-iterations (lir-core-fixpoint-max-iterations)
+                                                               ':equiv? equal?
+                                                               ':verify verify-mode
+                                                               ':trace trace-mode))
+                                 (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
+                       (loop rem next-ast)))))
+              (else
+               (let* ((desc (lookup-pass (car ids)))
+                      (next-ast (run-single-pass desc current-ast verify-mode trace-mode)))
+                 (loop (cdr ids) next-ast)))))))))
 
 (define (run-current-pipeline forms verify-mode trace-mode)
   (run-named-pipeline (current-pipeline-name) forms verify-mode trace-mode))
@@ -1498,6 +1540,42 @@
        (if (null? active-ids)
            forms
            (run-pass-fixpoint active-ids forms
+                              ':max-iterations max-iters
+                              ':equiv? equal?))))))
+
+(define *lir-core-fixpoint-max-iterations* (cons 4 '()))
+(define (lir-core-fixpoint-max-iterations) (car *lir-core-fixpoint-max-iterations*))
+(define (set-lir-core-fixpoint-max-iterations! n) (set-car! *lir-core-fixpoint-max-iterations* n))
+
+(define (lir-core-fixpoint-pass-id? id)
+  (or (eq? id 'pass-132-c99-mem2reg)
+      (eq? id 'pass-128-lir-branch-fusion)
+      (eq? id 'pass-133-lir-peephole)))
+
+(define run-lir-core-fixpoint-pipeline
+  (case-lambda
+    ((lir)
+     (run-lir-core-fixpoint-pipeline lir #f (lir-core-fixpoint-max-iterations)))
+    ((lir mode)
+     (run-lir-core-fixpoint-pipeline lir mode (lir-core-fixpoint-max-iterations)))
+    ((lir mode max-iters)
+     (if (null? (car *pass-registry*))
+         (init-default-pass-registry!))
+     (if (null? (car *analysis-property-registry*))
+         (init-default-analysis-properties!))
+     (reset-analysis-cache!)
+     (let* ((disabled (pipeline-disabled-passes))
+            (cand-ids (cond
+                        ((pair? mode) mode)
+                        (mode '(pass-132-c99-mem2reg pass-128-lir-branch-fusion pass-133-lir-peephole))
+                        (else '(pass-128-lir-branch-fusion pass-133-lir-peephole))))
+            (active-ids (filter (lambda (id)
+                                  (and (pass-registered? id)
+                                       (not (memq id disabled))))
+                                cand-ids)))
+       (if (null? active-ids)
+           lir
+           (run-pass-fixpoint active-ids lir
                               ':max-iterations max-iters
                               ':equiv? equal?))))))
 
@@ -1678,7 +1756,7 @@
       (lambda (ir) (c99-lower-mir-pass-run ir)) 'mir-ssa 'L_lir_core 'L_mir_ssa '() #f))
   (register-pass!
     (make-pass-descriptor 'pass-c99-lower-abi "C99 System V AMD64 Aggregate & Variadic ABI Lowering" 'c99-fe 0
-      (lambda (ir) (c99-lower-abi-pass-run ir)) 'core-lir 'L_lir_core 'L_lir_core '(pass-c99-lower-mir) #f))
+      (lambda (ir) (c99-lower-abi-pass-run ir)) 'core-lir 'L_mir_ssa 'L_lir_core '(pass-c99-lower-mir) #f))
   (register-pass!
     (make-pass-descriptor 'pass-c99-lower-inline-asm "C99 AT&T to Intel Inline Asm Normalization" 'c99-fe 0
       (lambda (ir) (c99-lower-inline-asm-pass-run ir)) 'core-lir 'L_lir_core 'L_lir_core '(pass-c99-lower-abi) #f))
@@ -1689,7 +1767,7 @@
             ':invalidates '(cfg-dominators variable-liveness))))
   (register-pass!
     (make-pass-descriptor-with-opts 'pass-133-lir-peephole "LIR Peephole Optimization" 'middle 1
-      (lambda (lir) (lir-peephole-optimize lir)) 'lir 'L_lir_core 'L_lir_core '(pass-130-lir) #f
+      (lambda (lir) (lir-peephole-optimize lir)) 'core-lir 'L_lir_core 'L_lir_core '(pass-130-lir) #f
       (list ':preserves '(cfg-dominators)
             ':invalidates '(variable-liveness alias-sets))))
   ;; Execute external pluggable pass initialization hooks (e.g. Synapse Reduction Safepoints)
@@ -1702,16 +1780,7 @@
   #t)
 
 (define (run-c99-o2-fixpoint-pipeline lir)
-  (if (null? (car *pass-registry*))
-      (init-default-pass-registry!))
-  (if (null? (car *analysis-property-registry*))
-      (init-default-analysis-properties!))
-  (reset-analysis-cache!)
-  (run-pass-fixpoint
-    (list 'pass-132-c99-mem2reg 'pass-128-lir-branch-fusion 'pass-133-lir-peephole)
-    lir
-    ':max-iterations 4
-    ':equiv? equal?))
+  (run-lir-core-fixpoint-pipeline lir #t))
 
 ;;; -----------------------------------------------------------------------
 ;;; 10. Rule-level Auto-Bisect (Delta Debugging) Engine (DSN-33-01 T6.2)

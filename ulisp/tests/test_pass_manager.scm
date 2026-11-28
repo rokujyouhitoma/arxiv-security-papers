@@ -793,4 +793,228 @@
   (assert-true "13.9 fixpoint convergence flag is #t"
                (last-fixpoint-converged?)))
 
+;; -----------------------------------------------------------------------
+;; 14. Issue #981: Unified L_lir_core Fixpoint & Strict LIR/StagePoly Contracts
+;; -----------------------------------------------------------------------
+(display "\n--- Group 14: Unified L_lir_core Fixpoint & Contracts (Issue #981) ---\n")
+(init-default-pass-registry!)
+(reset-pipeline-options!)
+
+;; 14.1..14.4 Configuration & pass predicate checks
+(assert-equal "14.1 lir-core-fixpoint-max-iterations defaults to 4"
+              4
+              (lir-core-fixpoint-max-iterations))
+(set-lir-core-fixpoint-max-iterations! 6)
+(assert-equal "14.2 set-lir-core-fixpoint-max-iterations! updates bound"
+              6
+              (lir-core-fixpoint-max-iterations))
+(set-lir-core-fixpoint-max-iterations! 4)
+
+(assert-true "14.3 lir-core-fixpoint-pass-id? accepts 132-mem2reg, 128, 133"
+             (and (lir-core-fixpoint-pass-id? 'pass-132-c99-mem2reg)
+                  (lir-core-fixpoint-pass-id? 'pass-128-lir-branch-fusion)
+                  (lir-core-fixpoint-pass-id? 'pass-133-lir-peephole)))
+(assert-false "14.4 lir-core-fixpoint-pass-id? rejects non-L_lir_core fixpoint passes"
+              (or (lir-core-fixpoint-pass-id? 'pass-130-lir)
+                  (lir-core-fixpoint-pass-id? 'pass-131-lower-managed-dialect)
+                  (lir-core-fixpoint-pass-id? 'pass-050-cp0)))
+
+;; 14.5..14.7 Unified L_lir_core fixpoint execution in Scheme & C99 modes
+(let* ((core-lir-sample
+        '(%lir-program
+          (strings ())
+          (stackmaps ())
+          (%lir-functions)
+          (%lir-main
+           (frame-size 16)
+           (body
+            (%mov %rax 1)
+            (%mov %rbx %rax)
+            (%cmp %rbx 1)
+            (%jump-cond je .L_then_981)
+            (%mov %rax 0)
+            (%return %rax)
+            (%label .L_then_981)
+            (%mov %rax 42)
+            (%return %rax)))))
+       (scheme-fp (run-lir-core-fixpoint-pipeline core-lir-sample #f))
+       (scheme-conv? (last-fixpoint-converged?))
+       (c99-fp (run-lir-core-fixpoint-pipeline core-lir-sample #t))
+       (c99-compat (run-c99-o2-fixpoint-pipeline core-lir-sample)))
+  (assert-true "14.5 Scheme L_lir_core fixpoint pipeline converges cleanly"
+               (and (pair? scheme-fp) (eq? (car scheme-fp) '%lir-program) scheme-conv?))
+  (assert-true "14.6 C99 L_lir_core fixpoint pipeline converges cleanly"
+               (and (pair? c99-fp) (eq? (car c99-fp) '%lir-program) (last-fixpoint-converged?)))
+  (assert-equal "14.7 run-c99-o2-fixpoint-pipeline delegates identically to run-lir-core-fixpoint-pipeline #t"
+                c99-fp
+                c99-compat))
+
+;; 14.8 Scheme -O2 run-pass-pipeline converges L_lir_core fixpoint and passes strict core-lir verification
+(let ((prev-lvl (verifier-level))
+      (prev-strict (verifier-strict?)))
+  (set-pipeline-opt-level! 2)
+  (let ((scheme-o2-lir (run-pass-pipeline '((if (< 3 10) (+ 40 2) 0)) #t #f)))
+    (assert-true "14.8 Scheme -O2 pipeline output satisfies validate-core-lir"
+                 (validate-core-lir scheme-o2-lir)))
+  (set-verifier-level! prev-lvl)
+  (set-verifier-strict! prev-strict))
+(reset-pipeline-options!)
+
+;; 14.9..14.11 Proposal A: pass-133-lir-peephole core-lir verifier & C99 modular lowering continuity
+(assert-equal "14.9 pass-133-lir-peephole verifier-phase is core-lir"
+              'core-lir
+              (pass-verifier-phase (lookup-pass 'pass-133-lir-peephole)))
+(assert-equal "14.10 pass-c99-lower-abi in-lang is L_mir_ssa"
+              'L_mir_ssa
+              (pass-in-lang (lookup-pass 'pass-c99-lower-abi)))
+(assert-true "14.11 check-pipeline-continuity-by-ids accepts 3-stage C99 modular lowering chain"
+             (check-pipeline-continuity-by-ids
+              '(pass-c99-lower-mir pass-c99-lower-abi pass-c99-lower-inline-asm)))
+
+;; 14.12 pass-133-lir-peephole verifier-phase ('core-lir) rejects leaked managed opcode
+(let* ((leaked-managed-lir
+        '(%lir-program
+          (strings ())
+          (stackmaps ())
+          (%lir-functions)
+          (%lir-main
+           (frame-size 16)
+           (body
+            (%box-fixnum %rax 21)
+            (%return %rax)))))
+       (p133 (lookup-pass 'pass-133-lir-peephole))
+       (prev-suppress (car *compiler-suppress-diagnostics*))
+       (prev-lvl (verifier-level))
+       (prev-strict (verifier-strict?))
+       (out-lir ((pass-fn p133) leaked-managed-lir))
+       (ver-ok? (begin
+                  (enable-verifier!)
+                  (set-verifier-strict! #f)
+                  (set-car! *compiler-suppress-diagnostics* #t)
+                  (let ((res (verify-pass-output (pass-verifier-phase p133) out-lir)))
+                    (set-car! *compiler-suppress-diagnostics* prev-suppress)
+                    (set-verifier-level! prev-lvl)
+                    (set-verifier-strict! prev-strict)
+                    res))))
+  (assert-false "14.12 pass-133-lir-peephole rejects managed %box-fixnum when verified"
+                ver-ok?))
+
+;; 14.13..14.18 Proposal E: Directional L-StagePoly / L-Residual-ANF compatibility
+(assert-true "14.13 L_anf -> L-StagePoly is compatible"
+             (nanopass-language-compatible? 'L_anf 'L-StagePoly))
+(assert-true "14.14 L-Residual-ANF -> L_anf is compatible"
+             (nanopass-language-compatible? 'L-Residual-ANF 'L_anf))
+(assert-true "14.15 L-Residual-ANF -> L_lir_managed is compatible"
+             (nanopass-language-compatible? 'L-Residual-ANF 'L_lir_managed))
+(assert-false "14.16 L-Residual-ANF -> L-StagePoly is incompatible (no backwards flow)"
+              (nanopass-language-compatible? 'L-Residual-ANF 'L-StagePoly))
+(assert-false "14.17 L-StagePoly -> L_anf is incompatible (must lower via StagePoly)"
+              (nanopass-language-compatible? 'L-StagePoly 'L_anf))
+(assert-false "14.18 L_anf -> L-Residual-ANF is incompatible"
+              (nanopass-language-compatible? 'L_anf 'L-Residual-ANF))
+
+;; 14.19..14.20 2-iteration L_lir_core fixpoint regression: dead mov between %set-boolean "setge" and %jump-if-false
+(assert-equal "14.19 lir-invert-cond-op inverts setge to jl"
+              "jl"
+              (lir-invert-cond-op "setge"))
+
+(let* ((prev-lvl (verifier-level))
+       (two-iter-prog
+        '(%lir-program
+          (strings ())
+          (stackmaps ())
+          (%lir-functions)
+          (%lir-main
+           (frame-size 16)
+           (body
+            (%cmp %r9 %rax)
+            (%set-boolean %rax "setge")
+            (%mov %rcx %rcx)
+            (%jump-if-false %rax .L_else_981)
+            (%mov %rax 1)
+            (%return %rax)
+            (%label .L_else_981)
+            (%mov %rax 0)
+            (%return %rax)))))
+       (fp-res (begin
+                 (disable-verifier!)
+                 (let ((r (run-lir-core-fixpoint-pipeline two-iter-prog #f)))
+                   (set-verifier-level! prev-lvl)
+                   r)))
+       (main-body (cdr (assq 'body (cdr (assq '%lir-main (cdr fp-res)))))))
+(assert-true "14.20 2-iteration L_lir_core fixpoint eliminates redundant mov and fuses setge to jl"
+             (and (last-fixpoint-converged?)
+                  (>= (last-fixpoint-iterations) 2)
+                  (not (not (member '(%jump-cond "jl" .L_else_981) main-body)))
+                  (not (member '(%jump-cond "jne" .L_else_981) main-body)))))
+
+;; 14.21 Call-free %block loop liveness: outer register live across %block loop must not be clobbered on iter 2
+(let* ((prev-lvl (verifier-level))
+       (prev-ls (lir-linear-scan-enabled?))
+       (blk-loop-prog
+        '(%lir-program
+          (strings ())
+          (stackmaps ())
+          (%lir-functions
+           (%lir-function ulisp_fn_test_block_liveness_981
+                          (params (ctx$0 pos$1))
+                          (frame-size 128)
+                          (body
+                           (%label .L_entry_981)
+                           (%store %rsp -32 %rsi)
+                           (%mov %rax %rdi)
+                           (%load %rax %rax 43)
+                           (%store %rsp -48 %rax)
+                           (%mov %rax %rsi)
+                           (%load %rdx %rsp -48)
+                           (%load %rax %rdx (%sib %rax 2 3))
+                           (%store %rsp -72 %rax)
+                           (%jump .L_loop_981 ((%stack -72)))
+                           (%jump .L_exit_981)
+                           (%block .L_loop_981 ((%stack -72)))
+                           (%load %rax %rsp -72)
+                           (%cmp %rax 63)
+                           (%jump-cond "jne" .L_body_981)
+                           (%jump .L_end_981 (%rax))
+                           (%block .L_body_981 ())
+                           (%load %rax %rsp -72)
+                           (%load %rax %rax -1)
+                           (%store %rsp -104 %rax)
+                           (%mov %rax 63)
+                           (%cmp %rax 47)
+                           (%jump-cond "jne" .L_skip_981)
+                           (%load %rax %rsp -104)
+                           (%load %rax %rax 43)
+                           (%block .L_skip_981 ())
+                           (%load %rax %rsp -72)
+                           (%load %rax %rax 7)
+                           (%store %rsp -72 %rax)
+                           (%jump .L_loop_981 ((%stack -72)))
+                           (%block .L_end_981 (%rax))
+                           (%label .L_exit_981)
+                           (%load %rax %rsp -48)
+                           (%store %rsp -80 %rax)
+                           (%load %rax %rsp -32)
+                           (%mov %rdx (%stack -80))
+                           (%store %rdx (%sib %rax 2 3) %rdx)
+                           (%mov %rax 63)
+                           (%return))))
+          (%lir-main
+           (frame-size 16)
+           (body (%mov %rax 47) (%return)))))
+       (fp-res (begin
+                 (disable-verifier!)
+                 (set-lir-linear-scan-enabled! #t)
+                 (let ((r (run-lir-core-fixpoint-pipeline blk-loop-prog #f)))
+                   (set-lir-linear-scan-enabled! prev-ls)
+                   (set-verifier-level! prev-lvl)
+                   r)))
+       (fns (cdr (assq '%lir-functions (cdr fp-res))))
+       (fn-body (cdr (assq 'body (cdr (car fns))))))
+  ;; Slot -48 uses %rdi (saved before loop and read at .L_exit_981), so -104 inside %block loop must NOT clobber %rdi
+  (assert-false "14.21 %block loop liveness preserves %rdi across 2-iteration L_lir_core fixpoint"
+                (and (member '(%mov %rdi %rax) fn-body)
+                     (member '(%load %rax %rdi 43)
+                             (memq '(%block .L_body_981 ()) fn-body)))))
+
 (test-end "Unified Pass Manager")

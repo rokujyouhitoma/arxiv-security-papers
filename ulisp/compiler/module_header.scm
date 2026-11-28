@@ -228,6 +228,10 @@
   frontend-fixpoint-max-iterations
   set-frontend-fixpoint-max-iterations!
   run-frontend-fixpoint
+  lir-core-fixpoint-max-iterations
+  set-lir-core-fixpoint-max-iterations!
+  lir-core-fixpoint-pass-id?
+  run-lir-core-fixpoint-pipeline
   lvn-all
   anf-all
   reset-cfa-state!

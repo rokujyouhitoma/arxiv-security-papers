@@ -33,6 +33,10 @@ graph TD
     L_lir_core["L_lir_core"]
     L_lir_managed["L_lir_managed"]
     L_lir_core --> L_lir_managed
+    L_mir_ssa["L_mir_ssa"]
+    L_lir_core --> L_mir_ssa
+    L_lir_mach["L_lir_mach"]
+    L_mir_ssa --> L_lir_mach
     L_lir_raw["L_lir_raw"]
     L_lir_canonical["L_lir_canonical"]
     L_lir_raw --> L_lir_canonical
@@ -799,7 +803,9 @@ graph TD
   (%push reg)
   (%pop reg)
   (%code-ref reg lbl)
+  (%code-ref reg str)
   (%str-ref reg lbl)
+  (%str-ref reg str)
   (%global-ref reg var)
   (%global-addr reg var)
   (%global-set! var reg)
@@ -1105,7 +1111,9 @@ graph TD
   (%push reg)
   (%pop reg)
   (%code-ref reg lbl)
+  (%code-ref reg str)
   (%str-ref reg lbl)
+  (%str-ref reg str)
   (%global-ref reg var)
   (%global-addr reg var)
   (%global-set! var reg)
@@ -1273,6 +1281,626 @@ graph TD
 
 ---
 
+### 言語: `L_mir_ssa`
+
+- **親言語 (Parent)**: `L_lir_core`
+- **エントリ非終端記号 (Entry)**: `Program`
+- **Nongenerative ID**: `L_lir_core->L_mir_ssa`
+
+#### 終端記号 (Terminals)
+
+| 述語 (Predicate) | メタ変数パターン (Meta-Variables) |
+| :--- | :--- |
+| `symbol` | `(x lbl var cond_op sp_lbl mty)` |
+| `integer` | `(n offset shift frame_size tag si cnt bitmap line col al_val)` |
+| `string` | `(str fn_name)` |
+| `boolean` | `(bool_val)` |
+
+#### 非終端記号とプロダクション規則 (Nonterminals & Productions)
+
+##### `Register` (reg)
+
+```scheme
+  %rax
+  %rbx
+  %rcx
+  %rdx
+  %rsi
+  %rdi
+  %rbp
+  %rsp
+  %r8
+  %r9
+  %r10
+  %r11
+  %r12
+  %r13
+  %r14
+  %r15
+  %al
+  %xmm0
+  %xmm1
+  %xmm2
+  %xmm3
+  %xmm4
+  %xmm5
+  %xmm6
+  %xmm7
+  %xmm8
+  %xmm9
+  %xmm10
+  %xmm11
+  %xmm12
+  %xmm13
+  %xmm14
+  %xmm15
+  (%reg x)
+  (%reg mty x)
+  (%freg x)
+```
+
+##### `StackSlot` (stk)
+
+```scheme
+  (%stack offset)
+```
+
+##### `MemRef` (mem)
+
+```scheme
+  (%mem reg offset)
+  (%mem reg reg)
+```
+
+##### `LValue` (lval)
+
+```scheme
+  reg
+  stk
+  mem
+```
+
+##### `Operand` (opnd)
+
+```scheme
+  lval
+  n
+  lbl
+```
+
+##### `AsmOutSpec` (asm_out)
+
+```scheme
+  (lval str)
+  (x str)
+  (x str lval)
+```
+
+##### `AsmInSpec` (asm_in)
+
+```scheme
+  (opnd str)
+  (x str opnd)
+```
+
+##### `AsmClobber` (asm_clob)
+
+```scheme
+  str
+  x
+```
+
+##### `AsmClause` (asm_clause)
+
+```scheme
+  (:outputs (asm_out ...))
+  (:inputs (asm_in ...))
+  (:clobbers (asm_clob ...))
+  (:volatile? bool_val)
+```
+
+##### `Inst` (inst)
+
+```scheme
+  (%loc n line col)
+  (%label lbl)
+  (%block lbl (x ...) inst ...)
+  (%jump lbl)
+  (%jump lbl (opnd ...))
+  (%jump-if-false reg lbl)
+  (%jump-if-false reg lbl (opnd ...))
+  (%jump-if reg lbl1 (opnd1 ...) lbl2 (opnd2 ...))
+  (%jump-cond cond_op lbl)
+  (%jump-cond str lbl)
+  (%jump-if-zero lbl)
+  (%direct-jump lbl)
+  (%switch opnd lbl (opnd ...) (sc ...))
+  (%switch opnd lbl (sc ...))
+  (%return)
+  (%return opnd)
+  (%c-call fn_name shift)
+  (%c-call fn_name shift al_val)
+  (%call-foreign fn_name shift)
+  (%call-foreign fn_name shift al_val)
+  (%call-indirect reg shift)
+  (%call-indirect reg shift al_val)
+  (%call-closure shift)
+  (%call-closure shift sp_lbl)
+  (%call-closure shift str)
+  (%direct-call lbl shift)
+  (%direct-call lbl shift sp_lbl)
+  (%direct-call lbl shift str)
+  (%dispatch-consumer si1 si2 shift)
+  (%mov lval opnd)
+  (%load reg1 reg2 offset)
+  (%store reg1 offset opnd)
+  (%load-byte-zx reg1 reg2 offset)
+  (%store-byte reg1 offset opnd)
+  (%push reg)
+  (%pop reg)
+  (%code-ref reg lbl)
+  (%code-ref reg str)
+  (%str-ref reg lbl)
+  (%str-ref reg str)
+  (%global-ref reg var)
+  (%global-addr reg var)
+  (%global-set! var reg)
+  (%add opnd1 opnd2)
+  (%raw-add opnd1 opnd2)
+  (%sub opnd1 opnd2)
+  (%raw-sub opnd1 opnd2)
+  (%imul opnd1 opnd2)
+  (%raw-mul opnd1 opnd2)
+  (%neg opnd)
+  (%inc opnd)
+  (%cqo)
+  (%idiv opnd)
+  (%shl opnd shift)
+  (%shl opnd %rcx)
+  (%shr opnd shift)
+  (%shr opnd %rcx)
+  (%shr reg opnd shift)
+  (%shr reg opnd %rcx)
+  (%sar opnd shift)
+  (%sar opnd %rcx)
+  (%bit-and opnd1 opnd2)
+  (%bit-or opnd1 opnd2)
+  (%bit-xor opnd1 opnd2)
+  (%cmp opnd1 opnd2)
+  (%raw-cmp opnd1 opnd2)
+  (%set-boolean opnd cond_op)
+  (%add-overflow reg1 reg2 opnd1 opnd2)
+  (%sub-overflow reg1 reg2 opnd1 opnd2)
+  (%mul-overflow reg1 reg2 opnd1 opnd2)
+  (%udiv opnd)
+  (%udiv reg opnd1 opnd2)
+  (%urem opnd)
+  (%urem reg opnd1 opnd2)
+  (%setb reg)
+  (%setb reg opnd1 opnd2)
+  (%setbe reg)
+  (%setbe reg opnd1 opnd2)
+  (%seta reg)
+  (%seta reg opnd1 opnd2)
+  (%setae reg)
+  (%setae reg opnd1 opnd2)
+  (%load-typed mty reg1 reg2 offset)
+  (%store-typed mty reg1 offset opnd)
+  (%fmov reg1 reg2)
+  (%fadd opnd1 opnd2)
+  (%fsub opnd1 opnd2)
+  (%fmul opnd1 opnd2)
+  (%fdiv opnd1 opnd2)
+  (%fcmp opnd1 opnd2)
+  (%fneg mty reg1 opnd2)
+  (%fpext mty reg1 opnd2)
+  (%fptrunc mty reg1 opnd2)
+  (%sitofp reg1 opnd2)
+  (%uitofp reg1 opnd2)
+  (%fptosi reg1 opnd2)
+  (%fptoui reg1 opnd2)
+  (%fcmp-oeq reg1 opnd2 opnd3)
+  (%fcmp-une reg1 opnd2 opnd3)
+  (%fcmp-olt reg1 opnd2 opnd3)
+  (%fcmp-ole reg1 opnd2 opnd3)
+  (%fcmp-ogt reg1 opnd2 opnd3)
+  (%fcmp-oge reg1 opnd2 opnd3)
+  (%trunc mty reg1 opnd2)
+  (%zext mty reg1 opnd2)
+  (%sext mty reg1 opnd2)
+  (%syscall)
+  (%syscall si)
+  (%memory-fence)
+  (%safepoint-poll)
+  (%atomic-cas! reg1 reg2 reg3)
+  (%inline-asm str asm_clause ...)
+```
+
+##### `StringEntry` (se)
+
+```scheme
+  (lbl str)
+  (lbl (bytes n ...))
+  (str1 str2)
+```
+
+##### `DataChunk` (dc)
+
+```scheme
+  n
+  (zero n)
+  (reloc lbl offset)
+```
+
+##### `DataEntry` (de)
+
+```scheme
+  (bss lbl al_val n)
+  (bytes lbl al_val dc ...)
+```
+
+##### `SafepointEntry` (sm)
+
+```scheme
+  (lbl frame_size bitmap)
+  (str frame_size bitmap)
+```
+
+##### `SwitchCase` (sc)
+
+```scheme
+  (opnd lbl)
+  (opnd lbl (opnd ...))
+```
+
+##### `AliasEntry` (ae)
+
+```scheme
+  (lbl1 lbl2 bool_val)
+```
+
+##### `MetaClause` (mc)
+
+```scheme
+  (weak-fns (lbl ...))
+  (weak-data (lbl ...))
+  (aliases (ae ...))
+  (top-asm (str ...))
+```
+
+##### `FunctionDecl` (f)
+
+```scheme
+  (%lir-function lbl (params (x ...)) (frame-size frame_size) (body inst ...))
+```
+
+##### `MainDecl` (m)
+
+```scheme
+  (%lir-main (frame-size frame_size) (body inst ...))
+```
+
+##### `Program` (p)
+
+```scheme
+  (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m mc ...)
+  (%lir-program (strings (se ...)) (data (de ...)) (stackmaps (sm ...)) (%lir-functions f ...) m mc ...)
+```
+
+---
+
+### 言語: `L_lir_mach`
+
+- **親言語 (Parent)**: `L_mir_ssa`
+- **エントリ非終端記号 (Entry)**: `Program`
+- **Nongenerative ID**: `L_mir_ssa->L_lir_mach`
+
+#### 終端記号 (Terminals)
+
+| 述語 (Predicate) | メタ変数パターン (Meta-Variables) |
+| :--- | :--- |
+| `symbol` | `(x lbl var cond_op sp_lbl mty)` |
+| `integer` | `(n offset shift frame_size tag si cnt bitmap line col al_val)` |
+| `string` | `(str fn_name)` |
+| `boolean` | `(bool_val)` |
+
+#### 非終端記号とプロダクション規則 (Nonterminals & Productions)
+
+##### `Register` (reg)
+
+```scheme
+  %rax
+  %rbx
+  %rcx
+  %rdx
+  %rsi
+  %rdi
+  %rbp
+  %rsp
+  %r8
+  %r9
+  %r10
+  %r11
+  %r12
+  %r13
+  %r14
+  %r15
+  %al
+  %xmm0
+  %xmm1
+  %xmm2
+  %xmm3
+  %xmm4
+  %xmm5
+  %xmm6
+  %xmm7
+  %xmm8
+  %xmm9
+  %xmm10
+  %xmm11
+  %xmm12
+  %xmm13
+  %xmm14
+  %xmm15
+```
+
+##### `StackSlot` (stk)
+
+```scheme
+  (%stack offset)
+```
+
+##### `MemRef` (mem)
+
+```scheme
+  (%mem reg offset)
+  (%mem reg reg)
+```
+
+##### `LValue` (lval)
+
+```scheme
+  reg
+  stk
+  mem
+```
+
+##### `Operand` (opnd)
+
+```scheme
+  lval
+  n
+  lbl
+```
+
+##### `AsmOutSpec` (asm_out)
+
+```scheme
+  (lval str)
+  (x str)
+  (x str lval)
+```
+
+##### `AsmInSpec` (asm_in)
+
+```scheme
+  (opnd str)
+  (x str opnd)
+```
+
+##### `AsmClobber` (asm_clob)
+
+```scheme
+  str
+  x
+```
+
+##### `AsmClause` (asm_clause)
+
+```scheme
+  (:outputs (asm_out ...))
+  (:inputs (asm_in ...))
+  (:clobbers (asm_clob ...))
+  (:volatile? bool_val)
+```
+
+##### `Inst` (inst)
+
+```scheme
+  (%loc n line col)
+  (%label lbl)
+  (%block lbl (x ...) inst ...)
+  (%jump lbl)
+  (%jump lbl (opnd ...))
+  (%jump-if-false reg lbl)
+  (%jump-if-false reg lbl (opnd ...))
+  (%jump-if reg lbl1 (opnd1 ...) lbl2 (opnd2 ...))
+  (%jump-cond cond_op lbl)
+  (%jump-cond str lbl)
+  (%jump-if-zero lbl)
+  (%direct-jump lbl)
+  (%switch opnd lbl (opnd ...) (sc ...))
+  (%switch opnd lbl (sc ...))
+  (%return)
+  (%return opnd)
+  (%c-call fn_name shift)
+  (%c-call fn_name shift al_val)
+  (%call-foreign fn_name shift)
+  (%call-foreign fn_name shift al_val)
+  (%call-indirect reg shift)
+  (%call-indirect reg shift al_val)
+  (%call-closure shift)
+  (%call-closure shift sp_lbl)
+  (%call-closure shift str)
+  (%direct-call lbl shift)
+  (%direct-call lbl shift sp_lbl)
+  (%direct-call lbl shift str)
+  (%dispatch-consumer si1 si2 shift)
+  (%mov lval opnd)
+  (%load reg1 reg2 offset)
+  (%store reg1 offset opnd)
+  (%load-byte-zx reg1 reg2 offset)
+  (%store-byte reg1 offset opnd)
+  (%push reg)
+  (%pop reg)
+  (%code-ref reg lbl)
+  (%code-ref reg str)
+  (%str-ref reg lbl)
+  (%str-ref reg str)
+  (%global-ref reg var)
+  (%global-addr reg var)
+  (%global-set! var reg)
+  (%add opnd1 opnd2)
+  (%raw-add opnd1 opnd2)
+  (%sub opnd1 opnd2)
+  (%raw-sub opnd1 opnd2)
+  (%imul opnd1 opnd2)
+  (%raw-mul opnd1 opnd2)
+  (%neg opnd)
+  (%inc opnd)
+  (%cqo)
+  (%idiv opnd)
+  (%shl opnd shift)
+  (%shl opnd %rcx)
+  (%shr opnd shift)
+  (%shr opnd %rcx)
+  (%shr reg opnd shift)
+  (%shr reg opnd %rcx)
+  (%sar opnd shift)
+  (%sar opnd %rcx)
+  (%bit-and opnd1 opnd2)
+  (%bit-or opnd1 opnd2)
+  (%bit-xor opnd1 opnd2)
+  (%cmp opnd1 opnd2)
+  (%raw-cmp opnd1 opnd2)
+  (%set-boolean opnd cond_op)
+  (%add-overflow reg1 reg2 opnd1 opnd2)
+  (%sub-overflow reg1 reg2 opnd1 opnd2)
+  (%mul-overflow reg1 reg2 opnd1 opnd2)
+  (%udiv opnd)
+  (%udiv reg opnd1 opnd2)
+  (%urem opnd)
+  (%urem reg opnd1 opnd2)
+  (%setb reg)
+  (%setb reg opnd1 opnd2)
+  (%setbe reg)
+  (%setbe reg opnd1 opnd2)
+  (%seta reg)
+  (%seta reg opnd1 opnd2)
+  (%setae reg)
+  (%setae reg opnd1 opnd2)
+  (%load-typed mty reg1 reg2 offset)
+  (%store-typed mty reg1 offset opnd)
+  (%fmov reg1 reg2)
+  (%fadd opnd1 opnd2)
+  (%fsub opnd1 opnd2)
+  (%fmul opnd1 opnd2)
+  (%fdiv opnd1 opnd2)
+  (%fcmp opnd1 opnd2)
+  (%fneg mty reg1 opnd2)
+  (%fpext mty reg1 opnd2)
+  (%fptrunc mty reg1 opnd2)
+  (%sitofp reg1 opnd2)
+  (%uitofp reg1 opnd2)
+  (%fptosi reg1 opnd2)
+  (%fptoui reg1 opnd2)
+  (%fcmp-oeq reg1 opnd2 opnd3)
+  (%fcmp-une reg1 opnd2 opnd3)
+  (%fcmp-olt reg1 opnd2 opnd3)
+  (%fcmp-ole reg1 opnd2 opnd3)
+  (%fcmp-ogt reg1 opnd2 opnd3)
+  (%fcmp-oge reg1 opnd2 opnd3)
+  (%trunc mty reg1 opnd2)
+  (%zext mty reg1 opnd2)
+  (%sext mty reg1 opnd2)
+  (%syscall)
+  (%syscall si)
+  (%memory-fence)
+  (%safepoint-poll)
+  (%atomic-cas! reg1 reg2 reg3)
+  (%inline-asm str asm_clause ...)
+```
+
+##### `StringEntry` (se)
+
+```scheme
+  (lbl str)
+  (lbl (bytes n ...))
+  (str1 str2)
+```
+
+##### `DataChunk` (dc)
+
+```scheme
+  n
+  (zero n)
+  (reloc lbl offset)
+```
+
+##### `DataEntry` (de)
+
+```scheme
+  (bss lbl al_val n)
+  (bytes lbl al_val dc ...)
+```
+
+##### `SafepointEntry` (sm)
+
+```scheme
+  (lbl frame_size bitmap)
+  (str frame_size bitmap)
+```
+
+##### `SwitchCase` (sc)
+
+```scheme
+  (opnd lbl)
+  (opnd lbl (opnd ...))
+```
+
+##### `AliasEntry` (ae)
+
+```scheme
+  (lbl1 lbl2 bool_val)
+```
+
+##### `MetaClause` (mc)
+
+```scheme
+  (weak-fns (lbl ...))
+  (weak-data (lbl ...))
+  (aliases (ae ...))
+  (top-asm (str ...))
+```
+
+##### `FunctionDecl` (f)
+
+```scheme
+  (%lir-function lbl (params (x ...)) (frame-size frame_size) (body inst ...))
+```
+
+##### `MainDecl` (m)
+
+```scheme
+  (%lir-main (frame-size frame_size) (body inst ...))
+```
+
+##### `Program` (p)
+
+```scheme
+  (%lir-program (strings (se ...)) (stackmaps (sm ...)) (%lir-functions f ...) m mc ...)
+  (%lir-program (strings (se ...)) (data (de ...)) (stackmaps (sm ...)) (%lir-functions f ...) m mc ...)
+```
+
+#### 削除・排除された不変条件 (Removed Invariants)
+
+本言語では以下の構文が明示的に禁止・脱糖済みとして排除されています：
+
+- `%reg`
+- `%freg`
+
+---
+
 ### 言語: `L_lir_raw`
 
 - **親言語 (Parent)**: (ルート言語)
@@ -1432,7 +2060,9 @@ graph TD
   (%push reg)
   (%pop reg)
   (%code-ref reg lbl)
+  (%code-ref reg str)
   (%str-ref reg lbl)
+  (%str-ref reg str)
   (%global-ref reg var)
   (%global-addr reg var)
   (%global-set! var reg)
@@ -1751,7 +2381,9 @@ graph TD
   (%push reg)
   (%pop reg)
   (%code-ref reg lbl)
+  (%code-ref reg str)
   (%str-ref reg lbl)
+  (%str-ref reg str)
   (%global-ref reg var)
   (%global-addr reg var)
   (%global-set! var reg)
@@ -1954,8 +2586,38 @@ graph TD
   r13
   r14
   r15
+  eax
+  ebx
+  ecx
+  edx
+  esi
+  edi
+  ebp
+  esp
+  r8d
+  r9d
+  r10d
+  r11d
+  r12d
+  r13d
+  r14d
+  r15d
   al
+  bl
   cl
+  dl
+  sil
+  dil
+  bpl
+  spl
+  r8b
+  r9b
+  r10b
+  r11b
+  r12b
+  r13b
+  r14b
+  r15b
   (%reg var)
 ```
 

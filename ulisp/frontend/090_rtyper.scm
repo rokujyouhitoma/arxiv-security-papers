@@ -741,8 +741,14 @@
                               (pair? (cdr (caddr d))) (pair? (cddr (caddr d))))
                          (loop (cdr ds) (cons (list (cadr d) (cadr (caddr d)) (caddr (caddr d))) acc))
                          (loop (cdr ds) acc))))))
-            ;; 2. Detect pure-int top-level functions using fixed-point pruning
-            (top-pure-int-fns (find-pure-int-fns top-fn-defs (cons main defs) '())))
+            ;; 2. Detect pure-int top-level functions using fixed-point pruning.
+            ;; In separate/modular builds (module-mode? or allow-extern-symbols?),
+            ;; top-level definitions are externally callable ABI entry points and
+            ;; must retain the standard tagged ABI across translation units.
+            (top-pure-int-fns
+             (if (or (module-mode?) (allow-extern-symbols?))
+                 '()
+                 (find-pure-int-fns top-fn-defs (cons main defs) '()))))
        ;; 3. Register unboxed top-level functions
        (for-each (lambda (fn-name)
                    (record-unboxed-fn! fn-name)

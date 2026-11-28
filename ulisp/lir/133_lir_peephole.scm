@@ -2213,6 +2213,8 @@
              (aarch64? (eq? (current-target-arch) 'aarch64))
              (rax-bit (if aarch64? 32 0)))
         (cond
+          ((lir-label-inst? inst)
+           (cons 0 0))
           ;; Pure-write 1st-operand instructions
           ((and (case op
                   ((%mov %load %load-byte-zx %code-ref %str-ref %global-ref %global-addr
@@ -2285,7 +2287,7 @@
             (init (+ i 1)
                   (if (and (pair? inst) (eq? (car inst) '%loc)) prev inst)))))
     (let pass-loop ((pass 0))
-      (if (< pass 4)
+      (if (< pass 8)
           (let ((changed-box (cons #f '())))
             (let iloop ((i (- n 1)) (r-cur 0))
               (if (>= i 0)
@@ -2334,12 +2336,14 @@
                          (d (vector-ref dvec i))
                          (r-in (bitwise-ior u (bitwise-and r-after (- 511 d)))))
                     (vector-set! mvec i (bitwise-ior r-after (bitwise-ior u d)))
-                    (if (and (eq? op '%label) (pair? (cdr inst)))
+                    (if (and (lir-label-inst? inst) (pair? (cdr inst)))
                         (let ((le (assq (cadr inst) (car lbl-live-box))))
-                          (if (and le (not (= (cdr le) r-in)))
-                              (begin
-                                (set-cdr! le r-in)
-                                (set-car! changed-box #t)))))
+                          (if le
+                              (let ((joined (bitwise-ior (cdr le) r-in)))
+                                (if (not (= (cdr le) joined))
+                                    (begin
+                                      (set-cdr! le joined)
+                                      (set-car! changed-box #t)))))))
                     (iloop (- i 1) r-in))))
             (if (car changed-box)
                 (pass-loop (+ pass 1))))))

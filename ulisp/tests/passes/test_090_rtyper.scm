@@ -248,4 +248,24 @@
   (assert-false "closure_1m loop removes lambda closure parameter (no remaining lambda in loop args)"
                 (occurs-in? '(lambda (x) (+ x 1)) typed)))
 
+;; Test 15: Modular compilation preserves tagged external ABI on top-level functions (Issue #981)
+(let ((prev-mod (module-mode?)))
+  (set-module-mode! #t)
+  (reset-type-annotations!)
+  (let* ((prog-ast (list '%program
+                         (list (list 'define 'bitwise-not-test (list 'lambda '(i) '(- -1 i)))
+                               (list 'define 'add3-mod (list 'lambda '(a b c) '(+ a (+ b c)))))
+                         '(+ (bitwise-not-test 0) (add3-mod 1 2 3))))
+         (ann (annotate-all prog-ast))
+         (typed (rtyper-all ann)))
+    (set-module-mode! prev-mod)
+    (assert-false "module-mode keeps top-level bitwise-not-test tagged (not unboxed-fn)"
+                  (unboxed-fn? 'bitwise-not-test))
+    (assert-false "module-mode keeps top-level bitwise-not-test return tagged (not unboxed-ret-fn)"
+                  (unboxed-ret-fn? 'bitwise-not-test))
+    (assert-false "module-mode keeps top-level add3-mod tagged (not unboxed-fn)"
+                  (unboxed-fn? 'add3-mod))
+    (assert-false "module-mode top-level lambda body does not emit raw-sub ABI"
+                  (occurs-in? '%raw-sub (car (cadr typed))))))
+
 (test-end "Pass 090 (S-RTyper Lowering)")
