@@ -144,5 +144,40 @@
                 5001
                 (length scheme-out-body)))
 
+;; Test 5: Hot/Cold Basic Block Splitting (Issue #970)
+(let* ((ast '(letrec ((fn (lambda (a b) (if (< a b) (+ a b) (- a b))))) (fn 10 20)))
+       (hir (closure-convert (alias-escape-all (anf-all (cp0-optimize (desugar-all ast))))))
+       (lir (generate-lir hir))
+       (fn-clause (car (cdr (assq '%lir-functions (cdr lir)))))
+       (fn-body (cdr (assq 'body (cdr fn-clause))))
+       (pos-of (lambda (pred xs)
+                 (let loop ((cur xs) (i 0))
+                   (cond ((null? cur) #f)
+                         ((pred (car cur)) i)
+                         (else (loop (cdr cur) (+ i 1)))))))
+       (ret-idx (pos-of (lambda (x) (and (pair? x) (eq? (car x) '%return))) fn-body))
+       (slow-idx (pos-of (lambda (x) (and (pair? x) (eq? (car x) '%label) (lir-cold-label-sym? (cadr x)))) fn-body))
+       (has-hot-jump-to-cont-or-done?
+        (let loop ((cur fn-body) (i 0))
+          (cond
+            ((or (null? cur) (and ret-idx (>= i ret-idx))) #f)
+            ((and (pair? (car cur))
+                  (eq? (caar cur) '%jump)
+                  (pair? (cdar cur))
+                  (symbol? (cadar cur))
+                  (let ((s (symbol->raw-name (cadar cur))))
+                    (or (string-starts-with? s ".cmp_br_cont_")
+                        (string-starts-with? s ".cmp_imm_cont_")
+                        (string-starts-with? s ".add_done_")
+                        (string-starts-with? s ".sub_done_"))))
+             #t)
+            (else (loop (cdr cur) (+ i 1)))))))
+  (assert-true "function %return precedes relocated cold *_slow block"
+               (and ret-idx slow-idx (< ret-idx slow-idx)))
+  (assert-false "hot path falls through without unconditional jump to *_cont / *_done"
+                has-hot-jump-to-cont-or-done?)
+  (assert-true "lir-fuse-branches is idempotent (eq?) on already-split program"
+               (eq? (lir-split-hot-cold-blocks lir) lir)))
+
 (newline)
 (test-end "Pass 128 (Condition Branch Flag Fusion)")

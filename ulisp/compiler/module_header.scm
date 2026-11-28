@@ -228,8 +228,17 @@
   lir-linear-scan-enabled?
   set-lir-linear-scan-enabled!
   lir-imm32-constant
+  lir-cold-label-sym?
+  lir-hot-exit-label-sym?
+  lir-split-unconditional-terminator?
+  lir-split-extract-flat-label
+  lir-cold-raise-or-trap-block?
+  lir-split-hot-cold-in-body
+  lir-split-hot-cold-blocks
   lir-fuse-branches
+  lir-regalloc-inst-branches-to-cold-slow?
   lir-peephole-optimize
+  *x86-cold-asm-insts*
   lir-physical-register-sym?
   lir-virtual-register?
   lir-tree-has-virtual-reg?

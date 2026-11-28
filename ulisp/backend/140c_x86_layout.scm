@@ -640,6 +640,7 @@
     (set-car! *x86-c-tu-hoist-frame* hoist-f)
     (set-car! *x86-c-tu-delta-calls* delta-ords)
     (set-car! *x86-c-tu-call-ordinal* 0)
+    (set-car! *x86-cold-asm-insts* '())
     (scan-x86-blocks! body)
     (let* ((guard-insts
             (if expected-args
@@ -675,11 +676,19 @@
                                base-acc)))
       (let loop ((rest body) (acc hoist-base-acc))
         (if (null? rest)
-            (begin
+            (let* ((cold-raw (car *x86-cold-asm-insts*))
+                   (cold-allocs (if (and (list? cold-raw) (pair? cold-raw))
+                                    (backend-concat (reverse cold-raw))
+                                    '()))
+                   (hot-insts (reverse acc))
+                   (final-insts (if (pair? cold-allocs)
+                                    (append hot-insts cold-allocs)
+                                    hot-insts)))
+              (set-car! *x86-cold-asm-insts* #f)
               (set-car! *x86-c-tu-hoist-frame* 0)
               (set-car! *x86-c-tu-delta-calls* '())
               (set-car! *x86-c-tu-call-ordinal* 0)
-              (list '%asm-function label (list 'frame-size out-frame-size) (cons 'body (reverse acc))))
+              (list '%asm-function label (list 'frame-size out-frame-size) (cons 'body final-insts)))
             (let ((lowered (lower-lir-instruction (car rest))))
               (loop (cdr rest) (prepend-lowered-instructions lowered acc))))))))
 
@@ -694,12 +703,15 @@
     (set-car! *x86-c-tu-delta-calls* '())
     (set-car! *x86-c-tu-call-ordinal* 0)
     (set-car! *c-tu-has-init?* (and c-tu? (pair? main-body)))
+    (set-car! *x86-cold-asm-insts* '())
     (scan-x86-blocks! main-body)
     (let loop ((rest main-body) (acc '()))
       (if (null? rest)
-          (list '%asm-main
-                (list 'frame-size frame-size)
-                (cons 'body (if c-tu?
+          (let* ((cold-raw (car *x86-cold-asm-insts*))
+                 (cold-allocs (if (and (list? cold-raw) (pair? cold-raw))
+                                  (backend-concat (reverse cold-raw))
+                                  '()))
+                 (base-body (if c-tu?
                                 (if (null? main-body)
                                     '()
                                     (append (reverse acc) (list (list 'ret))))
@@ -711,7 +723,14 @@
                                                   (list '%raw-asm "    mov [r11], r12")
                                                   (list 'add 'rsp 8)
                                                   (list 'pop 'r12)
-                                                  (list 'ret)))))))
+                                                  (list 'ret))))))
+                 (final-body (if (and (pair? base-body) (pair? cold-allocs))
+                                 (append base-body cold-allocs)
+                                 base-body)))
+            (set-car! *x86-cold-asm-insts* #f)
+            (list '%asm-main
+                  (list 'frame-size frame-size)
+                  (cons 'body final-body)))
           (let ((inst (car rest)))
             (if (eq? (car inst) '%return)
                 (loop (cdr rest) acc)
@@ -720,6 +739,7 @@
 
 (define (select-instructions-x86 prog)
   (reset-x86-switch-tables!)
+  (set-car! *x86-cold-asm-insts* #f)
   (set-car! *x86-c-tu-hoist-frame* 0)
   (set-car! *x86-c-tu-delta-calls* '())
   (set-car! *x86-c-tu-call-ordinal* 0)

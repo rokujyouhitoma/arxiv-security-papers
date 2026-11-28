@@ -2787,6 +2787,7 @@
   *x86-block-params*
   *backend-gc-mode*
   *alloc-counter*
+  *x86-cold-asm-insts*
   *c-tu-globals*
   *c-tu-has-init?*
   *x86-switch-jump-tables*
@@ -3068,6 +3069,7 @@
   lir-peephole-has-self-prologue?
   lir-forward-stack-slots
   lir-forward-stack-slots-in-ir
+  lir-regalloc-inst-branches-to-cold-slow?
   lir-regalloc-any-call-or-gc?
   lir-regalloc-caller-pool
   lir-regalloc-slot-match
@@ -3126,6 +3128,20 @@
   lir-fuse-c99-branches-in-body
   %bf-c99-transform-clause
   lir-fuse-c99-branches-in-ir
+  %lir-bf-str-has-substr?
+  lir-cold-label-sym?
+  lir-hot-exit-label-sym?
+  lir-split-unconditional-terminator?
+  lir-split-extract-flat-label
+  lir-cold-raise-or-trap-block?
+  %lir-split-take-cold-tail
+  %lir-split-trailing-hot-exit?
+  %lir-body-has-inline-cold-block?
+  lir-split-hot-cold-in-body
+  %lir-split-map-keep-eq
+  %lir-split-transform-clause
+  lir-split-hot-cold-blocks
+  lir-fuse-branches
   optimize-branch-fusion
   *lir-vm-errno-addr*
   vm-extract-meta-list

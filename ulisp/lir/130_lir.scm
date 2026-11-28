@@ -520,7 +520,7 @@
           (emit-lir! '(%return))
           (let* ((needed-frame (- 0 (car *lir-min-si*)))
                  (frame-size (align-frame-shift needed-frame))
-                 (insts (reverse (car *lir-instructions*))))
+                 (insts (lir-split-hot-cold-in-body (reverse (car *lir-instructions*)) #f)))
             (list '%lir-function
                   label
                   (list 'params params)
@@ -546,7 +546,7 @@
       (track-lir-si! -8)
       (lir-compile-expr main-expr -8 (list (cons '%raw-vars '()) (cons '%stack-vars '())) #f)
       (emit-lir! '(%return))
-      (let* ((main-insts (reverse (car *lir-instructions*)))
+      (let* ((main-insts (lir-split-hot-cold-in-body (reverse (car *lir-instructions*)) #t))
              (main-frame (align-frame-shift (- 0 (car *lir-min-si*))))
              (lir-main (list '%lir-main
                              (list 'frame-size main-frame)

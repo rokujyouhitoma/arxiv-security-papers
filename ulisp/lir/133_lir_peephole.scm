@@ -1893,6 +1893,19 @@
 ;;; LIR Linear-Scan Stack-Slot Register Allocator (Issue #961)
 ;;; -----------------------------------------------------------------------
 
+(define (lir-regalloc-inst-branches-to-cold-slow? inst)
+  (and (pair? inst)
+       (let ((op (car inst)))
+         (cond
+           ((or (eq? op '%jump-cond) (eq? op '%jump-if-false))
+            (and (pair? (cdr inst))
+                 (pair? (cddr inst))
+                 (lir-cold-label-sym? (caddr inst))))
+           ((eq? op '%jump-if-zero)
+            (and (pair? (cdr inst))
+                 (lir-cold-label-sym? (cadr inst))))
+           (else #f)))))
+
 (define (lir-regalloc-any-call-or-gc? inst)
   (and (pair? inst)
        (or (lir-inst-memory-barrier? inst)
@@ -2695,8 +2708,11 @@
                                         (if (and first-store? (>= cnt 2)
                                                  (not (let cloop ((k fst))
                                                         (and (<= k lst)
-                                                             (or (lir-regalloc-any-call-or-gc? (vector-ref ivec k))
-                                                                 (cloop (+ k 1)))))))
+                                                             (let ((kinst (vector-ref ivec k)))
+                                                               (or (lir-regalloc-any-call-or-gc? kinst)
+                                                                   (and (< k lst)
+                                                                        (lir-regalloc-inst-branches-to-cold-slow? kinst))
+                                                                   (cloop (+ k 1))))))))
                                             (cons s acc)
                                             acc)))))))
                     (if (null? eligible-slots)
