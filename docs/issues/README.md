@@ -15,14 +15,14 @@
 | **982** | x86-64 アドレッシングモード融合（Base+Disp / SIB Scaled Index）と連続 mov コピー伝播によるポインタ参照高速化 | Feature | In Progress | [982-fuse-x86-64-addressing-modes-and-eliminate-redundant-mov-chains.md](982-fuse-x86-64-addressing-modes-and-eliminate-redundant-mov-chains.md) |
 | **983** | 複雑 CFG（switch/goto/ループ）対応の C99 SSA mem2reg 拡張・ブロック内 Load-Store Forwarding・スタックフレーム圧縮 | Feature | In Progress | [983-extend-c99-ssa-mem2reg-and-register-allocation-for-complex-cfgs.md](983-extend-c99-ssa-mem2reg-and-register-allocation-for-complex-cfgs.md) |
 | **984** | C99 32-bit int 窄め最適化（冗長 movsxd 除去）と x86-64 命令選択の小型化（test 置換・アラインメント最適化） | Feature | In Progress | [984-eliminate-redundant-movsxd-sign-extensions-and-compact-x86-codegen.md](984-eliminate-redundant-movsxd-sign-extensions-and-compact-x86-codegen.md) |
-| **985** | 090_rtyper のセーフポイント透過アンボックス化と非アロケート純粋整数関数の Unboxed Direct Fast-Call ABI 導入 | Feature | In Progress | [985-enable-safepoint-transparent-rtyper-unboxing-and-unboxed-fast-call-abi.md](985-enable-safepoint-transparent-rtyper-unboxing-and-unboxed-fast-call-abi.md) |
-| **986** | Scheme カウントループ（loop_10m / closure_1m）の物理レジスタピン留めと Cold セーフポイント分離・ストリップマイニング | Feature | In Progress | [986-pin-scheme-counted-loop-registers-and-hoist-cold-safepoints.md](986-pin-scheme-counted-loop-registers-and-hoist-cold-safepoints.md) |
-| **987** | Freestanding ランタイムスタブ (140e) の関数別セクション分割と Pass 144 自前 ELF64 静的リンカの到達可能性 Dead Section GC | Feature | In Progress | [987-implement-per-symbol-section-splitting-and-pass-144-dead-section-gc.md](987-implement-per-symbol-section-splitting-and-pass-144-dead-section-gc.md) |
+| **987** | Freestanding ランタイムスタブ (140e) の関数別セクション分割（Step 1 完了）と Pass 144 自前 ELF64 静的リンカの到達可能性 Dead Section GC（Step 2） | Feature | In Progress | [987-implement-per-symbol-section-splitting-and-pass-144-dead-section-gc.md](987-implement-per-symbol-section-splitting-and-pass-144-dead-section-gc.md) |
 
 ## 2. 完了・クローズ済み Issue 一覧 (Closed Issues)
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **986** | Scheme カウントループ（loop_10m / closure_1m）の物理レジスタピン留めと Cold セーフポイント分離・SCEV 閉形式化 | Feature | 2026-11-28 | [986-pin-scheme-counted-loop-registers-and-hoist-cold-safepoints.md](closed/986-pin-scheme-counted-loop-registers-and-hoist-cold-safepoints.md) |
+| **985** | 090_rtyper のセーフポイント透過アンボックス化と非アロケート純粋整数関数の Unboxed Direct Fast-Call ABI・TRMC 導入 | Feature | 2026-11-28 | [985-enable-safepoint-transparent-rtyper-unboxing-and-unboxed-fast-call-abi.md](closed/985-enable-safepoint-transparent-rtyper-unboxing-and-unboxed-fast-call-abi.md) |
 | **981** | L_lir_core 不動点最適化ループの Scheme / C99 共通化と LIR / StagePoly 言語契約・仕様書統合是正 | Feature | 2026-11-28 | [981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md](closed/981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md) |
 | **972** | 全プログラム 0-CFA（制御フロー解析）による間接呼び出し脱仮想化と高階関数単相化・特化パスの導入 | Feature | 2026-11-28 | [972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md](closed/972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md) |
 | **971** | 汎用インライン展開 ＆ β-簡約パスの導入およびフロントエンド最適化（CP0/LVN/DCE）の Fixpoint 反復化 | Feature | 2026-11-28 | [971-implement-general-inliner-and-frontend-fixpoint-optimization.md](closed/971-implement-general-inliner-and-frontend-fixpoint-optimization.md) |

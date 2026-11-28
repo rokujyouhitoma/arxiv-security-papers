@@ -5,10 +5,10 @@
 ;;; =======================================================================
 
 (define (emit-oom-panic)
+  (emit "    .section .text.ulisp_oom_panic,\"ax\",@progbits")
   (emit "    .globl ulisp_oom_panic")
   (emit "    .weak ulisp_oom_panic")
   (emit "    .type ulisp_oom_panic, @function")
-  (emit "    .p2align 4")
   (emit "ulisp_oom_panic:")
   (emit "    lea rsi, [rip + .L_str_oom_panic]")
   (emit "    mov rdx, 46")                      ; string length
@@ -22,10 +22,10 @@
   (emit "    .asciz \"Fatal Error: ULisp Heap Limit Exhausted (OOM)\\n\"")
   (emit "    .p2align 3")
   (emit "")
+  (emit "    .section .text.ulisp_gc_write_barrier,\"ax\",@progbits")
   (emit "    .globl ulisp_gc_write_barrier")
   (emit "    .weak ulisp_gc_write_barrier")
   (emit "    .type ulisp_gc_write_barrier, @function")
-  (emit "    .p2align 4")
   (emit "ulisp_gc_write_barrier:")
   (emit "    test al, 1")
   (emit "    jz .L_wb_done")
@@ -77,10 +77,10 @@
   (emit "    ret"))
 
 (define (emit-arity-error-panic)
+  (emit "    .section .text.ulisp_arity_error,\"ax\",@progbits")
   (emit "    .globl ulisp_arity_error")
   (emit "    .weak ulisp_arity_error")
   (emit "    .type ulisp_arity_error, @function")
-  (emit "    .p2align 4")
   (emit "ulisp_arity_error:")
   (emit "    lea rsi, [rip + .L_str_arity_panic]")
   (emit "    mov rdx, 49")                      ; string length
@@ -95,10 +95,10 @@
   (emit "    .p2align 3"))
 
 (define (emit-gc-collector)
+  (emit "    .section .text.ulisp_alloc_slow_trampoline,\"ax\",@progbits")
   (emit "    .globl ulisp_alloc_slow_trampoline")
   (emit "    .weak ulisp_alloc_slow_trampoline")
   (emit "    .type ulisp_alloc_slow_trampoline, @function")
-  (emit "    .p2align 4")
   (emit "ulisp_alloc_slow_trampoline:")
   ;; Caller already shifted rsp by shift (16-byte aligned).
   ;; The call pushed an 8-byte return address, so rsp is (16k + 8).
@@ -130,10 +130,10 @@
   (emit "    ret")
   (emit "")
 
+  (emit "    .section .text.ulisp_gc_collect,\"ax\",@progbits")
   (emit "    .globl ulisp_gc_collect")
   (emit "    .weak ulisp_gc_collect")
   (emit "    .type ulisp_gc_collect, @function")
-  (emit "    .p2align 4")
   (emit "ulisp_gc_collect:")
   (emit "    push rbx")
   (emit "    push rbp")

@@ -699,6 +699,9 @@
                              (else ""))))
          (cond
            ((not frame-shift) 'all-except)
+           ((or (unboxed-fn? lbl)
+                (and (string? lbl) (unboxed-fn? (string->symbol lbl))))
+            '())
            ((string-starts-with? lbl-str "__ulisp_slow_")
             (if (> frame-shift 0)
                 (let ((len (string-length lbl-str)))

@@ -303,7 +303,7 @@ def compile_x86(workload_id: str, expr: str) -> str:
     bin_path = os.path.join(BUILD_DIR, f"{workload_id}_x86")
     compile_scheme_to_file(expr, s_path)
     run_cmd(["as", "--64", s_path, "-o", o_path])
-    run_cmd(["ld", "-m", "elf_x86_64", "-static", o_path, "-o", bin_path])
+    run_cmd(["ld", "-m", "elf_x86_64", "-static", "--gc-sections", o_path, "-o", bin_path])
     return bin_path
 
 

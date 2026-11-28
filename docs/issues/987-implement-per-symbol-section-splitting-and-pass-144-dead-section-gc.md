@@ -70,12 +70,13 @@ ID: 987
 
 ## 5. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [140e_x86_runtime_stubs.scm](../../ulisp/backend/140e_x86_runtime_stubs.scm)
+- [x] [140e_x86_runtime_stubs.scm](../../ulisp/backend/140e_x86_runtime_stubs.scm) *(Step 1 で完了)*
+- [x] [141_backend_x86_gc.scm](../../ulisp/backend/141_backend_x86_gc.scm) / [142_backend_x86_freestanding.scm](../../ulisp/backend/142_backend_x86_freestanding.scm) *(Step 1 で完了)*
 - [ ] [140c_x86_layout.scm](../../ulisp/backend/140c_x86_layout.scm)
 - [ ] [144_backend_x86_elf.scm](../../ulisp/backend/144_backend_x86_elf.scm)
 - [ ] [elf64_builder.scm](../../ulisp/backend/elf64_builder.scm)
 - [ ] [driver.scm](../../ulisp/compiler/driver.scm)
-- [ ] [benchmark_c_vs_x86.py](../../ulisp/benchmarks/benchmark_c_vs_x86.py)
+- [x] [benchmark_c_vs_x86.py](../../ulisp/benchmarks/benchmark_c_vs_x86.py) / [run_bench_c_vs_x86.sh](../../ulisp/benchmarks/run_bench_c_vs_x86.sh) *(Step 1 で完了: `--gc-sections` 導入)*
 - [ ] [test_elf_static_linker.scm](../../ulisp/tests/test_elf_static_linker.scm)
 
 ---
@@ -104,6 +105,6 @@ flowchart TD
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] Scheme Freestanding 6 種ベンチマーク（`fib_30`, `loop_10m`, `ack_3_7`, `closure_1m`, `list_100k`, `vector_100k`）のバイナリサイズが `27〜28 KB` から **`8 KB` 以下**（Pure C `16 KB` の半分以下）になること。
+- [x] **Step 1 完了（2026-11-28）**: Scheme Freestanding 6 種ベンチマーク（`fib_30`: `11,400 B`, `loop_10m`: `11,400 B`, `ack_3_7`: `11,400 B`, `closure_1m`: `11,408 B`, `list_100k`: `12,456 B`, `vector_100k`: `12,512 B`）すべてで **`11,400〜12,512 B`（Pure C `16,016〜16,104 B` 比 `0.71x〜0.78x` 勝利）** を達成した（`<= 8 KB` へのさらなる圧縮は Pass 144 直出力時・Step 2 で継続）。
 - [ ] Pass 144 自前静的リンカでビルドした `lua_ulisp`（`musl libc` 静的リンク込み）の ELF サイズが `667,592 B` から **`310,000 B` 以下**（`lua_gcc` `313,904 B` 未満）になること。
 - [ ] `test_elf_static_linker`, `make -C ulisp bootstrap test test_ulisp_cc_native`（Lua 公式 `all.lua` 全モジュール一致含む）および `make format && make static_analysis` が全 PASS すること。

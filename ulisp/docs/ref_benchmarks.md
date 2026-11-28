@@ -25,6 +25,9 @@
   - [#971 (汎用インライン展開 ＆ フロントエンド Fixpoint 反復化)](../../docs/issues/closed/971-implement-general-inliner-and-frontend-fixpoint-optimization.md)
   - [#972 (全プログラム 0-CFA 脱仮想化 ＆ 高階関数単相化)](../../docs/issues/closed/972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md)
   - [#981 (`L_lir_core` 不動点最適化共通化 ＆ Verifier / StagePoly 厳格化)](../../docs/issues/closed/981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md)
+  - [#985 (`090_rtyper` セーフポイント透過アンボックス化 ＆ TRMC `+` / 帰納基底展開 / Unboxed Fast-Call ABI)](../../docs/issues/closed/985-enable-safepoint-transparent-rtyper-unboxing-and-unboxed-fast-call-abi.md)
+  - [#986 (Scheme カウントループ物理レジスタ固定・SCEV 閉形式展開 ＆ インライン境界最適化)](../../docs/issues/closed/986-pin-scheme-counted-loop-registers-and-hoist-cold-safepoints.md)
+  - [#987 (Freestanding セクション分割・`--gc-sections` 導入 ＆ Pass 144 Dead Section GC)](../../docs/issues/987-implement-per-symbol-section-splitting-and-pass-144-dead-section-gc.md)
 
 ---
 
@@ -132,25 +135,27 @@ xychart-beta
 | **[#966](../../docs/issues/closed/966-separate-mir-ssa-and-machine-lir-for-unified-middle-end.md)〜[#970](../../docs/issues/closed/970-implement-hot-cold-basic-block-splitting-pass.md)** | `L_mir_ssa`/`L_lir_mach` 分離、C99 3分割、x86 5分割、Parallel Move、Hot/Cold 分離 | [pass_manager.scm](../compiler/pass_manager.scm), [lir_parallel_move.scm](../lir/lir_parallel_move.scm), [128_lir_branch_fusion.scm](../lir/128_lir_branch_fusion.scm) | **完了** | 中〜バックエンド基盤モジュール化 ＆ Lua `.text` **398,477 B (-10.5% vs #927)** |
 | **[#971](../../docs/issues/closed/971-implement-general-inliner-and-frontend-fixpoint-optimization.md)・[#972](../../docs/issues/closed/972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md)** | 汎用インライナ + FE 不動点、0-CFA ＆ 高階関数単相化 | [050_cp0.scm](../frontend/050_cp0.scm), [080_annotator.scm](../frontend/080_annotator.scm), [090_rtyper.scm](../frontend/090_rtyper.scm), [110_closure_convert.scm](../frontend/110_closure_convert.scm) | **完了** | `Higher-Order Closure (1M)` **2.99 → 1.42 ms (-52.5%)**、`List (100k)` **1.35 ms** |
 | **[#981](../../docs/issues/closed/981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md)** | `L_lir_core` 不動点共通化 ＆ `'core-lir` Verifier / StagePoly 契約厳格化 | [pass_manager.scm](../compiler/pass_manager.scm), [128_lir_branch_fusion.scm](../lir/128_lir_branch_fusion.scm), [133_lir_peephole.scm](../lir/133_lir_peephole.scm), [090_rtyper.scm](../frontend/090_rtyper.scm) | **完了** | 3-Stage モジュラーブートストラップ完全一致・`ulisp-boot` **5.45 MB → 5.33 MB** |
+| **[#985](../../docs/issues/closed/985-enable-safepoint-transparent-rtyper-unboxing-and-unboxed-fast-call-abi.md)・[#986](../../docs/issues/closed/986-pin-scheme-counted-loop-registers-and-hoist-cold-safepoints.md)** | Step 1: Safepoint 透過アンボックス + TRMC `+` / Unboxed ABI / カウントループ SCEV ＆ Freestanding 分割リンク | [090_rtyper.scm](../frontend/090_rtyper.scm), [124_lir_call_abi.scm](../lir/124_lir_call_abi.scm), [125_lir_continuation.scm](../lir/125_lir_continuation.scm), [133_lir_peephole.scm](../lir/133_lir_peephole.scm), [140e_x86_runtime_stubs.scm](../backend/140e_x86_runtime_stubs.scm), [142_backend_x86_freestanding.scm](../backend/142_backend_x86_freestanding.scm) | **完了** | **`fib_30` 2.05ms (0.93x Pure C)**, **`loop_10m` 0.35ms (0.62x)**, **`ack_3_7` 0.38ms (0.37x)**, **`closure_1m` 0.40ms (0.79x)**, **全6バイナリ 11,400–12,512 B (0.71–0.78x Pure C)** |
 
 ---
 
-## 3. Scheme ネイティブ AOT コンパイラ比較計測 (`2026-11-28` 再計測)
+## 3. Scheme ネイティブ AOT コンパイラ比較計測 (`2026-11-28` Step 1 完了時再計測)
 
 Scheme コア言語（R7RS）の 6 種標準ワークロードについて、`python3 ulisp/benchmarks/benchmark_c_vs_x86.py --iterations 30 --warmup 5 --include-schemes`（30 反復 + 5 ウォームアップ、`bin/ulisp-boot` + GCC 13 `-O2`）で再計測した最新結果は以下の通りです（過去の正典ベースライン初期記録は [benchmarks/BASELINE.md](../benchmarks/BASELINE.md) を参照）。
 
-| ワークロード | ULisp x86-64 Native (ms) | ULisp C `-O2` (ms) | Pure C `-O2` (ms) | Chez Scheme (ms) | Gauche (ms) | 対 Pure C 比率 | 対 Chez 比率 |
+| ワークロード | ULisp x86-64 Native (ms) | ULisp C `-O2` (ms) | Pure C `-O2` (ms) | Chez Scheme (ms) | Gauche (ms) | 対 Pure C 比率 | x86 / Pure C バイナリサイズ |
 | :--- | ---: | ---: | ---: | ---: | ---: | :---: | :---: |
-| **Fibonacci (`fib 30`)** | 5.48 ± 0.45 | 7.86 ± 0.65 | 1.86 ± 0.20 | 48.51 ± 1.54 | 81.15 ± 3.74 | **2.94x** | **0.11x** (8.9倍高速) |
-| **Tail-Recursive Loop (10M)** | 11.52 ± 0.49 | 23.18 ± 3.07 | 0.56 ± 0.06 | 63.77 ± 2.57 | 201.66 ± 19.07 | **20.48x** *(要改善)* | **0.18x** (5.5倍高速) |
-| **Ackermann (`ack 3 7`)** | 3.68 ± 0.14 | 4.59 ± 0.16 | 0.99 ± 0.09 | 49.20 ± 1.68 | 62.75 ± 6.17 | **3.74x** | **0.07x** (13.4倍高速) |
-| **Higher-Order Closure (1M)** | **1.42 ± 0.10** | 2.69 ± 0.12 | 0.55 ± 0.06 | 49.97 ± 0.76 | 62.40 ± 1.83 | **2.57x** | **0.03x** (35.2倍高速) |
-| **List Alloc & Traverse (100k)** | **1.35 ± 0.15** | 1.70 ± 0.16 | 1.43 ± 0.38 | 48.44 ± 0.93 | 46.52 ± 0.83 | **0.95x** *(Pure C 凌駕)* | **0.03x** (35.9倍高速) |
-| **Vector Indexing & Traverse (100k)** | 1.49 ± 0.30 | 1.53 ± 0.19 | 0.84 ± 0.07 | 52.17 ± 6.76 | 45.00 ± 0.94 | **1.76x** | **0.03x** (35.0倍高速) |
+| **Fibonacci (`fib 30`)** | **2.05 ± 0.25** | 2.38 ± 0.15 | 2.20 ± 0.34 | 61.37 ± 7.51 | 91.92 ± 4.52 | **0.93x (Pure C 勝利)** | **11,400 B** / 16,048 B (**0.71x**) |
+| **Tail-Recursive Loop (10M)** | **0.35 ± 0.05** | 1.92 ± 5.70 | 0.56 ± 0.10 | 67.43 ± 1.42 | 237.85 ± 33.18 | **0.62x (Pure C 勝利)** | **11,400 B** / 16,016 B (**0.71x**) |
+| **Ackermann (`ack 3 7`)** | **0.38 ± 0.08** | 0.60 ± 0.11 | 1.04 ± 0.09 | 50.87 ± 1.66 | 66.64 ± 2.09 | **0.37x (Pure C 勝利)** | **11,400 B** / 16,048 B (**0.71x**) |
+| **Higher-Order Closure (1M)** | **0.40 ± 0.05** | 0.58 ± 0.10 | 0.50 ± 0.04 | 59.28 ± 9.96 | 68.11 ± 5.34 | **0.79x (Pure C 勝利)** | **11,408 B** / 16,024 B (**0.71x**) |
+| **List Alloc & Traverse (100k)** | 1.50 ± 0.21 | 1.90 ± 0.31 | 1.22 ± 0.19 | 53.86 ± 2.01 | 48.40 ± 1.00 | **1.23x** *(対 Chez 36.0倍)* | **12,456 B** / 16,104 B (**0.77x**) |
+| **Vector Indexing & Traverse (100k)** | 1.40 ± 0.42 | 1.41 ± 0.15 | 0.82 ± 0.06 | 54.34 ± 4.04 | 50.10 ± 3.04 | **1.71x** *(対 Chez 38.9倍)* | **12,512 B** / 16,104 B (**0.78x**) |
 
-> **2026-11-28 再計測の主な変化**:
-> - **大幅改善**: Issue #972（0-CFA ＋ 高階関数単相化）と後続ミドルエンド最適化により、`Higher-Order Closure (1M)` が `2.99 ms → 1.42 ms`（**-52.5%**、対 Chez 35.2 倍高速）、`List Alloc & Traverse (100k)` が `2.17 ms → 1.35 ms`（**-37.8%**、Pure C `-O2` `1.43 ms` を下回る `0.95x`）へ大幅に高速化しました。
-> - **顕在化した要改善点**: `Tail-Recursive Loop (10M)` は過去の最小時（x86 `1.75 ms` / ULisp C `0.50 ms`）と比較して今回 x86 **`11.52 ms`**・ULisp C **`23.18 ms`** へ遅延しています（ループ内演算またはバックエンドコード生成・`L_mir_ssa` 経由最適化でのアンボックス維持／ループ最適化の後退が疑われ、Issue #973/#976 以降の次期ターゲットとなります）。
+> **2026-11-28 Step 1 完了時の成果（Issues #985・#986・#987前半）**:
+> - **純粋計算 4 ワークロードすべてで Pure C (`gcc -O2`) に勝利**: `090_rtyper.scm` の Safepoint 透過認識・TRMC `+` 化・Ackermann 基底展開、Unboxed Direct Fast-Call ABI（`124`/`126`/`133`/`140a`/`140c`）、および `125_lir_continuation.scm` の ANF ネスト `let` インプレース継続＋閉形式 SCEV / ループアンローリングにより、`fib_30` (`5.48 → 2.05 ms`, `0.93x`)、`loop_10m` (`11.52 → 0.35 ms`, `0.62x`)、`ack_3_7` (`3.68 → 0.38 ms`, `0.37x`)、`closure_1m` (`1.42 → 0.40 ms`, `0.79x`) のすべてで GCC `-O2` を上回りました。
+> - **全 6 Freestanding バイナリサイズで Pure C (`gcc -O2`) に勝利**: `140e`/`141`/`142` の関数別 `.text.<sym>` / `.data.<sym>` / `.bss` 分割と `ld --gc-sections` 導入により、全 6 バイナリが **`11,400〜12,512 B`**（Pure C `16,016〜16,104 B` の **`0.71x〜0.78x`**）へ縮小しました。
+> - **次期 Step 2/3（#973〜#978・#982〜#984・#987 後半）**: ヒープ走査（`list_100k` / `vector_100k`）のさらなる高速化と、`lua_ulisp`（`Pass 144` 自前リンカ Dead Section GC ＆ C99 最適化）による C99 アプリケーション領域での対 GCC 勝利を推進します。
 
 ---
 

@@ -268,4 +268,37 @@
     (assert-false "module-mode top-level lambda body does not emit raw-sub ABI"
                   (occurs-in? '%raw-sub (car (cadr typed))))))
 
+;; Test 16: Safepoint-injected fib & ack unboxing + pure-int poll stripping (Issue #985)
+(reset-type-annotations!)
+(let* ((orig (desugar-all '(letrec ((fib (lambda (n)
+                                           (begin (%synapse-safepoint-poll!)
+                                             (if (< n 2)
+                                                 n
+                                                 (+ (fib (- n 1)) (fib (- n 2))))))))
+                             (fib 30))))
+       (anf (anf-all (cp0-optimize orig)))
+       (ann (annotate-all anf))
+       (typed (rtyper-all ann)))
+  (assert-true "safepoint-injected fib is recorded as unboxed-fn" (unboxed-fn? 'fib))
+  (assert-true "safepoint-injected fib is recorded as unboxed-ret-fn" (unboxed-ret-fn? 'fib))
+  (assert-false "safepoint-injected unboxed fib strips safepoint polls"
+                (occurs-in? '%synapse-safepoint-poll! (cadar (cadr typed)))))
+
+(reset-type-annotations!)
+(let* ((orig (desugar-all '(letrec ((ack (lambda (m n)
+                                           (begin (%synapse-safepoint-poll!)
+                                             (if (= m 0)
+                                                 (+ n 1)
+                                                 (if (= n 0)
+                                                     (ack (- m 1) 1)
+                                                     (ack (- m 1) (ack m (- n 1)))))))))
+                             (ack 3 7))))
+       (anf (anf-all (cp0-optimize orig)))
+       (ann (annotate-all anf))
+       (typed (rtyper-all ann)))
+  (assert-true "safepoint-injected ack is recorded as unboxed-fn" (unboxed-fn? 'ack))
+  (assert-true "safepoint-injected ack is recorded as unboxed-ret-fn" (unboxed-ret-fn? 'ack))
+  (assert-false "safepoint-injected unboxed ack strips safepoint polls"
+                (occurs-in? '%synapse-safepoint-poll! (cadar (cadr typed)))))
+
 (test-end "Pass 090 (S-RTyper Lowering)")

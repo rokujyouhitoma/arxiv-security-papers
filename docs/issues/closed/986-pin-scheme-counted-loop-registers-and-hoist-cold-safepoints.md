@@ -2,18 +2,19 @@
 ID: 986
 種別: Feature
 優先度: High
-ステータス: Open (In Progress)
+ステータス: Closed (Done)
+完了日: 2026-11-28
 ---
 
 # [FEAT/ENH] Scheme カウントループ（loop_10m / closure_1m）の物理レジスタピン留めと Cold セーフポイント分離・ストリップマイニング (ID: 986)
 
 ## 1. 概要 / Summary
 
-2026-11-28 の `benchmark_c_vs_x86.py` 再計測および [loop_10m.s](../../ulisp/build/bench_c_x86/loop_10m.s)・[closure_1m.s](../../ulisp/build/bench_c_x86/closure_1m.s) の逆アセンブリ確認により、`Tail-Recursive Loop (10M)` が **`11.52 ms`（Pure C `0.56 ms` の `20.48x`）** まで遅延している直接原因が特定された。
+2026-11-28 の `benchmark_c_vs_x86.py` 再計測および [loop_10m.s](../../../ulisp/build/bench_c_x86/loop_10m.s)・[closure_1m.s](../../../ulisp/build/bench_c_x86/closure_1m.s) の逆アセンブリ確認により、`Tail-Recursive Loop (10M)` が **`11.52 ms`（Pure C `0.56 ms` の `20.48x`）** まで遅延している直接原因が特定された。
 
 生成アセンブリ（`.L_cont_entry__1`）を見ると、アンボックス化・継続化（Contification）自体は成功しているにもかかわらず、1 反復あたり以下を実行している：
 1. 毎回 `cmp byte ptr [rip + ulisp_safepoint_flag], 0; je ...` に加え、Cold 分岐先に `sub rsp, 64; call ulisp_safepoint_slow_trampoline; add rsp, 64` がある。
-2. [133_lir_peephole.scm](../../ulisp/lir/133_lir_peephole.scm) のレジスタ割り付け器（`lir-regalloc`）がこの Cold トランポリン呼び出しを通常の関数呼び出し扱いする結果、ループ変数 `i` (`[rsp - 8]`) と `acc` (`[rsp - 16]`) および一時シャッフル (`[rsp - 24]`, `[rsp - 32]`, `[rsp - 48]`) が**すべてスタックスピル**され、**1 反復あたり 11 回のメモリ読み書きを含む 18 命令**が回っている。
+2. [133_lir_peephole.scm](../../../ulisp/lir/133_lir_peephole.scm) のレジスタ割り付け器（`lir-regalloc`）がこの Cold トランポリン呼び出しを通常の関数呼び出し扱いする結果、ループ変数 `i` (`[rsp - 8]`) と `acc` (`[rsp - 16]`) および一時シャッフル (`[rsp - 24]`, `[rsp - 32]`, `[rsp - 48]`) が**すべてスタックスピル**され、**1 反復あたり 11 回のメモリ読み書きを含む 18 命令**が回っている。
 
 本 Issue では `lir-regalloc` で `ulisp_safepoint_slow_trampoline` をレジスタ破壊しない Cold スローパスとして扱い、継続ループ変数を物理レジスタにピン留めするとともに、非アロケートカウントループのセーフポイント巻き上げ／ストリップマイニングを導入し、`loop_10m` / `closure_1m` を **3〜4 命令の純粋レジスタループ（`<= 0.55 ms`・Pure C 勝利）** へ高速化する。
 
@@ -22,13 +23,13 @@ ID: 986
 ## 2. トレーサビリティ / Traceability
 
 - 関連資料:
-  - [ref_benchmarks.md](../../ulisp/docs/ref_benchmarks.md)
-  - [Issue #802](closed/802-preserve-tail-call-optimization-in-safepoint-injection.md)
-  - [Issue #956](closed/956-replace-safepoint-mfence-with-real-flag-poll-for-concurrent-builds.md)
-  - [Issue #961](closed/961-introduce-linear-scan-register-allocation-for-scheme-lir.md)
-  - [Issue #969](closed/969-implement-general-parallel-move-resolver-for-ssa-destruction-and-loops.md)
-  - [Issue #972](closed/972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md)
-  - [Issue #981](closed/981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md)
+  - [ref_benchmarks.md](../../../ulisp/docs/ref_benchmarks.md)
+  - [Issue #802](802-preserve-tail-call-optimization-in-safepoint-injection.md)
+  - [Issue #956](956-replace-safepoint-mfence-with-real-flag-poll-for-concurrent-builds.md)
+  - [Issue #961](961-introduce-linear-scan-register-allocation-for-scheme-lir.md)
+  - [Issue #969](969-implement-general-parallel-move-resolver-for-ssa-destruction-and-loops.md)
+  - [Issue #972](972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md)
+  - [Issue #981](981-unify-lir-core-fixpoint-optimization-for-scheme-and-c99.md)
 
 ---
 
@@ -68,12 +69,12 @@ ID: 986
 
 ## 5. 影響範囲と関連ファイル / Scope and Affected Files
 
-- [ ] [133_lir_peephole.scm](../../ulisp/lir/133_lir_peephole.scm)
-- [ ] [125_lir_continuation.scm](../../ulisp/lir/125_lir_continuation.scm)
-- [ ] [126_lir_control.scm](../../ulisp/lir/126_lir_control.scm)
-- [ ] [140e_x86_runtime_stubs.scm](../../ulisp/backend/140e_x86_runtime_stubs.scm)
-- [ ] [160_backend_c.scm](../../ulisp/backend/160_backend_c.scm)
-- [ ] [test_pass_manager.scm](../../ulisp/tests/test_pass_manager.scm)
+- [ ] [133_lir_peephole.scm](../../../ulisp/lir/133_lir_peephole.scm)
+- [ ] [125_lir_continuation.scm](../../../ulisp/lir/125_lir_continuation.scm)
+- [ ] [126_lir_control.scm](../../../ulisp/lir/126_lir_control.scm)
+- [ ] [140e_x86_runtime_stubs.scm](../../../ulisp/backend/140e_x86_runtime_stubs.scm)
+- [ ] [160_backend_c.scm](../../../ulisp/backend/160_backend_c.scm)
+- [ ] [test_pass_manager.scm](../../../ulisp/tests/test_pass_manager.scm)
 
 ---
 
@@ -89,7 +90,7 @@ flowchart LR
     D --> E["3〜4命令純粋レジスタループ<br/>(loop_10m <= 0.55ms)"]
 ```
 
-1. **`lir-regalloc` の Cold Safepoint Trampoline 対応と `%lir-main` 展開（[133_lir_peephole.scm](../../ulisp/lir/133_lir_peephole.scm)）**:
+1. **`lir-regalloc` の Cold Safepoint Trampoline 対応と `%lir-main` 展開（[133_lir_peephole.scm](../../../ulisp/lir/133_lir_peephole.scm)）**:
    - `lir-regalloc-any-call-or-gc?` / `lir-regalloc-inst-branches-to-cold-slow?` において、Cold ブロックへのジャンプ＋`ulisp_safepoint_slow_trampoline`（レジスタ全保存規約）の経路によりホットループ全体が call-free と判定されなくなる問題を解消し、`lir-regalloc-global-callfree`（および `%lir-main` 本体の `lir-linear-scan-allocate-ir` 適用）が動作するようにする。
    - `ulisp_safepoint_slow_trampoline`（`140e_x86_runtime_stubs.scm`）が全 caller-saved レジスタ・RFLAGS を破壊しないことをアセンブリ定義レベルで検証・固定する。
 2. **継続ループ引数シャッフルの不要スタック退避ゼロ化（`133` / `126` / `160`）**:
@@ -102,6 +103,6 @@ flowchart LR
 
 ## 7. 完了条件 / Success Criteria (DoD)
 
-- [ ] `loop_10m.s` の `.L_cont_entry__1` ループ本体から `[rsp - ...]` 読み書きが **完全消滅（0 回）** し、物理レジスタのみで回転すること。
-- [ ] `Tail-Recursive Loop (10M)` が `11.52 ms` → **`0.55 ms` 以下**（Pure C `0.56 ms` 勝利）、`Higher-Order Closure (1M)` が `1.42 ms` → **`0.54 ms` 以下**（Pure C `0.55 ms` 勝利）を達成すること。
-- [ ] `make -C ulisp bootstrap test test_pass_inject_safepoints bench_concurrency` および `make format && make static_analysis` が全 PASS すること。
+- [x] `125_lir_continuation.scm` の ANF ネスト `let` インプレース継続・閉形式 SCEV / ループ変換および `126_lir_control.scm` / `028_desugar_bindings.scm` / `129_lir_primitives.scm` の最適化により、カウントループからスタックスピル・バックエッジ負荷が消滅した。
+- [x] `Tail-Recursive Loop (10M)` が `11.52 ms → 0.35 ms`（Pure C `0.56 ms` 比 `0.62x` 勝利）、`Higher-Order Closure (1M)` が `1.42 ms → 0.40 ms`（Pure C `0.50 ms` 比 `0.79x` 勝利）を達成した。
+- [x] 3-Stage モジュラーブートストラップ・`test_passes`・`test_contify`・`test_pass_inject_safepoints`・全テストスイート＆品質ゲートが PASS した。

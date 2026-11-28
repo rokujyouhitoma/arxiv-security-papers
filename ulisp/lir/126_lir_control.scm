@@ -6,57 +6,93 @@
 ;;; performing Join Node Path Splitting and ANF Condition/Branch Flag Fusion.
 ;;; =======================================================================
 
-(define (terminal-cont-call-info body bindings env)
-  (cond
-    ((and (pair? body) (eq? (car body) '%cont-call))
-     (let* ((f-name (cadr body))
-            (call-args (cddr body))
-            (binding-vars (map car* bindings))
-            (b-entry (assq f-name env)))
-       (if (and (equal? call-args binding-vars)
-                b-entry
-                (pair? (cdr b-entry))
-                (eq? (cadr b-entry) '%cont-target)
-                (cont-target-all-regs? (cdr b-entry)))
-           (list '() f-name (cdr b-entry))
-           #f)))
-    ((and (pair? body) (eq? (car body) 'begin) (pair? (cdr body)))
-     (let loop ((es (cdr body)) (prologue '()))
-       (cond
-         ((null? (cdr es))
-          (let ((term (car es)))
-            (if (and (pair? term) (eq? (car term) '%cont-call))
-                (let* ((f-name (cadr term))
-                       (call-args (cddr term))
-                       (binding-vars (map car* bindings))
-                       (b-entry (assq f-name env)))
-                  (if (and (equal? call-args binding-vars)
-                           b-entry
-                           (pair? (cdr b-entry))
-                           (eq? (cadr b-entry) '%cont-target)
-                           (cont-target-all-regs? (cdr b-entry)))
-                      (list (reverse prologue) f-name (cdr b-entry))
-                      #f))
-                #f)))
-         (else
-          (loop (cdr es) (cons (car es) prologue))))))
-    (else #f)))
-
 (define (lir-safepoint-poll-form? e)
   (and (pair? e)
        (null? (cdr e))
        (memq (car e) '(%synapse-safepoint-poll! %safepoint-poll! synapse-safepoint-poll!))))
 
+(define (lir-count-var-refs var expr)
+  (cond
+    ((eq? expr var) 1)
+    ((not (pair? expr)) 0)
+    ((eq? (car expr) 'quote) 0)
+    (else (+ (lir-count-var-refs var (car expr))
+             (lir-count-var-refs var (cdr expr))))))
+
+(define (lir-subst-var var repl expr)
+  (cond
+    ((eq? expr var) repl)
+    ((not (pair? expr)) expr)
+    ((eq? (car expr) 'quote) expr)
+    (else (cons (lir-subst-var var repl (car expr))
+                (lir-subst-var var repl (cdr expr))))))
+
+(define (lir-flatten-terminal-cont-call expr bindings prologue)
+  (cond
+    ((and (pair? expr) (eq? (car expr) '%cont-call))
+     (list (reverse prologue) (reverse bindings) (cadr expr) (cddr expr)))
+    ((and (pair? expr) (eq? (car expr) 'begin) (pair? (cdr expr)))
+     (let loop ((es (cdr expr)) (rev-p prologue))
+       (cond
+         ((null? es) #f)
+         ((null? (cdr es))
+          (lir-flatten-terminal-cont-call (car es) bindings rev-p))
+         ((lir-safepoint-poll-form? (car es))
+          (loop (cdr es) (cons (car es) rev-p)))
+         (else #f))))
+    ((and (pair? expr) (eq? (car expr) 'let) (pair? (cdr expr)) (pair? (cddr expr)))
+     (let loop-b ((bs (cadr expr)) (rev-b bindings))
+       (if (null? bs)
+           (lir-flatten-terminal-cont-call (caddr expr) rev-b prologue)
+           (loop-b (cdr bs) (cons (car bs) rev-b)))))
+    (else #f)))
+
+(define (lir-resolve-cont-call-args rev-bindings call-args)
+  (let loop ((bs rev-bindings) (args call-args))
+    (if (null? bs)
+        (let check ((as args))
+          (if (null? as)
+              args
+              (if (cont-expr-pure? (car as))
+                  (check (cdr as))
+                  #f)))
+        (let* ((b (car bs))
+               (var (car* b))
+               (rhs (cadr b)))
+          (if (and (cont-expr-pure? rhs)
+                   (<= (lir-count-var-refs var args) 1))
+              (loop (cdr bs) (map (lambda (a) (lir-subst-var var rhs a)) args))
+              #f)))))
+
+(define (terminal-cont-call-info body bindings env)
+  (let ((flat (lir-flatten-terminal-cont-call body (reverse bindings) '())))
+    (if (not flat)
+        #f
+        (let* ((prologue (car flat))
+               (rev-bindings (cadr flat))
+               (f-name (caddr flat))
+               (call-args (cadddr flat))
+               (b-entry (assq f-name env)))
+          (if (and b-entry
+                   (pair? (cdr b-entry))
+                   (eq? (cadr b-entry) '%cont-target)
+                   (cont-target-all-regs? (cdr b-entry)))
+              (let ((resolved-args (lir-resolve-cont-call-args rev-bindings call-args)))
+                (if resolved-args
+                    (list prologue f-name (cdr b-entry) resolved-args)
+                    #f))
+              #f)))))
+
 (define (lir-compile-let bindings body si env tail?)
   (let ((term-info (terminal-cont-call-info body bindings env)))
     (cond
       ;; In-place Tail Loop Argument Shuffle: (let ((t0 e0) (t1 e1) ...) (%cont-call loop t0 t1 ...))
-      ;; or (let ((t0 e0) (t1 e1) ...) (begin ... (%cont-call loop t0 t1 ...)))
+      ;; or nested ANF let chain / (begin (%synapse-safepoint-poll!) ... (%cont-call loop ...))
       (term-info
        (let* ((prologue (car term-info))
               (f-name (cadr term-info))
               (target-info (caddr term-info))
-              (exprs (map cadr bindings)))
+              (exprs (cadddr term-info)))
          (for-each (lambda (p)
                      (if (lir-safepoint-poll-form? p)
                          (begin
@@ -130,13 +166,16 @@
        (emit-lir! '(%mov %rdi %rax))
        (if can-tco?
            (begin
-             (emit-lir! '(%mov %rax 4))
+             (if (not (unboxed-fn? label))
+                 (emit-lir! '(%mov %rax 4)))
              (emit-lir! (list '%direct-jump label)))
-           (let* ((bitmap (compute-stackmap-bitmap frame-shift (- 0 frame-shift) '() env))
-                  (safepoint-lbl (new-safepoint-label!)))
-             (record-safepoint! safepoint-lbl frame-shift bitmap)
-             (emit-lir! '(%mov %rax 4))
-             (emit-lir! (list '%direct-call label frame-shift safepoint-lbl))))))
+           (if (not (unboxed-fn? label))
+               (let* ((bitmap (compute-stackmap-bitmap frame-shift (- 0 frame-shift) '() env))
+                      (safepoint-lbl (new-safepoint-label!)))
+                 (record-safepoint! safepoint-lbl frame-shift bitmap)
+                 (emit-lir! '(%mov %rax 4))
+                 (emit-lir! (list '%direct-call label frame-shift safepoint-lbl)))
+               (emit-lir! (list '%direct-call label frame-shift))))))
 
     (else
      (let loop ((bs bindings)
