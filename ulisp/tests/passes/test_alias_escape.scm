@@ -139,6 +139,23 @@
                       (+ a b))))
                 res))
 
+;; Mutable pair target of set-car! / set-cdr! remains heap (cons) for GC write barrier & call/cc safety
+(let* ((expr '(let ((p (cons 0 '())))
+                (begin
+                  (set-car! p 1)
+                  (car p))))
+       (res (alias-escape-all expr)))
+  (assert-equal "pair mutated via set-car! remains heap (cons)"
+                expr
+                res))
+(let* ((expr '(let ((head (let ((inner (cons 1 mid)))
+                            inner)))
+                (capture-write-shared head)))
+       (res (alias-escape-all expr)))
+  (assert-equal "inner let pair returned to escaping outer let remains heap (cons)"
+                expr
+                res))
+
 ;;; -----------------------------------------------------------------------
 ;;; Test Group 5: LIR Generation with %alloc-stack
 ;;; -----------------------------------------------------------------------

@@ -58,9 +58,11 @@
       (let* ((vars (cons (cons var vn) (lvn-env-vars env)))
          (env1 (lvn-set-vars env vars))
          (vn-entry (assq vn (lvn-env-vns env1))))
-    ;; If this VN does not have a canonical variable yet (or has a compound expr),
+    ;; If this VN does not have a canonical variable yet (or has a compound/out-of-scope expr),
     ;; set its canonical representation to var
-    (if (and vn-entry (not (symbol? (cadr vn-entry))))
+    (if (and vn-entry
+             (or (not (symbol? (cadr vn-entry)))
+                 (not (assq (cadr vn-entry) (lvn-env-vars env)))))
         (let ((new-vns (cons (cons vn (cons var (cddr vn-entry)))
                              (lvn-env-vns env1))))
           (lvn-set-vns env1 new-vns))
@@ -128,6 +130,31 @@
                               entry)))
                       vns))))
     env2))
+
+(define (lvn-invalidate-var env var)
+  (let* ((env1 (lvn-invalidate-pairs env))
+         (new-vars (filter (lambda (entry) (not (eq? (car entry) var)))
+                           (lvn-env-vars env1)))
+         (new-vns (map (lambda (entry)
+                         (let ((vn (car entry))
+                               (canon (cadr entry))
+                               (info (cddr entry)))
+                           (if (eq? canon var)
+                               (cons vn (cons (list '%mutated var) '()))
+                               entry)))
+                       (lvn-env-vns env1))))
+    (lvn-set-vns (lvn-set-vars env1 new-vars) new-vns)))
+
+(define (lvn-body-mutates-var? expr var)
+  (cond
+    ((not (pair? expr)) #f)
+    ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) #f)
+    ((and (eq? (car expr) 'set!) (pair? (cdr expr)))
+     (or (eq? (cadr expr) var)
+         (and (pair? (cddr expr)) (lvn-body-mutates-var? (caddr expr) var))))
+    (else
+     (or (lvn-body-mutates-var? (car expr) var)
+         (lvn-body-mutates-var? (cdr expr) var)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Literal & Variable Value Evaluation
@@ -250,7 +277,7 @@
                    (list #t canon target-vn env)
                    (if (lvn-vn-is-const? env target-vn)
                        (list #t (val->ast-const (lvn-vn-const-val env target-vn)) target-vn env)
-                       (list #t canon target-vn env)))))
+                       (list #t (list op arg) target-vn env)))))
             ;; 2. Check if (op vn-p) was already memoized in this basic block / scope
             (else
              (let* ((tuple-key (list op vn-p))
@@ -346,14 +373,14 @@
 ;;; -----------------------------------------------------------------------
 
 (define (lvn-eval-call op opt-args vn-args env)
-  ;; 1. Check if all args are constants -> Constant Folding via fold-const-op
+  ;; 1. Check if all args are constants -> Constant Folding via fold-const-op-boxed
   (let ((folded (if (let loop ((as opt-args))
                       (if (null? as) #t
                           (and (const? (car as)) (loop (cdr as)))))
-                    (fold-const-op op opt-args)
+                    (fold-const-op-boxed op opt-args)
                     #f)))
     (if folded
-        (lvn-eval-const folded env)
+        (lvn-eval-const (car folded) env)
         ;; 2. Try algebraic identities
         (let ((alg (lvn-try-algebraic-simplification op opt-args vn-args env)))
           (if (car alg)
@@ -432,6 +459,14 @@
        (case op
          ((quote)
           (lvn-eval-const expr env))
+         ((declare)
+          (list expr 0 env))
+         ((set!)
+          (let* ((var (cadr expr))
+                 (val-res (lvn-eval (caddr expr) env))
+                 (opt-val (car val-res))
+                 (env1 (lvn-invalidate-var (caddr val-res) var)))
+            (list (list 'set! var opt-val) 0 env1)))
          ((if)
           (let* ((test-res (lvn-eval (cadr expr) env))
                  (opt-test (car test-res))
@@ -484,14 +519,18 @@
                       (opt-val (car val-res))
                       (vn-val (cadr val-res))
                       (env-val (caddr val-res))
-                      ;; Bind variable to vn-val
-                      (env-body (lvn-bind-var env-val var vn-val))
+                      (mutated? (lvn-body-mutates-var? body var))
+                      ;; Bind variable to vn-val unless mutated via set! inside body
+                      (env-body (if mutated?
+                                    (lvn-invalidate-var env-val var)
+                                    (lvn-bind-var env-val var vn-val)))
                       (body-res (lvn-eval body env-body))
                       (opt-body (car body-res))
                       (vn-body (cadr body-res))
                       (orig-vars (lvn-env-vars env-val))
                       ;; Dead let elimination: pure binding whose var is unused in body
-                      (dead? (and (atomic-expr? opt-val)
+                      (dead? (and (not mutated?)
+                                  (atomic-expr? opt-val)
                                   (not (tree-contains? opt-body var)))))
                  (if dead?
                      (list opt-body vn-body (lvn-set-vars (caddr body-res) orig-vars))
@@ -604,16 +643,31 @@
   (cond
     ((not (pair? form)) form)
     ((eq? (car form) '%program)
-     (let ((defs (cadr form))
-           (main (caddr form)))
-       (list '%program
-             (map (lambda (d)
-                    (if (and (pair? d) (eq? (car d) 'define))
-                        (list 'define (cadr d) (lvn-expr (caddr d) (make-lvn-env)))
-                        (lvn-expr d (make-lvn-env))))
-                  defs)
-             (lvn-expr main (make-lvn-env)))))
+     (let* ((defs (cadr form))
+            (main (caddr form))
+            (new-defs
+             (let loop ((ds defs) (rev '()) (changed? #f))
+               (if (null? ds)
+                   (if changed? (reverse rev) defs)
+                   (let* ((d (car ds))
+                          (nd (if (and (pair? d) (eq? (car d) 'define))
+                                  (let ((nv (lvn-expr (caddr d) (make-lvn-env))))
+                                    (if (equal? nv (caddr d))
+                                        d
+                                        (list 'define (cadr d) nv)))
+                                  (let ((nv (lvn-expr d (make-lvn-env))))
+                                    (if (equal? nv d) d nv)))))
+                     (loop (cdr ds) (cons nd rev) (or changed? (not (eq? nd d))))))))
+            (new-main-cand (lvn-expr main (make-lvn-env)))
+            (new-main (if (equal? new-main-cand main) main new-main-cand)))
+       (if (and (eq? new-defs defs) (eq? new-main main))
+           form
+           (list '%program new-defs new-main))))
     ((eq? (car form) 'define)
-     (list 'define (cadr form) (lvn-expr (caddr form) (make-lvn-env))))
+     (let ((nv (lvn-expr (caddr form) (make-lvn-env))))
+       (if (equal? nv (caddr form))
+           form
+           (list 'define (cadr form) nv))))
     (else
-     (lvn-expr form (make-lvn-env)))))
+     (let ((nv (lvn-expr form (make-lvn-env))))
+       (if (equal? nv form) form nv)))))

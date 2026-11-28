@@ -7,7 +7,6 @@
 | Issue ID | タイトル | 種別 | ステータス | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
 | **960** | 未参照関数の削除（関数・クロージャ毎セクション分割＋`--gc-sections` ＆ 到達可能性解析） | Feature | In Progress | [960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md](960-eliminate-unreferenced-functions-via-reachability-or-gc-sections.md) |
-| **971** | 汎用インライン展開 ＆ β-簡約パスの導入およびフロントエンド最適化（CP0/LVN/DCE）の Fixpoint 反復化 | Feature | New | [971-implement-general-inliner-and-frontend-fixpoint-optimization.md](971-implement-general-inliner-and-frontend-fixpoint-optimization.md) |
 | **972** | 全プログラム 0-CFA（制御フロー解析）による間接呼び出し脱仮想化と高階関数単相化・特化パスの導入 | Feature | New | [972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md](972-implement-0-cfa-devirtualization-and-higher-order-monomorphization.md) |
 | **973** | L_mir_ssa 上の共通 SSA データフロー最適化群（SCCP・SSA-GVN・ADCE）の実装と 133_lir_peephole.scm のパス分解 | Feature | New | [973-implement-ssa-sccp-gvn-adce-and-decompose-lir-peephole.md](973-implement-ssa-sccp-gvn-adce-and-decompose-lir-peephole.md) |
 | **974** | エスケープ解析の関数間要約・TBAA 責務分離および構造体・非エスケープオブジェクトのスカラー置換（SRA）実装 | Feature | New | [974-refactor-alias-escape-and-implement-scalar-replacement-of-aggregates.md](974-refactor-alias-escape-and-implement-scalar-replacement-of-aggregates.md) |
@@ -21,6 +20,7 @@
 
 | Issue ID | タイトル | 種別 | 完了日 | 詳細リンク |
 | :---: | --- | :--- | :---: | :---: |
+| **971** | 汎用インライン展開 ＆ β-簡約パスの導入およびフロントエンド最適化（CP0/LVN/DCE）の Fixpoint 反復化 | Feature | 2026-11-28 | [971-implement-general-inliner-and-frontend-fixpoint-optimization.md](closed/971-implement-general-inliner-and-frontend-fixpoint-optimization.md) |
 | **970** | Hot/Cold 基本ブロック分離パス（Slow Path の関数末尾・Cold 領域隔離）の導入 | Feature | 2026-11-28 | [970-implement-hot-cold-basic-block-splitting-pass.md](closed/970-implement-hot-cold-basic-block-splitting-pass.md) |
 | **969** | 汎用 Parallel Move Resolver（並列コピー解析・トポロジカルシャッフル）の実装と SSA 解除・継続化ループ更新の統合 | Feature | 2026-11-28 | [969-implement-general-parallel-move-resolver-for-ssa-destruction-and-loops.md](closed/969-implement-general-parallel-move-resolver-for-ssa-destruction-and-loops.md) |
 | **968** | x86-64 バックエンド 140_backend_x86_64.scm（4,177行）のモジュール分割と 143 ピープホールの %raw-asm 文字列依存解消 | Feature | 2026-11-28 | [968-split-x86-64-backend-and-eliminate-raw-asm-peephole-matching.md](closed/968-split-x86-64-backend-and-eliminate-raw-asm-peephole-matching.md) |

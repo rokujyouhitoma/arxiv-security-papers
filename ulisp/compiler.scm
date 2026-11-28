@@ -3093,28 +3093,30 @@
                      (and (pure-expr? (car args)) (loop (cdr args))))))))))
     (else #f)))
 
-(define (fold-const-op op args)
+;;; Fold primitive OP applied to AST constant ARGS, returning (list ast-const) on
+;;; success so boolean #f results remain distinct from #f (fold failure).
+(define (fold-const-op-boxed op args)
   (let ((nargs (length args)))
     (cond
       ;; Unary arithmetic / predicates
       ((and (= nargs 1) (const? (car args)))
        (let ((v (extract-const-val (car args))))
          (case op
-           ((fxadd1) (if (number? v) (val->ast-const (+ v 1)) #f))
-           ((fxsub1) (if (number? v) (val->ast-const (- v 1)) #f))
-           ((zero?) (if (number? v) (val->ast-const (= v 0)) #f))
-           ((not) (val->ast-const (if (eq? v #f) #t #f)))
-           ((null?) (val->ast-const (null? v)))
-           ((pair?) (val->ast-const (pair? v)))
+           ((fxadd1) (if (number? v) (list (val->ast-const (+ v 1))) #f))
+           ((fxsub1) (if (number? v) (list (val->ast-const (- v 1))) #f))
+           ((zero?) (if (number? v) (list (val->ast-const (= v 0))) #f))
+           ((not) (list (val->ast-const (if (eq? v #f) #t #f))))
+           ((null?) (list (val->ast-const (null? v))))
+           ((pair?) (list (val->ast-const (pair? v))))
            ((number? fixnum? integer? exact? exact-integer? real? rational? complex?)
-            (val->ast-const (number? v)))
-           ((inexact?) (val->ast-const #f))
-           ((boolean?) (val->ast-const (boolean? v)))
-           ((char?) (val->ast-const (char? v)))
-           ((symbol?) (val->ast-const (symbol? v)))
-           ((list?) (val->ast-const (list? v)))
-           ((car) (if (pair? v) (val->ast-const (car v)) #f))
-           ((cdr) (if (pair? v) (val->ast-const (cdr v)) #f))
+            (list (val->ast-const (number? v))))
+           ((inexact?) (list (val->ast-const #f)))
+           ((boolean?) (list (val->ast-const (boolean? v))))
+           ((char?) (list (val->ast-const (char? v))))
+           ((symbol?) (list (val->ast-const (symbol? v))))
+           ((list?) (list (val->ast-const (list? v))))
+           ((car) (if (pair? v) (list (val->ast-const (car v))) #f))
+           ((cdr) (if (pair? v) (list (val->ast-const (cdr v))) #f))
            (else #f))))
       ;; Binary arithmetic / predicates
       ((and (= nargs 2) (const? (car args)) (const? (cadr args)))
@@ -3125,43 +3127,47 @@
             (if (and (number? v1) (number? v2)
                      (<= v1 536870911) (>= v1 -536870911)
                      (<= v2 536870911) (>= v2 -536870911))
-                (val->ast-const (+ v1 v2))
+                (list (val->ast-const (+ v1 v2)))
                 #f))
            ((-)
             (if (and (number? v1) (number? v2)
                      (<= v1 536870911) (>= v1 -536870911)
                      (<= v2 536870911) (>= v2 -536870911))
-                (val->ast-const (- v1 v2))
+                (list (val->ast-const (- v1 v2)))
                 #f))
            ((*)
             (if (and (number? v1) (number? v2)
                      (<= v1 30000000) (>= v1 -30000000)
                      (<= v2 30000000) (>= v2 -30000000))
-                (val->ast-const (* v1 v2))
+                (list (val->ast-const (* v1 v2)))
                 #f))
            ((quotient /)
             (if (and (number? v1) (number? v2) (not (= v2 0))
                      (<= v1 536870911) (>= v1 -536870911)
                      (<= v2 536870911) (>= v2 -536870911))
-                (val->ast-const (quotient v1 v2))
+                (list (val->ast-const (quotient v1 v2)))
                 #f))
            ((modulo)
             (if (and (number? v1) (number? v2) (not (= v2 0))
                      (<= v1 536870911) (>= v1 -536870911)
                      (<= v2 536870911) (>= v2 -536870911))
-                (val->ast-const (modulo v1 v2))
+                (list (val->ast-const (modulo v1 v2)))
                 #f))
-           ((=) (if (and (number? v1) (number? v2)) (val->ast-const (= v1 v2)) #f))
-           ((<) (if (and (number? v1) (number? v2)) (val->ast-const (< v1 v2)) #f))
-           ((<=) (if (and (number? v1) (number? v2)) (val->ast-const (<= v1 v2)) #f))
-           ((>) (if (and (number? v1) (number? v2)) (val->ast-const (> v1 v2)) #f))
-           ((>=) (if (and (number? v1) (number? v2)) (val->ast-const (>= v1 v2)) #f))
-           ((eq? eqv?) (val->ast-const (eq? v1 v2)))
-           ((char=?) (if (and (char? v1) (char? v2)) (val->ast-const (char=? v1 v2)) #f))
-           ((boolean=?) (val->ast-const (if (and (boolean? v1) (boolean? v2)) (eq? v1 v2) #f)))
-           ((symbol=?) (val->ast-const (if (and (symbol? v1) (symbol? v2)) (eq? v1 v2) #f)))
+           ((=) (if (and (number? v1) (number? v2)) (list (val->ast-const (= v1 v2))) #f))
+           ((<) (if (and (number? v1) (number? v2)) (list (val->ast-const (< v1 v2))) #f))
+           ((<=) (if (and (number? v1) (number? v2)) (list (val->ast-const (<= v1 v2))) #f))
+           ((>) (if (and (number? v1) (number? v2)) (list (val->ast-const (> v1 v2))) #f))
+           ((>=) (if (and (number? v1) (number? v2)) (list (val->ast-const (>= v1 v2))) #f))
+           ((eq? eqv?) (list (val->ast-const (eq? v1 v2))))
+           ((char=?) (if (and (char? v1) (char? v2)) (list (val->ast-const (char=? v1 v2))) #f))
+           ((boolean=?) (list (val->ast-const (if (and (boolean? v1) (boolean? v2)) (eq? v1 v2) #f))))
+           ((symbol=?) (list (val->ast-const (if (and (symbol? v1) (symbol? v2)) (eq? v1 v2) #f))))
            (else #f))))
       (else #f))))
+
+(define (fold-const-op op args)
+  (let ((boxed (fold-const-op-boxed op args)))
+    (if boxed (car boxed) #f)))
 
 ;;; -----------------------------------------------------------------------
 ;;; Builtin & Primitive Arity Signatures (Issue #629)
@@ -10132,6 +10138,7 @@
     (pass-025-top-level . "pass-025-top-level")
     (pass-030-desugar . "pass-030-desugar")
     (pass-035-scope-resolve . "pass-035-scope-resolve")
+    (pass-048-inline . "pass-048-inline")
     (pass-050-cp0 . "pass-050-cp0")
     (pass-060-lvn . "pass-060-lvn")
     (pass-070-anf . "pass-070-anf")
@@ -10350,8 +10357,22 @@
                   (if (not (verify-pass-output 'lir current-ast))
                       (error "IR Verifier Invariant Violation in final LIR" current-ast)))
               current-ast)
-            (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
-              (loop (cdr ps) next-ast)))))))
+            (if (frontend-fixpoint-pass-id? (pass-id (car ps)))
+                (let collect ((rem ps) (cluster '()))
+                  (if (and (pair? rem) (frontend-fixpoint-pass-id? (pass-id (car rem))))
+                      (collect (cdr rem) (cons (car rem) cluster))
+                      (let* ((ordered (reverse cluster))
+                             (next-ast
+                              (if (pair? (cdr ordered))
+                                  (run-pass-fixpoint-opts ordered current-ast
+                                                          (list ':max-iterations (frontend-fixpoint-max-iterations)
+                                                                ':equiv? equal?
+                                                                ':verify verify-mode
+                                                                ':trace trace-mode))
+                                  (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
+                        (loop rem next-ast))))
+                (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
+                  (loop (cdr ps) next-ast))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 7.1 Named Pipeline Execution Engine (DSN-33-01 T6.1 / Issue #768)
@@ -10403,9 +10424,23 @@
                   (if (not (verify-pass-output 'lir current-ast))
                       (error "IR Verifier Invariant Violation in final LIR" current-ast)))
               current-ast)
-            (let* ((desc (lookup-pass (car ids)))
-                   (next-ast (run-single-pass desc current-ast verify-mode trace-mode)))
-              (loop (cdr ids) next-ast)))))))
+            (if (and (> (pipeline-opt-level) 0) (frontend-fixpoint-pass-id? (car ids)))
+                (let collect ((rem ids) (cluster '()))
+                  (if (and (pair? rem) (frontend-fixpoint-pass-id? (car rem)))
+                      (collect (cdr rem) (cons (lookup-pass (car rem)) cluster))
+                      (let* ((ordered (reverse cluster))
+                             (next-ast
+                              (if (pair? (cdr ordered))
+                                  (run-pass-fixpoint-opts ordered current-ast
+                                                          (list ':max-iterations (frontend-fixpoint-max-iterations)
+                                                                ':equiv? equal?
+                                                                ':verify verify-mode
+                                                                ':trace trace-mode))
+                                  (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
+                        (loop rem next-ast))))
+                (let* ((desc (lookup-pass (car ids)))
+                       (next-ast (run-single-pass desc current-ast verify-mode trace-mode)))
+                  (loop (cdr ids) next-ast))))))))
 
 (define (run-current-pipeline forms verify-mode trace-mode)
   (run-named-pipeline (current-pipeline-name) forms verify-mode trace-mode))
@@ -10517,6 +10552,40 @@
     ((pass-specs initial-ast o1 o2 o3 o4)
      (run-pass-fixpoint-opts pass-specs initial-ast (list o1 o2 o3 o4)))))
 
+(define *frontend-fixpoint-max-iterations* (cons 4 '()))
+(define (frontend-fixpoint-max-iterations) (car *frontend-fixpoint-max-iterations*))
+(define (set-frontend-fixpoint-max-iterations! n) (set-car! *frontend-fixpoint-max-iterations* n))
+
+(define (frontend-fixpoint-pass-id? id)
+  (or (eq? id 'pass-048-inline)
+      (eq? id 'pass-050-cp0)
+      (eq? id 'pass-060-lvn)))
+
+(define run-frontend-fixpoint
+  (case-lambda
+    ((forms)
+     (run-frontend-fixpoint forms (frontend-fixpoint-max-iterations)))
+    ((forms max-iters)
+     (if (null? (car *pass-registry*))
+         (init-default-pass-registry!))
+     (if (null? (car *analysis-property-registry*))
+         (init-default-analysis-properties!))
+     (let* ((opt (pipeline-opt-level))
+            (disabled (pipeline-disabled-passes))
+            (cand-ids (cond
+                        ((<= opt 0) '())
+                        ((= opt 1) '(pass-048-inline pass-050-cp0))
+                        (else '(pass-048-inline pass-050-cp0 pass-060-lvn))))
+            (active-ids (filter (lambda (id)
+                                  (and (pass-registered? id)
+                                       (not (memq id disabled))))
+                                cand-ids)))
+       (if (null? active-ids)
+           forms
+           (run-pass-fixpoint active-ids forms
+                              ':max-iterations max-iters
+                              ':equiv? equal?))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; 8. Default Pass Registry Initialization
 ;;; -----------------------------------------------------------------------
@@ -10529,6 +10598,7 @@
     pass-030-desugar
     pass-035-scope-resolve
     pass-040-analysis
+    pass-048-inline
     pass-050-cp0
     pass-060-lvn
     pass-070-anf
@@ -10634,6 +10704,9 @@
     (make-pass-descriptor-with-opts 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
       (lambda (forms) (check-arity-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t
       (list ':preserves '(all))))
+  (register-pass!
+    (make-pass-descriptor 'pass-048-inline "General Inliner and Beta-Reduction" 'frontend 1
+      (lambda (forms) (frontend-inline-pass forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
   (register-pass!
     (make-pass-descriptor 'pass-050-cp0 "CP0 Source Optimization" 'frontend 1
       (lambda (forms) (cp0-optimize forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
@@ -20311,6 +20384,8 @@
 ;;;             hygienic macros, and Nanopass/Picopass DSL forms).
 ;;; - L_src:    Source HIR after library/import desugaring and macro/DSL expansion.
 ;;; - L_core:   Core HIR where all 18 high-level syntactic sugar forms are removed.
+;;;             Also serves as the closed endomorphic carrier language for the
+;;;             bounded frontend fixpoint loop (pass-048-inline -> pass-050-cp0 -> pass-060-lvn).
 ;;; - L_anf:    A-Normal Form intermediate language where all function/primitive
 ;;;             arguments and conditional tests are atomic operands.
 ;;; - L_lifted: Flat procedure intermediate language where local lambda abstractions
@@ -24894,19 +24969,24 @@
         #t
         (and (const? (car as)) (loop (cdr as))))))
 
-(define (cp0-fold-expr op args)
-  (let ((folded (fold-const-op op args)))
-    (if folded
-        folded
+(define (cp0-fold-expr-boxed op args)
+  (let ((boxed (fold-const-op-boxed op args)))
+    (if boxed
+        boxed
         (if (and (symbol? op) (cp0-all-const-args? args) (ctfe-pure-prim? op))
-            (eval-in-language 'L_core (cons op args))
+            (let ((r (eval-in-language 'L_core (cons op args))))
+              (if r (list r) #f))
             #f))))
+
+(define (cp0-fold-expr op args)
+  (let ((boxed (cp0-fold-expr-boxed op args)))
+    (if boxed (car boxed) #f)))
 
 (define-picopass rule-cp0-const-fold
   :reads '() :writes '()
   (Expr
-    ((,op ,args ...) (guard (and (symbol? op) (cp0-fold-expr op args)))
-     (cp0-fold-expr op args))))
+    ((,op ,args ...) (guard (and (symbol? op) (cp0-fold-expr-boxed op args)))
+     (car (cp0-fold-expr-boxed op args)))))
 
 (define-picopass rule-cp0-inline-map-for-each
   :reads '(map for-each lambda) :writes '(letrec lambda if let begin)
@@ -25057,8 +25137,33 @@
              (loop (cdr args) (cp0-collect-expr-ops (car args) cur))))))
     (else acc)))
 
+(define (cp0-str-has-substr? str sub)
+  (let ((slen (string-length str))
+        (sublen (string-length sub)))
+    (if (> sublen slen)
+        #f
+        (let loop ((i 0))
+          (if (> (+ i sublen) slen)
+              #f
+              (let cmp ((j 0))
+                (cond
+                  ((= j sublen) #t)
+                  ((char=? (string-ref str (+ i j)) (string-ref sub j)) (cmp (+ j 1)))
+                  (else (loop (+ i 1))))))))))
+
+(define (cp0-asm-or-runtime-stub-name? sym)
+  (if (not (symbol? sym))
+      #f
+      (let ((s (symbol->string sym)))
+        (or (cp0-str-has-substr? s "%asm-")
+            (cp0-str-has-substr? s "%sys-")
+            (cp0-str-has-substr? s "%init-worker-tls")
+            (cp0-str-has-substr? s "%synapse-safepoint-poll!")
+            (cp0-str-has-substr? s "%safepoint-poll!")))))
+
 (define (cp0-inlineable-lambda? name rhs mutated-vars dup-defs)
   (and (symbol? name)
+       (not (cp0-asm-or-runtime-stub-name? name))
        (not (memq name mutated-vars))
        (not (memq name dup-defs))
        (pair? rhs)
@@ -25075,7 +25180,9 @@
               (single-body (if (and (pair? clean-list) (null? (cdr clean-list)))
                                (cp0-unwrap-accessor-body (car clean-list))
                                #f))
-              (cost (and single-body (cp0-accessor-cost single-body params name))))
+              (cost (and single-body
+                         (pair? single-body)
+                         (cp0-accessor-cost single-body params name))))
          (and cost
               (<= cost 2)
               (list name params single-body (cp0-collect-expr-ops single-body '()))))))
@@ -25307,6 +25414,714 @@
 ;;; Top-level entrypoint for CP0 optimization
 (define (cp0-optimize form)
   (cp0-opt (cp0-inline-accessors form)))
+
+;;; -----------------------------------------------------------------------
+;;; General Cost/Use-Count Inliner & Hygienic Beta-Reduction (Issue #971)
+;;; -----------------------------------------------------------------------
+
+(define *cp0-inline-forced-max-cost* 4)
+(define *cp0-inline-max-cost* 12)
+(define *cp0-inline-single-use-max-cost* 36)
+(define *cp0-inline-max-total-growth* 24)
+(define *cp0-inline-unroll-max-cost* 16)
+
+(define (cp0-proper-formal-list? params)
+  (and (list? params)
+       (<= (length params) 8)
+       (let loop ((ps params) (seen '()))
+         (cond
+           ((null? ps) #t)
+           ((and (symbol? (car ps)) (not (memq (car ps) seen)))
+            (loop (cdr ps) (cons (car ps) seen)))
+           (else #f)))))
+
+(define (cp0-has-unsafe-inline-op? expr)
+  (cond
+    ((symbol? expr)
+     (or (eq? expr '%num-args)
+         (eq? expr '%get-rsp)
+         (eq? expr '%get-rbp)
+         (cp0-asm-or-runtime-stub-name? expr)))
+    ((not (pair? expr)) #f)
+    ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) #f)
+    ((memq (car expr)
+           '(set! %num-args %get-rsp %get-rbp gc-collect! gc-minor-collect!
+             call/cc %raw-call/cc dynamic-wind %with-handler
+             with-exception-handler guard %cont-fun %cont-call
+             %make-closure %make-closure-env %inline-asm error raise))
+     #t)
+    ((and (symbol? (car expr)) (cp0-asm-or-runtime-stub-name? (car expr)))
+     #t)
+    (else
+     (or (cp0-has-unsafe-inline-op? (car expr))
+         (cp0-has-unsafe-inline-op? (cdr expr))))))
+
+(define (cp0-expr-cost-acc expr acc max-budget)
+  (cond
+    ((not acc) #f)
+    ((> acc max-budget) #f)
+    ((symbol? expr) acc)
+    ((not (pair? expr)) acc)
+    ((eq? (car expr) 'declare) acc)
+    ((eq? (car expr) 'quote)
+     (if (and (pair? (cdr expr))
+              (or (null? (cadr expr))
+                  (symbol? (cadr expr))
+                  (boolean? (cadr expr))
+                  (number? (cadr expr))
+                  (char? (cadr expr))))
+         acc
+         (let ((na (+ acc 1)))
+           (if (> na max-budget) #f na))))
+    ((eq? (car expr) 'if)
+     (let ((c1 (cp0-expr-cost-acc (cadr expr) (+ acc 1) max-budget)))
+       (if (not c1)
+           #f
+           (let ((c2 (cp0-expr-cost-acc (caddr expr) c1 max-budget)))
+             (if (not c2)
+                 #f
+                 (if (null? (cdddr expr))
+                     c2
+                     (cp0-expr-cost-acc (cadddr expr) c2 max-budget)))))))
+    ((eq? (car expr) 'begin)
+     (let loop ((es (cdr expr)) (cur acc))
+       (cond
+         ((not cur) #f)
+         ((null? es) cur)
+         (else (loop (cdr es) (cp0-expr-cost-acc (car es) cur max-budget))))))
+    ((memq (car expr) '(let letrec))
+     (if (and (pair? (cdr expr)) (list? (cadr expr)) (pair? (cddr expr)))
+         (let* ((bs (cadr expr))
+                (base (+ acc (length bs))))
+           (if (> base max-budget)
+               #f
+               (let loop ((rem bs) (cur base))
+                 (cond
+                   ((not cur) #f)
+                   ((null? rem)
+                    (cp0-expr-cost-acc (caddr expr) cur max-budget))
+                   (else
+                    (loop (cdr rem)
+                          (cp0-expr-cost-acc (cadar rem) cur max-budget)))))))
+         #f))
+    ((eq? (car expr) 'lambda)
+     (if (and (pair? (cdr expr)) (pair? (cddr expr)))
+         (let ((base (+ acc 4)))
+           (if (> base max-budget)
+               #f
+               (cp0-expr-cost-acc (caddr expr) base max-budget)))
+         #f))
+    (else
+     (let loop ((xs expr) (cur (+ acc 1)))
+       (cond
+         ((not cur) #f)
+         ((> cur max-budget) #f)
+         ((null? xs) cur)
+         ((pair? xs)
+          (loop (cdr xs) (cp0-expr-cost-acc (car xs) cur max-budget)))
+         (else cur))))))
+
+(define (cp0-expr-cost expr max-budget)
+  (cp0-expr-cost-acc expr 0 max-budget))
+
+(define (cp0-make-hash-table)
+  (make-vector 512 '()))
+
+(define (cp0-ht-idx sym)
+  (modulo (symbol->hash-idx sym) 512))
+
+(define (cp0-ht-ref ht sym)
+  (let ((entry (assq sym (vector-ref ht (cp0-ht-idx sym)))))
+    (if entry (cdr entry) #f)))
+
+(define (cp0-ht-set! ht sym val)
+  (let* ((idx (cp0-ht-idx sym))
+         (bucket (vector-ref ht idx))
+         (entry (assq sym bucket)))
+    (if entry
+        (set-cdr! entry val)
+        (vector-set! ht idx (cons (cons sym val) bucket)))))
+
+(define (cp0-ht-inc-stat! ht sym call-pos?)
+  (let* ((idx (cp0-ht-idx sym))
+         (bucket (vector-ref ht idx))
+         (entry (assq sym bucket)))
+    (if entry
+        (let ((pair-val (cdr entry)))
+          (set-car! pair-val (+ (car pair-val) 1))
+          (if call-pos?
+              (set-cdr! pair-val (+ (cdr pair-val) 1))))
+        (vector-set! ht idx (cons (cons sym (cons 1 (if call-pos? 1 0))) bucket)))))
+
+(define (cp0-collect-use-stats-walk expr ht call-pos?)
+  (cond
+    ((symbol? expr)
+     (cp0-ht-inc-stat! ht expr call-pos?))
+    ((not (pair? expr)) #f)
+    ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) #f)
+    ((and (eq? (car expr) '%program) (pair? (cdr expr)) (pair? (cddr expr)))
+     (for-each
+       (lambda (d)
+         (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (pair? (cddr d)))
+             (cp0-collect-use-stats-walk (caddr d) ht #f)
+             (cp0-collect-use-stats-walk d ht #f)))
+       (cadr expr))
+     (cp0-collect-use-stats-walk (caddr expr) ht #f))
+    ((and (eq? (car expr) 'lambda) (pair? (cdr expr)))
+     (for-each (lambda (e) (cp0-collect-use-stats-walk e ht #f)) (cddr expr)))
+    ((and (memq (car expr) '(let letrec)) (pair? (cdr expr)) (list? (cadr expr)) (pair? (cddr expr)))
+     (for-each (lambda (b) (cp0-collect-use-stats-walk (cadr b) ht #f)) (cadr expr))
+     (for-each (lambda (e) (cp0-collect-use-stats-walk e ht #f)) (cddr expr)))
+    ((and (eq? (car expr) 'set!) (pair? (cdr expr)) (pair? (cddr expr)))
+     (cp0-ht-inc-stat! ht (cadr expr) #f)
+     (cp0-collect-use-stats-walk (caddr expr) ht #f))
+    ((memq (car expr) '(if begin))
+     (for-each (lambda (e) (cp0-collect-use-stats-walk e ht #f)) (cdr expr)))
+    (else
+     (if (symbol? (car expr))
+         (cp0-ht-inc-stat! ht (car expr) #t)
+         (cp0-collect-use-stats-walk (car expr) ht #f))
+     (for-each (lambda (e) (cp0-collect-use-stats-walk e ht #f)) (cdr expr)))))
+
+(define (cp0-collect-use-counts expr)
+  (let ((ht (cp0-make-hash-table)))
+    (cp0-collect-use-stats-walk expr ht #f)
+    ht))
+
+(define (cp0-use-stat-total ht sym)
+  (let ((p (cp0-ht-ref ht sym)))
+    (if p (car p) 0)))
+
+(define (cp0-use-stat-calls ht sym)
+  (let ((p (cp0-ht-ref ht sym)))
+    (if p (cdr p) 0)))
+
+(define (cp0-collect-dup-defs-ht defs)
+  (let ((seen (cp0-make-hash-table)))
+    (let loop ((ds defs) (dups '()))
+      (if (null? ds)
+          dups
+          (let ((d (car ds)))
+            (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (symbol? (cadr d)))
+                (let ((name (cadr d)))
+                  (if (cp0-ht-ref seen name)
+                      (loop (cdr ds) (if (memq name dups) dups (cons name dups)))
+                      (begin
+                        (cp0-ht-set! seen name #t)
+                        (loop (cdr ds) dups))))
+                (loop (cdr ds) dups)))))))
+
+(define (cp0-count-var-occurrences var expr)
+  (cond
+    ((symbol? expr) (if (eq? expr var) 1 0))
+    ((not (pair? expr)) 0)
+    ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) 0)
+    (else
+     (+ (cp0-count-var-occurrences var (car expr))
+        (cp0-count-var-occurrences var (cdr expr))))))
+
+(define (cp0-collect-free-syms expr bound acc)
+  (cond
+    ((symbol? expr)
+     (if (or (memq expr bound) (memq expr acc))
+         acc
+         (cons expr acc)))
+    ((not (pair? expr)) acc)
+    ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) acc)
+    ((and (eq? (car expr) 'lambda) (pair? (cdr expr)))
+     (let ((nb (append (cp0-lambda-formal-syms (cadr expr)) bound)))
+       (let loop ((es (cddr expr)) (cur acc))
+         (if (null? es)
+             cur
+             (loop (cdr es) (cp0-collect-free-syms (car es) nb cur))))))
+    ((and (eq? (car expr) 'let) (pair? (cdr expr)) (list? (cadr expr)))
+     (let* ((bs (cadr expr))
+            (cur1 (let loop ((xs bs) (cur acc))
+                    (if (null? xs)
+                        cur
+                        (loop (cdr xs) (cp0-collect-free-syms (cadar xs) bound cur)))))
+            (nb (append (map car* bs) bound)))
+       (let loop ((es (cddr expr)) (cur cur1))
+         (if (null? es)
+             cur
+             (loop (cdr es) (cp0-collect-free-syms (car es) nb cur))))))
+    ((and (eq? (car expr) 'letrec) (pair? (cdr expr)) (list? (cadr expr)))
+     (let* ((bs (cadr expr))
+            (nb (append (map car* bs) bound))
+            (cur1 (let loop ((xs bs) (cur acc))
+                    (if (null? xs)
+                        cur
+                        (loop (cdr xs) (cp0-collect-free-syms (cadar xs) nb cur))))))
+       (let loop ((es (cddr expr)) (cur cur1))
+         (if (null? es)
+             cur
+             (loop (cdr es) (cp0-collect-free-syms (car es) nb cur))))))
+    (else
+     (let loop ((xs expr) (cur acc))
+       (cond
+         ((null? xs) cur)
+         ((pair? xs)
+          (loop (cdr xs) (cp0-collect-free-syms (car xs) bound cur)))
+         (else
+          (cp0-collect-free-syms xs bound cur)))))))
+
+(define (cp0-fresh-inl-sym orig)
+  (unique-symbol "__inl_v_"))
+
+(define (cp0-alpha-rename-expr expr env)
+  (cond
+    ((symbol? expr)
+     (let ((e (assq expr env)))
+       (if e (cdr e) expr)))
+    ((not (pair? expr)) expr)
+    ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) expr)
+    ((and (eq? (car expr) 'lambda) (pair? (cdr expr)))
+     (let* ((formals (cadr expr))
+            (bodies (cddr expr))
+            (ext-cell (cons env '()))
+            (new-formals
+             (let walk-f ((f formals))
+               (cond
+                 ((null? f) '())
+                 ((symbol? f)
+                  (let ((nf (cp0-fresh-inl-sym f)))
+                    (set-car! ext-cell (cons (cons f nf) (car ext-cell)))
+                    nf))
+                 ((pair? f)
+                  (let* ((p (car f))
+                         (np (if (symbol? p) (cp0-fresh-inl-sym p) p)))
+                    (if (symbol? p)
+                        (set-car! ext-cell (cons (cons p np) (car ext-cell))))
+                    (cons np (walk-f (cdr f)))))
+                 (else f))))
+            (nenv (car ext-cell))
+            (new-bodies (map (lambda (e) (cp0-alpha-rename-expr e nenv)) bodies)))
+       (cons 'lambda (cons new-formals new-bodies))))
+    ((and (eq? (car expr) 'let) (pair? (cdr expr)) (list? (cadr expr)))
+     (let* ((bindings (cadr expr))
+            (bodies (cddr expr))
+            (renamed-rhs (map (lambda (b) (cp0-alpha-rename-expr (cadr b) env)) bindings))
+            (new-pairs (map (lambda (b) (cons (car b) (cp0-fresh-inl-sym (car b)))) bindings))
+            (nenv (append new-pairs env))
+            (new-bs (let bzip ((ps new-pairs) (rs renamed-rhs) (acc '()))
+                      (if (null? ps)
+                          (reverse acc)
+                          (bzip (cdr ps) (cdr rs)
+                                (cons (list (cdar ps) (car rs)) acc)))))
+            (new-bodies (map (lambda (e) (cp0-alpha-rename-expr e nenv)) bodies)))
+       (cons 'let (cons new-bs new-bodies))))
+    ((and (eq? (car expr) 'letrec) (pair? (cdr expr)) (list? (cadr expr)))
+     (let* ((bindings (cadr expr))
+            (bodies (cddr expr))
+            (new-pairs (map (lambda (b) (cons (car b) (cp0-fresh-inl-sym (car b)))) bindings))
+            (nenv (append new-pairs env))
+            (new-bs (let bzip ((ps new-pairs) (bs bindings) (acc '()))
+                      (if (null? ps)
+                          (reverse acc)
+                          (bzip (cdr ps) (cdr bs)
+                                (cons (list (cdar ps) (cp0-alpha-rename-expr (cadar bs) nenv)) acc)))))
+            (new-bodies (map (lambda (e) (cp0-alpha-rename-expr e nenv)) bodies)))
+       (cons 'letrec (cons new-bs new-bodies))))
+    ((and (eq? (car expr) 'set!) (pair? (cdr expr)) (pair? (cddr expr)))
+     (let* ((v (cadr expr))
+            (e (assq v env))
+            (nv (if e (cdr e) v)))
+       (list 'set! nv (cp0-alpha-rename-expr (caddr expr) env))))
+    (else
+     (cons (cp0-alpha-rename-expr (car expr) env)
+           (cp0-alpha-rename-expr (cdr expr) env)))))
+
+(define (cp0-subst-expr expr subst)
+  (if (null? subst)
+      expr
+      (cond
+        ((symbol? expr)
+         (let ((e (assq expr subst)))
+           (if e (cdr e) expr)))
+        ((not (pair? expr)) expr)
+        ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) expr)
+        (else
+         (cons (cp0-subst-expr (car expr) subst)
+               (cp0-subst-expr (cdr expr) subst))))))
+
+(define (cp0-expand-beta-call params body args)
+  (if (or (not (cp0-proper-formal-list? params))
+          (not (= (length params) (length args)))
+          (cp0-has-unsafe-inline-op? body))
+      #f
+      (let* ((param-map (map (lambda (p) (cons p (cp0-fresh-inl-sym p))) params))
+             (renamed-body (cp0-alpha-rename-expr body param-map))
+             (atomic-all? (cp0-all-atomic-exprs? args)))
+        (let loop ((pm param-map) (as args) (subst '()) (bindings '()))
+          (if (null? pm)
+              (let ((body-sub (cp0-subst-expr renamed-body subst)))
+                (if (null? bindings)
+                    body-sub
+                    (list 'let (reverse bindings) body-sub)))
+              (let ((fp (cdar pm))
+                    (arg (car as)))
+                (cond
+                  ((const? arg)
+                   (loop (cdr pm) (cdr as) (cons (cons fp arg) subst) bindings))
+                  ((and atomic-all?
+                        (symbol? arg)
+                        (<= (cp0-count-var-occurrences fp renamed-body) 1))
+                   (loop (cdr pm) (cdr as) (cons (cons fp arg) subst) bindings))
+                  (else
+                   (loop (cdr pm) (cdr as) subst (cons (list fp arg) bindings))))))))))
+
+(define (cp0-beta-reduce-walk expr)
+  (cond
+    ((not (pair? expr)) expr)
+    ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) expr)
+    ((and (eq? (car expr) 'lambda) (pair? (cdr expr)))
+     (let* ((formals (cadr expr))
+            (bodies (cddr expr))
+            (nbodies (cp0-map-preserve-eq cp0-beta-reduce-walk bodies)))
+       (if (eq? nbodies bodies)
+           expr
+           (cons 'lambda (cons formals nbodies)))))
+    ((and (memq (car expr) '(let letrec)) (pair? (cdr expr)) (list? (cadr expr)))
+     (let* ((tag (car expr))
+            (bs (cadr expr))
+            (bodies (cddr expr))
+            (nbs (cp0-map-preserve-eq
+                   (lambda (b)
+                     (let ((nv (cp0-beta-reduce-walk (cadr b))))
+                       (if (eq? nv (cadr b)) b (list (car b) nv))))
+                   bs))
+            (nbodies (cp0-map-preserve-eq cp0-beta-reduce-walk bodies)))
+       (if (and (eq? nbs bs) (eq? nbodies bodies))
+           expr
+           (cons tag (cons nbs nbodies)))))
+    ((and (eq? (car expr) 'define) (pair? (cdr expr)) (pair? (cddr expr)))
+     (let ((nv (cp0-beta-reduce-walk (caddr expr))))
+       (if (eq? nv (caddr expr))
+           expr
+           (list 'define (cadr expr) nv))))
+    ((and (eq? (car expr) '%program) (pair? (cdr expr)) (pair? (cddr expr)))
+     (let* ((defs (cadr expr))
+            (main (caddr expr))
+            (ndefs (cp0-map-preserve-eq cp0-beta-reduce-walk defs))
+            (nmain (cp0-beta-reduce-walk main)))
+       (if (and (eq? ndefs defs) (eq? nmain main))
+           expr
+           (list '%program ndefs nmain))))
+    (else
+     (let* ((nop (cp0-beta-reduce-walk (car expr)))
+            (nargs (cp0-map-preserve-eq cp0-beta-reduce-walk (cdr expr))))
+       (if (and (pair? nop)
+                (eq? (car nop) 'lambda)
+                (pair? (cdr nop))
+                (cp0-proper-formal-list? (cadr nop))
+                (pair? (cddr nop))
+                (null? (cdddr nop)))
+           (let ((reduced (cp0-expand-beta-call (cadr nop) (caddr nop) nargs)))
+             (if reduced
+                 (cp0-beta-reduce-walk reduced)
+                 (if (and (eq? nop (car expr)) (eq? nargs (cdr expr)))
+                     expr
+                     (cons nop nargs))))
+           (if (and (eq? nop (car expr)) (eq? nargs (cdr expr)))
+               expr
+               (cons nop nargs)))))))
+
+(define (cp0-map-preserve-eq fn lst)
+  (let loop ((rem lst) (rev '()) (changed? #f))
+    (if (null? rem)
+        (if changed? (reverse rev) lst)
+        (let* ((item (car rem))
+               (nitem (fn item)))
+          (loop (cdr rem) (cons nitem rev) (or changed? (not (eq? nitem item))))))))
+
+(define (cp0-beta-reduce form)
+  (cp0-beta-reduce-walk form))
+
+(define (cp0-strip-body-declares raw-body)
+  (let strip ((es raw-body))
+    (if (and (pair? es) (cp0-declare-form? (car es)))
+        (strip (cdr es))
+        es)))
+
+(define (cp0-self-tail-only-loop? fn-name params expr)
+  (let ((body-expr (if (and (pair? expr) (null? (cdr expr))) (car expr) expr)))
+    (and (occurs-in? fn-name expr)
+         (let loop-check ((e expr) (tail? #t))
+           (cond
+             ((symbol? e) (not (eq? e fn-name)))
+             ((not (pair? e)) #t)
+             ((or (eq? (car e) 'quote) (eq? (car e) 'declare)) #t)
+             ((eq? (car e) 'if)
+              (and (loop-check (cadr e) #f)
+                   (loop-check (caddr e) tail?)
+                   (if (null? (cdddr e)) #t (loop-check (cadddr e) tail?))))
+             ((eq? (car e) 'begin)
+              (let bl ((es (cdr e)))
+                (cond
+                  ((null? es) #t)
+                  ((null? (cdr es)) (loop-check (car es) tail?))
+                  (else (and (loop-check (car es) #f) (bl (cdr es)))))))
+             ((eq? (car e) 'let)
+              (and (let bl ((bs (cadr e)))
+                     (or (null? bs)
+                         (and (loop-check (cadar bs) #f) (bl (cdr bs)))))
+                   (if (memq fn-name (map car* (cadr e)))
+                       #t
+                       (loop-check (caddr e) tail?))))
+             ((eq? (car e) 'lambda)
+              (if (memq fn-name (cp0-lambda-formal-syms (cadr e)))
+                  #t
+                  (not (occurs-in? fn-name (cddr e)))))
+             ((eq? (car e) fn-name)
+              (and tail?
+                   (let al ((as (cdr e)))
+                     (or (null? as)
+                         (and (loop-check (car as) #f) (al (cdr as)))))))
+             (else
+              (and (loop-check (car e) #f)
+                   (let al ((as (cdr e)))
+                     (or (null? as)
+                         (and (loop-check (car as) #f) (al (cdr as))))))))))))
+
+(define (cp0-general-inline-candidate name rhs mutated-vars dup-defs use-table local-scope?)
+  (and (symbol? name)
+       (not (cp0-asm-or-runtime-stub-name? name))
+       (not (memq name mutated-vars))
+       (not (memq name dup-defs))
+       (pair? rhs)
+       (eq? (car rhs) 'lambda)
+       (pair? (cdr rhs))
+       (cp0-proper-formal-list? (cadr rhs))
+       (pair? (cddr rhs))
+       (let* ((params (cadr rhs))
+              (clean-list (cp0-strip-body-declares (cddr rhs)))
+              (single-body (if (and (pair? clean-list) (null? (cdr clean-list)))
+                               (cp0-unwrap-accessor-body (car clean-list))
+                               #f)))
+         (and single-body
+              ;; Avoid inlining bare constant/identity placeholder stubs at top-level
+              (or local-scope? (pair? single-body))
+              (not (cp0-has-unsafe-inline-op? single-body))
+              (let ((cost (cp0-expr-cost single-body *cp0-inline-single-use-max-cost*)))
+                (and cost
+                     (let* ((self-rec? (occurs-in? name single-body))
+                            (u-total (cp0-use-stat-total use-table name))
+                            (u-calls (cp0-use-stat-calls use-table name))
+                            (frees (cp0-collect-free-syms single-body
+                                                         (if self-rec? (cons name params) params)
+                                                         '())))
+                       (cond
+                         (self-rec?
+                          (and (<= cost *cp0-inline-unroll-max-cost*)
+                               (not (and local-scope? (cp0-self-tail-only-loop? name params single-body)))
+                               (list name params single-body frees 'recursive-1step cost)))
+                         ((or (<= cost *cp0-inline-forced-max-cost*)
+                              (and (= u-total 1) (= u-calls 1)
+                                   (<= cost *cp0-inline-single-use-max-cost*))
+                              (and (= u-calls 1) (not local-scope?)
+                                   (<= cost *cp0-inline-single-use-max-cost*))
+                              (and (>= u-calls 1)
+                                   (<= u-calls 4)
+                                   (<= cost *cp0-inline-max-cost*)
+                                   (<= (* (- u-calls 1) cost) *cp0-inline-max-total-growth*)))
+                          (list name params single-body frees 'normal cost))
+                         (else #f)))))))))
+
+(define (cp0-harvest-general-top-env defs mutated-vars dup-defs use-table)
+  (let ((ht (cp0-make-hash-table)))
+    (for-each
+      (lambda (d)
+        (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (pair? (cddr d)) (symbol? (cadr d)))
+            (let ((info (cp0-general-inline-candidate (cadr d) (caddr d) mutated-vars dup-defs use-table #f)))
+              (if info
+                  (cp0-ht-set! ht (cadr d) info)))))
+      defs)
+    ht))
+
+(define (cp0-has-any-const-arg? args)
+  (let loop ((as args))
+    (and (pair? as)
+         (or (const? (car as))
+             (loop (cdr as))))))
+
+(define (cp0-try-expand-general-entry entry args shadowed expanding-stack)
+  (let ((name (car entry))
+        (params (cadr entry))
+        (body (caddr entry))
+        (frees (cadddr entry))
+        (mode (car (cddddr entry))))
+    (cond
+      ((memq name expanding-stack) #f)
+      ((cp0-any-memq? frees shadowed) #f)
+      ((eq? mode 'normal)
+       (cp0-expand-beta-call params body args))
+      ((and (eq? mode 'recursive-1step)
+            (cp0-has-any-const-arg? args))
+       (let ((trial (cp0-expand-beta-call params body args)))
+         (if trial
+             (let* ((simplified (cp0-opt trial))
+                    (rec-count (cp0-count-var-occurrences name simplified)))
+               (cond
+                 ((= rec-count 0) simplified)
+                 ((and (= rec-count 1) (cp0-all-const-args? args)) simplified)
+                 (else #f)))
+             #f)))
+      (else #f))))
+
+(define (cp0-general-lookup name local-env prog-ht shadowed)
+  (and (symbol? name)
+       (or (let ((loc (assq name local-env)))
+             (and loc (cdr loc)))
+           (and (not (memq name shadowed))
+                prog-ht
+                (cp0-ht-ref prog-ht name)))))
+
+(define (cp0-general-inline-walk-list es local-env prog-ht shadowed use-table expanding)
+  (cp0-map-preserve-eq
+    (lambda (e) (cp0-general-inline-walk e local-env prog-ht shadowed use-table expanding))
+    es))
+
+(define (cp0-general-inline-walk expr local-env prog-ht shadowed use-table expanding)
+  (cond
+    ((not (pair? expr)) expr)
+    ((const? expr) expr)
+    (else
+     (let ((head (car expr)))
+       (cond
+         ((or (eq? head 'quote) (eq? head 'declare)) expr)
+         ((and (eq? head '%program) (pair? (cdr expr)) (pair? (cddr expr)))
+          (let* ((defs (cadr expr))
+                 (main-body (caddr expr))
+                 (mutated (cp0-collect-set!-vars main-body (cp0-collect-set!-vars defs '())))
+                 (dups (cp0-collect-dup-defs-ht defs))
+                 (cur-use-table (cp0-collect-use-counts expr))
+                 (cur-prog-ht (cp0-harvest-general-top-env defs mutated dups cur-use-table))
+                 (new-defs
+                  (cp0-map-preserve-eq
+                    (lambda (d)
+                      (if (and (pair? d) (eq? (car d) 'define) (pair? (cdr d)) (pair? (cddr d)))
+                          (let* ((name (cadr d))
+                                 (rhs (caddr d))
+                                 ;; Conservative stack-root GC boundaries (%get-rsp) rely on callee stack frame deallocation
+                                 (rhs-prog-ht (if (occurs-in? '%get-rsp rhs) #f cur-prog-ht))
+                                 (rhs-loc-env (if (occurs-in? '%get-rsp rhs) '() local-env))
+                                 (nrhs (cp0-general-inline-walk rhs rhs-loc-env rhs-prog-ht shadowed cur-use-table (list name))))
+                            (if (eq? nrhs rhs) d (list 'define name nrhs)))
+                          (cp0-general-inline-walk d local-env cur-prog-ht shadowed cur-use-table expanding)))
+                    defs))
+                 (new-main (cp0-general-inline-walk main-body local-env cur-prog-ht shadowed cur-use-table expanding)))
+            (if (and (eq? new-defs defs) (eq? new-main main-body))
+                expr
+                (list '%program new-defs new-main))))
+         ((and (eq? head 'lambda) (pair? (cdr expr)))
+          (let* ((formals (cadr expr))
+                 (bodies (cddr expr))
+                 (f-syms (cp0-lambda-formal-syms formals))
+                 (inner-loc-env (cp0-filter-shadowed-env local-env f-syms))
+                 (inner-shadow (append f-syms shadowed))
+                 (new-bodies (cp0-general-inline-walk-list bodies inner-loc-env prog-ht inner-shadow use-table expanding)))
+            (if (eq? new-bodies bodies)
+                expr
+                (cons 'lambda (cons formals new-bodies)))))
+         ((and (eq? head 'let) (pair? (cdr expr)) (list? (cadr expr)) (pair? (cddr expr)))
+          (let* ((bindings (cadr expr))
+                 (bodies (cddr expr))
+                 (new-bindings
+                  (cp0-map-preserve-eq
+                    (lambda (b)
+                      (let ((nrhs (cp0-general-inline-walk (cadr b) local-env prog-ht shadowed use-table expanding)))
+                        (if (eq? nrhs (cadr b)) b (list (car b) nrhs))))
+                    bindings))
+                 (bound-vars (map car* bindings))
+                 (inner-shadow (append bound-vars shadowed))
+                 (mutated (cp0-collect-set!-vars bodies '()))
+                 (loc-use-table (if use-table use-table (cp0-collect-use-counts expr)))
+                 (new-loc-entries
+                  (let loop ((bs new-bindings) (acc '()))
+                    (if (null? bs)
+                        acc
+                        (let* ((b (car bs))
+                               (info (cp0-general-inline-candidate (car b) (cadr b) mutated '() loc-use-table #t)))
+                          (if info
+                              (loop (cdr bs) (cons (cons (car b) info) acc))
+                              (loop (cdr bs) acc))))))
+                 (inner-loc-env (append new-loc-entries (cp0-filter-shadowed-env local-env bound-vars)))
+                 (new-bodies (cp0-general-inline-walk-list bodies inner-loc-env prog-ht inner-shadow loc-use-table expanding)))
+            (if (and (eq? new-bindings bindings) (eq? new-bodies bodies))
+                expr
+                (cons 'let (cons new-bindings new-bodies)))))
+         ((and (eq? head 'letrec) (pair? (cdr expr)) (list? (cadr expr)) (pair? (cddr expr)))
+          (let* ((bindings (cadr expr))
+                 (bodies (cddr expr))
+                 (bound-vars (map car* bindings))
+                 (inner-shadow (append bound-vars shadowed))
+                 (mutated (cp0-collect-set!-vars bodies (cp0-collect-set!-vars bindings '())))
+                 (loc-use-table (if use-table use-table (cp0-collect-use-counts expr)))
+                 (new-loc-entries
+                  (let loop ((bs bindings) (acc '()))
+                    (if (null? bs)
+                        acc
+                        (let* ((b (car bs))
+                               (info (cp0-general-inline-candidate (car b) (cadr b) mutated '() loc-use-table #t)))
+                          (if info
+                              (loop (cdr bs) (cons (cons (car b) info) acc))
+                              (loop (cdr bs) acc))))))
+                 (inner-loc-env (append new-loc-entries (cp0-filter-shadowed-env local-env bound-vars)))
+                 (new-bindings
+                  (cp0-map-preserve-eq
+                    (lambda (b)
+                      (let* ((bname (car b))
+                             (nrhs (cp0-general-inline-walk (cadr b) inner-loc-env prog-ht inner-shadow loc-use-table (cons bname expanding))))
+                        (if (eq? nrhs (cadr b)) b (list bname nrhs))))
+                    bindings))
+                 (new-bodies (cp0-general-inline-walk-list bodies inner-loc-env prog-ht inner-shadow loc-use-table expanding)))
+            (if (and (eq? new-bindings bindings) (eq? new-bodies bodies))
+                expr
+                (cons 'letrec (cons new-bindings new-bodies)))))
+         ((and (eq? head 'set!) (pair? (cdr expr)) (pair? (cddr expr)))
+          (let ((nval (cp0-general-inline-walk (caddr expr) local-env prog-ht shadowed use-table expanding)))
+            (if (eq? nval (caddr expr))
+                expr
+                (list 'set! (cadr expr) nval))))
+         ((memq head '(if begin))
+          (let ((new-rest (cp0-general-inline-walk-list (cdr expr) local-env prog-ht shadowed use-table expanding)))
+            (if (eq? new-rest (cdr expr))
+                expr
+                (cons head new-rest))))
+         (else
+          (let* ((new-op (if (symbol? head) head (cp0-general-inline-walk head local-env prog-ht shadowed use-table expanding)))
+                 (new-args (cp0-general-inline-walk-list (cdr expr) local-env prog-ht shadowed use-table expanding)))
+            (cond
+              ;; Direct lambda beta-reduction: ((lambda (p ...) body) arg ...)
+              ((and (pair? new-op)
+                    (eq? (car new-op) 'lambda)
+                    (pair? (cdr new-op))
+                    (cp0-proper-formal-list? (cadr new-op))
+                    (pair? (cddr new-op))
+                    (null? (cdddr new-op)))
+               (let ((reduced (cp0-expand-beta-call (cadr new-op) (caddr new-op) new-args)))
+                 (if reduced
+                     (cp0-general-inline-walk reduced local-env prog-ht shadowed use-table expanding)
+                     (if (and (eq? new-op head) (eq? new-args (cdr expr)))
+                         expr
+                         (cons new-op new-args)))))
+              ;; Named procedure inlining / 1-step constant recursion unroll
+              ((symbol? head)
+               (let* ((entry (cp0-general-lookup head local-env prog-ht shadowed))
+                      (expanded (and entry (cp0-try-expand-general-entry entry new-args shadowed expanding))))
+                 (cond
+                   (expanded
+                    (cp0-general-inline-walk expanded local-env prog-ht shadowed use-table (cons head expanding)))
+                   ((and (eq? new-op head) (eq? new-args (cdr expr))) expr)
+                   (else (cons new-op new-args)))))
+              ((and (eq? new-op head) (eq? new-args (cdr expr))) expr)
+              (else (cons new-op new-args))))))))))
+
+(define (frontend-inline-pass form)
+  (if (or (not (pair? form)) (const? form))
+      form
+      (let ((use-table (if (eq? (car form) '%program) #f (cp0-collect-use-counts form))))
+        (cp0-general-inline-walk form '() #f '() use-table '()))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 3b: Extended Local Value Numbering (LVN) Nanopass
 ;;; Conforms to DSN-33 Architecture Specification (Section 8.2) & Issue #521
@@ -25367,9 +26182,11 @@
       (let* ((vars (cons (cons var vn) (lvn-env-vars env)))
          (env1 (lvn-set-vars env vars))
          (vn-entry (assq vn (lvn-env-vns env1))))
-    ;; If this VN does not have a canonical variable yet (or has a compound expr),
+    ;; If this VN does not have a canonical variable yet (or has a compound/out-of-scope expr),
     ;; set its canonical representation to var
-    (if (and vn-entry (not (symbol? (cadr vn-entry))))
+    (if (and vn-entry
+             (or (not (symbol? (cadr vn-entry)))
+                 (not (assq (cadr vn-entry) (lvn-env-vars env)))))
         (let ((new-vns (cons (cons vn (cons var (cddr vn-entry)))
                              (lvn-env-vns env1))))
           (lvn-set-vns env1 new-vns))
@@ -25437,6 +26254,31 @@
                               entry)))
                       vns))))
     env2))
+
+(define (lvn-invalidate-var env var)
+  (let* ((env1 (lvn-invalidate-pairs env))
+         (new-vars (filter (lambda (entry) (not (eq? (car entry) var)))
+                           (lvn-env-vars env1)))
+         (new-vns (map (lambda (entry)
+                         (let ((vn (car entry))
+                               (canon (cadr entry))
+                               (info (cddr entry)))
+                           (if (eq? canon var)
+                               (cons vn (cons (list '%mutated var) '()))
+                               entry)))
+                       (lvn-env-vns env1))))
+    (lvn-set-vns (lvn-set-vars env1 new-vars) new-vns)))
+
+(define (lvn-body-mutates-var? expr var)
+  (cond
+    ((not (pair? expr)) #f)
+    ((or (eq? (car expr) 'quote) (eq? (car expr) 'declare)) #f)
+    ((and (eq? (car expr) 'set!) (pair? (cdr expr)))
+     (or (eq? (cadr expr) var)
+         (and (pair? (cddr expr)) (lvn-body-mutates-var? (caddr expr) var))))
+    (else
+     (or (lvn-body-mutates-var? (car expr) var)
+         (lvn-body-mutates-var? (cdr expr) var)))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 2. Literal & Variable Value Evaluation
@@ -25559,7 +26401,7 @@
                    (list #t canon target-vn env)
                    (if (lvn-vn-is-const? env target-vn)
                        (list #t (val->ast-const (lvn-vn-const-val env target-vn)) target-vn env)
-                       (list #t canon target-vn env)))))
+                       (list #t (list op arg) target-vn env)))))
             ;; 2. Check if (op vn-p) was already memoized in this basic block / scope
             (else
              (let* ((tuple-key (list op vn-p))
@@ -25655,14 +26497,14 @@
 ;;; -----------------------------------------------------------------------
 
 (define (lvn-eval-call op opt-args vn-args env)
-  ;; 1. Check if all args are constants -> Constant Folding via fold-const-op
+  ;; 1. Check if all args are constants -> Constant Folding via fold-const-op-boxed
   (let ((folded (if (let loop ((as opt-args))
                       (if (null? as) #t
                           (and (const? (car as)) (loop (cdr as)))))
-                    (fold-const-op op opt-args)
+                    (fold-const-op-boxed op opt-args)
                     #f)))
     (if folded
-        (lvn-eval-const folded env)
+        (lvn-eval-const (car folded) env)
         ;; 2. Try algebraic identities
         (let ((alg (lvn-try-algebraic-simplification op opt-args vn-args env)))
           (if (car alg)
@@ -25741,6 +26583,14 @@
        (case op
          ((quote)
           (lvn-eval-const expr env))
+         ((declare)
+          (list expr 0 env))
+         ((set!)
+          (let* ((var (cadr expr))
+                 (val-res (lvn-eval (caddr expr) env))
+                 (opt-val (car val-res))
+                 (env1 (lvn-invalidate-var (caddr val-res) var)))
+            (list (list 'set! var opt-val) 0 env1)))
          ((if)
           (let* ((test-res (lvn-eval (cadr expr) env))
                  (opt-test (car test-res))
@@ -25793,14 +26643,18 @@
                       (opt-val (car val-res))
                       (vn-val (cadr val-res))
                       (env-val (caddr val-res))
-                      ;; Bind variable to vn-val
-                      (env-body (lvn-bind-var env-val var vn-val))
+                      (mutated? (lvn-body-mutates-var? body var))
+                      ;; Bind variable to vn-val unless mutated via set! inside body
+                      (env-body (if mutated?
+                                    (lvn-invalidate-var env-val var)
+                                    (lvn-bind-var env-val var vn-val)))
                       (body-res (lvn-eval body env-body))
                       (opt-body (car body-res))
                       (vn-body (cadr body-res))
                       (orig-vars (lvn-env-vars env-val))
                       ;; Dead let elimination: pure binding whose var is unused in body
-                      (dead? (and (atomic-expr? opt-val)
+                      (dead? (and (not mutated?)
+                                  (atomic-expr? opt-val)
                                   (not (tree-contains? opt-body var)))))
                  (if dead?
                      (list opt-body vn-body (lvn-set-vars (caddr body-res) orig-vars))
@@ -25913,19 +26767,34 @@
   (cond
     ((not (pair? form)) form)
     ((eq? (car form) '%program)
-     (let ((defs (cadr form))
-           (main (caddr form)))
-       (list '%program
-             (map (lambda (d)
-                    (if (and (pair? d) (eq? (car d) 'define))
-                        (list 'define (cadr d) (lvn-expr (caddr d) (make-lvn-env)))
-                        (lvn-expr d (make-lvn-env))))
-                  defs)
-             (lvn-expr main (make-lvn-env)))))
+     (let* ((defs (cadr form))
+            (main (caddr form))
+            (new-defs
+             (let loop ((ds defs) (rev '()) (changed? #f))
+               (if (null? ds)
+                   (if changed? (reverse rev) defs)
+                   (let* ((d (car ds))
+                          (nd (if (and (pair? d) (eq? (car d) 'define))
+                                  (let ((nv (lvn-expr (caddr d) (make-lvn-env))))
+                                    (if (equal? nv (caddr d))
+                                        d
+                                        (list 'define (cadr d) nv)))
+                                  (let ((nv (lvn-expr d (make-lvn-env))))
+                                    (if (equal? nv d) d nv)))))
+                     (loop (cdr ds) (cons nd rev) (or changed? (not (eq? nd d))))))))
+            (new-main-cand (lvn-expr main (make-lvn-env)))
+            (new-main (if (equal? new-main-cand main) main new-main-cand)))
+       (if (and (eq? new-defs defs) (eq? new-main main))
+           form
+           (list '%program new-defs new-main))))
     ((eq? (car form) 'define)
-     (list 'define (cadr form) (lvn-expr (caddr form) (make-lvn-env))))
+     (let ((nv (lvn-expr (caddr form) (make-lvn-env))))
+       (if (equal? nv (caddr form))
+           form
+           (list 'define (cadr form) nv))))
     (else
-     (lvn-expr form (make-lvn-env)))))
+     (let ((nv (lvn-expr form (make-lvn-env))))
+       (if (equal? nv form) form nv)))))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 4: ANF (A-Normal Form) Normalization Nanopass
 ;;; Conforms to DSN-33 Architecture Specification
@@ -28320,12 +29189,21 @@
          ((let)
           (let* ((bindings (cadr expr))
                  (body (caddr expr))
+                 (body-escs (collect-escaped-vars-in body is-tail tco-context?))
                  (b-escs
                   (let loop ((bs bindings) (acc (lattice-bottom lat)))
                     (if (null? bs) acc
-                        (loop (cdr bs)
-                              (lattice-join lat acc (collect-escaped-vars-in (cadar bs) #f tco-context?))))))
-                 (body-escs (collect-escaped-vars-in body is-tail tco-context?)))
+                        (let* ((b (car bs))
+                               (bvar (car b))
+                               (brhs (cadr b))
+                               (direct-alloc?
+                                (and (pair? brhs)
+                                     (memq (car brhs)
+                                           '(quote annotate car cdr %closure-ref %global-ref
+                                             cons %make-closure %make-closure-env))))
+                               (rhs-escapes? (or (memq bvar body-escs) (not direct-alloc?))))
+                          (loop (cdr bs)
+                                (lattice-join lat acc (collect-escaped-vars-in brhs rhs-escapes? tco-context?))))))))
             (lattice-join lat b-escs body-escs)))
          ;; Safe local destructors: car, cdr, %closure-ref, null?, pair? do NOT cause target to escape
          ((car cdr null? pair? not zero? fixnum? integer? string? boolean?)
@@ -28339,27 +29217,33 @@
                   (loop (cdr args)
                         (if (symbol? arg)
                             (lattice-join lat (list arg) acc)
-                            (lattice-join lat (collect-escaped-vars-in arg #f tco-context?) acc)))))))
+                            (lattice-join lat (collect-escaped-vars-in arg #t tco-context?) acc)))))))
          ((%global-set!)
           (let ((stored-val (caddr expr)))
             (if (symbol? stored-val)
                 (list stored-val)
-                (collect-escaped-vars-in stored-val #f tco-context?))))
-         ;; Mutations: if storing a value into a heap object, the stored value escapes!
+                (collect-escaped-vars-in stored-val #t tco-context?))))
+         ;; Mutations: both target (mutated container needs heap GC write barrier & survives call/cc rewind)
+         ;; and stored value escape.
          ((set-car! set-cdr!)
-          (let ((stored-val (caddr expr)))
-            (if (symbol? stored-val)
-                (lattice-join lat (list stored-val) (collect-escaped-vars-in (cadr expr) #f tco-context?))
-                (collect-escaped-vars-in stored-val #f tco-context?))))
+          (let* ((target (cadr expr))
+                 (stored-val (caddr expr))
+                 (target-esc (if (symbol? target)
+                                 (list target)
+                                 (collect-escaped-vars-in target #t tco-context?)))
+                 (val-esc (if (symbol? stored-val)
+                              (list stored-val)
+                              (collect-escaped-vars-in stored-val #t tco-context?))))
+            (lattice-join lat target-esc val-esc)))
          ((vector-set!)
           (let ((stored-val (cadddr expr)))
             (if (symbol? stored-val)
                 (lattice-join lat (list stored-val)
-                              (lattice-join lat (collect-escaped-vars-in (cadr expr) #f tco-context?)
-                                            (collect-escaped-vars-in (caddr expr) #f tco-context?)))
-                (lattice-join lat (collect-escaped-vars-in (cadr expr) #f tco-context?)
-                              (lattice-join lat (collect-escaped-vars-in (caddr expr) #f tco-context?)
-                                            (collect-escaped-vars-in stored-val #f tco-context?))))))
+                              (lattice-join lat (collect-escaped-vars-in (cadr expr) #t tco-context?)
+                                            (collect-escaped-vars-in (caddr expr) #t tco-context?)))
+                (lattice-join lat (collect-escaped-vars-in (cadr expr) #t tco-context?)
+                              (lattice-join lat (collect-escaped-vars-in (caddr expr) #t tco-context?)
+                                            (collect-escaped-vars-in stored-val #t tco-context?))))))
          ((%cont-fun)
           (lattice-join lat
                         (collect-escaped-vars-in (cadddr expr) #t tco-context?)
@@ -28373,12 +29257,12 @@
                          (loop (cdr args)
                                (if (symbol? arg)
                                    (lattice-join lat (list arg) acc)
-                                   (lattice-join lat (collect-escaped-vars-in arg #f tco-context?) acc))))))))
+                                   (lattice-join lat (collect-escaped-vars-in arg #t tco-context?) acc))))))))
             (if (symbol? op)
                 (if (and is-tail tco-context?)
                     (lattice-join lat (list op) args-esc)
                     args-esc)
-                (lattice-join lat (collect-escaped-vars-in op #f tco-context?) args-esc))))))))))
+                (lattice-join lat (collect-escaped-vars-in op #t tco-context?) args-esc))))))))))
 
 (define (collect-escaped-vars expr is-tail)
   (collect-escaped-vars-in expr is-tail #f))

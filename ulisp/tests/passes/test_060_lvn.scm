@@ -215,4 +215,28 @@
   (assert-true "optimized program contains single (car p)"
                (pair? opt)))
 
+;;; Test Group 7: Mutation Invalidation & Declare Preservation (#971)
+(let* ((decl-expr '(declare (no-safepoints)))
+       (set-expr '(let ((x 10))
+                    (begin
+                      (set! x 20)
+                      (+ x 1)))))
+  (assert-equal "declare form preserved verbatim in lvn-all"
+                decl-expr
+                (lvn-all decl-expr))
+  (assert-equal "mutated let binding via set! prevents stale constant propagation"
+                '(let ((x 10)) (begin (set! x 20) (+ x 1)))
+                (lvn-all set-expr)))
+
+;; Regression test (#971 / test_gc_ephemeron): out-of-scope inner let var must not leak via pair accessor memoization
+(let* ((scoped-pair '(let ((p (let ((inner (vector 1)))
+                                (cons inner 2))))
+                       (car p)))
+       (opt (lvn-all scoped-pair)))
+  (assert-equal "out-of-scope inner let variable does not leak from (car p)"
+                '(let ((p (let ((inner (vector 1)))
+                            (cons inner 2))))
+                   (car p))
+                opt))
+
 (test-end "Pass 060 (Extended LVN)")

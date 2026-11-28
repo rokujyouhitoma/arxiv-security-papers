@@ -9,6 +9,8 @@
 ;;;             hygienic macros, and Nanopass/Picopass DSL forms).
 ;;; - L_src:    Source HIR after library/import desugaring and macro/DSL expansion.
 ;;; - L_core:   Core HIR where all 18 high-level syntactic sugar forms are removed.
+;;;             Also serves as the closed endomorphic carrier language for the
+;;;             bounded frontend fixpoint loop (pass-048-inline -> pass-050-cp0 -> pass-060-lvn).
 ;;; - L_anf:    A-Normal Form intermediate language where all function/primitive
 ;;;             arguments and conditional tests are atomic operands.
 ;;; - L_lifted: Flat procedure intermediate language where local lambda abstractions

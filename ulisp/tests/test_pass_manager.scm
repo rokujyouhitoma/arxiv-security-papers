@@ -759,4 +759,38 @@
                     (memq 'pass-c99-lower-abi s-o1)
                     (memq 'pass-c99-lower-inline-asm s-o2))))
 
+;; -----------------------------------------------------------------------
+;; 13. Issue #971: General Inliner Pass & Frontend Bounded Fixpoint
+;; -----------------------------------------------------------------------
+(display "\n--- Group 13: pass-048-inline & Frontend Fixpoint (Issue #971) ---\n")
+(init-default-pass-registry!)
+(reset-pipeline-options!)
+
+(assert-true "13.1 pass-048-inline is registered"
+             (pass-registered? 'pass-048-inline))
+(let ((p048 (lookup-pass 'pass-048-inline))
+      (ids0 (map pass-id (build-pipeline 0 '())))
+      (ids1 (map pass-id (build-pipeline 1 '())))
+      (ids2 (map pass-id (build-pipeline 2 '()))))
+  (assert-equal "13.2 pass-048-inline opt-level is 1" 1 (pass-opt-level p048))
+  (assert-equal "13.3 pass-048-inline in/out lang is L_core"
+                '(L_core L_core)
+                (list (pass-in-lang p048) (pass-out-lang p048)))
+  (assert-false "13.4 -O0 pipeline excludes pass-048-inline" (memq 'pass-048-inline ids0))
+  (assert-true "13.5 -O1 pipeline includes pass-048-inline" (memq 'pass-048-inline ids1))
+  (assert-true "13.6 -O2 pipeline includes pass-048-inline" (memq 'pass-048-inline ids2))
+  (assert-true "13.7 aot-native-pipeline contains pass-048-inline"
+               (memq 'pass-048-inline (pipeline-desc-passes (lookup-pipeline 'aot-native-pipeline)))))
+
+(let* ((prog '(%program
+                ((define inc (lambda (x) (+ x 1)))
+                 (define add2 (lambda (y) (inc (inc y)))))
+                (add2 40)))
+       (res (run-frontend-fixpoint prog)))
+  (assert-equal "13.8 run-frontend-fixpoint converges inc/add2/cp0 to 42"
+                42
+                (caddr res))
+  (assert-true "13.9 fixpoint convergence flag is #t"
+               (last-fixpoint-converged?)))
+
 (test-end "Unified Pass Manager")

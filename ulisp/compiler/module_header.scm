@@ -215,7 +215,19 @@
   expand-macros-in-forms
   rewrite-top-level
   desugar-all
+  fold-const-op-boxed
+  cp0-fold-expr-boxed
+  cp0-asm-or-runtime-stub-name?
+  cp0-has-unsafe-inline-op?
+  cp0-expr-cost
+  cp0-collect-use-counts
+  cp0-alpha-rename-expr
+  cp0-beta-reduce
+  frontend-inline-pass
   cp0-optimize
+  frontend-fixpoint-max-iterations
+  set-frontend-fixpoint-max-iterations!
+  run-frontend-fixpoint
   lvn-all
   anf-all
   annotate-all

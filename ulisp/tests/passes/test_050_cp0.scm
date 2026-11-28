@@ -206,4 +206,40 @@
                 '(cons (get-car p) (list car))
                 (caddr (caddr opt-shadowed))))
 
+;; 13. Assembly/Runtime link-time stub preservation (fix for test_context_switch) & General Inliner
+(let* ((asm-stub-prog
+        '(%program
+           ((define %asm-yield-task! (lambda (v) v))
+            (define %sys-futex-get (lambda (a) 0))
+            (define work-stealing-scheduler? (lambda (x) #f)))
+           (begin
+             (%asm-yield-task! (+ 10 20))
+             (%sys-futex-get ptr)
+             (work-stealing-scheduler? obj))))
+       (opt-cp0-stubs (cp0-optimize asm-stub-prog))
+       (opt-gen-stubs (frontend-inline-pass asm-stub-prog))
+       (beta-res (cp0-beta-reduce '((lambda (x y) (+ x (* y y))) (fx a) 4)))
+       (inl-small (frontend-inline-pass
+                    '(%program
+                       ((define sq (lambda (x) (* x x))))
+                       (+ (sq 3) (sq 4))))))
+  (assert-equal "cp0-optimize preserves %asm-yield-task! link-time stub call"
+                '%asm-yield-task!
+                (car (cadr (caddr opt-cp0-stubs))))
+  (assert-equal "cp0-optimize preserves %sys-futex-get link-time stub call"
+                '%sys-futex-get
+                (car (caddr (caddr opt-cp0-stubs))))
+  (assert-equal "cp0-optimize preserves placeholder predicate stub"
+                'work-stealing-scheduler?
+                (car (cadddr (caddr opt-cp0-stubs))))
+  (assert-equal "frontend-inline-pass preserves %asm-yield-task! link-time stub call"
+                '%asm-yield-task!
+                (car (cadr (caddr opt-gen-stubs))))
+  (assert-equal "cp0-beta-reduce binds non-atomic argument once via let"
+                'let
+                (car beta-res))
+  (assert-equal "frontend-inline-pass inlines small non-leaf function sq cleanly"
+                '(+ (* 3 3) (* 4 4))
+                (caddr inl-small)))
+
 (test-end "Pass 050 (CP0 Optimization)")

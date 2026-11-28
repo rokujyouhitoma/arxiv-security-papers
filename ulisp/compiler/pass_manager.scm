@@ -1053,6 +1053,7 @@
     (pass-025-top-level . "pass-025-top-level")
     (pass-030-desugar . "pass-030-desugar")
     (pass-035-scope-resolve . "pass-035-scope-resolve")
+    (pass-048-inline . "pass-048-inline")
     (pass-050-cp0 . "pass-050-cp0")
     (pass-060-lvn . "pass-060-lvn")
     (pass-070-anf . "pass-070-anf")
@@ -1271,8 +1272,22 @@
                   (if (not (verify-pass-output 'lir current-ast))
                       (error "IR Verifier Invariant Violation in final LIR" current-ast)))
               current-ast)
-            (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
-              (loop (cdr ps) next-ast)))))))
+            (if (frontend-fixpoint-pass-id? (pass-id (car ps)))
+                (let collect ((rem ps) (cluster '()))
+                  (if (and (pair? rem) (frontend-fixpoint-pass-id? (pass-id (car rem))))
+                      (collect (cdr rem) (cons (car rem) cluster))
+                      (let* ((ordered (reverse cluster))
+                             (next-ast
+                              (if (pair? (cdr ordered))
+                                  (run-pass-fixpoint-opts ordered current-ast
+                                                          (list ':max-iterations (frontend-fixpoint-max-iterations)
+                                                                ':equiv? equal?
+                                                                ':verify verify-mode
+                                                                ':trace trace-mode))
+                                  (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
+                        (loop rem next-ast))))
+                (let ((next-ast (run-single-pass (car ps) current-ast verify-mode trace-mode)))
+                  (loop (cdr ps) next-ast))))))))
 
 ;;; -----------------------------------------------------------------------
 ;;; 7.1 Named Pipeline Execution Engine (DSN-33-01 T6.1 / Issue #768)
@@ -1324,9 +1339,23 @@
                   (if (not (verify-pass-output 'lir current-ast))
                       (error "IR Verifier Invariant Violation in final LIR" current-ast)))
               current-ast)
-            (let* ((desc (lookup-pass (car ids)))
-                   (next-ast (run-single-pass desc current-ast verify-mode trace-mode)))
-              (loop (cdr ids) next-ast)))))))
+            (if (and (> (pipeline-opt-level) 0) (frontend-fixpoint-pass-id? (car ids)))
+                (let collect ((rem ids) (cluster '()))
+                  (if (and (pair? rem) (frontend-fixpoint-pass-id? (car rem)))
+                      (collect (cdr rem) (cons (lookup-pass (car rem)) cluster))
+                      (let* ((ordered (reverse cluster))
+                             (next-ast
+                              (if (pair? (cdr ordered))
+                                  (run-pass-fixpoint-opts ordered current-ast
+                                                          (list ':max-iterations (frontend-fixpoint-max-iterations)
+                                                                ':equiv? equal?
+                                                                ':verify verify-mode
+                                                                ':trace trace-mode))
+                                  (run-single-pass (car ordered) current-ast verify-mode trace-mode))))
+                        (loop rem next-ast))))
+                (let* ((desc (lookup-pass (car ids)))
+                       (next-ast (run-single-pass desc current-ast verify-mode trace-mode)))
+                  (loop (cdr ids) next-ast))))))))
 
 (define (run-current-pipeline forms verify-mode trace-mode)
   (run-named-pipeline (current-pipeline-name) forms verify-mode trace-mode))
@@ -1438,6 +1467,40 @@
     ((pass-specs initial-ast o1 o2 o3 o4)
      (run-pass-fixpoint-opts pass-specs initial-ast (list o1 o2 o3 o4)))))
 
+(define *frontend-fixpoint-max-iterations* (cons 4 '()))
+(define (frontend-fixpoint-max-iterations) (car *frontend-fixpoint-max-iterations*))
+(define (set-frontend-fixpoint-max-iterations! n) (set-car! *frontend-fixpoint-max-iterations* n))
+
+(define (frontend-fixpoint-pass-id? id)
+  (or (eq? id 'pass-048-inline)
+      (eq? id 'pass-050-cp0)
+      (eq? id 'pass-060-lvn)))
+
+(define run-frontend-fixpoint
+  (case-lambda
+    ((forms)
+     (run-frontend-fixpoint forms (frontend-fixpoint-max-iterations)))
+    ((forms max-iters)
+     (if (null? (car *pass-registry*))
+         (init-default-pass-registry!))
+     (if (null? (car *analysis-property-registry*))
+         (init-default-analysis-properties!))
+     (let* ((opt (pipeline-opt-level))
+            (disabled (pipeline-disabled-passes))
+            (cand-ids (cond
+                        ((<= opt 0) '())
+                        ((= opt 1) '(pass-048-inline pass-050-cp0))
+                        (else '(pass-048-inline pass-050-cp0 pass-060-lvn))))
+            (active-ids (filter (lambda (id)
+                                  (and (pass-registered? id)
+                                       (not (memq id disabled))))
+                                cand-ids)))
+       (if (null? active-ids)
+           forms
+           (run-pass-fixpoint active-ids forms
+                              ':max-iterations max-iters
+                              ':equiv? equal?))))))
+
 ;;; -----------------------------------------------------------------------
 ;;; 8. Default Pass Registry Initialization
 ;;; -----------------------------------------------------------------------
@@ -1450,6 +1513,7 @@
     pass-030-desugar
     pass-035-scope-resolve
     pass-040-analysis
+    pass-048-inline
     pass-050-cp0
     pass-060-lvn
     pass-070-anf
@@ -1555,6 +1619,9 @@
     (make-pass-descriptor-with-opts 'pass-040-analysis "Static Arity & Scope Analysis" 'frontend 0
       (lambda (forms) (check-arity-all forms)) #f 'L_core 'L_core '(pass-030-desugar) #t
       (list ':preserves '(all))))
+  (register-pass!
+    (make-pass-descriptor 'pass-048-inline "General Inliner and Beta-Reduction" 'frontend 1
+      (lambda (forms) (frontend-inline-pass forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
   (register-pass!
     (make-pass-descriptor 'pass-050-cp0 "CP0 Source Optimization" 'frontend 1
       (lambda (forms) (cp0-optimize forms)) #f 'L_core 'L_core '(pass-030-desugar) #f))
