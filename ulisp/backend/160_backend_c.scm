@@ -416,28 +416,42 @@
 
 (define (c-param-location idx param)
   (cond
-    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
+    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
+                   %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                   %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
      param)
     ((and (pair? param) (eq? (car param) '%reg))
+     (if (and (pair? (cdr param)) (pair? (cddr param))) (caddr param) (cadr param)))
+    ((and (pair? param) (eq? (car param) '%freg))
      (cadr param))
     ((and (pair? param) (eq? (car param) '%stack)) param)
     (else
      (list '%stack (* -8 (+ idx 2))))))
 
 (define (emit-c-parallel-copy target-lbl args)
-  (let ((params (get-c-block-params target-lbl)))
-    (let loop ((ps params) (as args) (i 0))
-      (if (and (pair? ps) (pair? as))
-          (let* ((param (car ps))
-                 (arg (car as))
-                 (loc (c-param-location i param)))
+  (let* ((params (get-c-block-params target-lbl))
+         (pairs (let collect ((ps params) (as args) (i 0) (acc '()))
+                  (if (and (pair? ps) (pair? as))
+                      (collect (cdr ps) (cdr as) (+ i 1)
+                               (cons (cons (c-param-location i (car ps)) (car as)) acc))
+                      (reverse acc))))
+         (plan (lir-parallel-move-plan pairs *lir-pmov-gpr-scratch-pool* *lir-pmov-fpr-scratch-pool* #f)))
+    (for-each
+     (lambda (step)
+       (let ((loc (car step))
+             (arg (cdr step)))
+         (cond
+           ((or (lir-pmov-float-loc? loc) (lir-pmov-float-loc? arg))
             (cond
-              ((equal? loc arg) #f)
-              ((eq? loc '%rax)
-               (emit (string-append "    reg_rax = " (c-operand->str arg) ";")))
+              ((and (lir-pmov-float-loc? loc) (lir-pmov-float-loc? arg))
+               (emit (string-append "    memcpy(&" (c-reg->str loc) ", &" (c-reg->str arg) ", 8);")))
+              ((lir-pmov-float-loc? loc)
+               (emit (string-append "    memcpy(&" (c-reg->str loc) ", " (c-base-ptr-str '%rsp) " + (" (c-offset->str (cadr arg)) "), 8);")))
               (else
-               (emit (string-append "    " (c-operand->str loc) " = " (c-operand->str arg) ";"))))
-            (loop (cdr ps) (cdr as) (+ i 1)))))))
+               (emit (string-append "    memcpy(" (c-base-ptr-str '%rsp) " + (" (c-offset->str (cadr loc)) "), &" (c-reg->str arg) ", 8);")))))
+           (else
+            (emit (string-append "    " (c-operand->str loc) " = " (c-operand->str arg) ";"))))))
+     plan)))
 
 (define (c-inline-asm-join strs sep)
   (if (null? strs)

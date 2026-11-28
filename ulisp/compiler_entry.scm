@@ -99,6 +99,7 @@
 ;; LIR Passes
 (include "lir/lir_lang.scm")
 (include "lir/lir_verifier.scm")
+(include "lir/lir_parallel_move.scm")
 (include "lir/123_lir_closures.scm")
 (include "lir/124_lir_call_abi.scm")
 (include "lir/125_lir_continuation.scm")

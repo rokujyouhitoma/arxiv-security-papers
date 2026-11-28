@@ -29340,17 +29340,13 @@
            (if (and (>= (length inst) 3)
                     (symbol? (cadr inst))
                     (list? (caddr inst)))
-               (let p-loop ((ps (caddr inst)))
-                 (if (null? ps)
-                     (let b-loop ((body (cdddr inst)))
-                       (if (null? body)
-                           #t
-                           (and (lir-valid-inst? (car body))
-                                (b-loop (cdr body)))))
-                     (if (symbol? (car ps))
-                         (p-loop (cdr ps))
-                         (lir-report-error "%block parameter must be a symbol" (car ps)))))
-               (lir-report-error "%block must be (%block <label-sym> (<param-syms>...) <insts>...)" inst)))
+               (and (lir-sp-check-block-params (caddr inst))
+                    (let b-loop ((body (cdddr inst)))
+                      (if (null? body)
+                          #t
+                          (and (lir-valid-inst? (car body))
+                               (b-loop (cdr body))))))
+               (lir-report-error "%block must be (%block <label-sym> (<params>...) <insts>...)" inst)))
 
           ((%jump)
            (cond
@@ -30030,12 +30026,29 @@
         cases)))
     (else #t)))
 
+(define (lir-valid-block-param? p)
+  (or (symbol? p)
+      (and (pair? p)
+           (eq? (car p) '%stack)
+           (pair? (cdr p))
+           (integer? (cadr p))
+           (null? (cddr p)))))
+
 (define (lir-sp-check-block-params params)
-  (if (null? params)
-      #t
-      (if (symbol? (car params))
-          (lir-sp-check-block-params (cdr params))
-          (lir-report-error "%block parameter must be a symbol" (car params)))))
+  (let p-loop ((ps params) (seen '()))
+    (if (null? ps)
+        #t
+        (let ((p (car ps)))
+          (cond
+            ((not (lir-valid-block-param? p))
+             (lir-report-error "%block parameter must be a symbol or (%stack <offset>)" p))
+            ((or (eq? p '%rsp) (eq? p 'rsp))
+             (lir-report-error "%block parameter cannot be stack pointer %rsp" p))
+            ((let dup? ((ss seen))
+               (and (pair? ss) (or (equal? p (car ss)) (dup? (cdr ss)))))
+             (lir-report-error "Duplicate %block parameter" p))
+            (else
+             (p-loop (cdr ps) (cons p seen))))))))
 
 ;; Step 1: single traversal validating syntax, collecting labels & arities,
 ;; and queuing jump targets for post-pass resolution.
@@ -30591,6 +30604,582 @@
   (if (not (verifier-enabled?))
       #t
       (validate-lir prog)))
+
+;;; -----------------------------------------------------------------------
+;;; Symbolic-Execution Equivalence Verifier for Parallel Move Plans (#969)
+;;; -----------------------------------------------------------------------
+(define (lir-ver-pmov-unwrap x)
+  (cond
+    ((and (pair? x) (eq? (car x) '%reg) (pair? (cdr x)))
+     (let ((inner (if (pair? (cddr x)) (caddr x) (cadr x))))
+       (if (or (lir-physical-register-sym? inner)
+               (memq inner '(rax rbx rcx rdx rsi rdi rbp rsp
+                             r8 r9 r10 r11 r12 r13 r14 r15
+                             al bl cl dl sil dil bpl spl
+                             r8b r9b r10b r11b r12b r13b r14b r15b
+                             eax ebx ecx edx esi edi ebp esp
+                             r8d r9d r10d r11d r12d r13d r14d r15d
+                             xmm0 xmm1 xmm2 xmm3 xmm4 xmm5 xmm6 xmm7
+                             xmm8 xmm9 xmm10 xmm11 xmm12 xmm13 xmm14 xmm15)))
+           inner
+           x)))
+    ((and (pair? x) (eq? (car x) '%freg) (pair? (cdr x)))
+     (if (memq (cadr x) *canonical-lir-float-registers*) (cadr x) x))
+    (else x)))
+
+(define (lir-ver-pmov-norm-sym s)
+  (case s
+    ((rax) '%rax) ((rbx) '%rbx) ((rcx) '%rcx) ((rdx) '%rdx)
+    ((rsi) '%rsi) ((rdi) '%rdi) ((rbp) '%rbp) ((rsp) '%rsp)
+    ((r8)  '%r8)  ((r9)  '%r9)  ((r10) '%r10) ((r11) '%r11)
+    ((r12) '%r12) ((r13) '%r13) ((r14) '%r14) ((r15) '%r15)
+    ((al)  '%al)  ((bl)  '%bl)  ((cl)  '%cl)  ((dl)  '%dl)
+    ((xmm0) '%xmm0) ((xmm1) '%xmm1) ((xmm2) '%xmm2) ((xmm3) '%xmm3)
+    ((xmm4) '%xmm4) ((xmm5) '%xmm5) ((xmm6) '%xmm6) ((xmm7) '%xmm7)
+    ((xmm8) '%xmm8) ((xmm9) '%xmm9) ((xmm10) '%xmm10) ((xmm11) '%xmm11)
+    ((xmm12) '%xmm12) ((xmm13) '%xmm13) ((xmm14) '%xmm14) ((xmm15) '%xmm15)
+    (else s)))
+
+(define (lir-ver-pmov-gpr-fam s)
+  (case (lir-ver-pmov-norm-sym (lir-ver-pmov-unwrap-reg-or-id s))
+    ((%rax %eax %al) '%rax) ((%rbx %ebx %bl) '%rbx)
+    ((%rcx %ecx %cl) '%rcx) ((%rdx %edx %dl) '%rdx)
+    ((%rsi %esi %sil) '%rsi) ((%rdi %edi %dil) '%rdi)
+    ((%rbp %ebp %bpl) '%rbp) ((%rsp %esp %spl) '%rsp)
+    ((%r8 %r8d %r8b) '%r8) ((%r9 %r9d %r9b) '%r9)
+    ((%r10 %r10d %r10b) '%r10) ((%r11 %r11d %r11b) '%r11)
+    ((%r12 %r12d %r12b) '%r12) ((%r13 %r13d %r13b) '%r13)
+    ((%r14 %r14d %r14b) '%r14) ((%r15 %r15d %r15b) '%r15)
+    (else (lir-ver-pmov-norm-sym (lir-ver-pmov-unwrap-reg-or-id s)))))
+
+(define (lir-ver-pmov-unwrap-reg-or-id x)
+  (let ((u (lir-ver-pmov-unwrap x)))
+    (if (symbol? u) (lir-ver-pmov-norm-sym u) u)))
+
+(define (lir-ver-pmov-rsp? x)
+  (eq? (lir-ver-pmov-gpr-fam x) '%rsp))
+
+(define (lir-ver-pmov-loc? x)
+  (let ((u (lir-ver-pmov-unwrap-reg-or-id x)))
+    (or (symbol? u)
+        (and (pair? u) (memq (car u) '(%stack %mem %disp %reg %freg))))))
+
+(define (lir-ver-pmov-norm-loc x)
+  (let ((u (lir-ver-pmov-unwrap-reg-or-id x)))
+    (cond
+      ((symbol? u) u)
+      ((and (pair? u) (eq? (car u) '%stack) (pair? (cdr u)))
+       (list '%stack (cadr u)))
+      ((and (pair? u) (eq? (car u) '%mem) (pair? (cdr u)) (pair? (cddr u)))
+       (list '%mem (lir-ver-pmov-norm-loc (cadr u)) (lir-ver-pmov-norm-loc (caddr u))))
+      ((and (pair? u) (eq? (car u) '%disp) (pair? (cdr u)) (pair? (cddr u)))
+       (list '%disp (lir-ver-pmov-norm-loc (cadr u)) (lir-ver-pmov-norm-loc (caddr u))))
+      (else u))))
+
+(define (lir-ver-pmov-is-reg-sym? s)
+  (and (symbol? s)
+       (or (lir-physical-register-sym? s)
+           (memq s '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+                     %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
+                     %al %bl %cl %dl %sil %dil %bpl %spl
+                     %r8b %r9b %r10b %r11b %r12b %r13b %r14b %r15b
+                     %eax %ebx %ecx %edx %esi %edi %ebp %esp
+                     %r8d %r9d %r10d %r11d %r12d %r13d %r14d %r15d
+                     %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                     %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15)))))
+
+(define (lir-ver-pmov-is-stor-loc? x)
+  (let ((n (lir-ver-pmov-norm-loc x)))
+    (or (lir-ver-pmov-is-reg-sym? n)
+        (and (pair? n) (memq (car n) '(%stack %mem %disp %reg %freg))))))
+
+(define (lir-ver-pmov-env-ref env loc)
+  (let ((n (lir-ver-pmov-norm-loc loc)))
+    (let ((hit (assoc n env)))
+      (if hit (cdr hit) (cons 'init n)))))
+
+(define (lir-ver-pmov-env-set env loc val)
+  (let ((n (lir-ver-pmov-norm-loc loc)))
+    (let loop ((xs env) (acc '()) (found? #f))
+      (if (null? xs)
+          (if found? (reverse acc) (cons (cons n val) (reverse acc)))
+          (if (equal? (caar xs) n)
+              (loop (cdr xs) (cons (cons n val) acc) #t)
+              (loop (cdr xs) (cons (car xs) acc) found?))))))
+
+(define (lir-ver-pmov-eval expr env)
+  (let ((n (lir-ver-pmov-norm-loc expr)))
+    (cond
+      ((integer? n) (cons 'imm n))
+      ((and (pair? n) (eq? (car n) '%mem) (pair? (cdr n)) (pair? (cddr n)))
+       (list 'mem-val
+             (lir-ver-pmov-eval (cadr n) env)
+             (lir-ver-pmov-eval (caddr n) env)
+             (lir-ver-pmov-env-ref env n)))
+      ((and (pair? n) (eq? (car n) '%disp) (pair? (cdr n)) (pair? (cddr n)))
+       (list 'disp-val
+             (lir-ver-pmov-eval (cadr n) env)
+             (lir-ver-pmov-eval (caddr n) env)
+             (lir-ver-pmov-env-ref env n)))
+      ((lir-ver-pmov-is-stor-loc? n)
+       (lir-ver-pmov-env-ref env n))
+      (else (cons 'imm n)))))
+
+(define (lir-ver-pmov-collect-sources expr acc)
+  (let ((n (lir-ver-pmov-norm-loc expr)))
+    (cond
+      ((and (pair? n) (memq (car n) '(%mem %disp)) (pair? (cdr n)) (pair? (cddr n)))
+       (let* ((a1 (lir-ver-pmov-collect-sources (cadr n) acc))
+              (a2 (lir-ver-pmov-collect-sources (caddr n) a1)))
+         (if (member n a2) a2 (cons n a2))))
+      ((lir-ver-pmov-is-stor-loc? n)
+       (if (member n acc) acc (cons n acc)))
+      (else acc))))
+
+(define (lir-verify-parallel-move-plan pairs plan allowed-scratches)
+  (let ((norm-scratches (map lir-ver-pmov-norm-loc allowed-scratches)))
+    (let chk-pairs ((ps pairs) (seen-dsts '()))
+      (cond
+        ((null? ps)
+         (let chk-plan ((st plan))
+           (cond
+             ((null? st)
+              (let* ((expected
+                      (map (lambda (p)
+                             (cons (lir-ver-pmov-norm-loc (car p))
+                                   (lir-ver-pmov-eval (cdr p) '())))
+                           pairs))
+                     (dst-locs (map car* expected))
+                     (final-env
+                      (let sim ((steps plan) (env '()))
+                        (if (null? steps)
+                            env
+                            (let* ((md (caar steps))
+                                   (ms (cdar steps))
+                                   (val (lir-ver-pmov-eval ms env))
+                                   (nmd (lir-ver-pmov-norm-loc md)))
+                              (sim (cdr steps) (lir-ver-pmov-env-set env nmd val)))))))
+                (and
+                 ;; 1. Every dst_i equals initial symbolic value of src_i
+                 (let check-exp ((es expected))
+                   (if (null? es)
+                       #t
+                       (and (equal? (lir-ver-pmov-env-ref final-env (caar es)) (cdar es))
+                            (check-exp (cdr es)))))
+                 ;; 2. Every write in plan targets a declared dst or allowed scratch
+                 (let check-writes ((steps plan))
+                   (if (null? steps)
+                       #t
+                       (let* ((wloc (lir-ver-pmov-norm-loc (caar steps)))
+                              (wfam (lir-ver-pmov-gpr-fam wloc))
+                              (allowed-w?
+                               (or (member wloc dst-locs)
+                                   (member wloc norm-scratches)
+                                   (and (lir-ver-pmov-is-reg-sym? wloc)
+                                        (let chk-fam ((xs (append dst-locs norm-scratches)))
+                                          (and (pair? xs)
+                                               (or (and (lir-ver-pmov-is-reg-sym? (car xs))
+                                                        (eq? wfam (lir-ver-pmov-gpr-fam (car xs))))
+                                                   (chk-fam (cdr xs)))))))))
+                         (and allowed-w? (check-writes (cdr steps))))))
+                 ;; 3. Every non-dst, non-scratch live source preserves its initial value
+                 (let* ((all-srcs
+                         (let gather ((ps2 pairs) (acc '()))
+                           (if (null? ps2)
+                               acc
+                               (let* ((a1 (lir-ver-pmov-collect-sources (cdar ps2) acc))
+                                      (d (caar ps2)))
+                                 (gather (cdr ps2)
+                                         (if (and (pair? d) (memq (car d) '(%mem %disp)))
+                                             (lir-ver-pmov-collect-sources (cadr d)
+                                               (lir-ver-pmov-collect-sources (caddr d) a1))
+                                             a1)))))))
+                   (let check-live ((ls all-srcs))
+                     (if (null? ls)
+                         #t
+                         (let ((loc (car ls)))
+                           (if (or (member loc dst-locs)
+                                   (member loc norm-scratches))
+                               (check-live (cdr ls))
+                               (and (equal? (lir-ver-pmov-env-ref final-env loc) (cons 'init loc))
+                                    (check-live (cdr ls)))))))))))
+             ((not (pair? (car st))) #f)
+             ((lir-ver-pmov-rsp? (caar st)) #f)
+             ((equal? (lir-ver-pmov-norm-loc (caar st)) (lir-ver-pmov-norm-loc (cdar st))) #f)
+             (else (chk-plan (cdr st))))))
+        ((not (pair? (car ps))) #f)
+        ((lir-ver-pmov-rsp? (caar ps)) #f)
+        (else
+         (let ((nd (lir-ver-pmov-norm-loc (caar ps)))
+               (nfam (lir-ver-pmov-gpr-fam (caar ps))))
+           (if (let dup? ((ds seen-dsts))
+                 (and (pair? ds)
+                      (or (equal? nd (car ds))
+                          (and (lir-ver-pmov-is-reg-sym? nd)
+                               (lir-ver-pmov-is-reg-sym? (car ds))
+                               (eq? nfam (lir-ver-pmov-gpr-fam (car ds))))
+                          (dup? (cdr ds)))))
+               #f
+               (chk-pairs (cdr ps) (cons nd seen-dsts)))))))))
+;;; =======================================================================
+;;; ULisp Compiler: General Parallel Move Resolver (Rideau-Serpette-Leroy 2008)
+;;; Conforms to DSN-33 Architecture Specification & Issue #969
+;;; =======================================================================
+;;; Resolves an arbitrary N-element parallel assignment (dst_i <- src_i)
+;;; into a minimal sequential move plan (m + c moves for m non-self moves
+;;; and c disjoint cycles) via:
+;;;   1. Self-move elimination (dst == src)
+;;;   2. Directed dependency graph DAG reverse-topological peeling
+;;;   3. Domain-matched, collision-free single-scratch cycle breaking
+;;;      (reusing 1 scratch across disjoint cycles, or falling back to a
+;;;       caller-supplied stack slot if all scratch registers are live)
+;;;
+;;; Self-hosting constraints:
+;;;   - Fixed-arity definitions only (no variadic define)
+;;;   - No internal defines, no lexical set!, no max/min/2-arg make-vector
+;;;   - %rsp and %r12 are strictly excluded from scratch pools and targets
+;;; =======================================================================
+
+(define *lir-pmov-gpr-scratch-pool*
+  '(%r10 %r11 %rax %rdx %rcx %r8 %r9))
+
+(define *lir-pmov-fpr-scratch-pool*
+  '(%xmm15 %xmm14 %xmm13 %xmm12))
+
+(define (lir-pmov-unwrap-reg x)
+  (cond
+    ((and (pair? x) (eq? (car x) '%reg) (pair? (cdr x)))
+     (let ((inner (if (pair? (cddr x)) (caddr x) (cadr x))))
+       (if (lir-pmov-phys-reg-sym? inner) inner x)))
+    ((and (pair? x) (eq? (car x) '%freg) (pair? (cdr x)))
+     (let ((inner (cadr x)))
+       (if (lir-pmov-phys-reg-sym? inner) inner x)))
+    (else x)))
+
+(define (lir-pmov-phys-reg-sym? s)
+  (and (symbol? s)
+       (case s
+         ((%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+           %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
+           %al %bl %cl %dl %sil %dil %bpl %spl
+           %r8b %r9b %r10b %r11b %r12b %r13b %r14b %r15b
+           %eax %ebx %ecx %edx %esi %edi %ebp %esp
+           %r8d %r9d %r10d %r11d %r12d %r13d %r14d %r15d
+           rax rbx rcx rdx rsi rdi rbp rsp
+           r8 r9 r10 r11 r12 r13 r14 r15
+           al bl cl dl sil dil bpl spl
+           r8b r9b r10b r11b r12b r13b r14b r15b
+           eax ebx ecx edx esi edi ebp esp
+           r8d r9d r10d r11d r12d r13d r14d r15d
+           %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+           %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15
+           xmm0 xmm1 xmm2 xmm3 xmm4 xmm5 xmm6 xmm7
+           xmm8 xmm9 xmm10 xmm11 xmm12 xmm13 xmm14 xmm15)
+          #t)
+         (else #f))))
+
+(define (lir-pmov-canon-exact-reg r)
+  (case r
+    ((%rax rax) '%rax) ((%rbx rbx) '%rbx) ((%rcx rcx) '%rcx) ((%rdx rdx) '%rdx)
+    ((%rsi rsi) '%rsi) ((%rdi rdi) '%rdi) ((%rbp rbp) '%rbp) ((%rsp rsp) '%rsp)
+    ((%r8  r8)  '%r8)  ((%r9  r9)  '%r9)  ((%r10 r10) '%r10) ((%r11 r11) '%r11)
+    ((%r12 r12) '%r12) ((%r13 r13) '%r13) ((%r14 r14) '%r14) ((%r15 r15) '%r15)
+    ((%eax eax) '%eax) ((%ebx ebx) '%ebx) ((%ecx ecx) '%ecx) ((%edx edx) '%edx)
+    ((%esi esi) '%esi) ((%edi edi) '%edi) ((%ebp ebp) '%ebp) ((%esp esp) '%esp)
+    ((%r8d r8d) '%r8d) ((%r9d r9d) '%r9d) ((%r10d r10d) '%r10d) ((%r11d r11d) '%r11d)
+    ((%r12d r12d) '%r12d) ((%r13d r13d) '%r13d) ((%r14d r14d) '%r14d) ((%r15d r15d) '%r15d)
+    ((%al  al)  '%al)  ((%bl  bl)  '%bl)  ((%cl  cl)  '%cl)  ((%dl  dl)  '%dl)
+    ((%sil sil) '%sil) ((%dil dil) '%dil) ((%bpl bpl) '%bpl) ((%spl spl) '%spl)
+    ((%r8b r8b) '%r8b) ((%r9b r9b) '%r9b) ((%r10b r10b) '%r10b) ((%r11b r11b) '%r11b)
+    ((%r12b r12b) '%r12b) ((%r13b r13b) '%r13b) ((%r14b r14b) '%r14b) ((%r15b r15b) '%r15b)
+    ((%xmm0 xmm0) '%xmm0) ((%xmm1 xmm1) '%xmm1) ((%xmm2 xmm2) '%xmm2) ((%xmm3 xmm3) '%xmm3)
+    ((%xmm4 xmm4) '%xmm4) ((%xmm5 xmm5) '%xmm5) ((%xmm6 xmm6) '%xmm6) ((%xmm7 xmm7) '%xmm7)
+    ((%xmm8 xmm8) '%xmm8) ((%xmm9 xmm9) '%xmm9) ((%xmm10 xmm10) '%xmm10) ((%xmm11 xmm11) '%xmm11)
+    ((%xmm12 xmm12) '%xmm12) ((%xmm13 xmm13) '%xmm13) ((%xmm14 xmm14) '%xmm14) ((%xmm15 xmm15) '%xmm15)
+    (else r)))
+
+(define (lir-pmov-canon-gpr-family r)
+  (let ((u (lir-pmov-unwrap-reg r)))
+    (case u
+      ((%rax rax %eax eax %al al) '%rax)
+      ((%rbx rbx %ebx ebx %bl bl) '%rbx)
+      ((%rcx rcx %ecx ecx %cl cl) '%rcx)
+      ((%rdx rdx %edx edx %dl dl) '%rdx)
+      ((%rsi rsi %esi esi %sil sil) '%rsi)
+      ((%rdi rdi %edi edi %dil dil) '%rdi)
+      ((%rbp rbp %ebp ebp %bpl bpl) '%rbp)
+      ((%rsp rsp %esp esp %spl spl) '%rsp)
+      ((%r8  r8  %r8d r8d %r8b r8b) '%r8)
+      ((%r9  r9  %r9d r9d %r9b r9b) '%r9)
+      ((%r10 r10 %r10d r10d %r10b r10b) '%r10)
+      ((%r11 r11 %r11d r11d %r11b r11b) '%r11)
+      ((%r12 r12 %r12d r12d %r12b r12b) '%r12)
+      ((%r13 r13 %r13d r13d %r13b r13b) '%r13)
+      ((%r14 r14 %r14d r14d %r14b r14b) '%r14)
+      ((%r15 r15 %r15d r15d %r15b r15b) '%r15)
+      (else u))))
+
+(define (lir-pmov-gpr-sym? r)
+  (let ((fam (lir-pmov-canon-gpr-family r)))
+    (and (symbol? fam)
+         (memq fam '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp
+                     %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15)))))
+
+(define (lir-pmov-loc-equal? a b)
+  (let ((ua (lir-pmov-unwrap-reg a))
+        (ub (lir-pmov-unwrap-reg b)))
+    (cond
+      ((and (symbol? ua) (symbol? ub))
+       (eq? (lir-pmov-canon-exact-reg ua) (lir-pmov-canon-exact-reg ub)))
+      ((and (pair? ua) (pair? ub))
+       (and (eq? (car ua) (car ub))
+            (cond
+              ((eq? (car ua) '%stack)
+               (and (pair? (cdr ua)) (pair? (cdr ub))
+                    (equal? (cadr ua) (cadr ub))))
+              ((eq? (car ua) '%mem)
+               (and (pair? (cdr ua)) (pair? (cdr ub))
+                    (pair? (cddr ua)) (pair? (cddr ub))
+                    (lir-pmov-loc-equal? (cadr ua) (cadr ub))
+                    (lir-pmov-loc-equal? (caddr ua) (caddr ub))))
+              (else (equal? ua ub)))))
+      (else (equal? ua ub)))))
+
+(define (lir-pmov-reg-aliases? a b)
+  (or (lir-pmov-loc-equal? a b)
+      (and (lir-pmov-gpr-sym? a)
+           (lir-pmov-gpr-sym? b)
+           (eq? (lir-pmov-canon-gpr-family a)
+                (lir-pmov-canon-gpr-family b)))))
+
+(define (lir-pmov-float-loc? x)
+  (cond
+    ((symbol? x)
+     (let ((c (lir-pmov-canon-exact-reg x)))
+       (if (memq c '(%xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                     %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
+           #t #f)))
+    ((and (pair? x) (eq? (car x) '%freg)) #t)
+    ((and (pair? x) (eq? (car x) '%reg) (pair? (cdr x)))
+     (cond
+       ((and (pair? (cddr x)) (memq (cadr x) '(f32 f64))) #t)
+       ((lir-pmov-float-loc? (cadr x)) #t)
+       (else #f)))
+    (else #f)))
+
+(define (lir-pmov-stack-loc? x)
+  (and (pair? x) (eq? (car x) '%stack) (pair? (cdr x)) (integer? (cadr x))))
+
+(define (lir-pmov-mem-loc? x)
+  (and (pair? x) (eq? (car x) '%mem) (pair? (cdr x)) (pair? (cddr x))))
+
+(define (lir-pmov-rsp-loc? x)
+  (let ((fam (lir-pmov-canon-gpr-family x)))
+    (if (memq fam '(%rsp sp)) #t #f)))
+
+(define (lir-pmov-loc-reads? expr loc)
+  (cond
+    ((lir-pmov-reg-aliases? expr loc) #t)
+    ((lir-pmov-mem-loc? expr)
+     (or (lir-pmov-loc-reads? (cadr expr) loc)
+         (lir-pmov-loc-reads? (caddr expr) loc)))
+    ((and (pair? expr) (eq? (car expr) '%sib) (= (length expr) 4))
+     (lir-pmov-reg-aliases? (cadr expr) loc))
+    ((and (pair? expr) (eq? (car expr) '%disp) (= (length expr) 3))
+     (or (lir-pmov-loc-reads? (cadr expr) loc)
+         (lir-pmov-loc-reads? (caddr expr) loc)))
+    (else #f)))
+
+(define (lir-pmov-dst-reads-addr? dst loc)
+  (cond
+    ((lir-pmov-mem-loc? dst)
+     (or (lir-pmov-loc-reads? (cadr dst) loc)
+         (lir-pmov-loc-reads? (caddr dst) loc)))
+    ((and (pair? dst) (eq? (car dst) '%disp) (= (length dst) 3))
+     (or (lir-pmov-loc-reads? (cadr dst) loc)
+         (lir-pmov-loc-reads? (caddr dst) loc)))
+    (else #f)))
+
+(define (lir-pmov-loc-in-moves? cand moves)
+  (let loop ((ms moves))
+    (if (null? ms)
+        #f
+        (let ((d (caar ms))
+              (s (cdar ms)))
+          (if (or (lir-pmov-reg-aliases? d cand)
+                  (lir-pmov-loc-reads? s cand)
+                  (lir-pmov-dst-reads-addr? d cand))
+              #t
+              (loop (cdr ms)))))))
+
+(define (lir-pmov-select-scratch candidates moves fallback-slot)
+  (let loop ((cs candidates))
+    (cond
+      ((null? cs)
+       (if (and fallback-slot
+                (not (lir-pmov-rsp-loc? fallback-slot))
+                (not (lir-pmov-loc-in-moves? fallback-slot moves)))
+           fallback-slot
+           (error "lir-pmov-select-scratch: no collision-free scratch location available" moves)))
+      (else
+       (let* ((cand (car cs))
+              (fam (lir-pmov-canon-gpr-family cand)))
+         (if (and (not (lir-pmov-rsp-loc? cand))
+                  (not (eq? fam '%r12))
+                  (not (lir-pmov-loc-in-moves? cand moves)))
+             cand
+             (loop (cdr cs))))))))
+
+(define (lir-pmov-subst-expr expr old-loc new-loc)
+  (cond
+    ((lir-pmov-loc-equal? expr old-loc) new-loc)
+    ((lir-pmov-mem-loc? expr)
+     (list '%mem
+           (lir-pmov-subst-expr (cadr expr) old-loc new-loc)
+           (lir-pmov-subst-expr (caddr expr) old-loc new-loc)))
+    ((and (pair? expr) (eq? (car expr) '%sib) (= (length expr) 4))
+     (list '%sib
+           (lir-pmov-subst-expr (cadr expr) old-loc new-loc)
+           (caddr expr)
+           (cadddr expr)))
+    ((and (pair? expr) (eq? (car expr) '%disp) (= (length expr) 3))
+     (list '%disp
+           (lir-pmov-subst-expr (cadr expr) old-loc new-loc)
+           (lir-pmov-subst-expr (caddr expr) old-loc new-loc)))
+    (else expr)))
+
+(define (lir-pmov-subst-dst-addr dst old-loc new-loc)
+  (cond
+    ((lir-pmov-mem-loc? dst)
+     (list '%mem
+           (lir-pmov-subst-expr (cadr dst) old-loc new-loc)
+           (lir-pmov-subst-expr (caddr dst) old-loc new-loc)))
+    ((and (pair? dst) (eq? (car dst) '%disp) (= (length dst) 3))
+     (list '%disp
+           (lir-pmov-subst-expr (cadr dst) old-loc new-loc)
+           (lir-pmov-subst-expr (caddr dst) old-loc new-loc)))
+    (else dst)))
+
+(define (lir-pmov-validate-pairs pairs)
+  (let loop ((ps pairs) (seen-dsts '()))
+    (if (null? ps)
+        #t
+        (let ((d (caar ps)))
+          (cond
+            ((lir-pmov-rsp-loc? d)
+             (error "lir-parallel-move-plan: destination cannot be %rsp" (car ps))
+             #f)
+            ((let dup-chk ((ds seen-dsts))
+               (and (pair? ds)
+                    (or (lir-pmov-reg-aliases? d (car ds))
+                        (dup-chk (cdr ds)))))
+             (error "lir-parallel-move-plan: duplicate destination in parallel move" d)
+             #f)
+            (else
+             (loop (cdr ps) (cons d seen-dsts))))))))
+
+(define (lir-pmov-find-ready rem)
+  (let loop ((ms rem))
+    (if (null? ms)
+        #f
+        (let* ((cand (car ms))
+               (d (car cand))
+               (blocked?
+                (let chk ((all rem))
+                  (and (pair? all)
+                       (or (and (not (eq? (car all) cand))
+                                (or (lir-pmov-loc-reads? (cdar all) d)
+                                    (lir-pmov-dst-reads-addr? (caar all) d)))
+                           (chk (cdr all)))))))
+          (if blocked?
+              (loop (cdr ms))
+              cand)))))
+
+(define (lir-pmov-remove-pair target lst)
+  (let loop ((xs lst) (acc '()))
+    (cond
+      ((null? xs) (reverse acc))
+      ((eq? (car xs) target) (append (reverse acc) (cdr xs)))
+      (else (loop (cdr xs) (cons (car xs) acc))))))
+
+(define (lir-parallel-move-plan pairs gpr-scratches fpr-scratches fallback-slot)
+  (if (not (lir-pmov-validate-pairs pairs))
+      #f
+      (let ((initial
+             (let drop-self ((ps pairs) (acc '()))
+               (cond
+                 ((null? ps) (reverse acc))
+                 ((lir-pmov-loc-equal? (caar ps) (cdar ps))
+                  (drop-self (cdr ps) acc))
+                 (else
+                  (drop-self (cdr ps) (cons (cons (caar ps) (cdar ps)) acc)))))))
+        (let loop ((rem initial) (plan-rev '()))
+          (if (null? rem)
+              (reverse plan-rev)
+              (let ((ready (lir-pmov-find-ready rem)))
+                (if ready
+                    (loop (lir-pmov-remove-pair ready rem)
+                          (cons ready plan-rev))
+                    ;; Pure cycle(s) remain: break head cycle with 1 collision-free scratch
+                    (let* ((head (car rem))
+                           (d0 (car head))
+                           (pool (if (lir-pmov-float-loc? d0) fpr-scratches gpr-scratches))
+                           (tmp (lir-pmov-select-scratch pool rem fallback-slot))
+                           (updated-rem
+                            (map (lambda (m)
+                                   (cons (if (lir-pmov-loc-equal? (car m) d0)
+                                             (car m)
+                                             (lir-pmov-subst-dst-addr (car m) d0 tmp))
+                                         (lir-pmov-subst-expr (cdr m) d0 tmp)))
+                                 rem)))
+                      (loop updated-rem (cons (cons tmp d0) plan-rev))))))))))
+
+(define (lir-emit-single-move dst src mem-scratch)
+  (cond
+    ((lir-pmov-loc-equal? dst src) '())
+    ((and (lir-pmov-float-loc? dst) (lir-pmov-float-loc? src))
+     (list (list '%fmov dst src)))
+    ((and (lir-pmov-float-loc? dst) (lir-pmov-stack-loc? src))
+     (list (list '%load-typed 'f64 dst '%rsp (cadr src))))
+    ((and (lir-pmov-stack-loc? dst) (lir-pmov-float-loc? src))
+     (list (list '%store-typed 'f64 '%rsp (cadr dst) src)))
+    ((and (lir-pmov-stack-loc? dst) (lir-pmov-stack-loc? src))
+     (list (list '%load mem-scratch '%rsp (cadr src))
+           (list '%store '%rsp (cadr dst) mem-scratch)))
+    ((lir-pmov-stack-loc? dst)
+     (list (list '%store '%rsp (cadr dst) src)))
+    ((lir-pmov-stack-loc? src)
+     (list (list '%load dst '%rsp (cadr src))))
+    (else
+     (list (list '%mov dst src)))))
+
+(define (lir-emit-parallel-moves-with-usage dsts srcs gpr-scratches fpr-scratches fallback-slot)
+  (if (not (= (length dsts) (length srcs)))
+      (error "lir-emit-parallel-moves: dsts and srcs arity mismatch" (list dsts srcs))
+      (let* ((pairs (let zip ((ds dsts) (ss srcs) (acc '()))
+                      (if (null? ds)
+                          (reverse acc)
+                          (zip (cdr ds) (cdr ss) (cons (cons (car ds) (car ss)) acc)))))
+             (plan (lir-parallel-move-plan pairs gpr-scratches fpr-scratches fallback-slot))
+             (used-fb-box (cons #f '())))
+        (let loop ((ps plan) (acc-rev '()))
+          (if (null? ps)
+              (cons (reverse acc-rev) (car used-fb-box))
+              (let* ((step (car ps))
+                     (d (car step))
+                     (s (cdr step)))
+                (if (and fallback-slot
+                         (or (lir-pmov-loc-equal? d fallback-slot)
+                             (lir-pmov-loc-equal? s fallback-slot)))
+                    (set-car! used-fb-box #t))
+                (let* ((mem-tmp (if (and (lir-pmov-stack-loc? d) (lir-pmov-stack-loc? s))
+                                    (lir-pmov-select-scratch gpr-scratches ps #f)
+                                    #f))
+                       (insts (lir-emit-single-move d s mem-tmp)))
+                  (loop (cdr ps) (append (reverse insts) acc-rev)))))))))
+
+(define (lir-emit-parallel-moves dsts srcs gpr-scratches fpr-scratches fallback-slot)
+  (car (lir-emit-parallel-moves-with-usage dsts srcs gpr-scratches fpr-scratches fallback-slot)))
 ;;; =======================================================================
 ;;; ULisp Compiler Pass 123: LIR Closures & Stack Allocation Pass
 ;;; Conforms to DSN-33 Architecture Specification & Issue #583
@@ -31155,226 +31744,209 @@
          (let check-regs ((pbs p-bindings))
            (if (null? pbs) #t
                (let ((info (cdar pbs)))
-                 (and (or (and (pair? info) (eq? (car info) 'reg))
-                          (memq info '(%rbx %r13 %r14 %r15)))
+                 (and (or (and (pair? info) (eq? (car info) 'reg)
+                               (not (memq (cdr info) '(%rsp %r12))))
+                          (memq info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp
+                                       %r8 %r9 %r10 %r11 %r13 %r14 %r15)))
                       (check-regs (cdr pbs)))))))))
 
 (define (emit-in-place-jump! entry-lbl regs)
   (if entry-lbl
       (emit-lir! (list '%jump entry-lbl regs))))
 
+(define (cont-expr-pure? expr)
+  (cond
+    ((not (pair? expr)) #t)
+    ((eq? (car expr) 'quote) #t)
+    ((eq? (car expr) 'if)
+     (and (cont-expr-pure? (cadr expr))
+          (cont-expr-pure? (caddr expr))
+          (if (null? (cdddr expr)) #t (cont-expr-pure? (cadddr expr)))))
+    ((eq? (car expr) 'begin)
+     (let loop ((es (cdr expr)))
+       (or (null? es)
+           (and (cont-expr-pure? (car es))
+                (loop (cdr es))))))
+    ((memq (car expr) '(let letrec))
+     (and (let loop ((bs (cadr expr)))
+            (or (null? bs)
+                (and (cont-expr-pure? (cadar bs))
+                     (loop (cdr bs)))))
+          (cont-expr-pure? (caddr expr))))
+    ((memq (car expr) '(+ - * %raw-add %raw-sub %raw-mul %bitwise-and %bitwise-ior
+                        %shift-left %shift-right %box-fixnum %unbox-fixnum
+                        = < <= > >= eq? null? zero? pair? not))
+     (let loop ((args (cdr expr)))
+       (or (null? args)
+           (and (cont-expr-pure? (car args))
+                (loop (cdr args))))))
+    (else #f)))
+
+(define (cont-param-reg-of var p-names p-regs)
+  (let loop ((ps p-names) (rs p-regs))
+    (cond
+      ((or (null? ps) (null? rs)) #f)
+      ((eq? (car ps) var) (car rs))
+      (else (loop (cdr ps) (cdr rs))))))
+
+(define (cont-emit-expr-into-reg! p-i r-i e-i p-names p-regs si env)
+  (let ((src-reg (if (symbol? e-i) (cont-param-reg-of e-i p-names p-regs) #f)))
+    (cond
+      (src-reg
+       (if (not (eq? r-i src-reg))
+           (emit-lir! (list '%mov r-i src-reg))))
+      ((and (pair? e-i)
+            (memq (car e-i) '(+ %raw-add))
+            (= (length e-i) 3)
+            (or (and (eq? (cadr e-i) p-i) (in-place-const-int? (caddr e-i)))
+                (and (in-place-const-int? (cadr e-i)) (eq? (caddr e-i) p-i))))
+       (let ((c (extract-in-place-const (car e-i) e-i)))
+         (emit-lir! (list '%add r-i c))))
+      ((and (pair? e-i)
+            (memq (car e-i) '(- %raw-sub))
+            (= (length e-i) 3)
+            (eq? (cadr e-i) p-i)
+            (in-place-const-int? (caddr e-i)))
+       (let ((c (extract-in-place-const (car e-i) e-i)))
+         (emit-lir! (list '%sub r-i c))))
+      ((and (pair? e-i)
+            (memq (car e-i) '(+ %raw-add))
+            (= (length e-i) 3)
+            (or (and (eq? (cadr e-i) p-i) (symbol? (caddr e-i)) (cont-param-reg-of (caddr e-i) p-names p-regs))
+                (and (eq? (caddr e-i) p-i) (symbol? (cadr e-i)) (cont-param-reg-of (cadr e-i) p-names p-regs))))
+       (let* ((other-var (if (eq? (cadr e-i) p-i) (caddr e-i) (cadr e-i)))
+              (other-reg (cont-param-reg-of other-var p-names p-regs)))
+         (emit-lir! (list '%add r-i other-reg))))
+      ((and (pair? e-i)
+            (memq (car e-i) '(- %raw-sub))
+            (= (length e-i) 3)
+            (eq? (cadr e-i) p-i)
+            (symbol? (caddr e-i))
+            (cont-param-reg-of (caddr e-i) p-names p-regs))
+       (let ((other-reg (cont-param-reg-of (caddr e-i) p-names p-regs)))
+         (emit-lir! (list '%sub r-i other-reg))))
+      (else
+       (lir-compile-expr e-i si env #f)
+       (if (not (eq? r-i '%rax))
+           (emit-lir! (list '%mov r-i '%rax)))))))
+
+(define (cont-find-ready-work-item rem)
+  (let loop ((ws rem))
+    (if (null? ws)
+        #f
+        (let* ((w (car ws))
+               (p-i (car w))
+               (blocked?
+                (let chk ((all rem))
+                  (and (pair? all)
+                       (or (and (not (eq? (car all) w))
+                                (expr-free-references-var? (caddr (car all)) p-i))
+                           (chk (cdr all)))))))
+          (if blocked?
+              (loop (cdr ws))
+              w)))))
+
+(define (cont-drop-work-item target rem)
+  (let loop ((xs rem) (acc '()))
+    (cond
+      ((null? xs) (reverse acc))
+      ((eq? (car xs) target) (append (reverse acc) (cdr xs)))
+      (else (loop (cdr xs) (cons (car xs) acc))))))
+
 (define (lir-compile-in-place-cont-call f-name exprs target-info si env)
   (let* ((entry-lbl (cadr target-info))
          (p-bindings (caddr target-info))
-         (num-args (length exprs))
          (p-names (map car* p-bindings))
          (p-regs (map (lambda (pb)
                         (let ((info (cdr pb)))
                           (if (pair? info) (cdr info) info)))
-                      p-bindings)))
+                      p-bindings))
+         (work-items
+          (let collect ((ps p-names) (rs p-regs) (es exprs) (acc '()))
+            (if (or (null? ps) (null? rs) (null? es))
+                (reverse acc)
+                (if (eq? (car es) (car ps))
+                    (collect (cdr ps) (cdr rs) (cdr es) acc)
+                    (collect (cdr ps) (cdr rs) (cdr es)
+                             (cons (list (car ps) (car rs) (car es)) acc))))))
+         (all-pure?
+          (let chk ((ws work-items))
+            (or (null? ws)
+                (and (cont-expr-pure? (caddr (car ws)))
+                     (chk (cdr ws)))))))
     (cond
-      ;; === 2-Argument Hot Loop In-Place Shuffle ===
-      ((= num-args 2)
-       (let* ((p0 (car p-names))
-              (p1 (cadr p-names))
-              (r0 (car p-regs))
-              (r1 (cadr p-regs))
-              (e0 (car exprs))
-              (e1 (cadr exprs))
-              ;; Check if e0 references p1
-              (e0-refs-p1? (expr-references-var? e0 p1))
-              ;; Check if e1 references p0
-              (e1-refs-p0? (expr-references-var? e1 p0)))
-         (cond
-           ;; Case 1: Swap (loop p1 p0)
-           ((and (eq? e0 p1) (eq? e1 p0))
-            (emit-lir! (list '%mov '%r10 r0))
-            (emit-lir! (list '%mov r0 r1))
-            (emit-lir! (list '%mov r1 '%r10))
-            (emit-in-place-jump! entry-lbl (list r0 r1)))
+      ((null? work-items)
+       (emit-in-place-jump! entry-lbl p-regs))
 
-           ;; Case 1b: Identity on one variable
-           ((and (eq? e1 p1) (not e0-refs-p1?))
-            (cond
-              ((and (pair? e0)
-                    (memq (car e0) '(+ %raw-add))
-                    (or (and (eq? (cadr e0) p0) (in-place-const-int? (caddr e0)))
-                        (and (in-place-const-int? (cadr e0)) (eq? (caddr e0) p0))))
-               (let ((c (extract-in-place-const (car e0) e0)))
-                 (emit-lir! (list '%add r0 c))))
-              ((and (pair? e0)
-                    (memq (car e0) '(- %raw-sub))
-                    (eq? (cadr e0) p0)
-                    (in-place-const-int? (caddr e0)))
-               (let ((c (extract-in-place-const (car e0) e0)))
-                 (emit-lir! (list '%sub r0 c))))
-              (else
-               (lir-compile-expr e0 si env #f)
-               (if (not (eq? r0 '%rax))
-                   (emit-lir! (list '%mov r0 '%rax)))))
-            (emit-in-place-jump! entry-lbl (list r0 r1)))
-
-           ((and (eq? e0 p0) (not e1-refs-p0?))
-            (cond
-              ((and (pair? e1)
-                    (memq (car e1) '(+ %raw-add))
-                    (or (and (eq? (cadr e1) p1) (in-place-const-int? (caddr e1)))
-                        (and (in-place-const-int? (cadr e1)) (eq? (caddr e1) p1))))
-               (let ((c (extract-in-place-const (car e1) e1)))
-                 (emit-lir! (list '%add r1 c))))
-              ((and (pair? e1)
-                    (memq (car e1) '(- %raw-sub))
-                    (eq? (cadr e1) p1)
-                    (in-place-const-int? (caddr e1)))
-               (let ((c (extract-in-place-const (car e1) e1)))
-                 (emit-lir! (list '%sub r1 c))))
-              (else
-               (lir-compile-expr e1 si env #f)
-               (if (not (eq? r1 '%rax))
-                   (emit-lir! (list '%mov r1 '%rax)))))
-            (emit-in-place-jump! entry-lbl (list r0 r1)))
-
-           ;; Case 2: DAG dependency (e1 depends on p0, e0 does NOT depend on p1)
-           ;; e.g. e0 = (+ i 1), e1 = (+ acc i). Evaluate e1 into r1 first, then e0 into r0!
-           ((and e1-refs-p0? (not e0-refs-p1?))
-            ;; Fast path: e1 is (%raw-add i acc) or (+ acc i) -> direct in-place add!
-            (cond
-              ((and (pair? e1)
-                    (memq (car e1) '(+ %raw-add))
-                    (or (and (eq? (cadr e1) p0) (eq? (caddr e1) p1))
-                        (and (eq? (cadr e1) p1) (eq? (caddr e1) p0))))
-               (emit-lir! (list '%add r1 r0)))
-              ((and (pair? e1)
-                    (memq (car e1) '(- %raw-sub))
-                    (eq? (cadr e1) p1)
-                    (eq? (caddr e1) p0))
-               (emit-lir! (list '%sub r1 r0)))
-              (else
-               (lir-compile-expr e1 si env #f)
-               (if (not (eq? r1 '%rax))
-                   (emit-lir! (list '%mov r1 '%rax)))))
-            ;; Now evaluate e0 into r0 in-place!
-            (cond
-              ((and (pair? e0)
-                    (memq (car e0) '(+ %raw-add))
-                    (or (and (eq? (cadr e0) p0) (in-place-const-int? (caddr e0)))
-                        (and (in-place-const-int? (cadr e0)) (eq? (caddr e0) p0))))
-               (let ((c (extract-in-place-const (car e0) e0)))
-                 (emit-lir! (list '%add r0 c))))
-              ((and (pair? e0)
-                    (memq (car e0) '(- %raw-sub))
-                    (eq? (cadr e0) p0)
-                    (in-place-const-int? (caddr e0)))
-               (let ((c (extract-in-place-const (car e0) e0)))
-                 (emit-lir! (list '%sub r0 c))))
-              (else
-               (lir-compile-expr e0 si env #f)
-               (if (not (eq? r0 '%rax))
-                   (emit-lir! (list '%mov r0 '%rax)))))
-            (emit-in-place-jump! entry-lbl (list r0 r1)))
-
-           ;; Case 3: DAG dependency (e0 depends on p1, e1 does NOT depend on p0)
-           ;; Evaluate e0 into r0 first, then e1 into r1!
-           ((and e0-refs-p1? (not e1-refs-p0?))
-            (cond
-              ((and (pair? e0)
-                    (memq (car e0) '(+ %raw-add))
-                    (or (and (eq? (cadr e0) p0) (eq? (caddr e0) p1))
-                        (and (eq? (cadr e0) p1) (eq? (caddr e0) p0))))
-               (emit-lir! (list '%add r0 r1)))
-              (else
-               (lir-compile-expr e0 si env #f)
-               (if (not (eq? r0 '%rax))
-                   (emit-lir! (list '%mov r0 '%rax)))))
-            ;; Now evaluate e1 into r1 in-place!
-            (cond
-              ((and (pair? e1)
-                    (memq (car e1) '(+ %raw-add))
-                    (or (and (eq? (cadr e1) p1) (in-place-const-int? (caddr e1)))
-                        (and (in-place-const-int? (cadr e1)) (eq? (caddr e1) p1))))
-               (let ((c (extract-in-place-const (car e1) e1)))
-                 (emit-lir! (list '%add r1 c))))
-              ((and (pair? e1)
-                    (memq (car e1) '(- %raw-sub))
-                    (eq? (cadr e1) p1)
-                    (in-place-const-int? (caddr e1)))
-               (let ((c (extract-in-place-const (car e1) e1)))
-                 (emit-lir! (list '%sub r1 c))))
-              (else
-               (lir-compile-expr e1 si env #f)
-               (if (not (eq? r1 '%rax))
-                   (emit-lir! (list '%mov r1 '%rax)))))
-            (emit-in-place-jump! entry-lbl (list r0 r1)))
-
-           ;; Case 4: General 2-argument parallel update: preserve e0 on stack slot si across e1 evaluation
-           (else
-            (track-lir-si! si)
-            (lir-compile-expr e0 si env #f)
-            (emit-lir! (list '%store '%rsp si '%rax))
-            (lir-compile-expr e1 (- si 8) env #f)
-            (if (not (eq? r1 '%rax))
-                (emit-lir! (list '%mov r1 '%rax)))
-            (emit-lir! (list '%load r0 '%rsp si))
-            (emit-in-place-jump! entry-lbl (list r0 r1))))))
-
-      ;; === 1-Argument In-Place Update ===
-      ((= num-args 1)
-       (let ((r0 (car p-regs))
-             (p0 (car p-names))
-             (e0 (car exprs)))
-         (cond
-           ((and (pair? e0)
-                 (memq (car e0) '(+ %raw-add))
-                 (or (and (eq? (cadr e0) p0) (in-place-const-int? (caddr e0)))
-                     (and (in-place-const-int? (cadr e0)) (eq? (caddr e0) p0))))
-            (let ((c (extract-in-place-const (car e0) e0)))
-              (emit-lir! (list '%add r0 c))))
-           ((and (pair? e0)
-                 (memq (car e0) '(- %raw-sub))
-                 (eq? (cadr e0) p0)
-                 (in-place-const-int? (caddr e0)))
-            (let ((c (extract-in-place-const (car e0) e0)))
-              (emit-lir! (list '%sub r0 c))))
-           (else
-            (lir-compile-expr e0 si env #f)
-            (if (not (eq? r0 '%rax))
-                (emit-lir! (list '%mov r0 '%rax)))))
-         (emit-in-place-jump! entry-lbl (list r0))))
-
-      ;; === Fallback for >= 3 arguments using stack-free %cont-call ===
-      (else
-       (let loop ((es exprs) (curr-si si) (temp-sis '()))
-         (if (pair? es)
+      ((not all-pure?)
+       ;; Side-effecting argument expressions: evaluate left-to-right into temp slots, then reload
+       (let eval-seq ((ws work-items) (curr-si si) (saved '()))
+         (if (pair? ws)
              (begin
                (track-lir-si! curr-si)
-               (lir-compile-expr (car es) curr-si env #f)
+               (lir-compile-expr (caddr (car ws)) curr-si env #f)
                (emit-lir! (list '%store '%rsp curr-si '%rax))
-               (loop (cdr es) (- curr-si 8) (cons curr-si temp-sis)))
+               (eval-seq (cdr ws) (- curr-si 8) (cons (cons (cadr (car ws)) curr-si) saved)))
              (begin
-               (let xfer ((ts (reverse temp-sis)) (pbs p-bindings))
-                 (if (and (pair? ts) (pair? pbs))
-                     (let ((t-si (car ts))
-                           (p-info (cdar pbs)))
-                       (cond
-                         ((and (pair? p-info) (eq? (car p-info) 'reg))
-                          (emit-lir! (list '%load (cdr p-info) '%rsp t-si)))
-                         ((memq p-info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
-                          (emit-lir! (list '%load p-info '%rsp t-si)))
-                         (else
-                          (emit-lir! (list '%load '%rdx '%rsp t-si))
-                          (emit-lir! (list '%store '%rsp p-info '%rdx))))
-                       (xfer (cdr ts) (cdr pbs)))))
-               (emit-in-place-jump! entry-lbl
-                                (map (lambda (pb)
-                                       (let ((p-info (cdr pb)))
-                                         (cond
-                                           ((and (pair? p-info) (eq? (car p-info) 'reg))
-                                            (cdr p-info))
-                                           ((memq p-info '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
-                                            p-info)
-                                           (else
-                                            (list '%stack p-info)))))
-                                     p-bindings)))))))))
+               (for-each (lambda (rs)
+                           (emit-lir! (list '%load (car rs) '%rsp (cdr rs))))
+                         (reverse saved))
+               (emit-in-place-jump! entry-lbl p-regs)))))
+
+      (else
+       ;; General N-argument dependency-graph peel + parallel-move cycle resolver
+       (let loop ((rem work-items) (curr-si si) (deferred-loads '()))
+         (if (null? rem)
+             (begin
+               (for-each (lambda (rl)
+                           (emit-lir! (list '%load (car rl) '%rsp (cdr rl))))
+                         (reverse deferred-loads))
+               (emit-in-place-jump! entry-lbl p-regs))
+             (let ((ready (cont-find-ready-work-item rem)))
+               (if ready
+                   (begin
+                     (cont-emit-expr-into-reg! (car ready) (cadr ready) (caddr ready)
+                                               p-names p-regs curr-si env)
+                     (loop (cont-drop-work-item ready rem) curr-si deferred-loads))
+                   (let ((all-bare-params?
+                          (let chk ((ws rem))
+                            (or (null? ws)
+                                (let ((e (caddr (car ws))))
+                                  (and (symbol? e)
+                                       (cont-param-reg-of e p-names p-regs)
+                                       (chk (cdr ws))))))))
+                     (if all-bare-params?
+                         ;; Pure register-to-register permutation cycle: resolve with zero stack spills
+                         (let* ((rem-dsts (map cadr rem))
+                                (rem-srcs (map (lambda (w)
+                                                 (cont-param-reg-of (caddr w) p-names p-regs))
+                                               rem))
+                                (safe-scratches
+                                 (filter (lambda (r) (not (memq r p-regs)))
+                                         *lir-pmov-gpr-scratch-pool*))
+                                (fb (list '%stack curr-si))
+                                (res (lir-emit-parallel-moves-with-usage
+                                      rem-dsts rem-srcs
+                                      safe-scratches *lir-pmov-fpr-scratch-pool* fb)))
+                           (if (cdr res)
+                               (track-lir-si! curr-si))
+                           (for-each emit-lir! (car res))
+                           (loop '() (if (cdr res) (- curr-si 8) curr-si) deferred-loads))
+                         ;; Compound expression cycle: evaluate 1 compound node to temp stack slot
+                         (let ((pick
+                                (let find-comp ((ws rem))
+                                  (cond
+                                    ((null? ws) (car rem))
+                                    ((not (and (symbol? (caddr (car ws)))
+                                               (cont-param-reg-of (caddr (car ws)) p-names p-regs)))
+                                     (car ws))
+                                    (else (find-comp (cdr ws)))))))
+                           (track-lir-si! curr-si)
+                           (lir-compile-expr (caddr pick) curr-si env #f)
+                           (emit-lir! (list '%store '%rsp curr-si '%rax))
+                           (loop (cont-drop-work-item pick rem)
+                                 (- curr-si 8)
+                                 (cons (cons (cadr pick) curr-si) deferred-loads)))))))))))))
 
 (define (cont-recurse-tail? f-name expr)
   (cond
@@ -36319,8 +36891,12 @@
             (set-car! min-off-box off))))
     (define add-vreg!
       (lambda (sym kind)
-        (if (and (symbol? sym) (not (assq sym (car vregs-box))))
-            (set-car! vregs-box (cons (cons sym kind) (car vregs-box))))))
+        (if (symbol? sym)
+            (let ((hit (assq sym (car vregs-box))))
+              (if hit
+                  (if (and (eq? kind 'fpr) (not (eq? (cdr hit) 'fpr)))
+                      (set-cdr! hit 'fpr))
+                  (set-car! vregs-box (cons (cons sym kind) (car vregs-box))))))))
     (let walk-insts ((is insts))
       (if (not (null? is))
           (let ((inst (car is)))
@@ -36427,58 +37003,10 @@
   (and (pair? x) (eq? (car x) '%stack) (pair? (cdr x)) (integer? (cadr x))))
 
 (define (%mir-emit-move dst src)
-  (cond
-    ((equal? dst src) '())
-    ((and (%mir-stack-opnd? dst) (%mir-stack-opnd? src))
-     (list (list '%load '%r10 '%rsp (cadr src))
-           (list '%store '%rsp (cadr dst) '%r10)))
-    ((%mir-stack-opnd? dst)
-     (list (list '%store '%rsp (cadr dst) src)))
-    ((%mir-stack-opnd? src)
-     (list (list '%load dst '%rsp (cadr src))))
-    (else
-     (list (list '%mov dst src)))))
+  (lir-emit-single-move dst src '%r10))
 
 (define (%mir-emit-parallel-moves dsts srcs)
-  (let* ((pairs
-          (let collect ((ds dsts) (ss srcs) (acc '()))
-            (if (or (null? ds) (null? ss))
-                (reverse acc)
-                (let ((d (car ds)) (s (car ss)))
-                  (if (equal? d s)
-                      (collect (cdr ds) (cdr ss) acc)
-                      (collect (cdr ds) (cdr ss) (cons (cons d s) acc))))))))
-    (let loop ((rem pairs) (acc '()))
-      (if (null? rem)
-          acc
-          ;; Find a move whose dst does not appear as src in any remaining move
-          (let ((safe
-                 (let find-safe ((ms rem))
-                   (cond
-                     ((null? ms) #f)
-                     ((let is-read? ((d (caar ms)) (all rem))
-                        (and (pair? all)
-                             (or (and (not (eq? (car all) (car ms)))
-                                      (equal? d (cdar all)))
-                                 (is-read? d (cdr all)))))
-                      (find-safe (cdr ms)))
-                     (else (car ms))))))
-            (if safe
-                (let ((rest (let drop-one ((ms rem))
-                              (cond ((null? ms) '())
-                                    ((eq? (car ms) safe) (cdr ms))
-                                    (else (cons (car ms) (drop-one (cdr ms))))))))
-                  (loop rest (append acc (%mir-emit-move (car safe) (cdr safe)))))
-                ;; Cycle remaining: break cycle using %r11 scratch register
-                (let* ((head-dst (caar rem))
-                       (save-insts (%mir-emit-move '%r11 head-dst))
-                       (updated-rem
-                        (map (lambda (m)
-                               (if (equal? (cdr m) head-dst)
-                                   (cons (car m) '%r11)
-                                   m))
-                             rem)))
-                  (loop updated-rem (append acc save-insts)))))))))
+  (lir-emit-parallel-moves dsts srcs *lir-pmov-gpr-scratch-pool* *lir-pmov-fpr-scratch-pool* #f))
 
 (define (%mir-resolve-opnd x vreg-map)
   (let ((phys (%mir-unwrap-phys-wrapper x))
@@ -36599,13 +37127,13 @@
                                          (if (not wo?)
                                              (set-car! pre-box
                                                        (cons (if is-fpr?
-                                                                 (list '%mov scratch cur)
+                                                                 (list '%load-typed 'f64 scratch '%rsp off)
                                                                  (list '%load scratch '%rsp off))
                                                              (car pre-box))))))
                                    (if (or wo? rw?)
                                        (set-car! post-box
                                                  (cons (if is-fpr?
-                                                           (list '%mov cur scratch)
+                                                           (list '%store-typed 'f64 '%rsp off scratch)
                                                            (list '%store '%rsp off scratch))
                                                        (car post-box))))
                                    (build (cdr xs) (+ idx 1) next-g next-f (cons scratch acc)))))))))
@@ -36613,15 +37141,31 @@
                        (cons (cons op new-args)
                              (reverse (car post-box)))))))))))
 
-(define (%mir-lower-edge-args tgt-lbl args block-param-locs vreg-map)
+(define (%mir-lower-edge-args tgt-lbl args block-param-locs vreg-map fallback-slot used-fb-box)
   (let ((entry (assq tgt-lbl block-param-locs)))
     (if (not entry)
         (cons #f (map (lambda (a) (%mir-resolve-opnd a vreg-map)) args))
         (let* ((param-locs (cdr entry))
-               (resolved-args (map (lambda (a) (%mir-resolve-opnd a vreg-map)) args)))
-          (cons #t (%mir-emit-parallel-moves param-locs resolved-args))))))
+               (resolved-args (map (lambda (a) (%mir-resolve-opnd a vreg-map)) args))
+               (res (lir-emit-parallel-moves-with-usage
+                     param-locs resolved-args
+                     *lir-pmov-gpr-scratch-pool* *lir-pmov-fpr-scratch-pool* fallback-slot)))
+          (if (cdr res)
+              (set-car! used-fb-box #t))
+          (cons #t (car res))))))
 
-(define (%mir-lower-inst inst block-param-locs vreg-map tramps-box)
+(define (%mir-make-trampoline-target lbl edge tramps-box)
+  (cond
+    ((and (car edge) (pair? (cdr edge)))
+     (let ((tr (unique-label-sym "mir_tramp_")))
+       (set-car! tramps-box
+                 (cons (cons '%block (cons tr (cons '() (append (cdr edge) (list (list '%jump lbl))))))
+                       (car tramps-box)))
+       (cons tr '())))
+    ((car edge) (cons lbl '()))
+    (else (cons lbl (cdr edge)))))
+
+(define (%mir-lower-inst inst block-param-locs vreg-map tramps-box fallback-slot used-fb-box)
   (if (not (pair? inst))
       (list inst)
       (let ((op (car inst)))
@@ -36634,7 +37178,7 @@
                    (let bloop ((bs body) (acc '()))
                      (if (null? bs)
                          (reverse acc)
-                         (let ((ls (%mir-lower-inst (car bs) block-param-locs vreg-map tramps-box)))
+                         (let ((ls (%mir-lower-inst (car bs) block-param-locs vreg-map tramps-box fallback-slot used-fb-box)))
                            (bloop (cdr bs) (append (reverse ls) acc))))))
                   (new-params (if (assq lbl block-param-locs)
                                   '()
@@ -36643,7 +37187,7 @@
           ((eq? op '%jump)
            (let* ((tgt (cadr inst))
                   (args (if (pair? (cddr inst)) (caddr inst) '()))
-                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map)))
+                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map fallback-slot used-fb-box)))
              (if (car edge)
                  (append (cdr edge) (list (list '%jump tgt)))
                  (if (pair? (cddr inst))
@@ -36658,7 +37202,7 @@
                   (cond-reg (if (%mir-stack-opnd? cond-loc) '%r10 cond-loc))
                   (tgt (caddr inst))
                   (args (if (pair? (cdddr inst)) (cadddr inst) '()))
-                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map)))
+                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map fallback-slot used-fb-box)))
              (cond
                ((not (car edge))
                 (append pre-cond
@@ -36668,11 +37212,8 @@
                ((null? (cdr edge))
                 (append pre-cond (list (list '%jump-if-false cond-reg tgt))))
                (else
-                (let ((tramp (unique-label-sym "mir_tramp_")))
-                  (set-car! tramps-box
-                            (cons (cons '%block (cons tramp (cons '() (append (cdr edge) (list (list '%jump tgt))))))
-                                  (car tramps-box)))
-                  (append pre-cond (list (list '%jump-if-false cond-reg tramp))))))))
+                (let ((tr (car (%mir-make-trampoline-target tgt edge tramps-box))))
+                  (append pre-cond (list (list '%jump-if-false cond-reg tr))))))))
           ((eq? op '%jump-if)
            (let* ((raw-cond (cadr inst))
                   (cond-loc (%mir-resolve-opnd raw-cond vreg-map))
@@ -36684,28 +37225,47 @@
                   (t-args (cadddr inst))
                   (e-lbl (car (cddddr inst)))
                   (e-args (cadr (cddddr inst)))
-                  (t-edge (%mir-lower-edge-args t-lbl t-args block-param-locs vreg-map))
-                  (e-edge (%mir-lower-edge-args e-lbl e-args block-param-locs vreg-map))
-                  (new-t (cond
-                           ((and (car t-edge) (pair? (cdr t-edge)))
-                            (let ((tr (unique-label-sym "mir_tramp_")))
-                              (set-car! tramps-box
-                                        (cons (cons '%block (cons tr (cons '() (append (cdr t-edge) (list (list '%jump t-lbl))))))
-                                              (car tramps-box)))
-                              (cons tr '())))
-                           ((car t-edge) (cons t-lbl '()))
-                           (else (cons t-lbl (cdr t-edge)))))
-                  (new-e (cond
-                           ((and (car e-edge) (pair? (cdr e-edge)))
-                            (let ((tr (unique-label-sym "mir_tramp_")))
-                              (set-car! tramps-box
-                                        (cons (cons '%block (cons tr (cons '() (append (cdr e-edge) (list (list '%jump e-lbl))))))
-                                              (car tramps-box)))
-                              (cons tr '())))
-                           ((car e-edge) (cons e-lbl '()))
-                           (else (cons e-lbl (cdr e-edge))))))
+                  (t-edge (%mir-lower-edge-args t-lbl t-args block-param-locs vreg-map fallback-slot used-fb-box))
+                  (e-edge (%mir-lower-edge-args e-lbl e-args block-param-locs vreg-map fallback-slot used-fb-box))
+                  (new-t (%mir-make-trampoline-target t-lbl t-edge tramps-box))
+                  (new-e (%mir-make-trampoline-target e-lbl e-edge tramps-box)))
              (append pre-cond
                      (list (list '%jump-if cond-reg (car new-t) (cdr new-t) (car new-e) (cdr new-e))))))
+          ((eq? op '%switch)
+           (let* ((raw-val (cadr inst))
+                  (val-loc (%mir-resolve-opnd raw-val vreg-map))
+                  (pre-val (if (%mir-stack-opnd? val-loc)
+                               (list (list '%load '%r10 '%rsp (cadr val-loc)))
+                               '()))
+                  (val-opnd (if (%mir-stack-opnd? val-loc) '%r10 val-loc))
+                  (def-lbl (caddr inst))
+                  (has-def-args? (= (length inst) 5))
+                  (def-args (if (and has-def-args? (list? (cadddr inst))) (cadddr inst) '()))
+                  (raw-cases (cond (has-def-args? (car (cddddr inst)))
+                                   ((pair? (cdddr inst)) (cadddr inst))
+                                   (else '())))
+                  (def-edge (%mir-lower-edge-args def-lbl def-args block-param-locs vreg-map fallback-slot used-fb-box))
+                  (new-def (%mir-make-trampoline-target def-lbl def-edge tramps-box))
+                  (new-cases
+                   (map (lambda (c)
+                          (let* ((c-val (car c))
+                                 (c-lbl (cadr c))
+                                 (c-args (if (and (pair? (cddr c)) (list? (caddr c))) (caddr c) '()))
+                                 (c-edge (%mir-lower-edge-args c-lbl c-args block-param-locs vreg-map fallback-slot used-fb-box))
+                                 (nt (%mir-make-trampoline-target c-lbl c-edge tramps-box)))
+                            (list c-val (car nt) (cdr nt))))
+                        raw-cases))
+                  (all-empty-args?
+                   (and (null? (cdr new-def))
+                        (let chk ((cs new-cases))
+                          (or (null? cs)
+                              (and (null? (caddr (car cs)))
+                                   (chk (cdr cs))))))))
+             (append pre-val
+                     (list (if all-empty-args?
+                               (list '%switch val-opnd (car new-def)
+                                     (map (lambda (nc) (list (car nc) (cadr nc))) new-cases))
+                               (list '%switch val-opnd (car new-def) (cdr new-def) new-cases))))))
           (else
            (%mir-subst-vregs-with-spills inst vreg-map inst))))))
 
@@ -36716,6 +37276,8 @@
              (assigned (%mir-assign-vreg-locations analysis))
              (vreg-map (car assigned))
              (new-frame-size (cdr assigned))
+             (fallback-slot (list '%stack (- 0 (+ new-frame-size 8))))
+             (used-fb-box (cons #f '()))
              (raw-block-params (list-ref analysis 4))
              (block-param-locs
               (map (lambda (bp)
@@ -36727,11 +37289,12 @@
               (let loop ((is body) (acc '()))
                 (if (null? is)
                     (reverse acc)
-                    (let ((ls (%mir-lower-inst (car is) block-param-locs vreg-map tramps-box)))
+                    (let ((ls (%mir-lower-inst (car is) block-param-locs vreg-map tramps-box fallback-slot used-fb-box)))
                       (loop (cdr is) (append (reverse ls) acc))))))
              (all-tramps (reverse (car tramps-box)))
-             (final-body (if (null? all-tramps) lowered-insts (append lowered-insts all-tramps))))
-        (cons final-body new-frame-size))))
+             (final-body (if (null? all-tramps) lowered-insts (append lowered-insts all-tramps)))
+             (final-fs (if (car used-fb-box) (+ new-frame-size 8) new-frame-size)))
+        (cons final-body final-fs))))
 
 (define (%mir-lower-fn-or-main form)
   (if (not (pair? form))
@@ -42284,46 +42847,70 @@
   (cond
     ((case param
        ((%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
-         rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15)
+         rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15
+         %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+         %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15
+         xmm0 xmm1 xmm2 xmm3 xmm4 xmm5 xmm6 xmm7
+         xmm8 xmm9 xmm10 xmm11 xmm12 xmm13 xmm14 xmm15)
         #t)
        (else #f))
      param)
     ((and (pair? param) (eq? (car param) '%reg))
+     (if (and (pair? (cdr param)) (pair? (cddr param))) (caddr param) (cadr param)))
+    ((and (pair? param) (eq? (car param) '%freg))
      (cadr param))
     ((and (pair? param) (eq? (car param) '%stack)) param)
     (else
      (list '%stack (* -8 (+ idx 2))))))
 
 (define (select-x86-parallel-copy target-lbl args)
-  (let ((params (get-x86-block-params target-lbl)))
-    (let loop ((ps params) (as args) (i 0) (acc '()))
-      (if (and (pair? ps) (pair? as))
-          (let* ((param (car ps))
-                 (arg (car as))
-                 (loc (x86-param-location i param)))
+  (let* ((params (get-x86-block-params target-lbl))
+         (pairs (let collect ((ps params) (as args) (i 0) (acc '()))
+                  (if (and (pair? ps) (pair? as))
+                      (collect (cdr ps) (cdr as) (+ i 1)
+                               (cons (cons (x86-param-location i (car ps)) (car as)) acc))
+                      (reverse acc))))
+         (plan (lir-parallel-move-plan pairs *lir-pmov-gpr-scratch-pool* *lir-pmov-fpr-scratch-pool* #f)))
+    (let emit-loop ((steps plan) (acc '()))
+      (if (null? steps)
+          (reverse acc)
+          (let* ((step (car steps))
+                 (dst (car step))
+                 (src (cdr step)))
             (cond
-              ((equal? loc arg)
-               (loop (cdr ps) (cdr as) (+ i 1) acc))
-              ((or (eq? loc '%rax) (eq? loc 'rax))
-               (loop (cdr ps) (cdr as) (+ i 1)
-                     (cons (list 'mov 'rax (lower-lir-opnd arg)) acc)))
-              ((and (pair? loc) (eq? (car loc) '%stack))
-               (let ((stk-disp (list '%disp (x86-hoist-rsp-disp (cadr loc)) 'rsp)))
+              ((or (lir-pmov-float-loc? dst) (lir-pmov-float-loc? src))
+               (cond
+                 ((and (lir-pmov-float-loc? dst) (lir-pmov-float-loc? src))
+                  (emit-loop (cdr steps)
+                             (cons (list '%raw-asm (string-append "    movsd " (reg->str dst) ", " (reg->str src))) acc)))
+                 ((lir-pmov-float-loc? dst)
+                  (emit-loop (cdr steps)
+                             (cons (list '%raw-asm (string-append "    movsd " (reg->str dst) ", qword ptr " (hoist-operand->str src))) acc)))
+                 (else
+                  (emit-loop (cdr steps)
+                             (cons (list '%raw-asm (string-append "    movsd qword ptr " (hoist-operand->str dst) ", " (reg->str src))) acc)))))
+              ((and (pair? dst) (eq? (car dst) '%stack))
+               (let ((stk-disp (list '%disp (x86-hoist-rsp-disp (cadr dst)) 'rsp)))
                  (cond
-                   ((pair? arg)
-                    (loop (cdr ps) (cdr as) (+ i 1)
-                          (cons (list 'mov stk-disp 'r10)
-                                (cons (list 'mov 'r10 (lower-lir-opnd arg)) acc))))
-                   ((integer? arg)
-                    (loop (cdr ps) (cdr as) (+ i 1)
-                          (cons (list '%raw-asm (string-append "    mov qword ptr " (hoist-operand->str loc) ", " (number->string arg))) acc)))
+                   ((pair? src)
+                    (let ((mem-tmp (lower-lir-reg (lir-pmov-select-scratch *lir-pmov-gpr-scratch-pool* steps #f))))
+                      (emit-loop (cdr steps)
+                                 (cons (list 'mov stk-disp mem-tmp)
+                                       (cons (list 'mov mem-tmp (lower-lir-opnd src)) acc)))))
+                   ((integer? src)
+                    (if (x86-switch-imm32? src)
+                        (emit-loop (cdr steps)
+                                   (cons (list '%raw-asm (string-append "    mov qword ptr " (hoist-operand->str dst) ", " (number->string src))) acc))
+                        (let ((mem-tmp (lower-lir-reg (lir-pmov-select-scratch *lir-pmov-gpr-scratch-pool* steps #f))))
+                          (emit-loop (cdr steps)
+                                     (cons (list 'mov stk-disp mem-tmp)
+                                           (cons (list 'mov mem-tmp (lower-lir-opnd src)) acc))))))
                    (else
-                    (loop (cdr ps) (cdr as) (+ i 1)
-                          (cons (list 'mov stk-disp (lower-lir-opnd arg)) acc))))))
+                    (emit-loop (cdr steps)
+                               (cons (list 'mov stk-disp (lower-lir-opnd src)) acc))))))
               (else
-               (loop (cdr ps) (cdr as) (+ i 1)
-                     (cons (list 'mov (lower-lir-opnd loc) (lower-lir-opnd arg)) acc)))))
-          (reverse acc)))))
+               (emit-loop (cdr steps)
+                          (cons (list 'mov (lower-lir-opnd dst) (lower-lir-opnd src)) acc)))))))))
 
 (define (emit-x86-parallel-copy target-lbl args)
   (for-each emit-x86-asm-inst (select-x86-parallel-copy target-lbl args)))
@@ -51845,40 +52432,60 @@
 
 (define (arm-param-location idx param)
   (cond
-    ((or (eq? param '%rax) (eq? param 'x0)) 'x0)
+    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %r8 %r9 %r10 %r11 %r13 %r14 %r15
+                   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x19 x20 x21 x22
+                   %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                   %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
+     (if (or (eq? param '%rax) (eq? param 'x0)) 'x0 param))
+    ((and (pair? param) (eq? (car param) '%reg))
+     (if (and (pair? (cdr param)) (pair? (cddr param))) (caddr param) (cadr param)))
+    ((and (pair? param) (eq? (car param) '%freg))
+     (cadr param))
     ((and (pair? param) (eq? (car param) '%stack)) param)
     (else
      (list '%stack (* -8 (+ idx 2))))))
 
 (define (emit-arm-parallel-copy target-lbl args)
-  (let ((params (get-arm-block-params target-lbl)))
-    (let loop ((ps params) (as args) (i 0))
-      (if (and (pair? ps) (pair? as))
-          (let* ((param (car ps))
-                 (arg (car as))
-                 (loc (arm-param-location i param)))
+  (let* ((params (get-arm-block-params target-lbl))
+         (pairs (let collect ((ps params) (as args) (i 0) (acc '()))
+                  (if (and (pair? ps) (pair? as))
+                      (collect (cdr ps) (cdr as) (+ i 1)
+                               (cons (cons (arm-param-location i (car ps)) (car as)) acc))
+                      (reverse acc))))
+         (plan (lir-parallel-move-plan pairs '(x17 x15 x14 x13 x12 x11) *lir-pmov-fpr-scratch-pool* #f)))
+    (for-each
+     (lambda (step)
+       (let ((loc (car step))
+             (arg (cdr step)))
+         (cond
+           ((or (lir-pmov-float-loc? loc) (lir-pmov-float-loc? arg))
             (cond
-              ((equal? loc arg) #f)
-              ((or (eq? loc 'x0) (eq? loc '%rax))
-               (if (integer? arg)
-                   (emit (string-append "    mov x0, #" (number->string arg)))
-                   (arm-emit-load-operand 'x0 arg)))
-              ((and (pair? loc) (eq? (car loc) '%stack))
-               (let ((offset (cadr loc)))
-                 (cond
-                   ((integer? arg)
-                    (emit (string-append "    mov x1, #" (number->string arg)))
-                    (arm-emit-store 'x1 'sp offset))
-                   ((pair? arg)
-                    (arm-emit-load-operand 'x1 arg)
-                    (arm-emit-store 'x1 'sp offset))
-                   (else
-                    (arm-emit-store arg 'sp offset)))))
+              ((and (lir-pmov-float-loc? loc) (lir-pmov-float-loc? arg))
+               (emit (string-append "    fmov " (arm-reg->str loc) ", " (arm-reg->str arg))))
+              ((lir-pmov-float-loc? loc)
+               (arm-emit-load loc 'sp (cadr arg)))
               (else
-               (if (integer? arg)
-                   (emit (string-append "    mov " (arm-reg->str loc) ", #" (number->string arg)))
-                   (arm-emit-load-operand loc arg))))
-            (loop (cdr ps) (cdr as) (+ i 1)))))))
+               (arm-emit-store arg 'sp (cadr loc)))))
+           ((and (pair? loc) (eq? (car loc) '%stack))
+            (let ((offset (cadr loc)))
+              (cond
+                ((integer? arg)
+                 (if (and (>= arg -65535) (<= arg 65535))
+                     (emit (string-append "    mov x17, #" (number->string arg)))
+                     (emit (string-append "    ldr x17, =" (number->string arg))))
+                 (arm-emit-store 'x17 'sp offset))
+                ((pair? arg)
+                 (arm-emit-load-operand 'x17 arg)
+                 (arm-emit-store 'x17 'sp offset))
+                (else
+                 (arm-emit-store arg 'sp offset)))))
+           (else
+            (if (integer? arg)
+                (if (and (>= arg -65535) (<= arg 65535))
+                    (emit (string-append "    mov " (arm-reg->str loc) ", #" (number->string arg)))
+                    (emit (string-append "    ldr " (arm-reg->str loc) ", =" (number->string arg))))
+                (arm-emit-load-operand loc arg))))))
+     plan)))
 
 ;;; Emits a single LIR instruction to AArch64 assembly
 (define (emit-arm-lir-instruction inst)
@@ -53922,28 +54529,42 @@
 
 (define (c-param-location idx param)
   (cond
-    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15))
+    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %rsp %r8 %r9 %r10 %r11 %r12 %r13 %r14 %r15
+                   %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                   %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
      param)
     ((and (pair? param) (eq? (car param) '%reg))
+     (if (and (pair? (cdr param)) (pair? (cddr param))) (caddr param) (cadr param)))
+    ((and (pair? param) (eq? (car param) '%freg))
      (cadr param))
     ((and (pair? param) (eq? (car param) '%stack)) param)
     (else
      (list '%stack (* -8 (+ idx 2))))))
 
 (define (emit-c-parallel-copy target-lbl args)
-  (let ((params (get-c-block-params target-lbl)))
-    (let loop ((ps params) (as args) (i 0))
-      (if (and (pair? ps) (pair? as))
-          (let* ((param (car ps))
-                 (arg (car as))
-                 (loc (c-param-location i param)))
+  (let* ((params (get-c-block-params target-lbl))
+         (pairs (let collect ((ps params) (as args) (i 0) (acc '()))
+                  (if (and (pair? ps) (pair? as))
+                      (collect (cdr ps) (cdr as) (+ i 1)
+                               (cons (cons (c-param-location i (car ps)) (car as)) acc))
+                      (reverse acc))))
+         (plan (lir-parallel-move-plan pairs *lir-pmov-gpr-scratch-pool* *lir-pmov-fpr-scratch-pool* #f)))
+    (for-each
+     (lambda (step)
+       (let ((loc (car step))
+             (arg (cdr step)))
+         (cond
+           ((or (lir-pmov-float-loc? loc) (lir-pmov-float-loc? arg))
             (cond
-              ((equal? loc arg) #f)
-              ((eq? loc '%rax)
-               (emit (string-append "    reg_rax = " (c-operand->str arg) ";")))
+              ((and (lir-pmov-float-loc? loc) (lir-pmov-float-loc? arg))
+               (emit (string-append "    memcpy(&" (c-reg->str loc) ", &" (c-reg->str arg) ", 8);")))
+              ((lir-pmov-float-loc? loc)
+               (emit (string-append "    memcpy(&" (c-reg->str loc) ", " (c-base-ptr-str '%rsp) " + (" (c-offset->str (cadr arg)) "), 8);")))
               (else
-               (emit (string-append "    " (c-operand->str loc) " = " (c-operand->str arg) ";"))))
-            (loop (cdr ps) (cdr as) (+ i 1)))))))
+               (emit (string-append "    memcpy(" (c-base-ptr-str '%rsp) " + (" (c-offset->str (cadr loc)) "), &" (c-reg->str arg) ", 8);")))))
+           (else
+            (emit (string-append "    " (c-operand->str loc) " = " (c-operand->str arg) ";"))))))
+     plan)))
 
 (define (c-inline-asm-join strs sep)
   (if (null? strs)

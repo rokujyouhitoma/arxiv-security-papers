@@ -67,4 +67,39 @@
     (assert-equal "inferred join param rep is raw-i64" 'raw-i64 (braun-get-rep-type cfg v-join))
     (assert-true "join param in raw-params list" (memq v-join (braun-get-raw-params cfg)))))
 
+;; 6. Parallel move lowering via unified resolver (#969)
+(let ((pmov-insts (%mir-emit-parallel-moves '(%r10 %r11) '(%r11 %r10))))
+  (assert-true "live %r10/%r11 swap avoids clobbering %r10 or %r11 as scratch"
+               (and (= (length pmov-insts) 3)
+                    (not (eq? (cadr (car pmov-insts)) '%r10))
+                    (not (eq? (cadr (car pmov-insts)) '%r11)))))
+
+(let ((fpr-insts (%mir-emit-parallel-moves '(%xmm0 %xmm1) '(%xmm1 %xmm0))))
+  (assert-true "FPR %xmm0<->%xmm1 swap emits %fmov instructions"
+               (and (= (length fpr-insts) 3)
+                    (eq? (caar fpr-insts) '%fmov))))
+
+;; 7. %switch edge-argument lowering in lower-mir-ssa-to-mach-lir (#969)
+(let* ((sw-prog
+        (list '%lir-program
+              '(strings ())
+              '(stackmaps ())
+              '(%lir-functions)
+              '(%lir-main
+                (frame-size 16)
+                (body
+                 (%mov %rax 1)
+                 (%jump .L_sw (10 20))
+                 (%block .L_sw (a b)
+                   (%switch %rax .L_done ((%reg b) (%reg a))
+                            ((1 .L_done ((%reg b) (%reg a)))
+                             (2 .L_done ((%reg a) (%reg b))))))
+                 (%block .L_done (x y)
+                   (%mov %rax (%reg x))
+                   (%sub %rax (%reg y))
+                   (%return %rax))))))
+       (mach (lower-mir-ssa-to-mach-lir sw-prog)))
+  (assert-true "%switch cyclic block args lower to valid L_lir_mach?"
+               (and (L_lir_mach? mach) (validate-mach-lir mach))))
+
 (test-end "Pass 132 (Braun SSA Engine)")

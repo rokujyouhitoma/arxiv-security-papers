@@ -1554,8 +1554,12 @@
             (set-car! min-off-box off))))
     (define add-vreg!
       (lambda (sym kind)
-        (if (and (symbol? sym) (not (assq sym (car vregs-box))))
-            (set-car! vregs-box (cons (cons sym kind) (car vregs-box))))))
+        (if (symbol? sym)
+            (let ((hit (assq sym (car vregs-box))))
+              (if hit
+                  (if (and (eq? kind 'fpr) (not (eq? (cdr hit) 'fpr)))
+                      (set-cdr! hit 'fpr))
+                  (set-car! vregs-box (cons (cons sym kind) (car vregs-box))))))))
     (let walk-insts ((is insts))
       (if (not (null? is))
           (let ((inst (car is)))
@@ -1662,58 +1666,10 @@
   (and (pair? x) (eq? (car x) '%stack) (pair? (cdr x)) (integer? (cadr x))))
 
 (define (%mir-emit-move dst src)
-  (cond
-    ((equal? dst src) '())
-    ((and (%mir-stack-opnd? dst) (%mir-stack-opnd? src))
-     (list (list '%load '%r10 '%rsp (cadr src))
-           (list '%store '%rsp (cadr dst) '%r10)))
-    ((%mir-stack-opnd? dst)
-     (list (list '%store '%rsp (cadr dst) src)))
-    ((%mir-stack-opnd? src)
-     (list (list '%load dst '%rsp (cadr src))))
-    (else
-     (list (list '%mov dst src)))))
+  (lir-emit-single-move dst src '%r10))
 
 (define (%mir-emit-parallel-moves dsts srcs)
-  (let* ((pairs
-          (let collect ((ds dsts) (ss srcs) (acc '()))
-            (if (or (null? ds) (null? ss))
-                (reverse acc)
-                (let ((d (car ds)) (s (car ss)))
-                  (if (equal? d s)
-                      (collect (cdr ds) (cdr ss) acc)
-                      (collect (cdr ds) (cdr ss) (cons (cons d s) acc))))))))
-    (let loop ((rem pairs) (acc '()))
-      (if (null? rem)
-          acc
-          ;; Find a move whose dst does not appear as src in any remaining move
-          (let ((safe
-                 (let find-safe ((ms rem))
-                   (cond
-                     ((null? ms) #f)
-                     ((let is-read? ((d (caar ms)) (all rem))
-                        (and (pair? all)
-                             (or (and (not (eq? (car all) (car ms)))
-                                      (equal? d (cdar all)))
-                                 (is-read? d (cdr all)))))
-                      (find-safe (cdr ms)))
-                     (else (car ms))))))
-            (if safe
-                (let ((rest (let drop-one ((ms rem))
-                              (cond ((null? ms) '())
-                                    ((eq? (car ms) safe) (cdr ms))
-                                    (else (cons (car ms) (drop-one (cdr ms))))))))
-                  (loop rest (append acc (%mir-emit-move (car safe) (cdr safe)))))
-                ;; Cycle remaining: break cycle using %r11 scratch register
-                (let* ((head-dst (caar rem))
-                       (save-insts (%mir-emit-move '%r11 head-dst))
-                       (updated-rem
-                        (map (lambda (m)
-                               (if (equal? (cdr m) head-dst)
-                                   (cons (car m) '%r11)
-                                   m))
-                             rem)))
-                  (loop updated-rem (append acc save-insts)))))))))
+  (lir-emit-parallel-moves dsts srcs *lir-pmov-gpr-scratch-pool* *lir-pmov-fpr-scratch-pool* #f))
 
 (define (%mir-resolve-opnd x vreg-map)
   (let ((phys (%mir-unwrap-phys-wrapper x))
@@ -1834,13 +1790,13 @@
                                          (if (not wo?)
                                              (set-car! pre-box
                                                        (cons (if is-fpr?
-                                                                 (list '%mov scratch cur)
+                                                                 (list '%load-typed 'f64 scratch '%rsp off)
                                                                  (list '%load scratch '%rsp off))
                                                              (car pre-box))))))
                                    (if (or wo? rw?)
                                        (set-car! post-box
                                                  (cons (if is-fpr?
-                                                           (list '%mov cur scratch)
+                                                           (list '%store-typed 'f64 '%rsp off scratch)
                                                            (list '%store '%rsp off scratch))
                                                        (car post-box))))
                                    (build (cdr xs) (+ idx 1) next-g next-f (cons scratch acc)))))))))
@@ -1848,15 +1804,31 @@
                        (cons (cons op new-args)
                              (reverse (car post-box)))))))))))
 
-(define (%mir-lower-edge-args tgt-lbl args block-param-locs vreg-map)
+(define (%mir-lower-edge-args tgt-lbl args block-param-locs vreg-map fallback-slot used-fb-box)
   (let ((entry (assq tgt-lbl block-param-locs)))
     (if (not entry)
         (cons #f (map (lambda (a) (%mir-resolve-opnd a vreg-map)) args))
         (let* ((param-locs (cdr entry))
-               (resolved-args (map (lambda (a) (%mir-resolve-opnd a vreg-map)) args)))
-          (cons #t (%mir-emit-parallel-moves param-locs resolved-args))))))
+               (resolved-args (map (lambda (a) (%mir-resolve-opnd a vreg-map)) args))
+               (res (lir-emit-parallel-moves-with-usage
+                     param-locs resolved-args
+                     *lir-pmov-gpr-scratch-pool* *lir-pmov-fpr-scratch-pool* fallback-slot)))
+          (if (cdr res)
+              (set-car! used-fb-box #t))
+          (cons #t (car res))))))
 
-(define (%mir-lower-inst inst block-param-locs vreg-map tramps-box)
+(define (%mir-make-trampoline-target lbl edge tramps-box)
+  (cond
+    ((and (car edge) (pair? (cdr edge)))
+     (let ((tr (unique-label-sym "mir_tramp_")))
+       (set-car! tramps-box
+                 (cons (cons '%block (cons tr (cons '() (append (cdr edge) (list (list '%jump lbl))))))
+                       (car tramps-box)))
+       (cons tr '())))
+    ((car edge) (cons lbl '()))
+    (else (cons lbl (cdr edge)))))
+
+(define (%mir-lower-inst inst block-param-locs vreg-map tramps-box fallback-slot used-fb-box)
   (if (not (pair? inst))
       (list inst)
       (let ((op (car inst)))
@@ -1869,7 +1841,7 @@
                    (let bloop ((bs body) (acc '()))
                      (if (null? bs)
                          (reverse acc)
-                         (let ((ls (%mir-lower-inst (car bs) block-param-locs vreg-map tramps-box)))
+                         (let ((ls (%mir-lower-inst (car bs) block-param-locs vreg-map tramps-box fallback-slot used-fb-box)))
                            (bloop (cdr bs) (append (reverse ls) acc))))))
                   (new-params (if (assq lbl block-param-locs)
                                   '()
@@ -1878,7 +1850,7 @@
           ((eq? op '%jump)
            (let* ((tgt (cadr inst))
                   (args (if (pair? (cddr inst)) (caddr inst) '()))
-                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map)))
+                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map fallback-slot used-fb-box)))
              (if (car edge)
                  (append (cdr edge) (list (list '%jump tgt)))
                  (if (pair? (cddr inst))
@@ -1893,7 +1865,7 @@
                   (cond-reg (if (%mir-stack-opnd? cond-loc) '%r10 cond-loc))
                   (tgt (caddr inst))
                   (args (if (pair? (cdddr inst)) (cadddr inst) '()))
-                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map)))
+                  (edge (%mir-lower-edge-args tgt args block-param-locs vreg-map fallback-slot used-fb-box)))
              (cond
                ((not (car edge))
                 (append pre-cond
@@ -1903,11 +1875,8 @@
                ((null? (cdr edge))
                 (append pre-cond (list (list '%jump-if-false cond-reg tgt))))
                (else
-                (let ((tramp (unique-label-sym "mir_tramp_")))
-                  (set-car! tramps-box
-                            (cons (cons '%block (cons tramp (cons '() (append (cdr edge) (list (list '%jump tgt))))))
-                                  (car tramps-box)))
-                  (append pre-cond (list (list '%jump-if-false cond-reg tramp))))))))
+                (let ((tr (car (%mir-make-trampoline-target tgt edge tramps-box))))
+                  (append pre-cond (list (list '%jump-if-false cond-reg tr))))))))
           ((eq? op '%jump-if)
            (let* ((raw-cond (cadr inst))
                   (cond-loc (%mir-resolve-opnd raw-cond vreg-map))
@@ -1919,28 +1888,47 @@
                   (t-args (cadddr inst))
                   (e-lbl (car (cddddr inst)))
                   (e-args (cadr (cddddr inst)))
-                  (t-edge (%mir-lower-edge-args t-lbl t-args block-param-locs vreg-map))
-                  (e-edge (%mir-lower-edge-args e-lbl e-args block-param-locs vreg-map))
-                  (new-t (cond
-                           ((and (car t-edge) (pair? (cdr t-edge)))
-                            (let ((tr (unique-label-sym "mir_tramp_")))
-                              (set-car! tramps-box
-                                        (cons (cons '%block (cons tr (cons '() (append (cdr t-edge) (list (list '%jump t-lbl))))))
-                                              (car tramps-box)))
-                              (cons tr '())))
-                           ((car t-edge) (cons t-lbl '()))
-                           (else (cons t-lbl (cdr t-edge)))))
-                  (new-e (cond
-                           ((and (car e-edge) (pair? (cdr e-edge)))
-                            (let ((tr (unique-label-sym "mir_tramp_")))
-                              (set-car! tramps-box
-                                        (cons (cons '%block (cons tr (cons '() (append (cdr e-edge) (list (list '%jump e-lbl))))))
-                                              (car tramps-box)))
-                              (cons tr '())))
-                           ((car e-edge) (cons e-lbl '()))
-                           (else (cons e-lbl (cdr e-edge))))))
+                  (t-edge (%mir-lower-edge-args t-lbl t-args block-param-locs vreg-map fallback-slot used-fb-box))
+                  (e-edge (%mir-lower-edge-args e-lbl e-args block-param-locs vreg-map fallback-slot used-fb-box))
+                  (new-t (%mir-make-trampoline-target t-lbl t-edge tramps-box))
+                  (new-e (%mir-make-trampoline-target e-lbl e-edge tramps-box)))
              (append pre-cond
                      (list (list '%jump-if cond-reg (car new-t) (cdr new-t) (car new-e) (cdr new-e))))))
+          ((eq? op '%switch)
+           (let* ((raw-val (cadr inst))
+                  (val-loc (%mir-resolve-opnd raw-val vreg-map))
+                  (pre-val (if (%mir-stack-opnd? val-loc)
+                               (list (list '%load '%r10 '%rsp (cadr val-loc)))
+                               '()))
+                  (val-opnd (if (%mir-stack-opnd? val-loc) '%r10 val-loc))
+                  (def-lbl (caddr inst))
+                  (has-def-args? (= (length inst) 5))
+                  (def-args (if (and has-def-args? (list? (cadddr inst))) (cadddr inst) '()))
+                  (raw-cases (cond (has-def-args? (car (cddddr inst)))
+                                   ((pair? (cdddr inst)) (cadddr inst))
+                                   (else '())))
+                  (def-edge (%mir-lower-edge-args def-lbl def-args block-param-locs vreg-map fallback-slot used-fb-box))
+                  (new-def (%mir-make-trampoline-target def-lbl def-edge tramps-box))
+                  (new-cases
+                   (map (lambda (c)
+                          (let* ((c-val (car c))
+                                 (c-lbl (cadr c))
+                                 (c-args (if (and (pair? (cddr c)) (list? (caddr c))) (caddr c) '()))
+                                 (c-edge (%mir-lower-edge-args c-lbl c-args block-param-locs vreg-map fallback-slot used-fb-box))
+                                 (nt (%mir-make-trampoline-target c-lbl c-edge tramps-box)))
+                            (list c-val (car nt) (cdr nt))))
+                        raw-cases))
+                  (all-empty-args?
+                   (and (null? (cdr new-def))
+                        (let chk ((cs new-cases))
+                          (or (null? cs)
+                              (and (null? (caddr (car cs)))
+                                   (chk (cdr cs))))))))
+             (append pre-val
+                     (list (if all-empty-args?
+                               (list '%switch val-opnd (car new-def)
+                                     (map (lambda (nc) (list (car nc) (cadr nc))) new-cases))
+                               (list '%switch val-opnd (car new-def) (cdr new-def) new-cases))))))
           (else
            (%mir-subst-vregs-with-spills inst vreg-map inst))))))
 
@@ -1951,6 +1939,8 @@
              (assigned (%mir-assign-vreg-locations analysis))
              (vreg-map (car assigned))
              (new-frame-size (cdr assigned))
+             (fallback-slot (list '%stack (- 0 (+ new-frame-size 8))))
+             (used-fb-box (cons #f '()))
              (raw-block-params (list-ref analysis 4))
              (block-param-locs
               (map (lambda (bp)
@@ -1962,11 +1952,12 @@
               (let loop ((is body) (acc '()))
                 (if (null? is)
                     (reverse acc)
-                    (let ((ls (%mir-lower-inst (car is) block-param-locs vreg-map tramps-box)))
+                    (let ((ls (%mir-lower-inst (car is) block-param-locs vreg-map tramps-box fallback-slot used-fb-box)))
                       (loop (cdr is) (append (reverse ls) acc))))))
              (all-tramps (reverse (car tramps-box)))
-             (final-body (if (null? all-tramps) lowered-insts (append lowered-insts all-tramps))))
-        (cons final-body new-frame-size))))
+             (final-body (if (null? all-tramps) lowered-insts (append lowered-insts all-tramps)))
+             (final-fs (if (car used-fb-box) (+ new-frame-size 8) new-frame-size)))
+        (cons final-body final-fs))))
 
 (define (%mir-lower-fn-or-main form)
   (if (not (pair? form))

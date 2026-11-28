@@ -3182,6 +3182,25 @@
   verify-mir-ssa
   validate-mach-lir
   verify-mach-lir
+  lir-verify-parallel-move-plan
+  *lir-pmov-gpr-scratch-pool*
+  *lir-pmov-fpr-scratch-pool*
+  lir-pmov-unwrap-reg
+  lir-pmov-phys-reg-sym?
+  lir-pmov-canon-exact-reg
+  lir-pmov-canon-gpr-family
+  lir-pmov-loc-equal?
+  lir-pmov-reg-aliases?
+  lir-pmov-float-loc?
+  lir-pmov-stack-loc?
+  lir-pmov-mem-loc?
+  lir-pmov-rsp-loc?
+  lir-pmov-loc-reads?
+  lir-pmov-select-scratch
+  lir-parallel-move-plan
+  lir-emit-single-move
+  lir-emit-parallel-moves
+  lir-emit-parallel-moves-with-usage
   lir-to-mir-ssa
   braun-ssa-transform-program
   lower-mir-ssa-to-mach-lir

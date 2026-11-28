@@ -624,34 +624,15 @@
           (else #f)))))
 
 (define (%c99-lower-emit-parallel-moves! ctx move-op scratch-reg pairs)
-  (let loop ((pending (let filter-self ((ps pairs) (acc '()))
-                        (cond
-                          ((null? ps) (reverse acc))
-                          ((eq? (caar ps) (cdar ps)) (filter-self (cdr ps) acc))
-                          (else (filter-self (cdr ps) (cons (car ps) acc)))))))
-    (if (pair? pending)
-        (let* ((srcs (map (lambda (p) (cdr p)) pending))
-               (ready (let find-ready ((ps pending))
-                        (cond
-                          ((null? ps) #f)
-                          ((not (memq (caar ps) srcs)) (car ps))
-                          (else (find-ready (cdr ps)))))))
-          (if ready
-              (begin
-                (%c99-lower-emit! ctx (list move-op (car ready) (cdr ready)))
-                (loop (let rem-one ((ps pending) (acc '()))
-                        (cond
-                          ((null? ps) (reverse acc))
-                          ((eq? (car ps) ready) (rem-one (cdr ps) acc))
-                          (else (rem-one (cdr ps) (cons (car ps) acc)))))))
-              (let* ((cyc (car pending))
-                     (c-src (cdr cyc)))
-                (%c99-lower-emit! ctx (list move-op scratch-reg c-src))
-                (loop (map (lambda (p)
-                             (if (eq? (cdr p) c-src)
-                                 (cons (car p) scratch-reg)
-                                 p))
-                           pending))))))))
+  (let* ((is-float? (or (eq? move-op '%fmov) (lir-pmov-float-loc? scratch-reg)))
+         (plan (lir-parallel-move-plan
+                pairs
+                (if is-float? '() (list scratch-reg))
+                (if is-float? (list scratch-reg) '())
+                #f)))
+    (for-each (lambda (step)
+                (%c99-lower-emit! ctx (list move-op (car step) (cdr step))))
+              plan)))
 
 (define (%c99-lower-emit-u64-const! ctx dst-reg uval)
   (let ((lo (modulo uval 4294967296))

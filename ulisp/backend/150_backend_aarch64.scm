@@ -328,40 +328,60 @@
 
 (define (arm-param-location idx param)
   (cond
-    ((or (eq? param '%rax) (eq? param 'x0)) 'x0)
+    ((memq param '(%rax %rbx %rcx %rdx %rsi %rdi %rbp %r8 %r9 %r10 %r11 %r13 %r14 %r15
+                   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x19 x20 x21 x22
+                   %xmm0 %xmm1 %xmm2 %xmm3 %xmm4 %xmm5 %xmm6 %xmm7
+                   %xmm8 %xmm9 %xmm10 %xmm11 %xmm12 %xmm13 %xmm14 %xmm15))
+     (if (or (eq? param '%rax) (eq? param 'x0)) 'x0 param))
+    ((and (pair? param) (eq? (car param) '%reg))
+     (if (and (pair? (cdr param)) (pair? (cddr param))) (caddr param) (cadr param)))
+    ((and (pair? param) (eq? (car param) '%freg))
+     (cadr param))
     ((and (pair? param) (eq? (car param) '%stack)) param)
     (else
      (list '%stack (* -8 (+ idx 2))))))
 
 (define (emit-arm-parallel-copy target-lbl args)
-  (let ((params (get-arm-block-params target-lbl)))
-    (let loop ((ps params) (as args) (i 0))
-      (if (and (pair? ps) (pair? as))
-          (let* ((param (car ps))
-                 (arg (car as))
-                 (loc (arm-param-location i param)))
+  (let* ((params (get-arm-block-params target-lbl))
+         (pairs (let collect ((ps params) (as args) (i 0) (acc '()))
+                  (if (and (pair? ps) (pair? as))
+                      (collect (cdr ps) (cdr as) (+ i 1)
+                               (cons (cons (arm-param-location i (car ps)) (car as)) acc))
+                      (reverse acc))))
+         (plan (lir-parallel-move-plan pairs '(x17 x15 x14 x13 x12 x11) *lir-pmov-fpr-scratch-pool* #f)))
+    (for-each
+     (lambda (step)
+       (let ((loc (car step))
+             (arg (cdr step)))
+         (cond
+           ((or (lir-pmov-float-loc? loc) (lir-pmov-float-loc? arg))
             (cond
-              ((equal? loc arg) #f)
-              ((or (eq? loc 'x0) (eq? loc '%rax))
-               (if (integer? arg)
-                   (emit (string-append "    mov x0, #" (number->string arg)))
-                   (arm-emit-load-operand 'x0 arg)))
-              ((and (pair? loc) (eq? (car loc) '%stack))
-               (let ((offset (cadr loc)))
-                 (cond
-                   ((integer? arg)
-                    (emit (string-append "    mov x1, #" (number->string arg)))
-                    (arm-emit-store 'x1 'sp offset))
-                   ((pair? arg)
-                    (arm-emit-load-operand 'x1 arg)
-                    (arm-emit-store 'x1 'sp offset))
-                   (else
-                    (arm-emit-store arg 'sp offset)))))
+              ((and (lir-pmov-float-loc? loc) (lir-pmov-float-loc? arg))
+               (emit (string-append "    fmov " (arm-reg->str loc) ", " (arm-reg->str arg))))
+              ((lir-pmov-float-loc? loc)
+               (arm-emit-load loc 'sp (cadr arg)))
               (else
-               (if (integer? arg)
-                   (emit (string-append "    mov " (arm-reg->str loc) ", #" (number->string arg)))
-                   (arm-emit-load-operand loc arg))))
-            (loop (cdr ps) (cdr as) (+ i 1)))))))
+               (arm-emit-store arg 'sp (cadr loc)))))
+           ((and (pair? loc) (eq? (car loc) '%stack))
+            (let ((offset (cadr loc)))
+              (cond
+                ((integer? arg)
+                 (if (and (>= arg -65535) (<= arg 65535))
+                     (emit (string-append "    mov x17, #" (number->string arg)))
+                     (emit (string-append "    ldr x17, =" (number->string arg))))
+                 (arm-emit-store 'x17 'sp offset))
+                ((pair? arg)
+                 (arm-emit-load-operand 'x17 arg)
+                 (arm-emit-store 'x17 'sp offset))
+                (else
+                 (arm-emit-store arg 'sp offset)))))
+           (else
+            (if (integer? arg)
+                (if (and (>= arg -65535) (<= arg 65535))
+                    (emit (string-append "    mov " (arm-reg->str loc) ", #" (number->string arg)))
+                    (emit (string-append "    ldr " (arm-reg->str loc) ", =" (number->string arg))))
+                (arm-emit-load-operand loc arg))))))
+     plan)))
 
 ;;; Emits a single LIR instruction to AArch64 assembly
 (define (emit-arm-lir-instruction inst)

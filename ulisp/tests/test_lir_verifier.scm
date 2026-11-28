@@ -381,6 +381,45 @@
 (assert-false "reject %sar with invalid register count %rdx"
               (validate-lir (make-test-lir-program '() '((%sar %rax %rdx)))))
 
+;; 8.6 Issue #969: %block parameter invariants & symbolic parallel-move plan verifier
+(assert-false "reject duplicate %block parameter"
+              (validate-lir
+               (make-test-lir-program '()
+                                      '((%jump .L_dup_p (1 2))
+                                        (%block .L_dup_p (x x) (%return x))))))
+
+(assert-false "reject %rsp as %block parameter"
+              (validate-lir
+               (make-test-lir-program '()
+                                      '((%jump .L_rsp_p (1))
+                                        (%block .L_rsp_p (%rsp) (%return %rax))))))
+
+(assert-true "accept valid (%stack -8) %block parameter"
+             (validate-lir
+              (make-test-lir-program '()
+                                     '((%jump .L_stk_p (42))
+                                       (%block .L_stk_p ((%stack -8))
+                                         (%load %rax %rsp -8)
+                                         (%return %rax))))))
+
+(assert-true "lir-verify-parallel-move-plan accepts valid 2-cycle scratch plan"
+             (lir-verify-parallel-move-plan
+              '((%rax . %rbx) (%rbx . %rax))
+              '((%r10 . %rax) (%rax . %rbx) (%rbx . %r10))
+              '(%r10)))
+
+(assert-false "lir-verify-parallel-move-plan rejects naive clobbering plan"
+              (lir-verify-parallel-move-plan
+               '((%rax . %rbx) (%rbx . %rax))
+               '((%rax . %rbx) (%rbx . %rax))
+               '(%r10)))
+
+(assert-false "lir-verify-parallel-move-plan rejects unauthorized scratch clobber"
+              (lir-verify-parallel-move-plan
+               '((%rax . %rbx) (%rbx . %rax))
+               '((%rcx . %rax) (%rax . %rbx) (%rbx . %rcx))
+               '(%r10)))
+
 ;; Reset to standard verifier mode for subsequent suites
 (enable-verifier!)
 (set-verifier-strict! #f)

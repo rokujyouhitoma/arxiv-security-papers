@@ -585,6 +585,70 @@
                   (L_lir_mach? scheme-mach-full)
                   (validate-mach-lir scheme-mach-full)))
 
+;; 6.25 3-cycle %block args lower cleanly and evaluate on Reference VM (#969)
+(define mir-ssa-3cycle-prog
+  (make-dialect-test-prog
+   '()
+   '((%jump .L_rot (1 20 300))
+     (%block .L_rot (a b c)
+       (%jump .L_out ((%reg b) (%reg c) (%reg a))))
+     (%block .L_out (x y z)
+       (%mov (%reg i64 r) (%reg x))
+       (%imul (%reg i64 r) 100)
+       (%add (%reg i64 r) (%reg y))
+       (%add (%reg i64 r) (%reg z))
+       (%mov %rax (%reg i64 r))
+       (%return %rax)))))
+(define lowered-3cycle-mach (lower-mir-ssa-to-mach-lir mir-ssa-3cycle-prog))
+(assert-true "6.25 3-cycle %block program lowers to valid L_lir_mach"
+             (and (L_lir_mach? lowered-3cycle-mach) (validate-mach-lir lowered-3cycle-mach)))
+(assert-equal "6.26 Reference VM evaluates lowered 3-cycle (20*100 + 300 + 1 = 2301)"
+              2301
+              (eval-lir-program lowered-3cycle-mach))
+
+;; 6.27 FPR %xmm* %block swap lowers to valid L_lir_mach and runs on Reference VM (#969)
+(define mir-ssa-fpr-swap-prog
+  (make-dialect-test-prog
+   '()
+   '((%mov %rax 7)
+     (%sitofp (%freg fa) %rax)
+     (%mov %rax 50)
+     (%sitofp (%freg fb) %rax)
+     (%jump .L_fswap ((%freg fa) (%freg fb)))
+     (%block .L_fswap (fx fy)
+       (%jump .L_fcalc ((%freg fy) (%freg fx))))
+     (%block .L_fcalc (p q)
+       (%fsub (%freg p) (%freg q))
+       (%fptosi %rax (%freg p))
+       (%return %rax)))))
+(define lowered-fpr-mach (lower-mir-ssa-to-mach-lir mir-ssa-fpr-swap-prog))
+(assert-true "6.27 FPR %block swap lowers to valid L_lir_mach"
+             (and (L_lir_mach? lowered-fpr-mach) (validate-mach-lir lowered-fpr-mach)))
+(assert-equal "6.28 Reference VM evaluates lowered FPR swap (50 - 7 = 43)"
+              43
+              (eval-lir-program lowered-fpr-mach))
+
+;; 6.29 5-arg %switch with cyclic block args lowers and runs on Reference VM (#969)
+(define mir-ssa-switch-cycle-prog
+  (make-dialect-test-prog
+   '()
+   '((%mov %rax 2)
+     (%jump .L_sw (10 52))
+     (%block .L_sw (a b)
+       (%switch %rax .L_done ((%reg a) (%reg b))
+                ((1 .L_done ((%reg a) (%reg b)))
+                 (2 .L_done ((%reg b) (%reg a))))))
+     (%block .L_done (x y)
+       (%mov %rax (%reg x))
+       (%sub %rax (%reg y))
+       (%return %rax)))))
+(define lowered-sw-mach (lower-mir-ssa-to-mach-lir mir-ssa-switch-cycle-prog))
+(assert-true "6.29 5-arg %switch cyclic block args lower to valid L_lir_mach"
+             (and (L_lir_mach? lowered-sw-mach) (validate-mach-lir lowered-sw-mach)))
+(assert-equal "6.30 Reference VM evaluates %switch cyclic edge (52 - 10 = 42)"
+              42
+              (eval-lir-program lowered-sw-mach))
+
 ;;; -----------------------------------------------------------------------
 ;;; Test Suite Result Summary
 ;;; -----------------------------------------------------------------------
